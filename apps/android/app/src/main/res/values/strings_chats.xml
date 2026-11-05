@@ -199,6 +199,7 @@
     <string name="chats_start_on">Start on %1$s</string>
     <string name="chats_run_on">Run on</string>
     <string name="chats_run_on_note">A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.</string>
+    <string name="chats_run_on_state">%1$s · %2$s</string>
     <string name="chats_shared_with">Shared with Nekko</string>
     <string name="chats_shared_note">Goes into the chat’s message box. You send it.</string>
     <string name="chats_remove_shared">Remove shared text</string>

@@ -45,6 +45,16 @@ struct NewChatView: View {
     @State private var cloudError: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    /// Auto (2026-11-05): a chat on a local model starts on a free computer.
+    /// Off once a computer is picked by hand, or when New chat opened from one computer's list.
+    @State private var autoOn = true
+    /// What Auto chose last, and why (the line under Run on).
+    @State private var autoPick: MachinePick?
+    @State private var autoFinding = false
+    /// Bumped to run Auto again: a local model picked, or Automatic chosen.
+    @State private var autoRun = 0
+    /// Auto set the model (a local one), on the computer it moved to.
+    @State private var autoChoseModel = false
 
     private var selectedEffort: Effort {
         let id = model?.1 ?? ""
@@ -115,8 +125,11 @@ struct NewChatView: View {
         .sheet(isPresented: $showModels) {
             ModelPicker(selected: (model?.0, model?.1)) { p, m in
                 model = (p, m)
+                autoChoseModel = false
                 if let e = effort { effort = Effort.effective(e, for: m) }
                 if let id = store.activeId { app.prefs.lastModel[id] = "\(p)::\(m)" }
+                autoPick = nil
+                autoRun += 1
             }
         }
         .sheet(isPresented: $foldersOpen) {
@@ -136,12 +149,16 @@ struct NewChatView: View {
         .onAppear(perform: pickDefault)
         .onAppear(perform: pickPlace)
         .onAppear(perform: takeShared)
+        .onAppear { autoOn = app.prefs.chatsFilter == nil }
+        .task(id: autoRun) { await runAuto() }
+        // The computer's providers may arrive after this screen opened.
+        .onChange(of: isLocal) { _, local in if local && autoPick == nil && !autoFinding { autoRun += 1 } }
         // Kept on the phone like a chat's composer: text, photos, model, folder and tool policy.
         .onChange(of: text) { _, _ in saveDraft() }
         .onChange(of: images) { _, _ in saveDraft() }
         .onChange(of: model?.0) { _, _ in saveDraft() }
         .onChange(of: model?.1) { _, _ in saveDraft() }
-        .onChange(of: folder) { _, _ in saveDraft() }
+        .onChange(of: folder) { _, _ in saveDraft(); autoRun += 1 }
         .onChange(of: choseFolder) { _, _ in saveDraft() }
         .onChange(of: cachedSupportingFolders) { _, _ in saveDraft() }
         .onChange(of: mode) { _, _ in saveDraft() }
@@ -284,7 +301,14 @@ struct NewChatView: View {
                 // computer is already connected, so picking another is instant.
                 if isLocal || pickedComputer || store.computers.count + (phone.isSetUp ? 1 : 0) > 1 {
                     Menu {
-                        Picker("Run on", selection: Binding(get: { onPhone ? PhoneProviders.computerId : store.activeId }, set: { if let id = $0 { switchPlace(id) } })) {
+                        Picker("Run on", selection: Binding(get: { autoShown ? Self.autoTag : onPhone ? PhoneProviders.computerId : store.activeId }, set: { if let id = $0 { place(id) } })) {
+                            if autoOffered {
+                                Label {
+                                    Text("Automatic")
+                                    Text("A free computer")
+                                } icon: { Image(systemName: "sparkles") }
+                                .tag(Optional(Self.autoTag))
+                            }
                             ForEach(store.computers) { c in
                                 Label {
                                     Text(c.name)
@@ -305,6 +329,8 @@ struct NewChatView: View {
                     } label: {
                         if onPhone {
                             chip(ChatPlace.phoneName, icon: "iphone")
+                        } else if autoShown {
+                            chip(String(localized: "Auto · \(store.active?.name ?? String(localized: "Computer"))"), icon: "sparkles")
                         } else {
                             chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer", computerIcon: store.active?.icon)
                         }
@@ -339,6 +365,12 @@ struct NewChatView: View {
                         .accessibilityIdentifier("newChat.tools")
                     }
                 }
+            }
+            if autoShown, let line = autoLine {
+                Label(line, systemImage: autoFinding ? "ellipsis" : "sparkles")
+                    .font(.caption).foregroundStyle(palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("newChat.auto")
             }
             if onPhone {
                 Text("Runs on \(ChatPlace.phoneName) with your own key. No tools: it can’t see your computers or files.")
@@ -393,7 +425,7 @@ struct NewChatView: View {
     private var canStart: Bool {
         if onPhone { return !busy && phoneModel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty
-        return !busy && !loadingPhotos && model != nil && !(offline && (empty || !supportingFolders.isEmpty))
+        return !busy && !autoFinding && !loadingPhotos && model != nil && !(offline && (empty || !supportingFolders.isEmpty))
     }
 
     /// Images on the clipboard, scaled like picked photos (at most four in the message).
@@ -412,7 +444,8 @@ struct NewChatView: View {
 
     private var isLocal: Bool {
         guard let p = model?.0 else { return false }
-        return store.providers.first { $0.id == p }?.isLocal == true
+        // Auto set a local model on a computer whose providers are still being read.
+        return store.providers.first { $0.id == p }?.isLocal ?? autoChoseModel
     }
 
     private func effortName(_ e: Effort) -> String {
@@ -440,6 +473,85 @@ struct NewChatView: View {
             cloud.link(made.machine, computer: id)
             switchComputer(id)
         } catch { cloudError = error.localizedDescription }
+    }
+
+    // MARK: Auto
+
+    static let autoTag = "nekko.auto"
+
+    /// Auto can choose here: a local model, more than one computer, and no folder (a folder decides the computer).
+    private var autoOffered: Bool { !onPhone && isLocal && folder == nil && store.computers.count > 1 }
+    private var autoShown: Bool { autoOn && autoOffered }
+
+    private var autoLine: String? {
+        if autoFinding { return String(localized: "Finding a free computer…") }
+        guard let pick = autoPick, let name = store.active?.name else { return nil }
+        switch pick.reason {
+        case .free:
+            if let busy = pick.skipped.first.flatMap({ id in store.computers.first { $0.id == id }?.name }) {
+                return String(localized: "Auto picked \(name): \(busy) is busy.")
+            }
+            return String(localized: "Auto picked \(name): it’s free.")
+        case .allBusy:
+            return String(localized: "Every computer is busy, so Auto kept \(name), the one used last.")
+        case .noneAvailable:
+            return String(localized: "No other computer can run a local model now, so Auto kept \(name).")
+        }
+    }
+
+    /// The Run on menu: Automatic, a computer, or this iPhone. Picking a place by hand turns Auto off.
+    private func place(_ id: String) {
+        if id == Self.autoTag {
+            autoOn = true
+            autoPick = nil
+            autoRun += 1
+            return
+        }
+        autoOn = false
+        autoPick = nil
+        autoRun += 1 // Cancel any probe still in flight, even if Auto is chosen again.
+        switchPlace(id)
+    }
+
+    /// Ask every computer whether it is in use and move the chat to a free
+    /// one, with a local model there: the one picked if it has it, else its
+    /// last one, else one already loaded.
+    private func runAuto() async {
+        let run = autoRun
+        let source = store.activeId
+        autoFinding = false
+        guard autoShown, !busy, let chosen = model else { return }
+        autoFinding = true
+        defer { if autoRun == run { autoFinding = false } }
+        let pick = await store.pickMachine(lastUsed: source)
+        guard !Task.isCancelled, autoRun == run, store.activeId == source, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        guard let target = pick.computerId, target != store.activeId else { autoPick = pick; return }
+        let last = app.prefs.lastModel[target].flatMap { s -> (String, String)? in
+            guard let r = s.range(of: "::") else { return nil }
+            return (String(s[..<r.lowerBound]), String(s[r.upperBound...]))
+        }
+        var prefer: [(String, String)] = [chosen]
+        if let last { prefer.append(last) }
+        guard let next = await store.localModel(on: target, prefer: prefer) else {
+            guard !Task.isCancelled, autoShown else { return }
+            // A model server may be enabled without any installed models.
+            autoPick = MachinePick(computerId: store.activeId, reason: .noneAvailable, skipped: [])
+            return
+        }
+        guard !Task.isCancelled, autoRun == run, store.activeId == source, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        // Moved by Auto: the words carry over, the folder stays unset, and nothing is remembered as picked by hand.
+        let words = text
+        store.connect(target)
+        model = next
+        autoChoseModel = true
+        effort = nil
+        mode = nil
+        // Supporting folders belong to the computer they were starred on (the target's defaults load with its folders).
+        cachedSupportingFolders = []
+        refusal = nil
+        text = words
+        store.drafts.set(DraftStore.newChat, current)
+        autoPick = pick
     }
 
     /// Run on a paired computer, or on this iPhone.
@@ -489,6 +601,7 @@ struct NewChatView: View {
         let words = text
         store.connect(id)
         model = nil
+        autoChoseModel = false
         effort = nil
         mode = nil
         choseFolder = false
@@ -593,6 +706,7 @@ struct NewChatView: View {
     }
 
     private func start() {
+        guard !autoFinding else { return }
         if onPhone {
             guard let picked = phoneModel else { return }
             let (p, m) = picked

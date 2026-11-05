@@ -1,5 +1,6 @@
 {
  "channels": [
+  "activity:state",
   "app:info",
   "app:quit",
   "artifact:read",
@@ -172,6 +173,7 @@
   "engine:status",
   "gpu:stats",
   "system:stats",
+  "activity:state",
   "git:branches",
   "git:compare",
   "git:diff",
@@ -489,6 +491,12 @@
   "maxLoaded",
   "clientModelSettings",
   "shareWithComputers"
+ ],
+ "activityView": [
+  "chatActive",
+  "headless",
+  "strain",
+  "userActive"
  ],
  "modelSettingChannels": [
   "engine:saveModelPreset",

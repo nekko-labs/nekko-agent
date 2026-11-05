@@ -185,6 +185,7 @@
     <string name="chats_start_on">Lancer sur %1$s</string>
     <string name="chats_run_on">Exécuter sur</string>
     <string name="chats_run_on_note">Un modèle local s’exécute sur le matériel de l’ordinateur. Choisir un autre ordinateur affiche ses modèles et ses dossiers.</string>
+    <string name="chats_run_on_state">%1$s · %2$s</string>
     <string name="chats_shared_with">Partagé avec Nekko</string>
     <string name="chats_shared_note">Va dans la zone de message de la discussion. C’est vous qui l’envoyez.</string>
     <string name="chats_remove_shared">Retirer le texte partagé</string>
