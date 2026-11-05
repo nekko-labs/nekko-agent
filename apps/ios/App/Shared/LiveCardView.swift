@@ -4,8 +4,10 @@ import SwiftUI
 
 /// The one Live Activity card for all chats, on the Lock Screen and in the
 /// expanded Dynamic Island, and (with `interactive == false`) the preview in
-/// Settings. Apple caps the card at about 160 pt, so listening swaps the chip
-/// strip for the dictation area instead of adding to it.
+/// Settings. Two chats as rows with their titles (what needs you first, see
+/// `cardRows`), a line counting the rest by state ("3 Working · 5 Done"), and
+/// the buttons for the focused row. Apple caps the card at about 160 pt, so
+/// listening swaps the rows for the focused one and the dictation area.
 struct LiveCardView: View {
     let state: LiveCardState
     let level: LiveLevel
@@ -20,7 +22,7 @@ struct LiveCardView: View {
     fileprivate static let grey = Color(red: 0xA3/255, green: 0xA1/255, blue: 0xB0/255)
     fileprivate static let surface = grey.opacity(0.14)
     fileprivate static let raised = grey.opacity(0.24)
-    /// Where "+N" goes when every chat on the card is already a chip: the app.
+    /// Where the count line goes: the app's chat list.
     static let chatsURL = URL(string: "nekko-agent://chats")!
     /// The Detailed mic, on the card and in the Settings preview.
     static let showsMic = true
@@ -39,16 +41,16 @@ struct LiveCardView: View {
     private var showsText: Bool { level == .standard || level == .detailed }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 10) {
-                LiveMascot(state: focus?.state ?? .working)
-                top
-                if let focus, focus.state == .working || focus.state == .needsYou, let start = focus.startedAt { elapsed(since: start) }
-            }
+        VStack(alignment: .leading, spacing: 6) {
             if state.listening {
+                if let focus { row(focus, focused: true) }
                 dictation
             } else {
-                strip
+                let rows = cardRows(state)
+                VStack(spacing: 3) {
+                    ForEach(rows, id: \.id) { row($0, focused: rows.count > 1 && $0.id == focus?.id) }
+                }
+                tallyLine
                 if let focus { actions(focus) }
             }
         }
@@ -56,118 +58,113 @@ struct LiveCardView: View {
         .environment(\.colorScheme, .dark)
     }
 
-    // MARK: Focused chat
+    // MARK: Rows
 
-    private var top: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            if let focus {
-                let title = showsText ? focus.short : ""
-                if !title.isEmpty {
-                    Text(title).font(.system(size: 14, weight: .semibold)).privacySensitive()
-                }
-                Text(showsText && !focus.step.isEmpty ? focus.step : focus.state.phaseLine)
-                    .font(title.isEmpty ? .system(size: 14, weight: .semibold) : .system(size: 13))
-                    .foregroundStyle(title.isEmpty ? Color.white : Self.grey)
-                    .privacySensitive(showsText)
-                // What the mic sent ("Sent: ..."), until the reply line takes its place.
-                let line = state.heard.isEmpty || state.listening ? focus.reply : state.heard
-                if level == .detailed, !line.isEmpty {
-                    Text(line).font(.system(size: 12)).foregroundStyle(Color(white: 0.82)).privacySensitive()
-                }
-            }
-        }
-        .lineLimit(1)
-        .contentTransition(.opacity)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .id(focus?.id)
-        .transition(.push(from: .bottom))
-    }
-
-    // MARK: Chip strip
-
-    private var strip: some View {
-        HStack(spacing: 6) {
-            // As many chips as fit; the rest are counted in the "+N" chip.
-            ViewThatFits(in: .horizontal) {
-                ForEach(Array((1...max(state.chats.count, 1)).reversed()), id: \.self) { chips($0) }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if Self.showsMic, level == .detailed, let focus {
-                Group {
-                    if #available(iOS 18, *) {
-                        button(TalkToChatIntent(sessionId: focus.id)) { mic }
-                    } else if interactive {
-                        Link(destination: Self.listenURL(focus.id)) { mic }
-                    } else {
-                        mic
+    /// A chat's row: its status, its title (Standard up; Minimal shows only the
+    /// generic phase line), what it is doing, and how long it has run. Tapping
+    /// it brings it into focus, which moves the buttons to it.
+    private func row(_ chat: LiveChat, focused: Bool) -> some View {
+        let title = showsText ? (chat.title.isEmpty ? chat.short : chat.title) : ""
+        return button(FocusChatIntent(sessionId: chat.id)) {
+            HStack(spacing: 8) {
+                LiveStatusGlyph(state: chat.state, size: 11, ink: .black)
+                    .frame(width: 22, height: 22)
+                    .background(chat.state.tint, in: Circle())
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title.isEmpty ? chat.state.phaseLine : title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .privacySensitive(!title.isEmpty)
+                    if let detail = detail(chat, titled: !title.isEmpty) {
+                        Text(detail).font(.system(size: 11)).foregroundStyle(Self.grey).privacySensitive()
                     }
                 }
-                .accessibilityLabel(Text("Talk to this chat"))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if chat.state == .working || chat.state == .needsYou, let start = chat.startedAt { elapsed(since: start) }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(focused ? Self.raised : Self.surface, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(focused ? .isSelected : [])
+        .accessibilityValue(Text(chat.state.label))
+    }
+
+    /// The row's second line: the live step (Standard up); at Detailed the reply
+    /// line once the chat stops ("Finished" says less) and what the mic sent for
+    /// the focused chat. Under a title with no step, the phase line, so every
+    /// titled row says what it is doing. Nil at Minimal, where the phase line
+    /// is the whole row.
+    private func detail(_ chat: LiveChat, titled: Bool) -> String? {
+        guard showsText else { return nil }
+        let running = chat.state == .working || chat.state == .needsYou
+        if level == .detailed, chat.id == focus?.id, !state.heard.isEmpty, !state.listening { return state.heard }
+        if level == .detailed, !running, !chat.reply.isEmpty { return chat.reply }
+        if !chat.step.isEmpty { return chat.step }
+        return titled ? chat.state.phaseLine : nil
+    }
+
+    // MARK: Count line
+
+    /// The chats that are not rows, by state ("3 Working · 5 Done"), plus the
+    /// chats past the eight the card carries ("+2"). It opens the app's chat
+    /// list. At Detailed the mic sits at its end.
+    @ViewBuilder
+    private var tallyLine: some View {
+        let tally = cardTally(state)
+        let mic = Self.showsMic && level == .detailed
+        if !tally.isEmpty || (mic && focus != nil) {
+            HStack(spacing: 6) {
+                tallyWords(tally).frame(maxWidth: .infinity, alignment: .leading)
+                if mic, let focus { micButton(focus) }
             }
         }
+    }
+
+    @ViewBuilder
+    private func tallyWords(_ tally: CardTally) -> some View {
+        let words = HStack(spacing: 10) {
+            ForEach(tally.states, id: \.self) { item in
+                HStack(spacing: 4) {
+                    LiveStatusGlyph(state: item.state, size: 10)
+                    Text(verbatim: "\(item.count) \(item.state.label)")
+                }
+            }
+            if tally.more > 0 { Text(verbatim: "+\(tally.more)") }
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(Self.grey)
+        .lineLimit(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: tally.states.map { "\($0.count) \($0.state.label)" }.joined(separator: ", ")))
+        .accessibilityValue(tally.more > 0 ? Text("\(tally.more) more chats") : Text(verbatim: ""))
+        if interactive, !tally.isEmpty {
+            Link(destination: Self.chatsURL) { words }
+        } else {
+            words
+        }
+    }
+
+    private func micButton(_ focus: LiveChat) -> some View {
+        Group {
+            if #available(iOS 18, *) {
+                button(TalkToChatIntent(sessionId: focus.id)) { mic }
+            } else if interactive {
+                Link(destination: Self.listenURL(focus.id)) { mic }
+            } else {
+                mic
+            }
+        }
+        .accessibilityLabel(Text("Talk to this chat"))
     }
 
     private var mic: some View {
         MicGlyph().stroke(Self.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-            .frame(width: 16, height: 16)
-            .frame(width: 30, height: 30)
+            .frame(width: 12, height: 12)
+            .frame(width: 20, height: 20)
             .background(Self.surface, in: Circle())
-    }
-
-    /// The page of `size` chips that holds the focused chat, so it is always
-    /// shown, and the chat "+N" focuses: the next page's first (or the first
-    /// again). Nil when every chat is shown, so "+N" only counts chats past the eight.
-    static func page(_ chats: [LiveChat], focus: String?, size: Int) -> (shown: ArraySlice<LiveChat>, next: LiveChat?) {
-        let start = ((chats.firstIndex { $0.id == focus } ?? 0) / size) * size
-        let shown = chats[start..<min(start + size, chats.count)]
-        if shown.count == chats.count { return (shown, nil) }
-        return (shown, shown.endIndex < chats.count ? chats[shown.endIndex] : chats.first)
-    }
-
-    private func chips(_ count: Int) -> some View {
-        let (shown, next) = Self.page(state.chats, focus: focus?.id, size: count)
-        let hidden = state.chats.count - shown.count + state.more
-        return HStack(spacing: 6) {
-            ForEach(shown, id: \.id) { chip($0) }
-            if hidden > 0 {
-                Group {
-                    if let next {
-                        button(NextPageIntent(sessionId: next.id)) { chipLabel(on: false) { Text("+\(hidden)") } }
-                    } else if interactive {
-                        Link(destination: Self.chatsURL) { chipLabel(on: false) { Text("+\(hidden)") } }
-                    } else {
-                        chipLabel(on: false) { Text("+\(hidden)") }
-                    }
-                }
-                .accessibilityLabel(Text("\(hidden) more chats"))
-            }
-        }
-        .fixedSize()
-    }
-
-    private func chip(_ chat: LiveChat) -> some View {
-        let on = chat.id == focus?.id
-        let position = (state.chats.firstIndex { $0.id == chat.id } ?? 0) + 1
-        return button(FocusChatIntent(sessionId: chat.id)) {
-            chipLabel(on: on) {
-                LiveStatusGlyph(state: chat.state, size: 12)
-                if showsText, !chat.short.isEmpty { Text(chat.short).privacySensitive() }
-            }
-        }
-        .accessibilityAddTraits(on ? .isSelected : [])
-        // Minimal chips have no title: VoiceOver tells them apart by place.
-        .modifier(PositionLabel(on: !showsText || chat.short.isEmpty, text: Text("Chat \(position) of \(state.chats.count + state.more)"),
-                                value: Text(chat.state.label)))
-    }
-
-    private func chipLabel(on: Bool, @ViewBuilder _ content: () -> some View) -> some View {
-        HStack(spacing: 4, content: content)
-            .font(.system(size: 11, weight: .medium))
-            .lineLimit(1)
-            .foregroundStyle(on ? Color.white : Self.grey)
-            .padding(.horizontal, 7)
-            .frame(height: 24)
-            .background(on ? Self.raised : Self.surface, in: RoundedRectangle(cornerRadius: 10))
     }
 
     // MARK: Dictation and close
@@ -204,9 +201,9 @@ struct LiveCardView: View {
         .fixedSize()
     }
 
-    /// Under the strip, for the focused chat: Deny (and Allow from Standard up)
-    /// while a tool waits, Stop while it works, the close button once finished.
-    /// Allow asks for Face ID or the passcode (`AllowToolIntent`).
+    /// Under the count line, for the focused chat: Deny (and Allow from Standard
+    /// up) while a tool waits, Stop while it works, the close button once
+    /// finished. Allow asks for Face ID or the passcode (`AllowToolIntent`).
     @ViewBuilder
     private func actions(_ chat: LiveChat) -> some View {
         switch chat.state {
@@ -274,43 +271,6 @@ struct LiveCardView: View {
         } else {
             Button(action: {}, label: label).buttonStyle(.plain)
         }
-    }
-}
-
-private struct PositionLabel: ViewModifier {
-    let on: Bool
-    let text: Text
-    let value: Text
-
-    func body(content: Content) -> some View {
-        if on {
-            // .ignore makes a new element, which drops the Button's trait; add it back.
-            content.accessibilityElement(children: .ignore).accessibilityLabel(text).accessibilityValue(value).accessibilityAddTraits(.isButton)
-        } else {
-            content
-        }
-    }
-}
-
-/// The mascot on the card's left: the cat in a disc, the focused chat's status as a badge.
-struct LiveMascot: View {
-    let state: LiveChatState
-    var size: CGFloat = 44
-
-    var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            PixelCat(happy: state == .done)
-                .padding(size * 0.18)
-                .frame(width: size, height: size)
-                .background(LiveCardView.surface, in: Circle())
-            LiveStatusGlyph(state: state, size: size * 0.22, ink: .black)
-                .frame(width: size * 0.38, height: size * 0.38)
-                .background(state.tint, in: Circle())
-                .overlay(Circle().stroke(LiveCardView.background, lineWidth: 2))
-                .offset(x: 2, y: 2)
-        }
-        .accessibilityElement()
-        .accessibilityLabel(state.label)
     }
 }
 

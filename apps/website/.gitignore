@@ -1,2 +1,6 @@
 .vercel
 .env*
+
+# Generated from GitHub during the website build
+/contributors.json
+/contributors/

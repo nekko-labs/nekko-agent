@@ -154,20 +154,28 @@ export const STATUS_GROUPS = [
 ] as const;
 
 /**
+ * What a stopped chat is still watching: its armed watches, and the background
+ * watchers of its Claude Code, which has no `agent_watch`.
+ */
+export function wakeSourcesOf(chat: Pick<SessionSummary, 'activeWatchCount' | 'backgroundWatchCount'> | null | undefined): number {
+  return (chat?.activeWatchCount ?? 0) + (chat?.backgroundWatchCount ?? 0);
+}
+
+/**
  * A chat's activity group. Any `status` covers a first message on its way, which
  * no summary shows yet. A chat waiting on you leaves its phase until answered.
  * A working chat is in its phase, landing work (Shipping) included under
  * Verifying; one stopped on an error stays there, its glyph saying so. Reading
  * and changing are one phase, Building, so a chat that has only just been
  * sent, or only reads, is Building too (an older engine still says
- * `exploring`). A chat that has stopped is Watching while a watch is armed,
- * otherwise Done.
+ * `exploring`). A chat that has stopped is Watching while something can still
+ * wake it, otherwise Done.
  */
-export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase' | 'activeWatchCount'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase' | 'activeWatchCount' | 'backgroundWatchCount'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
   if (status === 'input') return NEEDS_INPUT_GROUP;
   if (status !== 'working' && status !== 'error') {
     if (chat?.exchangeCount === 0) return DRAFT_GROUP;
-    return (chat?.activeWatchCount ?? 0) > 0 ? 'status:watching' : 'status:done';
+    return wakeSourcesOf(chat) > 0 ? 'status:watching' : 'status:done';
   }
   const phase: string | undefined = chat?.phase;
   return phase === 'verifying' || phase === 'shipping' ? 'status:verifying' : 'status:building';

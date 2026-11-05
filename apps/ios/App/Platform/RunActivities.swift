@@ -61,7 +61,7 @@ final class RunActivities {
     private var runs: [String: Run] = [:]
     /// Closed with the card's button; off the card until the chat runs again.
     private var dismissed: Set<String> = []
-    /// The chat a chip tap brought up, until another chat newly needs you.
+    /// The chat a row tap brought up, until another chat newly needs you.
     var pinnedFocus: String?
     /// The chat the card's mic last sent to, and its reply line then: "Sent: ..." stays until that changes.
     private var sentTo: (id: String, reply: String)?
@@ -129,7 +129,7 @@ final class RunActivities {
         Task { @MainActor [weak self] in self?.refresh() }
     }
 
-    /// A chip (or "+N", which names the chat that starts the next page).
+    /// A row tap: that chat takes the focus (and the buttons).
     func focus(_ sessionId: String) {
         pinnedFocus = sessionId
         refresh(urgent: true)
@@ -296,11 +296,12 @@ final class RunActivities {
                 else { return nil }
             }
             let finished = state == .done || state == .failed
-            return LiveChat(id: s.id, short: shortTitle(s.title.isEmpty ? "Chat" : s.title), state: state, step: step,
+            let title = s.title.isEmpty ? "Chat" : s.title
+            return LiveChat(id: s.id, short: shortTitle(title), state: state, step: step,
                             reply: replyLine(s.lastReplyText), closeWord: closeWord(for: s.id, failed: state == .failed),
                             finishedAt: finished ? run?.finishedAt : nil,
                             callId: state == .needsYou ? live?.callId : nil, severity: state == .needsYou ? live?.severity : nil,
-                            startedAt: live?.startedAt)
+                            startedAt: live?.startedAt, title: title)
         }
     }
 

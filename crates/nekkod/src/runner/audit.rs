@@ -1,9 +1,9 @@
 //! `<data>/runners/audit.jsonl`: one line per job a runner ran, lost or
 //! stopped, and per VM that failed to start.
 
-use nekko_runner::Usage;
 use super::provider::PrRef;
 use super::supervisor::SlotState;
+use nekko_runner::Usage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{self, Write};

@@ -300,6 +300,8 @@ export interface AppSettings {
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;
+  /** The "Send your first prompt" intro has been shown (or skipped) on the first ever new chat. */
+  firstPromptIntroSeen?: boolean;
   /**
    * One-time notices the engine daemon leaves for the UI (for example
    * `claude-sign-in-changed`, written by crates/nekkod/src/claude_plan.rs).

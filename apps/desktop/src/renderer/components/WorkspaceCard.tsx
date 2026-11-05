@@ -14,6 +14,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
 import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
 import { SessionPrLinks } from './SessionPrLinks.js';
+import { wakeSourcesOf } from '../views/agentPanelView.js';
 
 /**
  * One workspace, as a card in the left sidebar.
@@ -276,29 +277,15 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* A chiplet: each card is its own small raised tile, so a column of them
-         reads as separate agents rather than one list. A chat's edge takes the
-         accent when it is the active one, so the thing this app is about is
-         findable without reading a word; a terminal's stays neutral. */
-      /* A card waiting on you (a question, or stopped on an error) takes the
-         active card's highlight too, so it is findable at a glance. */
-      className={`agent-chip group relative w-full cursor-pointer rounded-xl border px-3 py-1 text-left transition-colors duration-150 ${
-        isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'bg-surface hover:bg-surface-2'
-      }`}
-      style={{
-        borderColor: isChat && isActive
-          ? 'color-mix(in srgb, var(--accent) 70%, transparent)'
-          : isChat && (status === 'input' || status === 'error')
-            ? 'color-mix(in srgb, var(--accent) 35%, transparent)'
-            : 'var(--line)',
-      }}
+      /* Chat rows stay flat; selection is carried by their title and status. */
+      className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
       title={title}
       data-zone-tint={zoneTint}
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
       <div className="flex items-center gap-2">
-        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
+        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
           : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>

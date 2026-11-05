@@ -3500,6 +3500,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
 
 /* Prompt suggestions as one chip among the composer's actions. */
+.composer-suggestions-row { display: flex; justify-content: flex-end; min-width: 0; padding: 0 8px 6px; }
+.composer-suggestions-row:not(:has(button)) { display: none; }
+.agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
+.agent-chip-chat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .composer-suggestions-chip {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
@@ -3665,23 +3669,30 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .clean-start-tint { animation: none; }
 }
-/* Nekko and Indigo swap the shifting prism for a quiet glow from the top edge
-   of a window, shown only while its agent is thinking or replying, in Focus and
-   Dynamic alike. A new or finished chat stays plain, so the colour always means
-   "working". --nekko-glow (0 to 1) fades it in and out; only that number
-   animates, and only for the length of the fade. */
+/* The selected agent keeps its plum field from new chat through the full
+   transcript. A second static violet/rose palette crossfades by opacity;
+   inactive Dynamic panes stay neutral, even when they are working. */
 @property --nekko-glow { syntax: '<number>'; inherits: false; initial-value: 0; }
 :root:is([data-preset^='x-plum'], [data-preset^='x-indigo']) { --nekko-glow-rgb: 133 79 108; --nekko-glow-alpha: .3; }
 :root[data-theme='light']:is([data-preset^='x-plum'], [data-preset^='x-indigo']) { --nekko-glow-rgb: var(--nekko-main); --nekko-glow-alpha: .1; }
 :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .clean-start-tint { display: none; }
 :is([data-preset^='x-plum'], [data-preset^='x-indigo']) [data-clean-start] .clean-start::before { background: none; }
 :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window > .panel {
-  background: radial-gradient(90% 55% at 50% 0%, rgb(var(--nekko-glow-rgb) / calc(var(--nekko-glow-alpha) * var(--nekko-glow))), transparent 70%), var(--win);
+  isolation: isolate;
+  background: radial-gradient(110% 90% at 50% 0%, rgb(var(--nekko-glow-rgb) / calc(var(--nekko-glow-alpha) * var(--nekko-glow))), transparent 85%), var(--win);
   transition: --nekko-glow 700ms var(--ease-out, ease-out);
 }
-:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window[data-wall-working] > .panel { --nekko-glow: 1; }
+:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window[data-wall-selected] > .panel { --nekko-glow: 1; }
+:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window > .panel::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
+  background: radial-gradient(100% 90% at 15% 0%, rgb(107 77 153 / .22), transparent 80%), radial-gradient(100% 75% at 90% 100%, rgb(163 80 119 / .12), transparent 80%);
+  opacity: 0;
+}
+:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] > .panel::before { animation: agent-window-colour 24s ease-in-out infinite alternate; }
+@keyframes agent-window-colour { from { opacity: .1; } to { opacity: .9; } }
 @media (prefers-reduced-motion: reduce) {
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window > .panel { transition: none; }
+  :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] > .panel::before { animation: none; }
 }
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
@@ -3704,6 +3715,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
     0 18px 50px -22px color-mix(in srgb, var(--accent) 45%, transparent),
     0 2px 4px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
 }
+/* The frost's backdrop-filter makes the composer its own stacking context, so
+   its menus' z-index cannot beat the greeting cat (z 3-4) from inside. Lift the
+   whole composer while one is open (+ menu, slash/@ menus, model picker); when
+   closed it stays below so the cat's paws keep straddling its top edge. */
+[data-clean-start] .clean-start .composer:has([aria-expanded='true']) { z-index: 5; }
 /* Frost has no prism outline, including while typing. */
 [data-clean-start] .clean-start .composer::after { display: none; }
 /* Light themes use a whiter glass with the same soft, borderless depth. */

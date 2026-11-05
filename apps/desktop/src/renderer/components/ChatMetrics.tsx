@@ -236,7 +236,7 @@ export function EffortSlider(props: EffortProps) {
       <button
         ref={pop.anchor}
         type="button"
-        className="flex h-7 items-center justify-center gap-1.5 rounded-lg px-1 text-2xs text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+        className="effort-trigger flex h-7 items-center justify-center gap-1.5 rounded-lg px-1 text-2xs text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent"
         disabled={!available}
         title={!available ? metadata ? 'Effort unavailable: this provider reports no selectable effort choices for this model.' : 'Effort unavailable: this provider has not reported effort choices for this model.' : `Reasoning effort: ${shown}`}
         onClick={() => pop.setOpen((o) => !o)}

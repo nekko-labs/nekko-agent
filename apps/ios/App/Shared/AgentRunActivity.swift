@@ -13,7 +13,7 @@ struct NekkoCardAttributes: ActivityAttributes, Equatable {
 
     var computerId: String
     var computerName: String
-    /// What the card draws (icon-only chips at Minimal, the reply line at Detailed).
+    /// What the card draws (no titles at Minimal, the reply line at Detailed).
     /// Fixed for the card's life: a level change ends the card and starts a new one.
     var level: LiveLevel
 }
@@ -26,7 +26,6 @@ enum IntentRouter {
     static var stop: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     // The card's buttons.
     static var focus: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
-    static var nextPage: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     static var dismiss: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     static var talk: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     static var cancelTalk: (@MainActor @Sendable () async -> Void)?
@@ -100,7 +99,7 @@ struct StopRunIntent: LiveActivityIntent {
     }
 }
 
-/// A chip on the card: bring that chat up top.
+/// A row on the card: bring that chat into focus (the buttons answer it).
 struct FocusChatIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Show a chat on the card"
     static let isDiscoverable = false
@@ -113,26 +112,6 @@ struct FocusChatIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         await IntentRouter.focus?(sessionId)
-        return .result()
-    }
-}
-
-/// The "+N" chip: step the strip to the next chats. The strip shows the page
-/// that holds the focused chat and only the view knows how many chips fit, so
-/// the chip names the chat that starts the next page (the first one again after
-/// the last page) and the app focuses it.
-struct NextPageIntent: LiveActivityIntent {
-    static let title: LocalizedStringResource = "Show more chats on the card"
-    static let isDiscoverable = false
-
-    @Parameter(title: "Chat") var sessionId: String
-
-    init() {}
-
-    init(sessionId: String) { self.sessionId = sessionId }
-
-    func perform() async throws -> some IntentResult {
-        await IntentRouter.nextPage?(sessionId)
         return .result()
     }
 }

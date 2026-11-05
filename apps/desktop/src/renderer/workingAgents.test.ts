@@ -1,52 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import type { AgentEvent } from '@nekko-agent/shared';
-import { WorkingAgents } from './workingAgents.js';
-const event = (type: AgentEvent['type'], sessionId: string) => ({ type, sessionId }) as AgentEvent;
+import { describe, it, expect, vi } from 'vitest';
+import { applyEvent } from './liveRuns.js';
+import { localAgentStarts, onLocalAgentWorking, reportAgentWorking } from './workingAgents.js';
 
-describe('aggregate working indicator', () => {
-  it('stays active until the last agent finishes, including background agents', () => {
-    const s = new WorkingAgents();
-    s.event(event('text', 'background-a'));
-    s.event(event('text', 'b'));
-    expect(s.working).toBe(true);
-    s.event(event('done', 'background-a'));
-    expect(s.working).toBe(true);
-    s.event(event('error', 'b'));
-    expect(s.working).toBe(false);
-  });
-  it('excludes approval and question waits, resumes on progress, and ignores bookkeeping', () => {
-    const s = new WorkingAgents();
-    s.event(event('session_meta', 'a'));
-    s.event(event('compaction', 'a'));
-    expect(s.working).toBe(false);
-    s.event(event('text', 'a'));
-    s.event(event('question', 'a'));
-    expect(s.working).toBe(false);
-    s.event(event('question_resolved', 'a'));
-    expect(s.working).toBe(true);
-    s.event(event('tool_approval_required', 'a'));
-    expect(s.working).toBe(false);
-    s.event(event('tool_result', 'a'));
-    expect(s.working).toBe(true);
-  });
-  it('hydrates existing runs without resurrecting completed or unblocking waiting agents', () => {
-    const s = new WorkingAgents();
-    s.event(event('done', 'a'));
-    s.event(event('question', 'b'));
-    s.hydrate(['a', 'b'], {});
-    expect(s.working).toBe(false);
-    s.hydrate(['c'], { c: { approval: {} } } as never);
-    expect(s.working).toBe(false);
-    s.event(event('text', 'd'));
-    expect(s.working).toBe(true);
-    s.event(event('done', 'd'));
-    expect(s.working).toBe(false);
-  });
-});
+vi.stubGlobal('requestAnimationFrame', () => 0);
 
 describe('local sends', () => {
-  it('tells a listener the moment a pane sends, before the host says anything, and when it ends', async () => {
-    const { localAgentStarts, onLocalAgentWorking, reportAgentWorking } = await import('./workingAgents.js');
+  it('tells a listener the moment a pane sends, before the host says anything, and when it ends', () => {
     const heard: Array<[string, boolean]> = [];
     const off = onLocalAgentWorking((id, working) => heard.push([id, working]));
     reportAgentWorking('fresh', true);
@@ -57,5 +16,22 @@ describe('local sends', () => {
     expect(heard).toEqual([['fresh', true], ['fresh', false]]);
     expect(localAgentStarts()).not.toContain('fresh');
     reportAgentWorking('later', false);
+  });
+  it('ends with the turn, with no chat pane open to say so', () => {
+    reportAgentWorking('done-away', true);
+    reportAgentWorking('failed-away', true);
+    reportAgentWorking('other', true);
+    applyEvent({ type: 'done', sessionId: 'done-away', messageId: 'm' });
+    applyEvent({ type: 'error', sessionId: 'failed-away', message: 'boom' });
+    expect(localAgentStarts()).toEqual(['other']);
+    reportAgentWorking('other', false);
+  });
+  it('outlasts everything short of the end of the turn', () => {
+    reportAgentWorking('running', true);
+    applyEvent({ type: 'text', sessionId: 'running', delta: 'x' });
+    applyEvent({ type: 'session_meta', sessionId: 'running' });
+    expect(localAgentStarts()).toContain('running');
+    applyEvent({ type: 'done', sessionId: 'running', messageId: 'm' });
+    expect(localAgentStarts()).not.toContain('running');
   });
 });

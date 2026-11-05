@@ -391,6 +391,12 @@ export interface Session {
    */
   activeRun?: { startedAt: number };
   /**
+   * How the last turn failed, for a chat opened after the `error` event has gone.
+   * Cleared when the next turn starts, or by Dismiss (null). It only applies
+   * while `afterMessageId` is still the transcript's last message.
+   */
+  turnFailure?: { message: string; afterMessageId?: string } | null;
+  /**
    * The plan the agent itself wrote for this chat, via the `update_plan` tool:
    * what it decided to do after reading the request, kept live as it works.
    */
