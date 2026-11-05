@@ -49,7 +49,7 @@ struct ChatMascot: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Say hello to Nekko")
-        .accessibilityValue(greeting ? String(localized: "Hello!") : working ? String(localized: "Working") : String(localized: "Idle"))
+        .accessibilityValue(pull.animating ? String(localized: "Refreshing") : greeting ? String(localized: "Hello!") : working ? String(localized: "Working") : String(localized: "Idle"))
         .accessibilityIdentifier("chats.mascot")
         .task(id: greetingID) {
             guard greeting else { return }

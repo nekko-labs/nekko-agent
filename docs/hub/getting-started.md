@@ -120,7 +120,7 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 
 - Take the [walkthrough](/docs/walkthrough) for a tour of the app.
 - Set up [local models](/docs/local-models) or [sign in with a subscription](/docs/subscriptions).
-- [Pair your phone](/docs/remote) to use the agent away from your desk.
+- [Pair your phone](/docs/remote) to use the agent away from your desk. On iPhone, Nekko sits beside an open chat’s title. Pull **up** past the latest message to refresh without returning to the top; lists still refresh by pulling down. The spinner turns while loading, then Nekko grabs it and pulls it in once the reload finishes.
 - Want to help build it? Read [Contributing](/docs/contributing) and the [architecture](/docs/architecture).
 
 ### Closing the desktop UI and notifications
