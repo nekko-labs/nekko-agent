@@ -893,7 +893,7 @@ export const useStore = create<UiState>((set, get) => ({
     const settings = get().settings;
     const theme = settings?.theme ?? 'system';
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    // System follows the computer with the branded looks: Nekko Dark or Lilac.
+    // System follows the computer with the plum looks: Dark Nekko or Light Nekko.
     const picked = themePresetOf(settings);
     const presetId = resolveThemePreset(picked, prefersDark);
     const preset = presetId ? THEME_PRESETS.find((p) => p.id === presetId) : undefined;

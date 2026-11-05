@@ -18,25 +18,25 @@ beforeEach(() => {
 });
 
 describe('System theme', () => {
-  it('uses Nekko Dark when the computer is in dark mode', () => {
+  it('uses Dark Nekko when the computer is in dark mode', () => {
     darkMode(true);
     useStore.setState({ settings: system as any });
     useStore.getState().applyTheme();
     expect(attrs.get('data-theme')).toBe('dark');
-    expect(attrs.get('data-preset')).toBe('nekko-dark');
-    expect(props.get('--accent')).toBe('#c4b9ff');
-    expect(props.get('--accent-2')).toBe('#8ae4f2');
-    expect(useStore.getState().resolvedPreset).toBe('nekko-dark');
+    expect(attrs.get('data-preset')).toBe('x-plum-dark');
+    expect(props.get('--accent')).toBe('#c084b5');
+    expect(props.get('--accent-2')).toBe('#c99bb3');
+    expect(useStore.getState().resolvedPreset).toBe('x-plum-dark');
   });
-  it('uses Lilac when the computer is in light mode', () => {
+  it('uses Light Nekko when the computer is in light mode', () => {
     darkMode(false);
     useStore.setState({ settings: system as any });
     useStore.getState().applyTheme();
     expect(attrs.get('data-theme')).toBe('light');
-    expect(attrs.get('data-preset')).toBe('lilac');
-    expect(props.get('--accent')).toBe('#5b4ea7');
-    expect(props.get('--accent-2')).toBe('#9d8ce6');
-    expect(useStore.getState().resolvedPreset).toBe('lilac');
+    expect(attrs.get('data-preset')).toBe('x-plum-white');
+    expect(props.get('--accent')).toBe('#5a2352');
+    expect(props.get('--accent-2')).toBe('#8a4a7f');
+    expect(useStore.getState().resolvedPreset).toBe('x-plum-white');
   });
   it('switches live when the computer changes mode', () => {
     useStore.setState({ settings: system as any });
@@ -44,8 +44,8 @@ describe('System theme', () => {
     useStore.getState().applyTheme();
     darkMode(false);
     useStore.getState().applyTheme();
-    expect(attrs.get('data-preset')).toBe('lilac');
-    expect(props.get('--accent')).toBe('#5b4ea7');
+    expect(attrs.get('data-preset')).toBe('x-plum-white');
+    expect(props.get('--accent')).toBe('#5a2352');
   });
   it('keeps an accent the user chose on System', () => {
     darkMode(true);
@@ -53,7 +53,7 @@ describe('System theme', () => {
     useStore.getState().applyTheme();
     expect(props.get('--accent')).toBe('#ff0000');
   });
-  it.each([[true, 'dark', 'nekko-dark', '#c4b9ff'], [false, 'light', 'lilac', '#5b4ea7']])('treats a fresh profile with no saved theme as System (dark mode: %s)', (dark, mode, preset, accent) => {
+  it.each([[true, 'dark', 'x-plum-dark', '#c084b5'], [false, 'light', 'x-plum-white', '#5a2352']])('treats a fresh profile with no saved theme as System (dark mode: %s)', (dark, mode, preset, accent) => {
     darkMode(dark);
     useStore.setState({ settings: {} as any });
     useStore.getState().applyTheme();

@@ -47,8 +47,8 @@ export const THEME_PRESETS: ThemePreset[] = [
     mode: 'system',
     accent: '#6d5efc',
     accent2: '#06b6d4',
-    // Follows the computer: Nekko Dark in dark mode, Lilac in light (resolveThemePreset).
-    swatch: ['#0d0b18', '#c4b9ff', '#fbfaff', '#5b4ea7'],
+    // Follows the computer: Dark Nekko in dark mode, Light Nekko in light (resolveThemePreset).
+    swatch: ['#0c0c11', '#c084b5', '#fbfbfd', '#5a2352'],
     label: 'System',
   },
   {
@@ -1079,12 +1079,12 @@ export function experimentalFamilies(): Array<{ id: string; label: string; prese
 
 /**
  * The preset whose colours actually apply. System follows the computer's
- * light/dark mode with the branded looks, Nekko Dark or Lilac; every other id
+ * light/dark mode with the plum looks, Dark Nekko or Light Nekko; every other id
  * is itself.
  */
 export function resolveThemePreset(presetId: string | undefined, prefersDark: boolean): string | undefined {
   if (presetId !== 'system') return presetId;
-  return prefersDark ? 'nekko-dark' : 'lilac';
+  return prefersDark ? 'x-plum-dark' : 'x-plum-white';
 }
 
 /**
