@@ -289,7 +289,7 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
-> - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
+> - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. **+ → Paste image** adds photos from the clipboard. The computer sends small previews, not the originals; older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt

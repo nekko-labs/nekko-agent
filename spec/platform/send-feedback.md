@@ -5,7 +5,7 @@ area: platform
 
 # Send feedback from every app
 
-Issue: [#1004](https://github.com/nekko-labs/nekko-agent/issues/1004).
+Issues: [#1004](https://github.com/nekko-labs/nekko-agent/issues/1004), [#1725](https://github.com/nekko-labs/nekko-agent/issues/1725) (the desktop form below).
 
 ## Intent
 
@@ -14,6 +14,20 @@ Anyone using Nekko Agent, on any device, can tell Nekko Labs something is broken
 1. **Copy for an agent.** One button copies a ready-made prompt for the person's own coding agent (Claude Code, Codex, Nekko Agent itself). The prompt asks the agent to interview them, search existing issues for a duplicate, draft a title and description, and file the issue on `nekko-labs/nekko-agent` only after they approve, leaving out anything personal. The sheet shows the text before it is copied.
 2. **Quick note.** A text box (up to 4,000 characters) that sends straight to Nekko Labs through Nekko Cloud. An **Include app info** switch, off by default, adds what the sheet lists: app, version, OS and its version, and CPU type.
 3. **Open GitHub issues.** A link to <https://github.com/nekko-labs/nekko-agent/issues/new/choose>, which offers the bug report and feature request forms.
+
+## The desktop and Local Web UI form (2026-11-05)
+
+The sheet on desktop, the Local Web UI and Docker is one form that opens up as it is used, styled like the Scheduled Tasks editor. iPhone, iPad and Android keep the three-section sheet above.
+
+- **Always there:** the choice of **Good** or **Needs improvement** (nothing preselected), **Other ways** (collapsed, with the agent prompt and the GitHub issue forms as two separate options), and the contributing line linking to `CONTRIBUTING.md`.
+- **After choosing Needs improvement:** Summary, Description, Include app info and Send feedback.
+- **After choosing Good:** Summary, Description and Send feedback. Praise rarely needs app info, so it is not offered, and a switch left on before changing to Good sends nothing. Text typed before changing the choice stays.
+- **Required:** the choice, Summary (up to 120 characters) and Description. Send names the first thing missing, and pressing it with something missing shows each problem and moves focus to the first.
+- **The wire is unchanged.** The form joins everything into `message`, as `Needs improvement: <summary>`, a blank line, then the description (`feedbackNote` in `packages/shared/src/feedback.ts`). The 4,000 limit therefore covers the whole note, and the count under the description shows the whole note from the start.
+- **Wording stays positive:** "Needs improvement" and "needs work", never "broken" or a thumbs down. Good has a star-eyed Nekko and Needs improvement a wrench.
+- **Sent:** the form gives way to "Your feedback was sent successfully" with a check beside it, a line that depends on the choice, and the contributing line. It has no buttons of its own: the X or Escape closes it.
+- **Keyboard:** focus starts on the first choice and arrow keys change it. Enter in Summary moves to Description. Ctrl+Enter (⌘+Enter on a Mac) sends, and the sheet does not advertise it. Tab stays inside the sheet.
+- **Closing:** there is no Cancel. Escape, the X and clicking outside ask before discarding anything typed; a choice on its own is not a draft.
 
 ## Where the button is
 
@@ -50,11 +64,14 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 - Copy for an agent puts the exact prompt on the clipboard and confirms it.
 - Send is disabled for an empty note, keeps the text on failure, and shows a thank-you on success; a 429 says to try later.
 - With the switch off, the request has no `app` key.
+- On desktop and the Local Web UI, the fields and Send appear only after a choice, Good never sends app info, and a note over 4,000 characters can't be sent and says by how much.
 
 ## Status
 
 - Nekko Cloud `POST /v1/feedback` and the `feedback` table: implemented 2026-10-24, tested against PGlite; not yet deployed to Fly.
 - Desktop and Local Web UI sheet: implemented 2026-10-24. `nekkod` serves `feedback:info` and `feedback:send` (`crates/nekkod/src/feedback.rs`) and builds the app info itself, so the renderer can't add a field. Unit tested (Rust: field allow-list, body, a 429 against a local server; renderer: the three routes, app info off by default, Send disabled when empty) and captured in headless Chromium with a synthetic bridge. Not yet run in a packaged app or against the deployed endpoint.
+
+- Desktop and Local Web UI form: implemented 2026-11-05 (#1725). Unit tested, and the real component driven by keyboard and mouse in headless Edge with a synthetic bridge. Not yet run in a packaged app or against the deployed endpoint.
 
 - iPhone and iPad sheet: in progress (see #1004).
 

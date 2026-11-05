@@ -31,7 +31,7 @@ import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
-import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
+import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
 import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
@@ -64,7 +64,7 @@ import { PhotoViewer } from './PhotoViewer.js';
 import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -600,9 +600,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const delegationStrategy = useStore(s => s.settings?.orchestration?.strategy);
   const computer = useComputerOf(sessionId);
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
-  const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
+  const { providers: localProviders, providersLoaded, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
+      providersLoaded: s.providersLoaded,
       setMascotMood: s.setMascotMood,
       refreshSessions: s.refreshSessions,
     })),
@@ -938,6 +939,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   useEffect(() => {
     const cached = getCachedSession(sessionId);
     let live = true;
+    const release = holdTranscript();
     // After the first paint: the frame (and a cached transcript) goes on
     // screen before any of this is even asked for.
     const cancel = afterPaint(() => {
@@ -945,11 +947,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         if (!live) return;
         setSession(s);
         if (!cached) seedBrain(s);
-      }).catch(() => {});
+      }).catch(() => {}).finally(release);
       refreshCtx();
       useStore.getState().refreshSessionPrs(sessionId);
     });
-    return () => { live = false; cancel(); };
+    return () => { live = false; cancel(); release(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
@@ -1894,6 +1896,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
 
   const hasProvider = !!computer || !needsProviderSetup(providers, modelId ?? models[0]?.id);
+  // The list starts empty on every load: only a finished load can say there is nothing set up.
+  const setupNeeded = !hasProvider && providersLoaded;
   // An image chat runs on the engine's image model, not a chat provider, so it
   // can compose with no provider configured at all.
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
@@ -2021,11 +2025,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const canContinueReply = !!errorNotice && !question && !streaming && hasResumableProgress(session?.messages ?? []);
   // A transcript that ends on a cut-off reply (the app was closed mid-run, the
   // host restarted) has no `error` event left to announce it, so the notice is
-  // read off the record itself. Dismissing it is remembered per reply.
+  // read off the record itself, as is a failure the host saved for the same
+  // reason. Dismissing it is remembered per reply.
   const [dismissedInterruption, setDismissedInterruption] = useState<string | null>(null);
   useEffect(() => {
     if (!session) return;
-    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, !!held || finalizingReply.current, !!question);
+    const awaitingTranscript = !!held || finalizingReply.current;
+    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, awaitingTranscript, !!question);
     // A stale transcript can arrive before the completed record. Retire only
     // the inferred notice, never a provider error or a user-requested stop.
     if (reconcileInterruptionNotice(errorNotice, interrupted) !== errorNotice) {
@@ -2033,7 +2039,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       return;
     }
     if (errorNotice || dismissedInterruption === lastMsgId) return;
-    if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
+    const failure = streaming || awaitingTranscript || question ? null : savedTurnFailure(session);
+    if (failure) setErrorNotice(failure);
+    else if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
@@ -2433,7 +2441,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const columnWidth = Math.max(0, (paneWidth || 800) - 60);
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
-  const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
+  const welcomeState = chatWelcomeState({ loaded: !!session, messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
   const wavePreset = useStore((s) => s.resolvedPreset);
   const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(wavePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
@@ -2654,20 +2662,20 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               // On the wall the window's own reveal is the entrance; a second
               // fade here played inside it as a separate animation.
               <div className={`${commandCenter ? '' : 'fade-in '}mt-16 flex flex-col items-center gap-3 text-center`} data-chat-welcome>
-                {!hasProvider ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
+                {setupNeeded ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
                   <h2 className="text-base font-semibold">
-                    {!hasProvider ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
+                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
                   </h2>
                   <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
-                    {!hasProvider
+                    {setupNeeded
                       ? 'Connect an AI account or a local model. We’ll walk you through it — no technical experience needed.'
                       : needsModel
                         ? 'Choose a model here, or let Auto pick per message.'
                         : 'Ask a question or hand over a task. Use / for skills and prompts, @ to attach files, + for photos, videos and folders. Paste or drop any file.'}
                   </p>
                 </div>
-                {!hasProvider ? (
+                {setupNeeded ? (
                   <button className="btn btn-primary" onClick={() => useStore.getState().setView('models')}>Set up my first agent →</button>
                 ) : null}
                 {surface !== 'transcript' && welcomeState.modelChoice && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
@@ -2746,7 +2754,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <span className="mr-2 font-medium" style={{ color: tone }}>{interruption.title}</span>
                         {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
                       </span>
-                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
+                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => {
+                        setDismissedInterruption(lastMsgId ?? null);
+                        setErrorNotice(null);
+                        if (session?.turnFailure) void window.nekko.setSessionOptions(sessionId, { turnFailure: null }).catch(() => {});
+                      }}>
                         <CloseIcon className="h-3 w-3" />
                       </button>
                     </div>
@@ -3144,7 +3156,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[44px]' : 'min-h-[64px]'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-5 pb-2 pt-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
+                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (setupNeeded ? 'Add a model provider in Models first' : 'Message Nekko Agent…  (/ for prompts, @ to attach files)')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}

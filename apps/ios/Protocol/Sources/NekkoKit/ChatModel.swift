@@ -38,6 +38,8 @@ public final class ChatModel {
     private var savedBlocks: [Block] = [] { didSet { merge() } }
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
     private var shownIds: [String: String] = [:] { didSet { merge() } }
+    /// Only the current outgoing prompt, until the computer returns its thumbnails.
+    private var outgoingPhotos: (id: String, images: [String])?
     public private(set) var turn = LiveTurn() {
         didSet {
             if running != turn.running { running = turn.running }
@@ -241,6 +243,9 @@ public final class ChatModel {
             // Keep the ids of what was on screen when the saved transcript replaces the live one.
             let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
             if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
+            if let outgoingPhotos, session.messages.contains(where: { (shownIds[$0.id] ?? $0.id) == outgoingPhotos.id }) {
+                self.outgoingPhotos = nil
+            }
             await refreshAgentState()
             _ = await (skillsRead, contextRead)
         } catch {
@@ -374,6 +379,7 @@ public final class ChatModel {
         }
         let at = now()
         let shown = skill.map { "/\($0.name) \(text)".trimmingCharacters(in: .whitespaces) } ?? text
+        outgoingPhotos = images.isEmpty ? nil : ("pending-\(at)", images)
         turn = LiveTurn(running: true, blocks: [.user(id: "pending-\(at)", text: shown, at: at, images: images.count)], startedAt: at)
         sending = true
         // Resolves only when the whole turn ends; the events carry the progress.
@@ -394,7 +400,10 @@ public final class ChatModel {
             } catch {
                 var t = self.turn
                 let started = t.blocks.contains { $0.id != "pending-\(at)" }
-                if !started { t.blocks.removeAll { $0.id == "pending-\(at)" } }
+                if !started {
+                    t.blocks.removeAll { $0.id == "pending-\(at)" }
+                    self.outgoingPhotos = nil
+                }
                 t.running = false
                 if let e = error as? RelayError, e.fromComputer {
                     // The computer turned it down: the prompt goes back to the composer.
@@ -592,7 +601,12 @@ public final class ChatModel {
 
     /// A message's photos as the computer sent them (small JPEG data URLs; `""` for one it kept back).
     public func photos(_ messageId: String) -> [String] {
-        session?.messages.first { $0.id == messageId }?.images ?? []
+        let savedId = shownIds.first { $0.value == messageId }?.key ?? messageId
+        if let message = session?.messages.first(where: { $0.id == savedId }) { return message.images }
+        if let outgoingPhotos, outgoingPhotos.id == messageId, turn.blocks.contains(where: { $0.id == messageId }) {
+            return outgoingPhotos.images
+        }
+        return []
     }
 
     // MARK: Projection

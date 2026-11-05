@@ -129,6 +129,19 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, real renderer entry against a stub bridge in a hidden Electron window, warm reload, 3 runs each of `main` and the PR. Simulated delays: providers 10ms, model list 1500ms, transcript 150ms, 1,500-message chat. Reduced-motion path. Times are from the new page's first script.
+
+| Metric | Before | After |
+|---|---|---|
+| Overlay gone | 589, 652, 427ms | 604, 650, 647ms |
+| Chat on screen | 323, 368, 361ms | 320, 447, 367ms |
+| Samples showing a wrong screen | 7, 6, 7 | 0, 0, 0 |
+
+Why: the overlay now waits for the provider list and transcripts, but not the model list, a live provider call once its catalog is 5 minutes old. An earlier version of the PR did wait for it and took 1943ms in one run with the same delays. Source: this PR.
+
 ### #1833 iPhone: cat from the first frame, straight to the zoom after Face ID (2026-11-05)
 Area: renderer
 Result: improvement

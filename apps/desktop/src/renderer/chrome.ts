@@ -18,6 +18,7 @@ interface WindowChrome {
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: { color: string; symbolColor: string }) => void;
+  onPageReloading: (listener: (fadeMs: number) => void) => void;
 }
 
 /** The bridge, or `undefined` when this isn't the desktop shell. */
