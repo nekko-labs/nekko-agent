@@ -39,6 +39,14 @@ until the user came back. Every user and project now gets the watch by default.
   host's watch on it, when a wake-up fails to deliver, or after 24 wake-ups for
   that PR in that chat. A turn the user stopped arms nothing. Merged and closed
   PRs are remembered per daemon run, so old PRs are read once, not every turn.
+- Not armed for a chat the host may not wake `[fixed 2026-11-05]`: a Claude
+  Code chat on a Claude plan, whose `unattended_runs` row is off
+  (`claude:capability`, the same answer admission's gate uses). Before, the
+  watch was armed there anyway and its wake-up was refused, so the chat showed
+  "Scheduled runs need Claude with an API key." after the agent's reply. Claude
+  on an API key or a cloud account, and a plan whose row the user or a signed
+  policy turned on, are watched as before. A watch armed before the fix still
+  fails once and then stops.
 - Not armed in incognito, offline, archived or training-run chats. Child
   (delegated) chats are armed like any chat, since the parent's transcript does
   not show the PR as opened.
@@ -58,7 +66,8 @@ until the user came back. Every user and project now gets the watch by default.
 
 `crates/nekkod/src/pr_autowatch.rs` (which PRs, the continuation, when to stop),
 `Watches::watch_opened_prs` in `watches.rs` (arming, sharing the tool's create
-path), called from `Turns::after_turn_hooks` in `turns.rs`.
+path), called from `Turns::after_turn_hooks` in `turns.rs`, which first asks
+`claude:capability` for `unattended_runs` (`pr_autowatch::wakes_allowed`).
 
 ## Not verified
 
