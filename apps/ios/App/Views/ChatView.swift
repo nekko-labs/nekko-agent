@@ -59,7 +59,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         // No keyboard toolbar here: on iOS 26 its Done floats over the
         // composer's send button. Scrolling or tapping the transcript puts
-        // the keyboard away, and the message box has a VoiceOver action for it.
+        // the keyboard away; the in-card toolbar has a hide-keyboard button too.
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
