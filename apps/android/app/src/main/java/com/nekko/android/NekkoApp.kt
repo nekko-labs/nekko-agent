@@ -89,6 +89,8 @@ class NekkoApp : Application() {
             helloSigner = com.nekko.android.security.KeystoreHelloSigner(),
             routeAllowed = RoutePolicy::allowed,
             offlineFiles = OfflineFileStore(this),
+            // Every paired computer stays connected, as on the iPhone (decision 0047).
+            stayConnected = true,
             onForget = { id ->
                 newChatDefaults.forget(id)
                 paneLayouts.forget(id)

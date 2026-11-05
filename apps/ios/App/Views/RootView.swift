@@ -382,14 +382,14 @@ struct CatMark: View {
     }
 }
 
-/// The brand mark on its own: the head in the brand lavender, with no tile
+/// The brand mark on its own: the head in the brand plum secondary, with no tile
 /// behind it, as the desktop, Android and the opening animation show it. The
 /// tiled square is only the Home Screen icon.
 struct BrandMark: View {
-    static let lavender = Color(red: 0x9d / 255, green: 0x8c / 255, blue: 0xe6 / 255)
+    static let ink = Color(red: 0x85 / 255, green: 0x4f / 255, blue: 0x6c / 255)
 
     var body: some View {
-        CatMark().foregroundStyle(Self.lavender).accessibilityHidden(true)
+        CatMark().foregroundStyle(Self.ink).accessibilityHidden(true)
     }
 }
 

@@ -6,9 +6,9 @@ package com.nekko.android.ui.theme
 
 /** The desktop's theme presets, in its order. */
 val THEME_PRESETS: List<ThemePreset> = listOf(
-    ThemePreset("system", "System", ThemePreset.Mode.SYSTEM, accent = 0xFF6D5EFC, accent2 = 0xFF06B6D4, family = null, paper = null, surface = null, surface2 = null, ink = null, inkSoft = null, inkFaint = null, line = null),
-    ThemePreset("light", "Light", ThemePreset.Mode.LIGHT, accent = 0xFF6D5EFC, accent2 = 0xFF06B6D4, family = null, paper = null, surface = null, surface2 = null, ink = null, inkSoft = null, inkFaint = null, line = null),
-    ThemePreset("dark", "Dark", ThemePreset.Mode.DARK, accent = 0xFF8B7DFF, accent2 = 0xFF22D3EE, family = null, paper = null, surface = null, surface2 = null, ink = null, inkSoft = null, inkFaint = null, line = null),
+    ThemePreset("system", "System", ThemePreset.Mode.SYSTEM, accent = 0xFF5A2352, accent2 = 0xFF8A4A7F, family = null, paper = null, surface = null, surface2 = null, ink = null, inkSoft = null, inkFaint = null, line = null),
+    ThemePreset("light", "Light", ThemePreset.Mode.LIGHT, accent = 0xFF5A2352, accent2 = 0xFF8A4A7F, family = null, paper = null, surface = null, surface2 = null, ink = null, inkSoft = null, inkFaint = null, line = null),
+    ThemePreset("dark", "Dark", ThemePreset.Mode.DARK, accent = 0xFFC084B5, accent2 = 0xFFC99BB3, family = null, paper = null, surface = null, surface2 = null, ink = null, inkSoft = null, inkFaint = null, line = null),
     ThemePreset("nebula", "Nebula", ThemePreset.Mode.DARK, accent = 0xFF9D8CE6, accent2 = 0xFFD98BB6, family = null, paper = 0xFF0B0A12, surface = 0xFF15131F, surface2 = 0xFF1E1B2B, ink = 0xFFECE9F5, inkSoft = 0xFFA7A1BB, inkFaint = 0xFF88839B, line = 0xFF262334),
     ThemePreset("terminal", "Terminal", ThemePreset.Mode.DARK, accent = 0xFF3FB96A, accent2 = 0xFF8FBF3A, family = null, paper = 0xFF080A08, surface = 0xFF111711, surface2 = 0xFF192019, ink = 0xFFE8F5E8, inkSoft = 0xFF8FAB8F, inkFaint = 0xFF7A8C7A, line = 0xFF1F281F),
     ThemePreset("nord", "Nord", ThemePreset.Mode.DARK, accent = 0xFF88C0D0, accent2 = 0xFF81A1C1, family = null, paper = 0xFF1E222A, surface = 0xFF252A33, surface2 = 0xFF2E3440, ink = 0xFFECEFF4, inkSoft = 0xFF9CA6B6, inkFaint = 0xFF969FAB, line = 0xFF3B4252),

@@ -22,8 +22,8 @@ struct SplashView: View {
     @State private var held = false
     @State private var faded = false
 
-    /// The brand plum (spec/brand/colour-palette.md).
-    static let ground = Color(red: 0x19 / 255, green: 0, blue: 0x19 / 255)
+    /// The brand plum, the app icon's tile (spec/brand/colour-palette.md).
+    static let ground = Color(red: 0x19 / 255, green: 0x00 / 255, blue: 0x19 / 255)
     private static let ink = Color.white
     /// One beat, in seconds: the desktop's beats, quicker, so build and zoom take about a second.
     private static let B = 0.28

@@ -30,7 +30,7 @@ The quickest way to start is the installer.
    - **macOS (Apple silicon):** the `.dmg`
    - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
 2. Run it. On macOS, drag Nekko Agent into Applications.
-3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab. Click a model's name there to make it the default for new chats.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
@@ -289,6 +289,8 @@ other models and runtimes remain available while one downloads.
 After a reply, **Suggested follow-ups** can offer relevant next messages such as **Inspect the saved PNGs directly** or **Try another image viewer**. Each button sends the words it displays; nothing is sent until you choose one. These suggestions are not questions from you or approval requests from the agent.
 
 When delegation is available, use the small sliding toggle to choose **This chat** (the default) or **Subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
+
+Starred models stay listed under their provider as well as in the model picker shortcuts. Either entry selects the same model. To reorder a monitor card, press its header and move the pointer; clicking without movement does not lift it or show a landing preview.
 
 ### Text formatting toolbar
 
