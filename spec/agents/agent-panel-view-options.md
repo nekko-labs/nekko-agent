@@ -10,7 +10,7 @@ split-from: SPEC.md (2026-10-22)
 
 - **Group by:** Activity (default since 2026-10-26; the agent loop since 2026-11-03: Draft, Exploring, Building, Verifying, Shipping; called Status before), Project (the default until then), Date (Today, Yesterday, Previous 7 days, Previous 30 days, Older, by last update or by creation when sorting by creation), or None (one plain list with no headers). Outside Project grouping, completed chats gather in one **Completed** group at the bottom, folded until opened.
 - **Sort by:** Manual (default: the order cards were dragged into, newest first for the rest), Last updated, Date created or Name, with Descending / Ascending. Picking Name starts A to Z and a date starts newest first. Manual has no direction.
-- **Show:** **Metadata** (the model, context, git and sub-agent lines under each card's title; off leaves the title row alone), **Model provider** (where the card's model comes from, as subtext on its own line under the model; disabled while Metadata is off) `[added 2026-10-23]`, **Automations** (chats an automation started) and **Empty groups** (projects or buckets with no active agents; the General bucket still hides when empty).
+- **Show:** **Metadata** (the model, context, git and sub-agent lines under each card's title; off leaves the title row alone), **Model provider** `[added 2026-10-23, removed 2026-11-06]`, **Automations** (chats an automation started) and **Empty groups** (projects or buckets with no active agents; the General bucket still hides when empty).
 - **Reset to defaults** restores the original panel and is disabled when nothing differs.
 - Dragging cards into order works only when grouped by project in manual order, the one arrangement where that order is what the panel shows; projects can be dragged only when grouped by project. Group header **+** and terminal buttons appear only in project grouping.
 - The choice is a per-window preference in `localStorage` (`nekko.agentPanelView`), like the panel width; invalid saved values fall back field by field. No host calls, storage schema, permissions or network use change.
@@ -27,7 +27,7 @@ Verification: regression tests and isolated matching light/dark renderer capture
 
 - A card whose agent is waiting on you (a question or approval) or stopped on an error takes the same highlighted background as the active card, so it can be found in a column without reading.
 - The waiting glyph is orange (`--attention`, its own token, louder than the amber warning) and drawn a size larger than its slot, like the working rocket, so the titles stay aligned.
-- The model line names the model alone ("Opus 5.5"), followed by the context readout. The provider ("Claude", "Local", "ChatGPT (subscription)") is fainter subtext on the line under it, toggled by **Show > Model provider** (on by default). The hover title still reads "provider / model id".
+- The model line names the model alone ("Opus 5.5"), followed by the context readout. The hover title reads "provider / model id". `[updated 2026-11-06]` The card no longer shows the provider as a line of its own under the model, and the **Show > Model provider** toggle is gone: the line cost every card a row for something the model name nearly always implies. A card on another computer still names that computer on the line under the model.
 
 
 ## Compact horizontal row
