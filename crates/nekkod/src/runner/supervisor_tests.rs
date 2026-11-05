@@ -1,13 +1,13 @@
 use super::*;
 use crate::runner::egress::Egress;
-use crate::runner::provider::{Minted, PrRef};
+use crate::runner::provider::{JobSteps, Minted, PrRef};
 use crate::runner::signals::HostState;
 use crate::runner::store::{GithubLink, GitlabLink, Link};
 use crate::runner::vm::GITHUB_SEED;
 use crate::runner::vm::Halt;
 use nekko_cloud::vault::Vault;
 use nekko_machine::activity::Power;
-use nekko_runner::{KeepAwake, Pressure, Priority, RunnerSettings, Scope, Thermal};
+use nekko_runner::{KeepAwake, Pressure, Scope, Thermal};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -215,8 +215,15 @@ impl Provider for FakeProvider {
         st.job.clone().unwrap_or(Ok((st.status == RunnerStatus::Busy).then(job_ref)))
     }
 
-    async fn queued(&self, _: &RunnerRecord) -> Result<u32, ProviderError> {
-        Ok(self.0.lock().unwrap().queued)
+    /// `queued` jobs of acme/app, ids 1 to n.
+    async fn queued(&self, _: &RunnerRecord) -> Result<Vec<QueuedJob>, ProviderError> {
+        let n = self.0.lock().unwrap().queued;
+        Ok((1..=u64::from(n))
+            .map(|job_id| QueuedJob {
+                job: JobRef { repo: "acme/app".into(), job_id, ..Default::default() },
+                ..Default::default()
+            })
+            .collect())
     }
 
     async fn remove(&self, _: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
@@ -232,6 +239,11 @@ impl Provider for FakeProvider {
     async fn rerun(&self, _: &RunnerRecord, _: &JobRef) -> Result<(), ProviderError> {
         self.1.lock().unwrap().push("rerun".into());
         self.0.lock().unwrap().rerun.pop_front().unwrap_or(Ok(()))
+    }
+
+    async fn cancel(&self, _: &RunnerRecord, _: &JobRef) -> Result<(), ProviderError> {
+        self.1.lock().unwrap().push("cancel".into());
+        Ok(())
     }
 }
 
@@ -1711,4 +1723,83 @@ async fn an_app_key_stays_while_a_queued_removal_needs_it() {
     sense.0.lock().unwrap().wall_secs += 60.0;
     wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
     assert_eq!(log.lock().unwrap().iter().filter(|l| *l == "remove 100").count(), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_declined_job_starts_no_vm_and_shows_in_the_queue() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.queued(1);
+    h.sup.ask("r1", Ask::Decline("acme/app".into(), 1));
+    h.tick_for(120).await;
+    assert_eq!(h.count("mint"), 0);
+    let q = h.view().queue;
+    assert_eq!((q.len(), q[0].declined, q[0].accepted), (1, true, false));
+    // Undone, it is taken like any other.
+    h.sup.ask("r1", Ask::Undo("acme/app".into(), 1));
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn accept_now_starts_a_vm_the_mode_would_hold() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.mac(|m| m.idle_seconds = Some(30.0));
+    h.queued(1);
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0, "Do not disturb holds while the owner types");
+    assert!(h.view().accept_why.is_empty(), "Runner first would take it");
+    h.sup.ask("r1", Ask::Accept("acme/app".into(), 1));
+    h.tick_for(5).await;
+    assert_eq!(h.count("mint"), 1);
+    assert!(h.view().slots[0].boosted);
+    // The job runs on though the owner gets busy, which drains Do not disturb within 120 s.
+    h.status(RunnerStatus::Busy);
+    h.queued(0);
+    h.mac(|m| m.user_cpu_pct = 80.0);
+    h.tick_for(300).await;
+    assert_eq!(h.count("request_stop") + h.count("kill"), 0);
+    assert_eq!(h.view().slots[0].state, SlotState::Running);
+}
+
+#[tokio::test(start_paused = true)]
+async fn accept_now_keeps_the_hard_limits() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.mac(|m| m.host.as_mut().unwrap().thermal = Thermal::Critical);
+    h.queued(1);
+    h.sup.ask("r1", Ask::Accept("acme/app".into(), 1));
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0);
+    assert_eq!(h.view().accept_why, vec![Reason::ThermalCritical]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_accept_ends_when_its_job_leaves_the_queue() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.mac(|m| m.idle_seconds = Some(30.0));
+    h.queued(2);
+    h.sup.ask("r1", Ask::Accept("acme/app".into(), 2));
+    h.queued(0);
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0);
+    assert!(h.view().queue.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_running_job_is_asked_again_for_its_steps() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.running().await;
+    h.status(RunnerStatus::Busy);
+    let steps = JobSteps { done: 3, total: 8, current: Some("Build".into()) };
+    h.prov.0.lock().unwrap().job = Some(Ok(Some(JobRef { steps: Some(steps.clone()), ..job_ref() })));
+    h.tick_for(20).await;
+    assert_eq!(h.view().slots[0].job.as_ref().and_then(|j| j.steps.clone()), Some(steps));
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_owners_rerun_is_sent_on_the_next_tick() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.tick_for(5).await;
+    h.sup.ask("r1", Ask::Rerun(job_ref()));
+    h.tick_for(5).await;
+    assert_eq!(h.count("rerun"), 1);
 }

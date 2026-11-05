@@ -40,7 +40,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use store::{Link, RunnerRecord, Store, same_scope, same_target};
-use supervisor::{RunnerState, RunnerView, Supervisor, TICK};
+use supervisor::{Ask, RunnerState, RunnerView, Supervisor, TICK};
 use vm::HelperVm;
 use vm::Vm;
 
@@ -52,12 +52,16 @@ pub const CHANNELS: &[&str] = &[
     "runner:setEnabled",
     "runner:jobLog",
     "runner:vmLog",
+    "runner:liveLog",
+    "runner:job",
 ];
 /// Pushed with `RunnerView[]` whenever the views change.
 pub const EVENT: &str = "runner:changed";
 const NO_RUNNER: &str = "No runner with that id.";
 /// The most of a job's log `runner:jobLog` returns: its end, where a failure is.
 const JOB_LOG_TAIL: usize = 256 * 1024;
+/// The most of a running VM's console `runner:liveLog` returns.
+const LIVE_LOG_TAIL: usize = 64 * 1024;
 const FORK_APPROVAL_OPEN: &str = "This public repo doesn't hold outside contributors for approval yet. Turn that on in its Actions settings on GitHub, then choose Connect GitHub to finish.";
 /// How often the router is asked for its public address, and how often the gateway is checked for a change.
 const WAN_EVERY: Duration = Duration::from_secs(300);
@@ -96,6 +100,8 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     /// True once the tick loop runs (VM support is there).
     looping: AtomicBool,
     pending: std::sync::Mutex<Option<Pending>>,
+    /// What the owner asked of a runner's jobs, by runner id; the next step applies it.
+    asks: std::sync::Mutex<Vec<(String, Ask)>>,
     /// The views last published; `runner:list` answers from here.
     views: std::sync::Mutex<Vec<RunnerView>>,
     /// Vault items a connect is storing, with how many connects are in flight.
@@ -286,6 +292,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             sup: tokio::sync::Mutex::new(sup),
             looping: AtomicBool::new(false),
             pending: std::sync::Mutex::new(None),
+            asks: std::sync::Mutex::default(),
             views: std::sync::Mutex::new(views),
             connecting: std::sync::Mutex::new(HashMap::new()),
             queued_keys: std::sync::Mutex::default(),
@@ -353,6 +360,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             for id in p.reset {
                 s.reset(&id);
             }
+        }
+        for (id, ask) in self.asks.lock().map(|mut a| std::mem::take(&mut *a)).unwrap_or_default() {
+            s.ask(&id, ask);
         }
         if tick {
             s.tick().await;
@@ -427,6 +437,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     repos: Vec::new(),
                     fork_approval_open: false,
                     recent: Vec::new(),
+                    queue: Vec::new(),
+                    accept_why: Vec::new(),
                     suggested_size: None,
                 });
                 let (was, now) = (&v.config.settings, &r.config.settings);
@@ -495,6 +507,20 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         if channel == "runner:vmLog" {
             return self.vm_log(&id, arg(1).as_str().unwrap_or_default());
         }
+        if channel == "runner:liveLog" {
+            return self.live_log(&id, arg(1).as_str().unwrap_or_default());
+        }
+        if channel == "runner:job" {
+            let (action, repo, job_id) = (arg(1), arg(2), arg(3));
+            return self
+                .job_action(
+                    &id,
+                    action.as_str().unwrap_or_default(),
+                    repo.as_str().unwrap_or_default(),
+                    job_id.as_u64(),
+                )
+                .await;
+        }
         if github_setup::CHANNELS.contains(&channel) {
             return self.github_setup(channel, arg(0)).await;
         }
@@ -553,6 +579,85 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         }
         .map_err(|e| e.to_string())?;
         Ok(json!(tail(&text, JOB_LOG_TAIL)))
+    }
+
+    /// The end of a running VM's console: the guest's boot log, then the job's output as it runs.
+    fn live_log(&self, id: &str, name: &str) -> Result<Value, String> {
+        let live = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.slots)
+            .any(|s| s.vm == name);
+        // The name comes from our own view, so it is a plain folder name under `vms/`.
+        if !live || name.is_empty() {
+            return Err("That VM is not running for this runner.".into());
+        }
+        let path = self.dir.join("vms").join(name).join(vm::CONSOLE_LOG);
+        match std::fs::read(&path) {
+            Ok(b) => Ok(json!(tail(&String::from_utf8_lossy(&b), LIVE_LOG_TAIL))),
+            // Not written yet: the guest has not booted far enough.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!("")),
+            Err(e) => Err(format!("Couldn't read the live log: {e}")),
+        }
+    }
+
+    /// Acts on one of runner `id`'s jobs: `decline`, `accept` or `undo` a queued one,
+    /// `cancel` or `restart` a running one, `rerun` a recent one. Only jobs the runner's
+    /// view lists, so the channel never touches a job this Mac has nothing to do with.
+    async fn job_action(&self, id: &str, action: &str, repo: &str, job_id: Option<u64>) -> Result<Value, String> {
+        let job_id = job_id.ok_or("Which job?")?;
+        let (queued, running, recent) = {
+            let views = self.views.lock().map_err(|_| "The runner views are unavailable.")?;
+            let v = views.iter().find(|v| v.config.id == id).ok_or(NO_RUNNER)?;
+            let queued = v.queue.iter().any(|q| q.job.repo == repo && q.job.job_id == job_id);
+            let running = v.slots.iter().filter_map(|s| s.job.clone()).find(|j| j.repo == repo && j.job_id == job_id);
+            let recent =
+                v.recent.iter().find(|l| l.repo.as_deref() == Some(repo) && l.job_id == Some(job_id)).map(|l| {
+                    provider::JobRef {
+                        repo: repo.to_string(),
+                        job_id,
+                        workflow: l.workflow.clone().unwrap_or_default(),
+                        job: l.job.clone().unwrap_or_default(),
+                        url: l.url.clone().unwrap_or_default(),
+                        pr: l.pr.clone(),
+                        ..Default::default()
+                    }
+                });
+            (queued, running, recent)
+        };
+        if !self.looping.load(Ordering::SeqCst) {
+            return Err("The runner isn't running on this Mac.".into());
+        }
+        let ask = match action {
+            "decline" | "accept" | "undo" if !queued => return Err("That job is no longer waiting.".into()),
+            "decline" => Ask::Decline(repo.into(), job_id),
+            "accept" => Ask::Accept(repo.into(), job_id),
+            "undo" => Ask::Undo(repo.into(), job_id),
+            "cancel" | "restart" => {
+                let job = running.ok_or("That job is no longer running here.")?;
+                let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+                let c = self.connectors.as_ref().ok_or("Jobs can't be cancelled here.")?;
+                match rec.link {
+                    Link::Github(_) => c.github.cancel(&rec, &job).await,
+                    Link::Gitlab(_) => c.gitlab.cancel(&rec, &job).await,
+                }
+                .map_err(|e| e.to_string())?;
+                if action == "cancel" {
+                    return Ok(Value::Null);
+                }
+                Ask::Rerun(job)
+            }
+            "rerun" => Ask::Rerun(recent.ok_or("That job is not one of this runner's recent jobs.")?),
+            _ => return Err(format!("unknown job action {action}")),
+        };
+        if let Ok(mut a) = self.asks.lock() {
+            a.push((id.to_string(), ask));
+        }
+        self.wake.notify_one();
+        Ok(Value::Null)
     }
 
     /// The console log of a VM in the runner's recent list, as the guest wrote it.
