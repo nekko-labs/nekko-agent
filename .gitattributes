@@ -6,3 +6,6 @@
 /vendor/agent-browser/stdio.patch -text
 # The bundled Mermaid is pinned by sha256 (scripts/vendor-mermaid.mjs --check): store its bytes exactly.
 /vendor/mermaid/mermaid.min.js -text -diff linguist-vendored
+# An append-only log every measuring PR adds to: keep both sides on a merge.
+# (queue-repair.yml sets the same rule on its runner for branches cut before this.)
+/docs/perf-history.md merge=union

@@ -11,7 +11,7 @@ area: desktop
 
 `memory:state({ detail }?)` (nekkod, from nekko-machine `memory.rs`) answers `level` (`ok`, `low`, `critical`), total and available memory, and on Windows the commit limit and what is left of it.
 
-- **Low:** under 10% left. **Critical:** under 5%. On Windows the worse of physical memory and the commit charge counts: an allocation fails at the commit limit however much memory sits on standby.
+- **Low:** under 2 GB left. **Critical:** under 1 GB. A fixed amount, not a share of the total (2026-11-05; it was under 10% and 5%, which on a 64 GB machine with a page file asked at 6 GB of 60 GB virtual memory left, well before anything was at risk). On Windows the worse of physical memory and the commit charge counts: an allocation fails at the commit limit however much memory sits on standby.
 - **When not `ok`** (or when `detail` asks), it also reads the process list and answers:
   - `topApp`: the app holding the most, a process name summed over its processes (a browser is many). On Windows that is private commit; elsewhere resident memory. Nekko's processes (nekkod, everything under it, anything named Nekko), the system's (Explorer, `dwm`, WSL's `vmmem`, `WindowServer`, ...) and any app under 1 GiB are never named.
   - `nekkoBytes`: what Nekko's own processes hold.

@@ -34,6 +34,15 @@ describe('agent status from events', () => {
     expect(statusFromEvent('session_meta')).toBeUndefined();
     expect(statusFromEvent('session_meta', 'input')).toBeUndefined();
   });
+  it('does not call a finished chat working again for news about the chat', () => {
+    // After `done` the card has no status, and no second `done` would clear one.
+    expect(statusFromEvent('done', 'working')).toBeNull();
+    expect(statusFromEvent('claude_code_background')).toBeUndefined();
+    expect(statusFromEvent('compaction')).toBeUndefined();
+    // A chat that is working stays working through them.
+    expect(statusFromEvent('claude_code_background', 'working')).toBeUndefined();
+    expect(statusFromEvent('compaction', 'working')).toBeUndefined();
+  });
   // Source pin, pending an agents-panel e2e journey: the seeding is a mount effect
   // waiting on a host promise, which a server render never runs.
   it('seeds waiting chats from the host on mount (source pin)', () => {
