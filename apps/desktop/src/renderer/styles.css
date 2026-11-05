@@ -3715,6 +3715,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
     0 18px 50px -22px color-mix(in srgb, var(--accent) 45%, transparent),
     0 2px 4px color-mix(in srgb, var(--shadow-ink) 30%, transparent);
 }
+/* The frost's backdrop-filter makes the composer its own stacking context, so
+   its menus' z-index cannot beat the greeting cat (z 3-4) from inside. Lift the
+   whole composer while one is open (+ menu, slash/@ menus, model picker); when
+   closed it stays below so the cat's paws keep straddling its top edge. */
+[data-clean-start] .clean-start .composer:has([aria-expanded='true']) { z-index: 5; }
 /* Frost has no prism outline, including while typing. */
 [data-clean-start] .clean-start .composer::after { display: none; }
 /* Light themes use a whiter glass with the same soft, borderless depth. */

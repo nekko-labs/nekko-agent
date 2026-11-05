@@ -29,12 +29,12 @@ export interface PromptTemplate {
  * own knob: a sampling temperature on models that still take one, and
  * `output_config.effort` on the Claude models that dropped sampling.
  *
- * `low`/`medium`/`high`/`xhigh`/`max` are Anthropic's own rungs, sent as-is.
- * `normal` means "the model's default" (`high` on most Claude models, `medium`
- * on Opus 5.5, the balanced temperature elsewhere). Which rungs a model offers
- * is `modelEffortLevels` in model-capabilities.ts.
+ * Native API values are sent as-is, but only a model's live catalog can tell
+ * callers which values it supports. The type is open-ended for newly advertised
+ * levels. `normal` is a legacy compatibility sentinel, never an API option:
+ * OpenAI/ChatGPT omit the field; Claude retains its historical default mapping.
  */
-export type EffortLevel = 'low' | 'medium' | 'normal' | 'high' | 'xhigh' | 'max';
+export type EffortLevel = 'low' | 'medium' | 'normal' | 'high' | 'xhigh' | 'max' | (string & {});
 
 /**
  * Opt-in experimental surfaces. Each flag reveals a nav destination that stays
