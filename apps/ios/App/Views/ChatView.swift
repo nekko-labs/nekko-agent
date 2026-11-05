@@ -252,6 +252,11 @@ struct ChatView: View {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 6) {
                     ChatMascot(working: chat.running, pull: pull)
+                        // Scope the action to the 44-point button, not every transcript
+                        // descendant (which makes static captions into small hit targets).
+                        .accessibilityAction(named: Text("Refresh")) {
+                            Task { await pull.reload { await chat.reload() } }
+                        }
                     VStack(alignment: .leading, spacing: 0) {
                         Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
                         if prefs.shows("ph-subtitle") {

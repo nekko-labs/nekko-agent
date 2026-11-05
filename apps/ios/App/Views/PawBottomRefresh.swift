@@ -5,9 +5,6 @@ extension View {
     /// A transcript refreshes from its newest message, never from its history's top.
     func pawRefreshableFromEnd(_ pull: PawPull, action: @escaping @MainActor () async -> Void) -> some View {
         background(PawBottomRefreshProbe(pull: pull, action: action))
-            .accessibilityAction(named: Text("Refresh")) {
-                Task { await pull.reload(action: action) }
-            }
     }
 }
 
