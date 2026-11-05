@@ -210,6 +210,11 @@ cannot connect to an older computer.
 > version, the phone protocol on each side and the open-source licenses of the app and the
 > libraries it ships.
 >
+> **Every computer stays connected** (Android): the app keeps a connection to every paired
+> computer, not only the one you are using, so switching to another (in Computers, or **New chat →
+> Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
+> The chat list still shows one computer's chats at a time.
+>
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
 > different phone protocol versions, the chat list and **Settings → About** show a banner naming
 > the side to update: Nekko Agent on the computer, or the app.
