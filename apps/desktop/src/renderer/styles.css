@@ -2369,6 +2369,8 @@
   overflow-wrap: anywhere;
   width: 100%;
   min-width: 0;
+  /* Every voice keeps this, so a panel can pad its text inside the row. */
+  padding-inline-end: 14px;
   color: var(--ink);
   line-height: 1.6;
 }
@@ -2385,8 +2387,9 @@
 /* Who a block of agent text is for (spec/chat/thinking-and-replies.md). Thinking
    is quiet, with its icon out in the transcript's 30px gutter. A reply, and
    anything left for the reader mid-turn, sits on a panel that grows into the
-   gutter. Neither moves the text column, so a block that changes voice when
-   the turn moves on does not re-wrap. */
+   gutter. Its right edge stays on the row's, like .msg-user, clear of the
+   swipe-left times. Neither moves the text column, so a block that changes
+   voice when the turn moves on does not re-wrap. */
 .msg-ai[data-voice='working'] {
   position: relative;
   color: var(--ink-soft);
@@ -2400,8 +2403,8 @@
   color: var(--ink-faint);
 }
 .msg-ai:is([data-voice='reply'], [data-voice='attention']) {
-  width: calc(100% + 28px);
-  margin-inline: -14px;
+  width: calc(100% + 14px);
+  margin-inline: -14px 0;
   /* The hidden hover actions under the text are the bottom padding. */
   padding: 10px 14px 2px 12px;
   border-inline-start: 2px solid var(--accent);
