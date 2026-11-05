@@ -86,7 +86,7 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
   if (shown || open) return <>{children}</>;
   return (
     <section className="card mt-6 flex flex-wrap items-center gap-3 p-5" data-advanced-fold>
-      <p className="min-w-0 flex-1 text-xs text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Expert.</p>
+      <p className="min-w-0 flex-1 text-xs text-ink-soft">Git management, project management, pull requests, the terminal and MCP servers are kept for Detailed.</p>
       <button type="button" className="btn btn-outline px-3 py-1 text-xs" onClick={() => setOpen(true)}>Show advanced settings</button>
     </section>
   );
@@ -109,7 +109,7 @@ export function SettingsView() {
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<SettingsGroupId>('general');
-  // Simple says nothing about computers until one is connected; Expert is where the first one is paired.
+  // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
   const [expert] = useExpertMode();
   const hasComputers = useStore((s) => s.computers.length > 0);
   const computersPage = expert || hasComputers;

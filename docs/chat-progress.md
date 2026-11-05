@@ -8,6 +8,10 @@ When a provider supplies thought text, the desktop app and Local Web UI show it 
 
 This changes only the display. It does not send another chat message to the model or expose provider metadata that was not already supplied as thought text.
 
+## Plan step activity
+
+In the desktop and Local Web UI plan sheet, each active step has an accent-coloured concentric ripple, including when several steps work at once. The centre pulses every 1.5 seconds and outward rings repeat over 3 seconds. An interrupted step shows pause bars instead. Reduced motion uses still rings. Done, pending and skipped retain their usual marks. Activity indicators are not verification passes.
+
 ## Verification checklist
 
 The checklist reports **n of n passed**, followed by each check's state, device, current activity and last update. Expand it to follow individual checks or open an evidence link. You can collapse it to keep more room for the conversation.

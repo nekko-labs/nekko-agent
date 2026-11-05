@@ -27,6 +27,11 @@ struct WelcomeView: View {
                     }
                     .accessibilityIdentifier("welcome.cloud")
                 }
+                // No computer needed: chats can run on this iPhone, on a cloud provider (decision 0050).
+                NavigationLink(value: Route.phoneModels) {
+                    Label("Or use a model provider on this iPhone", systemImage: "iphone")
+                }
+                .accessibilityIdentifier("welcome.phoneModels")
             }
             .padding(20)
         }
@@ -46,6 +51,7 @@ struct WelcomeView: View {
             case .pair: PairView {}
             case .cloud: CloudView()
             case .syncedChat(let id): SyncedChatView(chatId: id)
+            case .phoneModels: PhoneModelsView()
             default: EmptyView()
             }
         }

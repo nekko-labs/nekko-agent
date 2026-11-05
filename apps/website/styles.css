@@ -1017,10 +1017,11 @@ h3 { font-size: 21px; }
 /* the reply-time infographic under the fast panel's copy: two bars on one scale */
 .speed-proof { margin: 22px 0 0; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; }
 .speed-proof figcaption { display: block; margin-bottom: 12px; }
-.speed-row { display: grid; grid-template-columns: 110px 1fr; gap: 12px; align-items: center; padding: 5px 0; font-size: 13.5px; font-weight: 600; }
+.speed-row { display: grid; grid-template-columns: 124px 1fr; gap: 12px; align-items: center; padding: 5px 0; font-size: 13.5px; font-weight: 600; }
 .speed-row .bar { height: 26px; min-width: 64px; }
 .speed-row .bar b { font-size: 13px; }
 .speed-proof .micro { margin-top: 10px; max-width: none; }
+.bench-method { grid-column: 1 / -1; max-width: none; margin: 0; }
 /* the why-it's-faster video: dark file for the Dark look, light for White and Colourful */
 .media .why-video-dark, :root[data-theme='dark'] .media .why-video-light { display: none; }
 :root[data-theme='dark'] .media .why-video-dark { display: block; }
