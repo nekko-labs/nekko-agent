@@ -182,6 +182,9 @@ const nd = (obj) => `${JSON.stringify(obj)}\n`;
 const oa = (delta, extra = {}) => sse({ choices: [{ delta, ...extra }] });
 const finish = (reason, usage) => sse({ choices: [{ delta: {}, finish_reason: reason }], ...(usage ? { usage } : {}) });
 const hex = (s) => Buffer.from(s, 'utf8').toString('hex');
+// Ollama's `/api/show`, asked before a request with `think: true`.
+const showing = (capabilities) => ({ body: JSON.stringify({ capabilities }) });
+const olReply = { chunks: [nd({ message: { content: 'Rayleigh.' } }), nd({ done: true })] };
 
 const streams = [
   // OpenAI-compatible
@@ -608,6 +611,7 @@ const streams = [
     provider: 'ollama',
     request: 'think-on',
     responses: [
+      showing(['completion', 'tools', 'thinking']),
       {
         chunks: [
           nd({ message: { role: 'assistant', content: '', thinking: 'Considering' } }),
@@ -649,6 +653,18 @@ const streams = [
   },
   { name: 'ol-http-500', provider: 'ollama', responses: [{ status: 500, body: '{"error":"model not found"}' }] },
   { name: 'ol-network-error', provider: 'ollama', responses: [{ networkError: 'fetch failed' }] },
+  { name: 'ol-think-model-cant', provider: 'ollama', request: 'think-on', responses: [showing(['completion', 'tools']), olReply] },
+  { name: 'ol-think-capabilities-missing', provider: 'ollama', request: 'think-on', responses: [{ body: '{"details":{}}' }, olReply] },
+  {
+    name: 'ol-think-show-404',
+    provider: 'ollama',
+    request: 'think-on',
+    responses: [{ status: 404, body: `{"error":"model 'qwen3-8b' not found"}` }, olReply],
+  },
+  { name: 'ol-think-show-network-error', provider: 'ollama', request: 'think-on', responses: [{ networkError: 'fetch failed' }, olReply] },
+  { name: 'ol-think-off-model-can', provider: 'ollama', request: 'think-off', responses: [olReply] },
+  { name: 'ol-http-400-reason', provider: 'ollama', responses: [{ status: 400, body: '{"error":"\\"qwen2.5:3b\\" does not support thinking"}' }] },
+  { name: 'ol-http-502-no-reason', provider: 'ollama', responses: [{ status: 502, body: '<html>Bad Gateway</html>' }] },
 ];
 
 for (const request of ['cache-on', 'cache-off']) {

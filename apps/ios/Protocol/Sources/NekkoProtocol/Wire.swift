@@ -441,6 +441,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var createdAt: Int64?
     /// A turn is running in it (`activeRun`).
     public var running = false
+    /// The pull requests its transcript names (`prUrls`): the rows look these up for their state.
+    public var prUrls: [String] = []
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -454,7 +456,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
             order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0,
-            createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false)
+            createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false,
+            prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [])
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.

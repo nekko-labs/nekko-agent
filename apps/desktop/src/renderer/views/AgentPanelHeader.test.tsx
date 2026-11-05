@@ -121,7 +121,7 @@ describe('Agent group hierarchy', () => {
     const layout = stylesheet('components/commandWallLayouts.css');
     expect(renderSidebar()).toContain('agent-panel-group-label');
     expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-sm)', color: 'var(--accent)' });
-    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('16px');
+    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('6px');
     expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('4px');
     expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group')['margin-top']).toBe('0');
   });

@@ -12,11 +12,17 @@ fn proc(pid: u32, parent: Option<u32>, name: &str, bytes: u64) -> Proc {
 #[test]
 fn low_is_the_worse_of_physical_and_commit() {
     assert_eq!(level(64 * GB, 20 * GB, None), Level::Ok);
-    assert_eq!(level(64 * GB, 5 * GB, None), Level::Low);
-    assert_eq!(level(64 * GB, 2 * GB, None), Level::Critical);
-    // The crash: plenty on standby, but 58 of 62.7 GB committed.
-    assert_eq!(level(64 * GB, 20 * GB, Some((63 * GB, 4 * GB))), Level::Low);
-    assert_eq!(level(64 * GB, 20 * GB, Some((63 * GB, GB))), Level::Critical);
+    // A fixed amount left, not a share: 6 GB of 60 GB is not low (it used to be).
+    assert_eq!(level(64 * GB, 6 * GB, None), Level::Ok);
+    assert_eq!(level(64 * GB, 2 * GB, None), Level::Ok);
+    assert_eq!(level(64 * GB, 2 * GB - 1, None), Level::Low);
+    assert_eq!(level(64 * GB, GB + GB / 2, None), Level::Low);
+    assert_eq!(level(64 * GB, GB - 1, None), Level::Critical);
+    assert_eq!(level(8 * GB, 3 * GB, None), Level::Ok);
+    // The crash: plenty on standby, but 58 of 62.7 GB committed, then less.
+    assert_eq!(level(64 * GB, 20 * GB, Some((63 * GB, 4 * GB))), Level::Ok);
+    assert_eq!(level(64 * GB, 20 * GB, Some((63 * GB, GB + GB / 2))), Level::Low);
+    assert_eq!(level(64 * GB, 20 * GB, Some((63 * GB, GB / 2))), Level::Critical);
     assert_eq!(level(0, 0, None), Level::Ok, "an unreadable machine is not low");
 }
 

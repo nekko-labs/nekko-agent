@@ -77,6 +77,8 @@ let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
 import {
+  PAGE_RELOADING_EVENT,
+  RELOAD_FADE_MS,
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
@@ -239,6 +241,7 @@ function wireAppWindow(win: BrowserWindow): void {
   // shortcuts people reach for shouldn't be, so bind the two that were worth
   // keeping directly. Everything else in that menu duplicated a shortcut the
   // app already owns (see `shortcuts.ts`) or a gesture Chromium handles itself.
+  let reloading = false;
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const mod = input.control || input.meta;
@@ -248,7 +251,14 @@ function wireAppWindow(win: BrowserWindow): void {
       win.webContents.toggleDevTools();
     } else if (mod && key === 'r') {
       event.preventDefault();
-      win.webContents.reload();
+      if (reloading || input.isAutoRepeat) return;
+      reloading = true;
+      // The page fades its cover in first. The timer is here, not there, so a stuck page still reloads.
+      win.webContents.send(PAGE_RELOADING_EVENT, RELOAD_FADE_MS);
+      setTimeout(() => {
+        reloading = false;
+        if (!win.isDestroyed()) win.webContents.reload();
+      }, RELOAD_FADE_MS);
     }
   });
 

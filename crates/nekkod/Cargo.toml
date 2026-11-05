@@ -57,6 +57,7 @@ nekko-term = { path = "../nekko-term" }
 nekko-tools = { path = "../nekko-tools" }
 nekko-turn = { path = "../nekko-turn" }
 nekko-usage = { path = "../nekko-usage" }
+nekko-vault = { path = "../nekko-vault" }
 nekko-web = { path = "../nekko-web" }
 regress.workspace = true
 nekko-workspace = { path = "../nekko-workspace" }

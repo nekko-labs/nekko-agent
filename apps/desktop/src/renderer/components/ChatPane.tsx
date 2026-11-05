@@ -4,6 +4,7 @@ import { computerBlock, useComputerOf } from './ComputerChip.js';
 import { ConnectivityNotices, mergeConnectivityNotices, rememberedConnectivityNotices } from './ConnectivityNotices.js';
 import { ClaudeBackgroundTasks, useClaudeBackgroundTasks } from './ClaudeBackgroundTasks.js';
 import { CleanStartGreeting } from './CleanStartGreeting.js';
+import { shouldShowFirstPromptIntro } from '../firstPromptIntroGate.js';
 import { PrWatchContinuation } from './PrWatchContinuation.js';
 import { canOfferPrWatch } from '../prWatchContinuation.js';
 import { chatArtifacts } from '../chatArtifacts.js';
@@ -17,7 +18,7 @@ import { attachmentName, pastedFileName, planAttachment, unreadableNote } from '
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
 import { revealEditorCaret } from './agent-console/editorCaret.js';
-import React, { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
@@ -30,7 +31,7 @@ import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
-import { getCachedSession, loadSession, putCachedSession } from '../sessionCache.js';
+import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
 import { usePaneVisible } from '../paneVisibility.js';
 import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
@@ -63,7 +64,7 @@ import { PhotoViewer } from './PhotoViewer.js';
 import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -73,7 +74,7 @@ import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.
 import { hasAppChrome } from '../chrome.js';
 import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
-import { TurnStatsLine } from './agent-console/TurnStatsLine.js';
+import { ReplyStatsRow } from './agent-console/TurnStatsLine.js';
 import { QuestionCard } from './QuestionCard.js';
 import { useWallLogs } from '../wallLogs.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
@@ -98,6 +99,8 @@ import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, Inc
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
 
 const NO_PRS: PrInfo[] = []; // stable empty ref so the store selector doesn't churn
+// The first-chat intro brings Remotion with it, so it loads only when it shows.
+const FirstPromptIntro = lazy(() => import('./FirstPromptIntro.js'));
 
 /**
  * How long the store's copy of the draft (read by the Context Inspector) trails
@@ -426,7 +429,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
 }) {
   if (row.kind === 'activity') return <ActivityGroup items={row.items} />;
   if (row.kind === 'compaction') return <CompactionSummary message={row.message} latest={row.latest} />;
-  if (row.kind === 'stats') return <div className="msg-ai"><TurnStatsLine stats={row.stats} /></div>;
+  if (row.kind === 'stats') return <div className="msg-ai"><ReplyStatsRow stats={row.stats} /></div>;
   if (row.kind === 'prs') {
     // Historical milestones stay anchored to their original transcript positions.
     return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} sessionId={sessionId} />)}</>;
@@ -597,9 +600,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const delegationStrategy = useStore(s => s.settings?.orchestration?.strategy);
   const computer = useComputerOf(sessionId);
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
-  const { providers: localProviders, setMascotMood, refreshSessions } = useStore(
+  const { providers: localProviders, providersLoaded, setMascotMood, refreshSessions } = useStore(
     useShallow((s) => ({
       providers: s.providers,
+      providersLoaded: s.providersLoaded,
       setMascotMood: s.setMascotMood,
       refreshSessions: s.refreshSessions,
     })),
@@ -719,7 +723,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Right-click menu for a chat image (copy / save / link), placed at the pointer.
   const [imageMenu, setImageMenu] = useState<{ x: number; y: number; item: ChatImageItem } | null>(null);
   const [changeSummary, setChangeSummary] = useState({ files: 0, added: 0, removed: 0 });
-  const [chatMenu, setChatMenu] = useState<{ x: number; y: number } | null>(null);
+  const [chatMenu, setChatMenu] = useState<{ x: number; y: number; selection: string } | null>(null);
   const [doneSummary, setDoneSummary] = useState<string | null>(null);
   // What the model thinks the user will say next: the composer's ghost text.
   // Pinned to the reply it was written for (forId) so
@@ -935,6 +939,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   useEffect(() => {
     const cached = getCachedSession(sessionId);
     let live = true;
+    const release = holdTranscript();
     // After the first paint: the frame (and a cached transcript) goes on
     // screen before any of this is even asked for.
     const cancel = afterPaint(() => {
@@ -942,11 +947,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         if (!live) return;
         setSession(s);
         if (!cached) seedBrain(s);
-      }).catch(() => {});
+      }).catch(() => {}).finally(release);
       refreshCtx();
       useStore.getState().refreshSessionPrs(sessionId);
     });
-    return () => { live = false; cancel(); };
+    return () => { live = false; cancel(); release(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
@@ -1365,12 +1370,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   }, [hasDraft, composerH, surface]);
 
   /**
-   * Drag the line between the conversation and the composer to trade one for
-   * the other: up gives the message box more room for a long prompt, down gives
-   * it back to the transcript. Everything else in the composer (the controls,
-   * the attach row) keeps its size, so only the text box grows, and the
-   * transcript is never squeezed below TRANSCRIPT_MIN_H. Double-click the line
-   * to go back to growing with the draft.
+   * Drag the message box's top edge to trade room with the conversation: up
+   * gives the box more room for a long prompt, down gives it back to the
+   * transcript. Everything else in the composer (the controls, the attach row)
+   * keeps its size, so only the text box grows, and the transcript is never
+   * squeezed below TRANSCRIPT_MIN_H. Double-click the edge to go back to
+   * growing with the draft.
    */
   const startComposerResize = (e: React.PointerEvent) => {
     const ta = composerRef.current;
@@ -1891,6 +1896,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
 
   const hasProvider = !!computer || !needsProviderSetup(providers, modelId ?? models[0]?.id);
+  // The list starts empty on every load: only a finished load can say there is nothing set up.
+  const setupNeeded = !hasProvider && providersLoaded;
   // An image chat runs on the engine's image model, not a chat provider, so it
   // can compose with no provider configured at all.
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
@@ -2018,11 +2025,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const canContinueReply = !!errorNotice && !question && !streaming && hasResumableProgress(session?.messages ?? []);
   // A transcript that ends on a cut-off reply (the app was closed mid-run, the
   // host restarted) has no `error` event left to announce it, so the notice is
-  // read off the record itself. Dismissing it is remembered per reply.
+  // read off the record itself, as is a failure the host saved for the same
+  // reason. Dismissing it is remembered per reply.
   const [dismissedInterruption, setDismissedInterruption] = useState<string | null>(null);
   useEffect(() => {
     if (!session) return;
-    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, !!held || finalizingReply.current, !!question);
+    const awaitingTranscript = !!held || finalizingReply.current;
+    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, awaitingTranscript, !!question);
     // A stale transcript can arrive before the completed record. Retire only
     // the inferred notice, never a provider error or a user-requested stop.
     if (reconcileInterruptionNotice(errorNotice, interrupted) !== errorNotice) {
@@ -2030,7 +2039,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       return;
     }
     if (errorNotice || dismissedInterruption === lastMsgId) return;
-    if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
+    const failure = streaming || awaitingTranscript || question ? null : savedTurnFailure(session);
+    if (failure) setErrorNotice(failure);
+    else if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
@@ -2430,10 +2441,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const columnWidth = Math.max(0, (paneWidth || 800) - 60);
   const estimate = useCallback((row: TranscriptRow) => estimateRowHeight(row, columnWidth), [columnWidth]);
   const hasLive = !!(held || getLiveRun(sessionId));
-  const welcomeState = chatWelcomeState({ messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
+  const welcomeState = chatWelcomeState({ loaded: !!session, messages: session?.messages.length ?? 0, streaming, hasLive, hasProvider, modelId, imageMode });
   const wavePreset = useStore((s) => s.resolvedPreset);
   const emptyWave = showEmptyAgentWave({ loaded: !!session, messages: session?.messages.length ?? 0, running: streaming || hasLive, readOnly: readOnly || !!session?.archivedAt, composer: surface === 'composer', enabled: settings?.backgroundAnimation !== false }) ? pixelWaveFor(wavePreset) : null;
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
+  // Someone's first ever new chat opens the "Send your first prompt" intro over it, once.
+  const [firstPromptIntroClosed, setFirstPromptIntroClosed] = useState(false);
+  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions }));
+  const closeFirstPromptIntro = useCallback(() => {
+    setFirstPromptIntroClosed(true);
+    // If saving fails it simply shows again next time.
+    void window.nekko.updateSettings({ firstPromptIntroSeen: true }).then((next) => useStore.setState({ settings: next }), () => {});
+  }, []);
   // Leaving the clean start because the user sent (the welcome is gone, it is
   // still the same focused chat) plays the composer-into-chat expansion once.
   const wasCleanStart = useRef(false);
@@ -2557,7 +2576,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
     <ChatImages.Provider value={chatImages}>
-    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); setChatMenu({ x: e.clientX, y: e.clientY }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
+    <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
       {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-(--shadow-float)" onClose={closeContextNotice}>
             <h2 className="font-semibold">Context on your next reply</h2>
             <p className="mt-3 text-sm text-ink-soft">Your selection is saved. Changing the model or effort does not send a request now or change an already-running reply. The next reply sends the assembled chat context again, as ordinary follow-up replies do.</p>
@@ -2566,6 +2585,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <button className="btn btn-primary mt-4" onClick={closeContextNotice}>Got it</button>
       </Modal>}
       {chatMenu && <ContextMenu x={chatMenu.x} y={chatMenu.y} onClose={() => setChatMenu(null)}>
+        {chatMenu.selection && <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMenu.selection).catch(() => useStore.getState().pushToast('error', "Couldn't copy text.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy</ContextAction>}
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
       </ContextMenu>}
@@ -2642,20 +2662,20 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               // On the wall the window's own reveal is the entrance; a second
               // fade here played inside it as a separate animation.
               <div className={`${commandCenter ? '' : 'fade-in '}mt-16 flex flex-col items-center gap-3 text-center`} data-chat-welcome>
-                {!hasProvider ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
+                {setupNeeded ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
                   <h2 className="text-base font-semibold">
-                    {!hasProvider ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
+                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
                   </h2>
                   <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
-                    {!hasProvider
+                    {setupNeeded
                       ? 'Connect an AI account or a local model. We’ll walk you through it — no technical experience needed.'
                       : needsModel
                         ? 'Choose a model here, or let Auto pick per message.'
                         : 'Ask a question or hand over a task. Use / for skills and prompts, @ to attach files, + for photos, videos and folders. Paste or drop any file.'}
                   </p>
                 </div>
-                {!hasProvider ? (
+                {setupNeeded ? (
                   <button className="btn btn-primary" onClick={() => useStore.getState().setView('models')}>Set up my first agent →</button>
                 ) : null}
                 {surface !== 'transcript' && welcomeState.modelChoice && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
@@ -2734,7 +2754,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <span className="mr-2 font-medium" style={{ color: tone }}>{interruption.title}</span>
                         {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
                       </span>
-                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
+                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => {
+                        setDismissedInterruption(lastMsgId ?? null);
+                        setErrorNotice(null);
+                        if (session?.turnFailure) void window.nekko.setSessionOptions(sessionId, { turnFailure: null }).catch(() => {});
+                      }}>
                         <CloseIcon className="h-3 w-3" />
                       </button>
                     </div>
@@ -2801,21 +2825,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
-          {/* The resize grip rides the composer's top border: a wide invisible
-              hit area over a hairline that lights up on hover. */}
-          {surface !== 'composer' && !cleanStart && <div
-            className="group absolute inset-x-0 -top-1.5 z-10 h-3 cursor-row-resize"
-            onPointerDown={startComposerResize}
-            onDoubleClick={resetComposerHeight}
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="Resize the message box"
-            title="Drag to resize the message box · double-click to reset"
-          >
-            <span className="absolute inset-x-0 top-[5px] h-0.5 opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
-            <span className="absolute left-1/2 top-[3px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
-          </div>}
           {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
+          {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
@@ -2829,6 +2840,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </div>
             )}
             <div className="composer relative">
+            {/* The resize grip is part of the box: a wide invisible hit area on
+                its top border, with a pill that lights up there on hover. */}
+            {surface !== 'composer' && !cleanStart && <div
+              className="group absolute inset-x-0 -top-2 z-10 h-3 cursor-row-resize"
+              onPointerDown={startComposerResize}
+              onDoubleClick={resetComposerHeight}
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="Resize the message box"
+              title="Drag to resize the message box · double-click to reset"
+            >
+              <span className="absolute left-1/2 top-[5px] h-1.5 w-10 -translate-x-1/2 rounded-full opacity-0 transition-opacity group-hover:opacity-100" style={{ background: 'var(--accent)' }} />
+            </div>}
             {/* The per-chat Nekko peeks over the composer's left end and watches
                 its caret; wall windows and the lone composer surface already
                 carry their own picker, and a new chat has the greeting cat. */}
@@ -3132,7 +3156,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <MarkdownEditor
                     ref={composerRef}
                     className={`relative ${compact ? 'min-h-[44px]' : 'min-h-[64px]'} w-full overflow-y-auto whitespace-pre-wrap break-words bg-transparent px-5 pb-2 pt-4 text-sm text-ink caret-ink outline-hidden [scrollbar-gutter:stable] empty:before:content-[attr(data-placeholder)] empty:before:text-ink-faint`}
-                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (hasProvider ? 'Message Nekko Agent…  (/ for prompts, @ to attach files)' : 'Add a model provider in Models first')}
+                    placeholder={remoteBlock ? remoteBlock : imageMode ? 'Describe the image you want…' : streaming ? 'Add a message for the agent…' : ghostSuggestion ?? (setupNeeded ? 'Add a model provider in Models first' : 'Message Nekko Agent…  (/ for prompts, @ to attach files)')}
                     value={draft}
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
@@ -3327,25 +3351,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {/* Prompt suggestions: one chip beside the microphone; its
-                      details open above it rather than pushing the editor. */}
-                  {!imageMode && showSuggest && (
-                    <PromptAnalyzer
-                      variant="chip"
-                      text={deferredDraft}
-                      sessionId={sessionId}
-                      canModelFill={hasProvider}
-                      workspaces={settings?.workspaces ?? []}
-                      contextItems={ctx?.items ?? []}
-                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-                      onFill={({ snippet, placement }) => {
-                        setDraft((d) =>
-                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-                        );
-                        composerRef.current?.focus();
-                      }}
-                    />
-                  )}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3361,6 +3366,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
+                {/* Suggestions get their own row, clear of the model and send controls. */}
+                {!imageMode && showSuggest && <div className="composer-suggestions-row" data-composer-suggestions-row>
+                    <PromptAnalyzer
+                      variant="chip"
+                      text={deferredDraft}
+                      sessionId={sessionId}
+                      canModelFill={hasProvider}
+                      workspaces={settings?.workspaces ?? []}
+                      contextItems={ctx?.items ?? []}
+                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
+                      onFill={({ snippet, placement }) => {
+                        setDraft((d) =>
+                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
+                        );
+                        composerRef.current?.focus();
+                      }}
+                    />
+                </div>}
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}

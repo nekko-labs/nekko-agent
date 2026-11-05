@@ -2,19 +2,62 @@ import XCTest
 @testable import NekkoNative
 
 final class PawPoseTests: XCTestCase {
-    func testExclamationThenAQuickGrabAndStraightIntoThePull() {
-        // The "!" while the paw waits, gone as it moves.
+    func testLoadingNeverGrabsEarly() {
         XCTAssertEqual(PawPose.refreshing(0, reduceMotion: false), PawPose(alarm: true))
-        XCTAssertFalse(PawPose.refreshing(PawPose.reachDelay, reduceMotion: false).alarm)
-        let reached = PawPose.reachDelay + PawPose.reachDuration
-        XCTAssertGreaterThan(PawPose.refreshing(PawPose.reachDelay + PawPose.reachDuration / 2, reduceMotion: false).reach, 0.5)
-        // No hold on the spinner: the pull starts the moment the paw is there.
-        XCTAssertEqual(PawPose.refreshing(reached, reduceMotion: false), PawPose(reach: 1))
-        XCTAssertLessThan(PawPose.refreshing(reached + 0.05, reduceMotion: false).spinner, 1)
-        XCTAssertEqual(PawPose.refreshing(PawPose.pullEnd + 0.01, reduceMotion: false), PawPose(reach: 1, spinner: 0))
-        // A long reload keeps it home by the cat.
-        XCTAssertEqual(PawPose.refreshing(5, reduceMotion: false), PawPose(reach: 1, spinner: 0))
-        XCTAssertLessThan(PawPose.pullEnd, 0.8, "a quick grab and pull")
+        for t in [PawPose.reachDelay, 1, 5, 60] {
+            XCTAssertEqual(PawPose.refreshing(t, reduceMotion: false), PawPose())
+        }
+    }
+
+    func testCompletionReachesThenScoopsWithoutPausing() {
+        XCTAssertEqual(PawPose.grabbing(0, reduceMotion: false), PawPose())
+        XCTAssertGreaterThan(PawPose.grabbing(PawPose.reachDuration / 2, reduceMotion: false).reach, 0.5)
+        XCTAssertEqual(PawPose.grabbing(PawPose.reachDuration, reduceMotion: false), PawPose(reach: 1))
+        XCTAssertLessThan(PawPose.grabbing(PawPose.reachDuration + 0.05, reduceMotion: false).spinner, 1)
+        XCTAssertEqual(PawPose.grabbing(PawPose.pullEnd, reduceMotion: false), PawPose(reach: 1, spinner: 0))
+    }
+
+    @MainActor func testSlowReloadAndDuplicateRefresh() async throws {
+        let pull = PawPull()
+        var calls = 0
+        let task = Task { await pull.reload { calls += 1; try? await Task.sleep(for: .milliseconds(500)) } }
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNotNil(pull.refreshStart)
+        XCTAssertNil(pull.grabStart, "the action has not completed")
+        XCTAssertEqual(pull.pose(at: Date().addingTimeInterval(60)).reach, 0)
+        XCTAssertNotEqual(pull.turn(at: Date()), pull.turn(at: Date().addingTimeInterval(0.1)))
+        await pull.reload { calls += 1 }
+        XCTAssertEqual(calls, 1, "a second gesture or menu action must not overlap")
+        await task.value
+        XCTAssertFalse(pull.animating)
+        XCTAssertTrue(pull.smiling)
+    }
+
+    @MainActor func testCancellationDoesNotScoopOrSmile() async throws {
+        let pull = PawPull()
+        let task = Task { await pull.reload { try? await Task.sleep(for: .seconds(10)) } }
+        try await Task.sleep(for: .milliseconds(50))
+        task.cancel()
+        await task.value
+        XCTAssertFalse(pull.animating)
+        XCTAssertFalse(pull.smiling)
+        XCTAssertNil(pull.grabStart)
+        XCTAssertEqual(pull.progress, 0)
+    }
+
+    func testBottomEdgeUsesInsetsAndWorksWithShortOrEmptyChats() {
+        func progress(_ offset: CGFloat, content: CGFloat = 1200) -> CGFloat {
+            PawBottomEdge.progress(offset: offset, content: content, viewport: 600, top: 100, bottom: 40)
+        }
+        XCTAssertEqual(progress(-100), 0, "top pull cannot refresh a chat")
+        XCTAssertEqual(progress(500), 0, "scrolling history is not a pull")
+        XCTAssertEqual(progress(640), 0)
+        XCTAssertEqual(progress(680), 0.5)
+        XCTAssertEqual(progress(720), 1)
+        XCTAssertEqual(progress(900), 1)
+        XCTAssertEqual(progress(-100, content: 0), 0)
+        XCTAssertEqual(progress(-20, content: 0), 1)
+        XCTAssertEqual(progress(-20, content: 300), 1)
     }
 
     func testOnceTheReloadIsDoneTheSpinnerFadesAndThePawGoesBack() {
@@ -53,6 +96,7 @@ final class PawPoseTests: XCTestCase {
     func testReduceMotionStaysStill() {
         XCTAssertEqual(PawPose.refreshing(0, reduceMotion: true), PawPose(alarm: true))
         XCTAssertEqual(PawPose.refreshing(0.6, reduceMotion: true), PawPose())
+        XCTAssertEqual(PawPose.grabbing(0.2, reduceMotion: true), PawPose())
         XCTAssertEqual(PawPose.ending(0.2, reduceMotion: true), PawPose())
     }
 }

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '../tests/browserGlobals.js';
 import { cssRule, cssUtility, cssValue, hasSelector, stylesheet } from '../tests/css.js';
 import { liveStore } from '../tests/liveStore.js';
-import { withProvider } from '../tests/renderChatPane.js';
+import { chatSession, composerBox, renderChatPane, withProvider } from '../tests/renderChatPane.js';
 import { renderWallComposer } from '../tests/renderWallComposer.js';
 
 vi.mock('../store.js', (original) => liveStore(original as never));
@@ -48,6 +48,12 @@ describe('wall edge stability and composer handles', () => {
     expect(panel.match(/class="wall-composer-side" data-edge="(left|right)" role="separator" tabindex="0"/g)).toHaveLength(2);
     expect(panel).toContain('aria-label="Resize composer from left side"');
     expect(panel).toContain('aria-label="Resize composer from right side"');
+  });
+
+  it('keeps the chat pane height grip on the message box, as one pill with no line across the pane', () => {
+    const html = renderChatPane(chatSession());
+    expect(html.match(/aria-label="Resize the message box"/g)).toHaveLength(1);
+    expect(composerBox(html)).toMatch(/aria-label="Resize the message box"[^>]*><span[^>]*><\/span><\/div>/);
   });
 
   // Source pin, pending the composer e2e journey: dragging, pointer capture,

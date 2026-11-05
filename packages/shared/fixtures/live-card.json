@@ -496,13 +496,14 @@
    "bytes": 140
   },
   {
-   "name": "minimal blanks the short title, step and reply",
+   "name": "minimal blanks the short title, row title, step and reply",
    "level": "minimal",
    "chats": [
     {
      "id": "a",
      "state": "working",
      "short": "Fix it",
+     "title": "Fix it  now\nplease",
      "step": "Run  tests\n now",
      "reply": "Got it.",
      "closeWord": "Cool"
@@ -528,6 +529,7 @@
      "id": "a",
      "state": "working",
      "short": "Fix it",
+     "title": "Fix it  now\nplease",
      "step": "Run  tests\n now",
      "reply": "Got it.",
      "closeWord": "Cool"
@@ -538,6 +540,7 @@
      {
       "id": "a",
       "short": "Fix it",
+      "title": "Fix it now please",
       "state": "working",
       "step": "Run tests now",
       "closeWord": "Cool"
@@ -545,7 +548,7 @@
     ],
     "focusId": "a"
    },
-   "bytes": 162
+   "bytes": 190
   },
   {
    "name": "detailed keeps the reply; the step is one line",
@@ -555,6 +558,7 @@
      "id": "a",
      "state": "working",
      "short": "Fix it",
+     "title": "Fix it  now\nplease",
      "step": "Run  tests\n now",
      "reply": "Got it.",
      "closeWord": "Cool"
@@ -565,6 +569,7 @@
      {
       "id": "a",
       "short": "Fix it",
+      "title": "Fix it now please",
       "state": "working",
       "step": "Run tests now",
       "reply": "Got it.",
@@ -573,7 +578,7 @@
     ],
     "focusId": "a"
    },
-   "bytes": 169
+   "bytes": 197
   },
   {
    "name": "the step is clipped to 60 characters",
@@ -620,6 +625,28 @@
     "focusId": "a"
    },
    "bytes": 199
+  },
+  {
+   "name": "the row title is clipped to 40 characters",
+   "level": "standard",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working",
+     "title": "ttttttttttttttttttttttttttttttttttttttttttttt"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working",
+      "title": "ttttttttttttttttttttttttttttttttttttttt…"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 192
   },
   {
    "name": "a big card blanks every reply first",

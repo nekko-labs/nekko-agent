@@ -20,10 +20,13 @@
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
-/// Below this share of memory left, memory is low.
-pub const LOW_SHARE: f64 = 0.10;
-/// Below this share, it is critical: the next big allocation may fail.
-pub const CRITICAL_SHARE: f64 = 0.05;
+/// Below this much memory left, memory is low. A fixed amount, not a share of
+/// the total: on a 64 GB machine with a big page file, 10% left was still 6 GB,
+/// and asking then was a false alarm. What fails is the next allocation, and
+/// that does not get bigger with the machine.
+pub const LOW_BYTES: u64 = 2 << 30;
+/// Below this much, it is critical: the next big allocation may fail.
+pub const CRITICAL_BYTES: u64 = 1 << 30;
 /// An app holding less than this is not worth naming.
 pub const MIN_APP_BYTES: u64 = 1 << 30;
 
@@ -76,10 +79,9 @@ pub fn level(total: u64, available: u64, commit: Option<(u64, u64)>) -> Level {
         if total == 0 {
             return Level::Ok;
         }
-        let share = left as f64 / total as f64;
-        if share < CRITICAL_SHARE {
+        if left < CRITICAL_BYTES {
             Level::Critical
-        } else if share < LOW_SHARE {
+        } else if left < LOW_BYTES {
             Level::Low
         } else {
             Level::Ok
