@@ -65,8 +65,7 @@ class ConnectionKeeper(
         // The first level, once: Minimal with the app lock on, Standard with it off (as on the iPhone).
         if (prefs.get(LiveCards.LEVEL) == null) prefs.set(LiveCards.LEVEL, LiveCards.firstLevel(lock.enabled.value))
         watchNetwork()
-        // A content-free dismissal also clears an OS notification retained across process restart.
-        scope.launch { repo.dismissals.collect { notices.dismissNeedsYou(it) } }
+        // Relay dismissals are hints only; a fresh full pending read owns cancellation.
         // Actual pending inputs, including reconnect snapshots, own both alerts and badges.
         // Foreground attention still has a silent notification so opening a chat cannot clear its badge.
         scope.launch {

@@ -16,6 +16,7 @@ class AttentionStateTest {
         .next(AgentEvent.ApprovalRequired("a", approval))
         .next(AgentEvent.Question("a", question))
         .next(AgentEvent.Question("b", question))
+    private fun AttentionState.read(snapshot: Map<String, PendingInput>?) = beginSnapshot().let { it.reconcile(snapshot, it.version) }
 
     @Test fun `distinct chats not repeated events or inputs determine badge units`() {
         val waiting = waiting().next(AgentEvent.ApprovalRequired("a", approval))
@@ -27,59 +28,89 @@ class AttentionStateTest {
         assertTrue(AttentionNotices.of(state.copy(summaries = emptyList()), true, false).isEmpty())
     }
 
-    @Test fun `viewing or streaming is not resolution and one remaining input keeps the chat waiting`() {
+    @Test fun `viewing and streaming never resolve attention`() {
         val waiting = waiting()
         assertSame(waiting, waiting.next(AgentEvent.Text("a", "still working")))
         assertSame(waiting, waiting.next(AgentEvent.SessionMeta("a")))
-        val approved = waiting.answered("a", "tool-1", approval = true)
-        assertEquals(setOf("a", "b"), approved.pending.keys)
-        assertNull(approved.pending["a"]?.approval)
-        assertNotNull(approved.pending["a"]?.question)
-        assertEquals(setOf("b"), approved.answered("a", "ask-1", approval = false).pending.keys)
     }
 
-    @Test fun `only matching resolution clears an input and done or failed clears a chat`() {
-        val waiting = waiting()
-        assertSame(waiting, waiting.next(AgentEvent.QuestionResolved("a", "old-question")))
-        assertSame(waiting, waiting.answered("a", "old-tool", approval = true))
-        val questionResolved = waiting.next(AgentEvent.QuestionResolved("a", "ask-1"))
-        assertNotNull(questionResolved.pending["a"]?.approval)
-        val resolved = questionResolved.next(AgentEvent.ToolResultReady("a", ToolResult("tool-1", "ok", false)))
-        assertEquals(setOf("b"), resolved.pending.keys)
-        assertEquals(setOf("b"), waiting.next(AgentEvent.Done("a", null)).pending.keys)
-        assertEquals(setOf("b"), waiting.next(AgentEvent.Error("a", "failed")).pending.keys)
-        assertEquals(setOf("b"), waiting.dismiss(E2E.activityTag("a")).pending.keys)
-        assertEquals(waiting.pending, waiting.dismiss(E2E.activityTag("unknown")).pending)
+    @Test fun `newest only approval snapshot resolves through older pending before zero`() {
+        val newest = approval.copy(call = approval.call.copy(id = "tool-2"))
+        val first = AttentionState().read(mapOf("a" to PendingInput("a", newest, null)))
+        val uncertain = first.next(AgentEvent.ToolResultReady("a", ToolResult("tool-2", "ok", false)))
+        assertFalse(uncertain.known)
+        assertEquals(first.pending, uncertain.pending)
+        assertTrue(uncertain.resolved.isEmpty())
+        val older = uncertain.read(mapOf("a" to PendingInput("a", approval, null)))
+        assertTrue(older.known)
+        assertEquals("tool-1", older.pending["a"]?.approval?.call?.id)
+        val last = older.next(AgentEvent.ToolResultReady("a", ToolResult("tool-1", "ok", false)))
+        assertEquals(setOf("a"), last.pending.keys)
+        assertFalse(last.known)
+        assertTrue(last.read(emptyMap()).pending.isEmpty())
     }
 
-    @Test fun `authoritative reconnect drops stale waits and restores new ones but failed read is unknown`() {
-        val waiting = waiting()
-        assertSame(waiting, waiting.reconcile(null, waiting.version))
-        assertTrue(waiting.reconcile(emptyMap(), waiting.version).pending.isEmpty())
+    @Test fun `all resolution signals retain waiting state until a successful full read`() {
+        val waiting = waiting().read(waiting().pending)
+        val signals = listOf(
+            AgentEvent.QuestionResolved("a", "ask-1"),
+            AgentEvent.QuestionResolved("a", "older-unobserved"),
+            AgentEvent.ToolResultReady("a", ToolResult("tool-1", "ok", false)),
+            AgentEvent.Done("a", null), AgentEvent.Error("a", "failed"),
+        )
+        signals.forEach { e ->
+            val uncertain = waiting.next(e)
+            assertFalse(uncertain.known)
+            assertEquals(waiting.pending, uncertain.pending)
+            assertTrue(uncertain.resolved.isEmpty())
+            assertFalse(uncertain.read(null).known)
+        }
+    }
+
+    @Test fun `authoritative reconnect drops stale waits and failed reads withdraw authority`() {
+        val waiting = waiting().read(waiting().pending)
+        val failed = waiting.read(null)
+        assertFalse(failed.known)
+        assertEquals(waiting.pending, failed.pending)
+        assertTrue(failed.read(emptyMap()).pending.isEmpty())
         val snapshot = mapOf("c" to PendingInput("c", null, question), "empty" to PendingInput("empty", null, null))
-        assertEquals(setOf("c"), waiting.reconcile(snapshot, waiting.version).pending.keys)
+        assertEquals(setOf("c"), waiting.read(snapshot).pending.keys)
     }
 
-    @Test fun `in flight snapshots cannot resurrect resolved inputs or erase newer waits`() {
-        val waiting = waiting()
-        val requestedAt = waiting.version
-        val later = waiting.next(AgentEvent.Done("a", null)).next(AgentEvent.Question("c", question))
-        assertEquals(setOf("b", "c"), later.reconcile(waiting.pending, requestedAt).pending.keys)
-        val unseen = AttentionState().next(AgentEvent.QuestionResolved("a", "ask-1"))
-        assertTrue(unseen.reconcile(mapOf("a" to PendingInput("a", null, question)), 0).pending.isEmpty())
-        val dismissedBeforeSnapshot = AttentionState().dismiss(E2E.activityTag("a"))
-        val snapshot = mapOf("a" to PendingInput("a", null, question))
-        assertTrue(dismissedBeforeSnapshot.reconcile(snapshot, 0).pending.isEmpty())
-        assertEquals(setOf("a"), dismissedBeforeSnapshot.next(AgentEvent.Question("a", question)).reconcile(snapshot, 0).pending.keys)
+    @Test fun `resolution invalidates even an empty in flight snapshot`() {
+        val reading = waiting().beginSnapshot()
+        val later = reading.next(AgentEvent.QuestionResolved("a", "ask-1"))
+        assertSame(later, later.reconcile(emptyMap(), reading.version))
+        assertFalse(later.known)
+        assertEquals(setOf("a", "b"), later.pending.keys)
+        assertEquals(setOf("a", "b"), later.reconcile(null, reading.version).pending.keys)
     }
 
-    @Test fun `launching and reconnecting with unknown state are not an empty snapshot`() {
+    @Test fun `newer inputs win over a snapshot and only latest read may replace state`() {
+        val reading = waiting().beginSnapshot()
+        val later = reading.next(AgentEvent.Question("c", question))
+        assertEquals(setOf("c"), later.reconcile(emptyMap(), reading.version).pending.keys)
+        val newerRead = reading.beginSnapshot()
+        val fresh = newerRead.reconcile(emptyMap(), newerRead.version)
+        assertTrue(fresh.known)
+        assertSame(fresh, fresh.reconcile(waiting().pending, reading.version))
+        assertSame(fresh, fresh.reconcile(null, reading.version))
+        val disconnected = reading.invalidate()
+        assertSame(disconnected, disconnected.reconcile(emptyMap(), reading.version))
+    }
+
+    @Test fun `unknown startup and resolution preserve notification authority until full snapshot`() {
         assertNull(AttentionNotices.update(ComputersState(), true, false, true))
         val opening = ComputersState(ready = true, activeId = "computer")
         assertFalse(AttentionNotices.update(opening, true, false, true)!!.authoritative)
         assertTrue(AttentionNotices.update(opening, false, false, true)!!.authoritative)
-        val loaded = opening.copy(attention = AttentionState().reconcile(emptyMap(), 0))
+        val loaded = opening.copy(attention = AttentionState().read(emptyMap()))
         assertTrue(AttentionNotices.update(loaded, true, false, true)!!.authoritative)
+        val uncertain = opening.copy(attention = waiting().next(AgentEvent.Done("a", null)), summaries = listOf(summary("a"), summary("b")))
+        val notice = AttentionNotices.update(uncertain, true, false, true)!!
+        assertFalse(notice.authoritative)
+        assertTrue(notice.resolved.isEmpty())
+        assertEquals(2, notice.waiting.size)
     }
 
     @Test fun `locked notice never includes chat title or question or command`() {
