@@ -6,7 +6,10 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+app.setPath('userData', path.join(out, 'profile'));
+app.setPath('sessionData', path.join(out, 'profile'));
 app.whenReady().then(async () => {
+  session.defaultSession.setPermissionRequestHandler((_window, _permission, done) => done(false));
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
   const left = Math.min(...screen.getAllDisplays().map(d => d.bounds.x));
