@@ -20,8 +20,9 @@ Anyone using Nekko Agent, on any device, can tell Nekko Labs something is broken
 The sheet on desktop, the Local Web UI and Docker is one form that opens up as it is used, styled like the Scheduled Tasks editor. iPhone, iPad and Android keep the three-section sheet above.
 
 - **Always there:** the choice of **Good** or **Needs improvement** (nothing preselected), **Other ways** (collapsed, with the agent prompt and the GitHub issue forms as two separate options), and the contributing line linking to `CONTRIBUTING.md`.
-- **After choosing Needs improvement:** Summary, Description, Include app info and Send feedback.
-- **After choosing Good:** Summary, Description and Send feedback. Praise rarely needs app info, so it is not offered, and a switch left on before changing to Good sends nothing. Text typed before changing the choice stays.
+- **After choosing Needs improvement:** Summary, Description, Screenshots, Include app info and Send feedback.
+- **After choosing Good:** Summary, Description and Send feedback. Praise rarely needs screenshots or app info, so they are not offered, and any set before changing to Good are not sent. Text typed before changing the choice stays.
+- **Screenshots:** optional, by drop, paste or the file picker. Up to 3, each up to 5 MB, so at most 15 MB a note. PNG, JPG and JPEG only, proven by the file's first bytes as well as its extension (`feedbackScreenshotProblem`). A refused file says why, in view, and the rest are kept. The sheet warns that screenshots can show names, chats or file paths.
 - **Required:** the choice, Summary (up to 120 characters) and Description. Send names the first thing missing, and pressing it with something missing shows each problem and moves focus to the first.
 - **The wire is unchanged.** The form joins everything into `message`, as `Needs improvement: <summary>`, a blank line, then the description (`feedbackNote` in `packages/shared/src/feedback.ts`). The 4,000 limit therefore covers the whole note, and the count under the description shows the whole note from the start.
 - **Wording stays positive:** "Needs improvement" and "needs work", never "broken" or a thumbs down. Good has a star-eyed Nekko and Needs improvement a wrench.
@@ -54,7 +55,8 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 
 ## Privacy boundary
 
-- No account, token, device id, device name or model, locale, IP, chat content or file path is sent or stored. The request is unauthenticated even when someone is signed in.
+- No account, token, device id, device name or model, locale, IP, chat content or file path is sent or stored, apart from what a person shows in a screenshot they choose to add. The request is unauthenticated even when someone is signed in.
+- Screenshots are the one thing a person can send that may identify them. The sheet says so beside the picker. Image metadata, such as location in a phone photo, must be stripped before a screenshot is stored (planned with the backend).
 - The server does not request-log the route, keeps rate-limit counts in memory only, and stores each note with only the day it arrived (`feedback` table: `message`, `app_info`, `received_on`), so a note can't be lined up with account activity by time.
 - People are told what app info contains before they switch it on.
 
@@ -77,4 +79,6 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 
 - Android sheet: in progress (see #1004).
 
-- Not built: reading the notes anywhere but the database, replying to a sender (there is no way to reach them, on purpose), screenshots or log attachments.
+- Screenshots on desktop and the Local Web UI: the section is implemented and passes them to `feedback:send` as `{ name, type, data }` with base64 `data`. Planned, and required before release: `nekkod` forwarding them, and Nekko Cloud accepting and storing them. Until then `nekkod` ignores them, so this must not ship alone.
+
+- Not built: reading the notes anywhere but the database, replying to a sender (there is no way to reach them, on purpose), log attachments, screenshots on the phone apps.

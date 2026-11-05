@@ -560,8 +560,8 @@ export interface NekkoApi {
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
-  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */
-  feedbackSend(message: string, includeAppInfo: boolean): Promise<{ ok: true }>;
+  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`, and any screenshots. */
+  feedbackSend(message: string, includeAppInfo: boolean, screenshots?: import('./feedback.js').FeedbackScreenshot[]): Promise<{ ok: true }>;
   syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
   syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
   syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;
