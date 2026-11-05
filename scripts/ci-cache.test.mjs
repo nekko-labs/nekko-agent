@@ -34,7 +34,7 @@ test('auto-merge queues only ready PRs into main, never a stacked layer', () => 
   assert.ok(!/gh pr merge --auto --(squash|merge|rebase)/.test(merge));
   // ...and an armed request alone did not reliably enter the queue, so it enqueues once gate passes.
   assert.ok(merge.includes('enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head})'));
-  assert.ok(merge.indexOf('Enqueue once gate passes') < merge.indexOf('Release the merge'));
+  assert.ok(merge.indexOf('Enqueue once gate passes') < merge.indexOf('Close linked issues once merged'));
   // A GITHUB_TOKEN-made merge group starts no merge_group runs, so the enqueue uses the App token.
   assert.ok(merge.split('Enqueue once gate passes')[1].split('run:')[0].includes('GH_TOKEN: ${{ steps.app-token.outputs.token }}'));
 });
