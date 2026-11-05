@@ -2,6 +2,16 @@ import XCTest
 
 @MainActor
 final class PhoneParityTests: XCTestCase {
+    func testStarredSupportingFoldersStayInDraftWhileOffline() {
+        let app = launch("-uiTestNewChat", extra: ["-uiTestStarredDraft"])
+        let start = app.buttons["newChat.start"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        XCTAssertFalse(start.isEnabled)
+        XCTAssertTrue(app.staticTexts["Connect to start"].exists)
+        XCTAssertEqual(app.textViews["newChat.prompt"].value as? String, "Review both folders")
+        attach(app, "offline-starred-folders")
+    }
+
     func testNewChatMarkdownVoiceAndPolicy() {
         let app = launch("-uiTestNewChat")
         let field = app.textViews["newChat.prompt"]
@@ -31,6 +41,16 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Stopped"].waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["voiceConversation.start"].exists)
         attach(app, "hands-free-stopped-fixture")
+    }
+
+    func testHandsFreeBackgroundStopsSilentFixture() {
+        let app = launch("-uiTestVoiceConversation")
+        XCTAssertTrue(app.staticTexts["Speaking"].waitForExistence(timeout: 10))
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(app.staticTexts["Stopped"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["voiceConversation.start"].exists)
+        attach(app, "hands-free-after-background-fixture")
     }
 
     func testHandsFreeOpensWithoutListeningOrSending() {

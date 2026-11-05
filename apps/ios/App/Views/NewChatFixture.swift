@@ -15,7 +15,10 @@ struct NewChatFixture: View {
             }
         }
         .task {
-            store.drafts.set(DraftStore.newChat, Draft(providerId: "fixture", modelId: "claude-opus-5-5"))
+            let starred = ProcessInfo.processInfo.arguments.contains("-uiTestStarredDraft")
+            store.drafts.set(DraftStore.newChat, Draft(text: starred ? "Review both folders" : "", providerId: "fixture", modelId: "claude-opus-5-5",
+                                                     workspaceId: starred ? "app" : nil, useDefaultFolders: starred ? true : nil,
+                                                     supportingWorkspaceIds: starred ? ["docs"] : []))
             ready = true
         }
     }

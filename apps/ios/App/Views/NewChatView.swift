@@ -16,6 +16,7 @@ struct NewChatView: View {
     @State private var model: (String, String)?
     @State private var folder: String?
     @State private var choseFolder = false
+    @State private var cachedSupportingFolders: [String] = []
     @State private var mode: PcSettings.ChatMode?
     /// A concrete draft choice; otherwise resolve the last-used choice for this computer.
     @State private var effort: Effort?
@@ -81,7 +82,7 @@ struct NewChatView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if offline {
-                    note(Label("\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then.",
+                    note(Label(supportingFolders.isEmpty ? "\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then." : "Reconnect to start with your starred supporting folders. They require confirmation on this iPhone; your draft stays here.",
                                systemImage: "tray.and.arrow.up"), color: palette.inkSoft)
                         .accessibilityIdentifier("newChat.offlineNote")
                 }
@@ -217,7 +218,7 @@ struct NewChatView: View {
     @ViewBuilder private var startButton: some View {
         if offline {
             Button(action: start) {
-                Text("Start when online").font(.footnote.weight(.semibold)).lineLimit(1)
+                Text(supportingFolders.isEmpty ? "Start when online" : "Connect to start").font(.footnote.weight(.semibold)).lineLimit(1)
                     .padding(.horizontal, 12).frame(minHeight: 36)
                     .background(canStart ? palette.accent : palette.surface2, in: Capsule())
                     .foregroundStyle(canStart ? palette.onAccent : palette.inkFaint)
@@ -331,7 +332,7 @@ struct NewChatView: View {
                         Divider()
                         Button { foldersOpen = true } label: { Label("Manage folders", systemImage: "folder.badge.gearshape") }
                     } label: {
-                        chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? String(localized: "No folder"), icon: "folder")
+                        chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? (folder == nil ? String(localized: "No folder") : String(localized: "Saved folder")), icon: "folder")
                     }
                     .accessibilityIdentifier("newChat.folder")
                     if app.prefs.shows("asks") {
@@ -394,7 +395,7 @@ struct NewChatView: View {
     private var canStart: Bool {
         if onPhone { return !busy && phoneModel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty
-        return !busy && !loadingPhotos && model != nil && !(offline && empty)
+        return !busy && !loadingPhotos && model != nil && !(offline && (empty || !supportingFolders.isEmpty))
     }
 
     /// Images on the clipboard, scaled like picked photos (at most four in the message).
@@ -493,6 +494,7 @@ struct NewChatView: View {
         effort = nil
         mode = nil
         choseFolder = false
+        cachedSupportingFolders = []
         folder = app.prefs.lastFolder[id]
         pickDefaultFolder()
         refusal = nil
@@ -523,12 +525,13 @@ struct NewChatView: View {
 
     private var supportingFolders: [String] {
         guard !choseFolder, folder != nil else { return [] }
+        if store.conn != .online { return cachedSupportingFolders }
         let valid = Set(store.workspaces.map(\.id))
         return store.pcSettings.defaultWorkspaceIds.filter { $0 != folder && valid.contains($0) }
     }
 
     private var current: Draft {
-        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal, useDefaultFolders: !choseFolder)
+        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal, useDefaultFolders: !choseFolder, supportingWorkspaceIds: supportingFolders)
     }
 
     private func restoreDraft() {
@@ -537,16 +540,18 @@ struct NewChatView: View {
         let draft = store.drafts.draft(DraftStore.newChat)
         folder = app.prefs.newChatFolder(computer: store.activeId, draft: draft)
         choseFolder = draft.useDefaultFolders.map { !$0 } ?? (draft.workspaceId != nil)
+        cachedSupportingFolders = draft.supportingWorkspaceIds
         apply(draft)
         pickDefaultFolder()
     }
 
     private func pickDefaultFolder() {
-        guard !choseFolder else { return }
+        guard !choseFolder, store.conn == .online else { return }
         let valid = Set(store.workspaces.map(\.id))
         if let first = store.pcSettings.defaultWorkspaceIds.first(where: { valid.contains($0) }) {
             folder = first
-        }
+            cachedSupportingFolders = store.pcSettings.defaultWorkspaceIds.filter { $0 != first && valid.contains($0) }
+        } else { cachedSupportingFolders = [] }
     }
 
     private func apply(_ d: Draft) {
@@ -601,7 +606,13 @@ struct NewChatView: View {
         rememberChoices()
         let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let photos = images
+        let supporting = supportingFolders
+        let sourceComputer = store.activeId
         if offline {
+            guard supporting.isEmpty else {
+                error = "Reconnect to start with your starred supporting folders. Your draft has not been sent."
+                return
+            }
             startLater(p, m, first)
             return
         }
@@ -609,15 +620,18 @@ struct NewChatView: View {
         error = nil
         Task {
             do {
-                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools, effort: selectedEffort, supportingWorkspaceIds: supportingFolders)
+                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools, effort: selectedEffort, supportingWorkspaceIds: supporting)
                 store.drafts.clear(DraftStore.newChat)
                 // The chat's own model sends the first message, so a failure shows
                 // there and the text comes back in its composer.
                 if !first.isEmpty || !photos.isEmpty { app.firstMessages[id] = UnsentPrompt(text: first, skill: nil, images: photos) }
                 opened(id)
             } catch let e as RelayError where !e.fromComputer && !(first.isEmpty && photos.isEmpty) {
-                // No answer: the chat starts from the outbox when the computer is back.
-                startLater(p, m, first)
+                // Multi-folder starts need foreground authorization; never drop that context.
+                if store.activeId == sourceComputer {
+                    if supporting.isEmpty { startLater(p, m, first) }
+                    else { error = "Reconnect to start with your starred supporting folders. Your draft has not been sent." }
+                }
             } catch {
                 self.error = error.localizedDescription
             }
@@ -628,8 +642,8 @@ struct NewChatView: View {
     /// Offline: the chat and its first prompt wait in the outbox, listed under
     /// Waiting to send, and start when the computer is back.
     private func startLater(_ p: String, _ m: String, _ first: String) {
-        guard !first.isEmpty || !images.isEmpty else { return }
-        store.outbox.add(chatId: nil, text: first, images: images, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, supportingWorkspaceIds: supportingFolders))
+        guard supportingFolders.isEmpty, !first.isEmpty || !images.isEmpty else { return }
+        store.outbox.add(chatId: nil, text: first, images: images, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue))
         store.drafts.clear(DraftStore.newChat)
         text = ""
         images = []

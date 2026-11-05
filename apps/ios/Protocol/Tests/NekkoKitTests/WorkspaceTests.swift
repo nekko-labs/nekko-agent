@@ -10,11 +10,10 @@ final class WorkspaceTests: XCTestCase {
     }
 
     func testDefaultIntentAndSupportingFoldersSurvivePersistence() {
-        let draft = Draft(text: "Hello", workspaceId: "app", useDefaultFolders: true)
+        let draft = Draft(text: "Hello", workspaceId: "app", useDefaultFolders: true, supportingWorkspaceIds: ["docs"])
         XCTAssertEqual(Draft.from(draft.json)?.useDefaultFolders, true)
-        let spec = NewChatSpec(providerId: "p", modelId: "m", workspaceId: "app", supportingWorkspaceIds: ["docs"])
-        XCTAssertEqual(NewChatSpec.from(spec.json)?.supportingWorkspaceIds, ["docs"])
-        XCTAssertEqual(NewChatSpec.from(["providerId": "p", "modelId": "m"])?.supportingWorkspaceIds, [])
+        XCTAssertEqual(Draft.from(draft.json)?.supportingWorkspaceIds, ["docs"])
+        XCTAssertEqual(Draft.from(["text": "legacy"])?.supportingWorkspaceIds, [])
     }
 
     func testPathsAndLegacyFoldersRoundTripThroughCache() {

@@ -1,6 +1,7 @@
 import AVFoundation
 import NekkoKit
 import SwiftUI
+import UIKit
 
 struct VoiceConversationButton: View {
     var makeTarget: () async throws -> ConversationTarget
@@ -36,6 +37,7 @@ struct VoiceConversationView: View {
     @State private var target: ConversationTarget?
     @State private var preparation: Task<Void, Never>?
     @State private var preparing = false
+    @State private var preparationGeneration = 0
     @State private var failure: String?
 
     init(makeTarget: @escaping () async throws -> ConversationTarget,
@@ -69,6 +71,18 @@ struct VoiceConversationView: View {
                     if let error = failure ?? voice.error {
                         Label(error, systemImage: "exclamationmark.circle").foregroundStyle(palette.danger)
                     }
+                    Text("End, leaving this screen, locking the phone, or an audio interruption stops listening and playback. An agent task already sent may continue in the chat. Approvals still need your explicit answer there.")
+                        .font(.footnote).foregroundStyle(palette.inkSoft)
+                }.padding(24).frame(maxWidth: 560)
+            }
+            .background(palette.paper).foregroundStyle(palette.ink)
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 10) {
+                    if !dictation.available {
+                        Button("Open microphone settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                        }
+                    }
                     if voice.active || preparing {
                         Button("End voice conversation", role: .destructive) { stop() }
                             .buttonStyle(.borderedProminent).accessibilityIdentifier("voiceConversation.stop")
@@ -76,15 +90,13 @@ struct VoiceConversationView: View {
                         Button("Start voice conversation") { start() }
                             .buttonStyle(.borderedProminent).accessibilityIdentifier("voiceConversation.start")
                     }
-                    Text("End, leaving this screen, locking the phone, or an audio interruption stops listening and playback. An agent task already sent may continue in the chat. Approvals still need your explicit answer there.")
-                        .font(.footnote).foregroundStyle(palette.inkSoft)
-                }.padding(24).frame(maxWidth: 560)
+                }
+                .frame(maxWidth: .infinity).padding(16).background(palette.paper)
             }
-            .background(palette.paper).foregroundStyle(palette.ink)
             .navigationTitle("Voice conversation").navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { stop(); dismiss() } } }
         }
-        .onChange(of: scene) { _, phase in if phase != .active { stop() } }
+        .onChange(of: scene) { _, phase in if Dictation.leavesScreen(phase, starting: dictation.starting || preparing) { stop() } }
         .onChange(of: store.activeId) { _, _ in stop() }
         .onChange(of: store.conn) { _, state in
             if case .computer = target, state != .online { stop(); failure = "The computer disconnected. Reconnect, then start voice again." }
@@ -98,14 +110,24 @@ struct VoiceConversationView: View {
 
     private func start() {
         guard !preparing, !voice.active else { return }
+        guard dictation.available else {
+            failure = "Microphone access is off. Allow it in Settings → Nekko Agent."
+            return
+        }
         failure = nil
         preparing = true
+        preparationGeneration += 1
+        let generation = preparationGeneration
         preparation = Task { @MainActor in
-            defer { preparing = false }
+            defer { if preparationGeneration == generation { preparing = false } }
             do {
                 let selected: ConversationTarget
                 if let target { selected = target } else { selected = try await makeTarget() }
-                try Task.checkCancellation()
+                guard !Task.isCancelled, preparationGeneration == generation else {
+                    // New-chat factories own a temporary subscription; existing chat controls do not.
+                    if finished != nil, case .computer(let chat, _) = selected { chat.stop() }
+                    throw CancellationError()
+                }
                 target = selected
                 let capture = Dictation()
                 let playback = ConversationSpeaker()
@@ -117,11 +139,12 @@ struct VoiceConversationView: View {
                             speak: { try await playback.speak($0) },
                             stopAudio: { capture.discard(); playback.stop() })
             } catch is CancellationError { }
-            catch { failure = error.localizedDescription }
+            catch { if preparationGeneration == generation, !Task.isCancelled { failure = error.localizedDescription } }
         }
     }
 
     private func stop() {
+        preparationGeneration += 1
         preparation?.cancel()
         preparation = nil
         preparing = false

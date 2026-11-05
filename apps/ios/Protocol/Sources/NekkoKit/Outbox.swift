@@ -7,22 +7,19 @@ public struct NewChatSpec: Equatable, Sendable {
     public let providerId: String
     public let modelId: String
     public let workspaceId: String?
-    public let supportingWorkspaceIds: [String]
     public let mode: String?
     public let effort: String?
 
-    public init(providerId: String, modelId: String, workspaceId: String? = nil, mode: String? = nil, effort: String? = nil, supportingWorkspaceIds: [String] = []) {
+    public init(providerId: String, modelId: String, workspaceId: String? = nil, mode: String? = nil, effort: String? = nil) {
         self.providerId = providerId
         self.modelId = modelId
         self.workspaceId = workspaceId
-        self.supportingWorkspaceIds = supportingWorkspaceIds
         self.mode = mode
         self.effort = effort
     }
 
     var json: JSONValue {
         var o: [String: JSONValue] = ["providerId": .string(providerId), "modelId": .string(modelId)]
-        if !supportingWorkspaceIds.isEmpty { o["supportingWorkspaceIds"] = .array(supportingWorkspaceIds.map(JSONValue.string)) }
         if let workspaceId { o["workspaceId"] = .string(workspaceId) }
         if let mode { o["mode"] = .string(mode) }
         if let effort { o["effort"] = .string(effort) }
@@ -31,8 +28,7 @@ public struct NewChatSpec: Equatable, Sendable {
 
     static func from(_ v: JSONValue?) -> NewChatSpec? {
         guard let v, let p = v.str("providerId"), let m = v.str("modelId") else { return nil }
-        return NewChatSpec(providerId: p, modelId: m, workspaceId: v.str("workspaceId"), mode: v.str("mode"), effort: v.str("effort"),
-                           supportingWorkspaceIds: (v["supportingWorkspaceIds"]?.array ?? []).compactMap(\.string))
+        return NewChatSpec(providerId: p, modelId: m, workspaceId: v.str("workspaceId"), mode: v.str("mode"), effort: v.str("effort"))
     }
 }
 
@@ -397,10 +393,6 @@ public final class Outbox {
                     _ = try await c.call(Channels.sessionSetOptions, [.string(chatId), .object(o)])
                     update(item.id) { $0.lastError = Self.modeNotRaised }
                 }
-            }
-            if let spec = item.newChat, !spec.supportingWorkspaceIds.isEmpty {
-                _ = try await c.call(Channels.sessionSetSupportingWorkspaces,
-                                     [.string(chatId), .array(spec.supportingWorkspaceIds.map(JSONValue.string))])
             }
             guard let session = Session.from(try await c.call(Channels.sessionGet, [.string(chatId)])) else {
                 return .refused("This chat was deleted on your computer.")
