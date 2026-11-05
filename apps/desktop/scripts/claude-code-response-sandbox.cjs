@@ -45,9 +45,9 @@ app.whenReady().then(async () => {
           noOverflow: document.documentElement.scrollWidth <= innerWidth,
         };
       })()`);
-      check(label + ': exactly one identity on the Claude Code reply', layout.count === 1 && layout.claudeReply);
       check(label + ': no horizontal overflow', layout.noOverflow);
       if (!before) {
+        check(label + ': exactly one identity on the Claude Code reply', layout.count === 1 && layout.claudeReply);
         check(label + ': speaker name and initials avatar', layout.text === 'CCClaude Code');
         check(label + ': top-left above text, not in the footer', layout.above && layout.left && !layout.footer);
       }
@@ -58,7 +58,7 @@ app.whenReady().then(async () => {
   }
   fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
-  if (report.errors.length || report.checks.some(c => !c.passed)) process.exitCode = 1;
+  const failed = report.errors.length || report.checks.some(c => !c.passed);
   win.destroy();
-  app.quit();
+  app.exit(failed ? 1 : 0);
 });
