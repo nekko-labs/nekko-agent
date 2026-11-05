@@ -530,6 +530,8 @@ New-chat details belong **inside the same bordered Add to the wall box**, never 
 
 ### Native iOS app (2026-10-16)
 
+**iPhone parity repair (#1782, in progress):** distinct hands-free conversation and dictation controls, Markdown editing on New chat/phone-only chat, visible effort gauges, readable icon-labelled tool-policy choices, desktop-style status groups with optional empty groups, and starred default folders. Details and explicit verification limits are in [the native iOS specification](spec/phone/native-ios-app.md#iphone-parity-repair-1782-implementation-in-progress).
+
 **User intent:** Philip asked (2026-10-16) to finish the native SwiftUI iPhone app using Orca's mobile app as the competitive reference, **Tailscale first** and on the Nekko relay, following the Android app's connection approach. It replaces the read-only direct-HTTPS foundation, which never shipped: one transport, the end-to-end encrypted relay, as on Android. Competitive notes: [reports/ios-native-competitive-2026-10-16.md](reports/ios-native-competitive-2026-10-16.md).
 
 **Scope `[shipped 2026-10-16 (#630, #631); verified on Linux (50 protocol tests + live relay itest) and on macOS CI in the simulator (build with the widget extension, unit and UI tests, the live journey in light and dark, deep-link pairing, the largest text size); no physical iPhone yet]`:**

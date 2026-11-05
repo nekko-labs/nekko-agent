@@ -58,6 +58,21 @@ Without Whisper on your computer, speech is turned into text on the iPhone only,
 
 With **Settings > While a chat runs > Live Activities** set to **Detailed**, the card on the Lock Screen and in the Dynamic Island has a microphone. Tap it and the iPhone asks for Face ID (or your passcode) first. Then say one message: the card shows "Listening…" and stops at your first pause (or after 30 seconds without one). What you said goes to the chat the card shows, as if you had typed it there; while the chat is working it waits in that chat's queue. The card then shows "Sent: " and your words until the chat's reply line takes their place. If your computer doesn't answer within 10 seconds (it's offline, say), the card still says "Sent": the message waits on the iPhone and goes when the computer is back. If your computer turns it down, the card says "Not sent" and why, and your words wait in that chat's message box. **Send to** on the card sends what you have said so far without waiting for the pause, and **Cancel** sends nothing. Speech is turned into text the same way as in a chat: Whisper on your computer, or on the iPhone only, never on a server. If it couldn't be turned into text, the card says "Not sent" and why, for about a minute. On iOS 17 the microphone opens the chat with listening already on instead, once you have unlocked the app (with **Hold to talk**, it just opens the chat).
 
+### Hands-free conversation on iPhone
+
+The waveform-in-a-circle button is **Voice conversation**, separate from the dictation microphone. It is available in New chat, a connected computer chat, and a chat running on this iPhone.
+
+1. Open **Voice conversation**, then tap **Start voice conversation**. Opening the controls alone does not start the microphone.
+2. Speak a turn. After a pause, the recognized words are sent automatically to that chat's selected model.
+3. Nekko speaks the reply on the iPhone, then listens again. The microphone is off while it thinks or speaks, so it cannot transcribe its own reply.
+4. Tap **End voice conversation** or **Done** to stop listening and playback. Leaving the screen, locking/backgrounding the phone, an audio interruption, or switching computers also stops voice. It never restarts without Start.
+
+An agent task already sent may continue after voice ends. If the agent needs approval or an answer, voice stops and asks you to answer in the chat—voice never approves a tool for you. For a computer chat, the original computer must remain connected. Phone-only chat recognition stays on the iPhone; connected chats use the existing configured on-device/computer speech path. Playback is iOS speech on this phone, without a new cloud speech service. The recognized text still goes to your selected model.
+
+Use the microphone instead when you want speech added to a draft without automatic sending. New chat and phone-only draft dictation only insert words; the existing connected-chat dictation commands are unchanged.
+
+**Verification note:** simulator state/lifecycle checks do not prove physical microphone, speech quality or Bluetooth routing. These require an on-device check before claiming hardware support for the new hands-free flow.
+
 ## Privacy
 
 Speech is turned into text on this computer, by Apple's on-device recognizer or by Whisper running locally. Audio is never sent anywhere and is not kept once it has been turned into text.
