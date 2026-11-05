@@ -21,6 +21,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     var calls: [(String, [JSONValue])] = []
     var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
     var summariesReply: (@MainActor () async throws -> JSONValue)?
+    var pendingReply: (@MainActor () async throws -> JSONValue)?
     var connected = false
     var closed = false
     var pushTokens: [String] = []
@@ -55,6 +56,10 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func registerPush(token: String, kinds: [String]?) async throws {
         lock.withLock { pushTokens.append(token); pushKinds.append(kinds) }
     }
+    var badgeManifests: [[String]?] = []
+    func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws {
+        lock.withLock { pushTokens.append(token); pushKinds.append(kinds); badgeManifests.append(badgeRooms) }
+    }
     private var onControl: (@Sendable (RelayControl) -> Void)?
     func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) { onControl = f }
     func control(_ c: RelayControl) { onControl?(c) }
@@ -74,6 +79,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
             return replies[channel]
         }
         if channel == Channels.sessionsSummaries, let summariesReply { return try await summariesReply() }
+        if channel == Channels.chatPending, let pendingReply { return try await pendingReply() }
         guard let r else { return .null }
         return try r(args)
     }

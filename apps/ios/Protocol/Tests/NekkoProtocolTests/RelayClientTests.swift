@@ -577,6 +577,20 @@ final class RelayClientTests: XCTestCase {
         c.close()
     }
 
+    func testRegistersWholeBadgeManifestAndDistinguishesOptOutFromUnknown() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        let (c, _) = client(relay)
+        c.connect()
+        defer { c.close() }
+        try await c.registerPush(token: "token", kinds: ["needs-you"], badgeRooms: ["aaaa", "bbbb"])
+        try await c.registerPush(token: "token", kinds: [], badgeRooms: [])
+        try await c.registerPush(token: "token", kinds: ["needs-you"], badgeRooms: nil)
+        let regs = relay.sync { relay.registrations }
+        XCTAssertEqual(regs[0]["badgeRooms"], ["aaaa", "bbbb"])
+        XCTAssertEqual(regs[1]["badgeRooms"], [])
+        XCTAssertNil(regs[2]["badgeRooms"], "omitting a manifest is unknown, not a room subtotal")
+    }
+
     func testTheHelloCarriesThePhonesProtocolAndTheWelcomeTheComputers() async throws {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         relay.welcomeProtocol = 3

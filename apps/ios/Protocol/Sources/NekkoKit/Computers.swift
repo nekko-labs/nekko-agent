@@ -30,6 +30,8 @@ public protocol RemoteConnection: Caller {
     func registerPush(token: String) async throws
     /// `kinds`: the pushes this phone wants; nil asks for all.
     func registerPush(token: String, kinds: [String]?) async throws
+    /// The complete needs-you room manifest, or nil when no single relay owns it.
+    func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws
     /// The Live Activity card's push tokens and level (`RelayClient.registerCard`).
     func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws
     /// Frames from the relay itself (`RelayControl`).
@@ -42,6 +44,9 @@ public protocol RemoteConnection: Caller {
 
 extension RemoteConnection {
     public func registerPush(token: String, kinds: [String]?) async throws { try await registerPush(token: token) }
+    public func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws {
+        try await registerPush(token: token, kinds: kinds)
+    }
     public func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) {}
     /// A connection with one route only has to dial again.
     public func networkChanged(_ path: NetworkPath) { reconnect() }
@@ -158,7 +163,11 @@ public final class ComputersStore {
     public private(set) var appearance: Appearance?
     public private(set) var pcSettings = PcSettings()
     public private(set) var workspaces: [WorkspaceFolder] = []
-    public private(set) var activity: [String: Activity] = [:]
+    public internal(set) var activity: [String: Activity] = [:]
+    /// Per-computer pending-input authority; nil counts are intentionally unknown.
+    public internal(set) var attention: [String: AttentionState] = [:]
+    /// All computer events for system notifications, separate from active-chat subscribers.
+    public var onComputerEvent: ((String, AgentEvent) -> Void)?
     /// Each listed chat's pull requests (`pr:sessionList`) for its row: only chats whose transcript names one.
     public private(set) var rowPrs: [String: [PullRequest]] = [:]
     /// When each chat's row PRs were asked for, and the links it named then.
@@ -244,7 +253,7 @@ public final class ComputersStore {
     /// Which side to update when the phone and the computer speak different versions.
     public var protocolCheck: ProtocolCheck { ProtocolCheck.compare(computer: hostProtocol) }
     public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
-    public var needsYouCount: Int { activity.values.filter { $0 == .needsYou }.count }
+    public var needsYouCount: Int { activeId.flatMap { attention[$0]?.pending.count } ?? 0 }
     public var runningCount: Int { activity.values.filter { $0 == .running }.count }
     public var modelGroups: [ModelGroup] {
         providers.filter(\.enabled).map { ModelGroup(provider: $0, models: models[$0.id], error: modelErrors[$0.id]) }
@@ -677,7 +686,9 @@ public final class ComputersStore {
         offlineFiles?.remove(id)
         transcriptCache?.removeComputer(id)
         computers.removeAll { $0.id == id }
+        attention[id] = nil
         saveIndex()
+        registerPushNow()
         if wasActive {
             activeId = computers.first?.id
             store.set(Self.activeKey, activeId)
@@ -694,8 +705,9 @@ public final class ComputersStore {
     /// the computer left behind keeps its link in the fleet, and a computer the
     /// fleet already reaches is taken over as it is, with no new connection.
     public func connect(_ id: String) {
-        defer { syncFleet() }
+        defer { syncFleet(); registerPushNow() }
         let leaving = id != activeId ? active : nil
+        if id == activeId { invalidateAttention(id) }
         // The computer left behind must not push (or start) a card on this phone any more:
         // tell it and its relay, best effort, then close that connection (or hand it to
         // the fleet). The switch never waits.
@@ -821,6 +833,7 @@ public final class ComputersStore {
     private func handle(_ signal: Signal, computerId: String, hadCode: Bool) {
         switch signal {
         case .status(let s):
+            if s.state != .online { invalidateAttention(computerId) }
             conn = s.state
             connDetail = s.detail
             if let r = s.route { route = r }
@@ -849,7 +862,7 @@ public final class ComputersStore {
         case .control(.pushRegistered(let delivers)):
             relayDelivers = delivers
         case .control(.dismiss(let tag)):
-            onDismiss?(tag)
+            dismissAttention(tag: tag, on: computerId)
         case .event(let channel, let payload):
             if channel == Events.appearanceUpdated {
                 appearance = Appearance.from(payload)
@@ -864,6 +877,8 @@ public final class ComputersStore {
             for f in listeners.values { f(e) }
             let next = ActivityTracker.next(activity, e)
             if next != activity { activity = next }
+            receiveAttention(e, on: computerId)
+            onComputerEvent?(computerId, e)
             // Keep the list fresh when a turn ends anywhere (another device, a task).
             switch e {
             case .done, .sessionMeta: scheduleSummaries()
@@ -874,6 +889,7 @@ public final class ComputersStore {
 
     /// Drop the live connection (the pairing stays).
     public func disconnect() {
+        if let id = activeId, links[id] == nil { invalidateAttention(id) }
         generation += 1
         pump?.cancel()
         pump = nil
@@ -896,13 +912,17 @@ public final class ComputersStore {
         nudgeFleet()
         if !pendingSignOuts.isEmpty { Task { await flushSignOuts() } }
         if conn == .online {
+            Task { await refreshAttention() }
             scheduleSummaries()
             flushOutbox()
         }
     }
 
     /// The phone changed network: dial a fresh socket now.
-    public func reconnect() { client?.reconnect() }
+    public func reconnect() {
+        if let id = activeId { invalidateAttention(id) }
+        client?.reconnect()
+    }
 
     /// The phone changed network (`path` says whether a LAN route can work):
     /// pick the route again and dial a fresh socket now.
@@ -951,6 +971,7 @@ public final class ComputersStore {
         suspendFleet()
         guard let c = client, !suspended else { return }
         suspended = true
+        if let id = activeId { invalidateAttention(id) }
         c.close()
     }
 
@@ -1033,19 +1054,38 @@ public final class ComputersStore {
         registerPushNow()
     }
 
+    private var pushRegistration: Task<Void, Never>?
+
+    /// Conservative single-authority enrollment: alternate endpoints cannot be
+    /// assumed to share one relay process. Never send a per-relay subtotal.
+    public var pushBadgeRooms: [String]? {
+        let routes = computers.flatMap(\.routes)
+        let rooms = computers.compactMap { secret($0.id)?.room }
+        guard rooms.count == computers.count else { return nil }
+        return PushBadgeManifest.rooms(routes: routes, rooms: rooms, needsYou: pushKinds?.contains(.needsYou) ?? true)
+    }
+
     private func registerPushNow() {
         // Every computer reached, so a chat that needs you on any of them can say so.
         for id in links.keys { registerPush(peer: id) }
         guard conn == .online, let token = pushToken, let c = client else { return }
-        let kinds = pushKinds?.map(\.rawValue)
-        Task { try? await c.registerPush(token: token, kinds: kinds) }
+        let previous = pushRegistration
+        pushRegistration = Task { [weak self] in
+            await previous?.value
+            guard let self, self.client === c, self.conn == .online, self.pushToken == token else { return }
+            try? await c.registerPush(token: token, kinds: self.pushKinds?.map(\.rawValue), badgeRooms: self.pushBadgeRooms)
+        }
     }
 
     /// Register this phone's push token on one fleet link, once it is online.
     func registerPush(peer id: String) {
         guard peers[id]?.conn == .online, let token = pushToken, let c = links[id]?.client else { return }
-        let kinds = pushKinds?.map(\.rawValue)
-        Task { try? await c.registerPush(token: token, kinds: kinds) }
+        let previous = pushRegistration
+        pushRegistration = Task { [weak self] in
+            await previous?.value
+            guard let self, self.links[id]?.client === c, self.peers[id]?.conn == .online, self.pushToken == token else { return }
+            try? await c.registerPush(token: token, kinds: self.pushKinds?.map(\.rawValue), badgeRooms: self.pushBadgeRooms)
+        }
     }
 
     /// *Send a test notification* (IO-30): ask the computer, which asks the relay
@@ -1090,6 +1130,8 @@ public final class ComputersStore {
 
     public func refresh() async {
         guard let c = client else { return }
+        let attentionId = activeId
+        let ticket = attentionId.map { beginAttention($0) }
         summariesLoading = true
         lastError = nil
         do {
@@ -1098,7 +1140,7 @@ public final class ComputersStore {
             async let settings = c.call(Channels.settingsGet)
             async let workspaces = orNil { try await c.call(Channels.workspaceList) }
             async let info = orNil { try await c.call(Channels.appInfo) }
-            async let pending = orNil { try await c.call(Channels.chatPending) }
+            async let pending = orNil { try await c.call(Channels.chatPending, [], timeout: 5) }
             let s = try await settings
             let r = (try await summaries, try await providers, s, await workspaces, await info, await pending)
             guard client === c else { return }
@@ -1110,7 +1152,7 @@ public final class ComputersStore {
             self.pcSettings = PcSettings.from(r.2)
             self.workspaces = WorkspaceFolder.list(r.3)
             // Approvals and questions already waiting when we (re)connect.
-            for (sid, p) in PendingInput.map(r.5) where p.approval != nil || p.question != nil { activity[sid] = .needsYou }
+            if let attentionId, let ticket { replaceAttention(r.5, on: attentionId, ticket: ticket) }
             let appInfo = AppInfo.from(r.4)
             hostVersion = appInfo.version
             quitFromPhone = appInfo.quitFromPhone
@@ -1125,6 +1167,7 @@ public final class ComputersStore {
             transcripts.keepOnly(Set((r.0.array ?? []).compactMap { $0.str("id") }))
         } catch {
             if client === c {
+                if let attentionId, let ticket { replaceAttention(nil, on: attentionId, ticket: ticket) }
                 summariesLoading = false
                 summariesLoaded = true
                 lastError = error.localizedDescription
