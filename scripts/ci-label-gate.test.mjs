@@ -93,6 +93,9 @@ test('Automatic evidence dispatch still runs the full required Native iOS suite'
   assert.doesNotMatch(condition, /automatic_baseline_ref/, 'Evidence must not stand in for the full native suite');
   const evidence = readFileSync(new URL('../.github/workflows/native-machine-evidence.yml', import.meta.url), 'utf8');
   assert.match(evidence, /revision: \[before, after\]/);
+  assert.match(evidence, /RUNTIME=com\.apple\.CoreSimulator\.SimRuntime\.iOS-27-0\n/);
+  assert.match(evidence, /TYPE=com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-18-Pro\n/);
+  assert.doesNotMatch(evidence, /reverse_each|\.max_by/, 'Both revisions need an identical simulator, not each runner\'s newest OS');
   assert.doesNotMatch(evidence, /cp .*NewChatView\.swift/, 'The base app implementation must stay unchanged');
 });
 

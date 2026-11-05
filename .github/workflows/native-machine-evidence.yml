@@ -50,7 +50,11 @@ jobs:
         run: |
           set -euo pipefail
           xcodegen generate
-          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          # Runtime list ordering and installed versions differ between hosted Macs.
+          # Both revisions must use this exact pair, never each runner's newest OS.
+          RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-0
+          TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro
+          xcrun simctl list runtimes -j | ruby -rjson -e 'abort "Required matched iOS 27.0 simulator is unavailable" unless JSON.parse(STDIN.read)["runtimes"].any? { |r| r["isAvailable"] && r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-27-0" }'
           DEVICE=$(xcrun simctl create Nekko-Automatic-Evidence "$TYPE" "$RUNTIME")
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
