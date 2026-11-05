@@ -1,9 +1,10 @@
+import { resolveThemeAppearance } from './themeMode.js';
 import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import { rememberSplashColours } from './splash.js';
 import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent, findThemePreset, resolveThemePreset, themePresetOf } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
 import { syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
@@ -891,13 +892,8 @@ export const useStore = create<UiState>((set, get) => ({
   resolvedPreset: undefined,
   applyTheme: () => {
     const settings = get().settings;
-    const theme = settings?.theme ?? 'system';
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    // System follows the computer with the plum looks: Dark Nekko or Light Nekko.
-    const picked = themePresetOf(settings);
-    const presetId = resolveThemePreset(picked, prefersDark);
-    const preset = presetId ? THEME_PRESETS.find((p) => p.id === presetId) : undefined;
-    const resolved = picked === 'system' && preset ? preset.mode : theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
+    const { mode: resolved, presetId, preset, accent, accent2 } = resolveThemeAppearance(settings, prefersDark);
     const root = document.documentElement;
     root.setAttribute('data-theme', resolved);
 
@@ -912,20 +908,8 @@ export const useStore = create<UiState>((set, get) => ({
     }
     if (get().resolvedPreset !== presetId) set({ resolvedPreset: presetId });
 
-    // Picking System saved its own old accents; only colours the user changed
-    // from those override the branded look.
-    const systemPreset = picked === 'system' ? findThemePreset('system') : undefined;
-    const own = (saved: string | undefined, shipped: string | undefined) =>
-      systemPreset && saved?.toLowerCase() === shipped ? undefined : saved;
-    const accent = currentPresetAccent(presetId, own(settings?.accent, systemPreset?.accent));
-    const accent2 = currentPresetAccent(presetId, own(settings?.accent2, systemPreset?.accent2));
-    if (accent) root.style.setProperty('--accent', accent);
-    else if (preset) root.style.setProperty('--accent', preset.accent);
-    else root.style.removeProperty('--accent');
-
-    if (accent2) root.style.setProperty('--accent-2', accent2);
-    else if (preset?.accent2) root.style.setProperty('--accent-2', preset.accent2);
-    else root.style.removeProperty('--accent-2');
+    root.style.setProperty('--accent', accent);
+    root.style.setProperty('--accent-2', accent2);
 
     // Settings > Style. A chosen family falls back to the bundled one.
     const family = (name: string | undefined, fallback: string) =>
