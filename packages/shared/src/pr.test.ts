@@ -207,6 +207,7 @@ describe('collectSessionPrInteractions', () => {
   it('rejects stale or contradictory result identities and invalid merged state', () => {
     for (const output of [
       '✓ Merged pull request other/repo#9 (Old)',
+      'Successfully merged pull request other/repo#9 (Old)',
       '✓ Merged pull request o/r#10 (Old)',
       '✓ Merged pull request #10 (Old)',
       JSON.stringify({ number: 10, state: 'MERGED' }),
