@@ -50,7 +50,7 @@ To use the microphone for dictation only, turn off **Enable "Nekko..." commands*
 
 ## On iPhone
 
-Tap the microphone in a chat's message box and it keeps listening through pauses until you tap stop, lock the phone, or leave the chat. The screen stays on while it listens. If listening stops on its own (a call, unplugging headphones, locking), you'll see "Stopped listening". With two chats side by side, only one listens at a time. AirPods work as the microphone, at call quality while listening. A command with nothing to do says so ("Nothing to send", "Nothing to erase", "Nothing to confirm"). With **Hold to talk**, answer a "Nekko, yes" question in your next hold. The first time you tap it (or the first time you hold it, with **Hold to talk**), a short video shows how voice works instead of listening. **Turn on** starts listening; **Not now** closes it without listening. Either way, or if you swipe it away, it won't show again. Watch it any time from **Settings > Dictation > Watch how voice works**. The video has captions, and VoiceOver reads a summary of it; with Reduce Motion on, it waits for the play button.
+The message box on iPhone has one microphone, and it starts a [hands-free conversation](#hands-free-conversation-on-iphone). To dictate words into a message without sending them, use the microphone on the iPhone keyboard. Watch how voice works any time from **Settings > Dictation > Watch how voice works**.
 
 Without Whisper on your computer, speech is turned into text on the iPhone only, never on a server.
 
@@ -60,7 +60,7 @@ With **Settings > While a chat runs > Live Activities** set to **Detailed**, the
 
 ### Hands-free conversation on iPhone
 
-The waveform-in-a-circle button is **Voice conversation**, separate from the dictation microphone. It is available in New chat, a connected computer chat, and a chat running on this iPhone.
+The microphone in the message box is **Voice conversation**. It is available in New chat, a connected computer chat, and a chat running on this iPhone.
 
 1. Open **Voice conversation**, then tap **Start voice conversation**. Opening the controls alone does not start the microphone.
 2. Speak a turn. After a pause, the recognized words are sent automatically to that chat's selected model.
@@ -69,7 +69,7 @@ The waveform-in-a-circle button is **Voice conversation**, separate from the dic
 
 An agent task already sent may continue after voice ends. If the agent needs approval or an answer, voice stops and asks you to answer in the chat—voice never approves a tool for you. For a computer chat, the original computer must remain connected. Phone-only chat recognition stays on the iPhone; connected chats use the existing configured on-device/computer speech path. Playback is iOS speech on this phone, without a new cloud speech service. The recognized text still goes to your selected model.
 
-Use the microphone instead when you want speech added to a draft without automatic sending. New chat and phone-only draft dictation only insert words; the existing connected-chat dictation commands are unchanged.
+To add speech to a draft without sending it, use the iPhone keyboard's own dictation.
 
 **Verification note:** simulator state/lifecycle checks do not prove physical microphone, speech quality or Bluetooth routing. These require an on-device check before claiming hardware support for the new hands-free flow.
 

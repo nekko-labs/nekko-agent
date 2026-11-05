@@ -197,11 +197,6 @@ struct NewChatView: View {
                     case .phone(let id): opened(id)
                     }
                 })
-                DraftVoiceInput(text: $text, onPhone: onPhone) { words in
-                    var draft = store.drafts.draft(DraftStore.newChat)
-                    draft.text += (draft.text.isEmpty ? "" : " ") + words
-                    store.drafts.set(DraftStore.newChat, draft)
-                }
                 startButton
             }
             // The model, effort and where the chat runs: the box's bottom rows, never below it (#1599).

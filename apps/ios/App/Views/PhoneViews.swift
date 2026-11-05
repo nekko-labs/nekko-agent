@@ -214,7 +214,6 @@ struct PhoneChatView: View {
             .accessibilityIdentifier("phoneChat.model")
             Spacer(minLength: 0)
             VoiceConversationButton(makeTarget: { .phone(chatId) })
-            DraftVoiceInput(text: $text, onPhone: true)
             if running {
                 Button { phone.stop(chatId) } label: {
                     Image(systemName: "stop.fill").font(.body.weight(.bold))

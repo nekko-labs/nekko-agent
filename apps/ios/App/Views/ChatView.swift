@@ -894,52 +894,6 @@ struct FlowOptions: View {
     }
 }
 
-/// The microphone in hold-to-talk mode (IO-28): records while pressed, stops
-/// on release. VoiceOver can't hold, so its double-tap starts and the next one stops.
-struct HoldToTalkButton: View {
-    let dictation: Dictation
-    let gate: VoiceIntroGate
-    @Environment(ComputersStore.self) private var store
-    @Environment(Prefs.self) private var prefs
-    @Environment(\.palette) private var palette
-    /// Resets when the gesture is cancelled too (the video's sheet coming up mid-press), so no press is swallowed.
-    @GestureState private var down = false
-    /// This press showed the video instead of listening, so its release has nothing to stop.
-    @State private var introduced = false
-
-    var body: some View {
-        Image(systemName: dictation.recording ? "waveform.circle.fill" : "mic.fill")
-            .font(dictation.recording ? .title2 : .title3)
-            .foregroundStyle(dictation.recording ? palette.danger : palette.inkSoft)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-            .scaleEffect(down ? 1.15 : 1)
-            // A critically damped spring: a fast press and release reverses from where it is.
-            .animation(.spring(response: 0.25, dampingFraction: 1), value: down)
-            .gesture(DragGesture(minimumDistance: 0).updating($down) { _, pressed, _ in pressed = true })
-            // Down, and up whether released or cancelled.
-            .onChange(of: down) { _, pressed in
-                if pressed {
-                    introduced = gate.intercept(prefs)
-                    if !introduced { Task { await dictation.press(store: store) } }
-                } else {
-                    if !introduced { Task { await dictation.letGo(store: store) } }
-                    introduced = false
-                }
-            }
-            .accessibilityElement()
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(dictation.recording ? "Stop dictation" : "Dictate")
-            .accessibilityHint(dictation.recording ? "" : "Hold to talk, let go to stop")
-            .accessibilityIdentifier("composer.holdToTalk")
-            .accessibilityAction {
-                Task {
-                    if dictation.recording { dictation.stopListening() } else if !gate.intercept(prefs) { await dictation.start(store: store, holding: true) }
-                }
-            }
-    }
-}
-
 /// Text, the computer's skills (`/`), photos, dictation, Send / Stop, with + and Send inside the box.
 struct Composer: View {
     let chat: ChatModel
@@ -1123,24 +1077,13 @@ struct Composer: View {
                             .accessibilityIdentifier("composer.dictationStarting")
                     } else if dictation.transcribing {
                         ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
-                    } else if prefs.dictationHold && dictation.available {
-                        HoldToTalkButton(dictation: dictation, gate: intro)
-                    } else if dictation.available {
-                        Button { if !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } } } label: {
-                            Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
-                                .frame(width: 44, height: 44).contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("Dictate")
-                        .accessibilityHint("Keeps listening until you tap stop. Start with Nekko for a command, like Nekko, send it.")
-                        .accessibilityIdentifier("composer.dictate")
-                    }
-                    VoiceConversationButton(makeTarget: {
-                        guard let id = store.activeId else { throw RelayError("Choose a computer first.") }
-                        return .computer(chat, computerId: id)
-                    })
-                    .disabled(chat.savedAt != nil || chat.sendsLater)
-                    if !dictation.available {
-                        DraftVoiceInput(text: $text)
+                    } else {
+                        // One mic: the voice conversation. Dictation into the box is the keyboard's own mic.
+                        VoiceConversationButton(makeTarget: {
+                            guard let id = store.activeId else { throw RelayError("Choose a computer first.") }
+                            return .computer(chat, computerId: id)
+                        })
+                        .disabled(chat.savedAt != nil || chat.sendsLater)
                     }
                     // Stop while running with nothing to queue; a photo or skill alone can be queued.
                     if chat.running && !hasContent {

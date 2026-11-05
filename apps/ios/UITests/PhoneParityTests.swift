@@ -16,7 +16,8 @@ final class PhoneParityTests: XCTestCase {
         let app = launch("-uiTestNewChat")
         let field = app.textViews["newChat.prompt"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["composer.dictate"].exists)
+        XCTAssertTrue(app.buttons["composer.voiceConversation"].exists)
+        XCTAssertFalse(app.buttons["composer.dictate"].exists, "one mic: dictation is the keyboard's")
         attach(app, "new-chat-after")
         field.tap()
         field.typeText("**Bold** and _italic_\n- First item")
@@ -70,25 +71,14 @@ final class PhoneParityTests: XCTestCase {
         let app = launch("-uiTestPhoneComposer")
         let field = app.textViews["phoneChat.prompt"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["composer.dictate"].exists)
+        XCTAssertTrue(app.buttons["composer.voiceConversation"].exists)
+        XCTAssertFalse(app.buttons["composer.dictate"].exists, "one mic: dictation is the keyboard's")
         attach(app, "phone-only-after")
         field.tap()
         field.typeText("**Draft** with a list\n- Item")
         XCTAssertTrue(app.buttons["composer.bold"].exists)
         XCTAssertTrue(app.buttons["phoneChat.send"].isEnabled)
         attach(app, "phone-only-keyboard-after")
-    }
-
-    func testNewChatVoiceIntroductionDoesNotSend() {
-        let app = launch("-uiTestNewChat", extra: ["-voiceIntroSeen", "NO"])
-        let mic = app.buttons["composer.dictate"]
-        XCTAssertTrue(mic.waitForExistence(timeout: 10))
-        mic.tap()
-        XCTAssertTrue(app.buttons["Not now"].waitForExistence(timeout: 5))
-        attach(app, "voice-introduction")
-        app.buttons["Not now"].tap()
-        XCTAssertTrue(mic.waitForExistence(timeout: 3))
-        XCTAssertFalse(app.buttons["newChat.start"].isEnabled)
     }
 
     func testGroupsAndFolderManagement() { checkGroups(reduced: false) }

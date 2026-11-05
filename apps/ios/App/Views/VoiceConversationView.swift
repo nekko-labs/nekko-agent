@@ -11,8 +11,8 @@ struct VoiceConversationButton: View {
 
     var body: some View {
         Button { open = true } label: {
-            Image(systemName: "waveform.circle").font(.title3)
-                .foregroundStyle(palette.accent).frame(width: 44, height: 44).contentShape(Rectangle())
+            Image(systemName: "mic.fill").font(.title3)
+                .foregroundStyle(palette.inkSoft).frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Voice conversation")
