@@ -1462,9 +1462,9 @@ impl Turns {
                     let harness = Arc::downgrade(&self.harness);
                     let hub = lock(&self.wakes).get(&session_id).map(|(_, hub)| hub.clone());
                     let id = session_id.clone();
-                    child.on_background_change(move |n| {
+                    child.on_background_change(move |n, watchers| {
                         if let Some(h) = harness.upgrade() {
-                            h.note_background(&id, n);
+                            h.note_background(&id, n, watchers);
                         }
                         if let Some(hub) = &hub {
                             let event = json!({ "type": "claude_code_background", "sessionId": id, "tasks": n });

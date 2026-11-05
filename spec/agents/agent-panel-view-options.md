@@ -78,6 +78,19 @@ Acceptance: the card bottoms meet the horizontal scrollbar, with no unused panel
 - **The agent plan** drops Explore the same way; see [the plan sheet](../chat/plan-sheet-on-the-composer.md).
 - No storage, permissions or network use change.
 
+## An agent asked to watch something is Watching (2026-11-05)
+
+`[implemented; unit-tested (agentPanelView, sessionSummaryRefresh, routes.rs, session.rs, a daemon test with a simulated Claude Code); not yet watched in the desktop app with a live Claude Code watcher]`
+
+**User intent:** with the automatic watch setting off, an agent asked by hand to watch a PR should still show in Watching, not Done. This is a manual way in for the specific agents someone asks, added to the logic and not replacing it.
+
+- Claude Code chats have no `agent_watch`, so an agent asked to watch something starts a background watcher. The panel only counted armed watches, so that chat looked finished.
+- **This adds to Watching; nothing else about it changes.** A stopped chat with an armed watch, including the default PR watch, is Watching as before. A stopped chat is now also Watching while its Claude Code runs a background watcher, whatever **Watch each PR until it is merge-ready** says, and its card shows the Zz. When the watcher ends, the chat goes to its phase if that wakes it, then to Done.
+- **A background watcher** is a `Monitor` task, or a background command that polls in a loop (`while`, `until` or `for` with a sleep) or follows a `gh` watch (`gh run watch`, `gh pr checks --watch`). Claude Code does not label its tasks, so this is read from the call that started the task (`is_watcher` in `session.rs`). A background test run, dev server or sub-agent is not a watcher and leaves the chat in Done.
+- A watcher counts only while Claude Code reports a background task, and all of them clear when it reports none, so a missed end cannot hold a chat in Watching.
+- The engine adds `backgroundWatchCount` to chat summaries, kept apart from `activeWatchCount`, which phones and live cards read as "Watching PR". Phones are unchanged. Every window re-reads its list on `claude_code_background`.
+- The count lives in memory with the Claude Code child, so it goes with the child. No new storage, permissions or network use.
+
 ## Subagents under their parent (2026-11-03)
 
 `[implemented; unit tested; checked in an isolated hidden renderer, not in the packaged app]`

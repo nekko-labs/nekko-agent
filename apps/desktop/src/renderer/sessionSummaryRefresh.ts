@@ -16,7 +16,7 @@ export function startSessionSummaryRefresh(refresh: () => Promise<void>): () => 
     }
   };
   const off = window.nekko.onAgentEvent((event) => {
-    if (!['done', 'error', 'session_meta'].includes(event.type)) return;
+    if (!['done', 'error', 'session_meta', 'claude_code_background'].includes(event.type)) return;
     pending = true;
     if (timer !== undefined) clearTimeout(timer);
     timer = setTimeout(() => void flush(), 100);
