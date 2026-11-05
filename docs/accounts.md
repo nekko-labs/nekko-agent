@@ -85,6 +85,16 @@ API keys, connector and MCP server tokens, and sign-ins (ChatGPT, OpenRouter, Go
 
 **Settings > System > Backup & restore** exports your settings without any key or token. Importing a backup keeps the keys this computer already has; on a new computer, add your keys again. **Delete everything** deletes the saved keys too.
 
+### macOS Keychain access requests
+
+On a Mac, the app keeps its API keys, sign-ins, and encryption keys together in one Keychain item per app data profile. Its name is **Nekko Agent: API keys, sign-ins and encryption keys**, followed by a short profile identifier. macOS may identify the requesting engine as **nekkod**. This unlocks Nekko Agent's saved credentials; it is not a request to read unrelated passwords in your Keychain.
+
+The engine loads this item once and shares it across the app, rather than reading a separate Keychain item for each key. macOS decides whether approval is needed, especially after a signing identity changes. Saving a changed credential can also require authorization.
+
+**Upgrading from separate items:** the first use of an older saved key moves it into the shared item only after checking that the new copy reads back correctly. Apple may still ask you to approve each old item during this one-time move. Existing per-item permissions cannot be combined retroactively. Later read-only starts use the shared item.
+
+If you deny access, the app remembers that refusal instead of repeatedly asking through other startup callers. Your saved keys are retained, but the affected credentials are unavailable in that run. Unlock Keychain if necessary, then quit and reopen Nekko Agent when you want to retry. Changes made manually in Keychain also take effect after reopening the app. Older app versions do not understand the consolidated storage, so downgrading may require signing in again.
+
 ## Accounts on another computer
 
 Nekko runs Claude Code on the computer it runs on. To use an account that lives on another machine (for example Claude Code inside WSL on a Windows desktop), open a terminal to it from **Terminal → SSH hosts** and run `claude` there: it appears as a terminal tab in the same window, with that machine's login, but not as a Nekko chat. Running a Claude subscription chat on another computer, with its approvals and transcript in this window, is not built yet.

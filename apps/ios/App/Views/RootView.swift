@@ -133,8 +133,8 @@ struct RootView: View {
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
     private func syncCover() {
-        // Before the first unlock the cover is the launch screen's plain lavender, so
-        // the full opening animation underneath starts on it; after that it is the cat.
+        // Before the first unlock the cover is the launch animation's held first frame, so
+        // the animation underneath takes over without a seam; after that it is the dissolving cat.
         let lock = LockView(phase: phase, cat: app.lock.everUnlocked, opening: !covered) { cover.opened() }
             .environment(app)
             .modifier(Themed(choice: app.prefs.theme, appearance: store.appearance))
@@ -331,7 +331,9 @@ struct LockView: View {
             if cat {
                 SplashView(kind: .resume, ready: opening, onDone: opened)
             } else {
-                SplashView.ground.ignoresSafeArea()
+                // The launch animation's first frame (the launch screen's cat), held: unlocked,
+                // the cover goes at once and the same frame underneath starts its zoom.
+                SplashView(ready: false) {}
             }
             if app.lock.locked && phase == .active && prompted && !app.lock.authenticating {
                 VStack(spacing: 12) {

@@ -1232,8 +1232,8 @@ public final class ComputersStore {
         activity[sessionId] = nil
     }
 
-    /// The connection a chat action goes over: the active computer's, or the fleet's link to `computer`.
-    private func caller(_ computer: String?) throws -> RemoteConnection {
+    /// The connection a chat action (or a read, like Usage's) goes over: the active computer's, or the fleet's link to `computer`.
+    func caller(_ computer: String?) throws -> RemoteConnection {
         guard let computer, computer != activeId else { return try remote() }
         guard peers[computer]?.conn == .online, let c = links[computer]?.client else {
             let name = computers.first { $0.id == computer }?.name ?? "That computer"
@@ -1387,6 +1387,18 @@ public final class ComputersStore {
         store.set(Self.indexKey, data)
     }
 }
+
+#if DEBUG
+extension ComputersStore {
+    /// UI-test fixtures only (`-uiTestModelTabs`): providers and their model lists as a
+    /// computer would send them (`providers:list`, `models:list`), with no connection.
+    public func seedModelsForUITest(providers: JSONValue, models: [String: JSONValue]) {
+        self.providers = PublicProvider.list(providers)
+        self.models = models.mapValues { ModelInfo.list($0) }
+        modelErrors = [:]
+    }
+}
+#endif
 
 func orNil<T: Sendable>(_ body: @Sendable () async throws -> T) async -> T? {
     try? await body()
