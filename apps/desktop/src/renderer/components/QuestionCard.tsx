@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { AskAnswer, AskQuestion, AskRequest } from '@nekko-agent/shared';
 import { PixelQuestionIcon } from './PixelQuestionIcon.js';
 import { ASK_OTHER_LABEL, isAskComplete } from '@nekko-agent/shared';
@@ -77,13 +77,15 @@ export function QuestionCard({
   /** The option rows plus the "Something else" row the keyboard also walks. */
   const rowCount = q.options.length + 1;
 
-  // A new question starts at the top, and the card takes the keyboard so the
-  // whole thing is answerable without reaching for the mouse. Board cards sit
-  // among other cards and don't get to steal focus.
-  useEffect(() => {
+  // Incoming questions never take the keyboard from another composer or field.
+  // Only an explicit step change inside this card transfers focus to its root,
+  // before the keyed step unmounts the control the user was interacting with.
+  const showStep = useCallback((next: number) => {
+    const root = rootRef.current;
+    if (root?.contains(document.activeElement)) root.focus({ preventScroll: true });
     setCursor(0);
-    if (!compact) rootRef.current?.focus({ preventScroll: true });
-  }, [index, compact]);
+    setStep(next);
+  }, []);
 
   const toggle = useCallback(
     (label: string) => {
@@ -115,11 +117,11 @@ export function QuestionCard({
    */
   const goNext = useCallback(() => {
     if (!last) {
-      setStep(index + 1);
+      showStep(index + 1);
       return;
     }
     onAnswer(toAnswers(request.questions, pickedRef.current, notesRef.current));
-  }, [index, last, onAnswer, request.questions]);
+  }, [index, last, onAnswer, request.questions, showStep]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement | null;
@@ -169,7 +171,7 @@ export function QuestionCard({
     }
     if (e.key === 'Backspace' && index > 0) {
       e.preventDefault();
-      setStep(index - 1);
+      showStep(index - 1);
     }
   };
 
@@ -187,7 +189,7 @@ export function QuestionCard({
       } as React.CSSProperties}
       role="group"
       aria-label="The agent is asking a question"
-      tabIndex={-1}
+      tabIndex={0}
       onKeyDown={onKeyDown}
     >
       <div className="mb-2 flex items-center gap-2">
@@ -216,7 +218,7 @@ export function QuestionCard({
                     title={item.header}
                     aria-label={`Question ${i + 1}: ${item.question}`}
                     aria-current={here ? 'step' : undefined}
-                    onClick={() => setStep(i)}
+                    onClick={() => showStep(i)}
                   />
                 );
               })}
@@ -311,7 +313,7 @@ export function QuestionCard({
 
       <div className="mt-2 flex items-center gap-2">
         {index > 0 && (
-          <button className="btn btn-ghost px-2 py-1 text-xs" onClick={() => setStep(index - 1)}>
+          <button className="btn btn-ghost px-2 py-1 text-xs" onClick={() => showStep(index - 1)}>
             Back
           </button>
         )}
