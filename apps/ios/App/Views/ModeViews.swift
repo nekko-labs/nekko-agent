@@ -4,44 +4,25 @@ import SwiftUI
 
 // MARK: - Simple and Expert
 
-/// Simple or Expert, in the floating pill of a chat and of the chats list: a
-/// chat bubble for Simple and code brackets for Expert.
-/// Simple hides the controls Settings > Simple mode keeps to Expert.
-struct ModeToggle: View {
-    /// Stacked, in the pill docked at a side.
-    var vertical = false
+/// Simple or Detailed, at the top of the chat list's view menu and a chat's More
+/// menu (2026-11-05; before, a switch in the floating pill): a chat bubble for
+/// Simple and code brackets for Detailed. Simple hides the controls
+/// Settings > Simple mode keeps to Detailed.
+struct ModeMenuPicker: View {
     @Environment(Prefs.self) private var prefs
-    @Environment(\.palette) private var palette
-    /// The pill is being dragged: the touch that lifted it doesn't also flip the mode.
-    @Environment(\.pillMoving) private var moving
 
     var body: some View {
-        let layout = vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
-        layout {
-            segment(expert: false)
-            segment(expert: true)
+        @Bindable var prefs = prefs
+        Picker(selection: $prefs.expertMode) {
+            Label("Simple", systemImage: Self.icon(expert: false)).tag(false)
+                .accessibilityIdentifier("mode.simple")
+            Label("Detailed", systemImage: Self.icon(expert: true)).tag(true)
+                .accessibilityIdentifier("mode.detailed")
+        } label: {
+            Text("Mode")
         }
-        .background(palette.surface2, in: Capsule())
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Mode")
-        .accessibilityValue(prefs.expertMode ? String(localized: "Detailed") : String(localized: "Simple"))
+        .pickerStyle(.inline)
         .accessibilityIdentifier("chat.mode")
-    }
-
-    private func segment(expert: Bool) -> some View {
-        let on = prefs.expertMode == expert
-        return Button { if !moving { prefs.expertMode = expert } } label: {
-            Image(systemName: Self.icon(expert: expert))
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(on ? palette.onAccent : palette.inkSoft)
-                .frame(width: 34, height: 24)
-                .background(on ? palette.accent : .clear, in: Capsule())
-                .frame(minWidth: 40, minHeight: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(expert ? String(localized: "Detailed: every control") : String(localized: "Simple: everyday controls"))
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     static func icon(expert: Bool) -> String {

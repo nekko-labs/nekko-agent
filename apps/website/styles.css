@@ -701,6 +701,8 @@ body {
 .media .hero-shot-dark, :root[data-theme='dark'] .media .hero-shot-light { display: none; }
 :root[data-theme='dark'] .media .hero-shot-dark { display: block; }
 :root[data-theme='dark'] .lightbox-stage > .hero-shot-dark { background: #241f23; }
+.media .panel-look-dark, :root[data-theme='dark'] .media .panel-look-light { display: none; }
+:root[data-theme='dark'] .media .panel-look-dark { display: block; }
 
 /* the enlarged view */
 .lightbox {

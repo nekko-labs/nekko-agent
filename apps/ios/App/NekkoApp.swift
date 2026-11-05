@@ -87,7 +87,9 @@ struct NekkoApp: App {
         if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") { PhoneComposerFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") { PhoneParityFixture() } else
-        if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
+            ChatRefreshFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
             NewChatFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") {
             MarkdownLab()
@@ -117,7 +119,7 @@ struct NekkoApp: App {
                 .onOpenURL { app.handle(url: $0) }
                 .task {
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") || ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") || ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") || ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") || ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") { return }
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") || ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") || ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") || ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") || ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") || ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") { return }
                     #endif
                     app.start()
                 }

@@ -71,4 +71,3 @@ public final class VoiceConversation {
         phase = .stopped
     }
 }
-
