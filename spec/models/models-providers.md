@@ -54,3 +54,7 @@ Acceptance: repeat activation, outside pointer, and Escape close setup; inside p
 - **Delete everything deletes them.** Resetting the settings deletes their keystore items, and Delete everything also deletes the sign-ins' item.
 
 Acceptance: an older `settings.json` with keys reads back with every key, and the file no longer holds them; a keystore that will not save keeps them in the file; a second read changes nothing; an exported backup holds no key; a backup imported on the same computer gives back the same settings; Delete everything leaves no key behind. Unverified: a real Keychain and Credential Manager (tests use a file stand-in), and Windows' item size limit with real ChatGPT tokens (values are split into 1000-character items for it).
+
+### Starred models retain their provider rows
+
+Implemented: favorites remain in their original provider group as well as the pinned Starred, Recent or Default shortcut. Starring never removes a provider catalog entry. Both copies select the same provider/model and share favorite state; source and text filters still apply. Non-favorite pinned rows retain existing deduplication. Verified with renderer tests and an isolated Electron fixture, without real provider calls or credentials.
