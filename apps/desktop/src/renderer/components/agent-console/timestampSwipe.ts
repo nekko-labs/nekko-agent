@@ -2,6 +2,21 @@
 export const TIMESTAMP_REVEAL_PX = 112;
 /** Wheel events have no finger-up signal. Allow brief pauses before settling. */
 export const WHEEL_RELEASE_MS = 450;
+/** A selection often starts just past a line's end or in the gap between its lines. */
+const TEXT_MARGIN_PX = 12;
+
+/**
+ * Whether a point lands on rendered text. The caret lookup snaps to the nearest
+ * text from anywhere, so the text's own line boxes decide: blank space clear of
+ * the text stays draggable.
+ */
+function isOverText(x: number, y: number) {
+  const range = document.caretRangeFromPoint(x, y);
+  if (range?.startContainer.nodeType !== 3) return false;
+  range.selectNodeContents(range.startContainer);
+  const m = TEXT_MARGIN_PX;
+  return Array.from(range.getClientRects()).some(r => x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m);
+}
 
 /** Renderer-only gesture. Pointer drags settle on release, never on an idle timer. */
 export function attachTimestampSwipe(el: HTMLElement) {
@@ -43,8 +58,10 @@ export function attachTimestampSwipe(el: HTMLElement) {
   };
   const onDown = (e: PointerEvent) => {
     if (!e.isPrimary || e.button !== 0) return;
-    // Keep buttons, links, editors and selectable message text working normally.
+    // Keep buttons, links, editors and code blocks working normally.
     if ((e.target as Element).closest('button, a, input, textarea, select, [contenteditable="true"], pre')) return;
+    // A mouse on text is selecting it. A finger can't, so touch still swipes there.
+    if (e.pointerType !== 'touch' && isOverText(e.clientX, e.clientY)) return;
     pointer = { id: e.pointerId, x: e.clientX, y: e.clientY, active: false };
   };
   const onMove = (e: PointerEvent) => {
