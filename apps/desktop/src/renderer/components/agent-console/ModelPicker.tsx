@@ -400,8 +400,9 @@ export function ModelPicker({
               </>
             )}
             {groups.map((g) => {
-              const remaining = q ? g.models : g.models.filter((m) => !pinnedKeys.has(`${g.provider.id}::${m.id}`));
+              const remaining = q ? g.models : g.models.filter((m) => (favSet.has(`${g.provider.id}::${m.id}`) || !pinnedKeys.has(`${g.provider.id}::${m.id}`)));
               // Keep the account meter visible even when every model is pinned above.
+              if (!remaining.length && !limitsKeyFor(g.provider)) return null;
               // A local provider can serve models out of several folders; when
               // the rows say where they live, group them under that heading.
               const locs = [...new Set(remaining.map((m) => m.details?.location ?? ''))];
