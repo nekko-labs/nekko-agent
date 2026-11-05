@@ -1016,11 +1016,12 @@ struct Composer: View {
                     ProgressView().controlSize(.small)
                     Text("Adding photos…").font(.caption)
                 }.foregroundStyle(palette.inkSoft)
-            } else if !images.isEmpty {
-                HStack {
-                    Label(images.count == 1 ? "1 photo" : "\(images.count) photos", systemImage: "photo").font(.caption)
-                    Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
-                }.foregroundStyle(palette.inkSoft)
+            }
+            if !images.isEmpty {
+                ComposerPhotos(photos: images) { index in
+                    images.remove(at: index)
+                    photos = []
+                }
             }
             if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
