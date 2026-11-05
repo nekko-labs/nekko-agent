@@ -79,6 +79,14 @@ app.whenReady().then(async () => {
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
       check('reduced motion has no transitions', await run(`getComputedStyle(document.querySelector('.theme-swatch')).transitionDuration==='0s' && getComputedStyle(document.querySelector('.theme-mode-thumb')).transitionDuration==='0s'`));
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [] }); win.webContents.debugger.detach();
+      // A fresh profile can store System's old shipped accents; editing one
+      // channel must not resurrect that old value in the untouched channel.
+      await run(`(() => {const s=layoutFixture.store;const settings={...s.getState().settings,theme:'dark',themePreset:'system',accent:'#6d5efc',accent2:'#06b6d4'};layoutFixture.bridge.updateSettings(settings);s.setState({settings});s.getState().applyTheme();})()`);
+      await sleep(100); await click('.theme-custom-trigger');
+      await run(`(() => {const input=document.querySelector('.theme-custom-colors input[type="color"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'#123456');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+      await sleep(100);
+      check('editing System keeps resolved secondary', await run(`layoutFixture.store.getState().settings.accent2==='#06b6d4' && getComputedStyle(document.documentElement).getPropertyValue('--accent-2').trim()==='#c99bb3'`));
+      await click('.theme-custom-trigger'); await click('[title="Nekko"]');
     }
     win.setContentSize(390, 844); await sleep(400); await scroll(); await shot('appearance-narrow');
     check('no horizontal page overflow', await run('document.documentElement.scrollWidth <= innerWidth'));
