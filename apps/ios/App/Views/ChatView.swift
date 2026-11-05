@@ -183,6 +183,9 @@ struct ChatView: View {
                 .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
             }
             .accessibilityIdentifier("chat.transcript")
+            #if DEBUG
+            .modifier(TurnDetailsMeasureFrame(name: "transcript"))
+            #endif
             .pawRefreshableFromEnd(pull) {
                 await chat.reload()
                 guard !Task.isCancelled else { return }

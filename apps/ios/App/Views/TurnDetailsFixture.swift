@@ -17,6 +17,7 @@ struct TurnDetailsFixture: View {
             if ready { ChatView(sessionId: "turn-details-fixture") }
         }
         .environment(store)
+        .overlay(alignment: .topLeading) { TurnDetailsProbeReadout() }
         .task {
             store.load()
             _ = try? await store.pair(PairingLink(relayUrl: "ws://localhost:1440", room: "a1b2c3d4e5f60718",

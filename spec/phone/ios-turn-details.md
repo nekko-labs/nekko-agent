@@ -5,7 +5,7 @@ area: phone
 
 # iOS persisted turn details
 
-Status: implemented; native app build, interaction and visual evidence pending. Tracks #1883.
+Status: implemented; native app build and core interaction checks passed in run 42127842332. Largest Dynamic Type content measurement and inspected visual evidence remain pending. Tracks #1883.
 
 ## Behavior
 
@@ -41,4 +41,8 @@ Local verification: Swift 6.2 Docker focused protocol/Kit suites passed (21 test
 
 ## Native verification
 
-The memory-only TurnDetailsFixture is routed by `-uiTestTurnDetails`; no provider requests or real computer connections are made. Native UI tests cover completion, interruption, unknown speed, legacy history, folded tool steps and largest Dynamic Type. The evidence workflow overlays only this fixture, its launch hooks and the capture-only test onto the exact base revision. Screenshots must be inspected before claiming visual verification.
+The memory-only TurnDetailsFixture is routed by `-uiTestTurnDetails`; no provider requests or real computer connections are made. Native UI tests cover completion, interruption, unknown speed, legacy history, folded tool steps and largest Dynamic Type. The evidence workflow overlays only the fixture, debug measurement helper, launch hooks and capture-only test onto the exact base revision. It pins both matrix jobs to iPhone 18 Pro / iOS 27.0 rather than choosing different newest-installed runtimes. Screenshots must be inspected before claiming visual verification.
+
+Run [42127842332](https://github.com/nekko-labs/nekko-agent/actions/runs/42127842332) built both exact revisions successfully. All three native row tests and five of six UI tests passed. The largest Dynamic Type test alone failed: its combined XCUI accessibility frame extended from -0.333333 to 402.333323 points on a 402-point screen. This symmetric one-physical-pixel expansion is not proof of overflowing text. Those artifacts also recorded different simulator runtimes (before 27.0, after 27.2), so they do not establish a matched-runtime visual comparison.
+
+The replacement bounds check measures the actual selectable metric Text and footer's SwiftUI global geometry, strictly inside the 16-point transcript gutters and visible transcript height. A second launch uses a pass-through TextRenderer to report actual typographic line bounds, line count and truncation; its metric/footer size must equal the normal selectable view before those readings count. It requires multiple lines, no truncation, every line inside the measured Text, and a larger line height than the default font. A no-selection diagnostic control compares geometry and records the XCUI frame without changing production selection behavior. JSON readings plus the combined XCUI frame are kept as native test attachments and log output. The probe is compiled only in DEBUG, requires explicit fixture measurement flags, and records no real transcript data. Native execution of these stronger assertions is pending; their existence alone does not verify layout or pixels.

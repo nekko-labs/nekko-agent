@@ -31,6 +31,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             apps/ios/App/Views/TurnDetailsFixture.swift
+            apps/ios/App/Views/TurnDetailsLayoutProbe.swift
             apps/ios/UITests/TurnDetailsTests.swift
           sparse-checkout-cone-mode: false
       - name: Install identical fixture and record exact revisions
@@ -44,6 +45,7 @@ jobs:
           mkdir -p apps/ios/evidence
           { echo "app=$(git rev-parse HEAD)"; echo "harness=$(git -C .evidence-harness rev-parse HEAD)"; xcodebuild -version; } > apps/ios/evidence/revisions.txt
           cp .evidence-harness/apps/ios/App/Views/TurnDetailsFixture.swift apps/ios/App/Views/
+          cp .evidence-harness/apps/ios/App/Views/TurnDetailsLayoutProbe.swift apps/ios/App/Views/
           cp .evidence-harness/apps/ios/UITests/TurnDetailsTests.swift apps/ios/UITests/
           if [ "$REVISION" = before ]; then
             python3 - <<'PY'
@@ -66,7 +68,11 @@ jobs:
         run: |
           set -euo pipefail
           xcodegen generate
-          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          # Pin both matrix jobs: auto-picking the newest installed runtime gave
+          # iOS 27.0 before but 27.2 after in run 42127842332.
+          RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-0
+          TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro
+          xcrun simctl list runtimes -j | ruby -rjson -e 'abort "Pinned iOS 27.0 runtime unavailable" unless JSON.parse(STDIN.read)["runtimes"].any? { |r| r["isAvailable"] && r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-27-0" }'
           DEVICE=$(xcrun simctl create Nekko-Attention-Evidence "$TYPE" "$RUNTIME")
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
