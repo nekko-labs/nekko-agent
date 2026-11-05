@@ -25,7 +25,9 @@ The note goes straight to Nekko Labs through Nekko Cloud. You don't need an acco
 
 **Include app info** is off by default. Switch it on to add the app, version, OS and its version, and CPU type, so we can reproduce what you saw. The sheet shows those values before you send.
 
-What the note never carries: your name or email, an account or device id, the device's name or model, your language, IP address, chats or files, apart from any screenshots you choose to add. Nekko Cloud doesn't log the request, and it stores the note with only the day it arrived. That also means we can't reply to it. If you'd like an answer, open a GitHub issue instead.
+What the note never carries: your name or email, an account or device id, the device's name or model, your language, IP address, chats or files, apart from any screenshots you choose to add. Nekko Cloud doesn't log the request, and it stores the note with only the day it arrived.
+
+Screenshots are checked again by Nekko Cloud: a file that isn't a whole PNG or JPEG is refused, and the sheet tells you which one. Before storing them, Nekko Cloud removes hidden details such as a phone photo's location, camera details and text an editor wrote in, and it never keeps the file name. Screenshots are deleted 90 days after they arrive; the note stays. That also means we can't reply to it. If you'd like an answer, open a GitHub issue instead.
 
 ## 2. Copy for an agent
 
