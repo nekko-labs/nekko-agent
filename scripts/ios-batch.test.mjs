@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { BATCH_CONTEXT, batchCandidates, batchMessage, batchPassed, iosVerdict, largestCompatible, parseBatch } from './ios-batch.mjs';
+import { BATCH_CONTEXT, batchCandidates, batchDecision, batchMessage, batchPassed, iosVerdict, largestCompatible, parseBatch } from './ios-batch.mjs';
 
 const pr = (number, { labels = ['deploy:ios'], files = ['apps/ios/App/AppModel.swift'], ...rest } = {}) =>
   ({ number, headRefOid: String(number).padStart(40, 'a'), isDraft: false, isCrossRepository: false, baseRefName: 'main',
@@ -56,4 +56,20 @@ test('the batch is the largest set of PRs that merge with each other, oldest fir
   assert.deepEqual(largestCompatible(3, new Set()), [0, 1, 2]);
   assert.deepEqual(largestCompatible(3, new Set(['0,1', '1,2', '0,2'])), [0]);
   assert.deepEqual(largestCompatible(0, new Set()), []);
+});
+
+test('main moving re-runs the same heads only when it touched what Native iOS tests', () => {
+  const included = [pr(980), pr(1012)];
+  const lastHeads = included.map(({ number, headRefOid }) => ({ number, headRefOid }));
+  const files = list => () => list;
+  const unasked = () => assert.fail('no diff needed');
+  assert.equal(batchDecision({ lastHeads, lastBase: 'm1', main: 'm1', included, changed: unasked }), 'same');
+  assert.equal(batchDecision({ lastHeads, lastBase: 'm1', main: 'm2', included,
+    changed: files(['apps/desktop/src/App.tsx', 'docs/guide.md']) }), 'main-not-ios');
+  assert.equal(batchDecision({ lastHeads, lastBase: 'm1', main: 'm2', included,
+    changed: files(['apps/desktop/src/App.tsx', 'apps/relay-server/src/index.ts']) }), 'main-ios');
+  // A new head, a PR more or fewer, or no last batch: run, whatever main did.
+  for (const heads of [[lastHeads[0], { ...lastHeads[1], headRefOid: 'b'.repeat(40) }], lastHeads.slice(1), []]) {
+    assert.equal(batchDecision({ lastHeads: heads, lastBase: 'm1', main: 'm1', included, changed: unasked }), 'run');
+  }
 });
