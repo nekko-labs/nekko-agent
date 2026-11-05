@@ -97,7 +97,7 @@ export function SimpleModeSettings() {
           <p className="mt-1 max-w-prose text-xs text-ink-soft">
             Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.{' '}
             <b>Show</b> puts a control in both modes whenever it applies, <b>Detailed only</b> keeps it for Detailed, and <b>Hide</b> puts it away in both.{' '}
-            Monitors wait for a local model to run: choose <b>Always</b> to pin them on.
+            The hardware gauges wait for a local model to run: choose <b>Always</b> to pin them on. The Monitors panel's own Configure menu picks its monitors for both modes.
           </p>
           <p className="mt-1 text-xs text-ink-faint">{hiddenInSimple} of {desktop.length} controls are out of sight in Simple. Kept on this computer.</p>
         </div>
