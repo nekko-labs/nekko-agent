@@ -125,7 +125,8 @@ struct NewChatView: View {
                 autoChoseModel = false
                 if let e = effort { effort = Effort.effective(e, for: m) }
                 if let id = store.activeId { app.prefs.lastModel[id] = "\(p)::\(m)" }
-                if store.providers.first(where: { $0.id == p })?.isLocal == true { autoPick = nil; autoRun += 1 }
+                autoPick = nil
+                autoRun += 1
             }
         }
         .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
@@ -149,7 +150,7 @@ struct NewChatView: View {
         .onChange(of: images) { _, _ in saveDraft() }
         .onChange(of: model?.0) { _, _ in saveDraft() }
         .onChange(of: model?.1) { _, _ in saveDraft() }
-        .onChange(of: folder) { _, _ in saveDraft() }
+        .onChange(of: folder) { _, _ in saveDraft(); autoRun += 1 }
         .onChange(of: mode) { _, _ in saveDraft() }
         .onChange(of: effort) { _, _ in saveDraft() }
         // A chat started offline that the computer turned down comes back here.
@@ -502,11 +503,14 @@ struct NewChatView: View {
     /// one, with a local model there: the one picked if it has it, else its
     /// last one, else one already loaded.
     private func runAuto() async {
+        let run = autoRun
+        let source = store.activeId
+        autoFinding = false
         guard autoShown, !busy, let chosen = model else { return }
         autoFinding = true
-        defer { autoFinding = false }
-        let pick = await store.pickMachine(lastUsed: store.activeId)
-        guard !Task.isCancelled, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        defer { if autoRun == run { autoFinding = false } }
+        let pick = await store.pickMachine(lastUsed: source)
+        guard !Task.isCancelled, autoRun == run, store.activeId == source, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
         guard let target = pick.computerId, target != store.activeId else { autoPick = pick; return }
         let last = app.prefs.lastModel[target].flatMap { s -> (String, String)? in
             guard let r = s.range(of: "::") else { return nil }
@@ -520,7 +524,7 @@ struct NewChatView: View {
             autoPick = MachinePick(computerId: store.activeId, reason: .noneAvailable, skipped: [])
             return
         }
-        guard !Task.isCancelled, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        guard !Task.isCancelled, autoRun == run, store.activeId == source, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
         // Moved by Auto: the words carry over, the folder stays unset, and nothing is remembered as picked by hand.
         let words = text
         store.connect(target)

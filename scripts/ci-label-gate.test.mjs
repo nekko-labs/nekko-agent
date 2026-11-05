@@ -85,6 +85,17 @@ test('Native iOS passes on a green batch status, a green run, or neither when th
   assert.deepEqual(labelRuns([], { iosRequired: false }), { pending: [], failed: [], passed: [] });
 });
 
+test('Automatic evidence dispatch still runs the full required Native iOS suite', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/ios-native.yml', import.meta.url), 'utf8');
+  const protocolJob = workflow.split('  protocol-and-build:')[1];
+  const condition = protocolJob.split('\n').find(line => line.trimStart().startsWith('if:'));
+  assert.match(workflow, /uses: \.\/\.github\/workflows\/native-machine-evidence\.yml/);
+  assert.doesNotMatch(condition, /automatic_baseline_ref/, 'Evidence must not stand in for the full native suite');
+  const evidence = readFileSync(new URL('../.github/workflows/native-machine-evidence.yml', import.meta.url), 'utf8');
+  assert.match(evidence, /revision: \[before, after\]/);
+  assert.doesNotMatch(evidence, /cp .*NewChatView\.swift/, 'The base app implementation must stay unchanged');
+});
+
 test('retired Expo runs cannot block native workflows or the merge queue', () => {
   const retired = '.github/workflows/mobile.yml';
   assert.ok(!LABEL_WORKFLOWS.includes(retired));
