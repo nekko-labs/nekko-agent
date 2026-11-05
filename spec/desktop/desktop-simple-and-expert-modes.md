@@ -32,7 +32,7 @@ Desktop and native UI labels now use **Simple** and **Detailed**, including tool
   - **Chat header:** git checkout chip (`worktree`), Changes (`changes`, contextual, reading *3 files changed*, with the lines added and removed in Detailed), Logs (`logs`), the Agent Monitor (`agent-monitor`), the hardware strip (`hardware`).
   - **Message box:** model picker (`model`; shown regardless while the chat has no usable model), effort (`effort`), Asks first (`asks`), usage ring (`context`), cost and limits (`cost`), the Mode button and panel (`mode`), Privacy Shield (`privacy`), Tools and MCP menus (`tools`), the internet switch (`internet`), prompt suggestions (`suggest`).
   - **Conversation:** reasoning and tool steps (`thinking`). Out of sight, each turn's thoughts and tool steps fold behind one line, *Took 4 steps* (*Working · 2 steps so far* while it runs, *Thought it through* with no tools), with **Show steps** / **Hide steps** for that turn, remembered while the row is in the transcript; reply stats (`stats`); PR status (`pr-status`, contextual): the live PR card in the chat and the plan sheet's PR and CI chips. Hidden, an open PR stays a plain card.
-  - **Agents wall:** Connected computers (`computers`, contextual): Run on, the computer chip on a card, grouping by computer, computer icons and the hardware switch; Terminal in New, the window picker, the split compass and an empty zone's options (`terminal`); the model and token line on deck cards (`cardmeta`); the Hardware and Local models monitors (`mon-hw`); Budget, Utilization, Cost and Tokens monitors (`mon-budget`).
+  - **Agents wall:** Connected computers (`computers`, contextual): Run on, the computer chip on a card, grouping by computer, computer icons and the hardware switch; Terminal in New, the window picker, the split compass and an empty zone's options (`terminal`); the model and token line on deck cards (`cardmeta`). The Monitors panel is not in the catalogue: see [The Monitors panel](#the-monitors-panel-2026-11-06).
   - **Workflows:** the CI runners section and its switch (`ci`).
   - **Models:** the Model server settings fold and a model's Expert load flags (`engine`).
   - **Settings:** the Tools group (git, pull requests, terminal, MCP), folded behind one *Show advanced settings* row (`set-tools`).
@@ -50,6 +50,16 @@ Desktop and native UI labels now use **Simple** and **Detailed**, including tool
   - **Clicking the strip** opens the **Local models** monitor.
 - **A chat getting long (Simple only).** When the chat's context reaches 85% of the model's window, a line above the composer, clear of the cat, says *This chat is getting long. Starting fresh saves about N tokens.*, where N is the conversation's tokens in the context breakdown, with **Start fresh** (a new chat in the same folder) and **Not now** (until the app restarts, for that chat).
 - **Effort and context in Detailed** keep their 2026-10-25 forms, the dial with a popover and the ring with a count.
+
+## The Monitors panel (2026-11-06)
+
+Issue: [#1887](https://github.com/nekko-labs/nekko-agent/issues/1887), following [#1666](https://github.com/nekko-labs/nekko-agent/issues/1666). Philip (2026-11-06): "the checked ones should match what's shown. Simple vs detailed view should only show/hide the panel."
+
+- **The checked monitors are the one source of truth.** The monitors ticked in the panel's **Configure** menu are exactly the monitors it shows, in Simple and in Detailed, and its count (*5 of 6*) counts them. No mode, catalogue entry, Settings > Simple mode choice or local-model check filters them; a monitor with nothing to report (Local models with no engine, say) shows its own empty state rather than vanishing.
+- **The mode only opens or closes the panel.** Each mode remembers its own open or closed state on the wall (`dock.show` for Detailed, `dock.simpleShow` for Simple). Simple starts closed, Detailed starts open, and the panel's hide and show buttons change only the current mode's state. Switching modes never changes which monitors are checked, their order or which are minimized.
+- **Removed:** the `mon-hw` (Hardware, Local models; waited for a local model in both modes) and `mon-budget` (Budget, Utilization; Detailed only) catalogue items, their Settings > Simple mode rows and drawing. Saved choices for them are ignored on load. They filtered the checked monitors without touching the checkboxes, so Simple with five monitors checked showed one (Automations), and Detailed without a local model showed three.
+
+Status `[implemented 2026-11-06 in apps/desktop and packages/shared; unit-tested (MonitorsMode.test.tsx renders the real dock with useShown and the local-model probe unmocked, in both modes); captured in the hidden full-App fixture (monitors-mode-sandbox.cjs) before and after: Simple 5 checked / 1 shown before, 5 / 5 after; not tried in the packaged app]`
 
 ## Message box bottom row (2026-11-03)
 

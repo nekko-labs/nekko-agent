@@ -76,7 +76,15 @@ export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
 export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware' | 'localModels';
 export interface MonitorsDock {
   side: MonitorsSide;
+  /** Whether the panel is open in Detailed. */
   show: boolean;
+  /**
+   * Whether the panel is open in Simple; absent reads as closed. Simple and
+   * Detailed only open or close the panel: which monitors it holds is
+   * `monitors` in both modes.
+   */
+  simpleShow?: boolean;
+  /** The monitors checked in Configure: exactly the ones the panel shows. */
   monitors: Record<MonitorKey, boolean>;
   /** Saved reading order; older settings omit it (or call it panelOrder) and use the default order. */
   monitorOrder?: MonitorKey[];
@@ -85,7 +93,7 @@ export interface MonitorsDock {
 }
 export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
-  side: 'right', show: true,
+  side: 'right', show: true, simpleShow: false,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
   // (sanitizeMonitorsDock drops it from saved docks). Local models sits under
   // Hardware: which model holds the GPU explains what the meters above report.
