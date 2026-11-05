@@ -6,7 +6,10 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+app.setPath('userData', path.join(out, 'profile'));
+app.setPath('sessionData', path.join(out, 'profile'));
 app.whenReady().then(async () => {
+  session.defaultSession.setPermissionRequestHandler((_window, _permission, done) => done(false));
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
   const left = Math.min(...screen.getAllDisplays().map(d => d.bounds.x));
@@ -45,7 +48,7 @@ app.whenReady().then(async () => {
       check('click sends exact contextual choice, not ghost question', await run("layoutFixture.lastSend?.text === 'Inspect the saved PNGs directly'"));
       check('choices disappear after sending', await run("!document.querySelector('[data-follow-up-choices]')"));
       await run("layoutFixture.emitAgent({type:'done',sessionId:'a',messageId:'a1'})"); await sleep(700);
-      await run(`(() => { const s = document.querySelector('[data-follow-up-choices] select'); const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(s, 'subagent'); s.dispatchEvent(new Event('change', {bubbles:true})); })()`);
+      await run("document.querySelector('[data-follow-up-location] [value=\"subagent\"]').click()");
       await sleep(100);
       await run("document.querySelector('[data-follow-up-choices] button').click()"); await sleep(400);
       check('optional delegation wraps selected response only', await run("layoutFixture.lastSend?.text === 'Do this in a subagent, then report back:\\n\\nInspect the saved PNGs directly'"));
