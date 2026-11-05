@@ -152,10 +152,16 @@ public enum PhoneProviders {
         case .openai:
             var all = turns
             if let system { all.insert(.object(["role": "system", "content": .string(system)]), at: 0) }
-            let body: [String: JSONValue] = ["model": .string(model), "stream": true, "messages": .array(all)]
+            var body: [String: JSONValue] = ["model": .string(model), "stream": true, "messages": .array(all)]
+            // Ask for the reply's token count at the end of the stream, where it is known to be
+            // accepted: an OpenAI-compatible server may turn down a field it doesn't know.
+            if usageKinds.contains(p.kind) { body["stream_options"] = ["include_usage": true] }
             return PhoneRequest(url: "\(p.baseUrl)/chat/completions", headers: headers(p, key: key), body: .object(body))
         }
     }
+
+    /// The OpenAI-wire kinds asked for `stream_options.include_usage`.
+    static let usageKinds: Set<String> = ["openai", "openrouter"]
 
     /// The models list, or nil for a kind that has none to read.
     public static func modelsRequest(_ p: PhoneProvider, key: String?) -> PhoneRequest? {
@@ -271,6 +277,9 @@ public protocol PhoneHTTP: Sendable {
 /// What one line of a streamed answer says.
 public enum PhoneStreamEvent: Equatable, Sendable {
     case text(String)
+    /// The tokens the provider counted so far for this reply: each figure is the
+    /// running total, nil when this line does not say it.
+    case usage(input: Int64?, output: Int64?)
     case done
     case failed(String)
 }
@@ -292,15 +301,43 @@ public struct PhoneStreamParser: Sendable {
         case "content_block_delta":
             if v["delta"]?.str("type") == "text_delta", let t = v["delta"]?.str("text"), !t.isEmpty { return [.text(t)] }
             return []
+        case "message_start":
+            // The prompt's tokens, cache reads and writes included: all of them are billed.
+            guard let u = v["message"]?["usage"], u.object != nil else { return [] }
+            let input = ["input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"].compactMap { u.long($0) }
+            return [.usage(input: input.isEmpty ? nil : input.reduce(0, +), output: u.long("output_tokens"))]
+        case "message_delta":
+            // The reply's tokens so far (a running total).
+            guard let out = v["usage"]?.long("output_tokens") else { return [] }
+            return [.usage(input: nil, output: out)]
         case "message_stop":
             return [.done]
         default:
             break
         }
-        // OpenAI's chat completion chunks.
-        guard let choice = v["choices"]?.array?.first else { return [] }
+        // OpenAI's chat completion chunks. With `include_usage` the last chunk has
+        // no choices and carries the whole reply's usage.
         var out: [PhoneStreamEvent] = []
-        if let t = choice["delta"]?.str("content"), !t.isEmpty { out.append(.text(t)) }
+        if let choice = v["choices"]?.array?.first, let t = choice["delta"]?.str("content"), !t.isEmpty { out.append(.text(t)) }
+        if let u = v["usage"], u.object != nil, u.long("prompt_tokens") != nil || u.long("completion_tokens") != nil {
+            out.append(.usage(input: u.long("prompt_tokens"), output: u.long("completion_tokens")))
+        }
         return out
+    }
+}
+
+/// A reply's token count as its stream reports it: the latest of each running total.
+public struct PhoneTokenCount: Equatable, Sendable {
+    public var input: Int64 = 0
+    public var output: Int64 = 0
+    public var reported = false
+
+    public init() {}
+
+    public mutating func add(_ e: PhoneStreamEvent) {
+        guard case .usage(let i, let o) = e else { return }
+        if let i { input = i }
+        if let o { output = o }
+        reported = true
     }
 }
