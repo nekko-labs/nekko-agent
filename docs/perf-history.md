@@ -53,7 +53,8 @@ Both unchanged-base runs and both head runs fail the unchanged 33 ms gate. Raw n
 
 Separate timeline-instrumented base/head runs measured 38.4 / 39.2 ms p95 (p50 31.6 / 31.3 ms). Inspected cold traces contain 176562 / 171446 events; nested renderer-main totals for style UpdateLayoutTree 481.215 / 442.285 ms, Layout 200.154 / 194.624 ms, Paint 502.808 / 469.747 ms and Layerize 1604.836 / 1502.413 ms are whole-phase observations, not per-click causal attribution. Profiling overhead means this pair is not equivalent to the unprofiled controls. Earlier automatic streaming-only profiles do not measure cold-chat latency.
 
-Source: [exact matched reports, provenance and timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42035974208), [PR #1854](https://github.com/nekko-labs/nekko-agent/pull/1854), baseline [#712](https://github.com/nekko-labs/nekko-agent/issues/712). The diagnostic workflow completed, but all six measurements missed the budget; workflow success is not a passed product gate. PR remains held/draft/dequeued, pending a separate verified baseline repair or revert, then integration and protected validation. No manual queue rerun, relaxed budget or speculative product optimization. The temporary diagnostic workflow must never merge.
+Source: [exact matched reports, provenance and timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42035974208), [PR #1854](https://github.com/nekko-labs/nekko-agent/pull/1854), baseline [#712](https://github.com/nekko-labs/nekko-agent/issues/712). The diagnostic workflow completed, but all six measurements missed the budget; workflow success is not a passed product gate. No budget change. The temporary diagnostic workflow must never merge.
+
 ## Follow-up slider and text toolbar (#1760, 2026-11-05)
 
 Area: renderer. Result: baseline cold-paint gate failure reproduced; no performance win or zero-regression claim.
