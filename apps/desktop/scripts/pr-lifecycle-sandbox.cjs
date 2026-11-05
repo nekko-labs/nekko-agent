@@ -40,10 +40,13 @@ app.whenReady().then(async () => {
       win.setContentSize(width, 1100); await sleep(400);
       await shot(`history-${width}`); await inspect(`history-${width}`);
     }
+    await run("document.documentElement.dataset.theme = 'light'"); await sleep(300);
+    await shot('history-light-390'); await inspect('history-light-390');
+    await run("document.documentElement.dataset.theme = 'dark'");
     win.setContentSize(1000, 1100);
     await run('layoutFixture.showPrLifecycle(true)'); await sleep(600);
     const frames = [];
-    for (let index = 0; index < 4; index++) {
+    for (let index = 0; index < await run('layoutFixture.lifecycle.steps.length - 1'); index++) {
       await run(`layoutFixture.lifecycle.emit(${index})`); await sleep(500);
       await shot(`live-${index}`); await inspect(`live-${index}`);
       frames.push((await win.capturePage(undefined, { stayHidden: true })).toPNG());
@@ -60,6 +63,8 @@ app.whenReady().then(async () => {
     const afterFinish = await inspect('after-finish');
     await shot('after-finish');
     report.sameEventsAfterFinish = JSON.stringify(beforeFinish.events) === JSON.stringify(afterFinish.events);
+    if (!report.sameEventsAfterFinish) throw Error('Lifecycle changed when saved');
+    if (process.env.NEKKO_LIFECYCLE_RECONCILED === '1' && JSON.stringify(afterFinish.events) !== JSON.stringify(['created-draft', 'draft', 'ready', 'auto-merge', 'queued'])) throw Error('Wrong reconciled lifecycle sequence');
     frames.push((await win.capturePage(undefined, { stayHidden: true })).toPNG());
     const { PNG } = require('pngjs'); const { GifWriter } = require('omggif');
     const images = frames.map(buffer => PNG.sync.read(buffer));

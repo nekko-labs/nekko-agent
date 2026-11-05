@@ -305,7 +305,7 @@ export function toTranscriptRows(
 export function estimateRowHeight(row: TranscriptRow, width: number): number {
   const gap = row.gapAfter ?? 20;
   if (row.kind === 'activity') return 22 + gap;
-  if (row.kind === 'prs') return row.urls.length * 90 + gap;
+  if (row.kind === 'prs') return row.urls.length * (row.live ? 90 : 46) + gap;
   if (row.kind === 'stats') return 18 + gap;
   // An older summary folds to its divider; the latest shows its text.
   if (row.kind === 'compaction') {

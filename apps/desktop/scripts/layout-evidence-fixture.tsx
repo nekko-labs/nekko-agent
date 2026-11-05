@@ -76,9 +76,10 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     const pr = { url, owner: 'example', repo: 'project', number: 42, title: 'Keep pull requests visible in chat', state: stream ? 'open' : 'merged', isDraft: false, additions: 12, deletions: 3, changedFiles: 2, checks: 'passing', source: 'gh', mergedAt: new Date(startedAt + 5000).toISOString() };
     record.messages = [{ id: 'prompt', role: 'user', content: 'Ship this change.', createdAt: startedAt }];
     const steps = [
-      { id: 'create', command: 'gh pr create --fill', output: url },
-      { id: 'draft', command: 'gh pr ready 42 --undo --repo example/project', output: '✓ Pull request example/project#42 is now marked as draft' },
-      { id: 'ready', command: 'gh pr ready 42 --repo example/project', output: '✓ Pull request example/project#42 is marked as ready for review' },
+      { id: 'create', command: 'gh pr create --draft --fill', output: url },
+      { id: 'draft', command: 'gh pr ready 42 --undo --repo example/project', output: '✓ Pull request example/project#42 is converted to "draft"' },
+      { id: 'ready', command: 'gh pr ready 42 --repo example/project', output: '✓ Pull request example/project#42 is marked as "ready for review"' },
+      { id: 'auto', command: 'gh pr merge 42 --auto --repo example/project', output: '✓ Pull request example/project#42 will be automatically merged via squash when all requirements are met' },
       { id: 'queue', command: 'gh pr merge 42 --auto --repo example/project', output: '✓ Added pull request example/project#42 to the merge queue' },
       { id: 'merge', command: 'gh pr merge 42 --repo example/project', output: '✓ Merged pull request example/project#42' },
     ];

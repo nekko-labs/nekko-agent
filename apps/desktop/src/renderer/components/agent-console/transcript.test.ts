@@ -423,3 +423,26 @@ describe('inline thought projection', () => {
     expect(blocks[1].type === 'msg' && blocks[1].message.reasoning).toBeUndefined();
   });
 });
+
+
+describe('reconciled lifecycle reload and measurements', () => {
+  it('preserves draft creation and auto-merge through JSON reload without no-op milestones', () => {
+    const url = 'https://github.com/o/r/pull/9';
+    const steps = [
+      ['create', 'gh pr create --draft', url],
+      ['ready', 'gh pr ready 9', '✓ Pull request o/r#9 is marked as "ready for review"'],
+      ['noop', 'gh pr ready 9', '! Pull request o/r#9 is already "ready for review"'],
+      ['auto', 'gh pr merge 9 --auto', '✓ Pull request o/r#9 will be automatically merged via squash when all requirements are met'],
+      ['merge', 'gh pr merge 9', '✓ Merged pull request o/r#9 (Fix)'],
+    ].flatMap(([id, command, output]) => [
+      msg(id, 'assistant', '', { toolCalls: [{ id, name: 'Bash', input: { command } }] }),
+      msg(id + '-result', 'tool', output, { toolResult: { toolCallId: id, output } }),
+    ]);
+    const cards = rows(steps).filter(r => r.kind === 'prs');
+    expect(cards.map(r => r.event)).toEqual(['created-draft', 'ready', 'auto-merge', 'merged']);
+    expect(cards.map(r => r.live)).toEqual([true, false, false, false]);
+    expect(rows(JSON.parse(JSON.stringify(steps)))).toEqual(rows(steps));
+    expect(estimateRowHeight(cards[0], 390)).toBeGreaterThan(estimateRowHeight(cards[1], 390));
+    expect(new Set(cards.map(r => r.key)).size).toBe(4);
+  });
+});

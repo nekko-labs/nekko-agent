@@ -54,7 +54,7 @@ export const MERGED_CARD_STYLE: React.CSSProperties = {
 
 /** Historical lifecycle labels never change when the live poller refreshes. */
 export const PR_EVENT_LABELS: Record<PrEvent, string> = {
-  created: 'PR created', open: 'PR opened', draft: 'PR set to draft', ready: 'PR ready for review',
+  created: 'PR created', 'created-draft': 'Draft PR created', 'auto-merge': 'Auto-merge enabled', open: 'PR opened', draft: 'PR set to draft', ready: 'PR ready for review',
   queued: 'PR queued', 'merge-requested': 'Merge requested', merged: 'PR merged', closed: 'PR closed',
   reopened: 'PR reopened', updated: 'PR updated', reviewed: 'PR reviewed', viewed: 'PR viewed',
 };
@@ -69,7 +69,7 @@ export function PrCard({ url, info, event = 'created', sessionId, live }: { url:
   // The created card goes live only when the poller still reports it open:
   // merged/closed events keep their own historical rows a few lines down, so
   // "created" must stay as a static milestone once resolved.
-  if (showStatus && (live ?? (event === 'created' || event === 'open')) && event !== 'merged' && event !== 'closed' && info?.state === 'open' && sessionId) {
+  if (showStatus && (live ?? (event === 'created' || event === 'created-draft' || event === 'open')) && event !== 'merged' && event !== 'closed' && info?.state === 'open' && sessionId) {
     return <OpenPrCard url={url} info={info} sessionId={sessionId} label={label} event={event} />;
   }
   const merged = event === 'merged';
@@ -80,7 +80,7 @@ export function PrCard({ url, info, event = 'created', sessionId, live }: { url:
       <div className="relative flex flex-wrap items-center gap-x-2 gap-y-1">
         <a href={url} className="min-w-0 truncate font-mono text-xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
         {info?.title && <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{info.title}</span>}
-        <span className="ml-auto text-xs font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : event === 'draft' || event === 'viewed' ? 'var(--ink-soft)' : 'var(--success)' }}>
+        <span className="ml-auto shrink-0 whitespace-nowrap text-xs font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : event === 'draft' || event === 'created-draft' || event === 'viewed' ? 'var(--ink-soft)' : 'var(--success)' }}>
           {PR_EVENT_LABELS[event]}
         </span>
       </div>

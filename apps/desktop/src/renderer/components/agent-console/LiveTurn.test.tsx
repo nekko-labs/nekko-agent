@@ -26,7 +26,7 @@ describe('voices in the reply being written', () => {
 
   it('keeps lifecycle cards between live text and identical in the held handoff', () => {
     const url = 'https://github.com/o/r/pull/9';
-    const create = { id: 'create', name: 'bash', input: { command: 'gh pr create --fill' } };
+    const create = { id: 'create', name: 'bash', input: { command: 'gh pr create --draft --fill' } };
     const queue = { id: 'queue', name: 'bash', input: { command: 'gh pr merge 9 --auto' } };
     const held = { ...run(), tools: [create, queue], blocks: [
       { kind: 'pr', toolCallId: 'create' }, { kind: 'text', text: 'Checking the change.' },
@@ -37,12 +37,12 @@ describe('voices in the reply being written', () => {
     ] } as LiveRun;
     live.run = held;
     const markup = renderToStaticMarkup(<LiveTurn sessionId="s" held={null} />);
-    expect(markup.indexOf('PR created')).toBeLessThan(markup.indexOf('Checking the change.'));
+    expect(markup.indexOf('Draft PR created')).toBeLessThan(markup.indexOf('Checking the change.'));
     expect(markup.indexOf('Checking the change.')).toBeLessThan(markup.indexOf('PR queued'));
     expect(markup.indexOf('PR queued')).toBeLessThan(markup.indexOf('Waiting for checks.'));
     expect(markup).not.toContain('PR merged');
     live.run = undefined;
-    expect([...renderToStaticMarkup(<LiveTurn sessionId="s" held={held} />).matchAll(/data-pr-event="([^"]+)"/g)].map((m) => m[1])).toEqual(['created', 'queued']);
+    expect([...renderToStaticMarkup(<LiveTurn sessionId="s" held={held} />).matchAll(/data-pr-event="([^"]+)"/g)].map((m) => m[1])).toEqual(['created-draft', 'queued']);
   });
 
   it('resolves a numeric live interaction from the known saved PR without inventing creation', () => {
