@@ -58,6 +58,23 @@ computer's key, which proves your computer on every connection. Phones and the c
 both need the update: an older app cannot connect to an updated computer, and an updated app
 cannot connect to an older computer.
 
+### Re-pairing and naming your computer
+
+For a phone already listed in **Paired devices**, click **Re-pair** beside its name and scan the
+fresh QR from the phone. You do not need to revoke it first, and your other phones stay paired.
+iPhone and Android update the existing computer when its identity key is unchanged, even after a
+relay address changes, keeping its nickname and saved data.
+
+**Computer name** in the same settings card starts with your computer's system name. Enter a name
+and click **Save name**, or clear it to use the system name again. The phone learns it when it
+connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
+that nickname is kept when the computer's shared name changes or you pair it again.
+
+A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
+credentials. For safety the phone does not merge different keys just because their names match.
+Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
+to old duplicates that were saved with different identity keys.
+
 ## The phone app
 
 > **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in

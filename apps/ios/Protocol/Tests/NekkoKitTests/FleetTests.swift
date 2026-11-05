@@ -37,13 +37,33 @@ final class FleetTests: XCTestCase {
     }
 
     func link(_ room: String) -> PairingLink {
-        PairingLink(relayUrl: "wss://relay.example", room: room, key: key, hostKey: testHostKey, pair: nil)
+        PairingLink(relayUrl: "wss://relay.example", room: room, key: key, hostKey: String(repeating: String(room.first!), count: 87) + "=", pair: nil)
     }
 
     func settle() async {
         for _ in 0..<20 { await Task.yield() }
         try? await Task.sleep(nanoseconds: 30_000_000)
         for _ in 0..<20 { await Task.yield() }
+    }
+
+    func testRepairAnInactiveComputerDiscardsItsOldFleetConnection() async throws {
+        let s = makeStore()
+        s.load()
+        let a = try await s.pair(link("aaaa"))
+        let old = try XCTUnwrap(connections.last)
+        old.online()
+        await settle()
+        _ = try await s.pair(link("bbbb"))
+        connections.last?.online()
+        await settle()
+        let original = link("aaaa")
+        let again = try await s.pair(PairingLink(relayUrl: "wss://new.example", room: "changed", key: key, hostKey: original.hostKey, pair: "FRESH"))
+        XCTAssertEqual(again, a)
+        XCTAssertEqual(s.computers.count, 2)
+        XCTAssertTrue(old.closed)
+        XCTAssertEqual(connections.last?.config.relayUrl, "wss://new.example")
+        XCTAssertEqual(connections.last?.config.room, "changed")
+        XCTAssertEqual(connections.last?.config.pairCode, "FRESH")
     }
 
     func testEveryComputerStaysConnectedAndTheListHoldsAllTheirChats() async throws {

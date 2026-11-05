@@ -710,10 +710,12 @@ data class AppInfo(
     val quitFromPhone: Boolean = false,
     /** The computer's icon, one of [COMPUTER_ICONS]; null when it has none, or one this app doesn't draw. */
     val machineIcon: String? = null,
+    val hostname: String? = null,
+    val computerName: String? = null,
 ) {
     companion object {
         fun from(e: JsonElement?): AppInfo = e.obj().let {
-            AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true, it?.str("machineIcon")?.takeIf { i -> i in COMPUTER_ICONS })
+            AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true, it?.str("machineIcon")?.takeIf { i -> i in COMPUTER_ICONS }, it?.str("hostname"), it?.str("computerName"))
         }
     }
 }

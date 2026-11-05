@@ -759,10 +759,13 @@ public struct AppInfo: Equatable, Sendable {
     /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
     public var quitFromPhone = false
     /// The computer's icon, one of `computerIcons`; nil when it has none, or one this app doesn't draw.
+    public var hostname: String?
+    public var computerName: String?
     public var machineIcon: String?
 
     public static func from(_ v: JSONValue?) -> AppInfo {
         AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false,
+                hostname: v?.str("hostname"), computerName: v?.str("computerName"),
                 machineIcon: v?.str("machineIcon").flatMap { computerIcons.contains($0) ? $0 : nil })
     }
 }

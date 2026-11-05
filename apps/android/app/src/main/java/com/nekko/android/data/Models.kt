@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
@@ -36,6 +37,7 @@ data class Computer(
     val alts: List<String> = emptyList(),
     /** Its `machineIcon`, learned from app:info once connected. Null shows nothing. */
     val icon: String? = null,
+    val nameIsCustom: Boolean? = null,
 )
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
@@ -114,6 +116,7 @@ internal object StoredJson {
                 c.platform?.let { put("platform", it) }
                 if (c.alts.isNotEmpty()) put("alts", buildJsonArray { c.alts.forEach { add(JsonPrimitive(it)) } })
                 c.icon?.let { put("icon", it) }
+                c.nameIsCustom?.let { put("nameIsCustom", it) }
             })
         }
     }.toString()
@@ -130,6 +133,7 @@ internal object StoredJson {
                 platform = o.str("platform"),
                 alts = (o["alts"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
                 icon = o.str("icon"),
+                nameIsCustom = (o["nameIsCustom"] as? JsonPrimitive)?.booleanOrNull,
             )
         }
     }

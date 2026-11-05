@@ -11,7 +11,7 @@ use crate::routes::Ctx;
 use futures_util::future::BoxFuture;
 use nekko_workspace::integrations;
 use nekko_workspace::stacks::{self, StackHost};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -65,6 +65,7 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
         "app:info" => {
             let mut info = app_info(&ctx.app.facts);
             let settings = crate::settings::current(ctx).await;
+            info["computerName"] = json!(computer_name(&settings, info["hostname"].as_str().unwrap_or_default()));
             info["machineIcon"] = settings.get("machineIcon").cloned().unwrap_or(Value::Null);
             info["sharesModels"] = json!(crate::model_tunnel::sharing(&settings));
             let on = crate::settings::current(ctx).await.get("quitFromPhone") == Some(&Value::Bool(true));
@@ -151,6 +152,19 @@ pub fn app_info(facts: &AppFacts) -> Value {
     let edition = facts.edition.clone().unwrap_or_else(|| "web".into());
     let hostname = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
     json!({ "version": version, "platform": crate::admission::platform(), "edition": edition, "hostname": hostname })
+}
+
+/// Names are display-only, never a computer's identity or a trust decision.
+fn computer_name(settings: &Value, hostname: &str) -> String {
+    settings
+        .get("machineName")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .unwrap_or(hostname)
+        .chars()
+        .take(40)
+        .collect()
 }
 
 // ---- app:quit ----
@@ -411,7 +425,11 @@ impl StackHost for DaemonStacks<'_> {
         Box::pin(async move {
             let refs: Vec<&str> = args.iter().map(String::as_str).collect();
             let out = nekko_workspace::proc::run("git", &refs, Duration::from_secs(30), Some(cwd), 1024 * 1024).await;
-            if out.ok { Ok(out.stdout) } else { Err(git_error(args, &out.stderr)) }
+            if out.ok {
+                Ok(out.stdout)
+            } else {
+                Err(git_error(args, &out.stderr))
+            }
         })
     }
 
@@ -746,6 +764,14 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn computer_name_defaults_to_hostname_and_accepts_a_bounded_override() {
+        assert_eq!(computer_name(&json!({}), "Studio Mac"), "Studio Mac");
+        assert_eq!(computer_name(&json!({"machineName": "  "}), "Studio Mac"), "Studio Mac");
+        assert_eq!(computer_name(&json!({"machineName": "  My studio  "}), "host"), "My studio");
+        assert_eq!(computer_name(&json!({"machineName": "x".repeat(80)}), "host").len(), 40);
     }
 
     #[test]

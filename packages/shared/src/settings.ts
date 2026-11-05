@@ -320,6 +320,8 @@ export interface AppSettings {
   quitFromPhone?: boolean;
   /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
   machineIcon?: string;
+  /** Display name shared with paired devices; blank uses the system hostname. */
+  machineName?: string;
   phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
