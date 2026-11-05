@@ -44,7 +44,8 @@ permissions:
   contents: read
   statuses: write
 # One batch runs at a time and the newest waiting one replaces an older one, so a
-# run of pushes costs one more batch, not one per push.
+# run of pushes costs one more batch, not one per push. ios-batch.mjs cancels a
+# running batch itself when a new one holds the same heads on a newer main.
 concurrency:
   group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
@@ -350,6 +351,12 @@ jobs:
           STATE: ${{ job.status == 'success' && 'success' || job.status == 'cancelled' && 'error' || 'failure' }}
           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Cancelled because a newer batch replaced this one (ios-batch.mjs pushes it first):
+          # that batch, or its compose, already gave these heads their status.
+          if [ "$STATE" = error ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/ci/ios-batch" --jq .object.sha)" != "$GITHUB_SHA" ]; then
+            echo "Superseded by a newer batch on ci/ios-batch: reporting nothing."
+            exit 0
+          fi
           prs=$(echo "$BATCH" | jq -r '[.[] | "#\(.number)"] | join(", ")')
           echo "$BATCH" | jq -r '.[].sha' | while read -r sha; do
             gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$STATE" -f context='Native iOS (batch)' \
