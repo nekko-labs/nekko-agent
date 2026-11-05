@@ -63,7 +63,7 @@ import { PhotoViewer } from './PhotoViewer.js';
 import { ChatImages, imageFileName, loadRemoteImage, remoteImageEvidence, urlSeenIn, type ChatImageItem, type ChatImagesApi } from '../remoteImages.js';
 import { CompactionSummary } from './agent-console/CompactionSummary.js';
 import { promptHistory, recallPrompt, type HistoryCursor } from './agent-console/promptHistory.js';
-import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption } from './agent-console/interruption.js';
+import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInterruptionNotice, describeInterruption, savedTurnFailure } from './agent-console/interruption.js';
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
@@ -2018,11 +2018,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const canContinueReply = !!errorNotice && !question && !streaming && hasResumableProgress(session?.messages ?? []);
   // A transcript that ends on a cut-off reply (the app was closed mid-run, the
   // host restarted) has no `error` event left to announce it, so the notice is
-  // read off the record itself. Dismissing it is remembered per reply.
+  // read off the record itself, as is a failure the host saved for the same
+  // reason. Dismissing it is remembered per reply.
   const [dismissedInterruption, setDismissedInterruption] = useState<string | null>(null);
   useEffect(() => {
     if (!session) return;
-    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, !!held || finalizingReply.current, !!question);
+    const awaitingTranscript = !!held || finalizingReply.current;
+    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, awaitingTranscript, !!question);
     // A stale transcript can arrive before the completed record. Retire only
     // the inferred notice, never a provider error or a user-requested stop.
     if (reconcileInterruptionNotice(errorNotice, interrupted) !== errorNotice) {
@@ -2030,7 +2032,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       return;
     }
     if (errorNotice || dismissedInterruption === lastMsgId) return;
-    if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
+    const failure = streaming || awaitingTranscript || question ? null : savedTurnFailure(session);
+    if (failure) setErrorNotice(failure);
+    else if (interrupted) setErrorNotice(PERSISTED_INTERRUPTION);
   }, [session, streaming, held, errorNotice, lastMsgId, dismissedInterruption, question]);
   // The model's single most likely next message, shown as the composer's
   // placeholder while the box is empty; ArrowRight types it in.
@@ -2734,7 +2738,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <span className="mr-2 font-medium" style={{ color: tone }}>{interruption.title}</span>
                         {interruption.detail} Retrying sends approximately {ctx ? ctxUsed.toLocaleString() : 'an unavailable number of'} input context tokens. Provider caching and billing vary.
                       </span>
-                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => { setDismissedInterruption(lastMsgId ?? null); setErrorNotice(null); }}>
+                      <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => {
+                        setDismissedInterruption(lastMsgId ?? null);
+                        setErrorNotice(null);
+                        if (session?.turnFailure) void window.nekko.setSessionOptions(sessionId, { turnFailure: null }).catch(() => {});
+                      }}>
                         <CloseIcon className="h-3 w-3" />
                       </button>
                     </div>
