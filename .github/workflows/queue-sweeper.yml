@@ -20,8 +20,10 @@ name: Queue sweeper
 #     flake heals itself and a real failure stays red for the author.
 #
 # Drafts, stacked layers (base is not main), conflicting PRs and PRs labelled
-# `hold` are left alone. Version-release's own schedule releases whatever this
-# lands.
+# `hold` are left alone. queue-repair.yml takes the PRs this cannot fix: it
+# merges main into a conflicting one, and hands a PR that stays red after the
+# re-run, or is ejected again, to Codex. Version-release's own schedule
+# releases whatever this lands.
 
 on:
   schedule:
@@ -88,7 +90,7 @@ jobs:
             run=$(jq -r '.gate.checkSuite.workflowRun.databaseId // ""' <<<"$pr")
 
             if [ "$(jq -r .queued <<<"$pr")" = true ]; then echo "#$n: in the queue."; continue; fi
-            if [ "$(jq -r .mergeable <<<"$pr")" = CONFLICTING ]; then echo "#$n: has conflicts; left for the author."; continue; fi
+            if [ "$(jq -r .mergeable <<<"$pr")" = CONFLICTING ]; then echo "#$n: has conflicts; queue-repair.yml merges main in."; continue; fi
 
             case "$gate" in
               SUCCESS)
@@ -115,7 +117,7 @@ jobs:
                   echo "#$n: gate is $gate on the first attempt; re-running the failed jobs once."
                   GH_TOKEN="$ACTIONS_TOKEN" gh run rerun "$run" --failed || echo "::warning::Could not re-run $run for #$n."
                 else
-                  echo "#$n: gate is $gate after a re-run; left for the author."
+                  echo "#$n: gate is $gate after a re-run; queue-repair.yml hands it to Codex."
                 fi
                 ;;
               *)

@@ -410,7 +410,7 @@ struct NewChatView: View {
     private var canStart: Bool {
         if onPhone { return !busy && phoneModel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty
-        return !busy && !loadingPhotos && model != nil && !(offline && empty)
+        return !busy && !autoFinding && !loadingPhotos && model != nil && !(offline && empty)
     }
 
     /// Images on the clipboard, scaled like picked photos (at most four in the message).
@@ -494,6 +494,7 @@ struct NewChatView: View {
         }
         autoOn = false
         autoPick = nil
+        autoRun += 1 // Cancel any probe still in flight, even if Auto is chosen again.
         switchPlace(id)
     }
 
@@ -505,7 +506,7 @@ struct NewChatView: View {
         autoFinding = true
         defer { autoFinding = false }
         let pick = await store.pickMachine(lastUsed: store.activeId)
-        guard autoShown, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        guard !Task.isCancelled, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
         guard let target = pick.computerId, target != store.activeId else { autoPick = pick; return }
         let last = app.prefs.lastModel[target].flatMap { s -> (String, String)? in
             guard let r = s.range(of: "::") else { return nil }
@@ -514,11 +515,12 @@ struct NewChatView: View {
         var prefer: [(String, String)] = [chosen]
         if let last { prefer.append(last) }
         guard let next = await store.localModel(on: target, prefer: prefer) else {
-            // It has no model to start with after all: stay, and say every other computer was busy.
-            autoPick = MachinePick(computerId: store.activeId, reason: .allBusy, skipped: [])
+            guard !Task.isCancelled, autoShown else { return }
+            // A model server may be enabled without any installed models.
+            autoPick = MachinePick(computerId: store.activeId, reason: .noneAvailable, skipped: [])
             return
         }
-        guard autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        guard !Task.isCancelled, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
         // Moved by Auto: the words carry over, the folder stays unset, and nothing is remembered as picked by hand.
         let words = text
         store.connect(target)
@@ -642,6 +644,7 @@ struct NewChatView: View {
     }
 
     private func start() {
+        guard !autoFinding else { return }
         if onPhone {
             guard let picked = phoneModel else { return }
             let (p, m) = picked
@@ -696,7 +699,36 @@ struct NewChatView: View {
     }
 }
 
+/// The All / Cloud / Local tabs pinned over a model list, after the desktop picker's
+/// Model source group. Every tab stays on offer; an empty one says so in the list.
+struct ModelScopeTabs: View {
+    @Binding var scope: ModelScope
+
+    var body: some View {
+        Picker("Model source", selection: $scope) {
+            ForEach(ModelScope.allCases) { s in Text(s.title).tag(s) }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("modelPicker.scope")
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+    }
+}
+
+extension ModelScope {
+    var title: LocalizedStringKey {
+        switch self {
+        case .all: "All"
+        case .cloud: "Cloud"
+        case .local: "Local"
+        }
+    }
+}
+
 /// Every enabled provider's models on the computer, listed in parallel; starred first.
+/// The tabs on top narrow it to the cloud APIs or the local model servers.
 struct ModelPicker: View {
     let selected: (String?, String?)
     var pick: (String, String) -> Void
@@ -704,6 +736,7 @@ struct ModelPicker: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var query = ""
+    @State private var scope = ModelScope.all
 
     var body: some View {
         NavigationStack {
@@ -716,7 +749,15 @@ struct ModelPicker: View {
                         }
                     }
                 }
-                ForEach(store.modelGroups) { g in
+                if groups.isEmpty && scope != .all {
+                    Group {
+                        if scope == .local { Text("No local model servers on this computer.") } else { Text("No cloud providers on this computer.") }
+                    }
+                        .font(.subheadline).foregroundStyle(palette.inkSoft)
+                        .listRowBackground(Color.clear)
+                        .accessibilityIdentifier("modelPicker.emptyScope")
+                }
+                ForEach(groups) { g in
                     Section(g.provider.label) {
                         if let e = g.error {
                             Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning)
@@ -730,6 +771,7 @@ struct ModelPicker: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) { ModelScopeTabs(scope: $scope) }
             .searchable(text: $query)
             .pawRefreshable { await store.loadAllModels(force: true) }
             .navigationTitle("Model")
@@ -739,7 +781,8 @@ struct ModelPicker: View {
         }
     }
 
-    private var favorites: [String] { store.defaults.favoriteModels.filter { f in store.providers.contains { $0.enabled && f.hasPrefix($0.id + "::") } } }
+    private var favorites: [String] { scope.favorites(store.defaults.favoriteModels, providers: store.providers) }
+    private var groups: [ModelGroup] { scope.groups(store.modelGroups) }
 
     private func split(_ f: String) -> (String, String) {
         guard let r = f.range(of: "::") else { return (f, "") }

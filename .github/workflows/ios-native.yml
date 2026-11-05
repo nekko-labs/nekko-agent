@@ -44,7 +44,8 @@ permissions:
   contents: read
   statuses: write
 # One batch runs at a time and the newest waiting one replaces an older one, so a
-# run of pushes costs one more batch, not one per push.
+# run of pushes costs one more batch, not one per push. ios-batch.mjs cancels a
+# running batch itself when a new one holds the same heads on a newer main.
 concurrency:
   group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
@@ -73,7 +74,7 @@ jobs:
     outputs:
       runs-on: ${{ steps.pick.outputs.runs-on }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: |
             .github/actions/pick-runner
@@ -94,7 +95,7 @@ jobs:
     # passing runs off mid-test. A slow runner reaches 75 by itself, and a retried journey adds about 8.
     timeout-minutes: 85
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # A PR checks out its merge commit and a batch is one commit on main:
           # either way HEAD^1 is the base, for the appearance scope.
@@ -116,7 +117,7 @@ jobs:
       - name: Protocol and app-state tests (NekkoProtocol, NekkoKit)
         working-directory: apps/ios/Protocol
         run: swift test
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -211,12 +212,22 @@ jobs:
           # A failed live run prints its stack's own logs (fake model, relay, agent): the phone's
           # screenshots alone can't say why the computer stopped answering.
           stack_logs() { for f in "$NEKKO_ITEST_LOGDIR"/*.log; do echo "::group::$1 $(basename "$f")"; tail -n 120 "$f"; echo "::endgroup::"; done; }
+          # The first-run suite is the only one split across simulator clones: its tests set all state by
+          # launch argument, open no host ports and leave evidence only in the one xcresult. One worker per
+          # 2 vCPUs and 4 GB of the VM, at most 4; a hosted 3-vCPU Mac gets 1, so it stays serial.
+          WORKERS=$(( $(sysctl -n hw.ncpu) / 2 )); MEM=$(( $(sysctl -n hw.memsize) / 4294967296 ))
+          [ "$MEM" -lt "$WORKERS" ] && WORKERS=$MEM; [ "$WORKERS" -gt 4 ] && WORKERS=4
+          PARALLEL=(-parallel-testing-enabled NO)
+          [ "$WORKERS" -lt 2 ] || PARALLEL=(-parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS")
+          echo "First-run suite: ${PARALLEL[*]}"
           TEST_RUNNER_NEKKO_UI_THEMES="$THEMES" \
             xcodebuild "${COMMON[@]}" -resultBundlePath evidence/first-run.xcresult test-without-building -skip-testing:NekkoNativeUITests/LiveRelayTests \
-            -retry-tests-on-failure -test-iterations 2 || failed=1
+            "${PARALLEL[@]}" -retry-tests-on-failure -test-iterations 2 || failed=1
           # A failing test gets one retry above: XCTest can hang minutes at "Setting up automation session"
           # before the app launches. Then a fresh boot, since every simulator loss so far followed this long suite.
           xcrun simctl shutdown "$DEVICE" || true
+          # The live runs below stay serial: each is one test against its own stack (the shell's single
+          # NEKKO_ITEST_PIDS and log dir), and the appearance and reinstalls are set on $DEVICE, which clones don't share.
           # The live journey, once per appearance, each against a fresh stack (pairing codes are single-use).
           # The first-run suite already asked for notifications; a fresh install gets the prompt again.
           xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent || true
@@ -324,7 +335,7 @@ jobs:
             base64 -i /tmp/shot.jpg | tr -d '\n'; echo
             echo "SHOT-END"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: native-ios-evidence
@@ -340,6 +351,12 @@ jobs:
           STATE: ${{ job.status == 'success' && 'success' || job.status == 'cancelled' && 'error' || 'failure' }}
           URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Cancelled because a newer batch replaced this one (ios-batch.mjs pushes it first):
+          # that batch, or its compose, already gave these heads their status.
+          if [ "$STATE" = error ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/ci/ios-batch" --jq .object.sha)" != "$GITHUB_SHA" ]; then
+            echo "Superseded by a newer batch on ci/ios-batch: reporting nothing."
+            exit 0
+          fi
           prs=$(echo "$BATCH" | jq -r '[.[] | "#\(.number)"] | join(", ")')
           echo "$BATCH" | jq -r '.[].sha' | while read -r sha; do
             gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$STATE" -f context='Native iOS (batch)' \

@@ -103,6 +103,12 @@ cannot connect to an older computer.
 > (in use, a chat replying, no keyboard, on battery or hot), never how long it has been idle,
 > its battery level or its temperatures.
 >
+> On the iPhone, the model list opens on **All**, with **Cloud** and **Local** beside it at the
+> top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
+> servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
+> filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
+> Local tab says to start the chat on a computer for local models.
+>
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one
 > computer (**Show chats from**). The phone stays connected to every paired computer and
@@ -348,6 +354,12 @@ cannot connect to an older computer.
 >   On Android it is **Settings → Logs**, with the same list, newest lines, **Refresh** and search;
 >   **Share** sends what the screen shows as text, with secrets removed again on the phone.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
+>   On the iPhone it is grouped by where the usage came from: an **All places** total, then one
+>   section per paired computer (an offline one keeps the last numbers it gave and says so) and
+>   **This iPhone** for chats that run on the phone. Within each, **Subscriptions** (each plan with
+>   its limit bars, and the models that bill to it) come before **API** (pay-per-token models with
+>   their estimated spend). This iPhone counts tokens only, from each provider's replies, and keeps
+>   that count on the phone.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**

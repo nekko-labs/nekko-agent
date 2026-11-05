@@ -36,7 +36,7 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The very first time, a short **Send your first prompt** intro opens over it: three looping demos (start with a question, add your files, send). **Skip**, the ✕, Escape or a click outside closes it, and it does not open again. It stays closed for anyone who turned off contextual tips. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
@@ -152,6 +152,8 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
+The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
+(it offers no Auto, so no Fusion).
 
 ### How the Agents panel groups your agents
 
@@ -225,7 +227,9 @@ chat. Child-agent watchers show their owner.
 
 When an agent opens a pull request, Nekko watches it for you: at the end of the
 turn it arms a watcher on every open PR the chat opened, whichever model or
-harness the chat runs on (Claude Code included). The agent wakes when checks
+harness the chat runs on (Claude Code included). The exception is Claude on a
+Claude plan: Nekko can't start a turn there on its own, so it doesn't watch
+those PRs; Claude with an API key or a cloud account is watched. The agent wakes when checks
 finish, a review arrives or a few hours pass, fixes what it can, and lands the
 PR if you or the repository allow it; otherwise it tells you the PR is
 merge-ready or what is blocking it. The chip reads **Watching until

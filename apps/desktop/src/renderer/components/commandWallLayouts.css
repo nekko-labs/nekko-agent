@@ -342,7 +342,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 @media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }
 
 /* Separate project/status/date sections without inflating the agent cards. */
-.agent-panel-group + .agent-panel-group { margin-top: 16px; }
+.agent-panel-group + .agent-panel-group { margin-top: 6px; }
 .agent-panel-group-heading { margin-bottom: 4px; }
 .agent-panel-group-label { font-size: var(--text-sm); line-height: 20px; color: var(--accent); }
 .agent-panel-row > .agent-panel-group + .agent-panel-group { margin-top: 0; }

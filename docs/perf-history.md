@@ -113,6 +113,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #1833 iPhone: cat from the first frame, straight to the zoom after Face ID (2026-11-05)
+Area: renderer
+Result: improvement
+Conditions: iPhone 17 Pro simulator, iOS 27.0, Xcode 27.2, Debug build signed ad hoc, app lock on, simulated Face ID match. Screen recordings via `simctl io recordVideo`, read frame by frame at 1/30 s: from the last frame showing the Face ID sheet to the first frame with no lavender left on screen. Two cold launches per build (fresh install, then relaunch without reinstall).
+
+| Metric | Before | After |
+|---|---|---|
+| Face ID sheet gone to app fully on screen, fresh install | 1.97 s | 0.77 s |
+| Face ID sheet gone to app fully on screen, relaunch | 1.97 s | 0.90 s |
+
+Why: the launch animation no longer builds the cat up from pixels (1.25 s) before the 0.525 s zoom; the cat is already on the launch screen and lock cover, so the zoom starts at once. Simulator Debug timing, not a device; app startup before the Face ID prompt (about 2 s here) did not change.
+
 ### #1663 / #1686 Empty-agent wave: per-frame swell, then per-column colour (2026-11-04)
 Area: renderer
 Result: mixed (#1663 costs more raster per second than #1495; #1686 brings it below #1495), microbenchmark only
@@ -1226,6 +1238,7 @@ speed. Source: [#152](https://github.com/nekko-labs/nekko-agent/pull/152).
 
 ## Unmeasured
 
+- Native iOS first-run suite across simulator clones (2026-11-05, #1825): on a VM with at least 4 vCPUs and 8 GB, the unit tests and launch-argument UI tests now run with `-parallel-testing-enabled YES` and one worker per 2 vCPUs and 4 GB, at most 4; a hosted 3-vCPU Mac still runs them serially. Not measured: the step's time before and after on a runner VM. One local run with 4 workers on a 10-core M-series Mac took 443 s for 141 tests, but the Mac's load average was over 200 from other work and there is no serial run under the same load, so it says nothing about the speedup. The first nightly or batch run on a 6-vCPU runner VM, against the previous one on the same VM size, would settle it.
 - Completing a chat from its X (2026-11-04, #1662): the sidebar card's X played its exit animation (260 ms fold, then a 60 ms delay and 220 ms collapse, each awaited with a 50 ms fallback) before asking the engine to complete the chat, and the engine call then ran `chat:abort`, the archive write and the session refresh one after another. The engine call now starts when X is pressed and the animation plays over it, so the total should approach the longer of the two rather than their sum. Not measured: click-to-row-removed time before and after. A hidden fixture timing the X press to the row's unmount against a stubbed engine with fixed IPC latency, on both revisions, would settle it.
 - iPhone chat streaming and outbox confirmation (2026-11-01, #1412): each streamed token used to recount every live block's characters for the context gauge, merge the whole saved transcript with the live turn twice per render (the list and the follow-scroll `onChange`), and regroup every row by purpose. Now `ChatModel` keeps a running character count and a stored merged transcript whose last block a token patches in place; the view keeps its rows and replaces only the last; the scroll follows a revision counter. The outbox re-read the whole chat (`session:get`) every 0.5 s for up to 45 s after each send; it now re-reads on the computer's first event for the chat, on the send's answer, or on a 0.5/1/2/4 s backoff, and `sendWaiting` no longer polls every 50 ms. Not measured: per-token main-actor time on a long transcript and `session:get` calls per send, before and after. An Instruments Time Profiler run of a long reply in a 500-message chat, and a count of `session:get` per outbox send in the itest, would settle it.
 - nekkod router table (2026-10-28, #1335): `routes::route()` looked a channel up by walking a match of about 90 arms, many of them a linear `contains` over a channel list; it is now one `HashMap` lookup in a table built at startup. Done for structure (no `.expect("checked")`, no channel registered twice), not measured: per-call routing time before and after is unknown. A microbenchmark of `route()` for a late channel (`session:get`) on both revisions would settle it.
