@@ -40,6 +40,10 @@ A new chat greets you with “What should we work on?” and a small pixel Nekko
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
+## Returning to the latest message
+
+When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
+
 ## Reviewing visual changes
 
 For UI work, Nekko is instructed to show the actual before/after screenshots in the agent reply, rather than leaving evidence only in a PR. Matching images labeled **Before: screen name** and **After: screen name** appear as a comparison; the reply's **Next step** section also shows a **Verify the visual changes** panel with those same screenshots. Wide conversations show the pair side by side, while narrow conversations stack it. Evidence stays with the reply and chat where the work happened.
