@@ -71,3 +71,7 @@ Verification: `AgentWindowIndicators.test.tsx` and `cleanStart.test.tsx` check t
 
 - Unload from the desktop's Detailed monitor.
 - A real-hardware check (NVIDIA, Apple Silicon unified memory) of the strip's labels and temperatures.
+
+### Composer spacing (#1791)
+
+Implemented in the shared renderer: the effort gauge trigger has no enclosing border (hover and keyboard focus feedback remain). Prompt Suggestions occupies its own next row inside the composer, below the model/action bar, in new and full chats. The row disappears when Suggestions has nothing to show, and remains independent of Simple/Detailed control visibility. Windows desktop/narrow synthetic verification is tracked in #1791; packaged and native mobile UI are outside this change.

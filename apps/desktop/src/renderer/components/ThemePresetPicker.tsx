@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
-import type { AppSettings, ThemePreset } from '@nekko-agent/shared';
-import { THEME_PRESETS, currentPresetAccent, experimentalFamilies, findThemePreset, themePresetOf } from '@nekko-agent/shared';
+import type { AppSettings } from '@nekko-agent/shared';
+import { findThemePreset } from '@nekko-agent/shared';
 import { useT } from '../i18n.js';
+import { MoonIcon, SunIcon } from '../icons.js';
+import { resolveThemeAppearance, themeModePatch, themePaletteDefaults, themePalettePatch } from '../themeMode.js';
 import { ColorWheel } from './ColorWheel.js';
+import './ThemePresetPicker.css';
 
-/** Preset groups, so light and dark looks sit under their own headings. Experimental sits above Fun!. */
-const GROUPS: Array<{ mode: ThemePreset['mode']; titleKey: string; fun?: boolean; experimental?: boolean }> = [
-  { mode: 'system', titleKey: 'settings.themeAuto' },
-  { mode: 'light', titleKey: 'settings.themeLight' },
-  { mode: 'dark', titleKey: 'settings.themeDark' },
-  { mode: 'light', titleKey: 'Experimental', experimental: true },
-  { mode: 'dark', titleKey: 'Fun!', fun: true },
+const THEMES = [
+  { id: 'x-plum-white', label: 'Nekko' }, { id: 'nebula', label: 'Nebula' },
+  { id: 'terminal', label: 'Terminal' }, { id: 'nord', label: 'Nord' },
+  { id: 'ember', label: 'Ember' }, { id: 'x-forest-white', label: 'Forest' },
+  { id: 'x-blueberry-white', label: 'Blueberry' },
 ];
-
-const FAMILIES = experimentalFamilies();
+const SEASONAL = [{ id: 'autumn', label: 'Spooky' }];
 
 /** Hard stops show the actual palette colors without blended intermediate shades. */
 export function slicedSwatch(colors: readonly string[]): string {
@@ -23,7 +23,7 @@ export function slicedSwatch(colors: readonly string[]): string {
 const WHEEL_SWATCH = slicedSwatch(['#f87171', '#fbbf24', '#4ade80', '#22d3ee', '#818cf8', '#e879f9']);
 
 /**
- * Grouped preset grid plus a color wheel, shared by Settings → Appearance and
+ * Mode-independent palette circles plus a color wheel, shared by Settings → Appearance and
  * the onboarding theme step. Selecting a preset writes theme + themePreset +
  * accent + accent2 in one patch; the caller's `update` persists and applies it,
  * so a click previews live.
@@ -45,145 +45,87 @@ export function ThemePresetPicker({
   large?: boolean;
 }) {
   const tr = useT();
-  // Only highlight a preset when it was explicitly selected. Falling back to
-  // `settings.theme` would falsely highlight a preset when the user only has a
-  // base mode and a custom accent. Nothing saved yet is System.
-  const activeId = themePresetOf(settings);
-  const activePreset = findThemePreset(activeId);
-  const accent = currentPresetAccent(activeId, settings.accent) ?? activePreset?.accent;
-  // With no preset and no saved secondary, fall back to the base brand cyan the
-  // stylesheet ships, so the gradient preview reads as a gradient and not a slab.
-  const accent2 = currentPresetAccent(activeId, settings.accent2) ?? activePreset?.accent2 ?? findThemePreset('system')?.accent2 ?? accent;
-  // "Custom" means the colors no longer match what the selected preset ships.
-  const customized =
-    !!activePreset && (accent !== activePreset.accent || accent2 !== activePreset.accent2);
+  const prefersDark = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const { mode, presetId: activeId, preset: activePreset, accent, accent2 } = resolveThemeAppearance(settings, prefersDark);
+  const defaults = activePreset ? themePaletteDefaults(activePreset, mode) : undefined;
+  const customized = !!defaults && (accent !== defaults.accent || accent2 !== defaults.accent2);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<'accent' | 'accent2'>('accent');
-  // Experimental families show one tile each; the open family lists its versions.
-  const [openFamily, setOpenFamily] = useState<string | undefined>(activePreset?.family);
-
-  const select = (preset: ThemePreset) => {
-    void update({
-      theme: preset.mode,
-      themePreset: preset.id,
-      accent: preset.accent,
-      accent2: preset.accent2,
-    });
-  };
 
   const setColor = (hex: string) => void update(editing === 'accent' ? { accent: hex } : { accent2: hex });
 
   const resetColors = () => {
-    if (!activePreset) return;
-    void update({ accent: activePreset.accent, accent2: activePreset.accent2 });
+    if (!defaults) return;
+    void update({ accent: defaults.accent, accent2: defaults.accent2 });
   };
 
   return (
-    <div className={showLabel ? 'mt-4' : undefined}>
-      {showLabel && <span className="text-sm">{tr('settings.theme')}</span>}
+    <div className={`theme-picker${showLabel ? ' mt-4' : ''}`}>
+      <div className="theme-picker-heading">
+        {showLabel && <span className="text-sm">{tr('settings.theme')}</span>}
+        <button
+          type="button"
+          role="switch"
+          aria-label={tr('settings.themeDark')}
+          aria-checked={mode === 'dark'}
+          title={`${tr('settings.themeLight')} / ${tr('settings.themeDark')}`}
+          className="theme-mode-toggle"
+          onClick={() => update(themeModePatch(settings, mode === 'dark' ? 'light' : 'dark', prefersDark))}
+        >
+          <span className="theme-mode-thumb" aria-hidden="true" />
+          <SunIcon className="h-4 w-4" aria-hidden="true" />
+          <MoonIcon className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
 
-      <div className={showLabel ? 'mt-2 space-y-3' : 'space-y-3'}>
-        {GROUPS.map((group) => {
-          if (group.experimental) return FAMILIES.length ? (
-            <div key="experimental">
-              <span className="text-xs font-medium text-ink-soft">Experimental</span>
-              <div className="mt-1 grid grid-cols-4 gap-2" role="group" aria-label="Experimental">
-                {FAMILIES.map((family) => {
-                  const active = family.presets.some((p) => p.id === activeId);
-                  const open = openFamily === family.id;
-                  const first = family.presets[0];
-                  return (
-                    <button
-                      key={family.id}
-                      onClick={() => setOpenFamily(open ? undefined : family.id)}
-                      title={`${family.label}: ${family.presets.map((p) => p.label).join(', ')}`}
-                      aria-expanded={open}
-                      aria-controls={`theme-family-${family.id}`}
-                      data-theme-family={family.id}
-                      className={`flex flex-col items-center gap-2 rounded-xl border p-2 text-2xs font-medium transition-colors ${
-                        active ? 'border-accent bg-accent-soft' : open ? 'border-ink-faint bg-surface-2' : 'border-line bg-surface hover:bg-surface-2'
-                      }`}
-                    >
-                      <span
-                        className={`${large ? 'h-14 w-14' : 'h-10 w-10'} rounded-full border border-line`}
-                        style={{ background: slicedSwatch([first.accent, first.paper ?? first.accent2, ...family.presets.slice(1).map((p) => p.paper ?? p.accent)]) }}
-                      />
-                      <span className={active ? 'text-accent' : 'text-ink-soft'}>
-                        {family.label} <span aria-hidden className="text-ink-faint">{open ? '▴' : '▾'}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {FAMILIES.filter((f) => f.id === openFamily).map((family) => (
-                <div key={family.id} id={`theme-family-${family.id}`} className="mt-2 rounded-xl border border-line bg-surface-2 p-2">
-                  <span className="text-2xs text-ink-faint">{family.label} versions</span>
-                  <div className={`mt-1 grid gap-2 ${family.presets.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`} role="radiogroup" aria-label={`${family.label} versions`}>
-                    {family.presets.map((preset) => {
-                      const active = activeId === preset.id;
-                      return (
-                        <button
-                          key={preset.id}
-                          onClick={() => select(preset)}
-                          title={`${family.label} ${preset.label}`}
-                          role="radio"
-                          aria-checked={active}
-                          className={`flex items-center gap-2 rounded-lg border p-2 text-2xs font-medium transition-colors ${
-                            active ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-2'
-                          }`}
-                        >
-                          <span className="h-7 w-7 shrink-0 rounded-full border border-line" style={{ background: slicedSwatch(preset.swatch) }} />
-                          <span className={active ? 'text-accent' : 'text-ink-soft'}>{preset.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+      <div className="mt-4 space-y-4">
+        {([
+          { key: 'themes', title: 'Themes', entries: THEMES },
+          { key: 'seasonal', title: 'Seasonal', entries: SEASONAL },
+        ] as const).map((section) => (
+          <div key={section.key}>
+            <span className="text-xs font-medium text-ink-soft">{section.title}</span>
+            <div className="theme-swatch-list" role="radiogroup" aria-label={section.title}>
+              {section.entries.map((entry) => {
+                const palette = themePaletteDefaults(findThemePreset(entry.id)!, mode);
+                const active = activeId === palette.id;
+                return (
+                  <button
+                    type="button"
+                    key={entry.id}
+                    onClick={() => update(themePalettePatch(settings, entry.id, prefersDark))}
+                    onKeyDown={(event) => {
+                      const direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 0;
+                      if (!direction && event.key !== 'Home' && event.key !== 'End') return;
+                      event.preventDefault();
+                      const buttons = Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+                      const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (buttons.indexOf(event.currentTarget) + direction + buttons.length) % buttons.length;
+                      buttons[next].focus();
+                      buttons[next].click();
+                    }}
+                    title={entry.label}
+                    role="radio"
+                    aria-checked={active}
+                    tabIndex={active || (entry === section.entries[0] && !section.entries.some((item) => themePaletteDefaults(findThemePreset(item.id)!, mode).id === activeId)) ? 0 : -1}
+                    className={`theme-swatch-button${large ? ' theme-swatch-large' : ''}`}
+                  >
+                    <span className="theme-swatch" style={{ background: slicedSwatch([palette.accent, palette.accent2, palette.preset?.mode === mode ? palette.preset.paper ?? (mode === 'dark' ? '#0c0c11' : '#fbfbfd') : '#fbfbfd']) }} />
+                    <span className="text-2xs font-medium">{entry.label}</span>
+                  </button>
+                );
+              })}
             </div>
-          ) : null;
-          const presets = THEME_PRESETS.filter((p) => p.group !== 'experimental' && (group.fun ? p.id === 'autumn' : p.mode === group.mode && p.id !== 'autumn'));
-          if (presets.length === 0) return null;
-          return (
-            <div key={group.titleKey}>
-              <span className="text-xs font-medium text-ink-soft">
-                {group.fun ? 'Fun!' : tr(group.titleKey)}
-              </span>
-              <div className="mt-1 grid grid-cols-4 gap-2" role="radiogroup" aria-label={group.fun ? 'Fun!' : tr(group.titleKey)}>
-                {presets.map((preset) => {
-                  const active = activeId === preset.id;
-                  const gradient = slicedSwatch(preset.swatch);
-                  return (
-                    <button
-                      key={preset.id}
-                      onClick={() => select(preset)}
-                      title={preset.label}
-                      role="radio"
-                      aria-checked={active}
-                      className={`flex flex-col items-center gap-2 rounded-xl border p-2 text-2xs font-medium transition-colors ${
-                        active ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-surface-2'
-                      }`}
-                    >
-                      <span
-                        className={`${large ? 'h-14 w-14' : 'h-10 w-10'} rounded-full border border-line`}
-                        style={{ background: gradient }}
-                      />
-                      <span className={active ? 'text-accent' : 'text-ink-soft'}>{preset.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       {/* Custom colors: the wheel rides on top of the selected preset. */}
-      <div className="mt-3 rounded-xl border border-line bg-surface">
+      <div className="theme-custom-colors mt-4">
         <button
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex w-full items-center gap-3 p-3 text-left"
+          type="button"
+          className="theme-custom-trigger flex w-full items-center gap-3 py-3 text-left"
         >
           <span
             className="h-8 w-8 shrink-0 rounded-full border border-line"
@@ -191,7 +133,7 @@ export function ThemePresetPicker({
           />
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-medium">{tr('settings.customColors')}</span>
-            <span className="block truncate text-2xs text-ink-faint">
+            <span className="block text-2xs text-ink-faint">
               {customized ? tr('settings.customColorsOn') : tr('settings.customColorsHint')}
             </span>
           </span>
@@ -206,7 +148,7 @@ export function ThemePresetPicker({
         </button>
 
         {open && (
-          <div className="flex flex-wrap items-start gap-4 border-t border-line p-3">
+          <div className="flex flex-wrap items-start gap-4 py-3">
             <ColorWheel
               value={editing === 'accent' ? accent : accent2}
               onChange={setColor}
@@ -259,7 +201,7 @@ export function ThemePresetPicker({
                 />
               </div>
               <button
-                className="text-2xs text-accent hover:underline disabled:text-ink-faint disabled:no-underline"
+                className="theme-custom-reset text-2xs text-accent hover:underline disabled:text-ink-faint disabled:no-underline"
                 onClick={resetColors}
                 disabled={!customized}
               >

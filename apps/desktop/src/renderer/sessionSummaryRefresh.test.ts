@@ -24,6 +24,18 @@ it('refreshes watch summaries on metadata and terminal events, not streamed toke
   expect(off).toHaveBeenCalledOnce();
 });
 
+it('refreshes when a chat\'s background tasks change between turns', async () => {
+  vi.useFakeTimers();
+  let listener!: (event: AgentEvent) => void;
+  vi.stubGlobal('window', { nekko: { onAgentEvent: (cb: typeof listener) => { listener = cb; return () => {}; } } });
+  const refresh = vi.fn(async () => {});
+  const stop = startSessionSummaryRefresh(refresh);
+  listener({ type: 'claude_code_background', sessionId: 's', tasks: 1 });
+  await vi.advanceTimersByTimeAsync(100);
+  expect(refresh).toHaveBeenCalledOnce();
+  stop();
+});
+
 it('serializes delayed refreshes and follows an in-flight watch invalidation once', async () => {
   vi.useFakeTimers();
   let listener!: (event: AgentEvent) => void;

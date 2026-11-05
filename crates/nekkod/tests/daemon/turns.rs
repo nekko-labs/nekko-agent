@@ -530,7 +530,9 @@ async fn stopping_a_daemon_turn_ends_it_and_clears_the_run_marker() {
     let (events, end) = turn_record(&rig, "turn_s", "s_turn_s").await;
     assert_eq!(end["aborted"], true);
     assert!(event_types(&events).contains(&"error".to_string()));
-    assert!(saved_session(&rig, "s_turn_s").get("activeRun").is_none());
+    let saved = saved_session(&rig, "s_turn_s");
+    assert!(saved.get("activeRun").is_none());
+    assert!(saved.get("turnFailure").is_none(), "a Stop is not a failure");
     let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_s"]), Some(TOKEN)).await;
     assert_eq!(alive, json!(false));
 }

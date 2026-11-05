@@ -36,7 +36,7 @@
       content="The personal, local agent you can trust. Run models on your own computer, choose exactly what data it sees, and watch everything it does. Fast, secure, and in your pocket."
     />
     <meta name="twitter:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
-    <link rel="stylesheet" href="styles.css?v=10" />
+    <link rel="stylesheet" href="styles.css?v=11" />
     <link rel="stylesheet" href="fonts.css?v=1" />
     <!-- Structured data: so search and answer engines describe Nekko Agent accurately -->
     <script type="application/ld+json">
@@ -206,13 +206,15 @@
 
       </div>
 
-      <!-- ===== app window mock rises out of the hero band ===== -->
+      <!-- Hidden for now: the workspace screenshot under the hero video. Restore by uncommenting.
+      
       <section class="showcase reveal" aria-label="Illustration of the workspace, not a live session">
                 <button class="media media-hero" type="button" aria-label="Nekko Agent workspace screenshot. Opens larger.">
           <img class="hero-shot hero-shot-dark" src="media/hero-dark-1920.webp?v=3" srcset="media/hero-dark-1920.webp?v=3 1920w, media/hero-dark.webp?v=3 2000w" sizes="(max-width: 960px) 100vw, 960px" width="2000" height="1088" alt="Nekko Agent with two agents working side by side: Claude Opus comparing Tokyo's weather with other capitals, and ChatGPT turning client notes into a launch plan with a timeline table" fetchpriority="high" decoding="async">
           <img class="hero-shot hero-shot-light" src="media/hero-colour-1920.webp?v=3" srcset="media/hero-colour-1920.webp?v=3 1920w, media/hero-colour.webp?v=3 2000w" sizes="(max-width: 960px) 100vw, 960px" width="2000" height="1088" alt="Nekko Agent with two agents working side by side: Claude Opus comparing Tokyo's weather with other capitals, and ChatGPT turning client notes into a launch plan with a timeline table" loading="lazy" decoding="async">
         </button>
       </section>
+      -->
 
       <!-- ===== why Nekko: five promises, one demo panel each. Travis is
            producing the videos; drop each one into its slot like the control
@@ -235,8 +237,9 @@
             </ul>
             <a class="card-link" href="#features">How the controls work <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video: switching a chat from a local model to Claude Opus, checking its context, and approving each file edit. Opens larger.">
-            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-control-poster.webp" data-autoplay>
+          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video: switching a chat from a local model to Claude Opus, then approving each file edit before it is made. Opens larger.">
+            <video class="panel-video" muted loop playsinline preload="none" width="1602" height="900" poster="media/demo-control-poster.webp" data-autoplay>
+              <source src="media/demo-control.webm" type="video/webm; codecs=av01.0.09M.08">
               <source src="media/demo-control.mp4" type="video/mp4">
             </video>
           </button>
@@ -254,7 +257,11 @@
             </ul>
             <a class="card-link" href="#editions">Desktop, browser, Docker or terminal <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="experience" aria-label="Demo video coming soon: the workspace, diff review and terminal. Opens larger."><span>Demo · The workspace</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
+          <button class="media panel-media" type="button" data-demo="experience" aria-label="Demo video: two chats side by side, a local model writing taglines while Claude Opus adds a section to a web page. Opens larger.">
+            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-experience-poster.webp?v=3" data-autoplay>
+              <source src="media/demo-experience.mp4?v=3" type="video/mp4">
+            </video>
+          </button>
         </article>
 
         <article class="panel glass reveal panel-fast" id="fast">
@@ -263,10 +270,10 @@
             <h3>Local code edits. 5× faster than Ollama.</h3>
             <p>Same model file. Same machine. Less waiting. Nekko returned a 156-line file with a function renamed in <strong>2.5 seconds</strong>. Ollama took <strong>13.9 seconds</strong>. Both made the correct edit.</p>
             <p>Nekko enables llama.cpp’s n-gram speculative decoding by default: propose repeated text, then let the model verify it. That helps when an edited file repeats much of the input—not on every task.</p>
-            <figure class="speed-proof" aria-label="Published benchmark medians, not a live demonstration">
+            <figure class="speed-proof" aria-label="Published benchmark medians, not a live demonstration" aria-describedby="bench-note">
               <figcaption class="mf-num">Whole-file rename benchmark</figcaption>
               <div class="speed-row"><span>Nekko Agent</span><div class="speed-track"><div class="bar k-nekko" style="--v: 18%" title="Nekko Agent: 2.5 seconds"><b>2.5 s</b></div></div></div>
-              <div class="speed-row"><span>Ollama</span><div class="speed-track"><div class="bar k-ollama" style="--v: 100%" title="Ollama: 13.9 seconds"><b>13.9 s</b></div></div></div>
+              <div class="speed-row"><span>Ollama 0.40.11</span><div class="speed-track"><div class="bar k-ollama" style="--v: 100%" title="Ollama: 13.9 seconds"><b>13.9 s</b></div></div></div>
               <p class="micro">Published benchmark medians, not a live demonstration.</p>
             </figure>
             <a class="card-link" href="/docs/benchmarks">Method, raw runs and limitations <span aria-hidden="true">→</span></a>
@@ -281,19 +288,7 @@
             </video>
           </button>
 
-          <!-- Complete-reply latency from docs/benchmarks.md (2026-10-30). -->
-          <figure class="bench" aria-describedby="bench-note">
-            <figcaption class="bench-title">Time to complete reply · lower is better</figcaption>
-            <div class="bench-row">
-              <span class="bench-label">Nekko Agent</span>
-              <div class="bench-bars"><div class="bar k-nekko" style="--v: 18%" title="Nekko Agent: 2.5 seconds"><b>2.5 s</b></div></div>
-            </div>
-            <div class="bench-row">
-              <span class="bench-label">Ollama 0.40.11</span>
-              <div class="bench-bars"><div class="bar k-ollama" style="--v: 100%" title="Ollama: 13.9 seconds"><b>13.9 s</b></div></div>
-            </div>
-            <p class="micro" id="bench-note">Apple M5 Max, 128 GB · Qwen3-8B Q4_K_M, same GGUF weights · cool-chip medians, 8 requests per server · October 2026. One 156-line function rename, with the whole file returned. These timings measure inference replies, not a complete agent workflow. Results vary by hardware and workload; MLX is faster at plain decode, and speculation adds first-token overhead. <a href="/docs/benchmarks">Full results, including the earlier NVIDIA benchmarks →</a></p>
-          </figure>
+          <p class="micro bench-method" id="bench-note">Apple M5 Max, 128 GB · Qwen3-8B Q4_K_M, same GGUF weights · cool-chip medians, 8 requests per server · October 2026. One 156-line function rename, with the whole file returned. These timings measure inference replies, not a complete agent workflow. Results vary by hardware and workload; MLX is faster at plain decode, and speculation adds first-token overhead. <a href="/docs/benchmarks">Full results, including the earlier NVIDIA benchmarks →</a></p>
           <!-- benchmark: three measures, higher is better, from docs/benchmarks.md (2026-09-30) -->
           <figure class="bench" aria-describedby="bench-nvidia-note">
             <figcaption class="bench-title">More comparisons · NVIDIA RTX 5090<br />Tokens per second, higher is better <span class="bench-legend"><i class="k-nekko"></i>Nekko <i class="k-ollama"></i>Ollama <i class="k-lms"></i>LM Studio</span></figcaption>
@@ -338,8 +333,11 @@
             <a class="card-link" href="/docs/privacy-shield">How Privacy Shield works <span aria-hidden="true">→</span></a>
           </div>
           <button class="media panel-media" type="button" data-demo="secure" aria-label="Demo video, an illustration: Privacy Shield swaps an email, an API key, a card number and a name for placeholders, only the placeholders reach a cloud model, and the real values are put back on your computer. Opens larger.">
-            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-secure-poster.webp" data-autoplay>
+            <video class="panel-video secure-video-dark" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-secure-poster.webp" data-autoplay>
               <source src="media/demo-secure.mp4" type="video/mp4">
+            </video>
+            <video class="panel-video secure-video-light" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-secure-light-poster.webp" data-autoplay>
+              <source src="media/demo-secure-light.mp4" type="video/mp4">
             </video>
           </button>
         </article>
@@ -356,7 +354,15 @@
             </ul>
             <a class="card-link" href="#beta">Get early access <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video coming soon: the phone app approving a command. Opens larger."><span>Demo · On the go</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
+          <!-- dark and light files; CSS shows the one for the current look -->
+          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video, an illustration of the beta phone app: a long run on your computer at home pauses on a risky command, your phone buzzes asking for approval, you tap Approve, and the run finishes. Opens larger.">
+            <video class="panel-video panel-look-dark" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-poster.webp" data-autoplay>
+              <source src="media/demo-convenient.mp4" type="video/mp4">
+            </video>
+            <video class="panel-video panel-look-light" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-light-poster.webp" data-autoplay>
+              <source src="media/demo-convenient-light.mp4" type="video/mp4">
+            </video>
+          </button>
         </article>
 
         <p class="micro center reveal panels-foot">Also in the box: scheduled agents and triggers, Whisper dictation on your computer, cost tracking for cloud models, skills and sub-agents, and connectors for GitHub, Linear, Slack, Discord, Gmail and Drive.</p>
@@ -648,6 +654,19 @@
         <p class="micro center reveal">macOS builds are signed and notarized from v0.6.0 on. An older release is not, and macOS may call it <em>damaged</em>: clear quarantine with <code>xattr -cr "/Applications/Nekko Agent.app"</code>, or just take a current build. <a href="https://github.com/nekko-labs/nekko-agent#macos-says-the-app-is-damaged-and-cant-be-opened">Read the install guidance</a></p>
         <p class="micro center reveal">Windows builds are unsigned for now (SmartScreen: More info → Run anyway); free code signing by the <a href="https://signpath.org" target="_blank" rel="noopener">SignPath Foundation</a> is in progress.</p>
       </section>
+      <section id="contributors" class="chapter contributors" aria-labelledby="contributors-title">
+        <div class="contributors-intro">
+          <p class="eyebrow">OPEN SOURCE. BUILT TOGETHER.</p>
+          <h2 id="contributors-title">The people behind Nekko.</h2>
+          <p class="chapter-lede">Made better by every contribution. Thank you to the people sharing their time, ideas and code to make Nekko Agent yours.</p>
+        </div>
+        <ul class="contributor-wall" data-contributors aria-label="GitHub contributors" hidden></ul>
+        <p class="micro contributors-status" data-contributors-status>Meet the contributors on GitHub.</p>
+        <div class="contributors-links">
+          <a class="card-link" href="https://github.com/nekko-labs/nekko-agent/graphs/contributors">Meet every contributor <span aria-hidden="true">↗</span></a>
+          <a class="btn btn-ghost btn-sm" href="https://github.com/nekko-labs/nekko-agent/blob/main/CONTRIBUTING.md">Start contributing <span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
     </main>
 
     <footer>
@@ -663,6 +682,7 @@
       <div class="lightbox-stage"></div>
     </div>
     <script src="site.js?v=13"></script>
+    <script src="contributors.js?v=1" defer></script>
     <script src="/analytics.js?v=1" defer></script>
   </body>
 </html>

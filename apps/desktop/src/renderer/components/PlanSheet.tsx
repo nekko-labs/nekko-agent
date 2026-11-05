@@ -29,14 +29,14 @@ function StepMark({ status, paused }: { status: PlanStep['status']; paused: bool
 /** One PR as a chip: number, state, and CI from the PR poller's cached rollup. */
 export function prChipLabel(url: string, info?: PrInfo): { text: string; tone: string; status: PrStatus } {
   const number = info?.number ?? parsePrUrl(url)?.number;
-  if (!info) return { text: `#${number}`, tone: 'var(--ink-faint)', status: 'unknown' };
-  if (info.state === 'merged') return { text: `#${number} · Merged`, tone: 'var(--accent)', status: 'merged' };
-  if (info.state === 'closed') return { text: `#${number} · Closed`, tone: 'var(--ink-faint)', status: 'closed' };
+  if (!info) return { text: `PR #${number}`, tone: 'var(--ink-faint)', status: 'unknown' };
+  if (info.state === 'merged') return { text: `PR #${number} · Merged`, tone: 'var(--accent)', status: 'merged' };
+  if (info.state === 'closed') return { text: `PR #${number} · Closed`, tone: 'var(--ink-faint)', status: 'closed' };
   const p = info.checkProgress;
   const ci = info.checks === 'failing' ? 'CI failing' : info.checks === 'passing' ? 'CI passing' : info.checks === 'pending' ? (p?.total ? `CI ${p.completed} of ${p.total}` : 'CI running') : 'No CI';
   const tone = info.checks === 'failing' ? 'var(--danger)' : info.checks === 'passing' ? 'var(--success)' : info.checks === 'pending' ? 'var(--warning)' : 'var(--ink-faint)';
   const status: PrStatus = info.checks === 'failing' ? 'failing' : info.checks === 'passing' ? 'passing' : info.checks === 'pending' ? 'pending' : info.isDraft ? 'draft' : 'open';
-  return { text: `#${number} · ${info.isDraft ? 'Draft' : 'Open'} · ${ci}`, tone, status };
+  return { text: `PR #${number} · ${info.isDraft ? 'Draft' : 'Open'} · ${ci}`, tone, status };
 }
 
 type PrStatus = 'draft' | 'open' | 'pending' | 'passing' | 'failing' | 'merged' | 'closed' | 'unknown';
@@ -104,10 +104,10 @@ function CiChips({ info }: { info: PrInfo }) {
   const base = canonicalPrUrl(info.url);
   return <>
     {loud.map((check, i) => <button key={i} type="button" className="plan-sheet-chip" data-plan-chip="ci" title={`#${info.number} · ${check.name} · ${check.state}`} onClick={() => open(safeProgressLink(check.link))}>
-      <span className="plan-sheet-dot" style={{ background: check.state === 'failing' ? 'var(--danger)' : check.state === 'pending' ? 'var(--warning)' : 'var(--ink-faint)' }} />{check.name}
+      <span className="plan-sheet-dot" style={{ background: check.state === 'failing' ? 'var(--danger)' : check.state === 'pending' ? 'var(--warning)' : 'var(--ink-faint)' }} />CI: {check.name}
     </button>)}
     {passed > 0 && <button type="button" className="plan-sheet-chip" data-plan-chip="ci" title={`#${info.number} · CI checks`} onClick={() => open(base && base + '/checks')}>
-      <span className="plan-sheet-dot" style={{ background: 'var(--success)' }} />{passed} passed
+      <span className="plan-sheet-dot" style={{ background: 'var(--success)' }} />CI: {passed} passed
     </button>}
   </>;
 }
@@ -144,14 +144,14 @@ function Pass({ step }: { step: PlanStep }) {
 }
 
 function ProjectChip({ link }: { link: ProjectLink }) {
-  return <button type="button" className="plan-sheet-chip" data-plan-chip="project" title={link.url} onClick={() => open(link.url)}><TagIcon className="h-3 w-3" />{link.label}</button>;
+  return <button type="button" className="plan-sheet-chip" data-plan-chip="project" title={link.url} onClick={() => open(link.url)}><TagIcon className="h-3 w-3" />Task: {link.label}</button>;
 }
 
 type Child = { id: string; title: string; running: boolean };
 
 function SubagentChip({ child, onOpen }: { child: Child; onOpen: (id: string) => void }) {
   return <button type="button" className="plan-sheet-chip" data-plan-chip="subagent" title={`Open ${child.title}`} onClick={() => onOpen(child.id)}>
-    <RobotIcon className="h-3 w-3" /><span className="truncate">{child.title}</span>
+    <RobotIcon className="h-3 w-3" /><span className="truncate">Sub-agent: {child.title}</span>
     {child.running ? <span className="plan-sheet-glyph is-running" role="img" aria-label="Running"><RocketIcon className="h-3 w-3" /></span> : <span className="plan-sheet-glyph" role="img" aria-label="Done"><CheckIcon className="h-3 w-3" /></span>}
   </button>;
 }
@@ -241,6 +241,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   if (!plan.length) return null;
   const running = new Set(runningSessionIds());
   const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
+  const runningChildren = [...childById.values()].filter(child => child.running);
   const openChild = onOpenChild ?? ((id: string) => useStore.getState().openChatPane(id));
   const progress = planProgress(plan);
   // An active step is not tied to token streaming. Only an explicit
@@ -267,7 +268,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
       <PrHoverActions url={url} info={info} sessionId={sessionId} />
     </span>;
   };
-  const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? artifact.live.host + artifact.live.route : artifact.filename}</button>;
+  const artifactChip = (artifact: ChatArtifact) => <button key={artifact.path} type="button" className="plan-sheet-chip" data-plan-chip="link" title={artifact.path} onClick={() => openArtifact(artifact, sessionId)}>{artifact.live ? 'Preview: ' + artifact.live.host + artifact.live.route : 'File: ' + artifact.filename}</button>;
   const kids = (own?: PlanStepLinks) => (own?.subagents ?? []).map(id => childById.get(id)).filter((c): c is Child => !!c);
   const position = plan.indexOf(current) + 1;
   const resultStep = plan.filter(step => links.get(step.id)?.prs.length || links.get(step.id)?.artifacts.length).pop()?.id;
@@ -301,6 +302,10 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   }
 
   return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet aria-label="Agent plan">
+    {runningChildren.length > 0 && <div className="plan-sheet-chips" data-plan-running-subagents aria-label="Running sub-agents">
+      <span className="text-2xs text-ink-faint">Running:</span>
+      {runningChildren.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
+    </div>}
     <div className="plan-sheet-head">
       <button type="button" className="plan-sheet-toggle" onClick={() => setCollapsed(true)} aria-expanded title="Fold the plan">
         <span className="font-semibold text-ink-soft">Plan</span>

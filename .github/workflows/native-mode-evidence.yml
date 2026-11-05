@@ -33,11 +33,11 @@ jobs:
       matrix:
         revision: [before, after]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || inputs.source_ref }}
           persist-credentials: false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           path: .evidence-harness
@@ -94,7 +94,7 @@ jobs:
             xcrun xcresulttool export attachments --path evidence/mode-label.xcresult --output-path evidence/shots
           fi
           test -n "$(find evidence/shots -name '*.png' -print -quit)"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: native-mode-label-ios-${{ matrix.revision }}
@@ -108,11 +108,11 @@ jobs:
       matrix:
         revision: [before, after]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || inputs.source_ref }}
           persist-credentials: false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           path: .evidence-harness
@@ -135,11 +135,11 @@ jobs:
           } > apps/android/evidence/revisions.txt
           cp .evidence-harness/apps/android/app/src/androidTest/java/com/nekko/android/ChatModesTest.kt apps/android/app/src/androidTest/java/com/nekko/android/
           cp .evidence-harness/apps/android/scripts/mode-evidence.sh apps/android/scripts/
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -162,7 +162,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: bash apps/android/scripts/mode-evidence.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: native-mode-label-android-${{ matrix.revision }}

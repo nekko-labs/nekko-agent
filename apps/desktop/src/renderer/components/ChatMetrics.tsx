@@ -249,7 +249,7 @@ export function EffortSlider(props: EffortProps) {
       <button
         ref={pop.anchor}
         type="button"
-        className="flex h-7 w-7 items-center justify-center rounded-lg border border-line hover:border-accent"
+        className="effort-trigger flex h-7 w-7 items-center justify-center rounded-lg hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-accent"
         onClick={() => pop.setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); step(1); }

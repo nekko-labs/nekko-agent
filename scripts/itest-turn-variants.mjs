@@ -9,6 +9,7 @@
 //
 // Usage: node scripts/itest-turn-variants.mjs [path/to/nekkod]
 // Needs `npm run build:web` and `cargo build -p nekkod --examples`.
+import { randomPort } from './itest-ports.mjs';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -23,7 +24,7 @@ const nekkod = resolve(process.argv[2] ?? join(targetDir, 'debug', `nekkod${exe}
 const fakeSd = resolve(join(targetDir, 'debug', 'examples', `fake_sd_server${exe}`));
 for (const p of [nekkod, fakeSd]) if (!existsSync(p)) throw new Error(`missing ${p}: cargo build -p nekkod --examples`);
 
-const SERVER_PORT = 5900 + Math.floor(Math.random() * 400);
+const SERVER_PORT = randomPort(5900, 400, [400]);
 const ENGINE_PORT = SERVER_PORT + 400;
 const TOKEN = randomBytes(24).toString('hex');
 const root = mkdtempSync(join(tmpdir(), 'nekko-turn-variants-'));

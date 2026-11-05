@@ -36,14 +36,15 @@ test('marketing preview serves only static website files and read requests', asy
   assert.match(replay, /href="\/docs\/benchmarks"/);
   assert.doesNotMatch(page.body, /class="hero-proof/);
   for (const f of ['nekko-vs-ollama-dark.mp4', 'nekko-vs-ollama-light.mp4', 'nekko-vs-ollama-dark-poster.webp', 'nekko-vs-ollama-light-poster.webp']) assert.equal((await get(`/media/${f}`)).status, 200, f);
-  assert.match(page.body, /Time to complete reply · lower is better/);
+  assert.doesNotMatch(page.body, /Time to complete reply/); // shown once, as the graphic under the fast copy
+  assert.match(page.body, /Whole-file rename benchmark/);
   assert.match(page.body, /Ollama 0\.40\.11/);
   assert.match(page.body, /cool-chip medians, 8 requests per server/);
   assert.match(page.body, /inference replies, not a complete agent workflow/);
   assert.match(page.body, /href="\/docs\/benchmarks"/);
   // Broader comparisons follow (rather than replace) the primary latency claim.
   const broader = page.body.indexOf('More comparisons · NVIDIA RTX 5090');
-  assert.ok(broader > page.body.indexOf('Time to complete reply · lower is better'));
+  assert.ok(broader > page.body.indexOf('Whole-file rename benchmark'));
   const comparison = page.body.slice(broader, page.body.indexOf('</article>', broader));
   assert.match(comparison, /Plain decode/);
   assert.match(comparison, /Code edit/);
