@@ -335,6 +335,12 @@ cannot connect to an older computer.
 >   On Android it is **Settings → Logs**, with the same list, newest lines, **Refresh** and search;
 >   **Share** sends what the screen shows as text, with secrets removed again on the phone.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
+>   On the iPhone it is grouped by where the usage came from: an **All places** total, then one
+>   section per paired computer (an offline one keeps the last numbers it gave and says so) and
+>   **This iPhone** for chats that run on the phone. Within each, **Subscriptions** (each plan with
+>   its limit bars, and the models that bill to it) come before **API** (pay-per-token models with
+>   their estimated spend). This iPhone counts tokens only, from each provider's replies, and keeps
+>   that count on the phone.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**

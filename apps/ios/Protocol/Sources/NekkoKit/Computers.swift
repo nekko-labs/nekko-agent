@@ -1232,8 +1232,8 @@ public final class ComputersStore {
         activity[sessionId] = nil
     }
 
-    /// The connection a chat action goes over: the active computer's, or the fleet's link to `computer`.
-    private func caller(_ computer: String?) throws -> RemoteConnection {
+    /// The connection a chat action (or a read, like Usage's) goes over: the active computer's, or the fleet's link to `computer`.
+    func caller(_ computer: String?) throws -> RemoteConnection {
         guard let computer, computer != activeId else { return try remote() }
         guard peers[computer]?.conn == .online, let c = links[computer]?.client else {
             let name = computers.first { $0.id == computer }?.name ?? "That computer"
