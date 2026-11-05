@@ -3364,24 +3364,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
-                {/* Suggestions get their own row, clear of the model and send controls. */}
-                {!imageMode && showSuggest && <div className="composer-suggestions-row" data-composer-suggestions-row>
-                    <PromptAnalyzer
-                      variant="chip"
-                      text={deferredDraft}
-                      sessionId={sessionId}
-                      canModelFill={hasProvider}
-                      workspaces={settings?.workspaces ?? []}
-                      contextItems={ctx?.items ?? []}
-                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-                      onFill={({ snippet, placement }) => {
-                        setDraft((d) =>
-                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-                        );
-                        composerRef.current?.focus();
-                      }}
-                    />
-                </div>}
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}
@@ -3439,7 +3421,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     {modelControls}
                   </div>
                 )}
-                {!imageMode && expertMode && showSuggest && <div className="composer-suggestions-row px-3 pb-2 empty:hidden" data-composer-suggestions>
+                {/* Suggestions get their own row at the bottom of the composer, clear of the model and send controls, in Detailed only (#1687, #1791). */}
+                {!imageMode && expertMode && showSuggest && <div className="composer-suggestions-row empty:hidden" data-composer-suggestions data-composer-suggestions-row>
                     <PromptAnalyzer
                       variant="chip"
                       text={deferredDraft}
