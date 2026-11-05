@@ -278,13 +278,16 @@ struct PhoneChatView: View {
     }
 }
 
-/// The models of this iPhone's providers that are on, grouped by provider.
+/// The models of this iPhone's providers that are on, grouped by provider, under the
+/// same All / Cloud / Local tabs as a computer's. Every provider here is a cloud API,
+/// so Local says where local models run instead.
 struct PhoneModelPicker: View {
     let selected: (String, String)?
     var pick: (String, String) -> Void
     @Environment(PhoneChats.self) private var phone
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @State private var scope = ModelScope.all
 
     var body: some View {
         NavigationStack {
@@ -293,8 +296,13 @@ struct PhoneModelPicker: View {
                     Text("Add a provider in Settings → Models on \(ChatPlace.phoneName) first.")
                         .font(.subheadline).foregroundStyle(palette.inkSoft)
                         .listRowBackground(Color.clear)
+                } else if scope == .local {
+                    Text("Local models run on a computer. Start the chat on a computer to use them.")
+                        .font(.subheadline).foregroundStyle(palette.inkSoft)
+                        .listRowBackground(Color.clear)
+                        .accessibilityIdentifier("modelPicker.emptyScope")
                 }
-                ForEach(phone.providers.filter(\.enabled)) { p in
+                ForEach(phone.providers.filter { $0.enabled && scope.includes($0) }) { p in
                     Section {
                         if let e = phone.modelErrors[p.id] {
                             Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
@@ -326,6 +334,7 @@ struct PhoneModelPicker: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) { ModelScopeTabs(scope: $scope) }
             .appBackground()
             .navigationTitle("Model")
             .navigationBarTitleDisplayMode(.inline)

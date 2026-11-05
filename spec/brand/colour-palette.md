@@ -52,10 +52,11 @@ The Nekko and Indigo themes use the standard Light and Dark surfaces unchanged; 
 
 - **Main button:** fill is the main colour (`#190019` or `#2B124C`), text `#FFFFFF`. In Dark it also has a 1px `#854F6C` inside outline.
 - **Merged-PR banner text:** Light uses the main colour; Dark uses `#C99BB3`.
-- **Working glow** (replaces the old blue-to-orange cycling glow in these themes; other themes keep it): a soft glow from the top edge of a chat window, an ellipse 90% wide and 55% tall fading to nothing by 70%.
-  - Dark: `#854F6C` at 30%.
-  - Light: the main colour at 10%.
-  - **When:** only while that window's agent is thinking or replying, in Focused and Dynamic alike. It fades in and out over 0.7 s (instantly with reduced motion). New, finished and resting chats stay plain, so colour always means "working".
+- **Active-window gradient** (revised for #1791; other themes keep their existing treatment): a soft plum field from the top of the selected chat window, an ellipse 110% wide and 90% tall fading to nothing by 85%.
+  - Dark: `#854F6C` at 30%. Light: the main colour at 10%.
+  - **When:** the selected agent keeps the same gradient from its new-chat greeting into its full transcript, working or idle. In Dynamic only the active pane has it; background agents stay neutral even while working. Selection fades the base field over 0.7 s.
+  - **Colour transition:** a static violet/rose palette (`rgb(107 77 153 / .22)` top-left, `rgb(163 80 119 / .12)` bottom-right) crossfades by composited opacity from .1 to .9 over 24 s, alternating. It never intercepts input. Reduced motion disables the cycle and selection fade, retaining a static plum field.
+  - Implemented in the shared desktop/Local Web UI renderer. Windows hidden Electron fixture verification is tracked in #1791; native macOS/Linux and packaged builds are not verified by this change.
 - **Dot wave** (faint dots behind the new-chat page; drawn at 60% strength and slowed, as for every Experimental theme):
 
 | Theme | From | To |

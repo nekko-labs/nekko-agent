@@ -2,7 +2,7 @@
 
 use crate::locate::{ClaudeBin, command};
 use serde_json::{Value, json};
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::io;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -150,8 +150,12 @@ pub struct Session {
     peeked: Option<String>,
     /// Background tasks Claude Code says are running (`background_tasks_changed`).
     background: usize,
-    /// Told the new count whenever it changes ([`Session::on_background_change`]).
-    on_background: Option<Box<dyn Fn(usize) + Send + Sync>>,
+    /// The calls that started a background watcher ([`is_watcher`]), until they end.
+    watchers: HashSet<String>,
+    /// The tasks and watchers last told to [`Session::on_background_change`].
+    reported: (usize, usize),
+    /// Told the new counts whenever they change ([`Session::on_background_change`]).
+    on_background: Option<Box<dyn Fn(usize, usize) + Send + Sync>>,
     /// Whether this child has reported a `command_lifecycle` for a message.
     reports_commands: bool,
     stderr: Arc<Mutex<VecDeque<String>>>,
@@ -216,6 +220,8 @@ impl Session {
             lines,
             peeked: None,
             background: 0,
+            watchers: HashSet::new(),
+            reported: (0, 0),
             on_background: None,
             reports_commands: false,
             stderr,
@@ -256,28 +262,58 @@ impl Session {
         self.background > 0
     }
 
-    /// Hear the number of background tasks each time it changes, and 0 when
-    /// the child ends with some still counted (they end with it).
-    pub fn on_background_change(&mut self, f: impl Fn(usize) + Send + Sync + 'static) {
+    /// Hear the number of background tasks, and how many of them are watchers,
+    /// each time either changes, and 0 when the child ends with some still
+    /// counted (they end with it).
+    pub fn on_background_change(&mut self, f: impl Fn(usize, usize) + Send + Sync + 'static) {
         self.on_background = Some(Box::new(f));
     }
 
     fn note(&mut self, line: &str) {
-        if !line.contains("background_tasks_changed") {
+        const NOTED: [&str; 4] = ["background_tasks_changed", "task_notification", "run_in_background", "\"Monitor\""];
+        if !NOTED.iter().any(|word| line.contains(word)) {
             return;
         }
-        if let Ok(v) = serde_json::from_str::<Value>(line)
-            && v.get("subtype").and_then(Value::as_str) == Some("background_tasks_changed")
-        {
-            self.set_background(v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len));
+        let Ok(v) = serde_json::from_str::<Value>(line) else { return };
+        match v.get("subtype").and_then(Value::as_str) {
+            Some("background_tasks_changed") => {
+                self.set_background(v.get("tasks").and_then(Value::as_array).map_or(0, Vec::len));
+            }
+            Some("task_notification") => {
+                if let Some(id) = v.get("tool_use_id").and_then(Value::as_str) {
+                    self.watchers.remove(id);
+                }
+                self.report();
+            }
+            _ if v.get("type").and_then(Value::as_str) == Some("assistant") => {
+                let blocks = v.pointer("/message/content").and_then(Value::as_array);
+                for call in blocks.into_iter().flatten().filter(|b| is_watcher(b)) {
+                    if let Some(id) = call.get("id").and_then(Value::as_str) {
+                        self.watchers.insert(id.to_string());
+                    }
+                }
+                self.report();
+            }
+            _ => {}
         }
     }
 
     fn set_background(&mut self, n: usize) {
-        if n != self.background {
-            self.background = n;
+        // With no task left nothing can be watching, whatever went unreported.
+        if n == 0 && self.background > 0 {
+            self.watchers.clear();
+        }
+        self.background = n;
+        self.report();
+    }
+
+    /// Say the counts if they changed. A watcher counts once its task runs.
+    fn report(&mut self) {
+        let now = (self.background, self.watchers.len().min(self.background));
+        if now != self.reported {
+            self.reported = now;
             if let Some(f) = &self.on_background {
-                f(n);
+                f(now.0, now.1);
             }
         }
     }
@@ -365,6 +401,28 @@ pub fn is_passive(line: &str) -> bool {
         ),
         _ => false,
     }
+}
+
+/// Whether a `tool_use` block starts a background task that waits on something
+/// outside the chat, which is how a Claude Code agent asked to watch a PR does
+/// it (it has no `agent_watch`): the `Monitor` tool, or a background command
+/// that polls in a loop or follows a `gh` watch. A background test run, dev
+/// server or sub-agent is not one.
+fn is_watcher(block: &Value) -> bool {
+    if block.get("type").and_then(Value::as_str) != Some("tool_use") {
+        return false;
+    }
+    if block.get("name").and_then(Value::as_str) == Some("Monitor") {
+        return true;
+    }
+    if block.pointer("/input/run_in_background") != Some(&Value::Bool(true)) {
+        return false;
+    }
+    let command = block.pointer("/input/command").and_then(Value::as_str).unwrap_or_default().to_ascii_lowercase();
+    let words: Vec<&str> =
+        command.split(|c: char| !c.is_ascii_alphanumeric() && c != '-').filter(|w| !w.is_empty()).collect();
+    let has = |options: &[&str]| words.iter().any(|w| options.contains(w));
+    (has(&["while", "until", "for"]) && has(&["sleep", "start-sleep"])) || (has(&["gh"]) && has(&["watch", "--watch"]))
 }
 
 /// End a process tree: `taskkill /T` on Windows (a bare kill of the `cmd`
@@ -481,6 +539,28 @@ mod tests {
         let line = user_line(json!("hi"), "u-1");
         assert_eq!(line["message"], json!({ "role": "user", "content": "hi" }));
         assert_eq!(line["uuid"], "u-1");
+    }
+
+    #[test]
+    fn only_a_task_that_waits_on_something_is_a_watcher() {
+        let shell = |command: &str| {
+            json!({ "type": "tool_use", "id": "t", "name": "Bash",
+                "input": { "command": command, "run_in_background": true } })
+        };
+        assert!(is_watcher(&json!({ "type": "tool_use", "id": "t", "name": "Monitor", "input": { "command": "x" } })));
+        assert!(is_watcher(&shell("while true; do gh pr view 1742; sleep 30; done")));
+        assert!(is_watcher(&shell("until curl -sf localhost:3000; do sleep 2; done")));
+        assert!(is_watcher(&shell("gh pr checks 1742 --watch")));
+        assert!(is_watcher(&shell("gh run watch 99")));
+        for command in ["npm test", "npm run dev", "vitest --watch", "sleep 8; echo BG-DONE", "gh pr view 1742"] {
+            assert!(!is_watcher(&shell(command)), "{command}");
+        }
+        let foreground = json!({ "type": "tool_use", "id": "t", "name": "Bash",
+            "input": { "command": "while true; do sleep 1; done" } });
+        assert!(!is_watcher(&foreground));
+        let subagent = json!({ "type": "tool_use", "id": "t", "name": "Agent",
+            "input": { "prompt": "watch it", "run_in_background": true } });
+        assert!(!is_watcher(&subagent));
     }
 
     #[test]

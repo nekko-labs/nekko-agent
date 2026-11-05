@@ -78,6 +78,15 @@ describe('agent panel view', () => {
     expect(statusGroupOf({ exchangeCount: 2, phase: 'building', activeWatchCount: 1 }, 'working')).toBe('status:building');
   });
 
+  it('files a stopped chat under Watching while it has a background watcher, alongside armed watches', () => {
+    expect(statusGroupOf({ exchangeCount: 2, activeWatchCount: 1, backgroundWatchCount: 1 }, undefined)).toBe('status:watching');
+    expect(statusGroupOf({ exchangeCount: 2, activeWatchCount: 0, backgroundWatchCount: 1 }, undefined)).toBe('status:watching');
+    expect(statusGroupOf({ exchangeCount: 2, backgroundWatchCount: 1 }, 'done')).toBe('status:watching');
+    expect(statusGroupOf({ exchangeCount: 2, activeWatchCount: 0, backgroundWatchCount: 0 }, undefined)).toBe('status:done');
+    expect(statusGroupOf({ exchangeCount: 2, phase: 'building', backgroundWatchCount: 1 }, 'working')).toBe('status:building');
+    expect(statusGroupOf({ exchangeCount: 2, backgroundWatchCount: 1 }, 'input')).toBe('status:input');
+  });
+
   it('files a chat waiting on you under Needs input, whatever its phase', () => {
     expect(statusGroupOf({ exchangeCount: 2, phase: 'building' }, 'input')).toBe('status:input');
     expect(statusGroupOf({ exchangeCount: 0 }, 'input')).toBe('status:input');

@@ -1,6 +1,9 @@
 import React from 'react';
 import { expect, it, vi } from 'vitest';
-vi.mock('../../store.js', () => ({ useStore: { getState: () => ({ openChatPane: () => {}, setView: () => {} }) } }));
+vi.mock('../../store.js', () => {
+  const state = { openChatPane: () => {}, setView: () => {}, providers: [], computerCatalogs: {} };
+  return { useStore: Object.assign((selector: (s: typeof state) => unknown) => selector(state), { getState: () => state }) };
+});
 vi.mock('../Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => <p>{text}</p> }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ActivityGroup } from './ActivityGroup.js';

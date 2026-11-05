@@ -101,6 +101,9 @@ fn builds_the_turn_context_exactly_as_the_ts_host_does() {
     memory.extend(list_memory(&data, "workspace", Some("w1")));
     let system =
         build_system_prompt(&PromptContext { workspaces: &workspaces, platform: "win32", ..Default::default() });
+    assert!(system.contains("![Before: <surface>](<actual path or URL>)"));
+    assert!(system.contains("![After: <surface>](<actual path or URL>)"));
+    assert!(system.contains("the chat mirrors explicitly labeled pairs"));
     let triples = |key: &str, a: &str, b: &str, c: &str| -> Vec<(String, String, String)> {
         fx[key]
             .as_array()

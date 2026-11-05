@@ -70,3 +70,17 @@ describe('System theme', () => {
     expect(attrs.get('data-theme')).toBe(id === 'light' ? 'light' : 'dark');
   });
 });
+
+describe('independent palette and mode application', () => {
+  it.each(['nebula', 'terminal', 'nord', 'ember', 'autumn'])('applies %s to the core light mode without a dark surface override', async (id) => {
+    const { themePalettePatch } = await import('./themeMode.js');
+    darkMode(true);
+    const settings = themePalettePatch({ theme: 'light' }, id, true);
+    useStore.setState({ settings: settings as any });
+    useStore.getState().applyTheme();
+    expect(attrs.get('data-theme')).toBe('light');
+    expect(attrs.get('data-preset')).toBe(id);
+    expect(props.get('--accent')).toBe(settings.accent);
+    expect(props.get('--accent-2')).toBe(settings.accent2);
+  });
+});

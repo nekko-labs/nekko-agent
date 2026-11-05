@@ -30,6 +30,7 @@ import { MAIN_EVENTS } from './routing.js';
 import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import {
+  PAGE_RELOADING_EVENT,
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
@@ -604,6 +605,7 @@ const chrome: WindowChromeBridge = {
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
+  onPageReloading: (listener) => { ipcRenderer.on(PAGE_RELOADING_EVENT, (_event, fadeMs: number) => listener(fadeMs)); },
   displays: {
     displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,
     list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),

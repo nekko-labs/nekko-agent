@@ -156,16 +156,28 @@ pub fn fake_claude() {
             tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
             out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
             out(result("planned", "completed"));
-        } else if text == "background later" {
+        } else if text == "background later" || text == "watch later" {
             // A background task that finishes only once the test says so (a
             // `wake-now` file in the workspace), so the chat can change first.
+            if text == "watch later" {
+                let input = json!({ "command": "gh pr checks 1 --watch", "description": "Watch the PR" });
+                out(assistant(
+                    "m_mon",
+                    json!([{ "type": "tool_use", "id": "toolu_mon", "name": "Monitor", "input": input }]),
+                ));
+                out(json!({ "type": "user", "message": { "role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": "toolu_mon", "content": "Monitor started",
+                }] }, "parent_tool_use_id": null }));
+            }
             out(assistant("m_bl", json!([{ "type": "text", "text": "started" }])));
             out(result("started", "completed"));
             out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [{ "task_id": "b2" }] }));
             while !Path::new("wake-now").exists() {
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
-            out(json!({ "type": "system", "subtype": "task_notification", "task_id": "b2", "status": "completed" }));
+            out(
+                json!({ "type": "system", "subtype": "task_notification", "task_id": "b2", "tool_use_id": "toolu_mon", "status": "completed" }),
+            );
             out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [] }));
             out(init());
             out(assistant("m_bl2", json!([{ "type": "text", "text": "woke later" }])));
@@ -248,6 +260,8 @@ pub fn fake_claude() {
             }
             out(assistant("m_d3", json!([{ "type": "text", "text": "They say hello." }])));
             out(result("They say hello.", "completed"));
+        } else if text == "out of tokens" {
+            out(result("You've hit your usage limit.", "model_error"));
         } else if text == "hang" {
             out(
                 json!({ "type": "stream_event", "event": { "type": "message_start", "message": { "id": "m_h" } }, "parent_tool_use_id": null }),
@@ -648,6 +662,24 @@ async fn a_background_sub_agent_outlives_the_turn_that_started_it() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_failed_turn_is_saved_until_the_next_turn_starts() {
+    let rig = rig("failed", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccF", "out of tokens")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, _) = turn_record(&rig, "ccF", "s_cc").await;
+    assert!(events.iter().any(|e| e["type"] == "error"), "{events:?}");
+
+    let session = saved(&rig);
+    assert_eq!(session["turnFailure"]["message"], "You've hit your usage limit.", "{session}");
+    assert_eq!(session["turnFailure"]["afterMessageId"], session["messages"].as_array().unwrap().last().unwrap()["id"]);
+
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccF2", "usage")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccF2", "s_cc").await;
+    assert!(saved(&rig).get("turnFailure").is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn without_the_bridge_claude_code_never_starts() {
     let rig = rig("nobridge", "guardrails", false);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccN", "hello")]), Some(TOKEN)).await;
@@ -799,6 +831,9 @@ async fn background_tasks_are_counted_after_done() {
     // After the turn's Done the chat can tell Claude Code still works.
     let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
     assert_eq!(tasks, json!({ "s_cc": 1 }));
+    // A task that is not watching anything leaves the chat out of Watching.
+    let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    assert_eq!(summaries[0]["backgroundWatchCount"], 0);
     std::fs::write(rig.workspace.join("wake-now"), "").unwrap();
     until("the wake-up turn to land", Duration::from_secs(30), || async {
         let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
@@ -816,4 +851,27 @@ async fn background_tasks_are_counted_after_done() {
     assert_eq!(counts, [&json!(1), &json!(0)]);
     let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
     assert_eq!(tasks, json!({}));
+}
+
+/// A chat whose agent was asked to watch something, with no Nekko watch armed:
+/// its summary counts the background watcher until the task ends.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_watcher_is_in_the_chat_summary_until_it_ends() {
+    let rig = rig("watchlater", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccW", "watch later")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccW", "s_cc").await;
+    until("the watcher to be counted", Duration::from_secs(30), || async {
+        let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+        (summaries[0]["backgroundWatchCount"] == 1).then_some(())
+    })
+    .await;
+    let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    assert_eq!(summaries[0]["activeWatchCount"], 0);
+    std::fs::write(rig.workspace.join("wake-now"), "").unwrap();
+    until("the watcher to end", Duration::from_secs(30), || async {
+        let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+        (summaries[0]["backgroundWatchCount"] == 0).then_some(())
+    })
+    .await;
 }
