@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { PrInfo, PrAction, PrDiff, PrChecks } from '@nekko-agent/shared';
+import type { PrInfo, PrAction, PrDiff, PrChecks, PrEvent } from '@nekko-agent/shared';
 import { getExecutionMode, parsePrUrl } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { useShown } from '../simpleMode.js';
@@ -52,15 +52,15 @@ export const MERGED_CARD_STYLE: React.CSSProperties = {
   background: 'linear-gradient(270deg, var(--merged-wash), var(--merged-wash-soft) 70%, transparent)',
 };
 
-/**
- * One PR as it appears in the transcript. The merged and closed cards stay as
- * historical milestones (anchored to the message that observed them). When the
- * PR is live (event is "created" and the poller reports it still open), the
- * card expands into the live surface the chat offers for working with it: its
- * Draft/Open state, CI progress and the actions (Approve, Decline, Merge,
- * Review) that used to sit as a strip below the composer.
- */
-export function PrCard({ url, info, event = 'created', sessionId }: { url: string; info?: PrInfo; event?: 'created' | 'open' | 'closed' | 'merged'; sessionId?: string }) {
+/** Historical lifecycle labels never change when the live poller refreshes. */
+export const PR_EVENT_LABELS: Record<PrEvent, string> = {
+  created: 'PR created', open: 'PR opened', draft: 'PR set to draft', ready: 'PR ready for review',
+  queued: 'PR queued', 'merge-requested': 'Merge requested', merged: 'PR merged', closed: 'PR closed',
+  reopened: 'PR reopened', updated: 'PR updated', reviewed: 'PR reviewed', viewed: 'PR viewed',
+};
+
+/** An anchored lifecycle milestone; the first open card also carries live status/actions. */
+export function PrCard({ url, info, event = 'created', sessionId, live }: { url: string; info?: PrInfo; event?: PrEvent; sessionId?: string; live?: boolean }) {
   const spooky = useStore((s) => s.settings?.themePreset === 'autumn');
   // Hidden in Settings > Simple mode, an open PR stays a plain milestone in the chat.
   const showStatus = useShown('pr-status', { pr: true });
@@ -69,8 +69,8 @@ export function PrCard({ url, info, event = 'created', sessionId }: { url: strin
   // The created card goes live only when the poller still reports it open:
   // merged/closed events keep their own historical rows a few lines down, so
   // "created" must stay as a static milestone once resolved.
-  if (showStatus && (event === 'created' || event === 'open') && info?.state === 'open' && sessionId) {
-    return <OpenPrCard url={url} info={info} sessionId={sessionId} label={label} />;
+  if (showStatus && (live ?? (event === 'created' || event === 'open')) && event !== 'merged' && event !== 'closed' && info?.state === 'open' && sessionId) {
+    return <OpenPrCard url={url} info={info} sessionId={sessionId} label={label} event={event} />;
   }
   const merged = event === 'merged';
   return (
@@ -80,8 +80,8 @@ export function PrCard({ url, info, event = 'created', sessionId }: { url: strin
       <div className="relative flex flex-wrap items-center gap-x-2 gap-y-1">
         <a href={url} className="min-w-0 truncate font-mono text-xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
         {info?.title && <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{info.title}</span>}
-        <span className="ml-auto text-xs font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : 'var(--success)' }}>
-          {merged ? 'PR merged' : event === 'closed' ? 'PR closed' : 'PR created'}
+        <span className="ml-auto text-xs font-semibold" style={{ color: merged ? 'var(--merged-ink)' : event === 'closed' ? 'var(--danger)' : event === 'draft' || event === 'viewed' ? 'var(--ink-soft)' : 'var(--success)' }}>
+          {PR_EVENT_LABELS[event]}
         </span>
       </div>
     </div>
@@ -89,7 +89,7 @@ export function PrCard({ url, info, event = 'created', sessionId }: { url: strin
 }
 
 /** The live card for an open PR: status, progress and the actions chats used to carry below the composer. */
-function OpenPrCard({ url, info, sessionId, label }: { url: string; info: PrInfo; sessionId: string; label: string }) {
+function OpenPrCard({ url, info, sessionId, label, event }: { url: string; info: PrInfo; sessionId: string; label: string; event: PrEvent }) {
   usePrPolling(sessionId);
   const openPrPane = useStore((s) => s.openPrPane);
   const session = useStore((s) => s.sessions.find((item) => item.id === sessionId));
@@ -120,7 +120,7 @@ function OpenPrCard({ url, info, sessionId, label }: { url: string; info: PrInfo
   const check = CHECK_META[info.checks];
   const actionClass = 'rounded-md px-2 py-0.5 text-2xs font-medium hover:bg-surface-2 disabled:opacity-50';
   return (
-    <div className="relative my-2 rounded-xl border border-line px-3 py-2" data-pr-event="open" data-pr-actions={url} style={{ background: 'var(--surface)' }}>
+    <div className="relative my-2 rounded-xl border border-line px-3 py-2" data-pr-event={event} data-pr-actions={url} style={{ background: 'var(--surface)' }}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <a href={url} className="min-w-0 truncate font-mono text-xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
         {info.title && <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{info.title}</span>}
@@ -129,6 +129,7 @@ function OpenPrCard({ url, info, sessionId, label }: { url: string; info: PrInfo
         </span>
         {!info.checkProgress && check.dot && <span className="text-2xs" style={{ color: check.color }}>{check.dot} {check.label}</span>}
       </div>
+      <p className="mt-1 text-2xs text-ink-soft">{PR_EVENT_LABELS[event]}</p>
       <PrProgress url={url} info={info} checks />
       {info.stack && <p className="mt-1 text-2xs text-ink-soft">GitHub stack · {info.stack.size} PRs</p>}
       {parent && <a className="mt-1 block truncate text-2xs text-ink-soft hover:underline" href={parent.url} onClick={(e) => { e.preventDefault(); openExternally(parent.url); }}>Builds on {parent.branch}</a>}

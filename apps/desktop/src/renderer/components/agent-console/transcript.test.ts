@@ -138,6 +138,47 @@ describe('toTranscriptRows', () => {
     expect(new Set(result.map((r) => r.key)).size).toBe(result.length);
   });
 
+  it('anchors confirmed draft, ready and queue events, with stable repeated-event keys', () => {
+    const url = 'https://github.com/o/r/pull/9';
+    const steps = (id: string, command: string, output = '', isError = false) => [
+      msg('call_' + id, 'assistant', '', { toolCalls: [{ id, name: 'bash', input: { command } }] }),
+      msg('result_' + id, 'tool', output, { toolResult: { toolCallId: id, output, isError } }),
+    ];
+    const messages = [
+      ...steps('create', 'gh pr create --fill', url),
+      ...steps('draft', 'gh pr ready 9 --undo'),
+      ...steps('ready', 'gh pr ready 9'),
+      ...steps('draft2', 'gh pr ready 9 --undo'),
+      ...steps('ready2', 'gh pr ready 9'),
+      ...steps('queue', 'gh pr merge 9 --auto', '✓ Added pull request o/r#9 to the merge queue'),
+    ];
+    const cards = rows(messages).filter((row) => row.kind === 'prs');
+    expect(cards.map((card) => card.event)).toEqual(['created', 'draft', 'ready', 'draft', 'ready', 'queued']);
+    expect(cards.map((card) => card.live)).toEqual([true, false, false, false, false, false]);
+    expect(new Set(cards.map((card) => card.key)).size).toBe(6);
+    expect(rows([...messages, msg('later', 'assistant', 'Waiting for checks.')]).slice(0, -1)).toEqual(rows(messages));
+    expect(rows([...messages, ...steps('failed', 'gh pr merge 9', 'merge denied', true)]).filter((row) => row.kind === 'prs')).toEqual(cards);
+  });
+
+  it('does not invent a creation milestone for an existing PR interaction', () => {
+    const messages = [
+      msg('call', 'assistant', '', { toolCalls: [{ id: 'c', name: 'bash', input: { command: 'gh pr ready 9 --undo --repo o/r' } }] }),
+      msg('result', 'tool', '', { toolResult: { toolCallId: 'c', output: '' } }),
+    ];
+    expect(rows(messages).filter((row) => row.kind === 'prs')).toMatchObject([{ event: 'draft', urls: ['https://github.com/o/r/pull/9'], live: true }]);
+  });
+
+  it('does not duplicate an explicit merged milestone when live polling confirms it', () => {
+    const url = 'https://github.com/o/r/pull/9';
+    const messages = [
+      msg('call', 'assistant', '', { toolCalls: [{ id: 'c', name: 'bash', input: { command: `gh pr merge ${url}` } }] }),
+      msg('result', 'tool', '✓ Merged pull request o/r#9', { toolResult: { toolCallId: 'c', output: '✓ Merged pull request o/r#9' } }),
+    ];
+    const result = toTranscriptRows(messages, extractPrUrls, collectSessionPrUrls, [{ url, state: 'merged', mergedAt: new Date(100).toISOString() }] as any);
+    expect(result.filter((row) => row.kind === 'prs')).toHaveLength(1);
+    expect(result.at(-1)).toMatchObject({ event: 'merged' });
+  });
+
   it('does not append phantom PR cards from reading test fixtures', () => {
     const r = rows([
       msg('a', 'assistant', '', { toolCalls: [{ id: 'read', name: 'read_file', input: {} }] }),
