@@ -13,7 +13,18 @@ describe('development launcher safety', () => {
     // Exercise the native .mjs loader, not two cold Vite imports (which can
     // spend the whole safety-test budget waiting on transform RPC under CI load).
     // Importing is safe: the launcher's argv/main guard never spawns Electron.
-    const script = `import(${JSON.stringify(new URL(launcher, import.meta.url).href)})`;
+    // Fail if an import touches Electron: its lazy binary install downloads on
+    // require in CI, where ELECTRON_SKIP_BINARY_DOWNLOAD skips npm's install.
+    const script = `
+      import { createRequire } from 'node:module';
+      const require = createRequire(import.meta.url);
+      const Module = require('node:module');
+      const load = Module._load;
+      Module._load = function(id, ...args) {
+        if (id === 'electron') throw new Error('Electron must not be resolved on plain import');
+        return load.call(this, id, ...args);
+      };
+      import(${JSON.stringify(new URL(launcher, import.meta.url).href)})`;
     const blocked = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', timeout: 2000,
     });
