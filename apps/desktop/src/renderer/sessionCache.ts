@@ -15,6 +15,8 @@ export const MAX_BYTES = 24 * 1024 * 1024;
 
 const cache = new Map<string, { session: Session; bytes: number }>();
 let totalBytes = 0;
+let holds = 0;
+const holdWaiters: Array<() => void> = [];
 
 /** Rough in-memory size of a transcript's text (UTF-16, two bytes a character). */
 export function transcriptBytes(session: Session): number {
@@ -74,6 +76,27 @@ export async function loadSession(id: string): Promise<Session | null> {
   if (s) putCachedSession(s);
   else dropCachedSession(id);
   return s;
+}
+
+/**
+ * A chat on screen holds this from mounting until its first load settles. The
+ * load itself starts after the first paint, so counting fetches would miss it.
+ * Returns the release.
+ */
+export function holdTranscript(): () => void {
+  holds += 1;
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    holds -= 1;
+    if (holds === 0) for (const done of holdWaiters.splice(0)) done();
+  };
+}
+
+/** Settles once every chat on screen has its first transcript, or failed to get it. */
+export function transcriptsLoaded(): Promise<void> {
+  return holds === 0 ? Promise.resolve() : new Promise((resolve) => { holdWaiters.push(resolve); });
 }
 
 /** What is cached right now, oldest first. Tests and diagnostics. */

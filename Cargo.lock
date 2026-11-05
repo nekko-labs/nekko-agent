@@ -2232,6 +2232,7 @@ dependencies = [
  "nekko-tools",
  "nekko-turn",
  "nekko-usage",
+ "nekko-vault",
  "nekko-web",
  "nekko-workspace",
  "p256",

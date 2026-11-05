@@ -542,6 +542,43 @@ xcrun stapler validate /Applications/Nekko Agent.app
 
 `spctl` should say `accepted` with `source=Notarized Developer ID`.
 
+## Development builds: keeping Keychain answers across rebuilds
+
+nekkod keeps API keys and sign-ins in the macOS Keychain, and the Keychain
+remembers an "Always Allow" for a program by its signature. A development
+nekkod is ad-hoc signed by the linker, and an ad-hoc signature is the binary's
+own hash: every rebuild is a new program to the Keychain, so it asks again for
+every item.
+
+Run this once per Mac:
+
+```bash
+apps/desktop/scripts/dev-signing-identity.sh
+```
+
+It creates **Nekko Agent Development**, a self-signed code-signing certificate
+in your login keychain that only your Mac trusts, and asks for your password
+once to trust it. From then on `npm run dev` (`stage-daemon.mjs --dev`) signs
+`target/dev-daemon/nekkod` with it under the identifier `dev.nekkolabs.nekkod`,
+and a local `npm run dist` without `CSC_LINK` signs the app with it instead of
+ad-hoc (`after-pack.cjs`). Answer the Keychain once more with **Always Allow**;
+later rebuilds keep it. The first signing may also ask to let `codesign` use
+the key: Always Allow.
+
+- `NEKKO_DEV_SIGN_IDENTITY="Apple Development: ..."` signs with an identity you
+  already have; `NEKKO_DEV_SIGN_IDENTITY=-` keeps ad-hoc.
+- Without the identity nothing breaks: the build stays ad-hoc, says so, and the
+  Keychain asks after every rebuild as before.
+- A `cargo build -p nekkod` run by hand is not re-signed. The app runs the
+  newest of `target/release`, `target/dev-daemon` and `target/debug`, so that
+  build asks again.
+- Undo: delete "Nekko Agent Development" (certificate and key) in Keychain
+  Access.
+
+Waiting on a Keychain dialog no longer gets nekkod killed either way: it tells
+the app (`NEKKOD_WAITING`), and the app holds its 30-second ready timeout
+until the dialog is answered (`engine-process.ts`).
+
 ## Building signed locally
 
 Only needed when debugging the signing config itself.

@@ -15,6 +15,7 @@ import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { copyVcRuntime } from '../../../scripts/vc-runtime.mjs';
+import { signDevDaemon } from './dev-signing.cjs';
 
 const local = process.argv.includes('--local');
 const dev = process.argv.includes('--dev');
@@ -92,6 +93,8 @@ function stageVmHelper(dirs) {
 
 if (dev) {
   execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod', '--features', 'dev-tools'], { cwd: repo, stdio: 'inherit' });
+  // A stable signature, so the Keychain keeps its answers across rebuilds.
+  signDevDaemon(join(repo, 'target', 'dev-daemon', exe));
   stageSpeechHelper([join(repo, 'target', 'dev-daemon')]);
   stageVmHelper([join(repo, 'target', 'dev-daemon')]);
   process.exit(0);
