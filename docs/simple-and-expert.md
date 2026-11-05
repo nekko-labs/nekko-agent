@@ -26,7 +26,7 @@ Some things appear only when they mean something, in both modes:
 In the message box's bottom row, Simple shows the folder, the model, how the agent asks you, and a ring for how full the chat is. Hover over the ring for the numbers.
 
 - **Effort** is inside the model menu.
-- **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**.
+- **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**. Each choice has the same icon as in Expert's Mode panel (a hand, a shield and a bolt) and a one-line description.
 - **Incognito and Automate** are in the **+** menu.
 - **The Agent Monitor** appears while agents are working in the background.
 - **In replies:** each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them.
