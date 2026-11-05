@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { composerToolbarPlacement, type SelectionAnchor } from './composerToolbarPlacement.js';
+import './ComposerEditingTools.css';
 import { ContextAction, ContextMenu } from '../ContextMenu.js';
 import type { MarkdownEdit, MarkdownEditorElement } from './MarkdownEditor.js';
 import { clipboardMarkdown, formatMarkdown, markdownActive, markdownControls, type MarkdownAction } from './composerFormatting.js';
@@ -18,10 +20,22 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
   composing: React.RefObject<boolean>;
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-  const [toolbar, setToolbar] = useState<{ x: number; y: number } | null>(null);
+  const [toolbar, setToolbar] = useState<SelectionAnchor | null>(null);
+  const [placement, setPlacement] = useState<ReturnType<typeof composerToolbarPlacement> | null>(null);
   const [error, setError] = useState('');
   const saved = useRef<[number, number]>([0, 0]);
   const tools = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!toolbar || !tools.current) { setPlacement(null); return; }
+    const position = () => {
+      const { width, height } = tools.current!.getBoundingClientRect();
+      setPlacement(composerToolbarPlacement(toolbar, width, height, innerWidth, innerHeight));
+    };
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(tools.current);
+    return () => observer.disconnect();
+  }, [toolbar]);
   useEffect(() => {
     const el = editor.current;
     if (!el || disabled) { setMenu(null); setToolbar(null); return; }
@@ -30,8 +44,11 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
       if (composing.current || document.activeElement !== el || !s?.rangeCount || !el.contains(s.anchorNode) || !el.contains(s.focusNode)) return;
       saved.current = [el.selectionStart, el.selectionEnd];
       if (saved.current[0] === saved.current[1]) { setToolbar(null); return; }
-      const rect = s.getRangeAt(0).getBoundingClientRect();
-      setToolbar({ x: Math.max(8, Math.min(rect.left, innerWidth - 320)), y: Math.max(8, rect.top - 86) });
+      const range = s.getRangeAt(0);
+      // Anchor a multiline selection to actual text, not the blank center of its union.
+      const box = el.getBoundingClientRect();
+      const rect = Array.from(range.getClientRects()).find(r => r.width && r.height && r.bottom > Math.max(0, box.top) && r.top < Math.min(innerHeight, box.bottom)) ?? range.getBoundingClientRect();
+      setToolbar({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom });
     };
     const context = (e: MouseEvent) => {
       if (composing.current) return;
@@ -105,11 +122,10 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
       setMenu(null);
     } catch { setError('Clipboard access failed. Use the keyboard shortcut or allow clipboard access.'); }
   };
-  const controls = <div role="toolbar" aria-label="Markdown formatting" className="flex flex-wrap gap-1 p-1" style={{ maxWidth: 304 }}>
+  const controls = <div role="toolbar" aria-label="Markdown formatting" className={`composer-format-controls${menu ? ' composer-format-controls--menu' : ''}`}>
     {markdownControls.map(([action, label, icon]) => <button key={action} type="button" title={label} aria-label={label}
       aria-pressed={markdownActive(value, ...saved.current, action)} disabled={disabled}
-      className="rounded px-2 py-1 text-xs hover:bg-surface-2"
-      style={{ background: markdownActive(value, ...saved.current, action) ? 'var(--surface-2)' : undefined, color: 'var(--ink)' }}
+      className="composer-format-control" data-format={action}
       onMouseDown={e => e.preventDefault()} onClick={() => format(action)}>{icon}</button>)}
   </div>;
   return <>
@@ -121,6 +137,6 @@ export function ComposerEditingTools({ editor, disabled, value, apply, onPaste, 
       <ContextAction onClick={() => { void clipboard('plain'); }}>Paste without formatting</ContextAction>
       {error && <p role="alert" className="px-2 text-xs">{error}</p>}
     </ContextMenu>}
-    {toolbar && !menu && !disabled && createPortal(<div ref={tools} data-composer-toolbar className="card fixed z-[99] rounded-lg p-1 shadow-(--shadow-float)" style={{ left: toolbar.x, top: toolbar.y, maxWidth: 'calc(100vw - 16px)', background: 'var(--paper)' }}>{controls}</div>, document.body)}
+    {toolbar && !menu && !disabled && createPortal(<div ref={tools} data-composer-toolbar className="composer-selection-toolbar" data-side={placement?.side} style={{ left: placement?.x ?? 0, top: placement?.y ?? 0, visibility: placement ? undefined : 'hidden', '--selection-pointer': `${placement?.pointer ?? 14}px` } as React.CSSProperties}>{controls}</div>, document.body)}
   </>;
 }

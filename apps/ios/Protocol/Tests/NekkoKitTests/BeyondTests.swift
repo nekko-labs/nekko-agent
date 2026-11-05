@@ -264,6 +264,20 @@ final class BeyondTests: XCTestCase {
         XCTAssertNil(none)
     }
 
+    func testRowsLookUpTheirPullRequestsOnce() async throws {
+        let (s, c) = try await makeStore()
+        let named = try XCTUnwrap(SessionSummary.from(["id": "s1", "title": "A", "updatedAt": 5, "prUrls": ["https://github.com/o/r/pull/12"]]))
+        let none = try XCTUnwrap(SessionSummary.from(["id": "s2", "title": "B", "updatedAt": 5]))
+        await s.loadRowPrs([named, none])
+        XCTAssertEqual(s.rowPrs["s1"]?.map(\.number), [12])
+        XCTAssertNil(s.rowPrs["s2"], "a chat that names no PR is never asked about")
+        XCTAssertEqual(c.callsTo(Channels.prSessionList), [[.string("s1"), .bool(false)]])
+        // Asked lately with the same links: not again, until the chat moves on.
+        XCTAssertTrue(s.rowPrsDue([named]).isEmpty)
+        let movedOn = try XCTUnwrap(SessionSummary.from(["id": "s1", "title": "A", "updatedAt": .int(Int64.max / 2), "prUrls": ["https://github.com/o/r/pull/12"]]))
+        XCTAssertEqual(s.rowPrsDue([movedOn]).map(\.id), ["s1"])
+    }
+
     func testUsageAndLimitsByProviderId() async throws {
         let (s, c) = try await makeStore()
         let u = UsageModel(store: s)

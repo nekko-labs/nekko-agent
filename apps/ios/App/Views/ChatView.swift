@@ -25,6 +25,7 @@ struct ChatView: View {
     @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
+    @State private var pull = PawPull()
     /// The transcript's rows between renders (a streamed token patches only the last one).
     @State private var rowCache = TranscriptRowCache()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -58,7 +59,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         // No keyboard toolbar here: on iOS 26 its Done floats over the
         // composer's send button. Scrolling or tapping the transcript puts
-        // the keyboard away, and the message box has a VoiceOver action for it.
+        // the keyboard away; the in-card toolbar has a hide-keyboard button too.
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
@@ -84,7 +85,12 @@ struct ChatView: View {
     }
 
     /// The room the transcript leaves at its top for the pill in its standard place.
-    private var pillRoom: CGFloat { prefs.pillPlacement.isStandard ? AgentPillLayer.topMargin : 0 }
+    private var pillRoom: CGFloat { AgentPillLayer.room(prefs.pillPlacement, gauges: gauges) }
+
+    /// The readings the floating pill shows, while the hardware shows; no pill otherwise.
+    private var gauges: HardwareMonitorModel? {
+        prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil
+    }
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
         let flex = self.flex
@@ -173,6 +179,13 @@ struct ChatView: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
             }
+            .accessibilityIdentifier("chat.transcript")
+            .pawRefreshableFromEnd(pull) {
+                await chat.reload()
+                guard !Task.isCancelled else { return }
+                // The gesture starts at the end; retain it after the new transcript lays out.
+                scrollAfterLayout(proxy)
+            }
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
@@ -205,10 +218,9 @@ struct ChatView: View {
                 }
                 .animation(.smooth(duration: 0.2), value: !atBottom && chat.running)
             }
-            // Simple or Expert, and the minimal monitor while the hardware shows, floating
-            // over the transcript; tapped, it opens into the agent's details.
-            .agentPill(gauges: prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil,
-                       monitor: monitor, chat: chat, hidden: pillHidden, expanded: $showPanel)
+            // The minimal monitor while the hardware shows, floating over the
+            // transcript; tapped, it opens into the agent's details.
+            .agentPill(gauges: gauges, monitor: monitor, chat: chat, hidden: pillHidden, expanded: $showPanel)
             .safeAreaInset(edge: .bottom) {
                 if flex == nil { bottomBar(chat) }
             }
@@ -242,16 +254,23 @@ struct ChatView: View {
         .modifier(MonitorFollow(monitor: $monitor, panelOpen: showPanel))
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 0) {
-                    Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    if prefs.shows("ph-subtitle") {
-                        Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
-                            .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                HStack(spacing: 6) {
+                    ChatMascot(working: chat.running, pull: pull, refresh: {
+                        Task { await pull.reload { await chat.reload() } }
+                    })
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        if prefs.shows("ph-subtitle") {
+                            Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                        }
                     }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    // Simple or Detailed is this phone's own, so it works on a saved copy too.
+                    ModeMenuPicker()
                     // A saved copy is read-only: changing the chat needs the computer.
                     Group {
                         if ModelEffortButton.parts(prefs, chat).model {
@@ -289,8 +308,9 @@ struct ChatView: View {
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
                     .disabled(chat.savedAt != nil)
-                    Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    Button { Task { await pull.reload { await chat.reload() } } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 } label: { Label("More", systemImage: "ellipsis.circle") }
+                .accessibilityIdentifier("chat.more")
             }
         }
         .sheet(isPresented: $showModels) {
@@ -998,11 +1018,12 @@ struct Composer: View {
                     ProgressView().controlSize(.small)
                     Text("Adding photos…").font(.caption)
                 }.foregroundStyle(palette.inkSoft)
-            } else if !images.isEmpty {
-                HStack {
-                    Label(images.count == 1 ? "1 photo" : "\(images.count) photos", systemImage: "photo").font(.caption)
-                    Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
-                }.foregroundStyle(palette.inkSoft)
+            }
+            if !images.isEmpty {
+                ComposerPhotos(photos: images) { index in
+                    images.remove(at: index)
+                    photos = []
+                }
             }
             if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {

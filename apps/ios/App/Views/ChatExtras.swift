@@ -2,6 +2,7 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 import UIKit
+import ImageIO
 
 /// The prompts waiting in the computer's queue for this chat, each with Edit
 /// and Remove. An edit is checked on the computer against the text shown here,
@@ -169,7 +170,7 @@ struct PhotoStrip: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(Array(photos.enumerated()), id: \.offset) { i, p in
-                if let image = DataURLImage.decode(p) {
+                if let image = DataURLImage.thumbnail(p) {
                     Button { open(i) } label: {
                         Image(uiImage: image).resizable().scaledToFill().frame(width: 64, height: 64)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -489,6 +490,20 @@ private final class SimultaneousGestures: NSObject, UIGestureRecognizerDelegate 
 }
 
 enum DataURLImage {
+    /// Decode only a small preview for a selected full-size photo. ImageIO
+    /// honours EXIF orientation without rasterising the entire attachment.
+    static func thumbnail(_ url: String) -> UIImage? {
+        guard url.hasPrefix("data:image/"), let comma = url.firstIndex(of: ","),
+              let data = Data(base64Encoded: String(url[url.index(after: comma)...])),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 240,
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
+    }
+
     /// A `data:image/…;base64,` URL's image, or nil (`""` is a photo the computer kept back).
     static func decode(_ url: String) -> UIImage? {
         guard url.hasPrefix("data:image/"), let comma = url.firstIndex(of: ","),
