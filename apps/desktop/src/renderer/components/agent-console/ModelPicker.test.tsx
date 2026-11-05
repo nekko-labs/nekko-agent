@@ -135,3 +135,16 @@ describe('account switcher', () => {
     expect(out).toContain('new Claude Code conversation');
   });
 });
+
+ describe('starred provider rows', () => {
+  it.each(['starred', 'recent', 'default'])('keeps a %s favorite in its provider group too', (pin) => {
+    const prev = useStore.getState().settings;
+    useStore.setState({ settings: { ...prev, favoriteModels: ['p::m'], defaultProviderId: pin === 'default' ? 'p' : undefined, defaultModelId: pin === 'default' ? 'm' : undefined } as NonNullable<typeof prev> });
+    try {
+      const html = renderToStaticMarkup(<ModelPicker expanded open providers={[{ id: 'p', kind: 'openai', label: 'Provider', enabled: true, baseUrl: '' }]} providerId='p' modelId='m' models={[{ id: 'm', providerId: 'p', name: 'Favorite' }]} recent={pin === 'recent' ? ['p::m'] : []} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+      expect(html.match(/role="option"/g)).toHaveLength(2);
+      expect(html).toContain('data-provider-heading="true">Provider');
+      expect(html.match(/data-model-name="true">Favorite</g)).toHaveLength(2);
+    } finally { useStore.setState({ settings: prev }); }
+  });
+});

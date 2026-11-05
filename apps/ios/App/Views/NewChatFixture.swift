@@ -11,7 +11,9 @@ struct NewChatFixture: View {
 
     var body: some View {
         NavigationStack {
-            if ready {
+            if ProcessInfo.processInfo.arguments.contains("-uiTestAutomatic") {
+                AutomaticMachineFixture()
+            } else if ready {
                 NewChatView(path: $path)
             }
         }
@@ -49,4 +51,86 @@ struct ModelTabsFixture: View {
         }
     }
 }
+
+/// Two scripted fleet links; nothing reaches a relay, a model server or the Keychain.
+@MainActor
+private struct AutomaticMachineFixture: View {
+    @Environment(AppModel.self) private var app
+    @State private var store = ComputersStore(
+        store: AutomaticMachineSecrets(),
+        makeConnection: { AutomaticMachineConnection(config: $0) },
+        deviceName: { "Test iPhone" },
+        deriveKey: { _, _ in Data(repeating: 7, count: 32) },
+        stayConnected: true)
+    @State private var path: [Route] = []
+    @State private var ready = false
+
+    var body: some View {
+        ZStack {
+            Color.clear
+            if ready { NewChatView(path: $path).environment(store) }
+        }
+        .task {
+            guard !ready else { return }
+            store.load()
+            let hostKey = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+            for (room, name) in [("bbbb", "Studio Mac"), ("aaaa", "MacBook")] {
+                let link = PairingLink(relayUrl: "wss://fixture.invalid", room: room,
+                                       key: "00112233445566778899aabbccddeeff", hostKey: hostKey, pair: nil)
+                if let id = try? await store.pair(link) { store.rename(id, to: name) }
+                for _ in 0..<20 { await Task.yield() }
+                await store.refresh()
+            }
+            app.prefs.chatsFilter = nil
+            if let id = store.activeId { app.prefs.lastFolder[id] = nil }
+            store.drafts.set(DraftStore.newChat, Draft(text: "Explain this local model", providerId: "mac-ollama", modelId: "qwen3:8b"))
+            ready = true
+        }
+    }
+}
+
+private final class AutomaticMachineSecrets: SecureStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String: String] = [:]
+    func get(_ key: String) -> String? { lock.withLock { values[key] } }
+    func set(_ key: String, _ value: String?) { lock.withLock { values[key] = value } }
+}
+
+private final class AutomaticMachineConnection: RemoteConnection, @unchecked Sendable {
+    let config: RelayConfig
+    private let lock = NSLock()
+    private var onStatus: (@Sendable (RelayStatus) -> Void)?
+    private var onWelcome: (@Sendable (WelcomedDevice) -> Void)?
+    init(config: RelayConfig) { self.config = config }
+    func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?, onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {
+        lock.withLock { self.onStatus = onStatus; self.onWelcome = onWelcome }
+    }
+    func connect() {
+        let (status, welcome) = lock.withLock { (onStatus, onWelcome) }
+        welcome?(WelcomedDevice(id: config.deviceId, name: config.deviceName, platform: "ios", protocolVersion: 1))
+        status?(RelayStatus(.online))
+    }
+    func close() {}
+    func nudge() {}
+    func reconnect() { connect() }
+    func registerPush(token: String) async throws {}
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
+    func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
+        let busy = config.room == "aaaa" || ProcessInfo.processInfo.arguments.contains("-uiTestAllBusy")
+        let provider = config.room == "aaaa" ? "mac-ollama" : "studio-ollama"
+        switch channel {
+        case "activity:state":
+            if ProcessInfo.processInfo.arguments.contains("-uiTestSlowAuto") { try await Task.sleep(for: .seconds(3)) }
+            return ["userActive": .bool(busy), "chatActive": false, "headless": false, "strain": []]
+        case Channels.providersList:
+            return [["id": .string(provider), "kind": "ollama", "label": "Ollama", "enabled": true]]
+        case Channels.modelsList:
+            return [["id": "qwen3:8b", "name": "Qwen3 8B", "loaded": true]]
+        case Channels.workspaceList:
+            return [["id": "project", "name": "Project", "path": "/fixture/project"]]
+        default: return .null
+        }
+    }
+}
+
 #endif
