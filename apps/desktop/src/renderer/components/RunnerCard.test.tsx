@@ -52,6 +52,49 @@ describe('RunnerCard', () => {
     ]) expect(html).toContain(s);
   });
 
+  it('groups jobs as queued, in progress and completed', () => {
+    const html = render(view({
+      queue: [{ repo: 'nekko-labs/nekko-agent', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: new Date((now - 180) * 1000).toISOString(), declined: false, accepted: false }],
+    }));
+    const at = (s: string) => html.indexOf(s);
+    expect(at('Queued · 1')).toBeGreaterThan(-1);
+    expect(at('Queued · 1')).toBeLessThan(at('In progress · 1'));
+    expect(at('In progress · 1')).toBeLessThan(at('Completed'));
+    expect(html).toContain('waiting 3 min');
+    // No group for what is not there.
+    expect(render(view({ slots: [], recent: [] }))).not.toContain('data-runner-jobs');
+  });
+
+  it('a running job says how far it has got, with a real percent', () => {
+    const job = { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'Native iOS', job: 'protocol-and-build', url: 'https://github.com/x/1', steps: { done: 6, total: 12, current: 'Build iOS' } };
+    const html = render(view({ slots: [{ state: 'running', vm: 'nekko-mac1-1', job, since: now - 2940, drainEndsAt: null }] }));
+    expect(html).toContain('Working on <a');
+    expect(html).toContain('Native iOS · protocol-and-build</a>');
+    expect(html).toContain('Step 7 of 12: Build iOS · 50%');
+    expect(html).toMatch(/role="progressbar"[^>]*aria-valuenow="50"/);
+    for (const b of ['>Live log<', '>Re-run<', '>Cancel<']) expect(html).toContain(b);
+  });
+
+  it('a running job without steps shows no made-up bar', () => {
+    const html = render(view());
+    expect(html).toContain('ios-native · PR #904');
+    expect(html).not.toContain('role="progressbar"');
+  });
+
+  it('a queued job can be accepted or declined, and either undone', () => {
+    const q = { repo: 'o/r', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: null };
+    const fresh = render(view({ queue: [{ ...q, declined: false, accepted: false }] }));
+    expect(fresh).toContain('>Accept now<');
+    expect(fresh).toContain('>Decline<');
+    const declined = render(view({ queue: [{ ...q, declined: true, accepted: false }] }));
+    expect(declined).toContain('Declined: this Mac starts no VM for it');
+    expect(declined).toContain('>Undo<');
+    expect(render(view({ queue: [{ ...q, declined: false, accepted: true }] }))).toContain('Accepted: a VM starts for it now');
+    // A hard limit Runner first keeps: Accept now is off, with the reason.
+    const hot = render(view({ acceptWhy: ['thermalCritical'], queue: [{ ...q, declined: false, accepted: false }] }));
+    expect(hot).toMatch(/disabled=""[^>]*title="[^"]*hot[^"]*"|title="[^"]*hot[^"]*"[^>]*disabled=""/i);
+  });
+
   it('error_card_shows_the_daemons_sentence', () => {
     expect(render(view({ state: 'error', error: 'No VM image yet.', slots: [] }))).toMatch(/role="alert"[^>]*>[^<]*No VM image yet\./);
   });

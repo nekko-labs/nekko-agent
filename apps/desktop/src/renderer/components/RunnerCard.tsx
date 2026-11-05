@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   NO_IMAGE_ERROR,
   STATE_LABELS,
+  acceptBlocked,
   auditText,
   auditTimeline,
   imageBusy,
@@ -13,11 +14,17 @@ import {
   runnerTitle,
   scopeName,
   slotLines,
+  stepText,
+  formatMinutes,
   todayText,
+  waitingText,
   type AuditLine,
   type ImageView,
+  type JobAction,
+  type QueuedJob,
   type RunnerState,
   type RunnerView,
+  type SlotView,
 } from '@nekko-agent/shared';
 import { Badge, StatusDot, Toggle } from './primitives/index.js';
 import type { StatusTone } from '../tokens.js';
@@ -71,6 +78,7 @@ function LogBlock({ title, load, kind }: { title: string; load(): Promise<string
 /** One recent job: a summary line with its job and PR, expanding to the VM's steps, the job's log and the VM's own log. */
 function RecentJob({ line: l, runnerId, rerun }: { line: AuditLine; runnerId: string; rerun: boolean }) {
   const [open, setOpen] = useState(false);
+  const act = useJobAction(runnerId);
   const steps = auditTimeline(l);
   const ranVm = l.result !== 'notRemoved';
   return (
@@ -84,6 +92,11 @@ function RecentJob({ line: l, runnerId, rerun }: { line: AuditLine; runnerId: st
         </button>
         {l.pr && <ExternalLink url={l.pr.url}>PR #{l.pr.number}</ExternalLink>}
         {l.url && <ExternalLink url={l.url}>Job</ExternalLink>}
+        {l.jobId != null && l.repo && (
+          <button className="shrink-0 text-accent hover:underline disabled:opacity-50" disabled={act.busy} onClick={() => void act.run('rerun', l.repo!, l.jobId!, 'Re-run asked for. It starts once GitHub has the run finished.')}>
+            Re-run
+          </button>
+        )}
       </div>
       {open && (
         <div className="mt-1 mb-2 ml-5 space-y-2">
@@ -111,6 +124,211 @@ function RecentJob({ line: l, runnerId, rerun }: { line: AuditLine; runnerId: st
         </div>
       )}
     </li>
+  );
+}
+
+/** Sends one `runner:job` action; a refusal shows as a toast with the daemon's sentence. */
+function useJobAction(runnerId: string) {
+  const [busy, setBusy] = useState(false);
+  const pushToast = useStore((s) => s.pushToast);
+  const run = async (action: JobAction, repo: string, jobId: number, done?: string): Promise<boolean> => {
+    setBusy(true);
+    try {
+      await window.nekko.runnerJob(runnerId, action, repo, jobId);
+      if (done) pushToast('success', done);
+      return true;
+    } catch (e) {
+      pushToast('error', e instanceof Error ? e.message : String(e));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, run };
+}
+
+/** A running VM's console, read again every few seconds; it stays at the end unless scrolled up. */
+function LiveLog({ runnerId, vm }: { runnerId: string; vm: string }) {
+  const [log, setLog] = useState<{ text: string } | { error: string } | null>(null);
+  const pre = useRef<HTMLPreElement | null>(null);
+  const atEnd = useRef(true);
+  useEffect(() => {
+    let alive = true;
+    const load = () => window.nekko.runnerLiveLog(runnerId, vm).then(
+      (text) => { if (alive) setLog({ text }); },
+      (e) => { if (alive) setLog({ error: e instanceof Error ? e.message : String(e) }); },
+    );
+    void load();
+    const timer = setInterval(() => void load(), LIVE_LOG_EVERY_MS);
+    return () => { alive = false; clearInterval(timer); };
+  }, [runnerId, vm]);
+  useEffect(() => {
+    if (pre.current && atEnd.current) pre.current.scrollTop = pre.current.scrollHeight;
+  }, [log]);
+  return (
+    <div>
+      <p className="mb-1 text-ink">Live log <span className="text-ink-faint">· updates every few seconds</span></p>
+      {log === null ? (
+        <p className="text-ink-faint">Loading…</p>
+      ) : 'error' in log ? (
+        <p className="text-ink-faint">Couldn't read it: {log.error}</p>
+      ) : (
+        <pre
+          ref={pre}
+          onScroll={(e) => { const el = e.currentTarget; atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24; }}
+          className="max-h-72 overflow-auto rounded-lg p-2 font-mono text-2xs whitespace-pre-wrap break-all"
+          style={{ background: 'var(--paper)' }}
+          data-log="live"
+        >
+          {log.text || 'Nothing yet. Step output shows here once the VM image has the latest scripts (Update scripts in runner settings).'}
+        </pre>
+      )}
+    </div>
+  );
+}
+const LIVE_LOG_EVERY_MS = 3000;
+
+/** The job a slot is running: its link, how far it has got, its live log, and Re-run or Cancel. */
+function RunningJob({ slot, runnerId, now }: { slot: SlotView; runnerId: string; now: number }) {
+  const [showLog, setShowLog] = useState(false);
+  const [confirm, setConfirm] = useState<'cancel' | 'restart' | null>(null);
+  const act = useJobAction(runnerId);
+  const j = slot.job;
+  const progress = stepText(j?.steps);
+  const name = j ? `${j.workflow} · ${j.job}` : 'A job';
+  const finish = async (action: 'cancel' | 'restart') => {
+    if (!j) return;
+    const ok = await act.run(action, j.repo, j.jobId, action === 'cancel' ? 'Cancelled the run.' : 'Cancelled. The job runs again once GitHub has the run finished.');
+    if (ok) setConfirm(null);
+  };
+  return (
+    <li data-running-job={slot.vm ?? ''} className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <StatusDot tone="running" pulse size={6} />
+        <span className="min-w-0 truncate text-ink">
+          Working on {j?.url ? <ExternalLink url={j.url}>{name}</ExternalLink> : name}
+        </span>
+        <span className="shrink-0 text-ink-faint">{formatMinutes(Math.max(0, now - slot.since))}</span>
+        {slot.boosted && <span className="shrink-0 text-ink-faint">· accepted now</span>}
+        <span className="flex-1" />
+        {j?.pr && <ExternalLink url={j.pr.url}>PR #{j.pr.number}</ExternalLink>}
+      </div>
+      {progress && (
+        <>
+          <p>{progress.text}</p>
+          <div
+            className="h-1.5 overflow-hidden rounded-full"
+            style={{ background: 'var(--surface-2)' }}
+            role="progressbar"
+            aria-label={`${name} progress`}
+            aria-valuenow={Math.round(progress.fraction * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+          >
+            <div className="h-full rounded-full" style={{ width: `${progress.fraction * 100}%`, background: 'var(--accent)' }} />
+          </div>
+        </>
+      )}
+      {confirm ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-ink">
+            {confirm === 'cancel' ? 'Cancel the whole workflow run on GitHub?' : 'Cancel this run and start the job again?'}
+          </span>
+          <button className="btn btn-outline py-1! text-xs" style={{ color: 'var(--danger)' }} disabled={act.busy} onClick={() => void finish(confirm)}>
+            {confirm === 'cancel' ? 'Cancel run' : 'Cancel and re-run'}
+          </button>
+          <button className="btn btn-outline py-1! text-xs" disabled={act.busy} onClick={() => setConfirm(null)}>Keep running</button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {slot.vm && (
+            <button className="btn btn-outline py-1! text-xs" aria-expanded={showLog} onClick={() => setShowLog(!showLog)}>
+              {showLog ? 'Hide live log' : 'Live log'}
+            </button>
+          )}
+          {j && <button className="btn btn-outline py-1! text-xs" onClick={() => setConfirm('restart')}>Re-run</button>}
+          {j && <button className="btn btn-outline py-1! text-xs" onClick={() => setConfirm('cancel')}>Cancel</button>}
+        </div>
+      )}
+      {showLog && slot.vm && <LiveLog runnerId={runnerId} vm={slot.vm} />}
+    </li>
+  );
+}
+
+/** A job waiting for a runner with this one's labels: Accept now or Decline, or undo either. */
+function QueuedRow({ job: q, view, now }: { job: QueuedJob; view: RunnerView; now: number }) {
+  const act = useJobAction(view.config.id);
+  // Shown at once; the daemon's view catches up on its next tick.
+  const [mine, setMine] = useState<JobAction | null>(null);
+  useEffect(() => setMine(null), [q.declined, q.accepted]);
+  const declined = mine ? mine === 'decline' : q.declined;
+  const accepted = mine ? mine === 'accept' : q.accepted;
+  const blocked = acceptBlocked(view);
+  const send = async (action: JobAction) => {
+    if (await act.run(action, q.repo, q.jobId)) setMine(action);
+  };
+  return (
+    <li data-queued-job={q.jobId} className={`flex flex-wrap items-center gap-2 ${declined ? 'opacity-60' : ''}`}>
+      <StatusDot tone={accepted ? 'running' : 'neutral'} size={6} />
+      <span className="min-w-0 truncate text-ink">
+        {q.url ? <ExternalLink url={q.url}>{`${q.workflow} · ${q.job}`}</ExternalLink> : `${q.workflow} · ${q.job}`}
+      </span>
+      <span className="shrink-0 text-ink-faint">{q.repo} · {waitingText(q.createdAt, now)}</span>
+      {q.pr && <ExternalLink url={q.pr.url}>PR #{q.pr.number}</ExternalLink>}
+      <span className="flex-1" />
+      {declined || accepted ? (
+        <>
+          <span className="shrink-0">{declined ? 'Declined: this Mac starts no VM for it' : 'Accepted: a VM starts for it now'}</span>
+          <button className="shrink-0 text-accent hover:underline disabled:opacity-50" disabled={act.busy} onClick={() => void send('undo')}>Undo</button>
+        </>
+      ) : (
+        <>
+          <button className="btn btn-outline py-1! text-xs" disabled={act.busy || blocked !== null} title={blocked ?? 'Start a VM for it now, as if the runner were in Runner first'} onClick={() => void send('accept')}>
+            Accept now
+          </button>
+          <button className="btn btn-outline py-1! text-xs" disabled={act.busy} title="This Mac starts no VM for it; another runner may take it" onClick={() => void send('decline')}>
+            Decline
+          </button>
+        </>
+      )}
+    </li>
+  );
+}
+
+function JobGroup({ title, count, children }: { title: string; count?: number; children: React.ReactNode }) {
+  return (
+    <section>
+      <h4 className="mb-1 text-2xs font-semibold tracking-wide text-ink-faint uppercase">{title}{count ? ` · ${count}` : ''}</h4>
+      <ul className="space-y-1.5">{children}</ul>
+    </section>
+  );
+}
+
+/** The runner's jobs by status: waiting, running here, and the last few that ended. Empty groups are left out. */
+function Jobs({ view, now }: { view: RunnerView; now: number }) {
+  const queue = view.queue ?? [];
+  const running = view.slots.filter((s) => s.state === 'running' || s.state === 'draining');
+  if (!queue.length && !running.length && !view.recent.length) return null;
+  return (
+    <div className="mt-3 space-y-3 border-t pt-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }} data-runner-jobs>
+      {queue.length > 0 && (
+        <JobGroup title="Queued" count={queue.length}>
+          {queue.map((q) => <QueuedRow key={`${q.repo}-${q.jobId}`} job={q} view={view} now={now} />)}
+        </JobGroup>
+      )}
+      {running.length > 0 && (
+        <JobGroup title="In progress" count={running.length}>
+          {running.map((s, i) => <RunningJob key={s.vm ?? i} slot={s} runnerId={view.config.id} now={now} />)}
+        </JobGroup>
+      )}
+      {view.recent.length > 0 && (
+        <JobGroup title="Completed">
+          {view.recent.map((l, i) => (
+            <RecentJob key={`${l.ts}-${i}`} line={l} runnerId={view.config.id} rerun={view.config.settings.rerunLostJobs} />
+          ))}
+        </JobGroup>
+      )}
+    </div>
   );
 }
 
@@ -205,10 +423,7 @@ export function RunnerCard({ view: given, now, image = null, onSettings, onSetup
         {slotLines(view, now).map((s) => (
           <div key={s.title} className={`rounded-xl border px-3 py-2 ${s.dim ? 'opacity-50' : ''}`} style={{ borderColor: 'var(--line)', background: 'var(--paper)' }}>
             <p className="text-xs text-ink-soft">{s.title}</p>
-            <p className={`mt-0.5 text-sm ${s.progress > 0 ? '' : 'text-ink-faint'}`}>{s.text}</p>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
-              <div className="h-full rounded-full" style={{ width: `${s.progress * 100}%`, background: 'var(--accent)' }} />
-            </div>
+            <p className={`mt-0.5 text-sm ${s.active ? '' : 'text-ink-faint'}`}>{s.text}</p>
           </div>
         ))}
       </div>
@@ -225,13 +440,7 @@ export function RunnerCard({ view: given, now, image = null, onSettings, onSetup
         <div><b className="block text-sm text-ink">Today</b>{todayText(today)}</div>
       </div>
 
-      {view.recent.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t pt-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }}>
-          {view.recent.map((l, i) => (
-            <RecentJob key={`${l.ts}-${i}`} line={l} runnerId={config.id} rerun={config.settings.rerunLostJobs} />
-          ))}
-        </ul>
-      )}
+      <Jobs view={view} now={now} />
 
       {image !== null && !settingUp && (
         <div className="mt-3 flex justify-end">

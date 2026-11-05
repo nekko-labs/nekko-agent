@@ -8,6 +8,7 @@ import {
   SLOT_LIMITS,
   STATE_LABELS,
   VPN_DIRECT_LABEL,
+  acceptBlocked,
   auditText,
   auditTimeline,
   formatMinutes,
@@ -27,7 +28,9 @@ import {
   runnerWorkflowPrompt,
   slotLimitText,
   slotLines,
+  stepText,
   toConnectRequest,
+  waitingText,
   type AuditLine,
   type ConnectForm,
   type HostView,
@@ -104,8 +107,8 @@ describe('runner helpers', () => {
     const job = { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'ios-native', job: 'PR #904' };
     const v = view({ available: 1, limit: 'otherApps', state: 'running', slots: [slot('running', { job, since: now - 360 })] }, { macosSlots: 2, maxJobMinutes: 120 });
     expect(slotLines(v, now)).toEqual([
-      { title: 'Slot 1 · macOS', text: 'ios-native · PR #904 · 6 min', progress: 0.05, dim: false },
-      { title: 'Slot 2 · macOS', text: 'Not available: Another app is running a macOS VM.', progress: 0, dim: true },
+      { title: 'Slot 1 · macOS', text: 'ios-native · PR #904 · 6 min', active: true, dim: false },
+      { title: 'Slot 2 · macOS', text: 'Not available: Another app is running a macOS VM.', active: false, dim: true },
     ]);
 
     const waiting = slotLines(view({ available: 2, reasons: ['userActive'] }, { macosSlots: 2 }), now);
@@ -117,9 +120,30 @@ describe('runner helpers', () => {
     expect(slotLines(view(), now).map((l) => l.text)).toEqual(['Starts a VM when a job is queued']);
     expect(slotLines(view({ state: 'error', error: 'No VM image yet.' }), now).map((l) => l.text)).toEqual(['Stopped until the error above is fixed']);
     // A bound with no name still greys the slot with a sentence.
-    expect(slotLines(view({ available: 0 }), now)[0]).toEqual({ title: 'Slot 1 · macOS', text: 'Not available: Fewer slots are available right now.', progress: 0, dim: true });
-    // A job past the max time caps at a full bar.
-    expect(slotLines(view({ slots: [slot('running', { job, since: now - 99_999 })] }), now)[0].progress).toBe(1);
+    expect(slotLines(view({ available: 0 }), now)[0]).toEqual({ title: 'Slot 1 · macOS', text: 'Not available: Fewer slots are available right now.', active: false, dim: true });
+  });
+
+  it('says how far a running job has got from its steps', () => {
+    expect(stepText({ done: 6, total: 12, current: 'Build iOS' })).toEqual({ text: 'Step 7 of 12: Build iOS · 50%', fraction: 0.5 });
+    expect(stepText({ done: 1, total: 3, current: null })?.text).toBe('Step 2 of 3 · 33%');
+    expect(stepText({ done: 4, total: 4, current: null })).toEqual({ text: 'All 4 steps done · 100%', fraction: 1 });
+    // GitLab, an older daemon, or a job not yet set up: no made-up percent.
+    expect(stepText(undefined)).toBeNull();
+    expect(stepText({ done: 0, total: 0, current: null })).toBeNull();
+  });
+
+  it('says how long a queued job has waited', () => {
+    expect(waitingText(new Date((now - 180) * 1000).toISOString(), now)).toBe('waiting 3 min');
+    expect(waitingText(null, now)).toBe('waiting');
+    expect(waitingText('not a date', now)).toBe('waiting');
+  });
+
+  it('says why Accept now cannot start a VM', () => {
+    const on = { enabled: true };
+    expect(acceptBlocked(view({ acceptWhy: [] }, on))).toBeNull();
+    expect(acceptBlocked(view({ acceptWhy: ['thermalCritical'] }, on))).toBe(REASONS.thermalCritical.sentence);
+    expect(acceptBlocked(view({ error: 'No VM image yet.' }, on))).toBe('Fix the error above first.');
+    expect(acceptBlocked(view({}, { enabled: false }))).toBe('Turn the runner on first.');
   });
 
   it('describes recent jobs', () => {
