@@ -14,6 +14,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
 import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
 import { SessionPrLinks } from './SessionPrLinks.js';
+import { wakeSourcesOf } from '../views/agentPanelView.js';
 
 /**
  * One workspace, as a card in the left sidebar.
@@ -298,7 +299,7 @@ function WorkspaceCardImpl({
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
       <div className="flex items-center gap-2">
-        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
+        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
           : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>

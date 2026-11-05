@@ -37,6 +37,8 @@ export type LoopPhase = 'building' | 'verifying' | 'shipping';
 export interface SessionSummary extends SessionMeta {
   /** Armed watches, including ones due while the chat is busy. Supplied by the host. */
   activeWatchCount?: number;
+  /** Background tasks of its Claude Code that are watching something for the chat. Supplied by the host. */
+  backgroundWatchCount?: number;
   /** Messages in the transcript, every role included. */
   messageCount: number;
   /** User and assistant messages only: the exchange a card counts. */
