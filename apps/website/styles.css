@@ -1240,3 +1240,10 @@ html { -webkit-tap-highlight-color: transparent; }
     #0c0c11;
 }
 :root[data-theme='dark'] .window-mock { background: #16161c; }
+
+/* Keep videos drawn with the rest of the page. On some Windows GPUs and HDR
+   screens Chrome hands a playing video to a hardware overlay while the page is
+   still and takes it back while scrolling; each switch shifts its colour, so
+   the video pops and pulses brighter on every scroll. A filter that is not a
+   no-op stops Chrome from using the overlay. */
+video { filter: brightness(1.0001); }

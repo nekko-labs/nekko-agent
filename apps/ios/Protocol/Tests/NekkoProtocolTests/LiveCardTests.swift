@@ -95,6 +95,49 @@ final class LiveCardTests: XCTestCase {
         XCTAssertEqual(detailed.reply, "Got it")
     }
 
+    func testRowTitleIsOneLineAndBlankAtMinimal() throws {
+        var a = chat("a", .working)
+        a.title = "Fix the  login\nredirect " + String(repeating: "x", count: 60)
+        let standard = try XCTUnwrap(build([a], level: .standard)).chats[0]
+        XCTAssertEqual(standard.title.count, LiveCardRules.titleLength)
+        XCTAssertTrue(standard.title.hasPrefix("Fix the login redirect x"))
+        XCTAssertTrue(standard.title.hasSuffix("…"))
+        XCTAssertEqual(try XCTUnwrap(build([a], level: .minimal)).chats[0].title, "")
+    }
+
+    /// An empty title is left out, so cards from before the rows keep their size;
+    /// one that is there round-trips.
+    func testEncodesTheTitleOnlyWhenThere() throws {
+        let plain = try XCTUnwrap(build([chat("a", .working)]))
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(plain), as: UTF8.self).contains("\"title\""))
+        var titled = chat("a", .working)
+        titled.title = "Fix login"
+        let card = try XCTUnwrap(build([titled]))
+        XCTAssertEqual(try JSONDecoder().decode(LiveCardState.self, from: JSONEncoder().encode(card)).chats[0].title, "Fix login")
+    }
+
+    func testRowsAreTheTopTwoWithTheFocusSwappedIn() throws {
+        let chats = [chat("n", .needsYou), chat("r1", .working), chat("r2", .working), chat("d", .done, finished: 60)]
+        let card = try XCTUnwrap(build(chats))
+        XCTAssertEqual(cardRows(card).map(\.id), ["n", "r1"], "what needs you is on top")
+        // A chat focused further down takes the second row, so the buttons answer a row you can see.
+        XCTAssertEqual(cardRows(try XCTUnwrap(build(chats, pinned: "d"))).map(\.id), ["n", "d"])
+        XCTAssertEqual(cardRows(try XCTUnwrap(build([chat("only", .working)]))).map(\.id), ["only"])
+    }
+
+    func testTallyCountsTheOtherChatsByState() throws {
+        let chats = [chat("n", .needsYou), chat("r1", .working), chat("r2", .working), chat("r3", .working),
+                     chat("w", .watching), chat("d1", .done, finished: 60), chat("d2", .done, finished: 90)]
+        let tally = cardTally(try XCTUnwrap(build(chats)))
+        XCTAssertEqual(tally.states, [.init(state: .working, count: 2), .init(state: .watching, count: 1), .init(state: .done, count: 2)])
+        XCTAssertEqual(tally.more, 0)
+        // Past the eight, the card cannot say what state they are in: they are only counted.
+        let many = cardTally(try XCTUnwrap(build((0..<11).map { chat("c\($0)", .working) })))
+        XCTAssertEqual(many.states, [.init(state: .working, count: 6)])
+        XCTAssertEqual(many.more, 3)
+        XCTAssertTrue(cardTally(try XCTUnwrap(build([chat("a", .working), chat("b", .done, finished: 1)]))).isEmpty)
+    }
+
     func testShortTitle() {
         XCTAssertEqual(shortTitle("Fix login bug"), "Fix")
         XCTAssertEqual(shortTitle("Fix it now"), "Fix it")
