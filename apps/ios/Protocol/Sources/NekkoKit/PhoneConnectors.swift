@@ -2,7 +2,7 @@ import Foundation
 import NekkoProtocol
 import Observation
 
-/// Services this iPhone connects to itself (decision 0052): a git provider for
+/// Services this iPhone connects to itself (decision 0055): a git provider for
 /// the Pull requests screen, and the project-management tools the user works
 /// in. As with the phone's own model providers (decision 0050), the token is
 /// kept in this iPhone's Keychain and sent only to that service, over https.
@@ -223,7 +223,7 @@ public struct PhoneConnector: Codable, Equatable, Sendable, Identifiable {
 }
 
 /// What this iPhone is connected to, kept beside its own providers (decision
-/// 0052): the list in a file of its own, each token in the Keychain.
+/// 0055): the list in a file of its own, each token in the Keychain.
 @MainActor
 @Observable
 public final class ConnectorsModel {

@@ -2142,6 +2142,7 @@ version = "0.1.0"
 dependencies = [
  "keyring",
  "nekko-js",
+ "security-framework 3.7.0",
  "serde_json",
  "sha2",
  "tempfile",
@@ -2231,6 +2232,7 @@ dependencies = [
  "nekko-tools",
  "nekko-turn",
  "nekko-usage",
+ "nekko-vault",
  "nekko-web",
  "nekko-workspace",
  "p256",

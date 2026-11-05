@@ -3,7 +3,7 @@ import NekkoProtocol
 import Observation
 
 /// A pull request (a merge request on GitLab) from the git provider connected
-/// on this iPhone (decision 0052).
+/// on this iPhone (decision 0055).
 public struct PhonePullRequest: Equatable, Sendable, Identifiable {
     /// Why it is in the list.
     public enum Role: String, Sendable, CaseIterable { case reviewRequested, authored, assigned, project }

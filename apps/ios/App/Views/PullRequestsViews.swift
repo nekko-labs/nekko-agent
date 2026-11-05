@@ -5,7 +5,7 @@ import UIKit
 
 // MARK: Pull requests
 
-/// The selected git provider's pull requests (decision 0052): Mine (authored,
+/// The selected git provider's pull requests (decision 0055): Mine (authored,
 /// to review, assigned) and Projects (the repositories in the paired computers'
 /// folders, plus pinned ones). Each has one-tap prompts that open New chat with
 /// the words filled in, on the computer that holds the repository.

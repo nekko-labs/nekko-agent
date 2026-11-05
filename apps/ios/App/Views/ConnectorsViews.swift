@@ -4,7 +4,7 @@ import SwiftUI
 
 // MARK: Connectors
 
-/// The services this iPhone is connected to (decision 0052): a git provider for
+/// The services this iPhone is connected to (decision 0055): a git provider for
 /// Pull requests, and the project tools you work in. Tokens stay in this
 /// iPhone's Keychain and go only to their own service.
 struct ConnectorsView: View {

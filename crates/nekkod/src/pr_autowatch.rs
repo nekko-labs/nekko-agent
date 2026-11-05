@@ -11,6 +11,12 @@
 //! It stops for a PR once the PR is merged or closed, once the user cancels
 //! the host's watch on it, after a failed wake-up, or after [`MAX_ROUNDS`]
 //! wake-ups. Settings > Pull requests turns it off (`watchUntilMergeReady`).
+//!
+//! It is never armed for a chat whose provider may not take a turn nobody
+//! started ([`wakes_allowed`]): a Claude Code chat on a Claude plan, where
+//! admission refuses every unattended turn (claude_policy.rs). Arming one
+//! there only ended in "Scheduled runs need Claude with an API key." in the
+//! chat after the agent's reply.
 
 use serde_json::Value;
 
@@ -31,6 +37,19 @@ pub fn enabled(settings: &Value) -> bool {
 pub fn eligible(session: &Value) -> bool {
     let on = |k: &str| nekko_js::truthy(session.get(k));
     !on("incognito") && !on("offline") && !on("trainingRunId") && !on("archivedAt")
+}
+
+/// Whether the host may wake a chat on its own, from `claude:capability`'s
+/// answer for the chat's provider and `unattended_runs`: a Claude provider
+/// only when that row is enabled for its sign-in; any other provider, or no
+/// answer, may.
+pub fn wakes_allowed(capability: Option<&Value>) -> bool {
+    match capability {
+        Some(c) if c.get("claude") == Some(&Value::Bool(true)) => {
+            c.get("state").and_then(Value::as_str) == Some("enabled")
+        }
+        _ => true,
+    }
 }
 
 /// The continuation the watch wakes the chat with.
@@ -140,6 +159,7 @@ pub fn should_arm(watches_on_pr: &[&Value]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nekko_agent::claude_policy as policy;
     use serde_json::json;
 
     fn turn(name: &str, command: &str, output: &str, error: bool) -> Vec<Value> {
@@ -177,6 +197,29 @@ mod tests {
             json!({ "role": "tool", "toolResult": { "toolCallId": "m", "output": "{\"html_url\":\"https://github.com/o/r/pull/3\"}" } }),
         ];
         assert_eq!(opened_prs(&mcp), vec!["https://github.com/o/r/pull/3"]);
+    }
+
+    /// `claude:capability`'s answer, as claude_policy.rs builds it.
+    fn capability(auth: policy::ClaudeAuth) -> Value {
+        let row = policy::capability(
+            &policy::Policy::shipped(),
+            auth,
+            policy::Capability::UnattendedRuns,
+            policy::Engine::ClaudeCode,
+        );
+        json!({ "claude": true, "auth": auth.as_str(), "state": row.state, "reason": row.reason })
+    }
+
+    #[test]
+    fn a_chat_on_a_claude_plan_is_never_woken_by_the_host() {
+        // A Claude Code chat on a plan: admission refuses unattended turns, so no watch.
+        assert!(!wakes_allowed(Some(&capability(policy::ClaudeAuth::Subscription))));
+        // Claude with an API key or a cloud account may be woken.
+        assert!(wakes_allowed(Some(&capability(policy::ClaudeAuth::ApiKey))));
+        assert!(wakes_allowed(Some(&capability(policy::ClaudeAuth::Cloud))));
+        // Not Claude, or no answer: as before.
+        assert!(wakes_allowed(Some(&json!({ "claude": false }))));
+        assert!(wakes_allowed(None));
     }
 
     #[test]

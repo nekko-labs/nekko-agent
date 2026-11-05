@@ -241,7 +241,7 @@ struct SettingsView: View {
                 // Chats that run on this iPhone, on its own cloud providers (decision 0050).
                 NavigationLink(value: Route.phoneModels) { Label("Models on \(ChatPlace.phoneName)", systemImage: "iphone") }
                     .accessibilityIdentifier("settings.phoneModels")
-                // GitHub, Linear, Jira and the rest, on this iPhone itself (decision 0052).
+                // GitHub, Linear, Jira and the rest, on this iPhone itself (decision 0055).
                 NavigationLink(value: Route.connectors) { Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted") }
                     .accessibilityIdentifier("settings.connectors")
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }

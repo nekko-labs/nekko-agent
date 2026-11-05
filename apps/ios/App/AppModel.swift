@@ -23,7 +23,7 @@ final class AppModel {
     let cloud: CloudSync
     /// This iPhone as a place chats run, on its own cloud providers (decision 0050).
     let phone: PhoneChats
-    /// GitHub, Linear, Jira and the rest, connected on this iPhone itself (decision 0052).
+    /// GitHub, Linear, Jira and the rest, connected on this iPhone itself (decision 0055).
     let connectors: ConnectorsModel
     private let connectorKeychain: KeychainStore
     private let cloudKeychain: KeychainStore
@@ -134,7 +134,7 @@ final class AppModel {
         #else
         phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
         #endif
-        // Connector tokens have a Keychain service of their own too (decision 0052).
+        // Connector tokens have a Keychain service of their own too (decision 0055).
         let connectorKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.phone-connectors")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { connectorKeychain.wipe() }
@@ -158,7 +158,6 @@ final class AppModel {
         }
         // The computer builds the same card for the relay to push: it hears these too.
         IntentRouter.focus = { [weak self] sid in await self?.focusCard(sid) }
-        IntentRouter.nextPage = { [weak self] sid in await self?.focusCard(sid) }
         IntentRouter.dismiss = { [weak self] sid in
             self?.activities.dismiss(sid)
             await self?.tellCard(dismiss: sid)
@@ -474,7 +473,7 @@ final class AppModel {
             newChatRequested = true
             return
         }
-        // The card's "+N" when it holds more chats than it shows: opening the app is the point.
+        // The card's count line ("3 Working · 5 Done"): opening the app is the point.
         if url.scheme == "nekko-agent", url.host == "chats" { return }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
     }

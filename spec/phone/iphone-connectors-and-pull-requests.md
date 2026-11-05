@@ -5,7 +5,7 @@ area: phone
 
 # iPhone: connectors and pull requests (2026-11-05)
 
-`[Connectors: implemented 2026-11-05, iPhone only. The connector model (catalog, field checks, each service's sign-in check, Keychain storage, the selected git provider) is tested in NekkoKit (Linux Swift container); the screen builds on macOS CI. Not yet tried against the real services from a device. Android has none of it yet]` `[Pull requests: implemented 2026-11-05, iPhone only. The requests and answers for GitHub (GraphQL), GitLab and Bitbucket, the merge into one list, Projects' repositories, pins, the prompts and where they run are tested in NekkoKit; the screen builds on macOS CI. Not yet tried against the real services from a device]` Decision: [0052](../../docs/decisions/0052-the-iphone-keeps-its-own-connector-tokens.md).
+`[Connectors: implemented 2026-11-05, iPhone only. The connector model (catalog, field checks, each service's sign-in check, Keychain storage, the selected git provider) is tested in NekkoKit (Linux Swift container); the screen builds on macOS CI. Not yet tried against the real services from a device. Android has none of it yet]` `[Pull requests: implemented 2026-11-05, iPhone only. The requests and answers for GitHub (GraphQL), GitLab and Bitbucket, the merge into one list, Projects' repositories, pins, the prompts and where they run are tested in NekkoKit; the screen builds on macOS CI. Not yet tried against the real services from a device]` Decision: [0055](../../docs/decisions/0055-the-iphone-keeps-its-own-connector-tokens.md).
 
 ## User intent
 
