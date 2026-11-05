@@ -7,7 +7,7 @@ date: 2026-11-06
 
 Issue: [#1886](https://github.com/nekko-labs/nekko-agent/issues/1886). Spec: [version numbers](../../spec/product/version-numbers.md). Runbook: [releasing](../runbooks/releasing.md).
 
-The readings of the request below (plain unpadded numbers, the tag as the only bump, per-platform counters, the store formula) were taken as defaults while Philip was unreachable, and are to be confirmed with him.
+The readings of the request below (plain unpadded numbers, the tag as the only bump, per-platform counters, the store formula) were taken as defaults while Philip was unreachable, and are to be confirmed with him. Internal-only TestFlight for iOS nightlies is Philip's decision of 2026-11-06.
 
 ## Context
 
@@ -41,6 +41,6 @@ Nightly desktop installers stay artifacts.
 - A release is a tag: `git tag -a v0.9.0 -m v0.9.0 && git push origin v0.9.0`. A desktop nightly that proves good can be promoted by tagging its commit with its own version (`v0.9.4`); the next desktop nightly then counts on from 0.9.5.
 - About three counter tags a night, roughly a thousand a year, in the tag list under `nightly/`. If that gets in the way, the derivation can move to a ref namespace outside `refs/tags/` without changing the numbers.
 - A reserved number whose build then fails is a gap. Harmless: only increasing matters.
-- Every iOS nightly is a new marketing version in App Store Connect, so each opens its own version train in TestFlight. Internal testers see it at once; an external group needs Beta App Review per marketing version. If that becomes a cost, iOS can keep MAJOR.MINOR.0 as its marketing version and carry BUILD in the build number only (the build number already holds the whole version).
+- Every iOS nightly is a new marketing version in App Store Connect, so each opens its own version train in TestFlight. An external group would need Beta App Review for every one, so **nightly iOS builds go to internal TestFlight testers only** (Philip, 2026-11-06). The export marks each upload `testFlightInternalTestingOnly`, so App Store Connect itself refuses to put it in an external group, send it to Beta App Review or submit it to the App Store, and a follow-up job (`scripts/testflight-internal.mjs`) waits for processing and adds the build to every internal group that does not already receive every build. Only a hand dispatch with `internal_only=false` uploads a build that could go further. If external testing is ever wanted, that is the switch, and the per-nightly marketing version should be revisited with it (keep MAJOR.MINOR.0 as the marketing version and carry BUILD in the build number only).
 - 9999 builds per line and 999 minors per major. The script refuses to go past either and says to tag the next line.
 - No nightly npm packages: npm still publishes only from a release tag.

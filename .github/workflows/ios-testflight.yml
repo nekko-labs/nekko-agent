@@ -42,6 +42,13 @@ name: iOS TestFlight
 # values in apps/ios/project.yml are only for local builds. (Before 0.8.1,
 # builds were numbered run number + 100, up to 179; the new numbers start at
 # 80001.)
+#
+# Internal testing only (Philip, 2026-11-06): a new marketing version every
+# night is fine because no build from here goes to external testers. The
+# export marks each build testFlightInternalTestingOnly, so App Store Connect
+# refuses to add it to an external group, send it to Beta App Review or submit
+# it to the App Store; the internal-testers job then adds it to the internal
+# groups. A dispatch with internal_only=false is the only way around that.
 
 on:
   schedule:
@@ -58,6 +65,11 @@ on:
         type: boolean
         required: false
         default: false
+      internal_only:
+        description: Internal TestFlight testing only (never external testers or the App Store). Scheduled runs always are.
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: read
@@ -241,9 +253,16 @@ jobs:
             | tee "$RUNNER_TEMP/archive.log" | grep -E '^(\*\*|error:|warning: .*[Ss]ign)' || true
           test -d "$RUNNER_TEMP/NekkoNative.xcarchive" || { tail -80 "$RUNNER_TEMP/archive.log"; exit 1; }
 
+      # testFlightInternalTestingOnly makes App Store Connect itself refuse to
+      # put the build in an external group, send it to Beta App Review or submit
+      # it to the App Store (Philip, 2026-11-06: nightlies are for internal
+      # testers only). Only a dispatch with internal_only=false leaves it off.
       - name: Export and upload to App Store Connect
+        env:
+          INTERNAL_ONLY: ${{ github.event_name != 'workflow_dispatch' || inputs.internal_only }}
         run: |
           set -o pipefail
+          if [ "$INTERNAL_ONLY" = true ]; then internal='<true/>'; else internal='<false/>'; fi
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -255,6 +274,7 @@ jobs:
             <key>signingStyle</key><string>automatic</string>
             <key>manageAppVersionAndBuildNumber</key><false/>
             <key>uploadSymbols</key><true/>
+            <key>testFlightInternalTestingOnly</key>${internal}
           </dict>
           </plist>
           EOF
@@ -279,6 +299,27 @@ jobs:
             echo "- Version $VERSION, build $BUILD_NUMBER, commit \`${GITHUB_SHA::7}\`"
             echo "- Team ${TEAM_ID:-unknown}; bundle id dev.nekkolabs.nekkoagent"
             [ -n "$NOTES" ] && echo "- What to test: $(printf '%s\n' "$NOTES" | head -n1)"
-            echo "- After processing, add the build to a TestFlight group in App Store Connect."
+            echo "- Internal TestFlight testing only: the internal-testers job adds it to the internal groups once Apple has processed it."
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f "${API_KEY_PATH:-}"
+
+  # After Apple's processing (usually 5-30 minutes), add the build to every
+  # internal TestFlight group that does not already get every build. Never an
+  # external group, never Beta App Review (scripts/testflight-internal.mjs
+  # cannot make either request). Waiting on a Linux runner keeps the Mac free.
+  internal-testers:
+    needs: [version, upload]
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v7
+      - name: Add the build to the internal TestFlight groups
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          VERSION: ${{ needs.version.outputs.version }}
+          BUILD_NUMBER: ${{ needs.version.outputs.code }}
+        run: |
+          node scripts/testflight-internal.mjs --bundle-id dev.nekkolabs.nekkoagent \
+            --version "$VERSION" --build "$BUILD_NUMBER" --wait-minutes 45

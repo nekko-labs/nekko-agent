@@ -5,7 +5,7 @@ area: product
 
 # Version numbers (2026-11-06)
 
-`[implemented 2026-11-06 (#1886); script unit-tested, including the tag push against a local remote; workflows linted; not yet seen in a real nightly or release run]`
+`[implemented 2026-11-06 (#1886); scripts unit-tested, including the tag push against a local remote; workflows linted; not yet seen in a real nightly, release or App Store Connect run]`
 
 **User intent.** Every build of Nekko Agent, on every device, says which version it is in one format, `MAJOR.MINOR.BUILD` (capacity `x.xxx.xxxx`). Nightly builds count up on their own; MAJOR and MINOR move only when a person decides, with a GitHub tag release. Why each choice: [decision 0055](../../docs/decisions/0055-versions-are-major-minor-and-a-per-platform-nightly-build.md). How to cut a release: [releasing](../../docs/runbooks/releasing.md).
 
@@ -26,6 +26,8 @@ After a `v0.9` tag: desktop 0.9.0 is the release, and the nightlies are 0.9.1, 0
 - Desktop's BUILD stays above any release in the line, so a nightly never carries a released number. A good desktop nightly can be released by tagging its commit with its version.
 - Desktop and Android give a commit that already has a version the same one again (a re-run, a night with no new commits). iOS never does, because App Store Connect refuses a repeated build number.
 - A PR build, or a run started by hand off `main`, keeps the checked-in version (desktop 0.8.2, iOS 0.2.0, Android 0.1.0) and counts nothing. An iOS upload started by hand from a branch does count, since it reaches TestFlight.
+
+**iOS nightlies are for internal testers only** (Philip, 2026-11-06). Every iOS nightly has its own marketing version, which would need Beta App Review per build for external testers, so none goes to them. Each upload is marked internal testing only (`testFlightInternalTestingOnly`), so App Store Connect refuses to add it to an external group, send it to Beta App Review or submit it to the App Store. After Apple's processing, the workflow adds it to every internal TestFlight group that does not already receive every build. Only an upload started by hand with `internal_only` off can go further.
 
 **Store code.** `MAJOR*10000000 + MINOR*10000 + BUILD`: always increasing, under Google Play's 2100000000 cap up to MAJOR 209, and above every build uploaded before (TestFlight reached 179).
 
