@@ -1,10 +1,12 @@
 //! Where this device's secrets live: Nekko Cloud's token and keys, linked
 //! computers' and CI runners' keys, provider API keys and sign-in tokens.
 //!
-//! macOS and Windows use the OS keystore (Keychain, Credential Manager), one
-//! item per secret under a service name scoped to the data directory, so a
-//! dev profile and the installed app never share keys. Elsewhere a 0600 JSON
-//! file in the data directory.
+//! macOS uses one shared Keychain item per data profile, loaded once per
+//! daemon lifetime. Windows uses one Credential Manager item per secret.
+//! Profiles never share keys. Elsewhere a 0600 JSON file in the data directory.
+
+#[cfg(any(target_os = "macos", test))]
+mod consolidated;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -32,7 +34,11 @@ pub fn scoped_vault(dir: &Path, name: &str, file: PathBuf) -> Box<dyn Vault> {
 /// The OS keystore's vault for one part of the app, or `None` where there is
 /// no keystore (the caller keeps its 0600 file then).
 pub fn keystore(dir: &Path, name: &str) -> Option<Box<dyn Vault>> {
-    #[cfg(any(target_os = "macos", windows))]
+    #[cfg(target_os = "macos")]
+    {
+        return Some(consolidated::vault(dir, name));
+    }
+    #[cfg(windows)]
     {
         return Some(Box::new(KeychainVault { service: service(dir, name) }));
     }
