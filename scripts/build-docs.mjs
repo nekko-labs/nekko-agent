@@ -21,6 +21,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { basename, dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
+import { writeContributors } from './build-contributors.mjs';
 
 function stripHtmlTags(input) {
   let prev;
@@ -447,5 +448,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     write(files);
     console.log(`wrote ${files.size} files to apps/website`);
     console.log(await writeRelease());
+    console.log(await writeContributors(site));
   }
 }

@@ -39,6 +39,22 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Follow-up slider and text toolbar (#1760, 2026-11-05)
+
+Area: renderer. Result: baseline cold-paint gate failure reproduced; no performance win or zero-regression claim.
+Conditions: same Linux runner, AMD EPYC 7763 (4 threads), Chrome/156.0.8078.79, Node 22.23.4, 1440x1000, scripted local model, 33 cold switches per run. Exact base `42b12519687867ac51608aec0b9bb5e6a44724e6`, queue snapshot `b5eb5a103700771b36be2ad31f224fea5ae3cc35`. Same unchanged latency harness and release daemon (SHA256 `9953ec90d7b3de254f47c4c2a69d1ef33b901668ff4da1dacf6e882254049d50`), clean source snapshots, fresh isolated profiles. Order base/head/head/base, one full unprofiled latency attempt per snapshot, not `--quick`.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-paint p95 | 40.0 / 45.3 ms | 44.9 / 42.8 ms |
+| Cold-chat first-paint p50 | 30.6 / 33.5 ms | 33.7 / 32.7 ms |
+
+Both unchanged-base runs fail the same 33 ms gate; both head p95s fall within the observed base range. This establishes a baseline failure on this runner, not proof that the UI change has zero effect. Original queue cold-paint p95 attempts were 41.8 / 40.3 / 40.1 ms; all other measured speed/memory rows passed. Automatic streaming-frame diagnostics did not measure the failing cold-paint metric.
+
+Separate timeline-instrumented base/head runs measured cold-paint p95 48.4 / 46.6 ms. Renderer-main cold-switch phase totals (nested events overlap, not per-interaction causal attribution): RunTask 6551.263 / 6460.261 ms, UpdateLayoutTree 723.449 / 706.784 ms, Layout 187.409 / 185.191 ms, Paint 2174.534 / 2167.673 ms, Layerize 1209.540 / 1249.811 ms. Instrumentation has overhead; these are not gate measurements or a performance improvement. Both cold-switch traces and source provenance were inspected. Baseline repair remains tracked in [#712](https://github.com/nekko-labs/nekko-agent/issues/712); budgets and protections are unchanged. Two matched base failures support one evidence-backed requeue, not repeated retries if it recurs.
+
+Source: [matched reports, samples, provenance and cold-switch timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/41956243176), [original queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/41954035733). Diagnostic attempt 1 stopped before measurement due to a crates.io TLS EOF; one network retry produced the complete artifact. Temporary `ci/1760-cold-paint` workflow is diagnostic only and must never merge.
+
 ## Zone drag and composer actions (#1703, 2026-11-04)
 
 Area: renderer. Result: regression under investigation; no budget changes.
@@ -112,6 +128,31 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-11
+
+### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, real renderer entry against a stub bridge in a hidden Electron window, warm reload, 3 runs each of `main` and the PR. Simulated delays: providers 10ms, model list 1500ms, transcript 150ms, 1,500-message chat. Reduced-motion path. Times are from the new page's first script.
+
+| Metric | Before | After |
+|---|---|---|
+| Overlay gone | 589, 652, 427ms | 604, 650, 647ms |
+| Chat on screen | 323, 368, 361ms | 320, 447, 367ms |
+| Samples showing a wrong screen | 7, 6, 7 | 0, 0, 0 |
+
+Why: the overlay now waits for the provider list and transcripts, but not the model list, a live provider call once its catalog is 5 minutes old. An earlier version of the PR did wait for it and took 1943ms in one run with the same delays. Source: this PR.
+
+### #1833 iPhone: cat from the first frame, straight to the zoom after Face ID (2026-11-05)
+Area: renderer
+Result: improvement
+Conditions: iPhone 17 Pro simulator, iOS 27.0, Xcode 27.2, Debug build signed ad hoc, app lock on, simulated Face ID match. Screen recordings via `simctl io recordVideo`, read frame by frame at 1/30 s: from the last frame showing the Face ID sheet to the first frame with no lavender left on screen. Two cold launches per build (fresh install, then relaunch without reinstall).
+
+| Metric | Before | After |
+|---|---|---|
+| Face ID sheet gone to app fully on screen, fresh install | 1.97 s | 0.77 s |
+| Face ID sheet gone to app fully on screen, relaunch | 1.97 s | 0.90 s |
+
+Why: the launch animation no longer builds the cat up from pixels (1.25 s) before the 0.525 s zoom; the cat is already on the launch screen and lock cover, so the zoom starts at once. Simulator Debug timing, not a device; app startup before the Face ID prompt (about 2 s here) did not change.
 
 ### #1663 / #1686 Empty-agent wave: per-frame swell, then per-column colour (2026-11-04)
 Area: renderer

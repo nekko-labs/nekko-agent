@@ -152,6 +152,44 @@ describe('a daemon that never comes up', () => {
     const final = engine.stop(); next.emit('exit', 0, null); await final;
   });
 
+  it('holds the ready timeout while nekkod waits on a Keychain dialog, then starts it over', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess({ ...options, readyTimeoutMs: 1000 });
+    engine.start();
+    let settled = false;
+    const call = engine.endpoint().finally(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(500);
+    first.stdout.write('NEKKOD_WAITING {"on":"keychain"}\n');
+    // Minutes reading the dialog: no kill, and the waiting call is still waiting.
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(first.kill).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+    first.stdout.write('NEKKOD_WAITING {"on":null}\n');
+    // The full timeout again from the answer, not what was left before it.
+    await vi.advanceTimersByTimeAsync(999);
+    expect(first.kill).not.toHaveBeenCalled();
+    first.stdout.write('NEKKOD_READY {"port":7171}\n');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(first.kill).not.toHaveBeenCalled();
+    expect((await call).url).toBe('http://127.0.0.1:7171');
+    expect(mocked.spawn).toHaveBeenCalledTimes(1);
+    const final = engine.stop(); first.emit('exit', 0, null); await final;
+  });
+
+  it('still kills a daemon wedged after the Keychain answered', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess({ ...options, readyTimeoutMs: 1000 });
+    engine.start();
+    first.stdout.write('NEKKOD_WAITING {"on":"keychain"}\n');
+    await vi.advanceTimersByTimeAsync(10_000);
+    first.stdout.write('NEKKOD_WAITING {"on":null}\n');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(first.kill).toHaveBeenCalledWith('SIGTERM');
+    const final = engine.stop(); first.emit('exit', null, 'SIGTERM'); await final;
+  });
+
   it('says another engine holds the data folder instead of restarting into it', async () => {
     vi.useFakeTimers();
     const first = child(); mocked.spawn.mockReturnValue(first);

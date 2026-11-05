@@ -69,21 +69,9 @@ describe('sidebarWorkspaces', () => {
 });
 
 describe('subagentRows', () => {
-  const kids = [chat('working'), chat('finished')];
-  const rows = (busy: string[], selected?: string) =>
-    subagentRows(kids, (id) => busy.includes(id), 'parent', selected).map((s) => s.id);
-
-  it('keeps a working sub-agent under its card whatever else is going on', () => {
-    expect(rows(['working'])).toEqual(['working']);
-  });
-
-  it('keeps finished sub-agents while their chat is working or open', () => {
-    expect(rows(['parent'])).toEqual(['working', 'finished']);
-    expect(rows([], 'parent')).toEqual(['working', 'finished']);
-    expect(rows([], 'finished')).toEqual(['working', 'finished']);
-  });
-
-  it('folds finished sub-agents away once their chat is neither', () => {
-    expect(rows([], 'something-else')).toEqual([]);
+  it('keeps all children listed regardless of focus or activity', () => {
+    const kids = [chat('working'), chat('finished')];
+    expect(subagentRows(kids)).toEqual(kids);
+    expect(subagentRows([])).toEqual([]);
   });
 });
