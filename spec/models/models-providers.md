@@ -70,7 +70,7 @@ Acceptance: an older `settings.json` with keys reads back with every key, and th
 
 ### Starred models retain their provider rows
 
-Implemented: favorites remain in their original provider group as well as the pinned Starred, Recent or Default shortcut. Starring never removes a provider catalog entry. Both copies select the same provider/model and share favorite state; source and text filters still apply. Non-favorite pinned rows retain existing deduplication. Verified with renderer tests and an isolated Electron fixture, without real provider calls or credentials.
+Implemented: favorites remain in their original provider group as well as the pinned Starred, Recent or Default shortcut. Starring never removes a provider catalog entry. Both copies select the same provider/model and share favorite state; source and text filters still apply. Non-favorite pinned rows retain existing deduplication. The default model has no pinned copy since #1687: it shows once, highlighted in its own provider group. Verified with renderer tests and an isolated Electron fixture, without real provider calls or credentials.
 
 ## Consolidated macOS Keychain access (issue #1749)
 

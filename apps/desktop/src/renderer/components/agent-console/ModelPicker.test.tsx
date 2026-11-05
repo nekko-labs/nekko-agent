@@ -168,9 +168,11 @@ describe('account switcher', () => {
     useStore.setState({ settings: { ...prev, favoriteModels: ['p::m'], defaultProviderId: pin === 'default' ? 'p' : undefined, defaultModelId: pin === 'default' ? 'm' : undefined } as NonNullable<typeof prev> });
     try {
       const html = renderToStaticMarkup(<ModelPicker expanded open providers={[{ id: 'p', kind: 'openai', label: 'Provider', enabled: true, baseUrl: '' }]} providerId='p' modelId='m' models={[{ id: 'm', providerId: 'p', name: 'Favorite' }]} recent={pin === 'recent' ? ['p::m'] : []} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-      expect(html.match(/role="option"/g)).toHaveLength(2);
+      // The default is shown once, highlighted in its own provider group (#1687), so it has no pinned copy.
+      const copies = pin === 'default' ? 1 : 2;
+      expect(html.match(/role="option"/g)).toHaveLength(copies);
       expect(html).toContain('data-provider-heading="true">Provider');
-      expect(html.match(/data-model-name="true">Favorite</g)).toHaveLength(2);
+      expect(html.match(/data-model-name="true">Favorite</g)).toHaveLength(copies);
     } finally { useStore.setState({ settings: prev }); }
   });
 });
