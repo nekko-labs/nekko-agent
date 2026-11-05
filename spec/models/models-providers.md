@@ -8,7 +8,7 @@ split-from: SPEC.md (2026-10-22)
 
 ## Provider-reported effort and grouped picker (#1687)
 
-Implemented in the working change, with shared/provider/daemon regression tests and hidden Electron interaction checks. Visual inspection is still blocked by screenshot-tool errors; authenticated provider inference and packaged builds remain unverified.
+Implemented in the working change, with shared/provider/daemon regression tests and hidden Electron interaction checks. Visual inspection remains unverified; authenticated provider inference and packaged builds remain unverified.
 
 This supersedes the historical inferred effort ladders below. ChatGPT reads `supported_reasoning_levels` and `default_reasoning_level` from its live catalog; Anthropic reads individual support flags under `capabilities.effort`. Exact strings and descriptions are preserved, including new advertised levels without a client release. `normal` remains only a compatibility sentinel and is not a slider stop. Unknown metadata does not imply support: the desktop disables the control rather than guessing. API support is not universal; OpenAI/OpenRouter/local fallback catalogs and Claude Code currently provide no verified effort metadata here. Claude Code's harness does not forward an effort option.
 

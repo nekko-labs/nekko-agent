@@ -5,6 +5,8 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], assertions: {}, errors: [] };
+const assert = require('node:assert/strict');
+const before = !!process.env.NEKKO_TEST_REVISION;
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
@@ -17,6 +19,7 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 60 && !(await run('!!window.composerFixture && !!document.querySelector("[data-model-chip-name]")')); i++) await sleep(200);
     await run("localStorage.setItem('nekko.chatMode','simple')"); await win.reload(); await sleep(1500); await run("document.querySelector('[contenteditable=plaintext-only]').focus()"); await win.webContents.insertText("Make this better and fix everything"); await sleep(500);
+    if (!before) assert.equal(await run('document.querySelectorAll("[data-prompt-suggestions]").length'), 0, 'Simple hides prompt suggestions');
     await shot('simple');
     await run('document.querySelector("button[aria-haspopup=listbox]").click()'); await sleep(600);
     await shot('models');
@@ -69,10 +72,23 @@ app.whenReady().then(async () => {
       }
       await run('document.querySelector(".effort-slider button").click()');
     }
-    await run("localStorage.setItem('nekko.chatMode','expert')"); await win.reload(); await sleep(1500); await run("document.querySelector('[contenteditable=plaintext-only]').focus()"); await win.webContents.insertText("Make this better and fix everything"); await sleep(500); await shot('expert');
+    await run("localStorage.setItem('nekko.chatMode','expert')"); await win.reload(); await sleep(1500); await run("document.querySelector('[contenteditable=plaintext-only]').focus()"); await win.webContents.insertText("Make this better and fix everything"); await sleep(500);
+    if (!before) {
+      assert.equal(await run('document.querySelectorAll("[data-prompt-suggestions]").length'), 1, 'one suggestions control in Detailed');
+      assert.equal(await run('!!document.querySelector("[data-composer-suggestions] [data-prompt-suggestions]")'), true, 'suggestions stay in their separate row');
+    }
+    await shot('expert');
     win.setContentSize(420, 800); await sleep(250); await shot('narrow');
     await run('document.querySelector("button[aria-haspopup=listbox]").click()'); await sleep(250); await shot('narrow-models');
     report.assertions.viewportOverflow = await run('document.documentElement.scrollWidth > innerWidth');
+    assert.equal(report.assertions.viewportOverflow, false);
+    if (!before) {
+      assert.equal(report.assertions.columns.length, 2);
+      assert.ok(report.assertions.columns.every(column => column.scroll > column.height));
+      assert.equal(report.assertions.defaultCount, 1);
+      assert.deepEqual(report.assertions.scroll, [200, 0]);
+      assert.equal(report.assertions.savedEffort, 'ultra');
+    }
   } catch (e) { report.errors.push(String(e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
