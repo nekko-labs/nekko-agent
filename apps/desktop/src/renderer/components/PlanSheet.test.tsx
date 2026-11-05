@@ -17,6 +17,27 @@ const render = (agentPlan: PlanStep[], prs: PrInfo[] = []) => renderToStaticMark
 const chips = (html: string, kind: string) => html.match(new RegExp(`data-plan-chip="${kind}"`, 'g'))?.length ?? 0;
 afterEach(() => { vi.restoreAllMocks(); linked.links = null; });
 
+describe('working and paused marks', () => {
+  const active = { id: 'work', title: 'Working step', status: 'active', createdAt: now, updatedAt: now } as PlanStep;
+  it('uses an aria-hidden SMIL ripple for working active steps', () => {
+    const html = render([active]);
+    expect(html).toContain('aria-label="Working"');
+    expect(html).toContain('class="plan-working" aria-hidden="true"');
+    expect(html).toContain('attributeName="r"');
+    expect(html).toContain('repeatCount="indefinite"');
+    expect(html).toContain('class="plan-working-still"');
+    expect(html).not.toContain('M8 5v14M16 5v14');
+  });
+  it('keeps pause bars instead of a ripple for interrupted inactive runs', () => {
+    const session = { agentPlan: [active], messages: [{ id: 'reply', role: 'assistant', content: 'Partial reply', interrupted: true, createdAt: now }] } as unknown as Session;
+    const html = renderToStaticMarkup(<PlanSheet sessionId="s" session={session} streaming={false} prs={[]} initiallyOpen />);
+    expect(html).toContain('aria-label="Paused"');
+    expect(html).toContain('M8 5v14M16 5v14');
+    expect(html).not.toContain('plan-working');
+    expect(html).not.toContain('<animate');
+  });
+});
+
 describe('verification chips', () => {
   it('shows only explicit reports, with device and detail, never a done step on its own', () => {
     const html = render([step('inspected', 'passed'), step('phone', 'blocked', { device: 'iPhone', detail: 'Waiting for pairing' }), { id: 'generic', title: 'generic', status: 'done', createdAt: now, updatedAt: now }]);

@@ -22,16 +22,6 @@
   color-scheme: light;
   --topbar-bg: rgba(255, 255, 255, 0.9);
 }
-/* colourful mode (the default): a lavender top bar, pale lilac side columns
-   and a white column for the article, so the colour frames the reading
-   rather than sitting under it */
-:root[data-theme='colour'] {
-  --bg: #fbf6f8; --bg-2: #ffffff; --bg-3: #f3e8ee;
-  --line: rgba(169, 101, 156, 0.14); --line-2: rgba(169, 101, 156, 0.24);
-  --muted: #8a4a7f; --accent: #a9659c; --accent-2: #8a4a7f;
-  --code-bg: #fbf6f8; --topbar-bg: rgba(133, 79, 108, 0.94);
-}
-:root[data-theme='colour'] main { background: var(--bg-2); border-inline: 1px solid var(--line); }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-padding-top: calc(var(--top) + 20px); -webkit-text-size-adjust: 100%; }
@@ -311,4 +301,3 @@ main { min-width: 0; padding: 40px 56px 96px; }
 @media (prefers-reduced-motion: reduce) {
   .sidebar, body.nav-open .sidebar { transition: none; }
 }
-:root[data-theme='colour'] .brand img { filter: brightness(0) invert(1); }

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import type { ChatMessage, PlanStep, PlanStepKind, PrInfo, Session } from '@nekko-agent/shared';
+import { planStepKind, type ChatMessage, type PlanStep, type PlanStepKind, type PrInfo, type Session } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
@@ -11,11 +11,12 @@ import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
+import { PlanWorking } from './PlanWorking.js';
 
 function StepMark({ status, paused }: { status: PlanStep['status']; paused: boolean }) {
   const label = status === 'active' ? (paused ? 'Paused' : 'Working') : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
   return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={label} title={label}>
-    {status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
+    {status === 'active' && !paused ? <PlanWorking /> : status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
       <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: status === 'active' ? 'var(--accent)' : 'var(--ink-faint)' }}>
         {status === 'active' ? (paused ? <path d="M8 5v14M16 5v14" /> : <path d="M12 3v3m6.36-.36-2.12 2.12M21 12h-3m.36 6.36-2.12-2.12M12 21v-3m-6.36.36 2.12-2.12M3 12h3m-.36-6.36 2.12 2.12" />) : <>
           <circle cx="12" cy="12" r="8" />
@@ -111,7 +112,7 @@ function CiChips({ info }: { info: PrInfo }) {
   </>;
 }
 
-const KIND_LABEL: Record<PlanStepKind, string> = { explore: 'Explore', build: 'Build', verify: 'Verify', ship: 'Ship' };
+const KIND_LABEL: Record<PlanStepKind, string> = { build: 'Build', verify: 'Verify', ship: 'Ship' };
 
 /** The step's place in the loop, a small caps word before its title. */
 /**
@@ -127,7 +128,9 @@ function PlanCaret({ direction, label }: { direction: 'up' | 'down'; label: stri
   </span>;
 }
 
-function Kind({ kind, current }: { kind?: PlanStepKind; current?: boolean }) {
+function Kind({ kind: saved, current }: { kind?: PlanStepKind; current?: boolean }) {
+  // A plan saved before looking became part of Build still says `explore`.
+  const kind = planStepKind(saved);
   if (!kind) return null;
   return <span className="plan-sheet-kind" data-plan-kind={kind} data-current={current || undefined}>{KIND_LABEL[kind]}</span>;
 }

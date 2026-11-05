@@ -9,7 +9,9 @@ import Foundation
 /// order (newest first for the rest), with previews, completed chats and every
 /// project folder shown.
 public struct ChatListView: Codable, Equatable, Sendable {
-    public enum GroupBy: String, Codable, CaseIterable, Sendable { case project, status, date, none }
+    /// `computer`: one group per place a chat runs (each paired computer, and this
+    /// iPhone when it runs chats itself), as the desktop's Group by → Computer.
+    public enum GroupBy: String, Codable, CaseIterable, Sendable { case project, status, date, computer, none }
     /// No "Date created" as on the desktop: the phone's summaries carry only the last update.
     public enum SortBy: String, Codable, CaseIterable, Sendable { case manual, updated, name }
 
@@ -23,6 +25,10 @@ public struct ChatListView: Codable, Equatable, Sendable {
     public var showCompleted = true
     /// Project folders with no chats in them.
     public var showEmptyGroups = true
+    /// With chats from more than one place: each row names where it runs.
+    public var showComputer = true
+    /// ...with that computer's icon, when it has one.
+    public var showComputerIcons = true
 
     public init() {}
 
@@ -49,7 +55,9 @@ public struct ChatListView: Codable, Equatable, Sendable {
 
     public var encoded: Data? { try? JSONEncoder().encode(self) }
 
-    private enum CodingKeys: String, CodingKey { case groupBy, sortBy, ascending, showPreviews, showCompleted, showEmptyGroups }
+    private enum CodingKeys: String, CodingKey {
+        case groupBy, sortBy, ascending, showPreviews, showCompleted, showEmptyGroups, showComputer, showComputerIcons
+    }
 
     /// A saved view keeps every field that is still valid; the rest fall back to the defaults.
     public init(from decoder: Decoder) throws {
@@ -61,7 +69,19 @@ public struct ChatListView: Codable, Equatable, Sendable {
         showPreviews = (try? c.decodeIfPresent(Bool.self, forKey: .showPreviews)) ?? d.showPreviews
         showCompleted = (try? c.decodeIfPresent(Bool.self, forKey: .showCompleted)) ?? d.showCompleted
         showEmptyGroups = (try? c.decodeIfPresent(Bool.self, forKey: .showEmptyGroups)) ?? d.showEmptyGroups
+        showComputer = (try? c.decodeIfPresent(Bool.self, forKey: .showComputer)) ?? d.showComputer
+        showComputerIcons = (try? c.decodeIfPresent(Bool.self, forKey: .showComputerIcons)) ?? d.showComputerIcons
     }
+}
+
+/// A place chats run, for Group by → Computer: a paired computer, or this iPhone.
+public struct ChatSource: Equatable, Sendable {
+    public let id: String
+    public let name: String
+    public init(id: String, name: String) { self.id = id; self.name = name }
+
+    /// The group's key: `computer:<id>`.
+    public var groupKey: String { "computer:\(id)" }
 }
 
 /// One group of the chat list as the view arranges it.
@@ -102,8 +122,13 @@ public enum ChatSections {
     /// The list's groups for `view`. Project groups follow `groupOrder` (folder
     /// ids and `ChatGroup.general`, as dragged on the phone); folders it doesn't
     /// name keep the computer's order after the ones it does.
+    ///
+    /// By computer, `sources` are the groups in order and `sourceOf` names the
+    /// one a chat runs on; a chat it can't place joins the first. Each group
+    /// keeps its own completed chats after its active ones, like a project's.
     public static func make(_ chats: [SessionSummary], folders: [WorkspaceFolder], view: ChatListView,
                             activity: [String: Activity], groupOrder: [String] = [],
+                            sources: [ChatSource] = [], sourceOf: (SessionSummary) -> String? = { _ in nil },
                             now: Int64, calendar: Calendar = .current) -> [ChatSection] {
         let sort = compare(view)
         let done: ([SessionSummary]) -> [SessionSummary] = { list in
@@ -125,10 +150,21 @@ public enum ChatSections {
             return order.compactMap { k in groups.first { $0.key == k } }
         }
 
+        if view.groupBy == .computer, let first = sources.first {
+            let known = Set(sources.map(\.id))
+            let bySource = Dictionary(grouping: chats) { s in sourceOf(s).flatMap { known.contains($0) ? $0 : nil } ?? first.id }
+            return sources.compactMap { src in
+                let all = bySource[src.id] ?? []
+                let s = section(src.groupKey, src.name, active: all.filter { !$0.archived }.sorted(by: sort), completed: done(all))
+                return s.chats.isEmpty && !view.showEmptyGroups ? nil : s
+            }
+        }
+
         let active = chats.filter { !$0.archived }.sorted(by: sort)
         let completedAll = done(chats)
         let completed = completedAll.isEmpty ? [] : [section(ChatSection.completedKey, "Completed", active: [], completed: completedAll)]
-        if view.groupBy == .none {
+        // By computer with no computer to name: one list.
+        if view.groupBy == .none || view.groupBy == .computer {
             return (active.isEmpty ? [] : [section("all", "All chats", active: active, completed: [])]) + completed
         }
         let defs = view.groupBy == .status ? statusGroups : dateGroups
@@ -222,4 +258,16 @@ public enum ChatGroupOrder {
         }
         return out
     }
+}
+
+/// One colour per place a chat runs: the desktop's `COMPUTER_COLORS`
+/// (packages/shared/src/computers.ts). None of them is a status colour, which
+/// mean working, warning, needs you and error.
+public enum ComputerColors {
+    public static let all: [UInt32] = [0x5b8def, 0xa57cf0, 0x2fb7b1, 0xe26fb4, 0x7f8cf5, 0x8aa0b8]
+    /// This iPhone, when it runs chats itself: the last colour, which no computer takes.
+    public static let phone: UInt32 = 0x8aa0b8
+
+    /// A paired computer's, by its place among the paired computers.
+    public static func computer(at index: Int) -> UInt32 { all[max(0, index) % (all.count - 1)] }
 }

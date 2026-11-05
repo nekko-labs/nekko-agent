@@ -223,8 +223,13 @@ export interface AppSettings {
    * agent asks the first time.
    */
   projectManagement?: { createIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean; includeContext?: boolean };
-  /** Settings > Pull requests. `linkIssue` is on unless false; includes as above. */
-  pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean };
+  /**
+   * Settings > Pull requests. `linkIssue` is on unless false; includes as above.
+   * `watchUntilMergeReady` (on unless false): when a turn ends, the host arms a
+   * PR watch on each open PR the chat opened, waking the chat to get it
+   * merge-ready (nekkod pr_autowatch.rs).
+   */
+  pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean; watchUntilMergeReady?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
   /** Optional sidebar shortcuts. Both remain available from Settings. */
@@ -253,6 +258,8 @@ export interface AppSettings {
   mascotEnabled: boolean;
   /** Draw the moving pixel-dot wave behind themes that have one (Lilac, Lavender, Experimental). On unless set to false. */
   backgroundAnimation?: boolean;
+  /** Move Nekko beside the Agent panel's live groups. On unless set to false; this setting decides, not the system's reduced-motion preference. */
+  agentActivityAnimation?: boolean;
   /** Desktop close button defaults to keeping work alive in the tray. */
   desktopCloseBehavior?: 'tray' | 'shutdown';
   trayCloseHintSeen?: boolean;

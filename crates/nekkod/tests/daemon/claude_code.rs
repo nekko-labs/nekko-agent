@@ -697,6 +697,7 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     let s = saved(&rig);
     let users = s["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").count();
     assert_eq!(users, 1, "a wake-up adds no user message");
+    until_turn_end_heard(&rig.events, "s_cc").await;
     let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
     assert_eq!(kinds(&events).iter().filter(|k| *k == "done").count(), 2, "{:?}", kinds(&events));
 

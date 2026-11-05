@@ -10,6 +10,8 @@ NEKKO_RUNNER_HOME="${NEKKO_RUNNER_HOME:-/Users/runner}"
 NEKKO_SEED_WAIT="${NEKKO_SEED_WAIT:-120}"
 NEKKO_LOGIN_WAIT="${NEKKO_LOGIN_WAIT:-300}"
 NEKKO_POLL="${NEKKO_POLL:-2}"
+NEKKO_DEV_DIR="${NEKKO_DEV_DIR:-/dev}"
+NEKKO_STATS_EVERY="${NEKKO_STATS_EVERY:-5}"
 MAX_SEED_BYTES=65536
 # sudo swaps the caller's PATH for its secure_path, which leaves out Homebrew. Jobs expect `brew`
 # on the PATH, as on GitHub's hosted Macs.
@@ -23,6 +25,42 @@ seed_copy=""
 
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
+# The raw disk nekkod attached for usage samples: the whole disk whose first block is its header.
+# Only root can write a raw disk, so the job cannot touch it.
+stats_disk() {
+  local d
+  for d in "$NEKKO_DEV_DIR"/disk[0-9]*; do
+    case "$d" in *s[0-9]*) continue ;; esac
+    if [ "$(dd if="$d" bs=512 count=1 2>/dev/null | head -c 11)" = NEKKOSTATS1 ]; then
+      echo "$d"
+      return
+    fi
+  done
+}
+
+# One sample over NEKKO_STATS_EVERY seconds: `<unix secs> <idle %> <used MB> <compressed MB>
+# <swapped-out MB so far>`. Used is wired + app + compressed memory; file cache is given back.
+sample() {
+  local idle
+  idle="$(top -l 2 -s "$NEKKO_STATS_EVERY" -n 0 | awk '/^CPU usage/ {v=$7} END {sub("%", "", v); print v}')"
+  [ -n "$idle" ] || return 0
+  vm_stat | awk -v t="$(date +%s)" -v idle="$idle" '
+    /page size of/ {ps = $8}
+    /^Pages wired down/ {w = $4}
+    /^Anonymous pages/ {a = $3}
+    /^Pages occupied by compressor/ {c = $5}
+    /^Swapouts/ {s = $2}
+    END {if (ps > 0) {mb = ps / 1048576; printf "%d %s %d %d %d\n", t, idle, (w + a + c) * mb, c * mb, s * mb}}'
+}
+
+# Appends a sample, then writes every sample so far after the header block; nekkod reads them
+# after the VM stops. A full disk only stops new samples from landing.
+stats_loop() {
+  while :; do
+    sample >> "$2"
+    dd if="$2" of="$1" bs=512 seek=1 conv=sync,notrunc 2>/dev/null
+  done
+}
 # Everything below, the runner's output included, also goes to the host's VM log through the
 # virtio console when the helper attached one. Only what this log already holds: never the seed.
 for console in /dev/cu.virtio*; do
@@ -96,8 +134,16 @@ until [ "$(stat -f %Su /dev/console 2>/dev/null)" = "$NEKKO_RUNNER_USER" ]; do
   sleep "$NEKKO_POLL"
 done
 
-# 5. Run one job as the runner user in its session. Provider-specific parts stay in this case.
+# 5. Run one job as the runner user in its session, sampling its usage. Provider-specific parts stay
+# in the case.
 uid="$(id -u "$NEKKO_RUNNER_USER")"
+stats_pid=""
+stats_dev="$(stats_disk)"
+if [ -n "$stats_dev" ]; then
+  stats_file="$(mktemp "${TMPDIR:-/tmp}/nekko-stats.XXXXXX")"
+  stats_loop "$stats_dev" "$stats_file" &
+  stats_pid=$!
+fi
 case "$name" in
   jit-config)
     jit="$(cat "$conf_dir/jit-config")"
@@ -117,5 +163,6 @@ case "$name" in
     ;;
 esac
 log "runner exited with $rc"
+if [ -n "$stats_pid" ]; then kill "$stats_pid" 2>/dev/null; fi
 
 # 6. The EXIT trap powers the guest off.

@@ -32,6 +32,32 @@ final class ThemeLanguageTests: XCTestCase {
         attach(app, "en-settings-spooky")
     }
 
+    /// The same harness runs over base and head without assuming either mode's display name.
+    func testSimpleModeLabelEvidence() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-splash", "NO",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", "light", "-expertMode", "NO"]
+        app.launch()
+        pair(app, pairButton: "Pair with your computer", pair: "Pair", notNow: "Not now")
+        openSettings(app, settings: "Settings")
+        let simpleMode = app.buttons["settings.simpleMode"]
+        for _ in 0..<6 {
+            if simpleMode.exists && simpleMode.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(simpleMode.waitForExistence(timeout: 5), "Settings offers Simple mode")
+        attach(app, "mode-label-settings")
+        simpleMode.tap()
+        let preview = app.segmentedControls["simpleMode.preview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5), "Settings opens Simple mode")
+        XCTAssertEqual(preview.buttons.count, 2, "both preview modes are present")
+        attach(app, "mode-label-simple-preview")
+        // Stable identifier and segment position, not Expert/Detailed text.
+        preview.buttons.element(boundBy: 1).tap()
+        XCTAssertTrue(preview.buttons.element(boundBy: 1).isSelected)
+        attach(app, "mode-label-full-preview")
+    }
+
     func testRunsInJapanese() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-splash", "NO",

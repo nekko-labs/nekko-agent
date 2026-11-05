@@ -116,4 +116,56 @@ final class ChatListLayoutTests: XCTestCase {
         XCTAssertEqual(ChatListView.parse(Data("nope".utf8)), .standard)
         XCTAssertEqual(ChatListView.parse(nil), .standard)
     }
+
+    func testGroupsByComputerWithEachOnesCompletedChats() throws {
+        let list = try chats("""
+        [{"id":"a1","title":"A1","updatedAt":5},
+         {"id":"a2","title":"A2","updatedAt":9},
+         {"id":"p1","title":"P1","updatedAt":7},
+         {"id":"b1","title":"B1","updatedAt":3,"archivedAt":100},
+         {"id":"x","title":"Lost","updatedAt":1}]
+        """)
+        var v = ChatListView.standard
+        v.groupBy = .computer
+        let sources = [ChatSource(id: "pc-a", name: "Studio"), ChatSource(id: "pc-b", name: "Laptop"),
+                       ChatSource(id: "this-iphone", name: "This iPhone")]
+        let owner = ["a1": "pc-a", "a2": "pc-a", "b1": "pc-b", "p1": "this-iphone"]
+        let s = ChatSections.make(list, folders: folders, view: v, activity: [:], sources: sources,
+                                  sourceOf: { owner[$0.id] }, now: now, calendar: utc)
+        XCTAssertEqual(s.map(\.key), ["computer:pc-a", "computer:pc-b", "computer:this-iphone"])
+        XCTAssertEqual(s.map(\.name), ["Studio", "Laptop", "This iPhone"])
+        XCTAssertEqual(s[0].chats.map(\.id), ["a2", "a1", "x"], "a chat no computer holds joins the first")
+        XCTAssertEqual(s[1].activeCount, 0)
+        XCTAssertEqual(s[1].doneCount, 1)
+        XCTAssertEqual(s[2].chats.map(\.id), ["p1"])
+        XCTAssertFalse(v.canReorderGroups)
+
+        v.showEmptyGroups = false
+        v.showCompleted = false
+        let hidden = ChatSections.make(list, folders: folders, view: v, activity: [:], sources: sources,
+                                       sourceOf: { owner[$0.id] }, now: now, calendar: utc)
+        XCTAssertEqual(hidden.map(\.name), ["Studio", "This iPhone"], "a computer with only completed chats drops out")
+    }
+
+    func testByComputerWithNoComputerIsOneList() throws {
+        let list = try chats(#"[{"id":"a","title":"A","updatedAt":5},{"id":"b","title":"B","updatedAt":6}]"#)
+        var v = ChatListView.standard
+        v.groupBy = .computer
+        let s = ChatSections.make(list, folders: [], view: v, activity: [:], now: now)
+        XCTAssertEqual(s.map(\.name), ["All chats"])
+        XCTAssertEqual(s[0].chats.map(\.id), ["b", "a"])
+    }
+
+    func testComputerChoicesSurviveASavedView() throws {
+        var v = ChatListView.standard
+        v.groupBy = .computer
+        v.showComputerIcons = false
+        XCTAssertEqual(ChatListView.parse(v.encoded), v)
+        let old = ChatListView.parse(Data(#"{"groupBy":"status"}"#.utf8))
+        XCTAssertTrue(old.showComputer, "a view saved before the computer choices shows them")
+        XCTAssertTrue(old.showComputerIcons)
+        XCTAssertEqual(ComputerColors.computer(at: 0), 0x5b8def)
+        XCTAssertEqual(ComputerColors.computer(at: 5), 0x5b8def, "computers cycle through five; the sixth is this iPhone's")
+        XCTAssertFalse((0..<10).map(ComputerColors.computer(at:)).contains(ComputerColors.phone))
+    }
 }

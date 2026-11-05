@@ -254,5 +254,5 @@ A comment on #1038 with:
 the induced ones; `vms/` empty after every job and every wake; every probe and VPN check
 refused; no complaint from the Mac's owner about the Mac slowing down in Balanced.
 
-If it holds, tick T214 in `TASKS.md`, and turn the `Pending` lines of T211 (VPN), T212 and T213
-into done lines citing the comment.
+If it holds, say so on the pilot's GitHub issue, citing the comment, and close it. (T211 to T214 are in
+[the task archive](../history/tasks-archive.md), which is frozen.)

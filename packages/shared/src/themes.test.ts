@@ -17,8 +17,8 @@ describe('currentPresetAccent', () => {
 
 describe('resolveThemePreset', () => {
   it('resolves System to Nekko Dark in dark mode and Lilac in light mode', () => {
-    expect(resolveThemePreset('system', true)).toBe('nekko-dark');
-    expect(resolveThemePreset('system', false)).toBe('lilac');
+    expect(resolveThemePreset('system', true)).toBe('x-plum-dark');
+    expect(resolveThemePreset('system', false)).toBe('x-plum-white');
   });
   it('leaves every other preset as it is', () => {
     for (const id of ['light', 'dark', 'nebula', 'lilac', 'nekko-dark']) {
