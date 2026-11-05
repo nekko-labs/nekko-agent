@@ -10,6 +10,7 @@ import { isRecoveryNotice, RecoveryNotice } from './RecoveryNotice.js';
 import { isWatchWake } from '../../agentWatches.js';
 import { WatchWakeRow } from './WatchRow.js';
 import { DoneRow } from './TurnStatsLine.js';
+import { ClaudeCodeSpeaker, useClaudeCodeReply } from './ClaudeCodeResponse.js';
 
 /**
  * One message. Memoized: a transcript row re-renders only when its message (or
@@ -53,6 +54,7 @@ export const MessageBubble = memo(function MessageBubble({
   // out of the window and back.
   const [editing, setEditing] = useRowState('editing', false);
   const isUser = message.role === 'user';
+  const claudeCode = useClaudeCodeReply(message.turnStats);
   const displayText = isUser && message.skill ? message.skill.input : message.content;
   const [draft, setDraft] = useRowState('edit-draft', displayText);
   if (message.role === 'tool') return null;
@@ -101,6 +103,7 @@ export const MessageBubble = memo(function MessageBubble({
       parts.push(
         <div key="text" className={`group ${entering ? 'fade-in ' : ''}flex justify-start`}>
           <div className="msg-ai" data-voice={voice}>
+            {!entering && claudeCode && <ClaudeCodeSpeaker />}
             {voice === 'working' && <ThoughtIcon className="msg-voice-icon" />}
             <div data-chat-search-text><Markdown basePath={basePath} text={message.content} topics askTail={voice === 'reply' || voice === 'attention'} /></div>
             {/* A note between steps is not the end of anything. */}
@@ -129,6 +132,7 @@ export const MessageBubble = memo(function MessageBubble({
   return (
     <div className={`group ${entering ? 'fade-in ' : ''}flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={isUser ? 'msg-user' : 'msg-ai'}>
+        {!isUser && !entering && claudeCode && <ClaudeCodeSpeaker />}
         {isUser && message.skill && (
           <span className="skill-pill mb-2 inline-flex text-2xs">
             <span className="skill-pill-slash">/</span>{message.skill.name}

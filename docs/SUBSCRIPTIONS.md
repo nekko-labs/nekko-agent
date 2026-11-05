@@ -13,6 +13,8 @@ To use Claude in Nekko Agent, choose **Add provider → Claude**. One table comp
 
 Below the table, **How Nekko works with Claude** draws the option you picked: with API, everything runs inside Nekko on your computer and only the API call goes out; with Subscription, Nekko hands each turn to Claude Code, which runs beside it and calls Claude on your plan. Claude subscription models appear as the Opus, Sonnet and Haiku family aliases. Claude Code chooses the exact version; after a turn, the selected model's picker row shows the version Claude Code reported.
 
+In a chat that runs on Claude Code, each finished reply starts with a left-aligned **Claude Code** speaker header and a circular **CC** avatar: the text below it is what your own Claude Code wrote, shown as it wrote it. This is separate from the Done and token-statistics footer. A reply from any other provider in the same chat (after you switch models, or one a local model answered) has no label. The desktop app and the Local Web UI show it; the iPhone and Android apps do not yet.
+
 When you pick Claude, Nekko first checks whether Claude Code is installed (it runs `claude --version` and `claude auth status`). If it isn't, **Install Claude Code** opens a terminal inside Nekko and runs Anthropic's own installer (`curl -fsSL https://claude.ai/install.sh | bash`, or `irm https://claude.ai/install.ps1 | iex` on Windows). If it isn't signed in, **Connect** opens Claude Code in that terminal so you can type `/login`. Once it's connected, the panel says so in green, with the account and plan it uses.
 
 ### If Anthropic has approved your use
