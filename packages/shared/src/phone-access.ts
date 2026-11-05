@@ -137,6 +137,7 @@ import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
  * phone-artifacts.ts and chat-links.ts.
  */
 export const PHONE_CHANNELS = [
+  'activity:state',
   'app:info',
   'app:quit',
   'artifact:read',
@@ -390,9 +391,17 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
  * Server's state and a chat's context totals, each a narrow projection.
  */
 export const PHONE_MONITOR_READ_CHANNELS: readonly string[] = ['context:preview', 'engine:status', 'gpu:stats', 'system:stats'];
+/**
+ * Whether someone is using a computer (2026-11-05), so New chat can start a
+ * local-model chat on a free one: only yes/no answers, never how long it has
+ * been idle, its battery or its temperatures.
+ */
+export const PHONE_ACTIVITY_READ_CHANNELS: readonly string[] = ['activity:state'];
+export const PHONE_ACTIVITY_VIEW = ['chatActive', 'headless', 'strain', 'userActive'] as const;
 export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_CHAT_READ_CHANNELS,
   ...PHONE_MONITOR_READ_CHANNELS,
+  ...PHONE_ACTIVITY_READ_CHANNELS,
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
@@ -1180,6 +1189,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return isObj(result) ? pick(result, ['id', 'title']) : null;
     case 'engine:settings':
       return pick(result, PHONE_MODEL_SERVER_VIEW);
+    case 'activity:state':
+      return pick(result, PHONE_ACTIVITY_VIEW);
     case 'tasks:list':
       return phoneTasksView(result);
     case 'workflows:list':
@@ -1367,6 +1378,8 @@ export async function callFromPhone(
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
   if (channel === 'system:stats' || channel === 'gpu:stats' || channel === 'engine:status') callArgs = [];
+  // The computer's own idle threshold: the phone never sets it.
+  if (channel === 'activity:state') callArgs = [];
   // A chat's own context only: the phone never attaches a path.
   if (channel === 'context:preview') callArgs = [args[0], []];
   if (channel === 'model:unload') callArgs = [args[0], args[1]];
@@ -1435,6 +1448,7 @@ export function phoneAccessPolicy() {
     optionSwitches: [...PHONE_OPTION_SWITCHES],
     engineKeys: [...PHONE_ENGINE_KEYS],
     modelServerView: [...PHONE_MODEL_SERVER_VIEW],
+    activityView: [...PHONE_ACTIVITY_VIEW],
     modelSettingChannels: [...PHONE_MODEL_SETTING_CHANNELS],
     presetPathKeys: [...PHONE_PRESET_PATH_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],

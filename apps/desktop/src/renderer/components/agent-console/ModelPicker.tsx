@@ -398,7 +398,7 @@ export function ModelPicker({
               </>
             )}
             {groups.map((g) => {
-              const remaining = q ? g.models : g.models.filter((m) => !pinnedKeys.has(`${g.provider.id}::${m.id}`));
+              const remaining = q ? g.models : g.models.filter((m) => (favSet.has(`${g.provider.id}::${m.id}`) || !pinnedKeys.has(`${g.provider.id}::${m.id}`)));
               if (!remaining.length) return null;
               // A local provider can serve models out of several folders; when
               // the rows say where they live, group them under that heading.

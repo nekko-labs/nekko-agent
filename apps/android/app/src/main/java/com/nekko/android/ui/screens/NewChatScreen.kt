@@ -87,6 +87,7 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.Session
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.nekko.android.ui.settings.stateName
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -311,7 +312,12 @@ fun NewChatScreen(
                     NCard {
                         Label(Icons.Filled.Computer, stringResource(R.string.chats_run_on))
                         Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.runOn"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            c.computers.forEach { pc -> Chip(pc.name, pc.id == c.activeId, pc.icon) { runOn(pc.id) } }
+                            c.computers.forEach { pc ->
+                                // Every paired computer stays connected: each says whether it can take the chat now.
+                                val label = if (pc.id == c.activeId || c.peers.isEmpty()) pc.name
+                                else stringResource(R.string.chats_run_on_state, pc.name, stringResource(stateName(c.connOf(pc.id))))
+                                Chip(label, pc.id == c.activeId, pc.icon) { runOn(pc.id) }
+                            }
                         }
                         Text(
                             stringResource(R.string.chats_run_on_note),

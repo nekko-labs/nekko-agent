@@ -130,6 +130,8 @@ export const IpcChannels = {
   /** The loaded local models, how many are replying, and what their processes hold: what shutting them down frees. */
   engineMemory: 'engine:memory',
   gpuStats: 'gpu:stats',
+  /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
+  activityState: 'activity:state',
   systemStats: 'system:stats',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
   monitorSummary: 'monitor:summary',

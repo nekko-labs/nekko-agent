@@ -1,3 +1,4 @@
+import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SystemStats, UsageSummary } from '@nekko-agent/shared';
 import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
@@ -71,6 +72,20 @@ export function MonitorsDock(props: MonitorsDockProps) {
   const background = useBackgroundState();
   const present = usePanelPresence(dock.show);
   const reorderDrag = useRef<MonitorKey | null>(null);
+  const pickup = useRef(monitorPickup()).current;
+  useEffect(() => {
+    window.addEventListener('pointermove', pickup.move);
+    window.addEventListener('pointerup', pickup.release);
+    window.addEventListener('pointercancel', pickup.release);
+    window.addEventListener('blur', pickup.reset);
+    return () => {
+      pickup.reset();
+      window.removeEventListener('pointermove', pickup.move);
+      window.removeEventListener('pointerup', pickup.release);
+      window.removeEventListener('pointercancel', pickup.release);
+      window.removeEventListener('blur', pickup.reset);
+    };
+  }, [pickup]);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const sideDock = dock.side === 'left' || dock.side === 'right';
   const reorder = (key: MonitorKey, target: MonitorKey) => {
@@ -278,8 +293,12 @@ export function MonitorsDock(props: MonitorsDockProps) {
           <header className="monitors-dock__monitor-header" draggable={sideDock && collapsing === null} tabIndex={sideDock ? 0 : undefined}
             aria-label={sideDock ? `${p.label} monitor header; use Alt+ArrowUp or Alt+ArrowDown to reorder` : undefined}
             title={sideDock ? 'Drag header to reorder; Alt+ArrowUp/Down moves this monitor' : undefined}
+            onPointerDown={(e) => {
+              pickup.reset();
+              if (sideDock && collapsing === null && e.button === 0 && !(e.target as Element).closest('button, a, input, select, textarea, [role="button"]')) pickup.arm(p.key, e);
+            }}
             onDragStart={(e) => {
-              if (!sideDock || collapsing !== null || (e.target as HTMLElement).closest('button')) { e.preventDefault(); return; }
+              if (!pickup.consume(p.key) || !sideDock || collapsing !== null || (e.target as HTMLElement).closest('button')) { e.preventDefault(); return; }
               reorderDrag.current = p.key;
               e.dataTransfer.effectAllowed = 'move';
               e.dataTransfer.setData('application/x-nekko-monitor', p.key);

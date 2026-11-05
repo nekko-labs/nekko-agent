@@ -284,16 +284,17 @@ async fn list(ctx: &Ctx, id: &str, fresh: bool) -> Result<Vec<nekko_agent::Model
     };
     let config = resolve(ctx, &saved).await?;
     let cacheable = matches!(config.get("kind").and_then(Value::as_str), Some("anthropic" | "chatgpt"));
-    let key = cacheable.then(|| catalog_key(&config));
-    if let Some(key) = key.filter(|_| !fresh)
+    let key = catalog_key(&config);
+    if cacheable
+        && !fresh
         && let Some(models) = catalog_cache().get(id, key)
     {
         return Ok(models);
     }
     let models = build(&config)?.list_models().await.map_err(|e| e.to_string())?;
-    if let Some(key) = key {
-        catalog_cache().put(id, key, &models);
-    }
+    // Keep every live listing as admission evidence, without changing which
+    // providers reuse their listing instead of querying their server.
+    catalog_cache().put(id, key, &models);
     Ok(models)
 }
 
@@ -312,9 +313,9 @@ fn catalog_key(config: &Value) -> u64 {
     h.finish()
 }
 
-/// The live catalogs of the cloud providers (Anthropic, ChatGPT), one per
-/// provider id. A shipped fallback list is never kept, so an outage is not
-/// remembered for minutes: the next caller asks the provider again.
+/// The last live catalog per provider id. Only Anthropic and ChatGPT reuse
+/// it as a fresh list; other providers are still queried normally. A shipped
+/// fallback is never kept, and a failed refresh is not served as a fresh hit.
 #[derive(Default)]
 struct CatalogCache(Mutex<std::collections::HashMap<String, CachedCatalog>>);
 
@@ -328,10 +329,25 @@ impl CatalogCache {
         (*k == key && at.elapsed() < CATALOG_TTL).then(|| models.clone())
     }
 
+    fn effort(&self, id: &str, key: u64, model_id: &str) -> Option<nekko_agent::ModelEffort> {
+        let map = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let (k, _, models) = map.get(id)?;
+        // TTL controls refreshing a picker, not discarding its last evidence
+        // during a turn. Never reuse evidence across credentials/endpoints.
+        if *k != key {
+            return None;
+        }
+        models.iter().find(|m| m.id == model_id)?.effort.clone()
+    }
+
     fn put(&self, id: &str, key: u64, models: &[nekko_agent::ModelInfo]) {
         let mut map = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if models.is_empty() || models.iter().any(|m| m.fallback) {
-            map.remove(id);
+            // An outage is not new capability evidence. Do not serve the old
+            // list as fresh, but keep its last live effort snapshot for turns.
+            if let Some((_, at, _)) = map.get_mut(id) {
+                *at = Instant::now() - CATALOG_TTL;
+            }
         } else {
             map.insert(id.to_string(), (key, Instant::now(), models.to_vec()));
         }
@@ -341,6 +357,12 @@ impl CatalogCache {
 fn catalog_cache() -> &'static CatalogCache {
     static CACHE: std::sync::OnceLock<CatalogCache> = std::sync::OnceLock::new();
     CACHE.get_or_init(CatalogCache::default)
+}
+
+/// Last live effort evidence for the already-resolved provider. Admission
+/// must not add a catalog request (or refresh credentials a second time).
+pub fn cached_effort(config: &Value, model_id: &str) -> Option<nekko_agent::ModelEffort> {
+    catalog_cache().effort(config.get("id")?.as_str()?, catalog_key(config), model_id)
 }
 
 /// How long a provider's reported windows are trusted (`CACHE_MS`, context-window.ts).
@@ -559,6 +581,29 @@ mod tests {
         assert!(cache.get("provider", b).is_none());
         cache.put("provider", a, &[]);
         assert!(cache.get("provider", a).is_none());
+    }
+
+    #[test]
+    fn effort_evidence_is_exact_and_survives_ttl_without_crossing_provider_configs() {
+        let cache = CatalogCache::default();
+        let models: Vec<nekko_agent::ModelInfo> = serde_json::from_value(json!([{
+            "id": "same-model", "providerId": "a", "name": "Model",
+            "effort": { "levels": [{"effort":"medium"}, {"effort":"ultra"}], "default":"medium" }
+        }]))
+        .unwrap();
+        cache.put("a", 1, &models);
+        cache.0.lock().unwrap().get_mut("a").unwrap().1 = Instant::now() - CATALOG_TTL;
+        assert!(cache.get("a", 1).is_none(), "picker should refresh expired catalogs");
+        assert_eq!(cache.effort("a", 1, "same-model"), models[0].effort);
+        assert!(cache.effort("b", 1, "same-model").is_none());
+        assert!(cache.effort("a", 2, "same-model").is_none());
+        assert!(cache.effort("a", 1, "different-model").is_none());
+        let fallback = vec![nekko_agent::ModelInfo { fallback: true, ..models[0].clone() }];
+        cache.put("a", 1, &fallback);
+        assert!(cache.get("a", 1).is_none());
+        assert_eq!(cache.effort("a", 1, "same-model"), models[0].effort);
+        cache.put("a", 1, &[]);
+        assert_eq!(cache.effort("a", 1, "same-model"), models[0].effort);
     }
 
     #[test]
