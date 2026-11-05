@@ -20,6 +20,7 @@ git diff --quiet "$base" HEAD -- \
   ASSETS.md \
   CONTRIBUTING.md \
   scripts/build-docs.mjs \
+  scripts/build-contributors.mjs \
   scripts/vercel-ignore.sh \
   vercel.json \
   package.json \

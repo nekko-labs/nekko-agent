@@ -263,6 +263,14 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **macOS slots**: 0, 1 or 2 VMs at once. Apple allows 2 per Mac, so 3 is not offered. If
   another app is running a macOS VM, or memory allows only one, the card greys the extra slot and
   says why.
+- **Suggested size**: what size VM your jobs need, from what they used. A VM holds all its
+  memory from boot whether a job needs it or not, so a smaller fit leaves more for you, and a job
+  that swapped or kept every vCPU busy gets more. After 3 jobs at the current size, the row says
+  either **Fits your last N jobs** or suggests a size with the reason, and **Apply** saves it at
+  once for the next VM. It never goes over what this Mac can give each slot, and never cuts
+  below GitHub's standard hosted Mac (3 vCPUs, 7 GB). Each job's VM samples its own CPU and memory
+  every 5 seconds; the samples stay on this Mac and only their summary is kept, on the job's line
+  in `runners/audit.jsonl`.
 - **Memory per VM**: 4 to 64 GB.
 - **Total runner memory**: **Use the recommendation** (the sheet shows
   `Recommended: N GB for this Mac`), or your own figure from 4 GB up to 75% of the Mac's memory.

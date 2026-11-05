@@ -128,6 +128,7 @@ app.whenReady().then(async () => {
       await run("[...document.querySelectorAll('[role=dialog], [role=dialog] *')].forEach(e=>{e.scrollTop=e.scrollHeight})"); await sleep(200);
     },
     'settings-unsampled': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
+    'settings-suggested': async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
   };
   const checks = {
     'first-visit': [['both steps, step 2 waits', "(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.textContent==='After step 1');return document.body.innerText.includes('Use this Mac as a CI runner')&&document.querySelectorAll('.runner-step svg').length===2&&b&&b.disabled})()"]],
@@ -182,17 +183,21 @@ app.whenReady().then(async () => {
       ['exact mode labels present', "[\"Do not disturb: Only run when I'm idle\",'Balanced: in the background','Runner first','System default','While a runner is active','Always','Let jobs use the internet directly while a VPN is on'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"],
       ['recommendation shown', "document.body.innerText.includes('Recommended: 20 GB for this Mac')"]],
     'settings-bottom': [['Max job time and Save in view', "(()=>{const v=e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight};const m=[...document.querySelectorAll('[role=dialog] p')].find(e=>e.textContent==='Max job time');const s=[...document.querySelectorAll('[role=dialog] button')].find(e=>e.textContent==='Save');return !!m&&!!s&&v(m)&&v(s)})()"]],
+    'settings-suggested': [['the suggestion with Apply', "document.querySelector('[role=dialog]').innerText.includes('Suggested for your jobs: 4 vCPUs, 8 GB (now 4 vCPUs, 12 GB).') && [...document.querySelectorAll('[role=dialog] button')].some(b=>b.textContent==='Apply')"]],
     'settings-unsampled': [['waits for the first reading', "document.body.innerText.includes('Waiting for this Mac\\'s first reading.') && !document.body.innerText.includes('Recommended:')"]],
   };
   try {
     await win.loadFile(path.join(out, 'index.html')); await sleep(1000);
     for (const theme of ['light', 'dark']) {
-      for (const [scene, act] of Object.entries(scenes)) {
+      // NEKKO_SCENES=a,b captures only those scenes, and skips the burst frames.
+      const only = process.env.NEKKO_SCENES ? process.env.NEKKO_SCENES.split(',') : null;
+      for (const [scene, act] of Object.entries(scenes).filter(([s]) => !only || only.includes(s))) {
         await open(scene, theme); await act(); await sleep(300);
         await capture(`ci-runners-${scene}-${theme}`);
         await check(`${theme} ${scene}: no em dash in document text`, "!document.body.innerText.includes('\\u2014')");
         for (const [name, src] of checks[scene]) await check(`${theme} ${scene}: ${name}`, src);
       }
+      if (only) continue;
       // Motion: stepped frames, because a hidden window's timing is not worth trusting for stills.
       const burst = "document.getAnimations().filter(a=>a.effect.target.closest&&a.effect.target.closest('.runner-burst'))";
       await open('ready', theme); await finish();
