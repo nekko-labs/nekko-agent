@@ -660,7 +660,36 @@ struct NewChatView: View {
     }
 }
 
+/// The All / Cloud / Local tabs pinned over a model list, after the desktop picker's
+/// Model source group. Every tab stays on offer; an empty one says so in the list.
+struct ModelScopeTabs: View {
+    @Binding var scope: ModelScope
+
+    var body: some View {
+        Picker("Model source", selection: $scope) {
+            ForEach(ModelScope.allCases) { s in Text(s.title).tag(s) }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("modelPicker.scope")
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+    }
+}
+
+extension ModelScope {
+    var title: LocalizedStringKey {
+        switch self {
+        case .all: "All"
+        case .cloud: "Cloud"
+        case .local: "Local"
+        }
+    }
+}
+
 /// Every enabled provider's models on the computer, listed in parallel; starred first.
+/// The tabs on top narrow it to the cloud APIs or the local model servers.
 struct ModelPicker: View {
     let selected: (String?, String?)
     var pick: (String, String) -> Void
@@ -668,6 +697,7 @@ struct ModelPicker: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var query = ""
+    @State private var scope = ModelScope.all
 
     var body: some View {
         NavigationStack {
@@ -680,7 +710,15 @@ struct ModelPicker: View {
                         }
                     }
                 }
-                ForEach(store.modelGroups) { g in
+                if groups.isEmpty && scope != .all {
+                    Group {
+                        if scope == .local { Text("No local model servers on this computer.") } else { Text("No cloud providers on this computer.") }
+                    }
+                        .font(.subheadline).foregroundStyle(palette.inkSoft)
+                        .listRowBackground(Color.clear)
+                        .accessibilityIdentifier("modelPicker.emptyScope")
+                }
+                ForEach(groups) { g in
                     Section(g.provider.label) {
                         if let e = g.error {
                             Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning)
@@ -694,6 +732,7 @@ struct ModelPicker: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) { ModelScopeTabs(scope: $scope) }
             .searchable(text: $query)
             .pawRefreshable { await store.loadAllModels(force: true) }
             .navigationTitle("Model")
@@ -703,7 +742,8 @@ struct ModelPicker: View {
         }
     }
 
-    private var favorites: [String] { store.defaults.favoriteModels.filter { f in store.providers.contains { $0.enabled && f.hasPrefix($0.id + "::") } } }
+    private var favorites: [String] { scope.favorites(store.defaults.favoriteModels, providers: store.providers) }
+    private var groups: [ModelGroup] { scope.groups(store.modelGroups) }
 
     private func split(_ f: String) -> (String, String) {
         guard let r = f.range(of: "::") else { return (f, "") }

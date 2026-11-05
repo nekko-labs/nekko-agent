@@ -101,7 +101,8 @@ public enum ChatSections {
     /// ...and only those touched in this window (ms).
     public static let recentWindow: Int64 = 14 * 24 * 60 * 60 * 1000
 
-    /// The status groups, most urgent first.
+    /// The status groups, most urgent first. A stopped chat is Watching while a
+    /// watch is armed on it, otherwise Done, as the desktop’s Agents panel splits them.
     public static let statusGroups: [GroupDef] = [
         GroupDef("status:input", "Needs input"), GroupDef("status:draft", "Draft"),
         GroupDef("status:building", "Building"), GroupDef("status:verifying", "Verifying"),

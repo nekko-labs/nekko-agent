@@ -91,6 +91,8 @@ open. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ![Nekko Agent, unified chat with the Context Inspector](docs/screenshots/chat.png)
 
+<a href="https://nekkoagent.com/#experience"><img src="docs/media/side-by-side.png" width="960" alt="Two chats side by side: a local Qwen3.5-4B model writing taglines while Claude Opus adds a section to a web page. Opens the demo video."></a>
+
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/models.png" alt="Models, local + cloud providers with usage analytics" /></td>

@@ -121,7 +121,7 @@ const date = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 
 
 /**
  * The agent's card as a phone at `level` may see it (exported for tests):
- * Minimal blanks the title, step and reply, Standard the reply. Only the
+ * Minimal blanks the titles, step and reply, Standard the reply. Only the
  * fields `LiveCardState` decodes are kept, text clipped, and the last chats
  * (never the focused one) move into `more` while the push would pass 4 KB.
  * Null when the agent sent no card.
@@ -140,6 +140,9 @@ export function cardForLevel(state: unknown, level: CardLevel): CardState | null
       reply: level === 'detailed' ? clip(c.reply, 60) : '',
       closeWord: clip(c.closeWord, 20),
     };
+    // The row title, left out when empty as the phone writes it.
+    const title = level === 'minimal' ? '' : clip(c.title, 40);
+    if (title) chat.title = title;
     if (date(c.finishedAt) !== undefined) chat.finishedAt = c.finishedAt;
     if (date(c.startedAt) !== undefined) chat.startedAt = c.startedAt;
     if (id(c.callId)) chat.callId = c.callId;

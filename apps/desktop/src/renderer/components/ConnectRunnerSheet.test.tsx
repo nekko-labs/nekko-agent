@@ -19,6 +19,7 @@ const view: RunnerView = {
   state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, repos: [], forkApprovalOpen: false,
   host: { ramMb: 0, cores: 0, recommendedMemoryMb: 0, runnerMemoryMb: 0, cpusPerVm: 0, onBattery: null, batteryPct: null, networkId: null, networkTrusted: false },
   recent: [],
+  suggestedSize: null,
 };
 const body = (step: 1 | 2 | 3, f: ConnectForm, error: string | null = null) =>
   renderToStaticMarkup(<ConnectBody step={step} form={f} error={error} busy={false} onField={() => {}} onStep={() => {}} onSubmit={() => {}} />);

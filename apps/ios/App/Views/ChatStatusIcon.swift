@@ -34,6 +34,6 @@ struct ChatStatusIcon: View {
         if activity == .needsYou { return String(localized: "Needs you") }
         if activity == .failed { return String(localized: "Error") }
         if waiting { return String(localized: "Waiting to send") }
-        return activeWatchCount <= 0 ? String(localized: "Done") : String(localized: "Idle")
+        return activeWatchCount <= 0 ? String(localized: "Done") : String(localized: "Watching")
     }
 }

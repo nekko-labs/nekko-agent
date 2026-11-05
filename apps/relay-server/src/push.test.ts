@@ -87,6 +87,7 @@ describe('the Live Activity card', () => {
   const chat = (id: string, extra: Record<string, unknown> = {}) => ({
     id,
     short: 'Fix',
+    title: 'Fix the login bug',
     state: 'working',
     step: 'Run npm test',
     reply: 'On it.',
@@ -99,8 +100,9 @@ describe('the Live Activity card', () => {
   it('blanks text per level: Minimal none, Standard no reply, Detailed all', () => {
     const minimal = cardForLevel(state, 'minimal')!;
     expect(minimal.chats.map((c) => [c.short, c.step, c.reply])).toEqual([['', '', ''], ['', '', '']]);
+    expect(minimal.chats.some((c) => 'title' in c)).toBe(false);
     expect(minimal.chats[1]).toMatchObject({ id: 'b', state: 'needsYou', callId: 'tc1', severity: 'high', closeWord: 'Cool' });
-    expect(cardForLevel(state, 'standard')!.chats[0]).toMatchObject({ short: 'Fix', step: 'Run npm test', reply: '' });
+    expect(cardForLevel(state, 'standard')!.chats[0]).toMatchObject({ short: 'Fix', title: 'Fix the login bug', step: 'Run npm test', reply: '' });
     expect(cardForLevel(state, 'detailed')!.chats[0]).toEqual(chat('a'));
     expect(cardForLevel(state, 'detailed')).toMatchObject({ focusId: 'b', more: 0, listening: false, heard: '' });
   });

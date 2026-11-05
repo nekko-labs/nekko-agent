@@ -2,8 +2,9 @@
 //!
 //! Started by the desktop app with `--config-stdin` and a JSON config as the
 //! first line of its stdin (see `config.rs`). Prints one line,
-//! `NEKKOD_READY {"port":N,"pid":P}`, once it is listening; everything else
-//! goes to stderr. Shuts down when its stdin closes or on SIGTERM, SIGHUP or
+//! `NEKKOD_READY {"port":N,"pid":P}`, once it is listening, and before that
+//! `NEKKOD_WAITING {"on":"keychain"|null}` while the OS keystore holds its
+//! startup up (`report_keychain_waits`); everything else goes to stderr. Shuts down when its stdin closes or on SIGTERM, SIGHUP or
 //! Ctrl-C, ending everything it started (`procgroup.rs`). One daemon per data
 //! directory (`datalock.rs`): a second exits with code 3.
 
@@ -133,6 +134,7 @@ fn main() -> std::process::ExitCode {
     // held until main returns so the last lines are copied out.
     let _daemon_log = logs::start_daemon_log(&std::path::Path::new(&cfg.data_dir).join("logs"));
     logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
+    report_keychain_waits();
     procgroup::init();
     // Each job VM's NAT holds a socket per guest flow; 256 runs out.
     #[cfg(unix)]
@@ -483,6 +485,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     {
         let mut out = std::io::stdout().lock();
+        READY.store(true, std::sync::atomic::Ordering::SeqCst);
         writeln!(out, "NEKKOD_READY {}", serde_json::json!({ "port": port, "pid": std::process::id() }))?;
         out.flush()?;
     }
@@ -531,6 +534,45 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     mcp.stop_all();
     processes.kill_all();
     Ok(())
+}
+
+/// Set, under the stdout lock, just before the `NEKKOD_READY` line goes out.
+static READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// A keystore call this slow is waiting on the user (a consent dialog, a
+/// locked keychain), not on the keystore itself.
+const KEYCHAIN_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Until the daemon is ready, tell the app that started it whenever startup is
+/// held up by the OS keystore: `NEKKOD_WAITING {"on":"keychain"}` when a call
+/// has waited [`KEYCHAIN_WAIT`], `NEKKOD_WAITING {"on":null}` once none is
+/// waiting. The app holds its ready timeout meanwhile (engine-process.ts), so
+/// a user still reading a Keychain dialog is not answered with a restart and
+/// the same dialog again.
+fn report_keychain_waits() {
+    use std::sync::atomic::Ordering;
+    std::thread::spawn(|| {
+        let mut waiting = false;
+        while !READY.load(Ordering::SeqCst) {
+            let now = nekko_vault::waits::longest().is_some_and(|d| d >= KEYCHAIN_WAIT);
+            if now != waiting {
+                let mut out = std::io::stdout().lock();
+                if READY.load(Ordering::SeqCst) {
+                    break;
+                }
+                let on = if now { serde_json::json!("keychain") } else { serde_json::Value::Null };
+                let _ = writeln!(out, "NEKKOD_WAITING {}", serde_json::json!({ "on": on }));
+                let _ = out.flush();
+                drop(out);
+                logs::note(if now {
+                    "nekkod: waiting for the keychain (a consent dialog or a locked keychain)"
+                } else {
+                    "nekkod: the keychain answered"
+                });
+                waiting = now;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    });
 }
 
 /// The signals that stop the daemon: Ctrl-C everywhere, SIGTERM and SIGHUP on Unix.

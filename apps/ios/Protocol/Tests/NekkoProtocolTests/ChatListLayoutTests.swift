@@ -42,6 +42,23 @@ final class ChatListLayoutTests: XCTestCase {
         XCTAssertEqual(ChatListView.parse(always.encoded), always)
     }
 
+    func testMergedPhaseGroupsKeepWatchingAndPRMetadata() throws {
+        let list = try chats("""
+        [{"id":"failed-build","phase":"building","exchangeCount":1,"activeWatchCount":1},
+         {"id":"failed-verify","phase":"verifying","exchangeCount":1},
+         {"id":"failed-ship","phase":"shipping","exchangeCount":1},
+         {"id":"watch","exchangeCount":1,"activeWatchCount":1,"prUrls":["https://github.com/o/r/pull/7"]},
+         {"id":"done","exchangeCount":1,"prUrls":["https://github.com/o/r/pull/8"]}]
+        """)
+        let activity: [String: Activity] = ["failed-build": .failed, "failed-verify": .failed, "failed-ship": .failed]
+        let sections = ChatSections.make(list, folders: [], view: .standard, activity: activity, now: now)
+        XCTAssertEqual(sections.map(\.key), ["status:building", "status:verifying", "status:watching", "status:done"])
+        XCTAssertEqual(sections[0].chats.map(\.id), ["failed-build"], "A failed run keeps its phase, even with a watch")
+        XCTAssertEqual(Set(sections[1].chats.map(\.id)), Set(["failed-verify", "failed-ship"]))
+        XCTAssertEqual(sections[2].chats.first?.prUrls, ["https://github.com/o/r/pull/7"])
+        XCTAssertEqual(sections[3].chats.first?.prUrls, ["https://github.com/o/r/pull/8"], "A PR URL alone must not imply Watching")
+    }
+
     func testProjectViewKeepsDraggedOrder() throws {
         let list = try chats("""
         [{"id":"a","title":"A","updatedAt":5},
@@ -96,6 +113,16 @@ final class ChatListLayoutTests: XCTestCase {
         let status = ChatSections.make(list, folders: [], view: v, activity: ["c": .needsYou, "a": .running], now: now, calendar: utc)
         XCTAssertEqual(status.map(\.name), ["Needs input", "Building", "Done", "Completed"])
         XCTAssertEqual(status.map { $0.chats.map(\.id) }, [["c"], ["a"], ["b", "d"], ["e"]])
+
+        // A stopped chat with a watch armed is Watching, apart from the Done ones.
+        let watched = try chats("""
+        [{"id":"w","title":"W","updatedAt":\(now),"activeWatchCount":1},
+         {"id":"x","title":"X","updatedAt":\(now - 1000),"prUrls":["https://github.com/o/r/pull/7"]}]
+        """)
+        let split = ChatSections.make(watched, folders: [], view: v, activity: [:], now: now, calendar: utc)
+        XCTAssertEqual(split.map(\.name), ["Watching", "Done"])
+        XCTAssertEqual(split.map { $0.chats.map(\.id) }, [["w"], ["x"]])
+        XCTAssertEqual(watched.first { $0.id == "x" }?.prUrls, ["https://github.com/o/r/pull/7"])
 
         v.groupBy = .date
         let date = ChatSections.make(list, folders: [], view: v, activity: [:], now: now, calendar: utc)
