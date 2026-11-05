@@ -24,7 +24,7 @@ PR work should remain visible in the conversation at the point it happened, not 
 
 Focused parser, transcript, card and live replay/handoff tests cover chronology, repeated transitions, numeric identities, contradictory results, false merge prevention and bounded live retention. The actual ChatPane runs in a hidden, non-focusable Electron fixture with a disposable profile, a stub bridge and external requests/permissions blocked. Matching base/head screenshots at 1000×1100 and 390×1100 cover saved history; the same fixture captures live creation → draft → ready → queued and its saved handoff as PNG frames and a short GIF.
 
-Desktop baseline/head pixels have been inspected; narrow/live pixel inspection and full built-bundle regression results are pending. Captures alone are not visual verification.
+Matching desktop/narrow baseline/head pixels and live/saved PNGs have been inspected. The initial creation card is visibly present after a fixture compositor barrier. The canonical PR link click, exactly one action card and identical before/after-finish event order passed. Shared and desktop regressions pass across 389 files / 3,643 tests after building the required desktop bundles; desktop typecheck and shared build also pass. Captures alone were not counted as visual verification.
 
 ## Boundaries / unverified
 
