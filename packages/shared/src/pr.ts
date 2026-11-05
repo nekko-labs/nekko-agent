@@ -406,14 +406,15 @@ function interactionFor(command: PrCommand, output: string, known: readonly stri
   }
   if (command.repo && `${identity.owner}/${identity.repo}`.toLowerCase() !== command.repo.toLowerCase()) return undefined;
   // Conflicting identities are not confirmation of the requested interaction.
-  if (candidates.some(candidate => candidate.toLowerCase() !== url.toLowerCase())) return undefined;
+  const resolvedUrl = url;
+  if (candidates.some(candidate => candidate.toLowerCase() !== resolvedUrl.toLowerCase())) return undefined;
   // References on other lines are not part of a success-line title. Reject
   // ambiguous multi-PR output while leaving links in that title alone.
   if (command.outputEvidence && output.split(/\r?\n/).some(line =>
     !/^[✓✔]?\s*(?:(?:Added|(?:Successfully )?Merged|Squashed and merged|Rebased and merged|Closed|Reopened|Updated|Marked)\s+(?:pull request|PR)|Pull request|Auto-merge enabled for pull request)\b/i.test(line.trim())
     && /\b[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+#[1-9]\d*\b/.test(line))) return undefined;
   // Prefer the spelling already used by the chat, not a differently cased confirmation.
-  url = known.find(value => value.toLowerCase() === url!.toLowerCase()) ?? url;
+  url = known.find(value => value.toLowerCase() === resolvedUrl.toLowerCase()) ?? resolvedUrl;
   if (create) return { url, event: command.switches.has('--draft') || command.switches.has('-d') ? 'created-draft' : 'created' };
   if (confirmed) return { url, event: confirmed.event };
   let event: PrEvent;
