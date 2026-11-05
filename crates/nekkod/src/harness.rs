@@ -111,6 +111,9 @@ pub struct Harness {
     /// Background tasks each chat's Claude Code still runs, by chat id
     /// (`claude:backgroundTasks`); a chat with none is not listed.
     background: Mutex<HashMap<String, usize>>,
+    /// How many of those tasks are watchers, by chat id, for the chat summaries;
+    /// a chat with none is not listed.
+    watchers: Mutex<HashMap<String, usize>>,
     /// Sub-agents still running, by parent chat and delegating call. They
     /// outlive a turn when they run in the background (subagents.rs).
     subagents: Mutex<HashMap<String, HashMap<String, crate::subagents::Run>>>,
@@ -209,13 +212,15 @@ impl Harness {
         lock(&self.plan_usage).get(provider_id).cloned()
     }
 
-    /// A chat's Claude Code now runs `n` background tasks.
-    pub fn note_background(&self, session_id: &str, n: usize) {
-        let mut all = lock(&self.background);
-        if n == 0 {
-            all.remove(session_id);
-        } else {
-            all.insert(session_id.to_string(), n);
+    /// A chat's Claude Code now runs `n` background tasks, `watchers` of them watchers.
+    pub fn note_background(&self, session_id: &str, n: usize, watchers: usize) {
+        for (all, count) in [(&self.background, n), (&self.watchers, watchers)] {
+            let mut all = lock(all);
+            if count == 0 {
+                all.remove(session_id);
+            } else {
+                all.insert(session_id.to_string(), count);
+            }
         }
     }
 
@@ -258,6 +263,12 @@ impl Harness {
     /// Code runs, for the chats that run any.
     pub fn background_tasks(&self) -> serde_json::Value {
         serde_json::json!(*lock(&self.background))
+    }
+
+    /// How many background watchers each chat's Claude Code runs, for the
+    /// chats that run any.
+    pub fn background_watchers(&self) -> HashMap<String, usize> {
+        lock(&self.watchers).clone()
     }
 
     /// The chat's slot (made on first use).

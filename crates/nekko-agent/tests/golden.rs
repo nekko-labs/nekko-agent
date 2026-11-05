@@ -240,14 +240,23 @@ async fn every_request_is_built_exactly_as_the_ts_provider_builds_it() {
     for p in cases["providers"].as_array().unwrap() {
         let p = p.as_str().unwrap();
         for (name, req) in cases["requests"].as_object().unwrap() {
-            let transport = FakeTransport::queue(vec![json!({ "chunks": [] })]);
+            let mut answers = vec![json!({ "chunks": [] })];
+
+            // Ollama asks `/api/show` before it sends `think: true`: these pin
+            // the chat to a model that can think (stream-cases covers the rest).
+            if p == "ollama" && req.get("think") == Some(&json!(true)) {
+                answers.insert(0, json!({ "body": r#"{"capabilities":["thinking"]}"# }));
+            }
+
+            let requests = answers.len();
+            let transport = FakeTransport::queue(answers);
             let provider = provider(&providers[p], transport.clone());
             let req: ChatRequest = serde_json::from_value(req.clone()).unwrap();
             let chunks = run_chat(&provider, req).await;
             assert_eq!(chunks, vec![Ok(ProviderChunk::Done)], "{p}/{name}");
             let sent = transport.sent();
-            assert_eq!(sent.len(), 1, "{p}/{name}");
-            assert_eq!(recorded(&sent[0]), expected_request(&expected[p][name]), "{p}/{name}");
+            assert_eq!(sent.len(), requests, "{p}/{name}");
+            assert_eq!(recorded(&sent[requests - 1]), expected_request(&expected[p][name]), "{p}/{name}");
             count += 1;
         }
     }

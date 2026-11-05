@@ -54,6 +54,21 @@ Both unchanged-base runs and both head runs fail the unchanged 33 ms gate. Raw n
 Separate timeline-instrumented base/head runs measured 38.4 / 39.2 ms p95 (p50 31.6 / 31.3 ms). Inspected cold traces contain 176562 / 171446 events; nested renderer-main totals for style UpdateLayoutTree 481.215 / 442.285 ms, Layout 200.154 / 194.624 ms, Paint 502.808 / 469.747 ms and Layerize 1604.836 / 1502.413 ms are whole-phase observations, not per-click causal attribution. Profiling overhead means this pair is not equivalent to the unprofiled controls. Earlier automatic streaming-only profiles do not measure cold-chat latency.
 
 Source: [exact matched reports, provenance and timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42035974208), [PR #1854](https://github.com/nekko-labs/nekko-agent/pull/1854), baseline [#712](https://github.com/nekko-labs/nekko-agent/issues/712). The diagnostic workflow completed, but all six measurements missed the budget; workflow success is not a passed product gate. PR remains held/draft/dequeued, pending a separate verified baseline repair or revert, then integration and protected validation. No manual queue rerun, relaxed budget or speculative product optimization. The temporary diagnostic workflow must never merge.
+## Follow-up slider and text toolbar (#1760, 2026-11-05)
+
+Area: renderer. Result: baseline cold-paint gate failure reproduced; no performance win or zero-regression claim.
+Conditions: same Linux runner, AMD EPYC 7763 (4 threads), Chrome/156.0.8078.79, Node 22.23.4, 1440x1000, scripted local model, 33 cold switches per run. Exact base `42b12519687867ac51608aec0b9bb5e6a44724e6`, queue snapshot `b5eb5a103700771b36be2ad31f224fea5ae3cc35`. Same unchanged latency harness and release daemon (SHA256 `9953ec90d7b3de254f47c4c2a69d1ef33b901668ff4da1dacf6e882254049d50`), clean source snapshots, fresh isolated profiles. Order base/head/head/base, one full unprofiled latency attempt per snapshot, not `--quick`.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-paint p95 | 40.0 / 45.3 ms | 44.9 / 42.8 ms |
+| Cold-chat first-paint p50 | 30.6 / 33.5 ms | 33.7 / 32.7 ms |
+
+Both unchanged-base runs fail the same 33 ms gate; both head p95s fall within the observed base range. This establishes a baseline failure on this runner, not proof that the UI change has zero effect. Original queue cold-paint p95 attempts were 41.8 / 40.3 / 40.1 ms; all other measured speed/memory rows passed. Automatic streaming-frame diagnostics did not measure the failing cold-paint metric.
+
+Separate timeline-instrumented base/head runs measured cold-paint p95 48.4 / 46.6 ms. Renderer-main cold-switch phase totals (nested events overlap, not per-interaction causal attribution): RunTask 6551.263 / 6460.261 ms, UpdateLayoutTree 723.449 / 706.784 ms, Layout 187.409 / 185.191 ms, Paint 2174.534 / 2167.673 ms, Layerize 1209.540 / 1249.811 ms. Instrumentation has overhead; these are not gate measurements or a performance improvement. Both cold-switch traces and source provenance were inspected. Baseline repair remains tracked in [#712](https://github.com/nekko-labs/nekko-agent/issues/712); budgets and protections are unchanged. Two matched base failures support one evidence-backed requeue, not repeated retries if it recurs.
+
+Source: [matched reports, samples, provenance and cold-switch timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/41956243176), [original queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/41954035733). Diagnostic attempt 1 stopped before measurement due to a crates.io TLS EOF; one network retry produced the complete artifact. Temporary `ci/1760-cold-paint` workflow is diagnostic only and must never merge.
 
 ## Zone drag and composer actions (#1703, 2026-11-04)
 
@@ -128,6 +143,19 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-11
+
+### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
+Area: renderer
+Result: no effect
+Conditions: Windows 11, real renderer entry against a stub bridge in a hidden Electron window, warm reload, 3 runs each of `main` and the PR. Simulated delays: providers 10ms, model list 1500ms, transcript 150ms, 1,500-message chat. Reduced-motion path. Times are from the new page's first script.
+
+| Metric | Before | After |
+|---|---|---|
+| Overlay gone | 589, 652, 427ms | 604, 650, 647ms |
+| Chat on screen | 323, 368, 361ms | 320, 447, 367ms |
+| Samples showing a wrong screen | 7, 6, 7 | 0, 0, 0 |
+
+Why: the overlay now waits for the provider list and transcripts, but not the model list, a live provider call once its catalog is 5 minutes old. An earlier version of the PR did wait for it and took 1943ms in one run with the same delays. Source: this PR.
 
 ### #1833 iPhone: cat from the first frame, straight to the zoom after Face ID (2026-11-05)
 Area: renderer

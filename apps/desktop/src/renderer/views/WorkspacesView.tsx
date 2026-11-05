@@ -29,7 +29,7 @@ import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
-  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelView, saveAgentPanelView, statusGroupOf, wakeSourcesOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -869,7 +869,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
-                        {s && subagentRows(kids, (id) => statuses.has(id), s.id, selectedId).map((kid) => (
+                        {s && subagentRows(kids).map((kid) => (
                           <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
@@ -1086,7 +1086,7 @@ function SubAgentRow({
         className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
       />
       <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
-      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
+      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, wakeSourcesOf(session))} />
     </button>
   );
 }

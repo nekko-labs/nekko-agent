@@ -54,6 +54,7 @@ import { ExplorerPane } from './ExplorerPane.js';
 import { WorkingSubagents } from './WorkingSubagents.js';
 import { FocusIcon } from '../gentleface-icons.js';
 import { agentStatusOfLane, type AgentStatus } from './WorkspaceCard.js';
+import { wakeSourcesOf } from '../views/agentPanelView.js';
 import { WallMascot, WallNumber } from './WallMascot.js';
 import { BrowserPane } from './BrowserPane.js';
 import { DiffPane } from './DiffPane.js';
@@ -797,7 +798,7 @@ export function CommandWall({
     if (session) {
       const { lane, blocked } = sessionLane({ running: isRunning(session), pending: pending[session.id], stalled: session.stalled });
       needsYou = lane === 'needs-you';
-      agentStatus = agentStatusOfLane(lane, blocked, session.activeWatchCount);
+      agentStatus = agentStatusOfLane(lane, blocked, wakeSourcesOf(session));
       status = needsYou && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
     } else if (terminal) {
       status = terminal.running ? { label: 'Shell open', tone: 'var(--success)' } : { label: terminal.exitCode ? `Exited with code ${terminal.exitCode}` : 'Exited', tone: 'var(--ink-faint)' };

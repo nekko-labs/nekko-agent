@@ -1,4 +1,4 @@
-import { isContextOverflowError, lastReplyInterrupted, type ChatMessage } from '@nekko-agent/shared';
+import { isContextOverflowError, lastReplyInterrupted, type ChatMessage, type Session } from '@nekko-agent/shared';
 
 /**
  * The notice for a reply the chat found already cut off in its transcript: the
@@ -33,6 +33,12 @@ export function reconcileInterruptionNotice(notice: string | null, interrupted: 
   return notice === PERSISTED_INTERRUPTION && !interrupted ? null : notice;
 }
 
+
+/** The saved failure of the turn that ended this transcript; anything newer retires it. */
+export function savedTurnFailure(session: Pick<Session, 'messages' | 'turnFailure'>): string | null {
+  const failure = session.turnFailure;
+  return failure && failure.afterMessageId === session.messages.at(-1)?.id ? failure.message : null;
+}
 
 /** A held reply means the final transcript is still loading; the record is stale. */
 export function shouldShowPersistedInterruption(history: ChatMessage[], streaming: boolean, awaitingTranscript: boolean, awaitingQuestion = false): boolean {
