@@ -67,6 +67,10 @@ Acceptance: repeat activation, outside pointer, and Escape close setup; inside p
 
 Acceptance: an older `settings.json` with keys reads back with every key, and the file no longer holds them; a keystore that will not save keeps them in the file; a second read changes nothing; an exported backup holds no key; a backup imported on the same computer gives back the same settings; Delete everything leaves no key behind. Unverified: a real Keychain and Credential Manager (tests use a file stand-in), and Windows' item size limit with real ChatGPT tokens (values are split into 1000-character items for it).
 
+### Starred models retain their provider rows
+
+Implemented: favorites remain in their original provider group as well as the pinned Starred, Recent or Default shortcut. Starring never removes a provider catalog entry. Both copies select the same provider/model and share favorite state; source and text filters still apply. Non-favorite pinned rows retain existing deduplication. Verified with renderer tests and an isolated Electron fixture, without real provider calls or credentials.
+
 ## Consolidated macOS Keychain access (issue #1749)
 
 `[implemented 2026-11-05; unit tests and a no-dialog native Keychain test]` Opening the app should not require a separate approval for every API key or sign-in token chunk. All vaults belonging to one Mac data profile share a single Keychain item named **Nekko Agent: API keys, sign-ins and encryption keys (<profile hash>)**. The name explains that the engine is unlocking the app's saved provider credentials, sign-ins and encryption keys, not asking to read unrelated Keychain items. Apple still controls the process name (`nekkod`), buttons and surrounding system text.
