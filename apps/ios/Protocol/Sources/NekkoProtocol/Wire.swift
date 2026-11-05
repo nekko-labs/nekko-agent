@@ -39,6 +39,8 @@ public enum Channels {
     public static let workspaceAddByPath = "workspace:addByPath"
     public static let workspaceRemove = "workspace:remove"
     public static let appInfo = "app:info"
+    /// Whether someone is using the computer (`PHONE_ACTIVITY_VIEW`), for New chat's Auto (2026-11-05).
+    public static let activityState = "activity:state"
     /// SK-2: a single-use step-up challenge (read class).
     public static let securityChallenge = "security:challenge"
     /// SK-3 safety exits (agent class, never refused for Change off).
@@ -121,7 +123,7 @@ public enum Channels {
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
+        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
@@ -501,6 +503,34 @@ public struct ChatGroup: Equatable, Sendable, Identifiable {
         if !g.active.isEmpty || !g.completed.isEmpty { out.append(g) }
         out += folders.map { group($0.id, $0.name) }
         return out
+    }
+}
+
+/// Whether someone is using a computer (`activity:state`): yes/no answers
+/// only; the computer never tells a phone how long it has been idle, its
+/// battery level or its temperatures.
+public struct ComputerUse: Equatable, Sendable {
+    /// Someone is at the keyboard, or a chat they started is replying.
+    public var userActive: Bool
+    /// A chat a person started is replying there.
+    public var chatActive: Bool
+    /// No input to read (a server or Docker): nobody sits at it.
+    public var headless: Bool
+    /// On battery, low or hot: heavy work is better elsewhere.
+    public var strained: Bool
+
+    public init(userActive: Bool = false, chatActive: Bool = false, headless: Bool = false, strained: Bool = false) {
+        self.userActive = userActive
+        self.chatActive = chatActive
+        self.headless = headless
+        self.strained = strained
+    }
+
+    /// nil when the computer didn't answer with one (an older build).
+    public static func from(_ v: JSONValue?) -> ComputerUse? {
+        guard let v, v.object != nil, v["userActive"]?.bool != nil else { return nil }
+        return ComputerUse(userActive: v.flag("userActive"), chatActive: v.flag("chatActive"), headless: v.flag("headless"),
+                           strained: !(v["strain"]?.array ?? []).isEmpty)
     }
 }
 

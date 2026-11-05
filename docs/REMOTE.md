@@ -90,6 +90,19 @@ cannot connect to an older computer.
 > computer. Choosing another computer shows its models and folders at once, since every paired
 > computer is already connected; what you typed stays.
 >
+> **Automatic** (iPhone): with a **local model** (Ollama, LM Studio, llama.cpp, vLLM) and more
+> than one paired computer, **Run on** starts on **Automatic**. The phone asks each online
+> computer whether it is in use (a chat replying there, or someone at its keyboard) and starts the
+> chat on a free one, with the same model if that computer has it, else the last one used there,
+> else one it already has loaded. The line under the options says what it picked and why
+> (*Auto picked Studio Mac: MacBook is busy.*). When every computer is busy, or none other can run
+> a local model, the chat stays on the one used last. Choosing a **folder** decides the computer
+> (the folder lives on it), and picking a computer by hand turns Automatic off for that chat;
+> choose **Automatic** again to go back. New chat opened from one computer's list starts on that
+> computer. Chats on cloud models are not moved. A computer tells the phone only yes/no answers
+> (in use, a chat replying, no keyboard, on battery or hot), never how long it has been idle,
+> its battery level or its temperatures.
+>
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one
 > computer (**Show chats from**). The phone stays connected to every paired computer and
