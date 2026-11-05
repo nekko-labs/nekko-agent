@@ -94,6 +94,8 @@ final class Dictation {
         let id = UUID()
         let text: String
     }
+    /// Phone-only chats must never send audio to a paired computer.
+    var allowComputer = true
     var available: Bool { AVAudioApplication.shared.recordPermission != .denied }
 
     var status: String {
@@ -546,7 +548,7 @@ final class Dictation {
     }
 
     private func computerHasWhisper(_ store: ComputersStore) async -> Bool {
-        guard AppModel.shared.prefs.dictationOnComputer, store.conn == .online, store.pcSettings.voiceEnabled,
+        guard allowComputer, AppModel.shared.prefs.dictationOnComputer, store.conn == .online, store.pcSettings.voiceEnabled,
               let r = try? store.remote(), let v = try? await r.call(Channels.voiceStatus) else { return false }
         return VoiceInstall.from(v).installed
     }

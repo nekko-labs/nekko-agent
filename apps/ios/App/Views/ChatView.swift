@@ -1113,6 +1113,14 @@ struct Composer: View {
                         .accessibilityHint("Keeps listening until you tap stop. Start with Nekko for a command, like Nekko, send it.")
                         .accessibilityIdentifier("composer.dictate")
                     }
+                    VoiceConversationButton(makeTarget: {
+                        guard let id = store.activeId else { throw RelayError("Choose a computer first.") }
+                        return .computer(chat, computerId: id)
+                    })
+                    .disabled(chat.savedAt != nil || chat.sendsLater)
+                    if !dictation.available {
+                        DraftVoiceInput(text: $text)
+                    }
                     // Stop while running with nothing to queue; a photo or skill alone can be queued.
                     if chat.running && !hasContent {
                         Button { chat.abort() } label: {
@@ -1399,6 +1407,7 @@ struct Composer: View {
                 let lane = switch store.activity[chat.sessionId] {
                 case .needsYou: "Needs you"
                 case .running: "Working"
+                case .failed: "Error"
                 case nil: chat.running ? "Working" : "Idle"
                 }
                 let watching = chat.watches.contains { $0.kind == .pr && $0.status == .active }

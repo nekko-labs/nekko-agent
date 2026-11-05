@@ -15,6 +15,8 @@ struct ChatStatusIcon: View {
                 RocketGlyph().stroke(palette.success, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)).frame(width: 18, height: 18)
             } else if activity == .needsYou {
                 Image(systemName: "questionmark").foregroundStyle(palette.warning)
+            } else if activity == .failed {
+                Image(systemName: "exclamationmark.triangle").foregroundStyle(palette.danger)
             } else if waiting {
                 Image(systemName: "clock").foregroundStyle(palette.inkFaint)
             } else if activeWatchCount <= 0 {
@@ -30,6 +32,7 @@ struct ChatStatusIcon: View {
     var label: String {
         if activity == .running { return String(localized: "Working") }
         if activity == .needsYou { return String(localized: "Needs you") }
+        if activity == .failed { return String(localized: "Error") }
         if waiting { return String(localized: "Waiting to send") }
         return activeWatchCount <= 0 ? String(localized: "Done") : String(localized: "Idle")
     }

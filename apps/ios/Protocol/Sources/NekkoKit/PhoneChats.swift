@@ -46,6 +46,7 @@ public struct PhoneChat: Codable, Equatable, Sendable, Identifiable {
     public var summary: SessionSummary? {
         var o: [String: JSONValue] = [
             "id": .string(id), "title": .string(title), "updatedAt": .int(updatedAt), "createdAt": .int(createdAt),
+            "exchangeCount": .int(Int64(messages.filter { $0.role == .user }.count)),
             "modelId": .string(modelId), "providerId": .string(providerId), "pinned": .bool(pinned),
         ]
         if let at = archivedAt { o["archivedAt"] = .int(at) }
@@ -398,3 +399,15 @@ public final class PhoneChats {
         return try? JSONDecoder().decode(type, from: data)
     }
 }
+
+#if DEBUG
+extension PhoneChats {
+    /// Native UI fixture: in-memory only, no provider or credential and no HTTP.
+    public func seedComposerFixture() {
+        var chat = PhoneChat(id: "phone-parity", title: "On this iPhone", providerId: "fixture", modelId: "fixture", createdAt: 0)
+        chat.messages = [PhoneMessage(id: "reply", role: .assistant,
+            text: "# Markdown works\n\n**Bold**, _italic_, and `code`.\n\n- First item\n- Second item\n\n| Feature | State |\n| --- | --- |\n| Markdown | Ready |", at: 0)]
+        chats = [chat]
+    }
+}
+#endif

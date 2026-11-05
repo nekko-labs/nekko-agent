@@ -148,6 +148,7 @@ struct EffortGauge: View {
     let count: Int
     var size: CGFloat = 24
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let f = level.map { Double($0 + 1) / Double(max(1, count)) }
@@ -162,7 +163,7 @@ struct EffortGauge: View {
             Circle().fill(f == nil ? palette.inkFaint : palette.ink).frame(width: size * 0.16, height: size * 0.16)
         }
         .frame(width: size, height: size)
-        .animation(.snappy, value: level)
+        .animation(reduceMotion ? nil : .snappy, value: level)
         .accessibilityHidden(true)
     }
 }
@@ -194,24 +195,9 @@ struct AsksFirstMenu: View {
     }
 
     var body: some View {
-        Menu {
-            ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                Button {
-                    Task {
-                        do { try await chat.setOptions(mode: m) } catch { failed = error.localizedDescription }
-                    }
-                } label: {
-                    if m == mode { Label(SimpleMode.asksName(m), systemImage: "checkmark") } else { Text(SimpleMode.asksName(m)) }
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "hand.raised").font(.caption2).foregroundStyle(palette.inkFaint)
-                Text(SimpleMode.asksName(mode)).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
-            }
-            .frame(minHeight: 44).contentShape(Rectangle())
-        }
+        ToolPolicyPicker(selection: Binding(get: { mode }, set: { m in
+            Task { do { try await chat.setOptions(mode: m) } catch { failed = error.localizedDescription } }
+        }))
         .disabled(chat.savedAt != nil)
         .accessibilityIdentifier("chat.asksFirst")
         .alert("Couldn’t change it", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {
@@ -242,8 +228,8 @@ struct ModelEffortButton: View {
         let parts = Self.parts(prefs, chat)
         Button { open = true } label: {
             HStack(spacing: 6) {
-                // Simple keeps effort inside the dropdown, unless the model's half is out of sight.
-                if parts.effort && (prefs.expertMode || !parts.model) { EffortGauge(level: level, count: levels.count, size: 16) }
+                // The dial stays visible in either mode when effort is enabled.
+                if parts.effort { EffortGauge(level: level, count: levels.count, size: 16) }
                 if parts.model { Text(name).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle) }
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
             }

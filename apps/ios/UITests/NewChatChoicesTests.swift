@@ -21,11 +21,11 @@ final class NewChatChoicesTests: XCTestCase {
         app.buttons["newChat.tools"].tap()
         XCTAssertFalse(app.buttons["Computer default"].exists)
         attach(app, "iphone-tools-after")
-        option("YOLO (never ask)", in: app).tap()
-        XCTAssertTrue(app.buttons["newChat.tools"].label.contains("YOLO"))
+        app.buttons["tools.yolo"].tap()
+        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "Works on its own")
         app.buttons["newChat.tools"].tap()
-        XCTAssertTrue(app.buttons["Guardrails (ask for risky tools) (Recommended)"].exists)
-        option("YOLO (never ask)", in: app).tap()
+        XCTAssertTrue(app.buttons["tools.guardrails"].exists)
+        app.buttons["tools.yolo"].tap()
     }
 
     func testMascotLaughRestartsAndReturnsToIdle() { checkLaugh(reduced: false) }

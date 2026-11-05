@@ -18,14 +18,38 @@ final class ChatListLayoutTests: XCTestCase {
 
     private let folders = [WorkspaceFolder(id: "w1", name: "App"), WorkspaceFolder(id: "w2", name: "Empty")]
 
-    func testTheDefaultViewIsTheListAsItWas() throws {
+    private var projectView: ChatListView {
+        var view = ChatListView.standard
+        view.groupBy = .project
+        view.showEmptyGroups = true
+        return view
+    }
+
+    func testDefaultGroupsMatchDesktopAndHideEmptyGroups() throws {
+        XCTAssertEqual(ChatListView.standard.groupBy, .status)
+        XCTAssertFalse(ChatListView.standard.showEmptyGroups)
+        let list = try chats("""
+        [{"id":"draft","exchangeCount":0},{"id":"build","activeRun":{},"phase":"building"},
+         {"id":"verify","activeRun":{},"phase":"shipping"},{"id":"watch","activeWatchCount":1},
+         {"id":"done","exchangeCount":1},{"id":"ask"}]
+        """)
+        let sections = ChatSections.make(list, folders: [], view: .standard, activity: ["ask": .needsYou], now: now)
+        XCTAssertEqual(sections.map(\.name), ["Needs input", "Draft", "Building", "Verifying", "Watching", "Done"])
+        XCTAssertTrue(ChatSections.make([], folders: folders, view: .standard, activity: [:], now: now).isEmpty)
+        var always = ChatListView.standard
+        always.showEmptyGroups = true
+        XCTAssertEqual(ChatSections.make([], folders: [], view: always, activity: [:], now: now).count, 6)
+        XCTAssertEqual(ChatListView.parse(always.encoded), always)
+    }
+
+    func testProjectViewKeepsDraggedOrder() throws {
         let list = try chats("""
         [{"id":"a","title":"A","updatedAt":5},
          {"id":"b","title":"B","updatedAt":9,"workspaceId":"w1","order":2},
          {"id":"c","title":"C","updatedAt":3,"workspaceId":"w1","order":1},
          {"id":"e","title":"E","updatedAt":8,"workspaceId":"w1","archivedAt":100}]
         """)
-        let s = ChatSections.make(list, folders: folders, view: .standard, activity: [:], now: now, calendar: utc)
+        let s = ChatSections.make(list, folders: folders, view: projectView, activity: [:], now: now, calendar: utc)
         XCTAssertEqual(s.map(\.name), ["General", "App", "Empty"])
         XCTAssertEqual(s[1].chats.map(\.id), ["c", "b", "e"], "active in dragged order, then completed")
         XCTAssertEqual(s[1].activeCount, 2)
@@ -34,7 +58,7 @@ final class ChatListLayoutTests: XCTestCase {
 
     func testHidesCompletedChatsAndEmptyFolders() throws {
         let list = try chats(#"[{"id":"e","title":"E","updatedAt":8,"workspaceId":"w1","archivedAt":100}]"#)
-        var v = ChatListView.standard
+        var v = projectView
         v.showCompleted = false
         v.showEmptyGroups = false
         XCTAssertEqual(ChatSections.make(list, folders: folders, view: v, activity: [:], now: now).map(\.name), [])
@@ -70,7 +94,7 @@ final class ChatListLayoutTests: XCTestCase {
         v.groupBy = .status
         v.showEmptyGroups = false
         let status = ChatSections.make(list, folders: [], view: v, activity: ["c": .needsYou, "a": .running], now: now, calendar: utc)
-        XCTAssertEqual(status.map(\.name), ["Needs you", "Working", "Idle", "Completed"])
+        XCTAssertEqual(status.map(\.name), ["Needs input", "Building", "Done", "Completed"])
         XCTAssertEqual(status.map { $0.chats.map(\.id) }, [["c"], ["a"], ["b", "d"], ["e"]])
 
         v.groupBy = .date
@@ -89,7 +113,7 @@ final class ChatListLayoutTests: XCTestCase {
             return "{\"id\":\"c\(i)\",\"title\":\"C\(i)\",\"updatedAt\":\(at)\(pin)}"
         }
         let list = try chats("[" + items.joined(separator: ",") + "]")
-        let s = ChatSections.make(list, folders: [], view: .standard, activity: ["c10": .needsYou], now: now)[0]
+        let s = ChatSections.make(list, folders: [], view: projectView, activity: ["c10": .needsYou], now: now)[0]
         let split = ChatSections.split(s, activity: ["c10": .needsYou], now: now)
         XCTAssertEqual(split.shown.map(\.id), ["c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c10", "c11"])
         XCTAssertEqual(split.hidden, 2)
@@ -97,7 +121,7 @@ final class ChatListLayoutTests: XCTestCase {
 
     func testGroupOrderFollowsTheDraggedOrder() throws {
         let list = try chats(#"[{"id":"a","title":"A","updatedAt":5},{"id":"b","title":"B","updatedAt":5,"workspaceId":"w1"}]"#)
-        let s = ChatSections.make(list, folders: folders, view: .standard, activity: [:], groupOrder: ["w2", "w1"], now: now)
+        let s = ChatSections.make(list, folders: folders, view: projectView, activity: [:], groupOrder: ["w2", "w1"], now: now)
         XCTAssertEqual(s.map(\.name), ["Empty", "App", "General"], "a group the saved order doesn't name keeps its place after")
         XCTAssertEqual(ChatGroupOrder.move(["a", "b", "c"], "c", before: "a"), ["c", "a", "b"])
         XCTAssertEqual(ChatGroupOrder.move(["a", "b", "c"], "a", before: nil), ["b", "c", "a"])

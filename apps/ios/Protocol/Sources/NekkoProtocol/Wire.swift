@@ -35,6 +35,7 @@ public enum Channels {
     public static let chatPending = "chat:pending"
     public static let chatAnswer = "chat:answer"
     public static let toolApprove = "tool:approve"
+    public static let sessionSetSupportingWorkspaces = "session:setSupportingWorkspaces"
     public static let workspaceList = "workspace:list"
     public static let workspaceAddByPath = "workspace:addByPath"
     public static let workspaceRemove = "workspace:remove"
@@ -116,11 +117,11 @@ public enum Channels {
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove])
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
-        sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
+        sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
@@ -441,6 +442,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var createdAt: Int64?
     /// A turn is running in it (`activeRun`).
     public var running = false
+    public var exchangeCount: Int64? = nil
+    public var phase: String? = nil
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -454,7 +457,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
             order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0,
-            createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false)
+            createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false,
+            exchangeCount: v.long("exchangeCount"), phase: v.str("phase"))
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.
@@ -561,11 +565,12 @@ public struct PcSettings: Equatable, Sendable {
     /// The computer's automations are paused (set on the computer only).
     public var automationsPaused: Bool
     /// How the computer's agents delegate (`solo`, `balanced`, `swarm`); nil from a computer that doesn't say.
+    public var defaultWorkspaceIds: [String] = []
     public var orchestrationStrategy: String?
 
     public init(effort: Effort? = nil, defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
                 known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false, prompts: [SavedPrompt] = [],
-                automationsPaused: Bool = false, orchestrationStrategy: String? = nil) {
+                automationsPaused: Bool = false, orchestrationStrategy: String? = nil, defaultWorkspaceIds: [String] = []) {
         self.effort = effort
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
@@ -576,6 +581,7 @@ public struct PcSettings: Equatable, Sendable {
         self.prompts = prompts
         self.automationsPaused = automationsPaused
         self.orchestrationStrategy = orchestrationStrategy
+        self.defaultWorkspaceIds = defaultWorkspaceIds
     }
 
     /// What the computer does when a key is unset (shared/settings.ts defaults).
@@ -591,7 +597,8 @@ public struct PcSettings: Equatable, Sendable {
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
                           voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"),
                           prompts: SavedPrompt.list(v["prompts"]), automationsPaused: v.flag("automationsPaused"),
-                          orchestrationStrategy: v["orchestration"]?.str("strategy"))
+                          orchestrationStrategy: v["orchestration"]?.str("strategy"),
+                          defaultWorkspaceIds: (v["defaultWorkspaceIds"]?.array ?? []).compactMap(\.string))
     }
 
     /// The `settings:update` patch for one change: never more than the phone-settable keys.

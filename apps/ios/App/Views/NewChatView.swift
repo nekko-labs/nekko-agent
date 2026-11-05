@@ -15,6 +15,7 @@ struct NewChatView: View {
     @Environment(\.palette) private var palette
     @State private var model: (String, String)?
     @State private var folder: String?
+    @State private var choseFolder = false
     @State private var mode: PcSettings.ChatMode?
     /// A concrete draft choice; otherwise resolve the last-used choice for this computer.
     @State private var effort: Effort?
@@ -23,12 +24,13 @@ struct NewChatView: View {
     @State private var text = ""
     @State private var photos: [PhotosPickerItem] = []
     @State private var pickingPhotos = false
-    @FocusState private var typing: Bool
+    @State private var typing = false
     @State private var images: [String] = []
     @State private var loadingPhotos = false
     @State private var busy = false
     @State private var error: String?
     @State private var showModels = false
+    @State private var foldersOpen = false
     @State private var restored = false
     /// Why the computer turned down a chat started offline (it came back here).
     @State private var refusal: String?
@@ -116,6 +118,11 @@ struct NewChatView: View {
                 if let id = store.activeId { app.prefs.lastModel[id] = "\(p)::\(m)" }
             }
         }
+        .sheet(isPresented: $foldersOpen) {
+            NavigationStack {
+                FoldersView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { foldersOpen = false } } }
+            }
+        }
         .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
         .task(id: photos) {
             guard !photos.isEmpty else { return }
@@ -140,21 +147,18 @@ struct NewChatView: View {
         .onChange(of: store.drafts.drafts[DraftStore.newChat]) { _, d in adopt(d) }
         .onChange(of: app.sharedText) { _, _ in takeShared() }
         // The computer's defaults may arrive after this screen opened.
+        .onChange(of: store.pcSettings.defaultWorkspaceIds) { _, _ in pickDefaultFolder() }
+        .onChange(of: store.workspaces) { _, _ in pickDefaultFolder() }
         .onChange(of: store.defaults) { _, _ in pickDefault() }
     }
 
     /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextField(onPhone ? String(localized: "Ask anything") : String(localized: "What should your computer do?"), text: $text, axis: .vertical).lineLimit(3...10)
-                .foregroundStyle(palette.ink)
-                .focused($typing)
-                // The cat's paws rest on the box's top edge, above the first line.
+            MarkdownComposerField(text: $text, focused: $typing,
+                                  placeholder: onPhone ? "Ask anything" : "What should your computer do?",
+                                  identifier: "newChat.prompt", onPasteImages: pasteImages, boxed: false)
                 .padding(.top, 20)
-                // The whole box takes the keyboard, not only the first line's height.
-                .contentShape(Rectangle())
-                .onTapGesture { typing = true }
-                .accessibilityIdentifier("newChat.prompt")
             if loadingPhotos {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -183,6 +187,17 @@ struct NewChatView: View {
                 // Chats on this iPhone send text only.
                 .disabled(onPhone)
                 Spacer(minLength: 0)
+                VoiceConversationButton(makeTarget: makeVoiceTarget, finished: { target in
+                    switch target {
+                    case .computer(let chat, _): chat.stop(); opened(chat.sessionId)
+                    case .phone(let id): opened(id)
+                    }
+                })
+                DraftVoiceInput(text: $text, onPhone: onPhone) { words in
+                    var draft = store.drafts.draft(DraftStore.newChat)
+                    draft.text += (draft.text.isEmpty ? "" : " ") + words
+                    store.drafts.set(DraftStore.newChat, draft)
+                }
                 startButton
             }
             // The model, effort and where the chat runs: the box's bottom rows, never below it (#1599).
@@ -252,7 +267,13 @@ struct NewChatView: View {
                             }
                         }
                     } label: {
-                        chip(effortName(selectedEffort), icon: "gauge.with.dots.needle.33percent")
+                        HStack(spacing: 6) {
+                            EffortGauge(level: Effort.levels(for: model.1).firstIndex(of: selectedEffort),
+                                        count: Effort.levels(for: model.1).count, size: 20)
+                            Text(effortName(selectedEffort)).font(.footnote.weight(.medium)).lineLimit(1)
+                        }
+                        .foregroundStyle(palette.ink).padding(.horizontal, 10).frame(minHeight: 44)
+                        .background(palette.surface, in: Capsule())
                     }
                     .accessibilityHint("How hard the model works on each reply. Higher takes longer.")
                     .accessibilityIdentifier("newChat.effort")
@@ -295,6 +316,7 @@ struct NewChatView: View {
                 if !onPhone {
                     Menu {
                         Picker("Folder", selection: Binding(get: { folder }, set: { value in
+                            choseFolder = true
                             folder = value
                             if let id = store.activeId { app.prefs.lastFolder[id] = value }
                         })) {
@@ -306,21 +328,14 @@ struct NewChatView: View {
                                 }.tag(Optional(w.id))
                             }
                         }
+                        Divider()
+                        Button { foldersOpen = true } label: { Label("Manage folders", systemImage: "folder.badge.gearshape") }
                     } label: {
                         chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? String(localized: "No folder"), icon: "folder")
                     }
                     .accessibilityIdentifier("newChat.folder")
                     if app.prefs.shows("asks") {
-                        Menu {
-                            Picker("Tools", selection: toolsChoice) {
-                                ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                                    let name = app.prefs.expertMode ? modeName(m) : SimpleMode.asksName(m)
-                                    Text(m == .guardrails ? String(localized: "\(name) (Recommended)") : name).tag(m)
-                                }
-                            }
-                        } label: {
-                            chip(app.prefs.expertMode ? modeName(selectedTools) : SimpleMode.asksName(selectedTools), icon: "checkmark.shield")
-                        }
+                        ToolPolicyPicker(selection: toolsChoice)
                         .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
                         .accessibilityIdentifier("newChat.tools")
                     }
@@ -477,7 +492,9 @@ struct NewChatView: View {
         model = nil
         effort = nil
         mode = nil
+        choseFolder = false
         folder = app.prefs.lastFolder[id]
+        pickDefaultFolder()
         refusal = nil
         text = words
         store.drafts.set(DraftStore.newChat, current)
@@ -504,8 +521,14 @@ struct NewChatView: View {
         if let p = store.defaults.defaultProviderId, let m = store.defaults.defaultModelId, m != autoModelId { model = (p, m) }
     }
 
+    private var supportingFolders: [String] {
+        guard !choseFolder, folder != nil else { return [] }
+        let valid = Set(store.workspaces.map(\.id))
+        return store.pcSettings.defaultWorkspaceIds.filter { $0 != folder && valid.contains($0) }
+    }
+
     private var current: Draft {
-        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal)
+        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal, useDefaultFolders: !choseFolder)
     }
 
     private func restoreDraft() {
@@ -513,7 +536,17 @@ struct NewChatView: View {
         restored = true
         let draft = store.drafts.draft(DraftStore.newChat)
         folder = app.prefs.newChatFolder(computer: store.activeId, draft: draft)
+        choseFolder = draft.useDefaultFolders.map { !$0 } ?? (draft.workspaceId != nil)
         apply(draft)
+        pickDefaultFolder()
+    }
+
+    private func pickDefaultFolder() {
+        guard !choseFolder else { return }
+        let valid = Set(store.workspaces.map(\.id))
+        if let first = store.pcSettings.defaultWorkspaceIds.first(where: { valid.contains($0) }) {
+            folder = first
+        }
     }
 
     private func apply(_ d: Draft) {
@@ -534,6 +567,22 @@ struct NewChatView: View {
     private func adopt(_ stored: Draft?) {
         guard let d = stored, d != current, !d.isEmpty else { return }
         apply(d)
+    }
+
+    private func makeVoiceTarget() async throws -> ConversationTarget {
+        if onPhone {
+            guard let picked = phoneModel else { throw RelayError("Choose a phone model before starting voice.") }
+            return .phone(phone.create(providerId: picked.0, modelId: picked.1, first: ""))
+        }
+        guard let model else { throw RelayError("Choose a model before starting voice.") }
+        guard let computer = store.activeId, store.conn == .online else { throw RelayError("Connect to your computer before starting voice.") }
+        let id = try await store.createChat(providerId: model.0, modelId: model.1, workspaceId: folder,
+                                            mode: selectedTools, effort: selectedEffort, supportingWorkspaceIds: supportingFolders)
+        guard store.activeId == computer else { throw RelayError("The selected computer changed. Start voice again on the intended computer.") }
+        let chat = ChatModel(sessionId: id, store: store)
+        await chat.start()?.value
+        if Task.isCancelled { chat.stop(); throw CancellationError() }
+        return .computer(chat, computerId: computer)
     }
 
     private func start() {
@@ -560,7 +609,7 @@ struct NewChatView: View {
         error = nil
         Task {
             do {
-                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools, effort: selectedEffort)
+                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools, effort: selectedEffort, supportingWorkspaceIds: supportingFolders)
                 store.drafts.clear(DraftStore.newChat)
                 // The chat's own model sends the first message, so a failure shows
                 // there and the text comes back in its composer.
@@ -580,7 +629,7 @@ struct NewChatView: View {
     /// Waiting to send, and start when the computer is back.
     private func startLater(_ p: String, _ m: String, _ first: String) {
         guard !first.isEmpty || !images.isEmpty else { return }
-        store.outbox.add(chatId: nil, text: first, images: images, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue))
+        store.outbox.add(chatId: nil, text: first, images: images, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, supportingWorkspaceIds: supportingFolders))
         store.drafts.clear(DraftStore.newChat)
         text = ""
         images = []

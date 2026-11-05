@@ -233,6 +233,15 @@ fn language_ok(s: &str) -> bool {
 fn setting_value(path: &str, value: &Value) -> Result<(), Denied> {
     let ok = match path {
         "defaultChatMode" => return chat_mode(value, path),
+        "defaultWorkspaceIds" => value.as_array().is_some_and(|ids| {
+            ids.len() <= 100
+                && ids.iter().all(|id| {
+                    id.as_str().is_some_and(|s| {
+                        (1..=256).contains(&s.len())
+                            && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+                    })
+                })
+        }),
         "machineIcon" => value.as_str().is_some_and(|i| i.is_empty() || has(&policy().computer_icons, i)),
         "chatPaneAction" => matches!(value.as_str(), Some("complete" | "delete")),
         "skipDeleteConfirmation" | "voice.enabled" => value.is_boolean(),
@@ -347,6 +356,12 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
+        "session:setSupportingWorkspaces" => {
+            if args.len() != 2 || !args[0].as_str().is_some_and(|s| !s.is_empty()) {
+                return Err(denied("value-invalid", "session id"));
+            }
+            setting_value("defaultWorkspaceIds", &args[1])?;
+        }
         "workspace:addByPath" | "workspace:remove" => {
             let what = if channel == "workspace:addByPath" { "folder path" } else { "workspace id" };
             if arg(0).as_str().is_none_or(|s| s.trim().is_empty() || s.contains('\0')) {
@@ -1926,6 +1941,23 @@ mod tests {
                 refused("key-invalid", "device:registerKey")
             );
             assert_eq!(r.devices.device("phone-1").unwrap().key, None);
+        }
+
+        #[test]
+        fn supporting_folders_require_proof_and_validate_ids() {
+            let k = signer(32);
+            let channel = "session:setSupportingWorkspaces";
+            let args = json!(["chat", ["docs"]]);
+            let r = policy_rig(ON, Some(&k), None, "guardrails");
+            assert_eq!(r.ask(channel, args.clone(), None), refused("proof-required", channel));
+            let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+            assert!(r.ask(channel, args.clone(), Some(p)).is_ok());
+            assert_eq!(*r.calls.lock().unwrap(), vec![(channel.to_string(), args)]);
+            for invalid in [json!(null), json!(["/private"]), json!([""]), json!([3])] {
+                assert!(screen(channel, &[json!("chat"), invalid.clone()]).is_err());
+                assert!(check_settings_patch(&json!({"defaultWorkspaceIds": invalid})).is_err());
+            }
+            assert!(check_settings_patch(&json!({"defaultWorkspaceIds": ["app", "docs"]})).is_ok());
         }
 
         #[test]

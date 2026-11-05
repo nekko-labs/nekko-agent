@@ -5,9 +5,8 @@ import Foundation
 /// menu (apps/desktop/src/renderer/views/agentPanelView.ts) on the iPhone, kept
 /// as a phone preference rather than a computer setting.
 ///
-/// The defaults are the list as it was: by project, in the desktop's dragged
-/// order (newest first for the rest), with previews, completed chats and every
-/// project folder shown.
+/// Defaults match desktop: activity groups, with empty groups hidden.
+/// Explicitly saved choices remain intact.
 public struct ChatListView: Codable, Equatable, Sendable {
     /// `computer`: one group per place a chat runs (each paired computer, and this
     /// iPhone when it runs chats itself), as the desktop's Group by → Computer.
@@ -15,7 +14,7 @@ public struct ChatListView: Codable, Equatable, Sendable {
     /// No "Date created" as on the desktop: the phone's summaries carry only the last update.
     public enum SortBy: String, Codable, CaseIterable, Sendable { case manual, updated, name }
 
-    public var groupBy: GroupBy = .project
+    public var groupBy: GroupBy = .status
     public var sortBy: SortBy = .manual
     /// Manual order has no direction: it is whatever was dragged on the computer.
     public var ascending = false
@@ -23,8 +22,8 @@ public struct ChatListView: Codable, Equatable, Sendable {
     public var showPreviews = true
     /// Completed chats, after their group's active ones (in a Completed group when not by project).
     public var showCompleted = true
-    /// Project folders with no chats in them.
-    public var showEmptyGroups = true
+    /// Keep even groups with no chats visible.
+    public var showEmptyGroups = false
     /// With chats from more than one place: each row names where it runs.
     public var showComputer = true
     /// ...with that computer's icon, when it has one.
@@ -104,7 +103,9 @@ public enum ChatSections {
 
     /// The status groups, most urgent first.
     public static let statusGroups: [GroupDef] = [
-        GroupDef("status:input", "Needs you"), GroupDef("status:working", "Working"), GroupDef("status:idle", "Idle"),
+        GroupDef("status:input", "Needs input"), GroupDef("status:draft", "Draft"),
+        GroupDef("status:building", "Building"), GroupDef("status:verifying", "Verifying"),
+        GroupDef("status:watching", "Watching"), GroupDef("status:done", "Done"),
     ]
 
     /// The date groups, newest first, counted in local calendar days.
@@ -169,7 +170,7 @@ public enum ChatSections {
         }
         let defs = view.groupBy == .status ? statusGroups : dateGroups
         let groupOf: (SessionSummary) -> String = view.groupBy == .status
-            ? { statusKey(activity[$0.id]) }
+            ? { statusKey(activity[$0.id], chat: $0) }
             : { dateKey($0.updatedAt, now: now, calendar: calendar) }
         let grouped = Dictionary(grouping: active, by: groupOf)
         return defs.compactMap { d in
@@ -193,12 +194,13 @@ public enum ChatSections {
         return (shown, hidden)
     }
 
-    public static func statusKey(_ a: Activity?) -> String {
-        switch a {
-        case .needsYou?: return "status:input"
-        case .running?: return "status:working"
-        case nil: return "status:idle"
+    public static func statusKey(_ activity: Activity?, chat: SessionSummary? = nil) -> String {
+        if activity == .needsYou { return "status:input" }
+        if activity == .running || activity == .failed || chat?.running == true {
+            return chat?.phase == "verifying" || chat?.phase == "shipping" ? "status:verifying" : "status:building"
         }
+        if chat?.exchangeCount == 0 { return "status:draft" }
+        return (chat?.activeWatchCount ?? 0) > 0 ? "status:watching" : "status:done"
     }
 
     public static func dateKey(_ at: Int64, now: Int64, calendar: Calendar = .current) -> String {
