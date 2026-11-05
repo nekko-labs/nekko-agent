@@ -508,6 +508,7 @@ class ComputersRepositoryTest {
         fail = true
         repo.refresh()
         assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
         fail = false
         pending = buildJsonObject {}
         remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.CONNECTING)
@@ -519,8 +520,9 @@ class ComputersRepositoryTest {
     }
 
     @Test
-    fun `relay dismissal reconciles repository attention and switching computers resets it`() = runTest {
-        val remotes = FakeRemotes { c -> if (c.channel == Channels.CHAT_PENDING) attentionSnapshot else FakeRemotes.defaultAnswer(c) }
+    fun `legacy relay dismissal retains attention until full snapshot and switching resets it`() = runTest {
+        var pending = attentionSnapshot
+        val remotes = FakeRemotes { c -> if (c.channel == Channels.CHAT_PENDING) pending else FakeRemotes.defaultAnswer(c) }
         val repo = repo(remotes = remotes)
         repo.pair(link)
         runCurrent()
@@ -531,19 +533,26 @@ class ComputersRepositoryTest {
         assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
         remotes.last.dismissals.emit(E2E.activityTag("s1"))
         runCurrent()
-        assertTrue(repo.state.value.attention.pending.isEmpty())
-        repo.refresh()
+        assertFalse(repo.state.value.attention.known)
         assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        pending = buildJsonObject {}
+        remotes.last.dismissals.emit(E2E.activityTag("s1"))
+        runCurrent(); advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.pending.isEmpty())
         repo.pair(link.copy(room = "ffffffffffffffff"))
         assertTrue(repo.state.value.attention.pending.isEmpty())
     }
 
     @Test
-    fun `answers on this phone resolve only after a successful matching call`() = runTest {
+    fun `answers on this phone retain attention until fresh pending proves none`() = runTest {
         var refuse = false
+        var pending = attentionSnapshot
         val remotes = FakeRemotes { c ->
             when (c.channel) {
-                Channels.CHAT_PENDING -> attentionSnapshot
+                Channels.CHAT_PENDING -> pending
                 Channels.CHAT_ANSWER -> if (refuse) error("not connected") else kotlinx.serialization.json.JsonNull
                 else -> FakeRemotes.defaultAnswer(c)
             }
@@ -559,7 +568,15 @@ class ComputersRepositoryTest {
         refuse = false
         repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("older"))
         assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        pending = buildJsonObject {}
         repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("ask-1"))
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
         assertTrue(repo.state.value.attention.pending.isEmpty())
     }
 
@@ -577,9 +594,16 @@ class ComputersRepositoryTest {
         runCurrent()
         remotes.last.events.emit(Events.AGENT_EVENT to Json.parseToJsonElement("""{"type":"question_resolved","sessionId":"s1","callId":"ask-1"}"""))
         runCurrent()
+        assertFalse(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        // A post-resolution read proves zero before the old request returns.
+        remotes.handler = { c -> if (c.channel == Channels.CHAT_PENDING) buildJsonObject {} else FakeRemotes.defaultAnswer(c) }
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
         assertTrue(repo.state.value.attention.pending.isEmpty())
         pending.complete(attentionSnapshot)
         refresh.join()
+        assertTrue(repo.state.value.attention.known)
         assertTrue(repo.state.value.attention.pending.isEmpty())
     }
 
