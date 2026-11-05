@@ -159,6 +159,10 @@ public final class ComputersStore {
     public private(set) var pcSettings = PcSettings()
     public private(set) var workspaces: [WorkspaceFolder] = []
     public private(set) var activity: [String: Activity] = [:]
+    /// Each listed chat's pull requests (`pr:sessionList`) for its row: only chats whose transcript names one.
+    public private(set) var rowPrs: [String: [PullRequest]] = [:]
+    /// When each chat's row PRs were asked for, and the links it named then.
+    @ObservationIgnored private var rowPrsAsked: [String: (urls: [String], at: Int64)] = [:]
     public private(set) var models: [String: [ModelInfo]] = [:]
     public private(set) var modelErrors: [String: String] = [:]
     public private(set) var hostVersion: String?
@@ -1188,6 +1192,53 @@ public final class ComputersStore {
             }
             for await (id, m) in group {
                 if let m { modelErrors[id] = m.hasSuffix("timed out") ? "Didn’t answer in time." : m }
+            }
+        }
+    }
+
+    // MARK: The rows' pull requests
+
+    /// Rows ask for their PRs at most this many at a time, as the desktop's sidebar does...
+    public static let rowPrsBatch = 8
+    /// ...and again after this long (ms), or sooner when the chat moves on or names another PR.
+    public static let rowPrsFresh: Int64 = 5 * 60 * 1000
+
+    /// The chats in `chats` whose PRs are due a lookup: they name one, and were not
+    /// asked about lately with the same links, or have moved on since. Newest first.
+    public func rowPrsDue(_ chats: [SessionSummary]) -> [SessionSummary] {
+        let t = now()
+        return chats.filter { s in
+            guard !s.prUrls.isEmpty else { return false }
+            guard let asked = rowPrsAsked[s.id] else { return true }
+            return asked.urls != s.prUrls || s.updatedAt > asked.at || t - asked.at > Self.rowPrsFresh
+        }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// Look up the state of the PRs the chats in `chats` name, on the computer each
+    /// runs on, `rowPrsBatch` at a time. A failed lookup is asked again next time.
+    public func loadRowPrs(_ chats: [SessionSummary]) async {
+        let due = rowPrsDue(chats)
+        var start = 0
+        // A batch is marked asked as it goes out, so a cancelled walk leaves the rest due.
+        while start < due.count, !Task.isCancelled {
+            let batch = due[start..<min(start + Self.rowPrsBatch, due.count)]
+            start += Self.rowPrsBatch
+            let t = now()
+            for s in batch { rowPrsAsked[s.id] = (s.prUrls, t) }
+            let calls = batch.map { s in (s.id, try? caller(computerId(ofChat: s.id))) }
+            let results = await withTaskGroup(of: (String, [PullRequest]?).self) { group in
+                for (id, c) in calls {
+                    group.addTask {
+                        guard let c, let v = try? await c.call(Channels.prSessionList, [.string(id), .bool(false)]) else { return (id, nil) }
+                        return (id, PullRequest.list(v))
+                    }
+                }
+                var out: [(String, [PullRequest]?)] = []
+                for await r in group { out.append(r) }
+                return out
+            }
+            for (id, prs) in results {
+                if let prs { rowPrs[id] = prs } else { rowPrsAsked[id] = nil }
             }
         }
     }

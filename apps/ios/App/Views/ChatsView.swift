@@ -59,6 +59,8 @@ struct ChatsView: View {
             await store.refresh()
             await store.refreshFleet()
         }
+        // The rows' PR states: looked up as chats name PRs or move on, and every few minutes.
+        .task(id: rowPrsKey) { await store.loadRowPrs(listSummaries) }
         .navigationTitle("Chats")
         .toolbar {
             RootMascot(working: listActivity.values.contains(.running), pull: pull)
@@ -439,13 +441,21 @@ struct ChatsView: View {
 
     private var needsYou: [SessionSummary] { listSummaries.filter { listActivity[$0.id] == .needsYou } }
 
+    /// Changes when a row's PRs may have: a chat naming PRs moved on, a computer came online, or the five-minute mark passed.
+    private var rowPrsKey: String {
+        let chats = listSummaries.filter { !$0.prUrls.isEmpty }.map { "\($0.id):\($0.updatedAt):\($0.prUrls.count)" }
+        let tick = nowMs / ComputersStore.rowPrsFresh
+        return chats.joined(separator: ",") + "|\(store.conn)|\(store.peers.values.filter { $0.conn == .online }.count)|\(tick)"
+    }
+
     /// A chat on any computer in view. Opening one on another computer makes that
     /// computer active (`ChatView`), over the link the phone already holds to it.
     private func row(_ s: SessionSummary) -> some View {
         let on = owner(s)
         return NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
-                    showPreview: view.showPreviews, place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons)
+                    showPreview: view.showPreviews, place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons,
+                    prs: store.rowPrs[s.id] ?? [])
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
         .listRowBackground(RowBackground(needsYou: listActivity[s.id] == .needsYou,
@@ -500,6 +510,8 @@ struct ChatRow: View {
     var place: ChatPlace? = nil
     /// ...with its icon (Show → Computer icons).
     var showPlaceIcon = true
+    /// The pull requests the chat made, with their state (`pr:sessionList`).
+    var prs: [PullRequest] = []
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -514,10 +526,11 @@ struct ChatRow: View {
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
                 if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
-                if activity != nil || waiting > 0 || place != nil {
+                if activity != nil || waiting > 0 || place != nil || !prs.isEmpty {
                     HStack(spacing: 6) {
                         badge
                         if let place { PlaceChip(place: place, showIcon: showPlaceIcon) }
+                        if !prs.isEmpty { RowPrLinks(prs: prs) }
                         if waiting > 0 {
                             Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
                                 .font(.caption2).foregroundStyle(palette.inkSoft)
@@ -551,6 +564,50 @@ struct ChatRow: View {
         case .running?: RowChip(text: String(localized: "Working"), tone: .normal, accent: true)
         case nil: EmptyView()
         }
+    }
+}
+
+/// The PRs a chat made, on its row as on the desktop's agent cards: one `#123`
+/// per PR tinted by its state as on GitHub, up to three; past that a
+/// pull-request glyph and the count. Opening the chat shows each one.
+struct RowPrLinks: View {
+    static let maxInline = 3
+    let prs: [PullRequest]
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if prs.count > Self.maxInline {
+                Label("\(prs.count)", systemImage: "arrow.triangle.pull")
+                    .labelStyle(.titleAndIcon).foregroundStyle(palette.inkSoft)
+            } else {
+                ForEach(prs) { pr in Text("#\(pr.number)").foregroundStyle(tone(pr)) }
+            }
+        }
+        .font(.caption2.weight(.semibold).monospacedDigit())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("chats.row.prs")
+    }
+
+    /// Merged in the merge hue, closed in danger, a draft faint, an open one green: the desktop's `prTone`.
+    private func tone(_ pr: PullRequest) -> Color {
+        switch pr.state {
+        case .merged: return palette.accent
+        case .closed: return palette.danger
+        case .open: return pr.isDraft ? palette.inkFaint : palette.success
+        }
+    }
+
+    private var label: String {
+        prs.map { pr in
+            let s: String = switch pr.state {
+            case .merged: String(localized: "merged")
+            case .closed: String(localized: "closed")
+            case .open: pr.isDraft ? String(localized: "draft") : String(localized: "open")
+            }
+            return String(localized: "Pull request \(pr.number), \(s)")
+        }.joined(separator: ", ")
     }
 }
 
