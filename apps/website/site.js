@@ -411,6 +411,26 @@
   videos.forEach((v) => io.observe(v));
 })();
 
+// ---- panel videos with a light and a dark file (data-src-light / -dark):
+//      the file and poster follow the look, switching with the theme. ----
+(() => {
+  const toned = document.querySelectorAll('video[data-autoplay][data-src-light][data-src-dark]');
+  if (!toned.length) return;
+  const apply = () => {
+    const key = document.documentElement.dataset.theme === 'dark' ? 'Dark' : 'Light';
+    toned.forEach((v) => {
+      const src = v.dataset[`src${key}`];
+      if (v.getAttribute('src') === src) return;
+      const wasPlaying = !v.paused;
+      v.poster = v.dataset[`poster${key}`];
+      v.src = src;
+      if (wasPlaying) v.play().catch(() => {});
+    });
+  };
+  apply();
+  new MutationObserver(apply).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+
 // ---- the hero's speed replay: its file and end-frame poster follow the look
 //      (dark files for Dark, light for White), switching with the theme. It
 //      autoplays muted and loops; with reduced motion only the poster loads. ----
