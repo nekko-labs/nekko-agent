@@ -39,6 +39,22 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Dynamic pane search routing (#1854, 2026-11-05)
+
+Area: renderer. Result: matched baseline failure reproduced; no performance improvement or zero-effect claim.
+Conditions: same Linux runner, Intel Xeon Platinum 8573C (4 threads, 16 GB), Chrome/156.0.8078.79, Node22.23.4, 1440x1000, full latency workload, 33 cold switches per run. Exact base `9f9cffb607014608c14faf80b680a84c85fb70d4`, queue head `98a5cc2d5bb6fbac681aba7f81454bacf951a458`; order base/head/head/base. Clean snapshots and identical performance harness/daemon sources verified; separately built release daemons share SHA256 `a139292055626875d1a744439ca60854d62e37fc5a2ef9d8303764d32ddbad93`.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-frame p95 | 40.4 / 38.3 ms | 38.8 / 36.1 ms |
+| Cold-chat first-frame p50 | 29.0 / 29.0 ms | 29.7 / 29.9 ms |
+
+Both unchanged-base runs and both head runs fail the unchanged 33 ms gate. Raw nearest-rank percentiles were recomputed from the reports. This proves baseline failure on this runner, not a causal speedup or absence of influence from the routing change. The original protected queue [42033611344](https://github.com/nekko-labs/nekko-agent/actions/runs/42033611344) failed only cold first-frame paint at 36.3 / 37.6 / 34.3 ms p95 on the same CPU/browser class; build, integration tests, CodeQL and all other measured latency/memory rows passed, terminal typing skipped. Earlier cumulative [42031593338](https://github.com/nekko-labs/nekko-agent/actions/runs/42031593338) failed at 34.5 / 33.7 / 34.3 ms on Xeon 6973P-C, not a matched causal comparison.
+
+Separate timeline-instrumented base/head runs measured 38.4 / 39.2 ms p95 (p50 31.6 / 31.3 ms). Inspected cold traces contain 176562 / 171446 events; nested renderer-main totals for style UpdateLayoutTree 481.215 / 442.285 ms, Layout 200.154 / 194.624 ms, Paint 502.808 / 469.747 ms and Layerize 1604.836 / 1502.413 ms are whole-phase observations, not per-click causal attribution. Profiling overhead means this pair is not equivalent to the unprofiled controls. Earlier automatic streaming-only profiles do not measure cold-chat latency.
+
+Source: [exact matched reports, provenance and timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42035974208), [PR #1854](https://github.com/nekko-labs/nekko-agent/pull/1854), baseline [#712](https://github.com/nekko-labs/nekko-agent/issues/712). The diagnostic workflow completed, but all six measurements missed the budget; workflow success is not a passed product gate. PR remains held/draft/dequeued, pending a separate verified baseline repair or revert, then integration and protected validation. No manual queue rerun, relaxed budget or speculative product optimization. The temporary diagnostic workflow must never merge.
+
 ## Zone drag and composer actions (#1703, 2026-11-04)
 
 Area: renderer. Result: regression under investigation; no budget changes.
