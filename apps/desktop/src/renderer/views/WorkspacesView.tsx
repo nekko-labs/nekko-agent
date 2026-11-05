@@ -869,11 +869,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
-                        {s && subagentRows(kids).map((kid) => (
+                        {s && subagentRows(kids).map((kid, i, rows) => (
                           <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
                             isActive={kid.id === selectedId}
+                            last={i === rows.length - 1}
                             onOpen={() => onOpenChat(kid.id)}
                           /></div>
                         ))}
@@ -1068,25 +1069,27 @@ function CompletedRow({
   );
 }
 
-/** One sub-agent under its parent's card: a single line, no details of its own. */
+/**
+ * One sub-agent under its parent's card: a single line, no details of its own.
+ * A tree elbow ties it to the card above (a tee for every row but the last),
+ * and its status icon (rocket, check, question) sits where a bullet would.
+ */
 function SubAgentRow({
-  session, status, isActive, onOpen,
+  session, status, isActive, last, onOpen,
 }: {
-  session: SessionSummary; status: AgentStatus | undefined; isActive: boolean; onOpen: () => void;
+  session: SessionSummary; status: AgentStatus | undefined; isActive: boolean; last: boolean; onOpen: () => void;
 }) {
   return (
     <button
       onClick={onOpen}
-      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-6 pr-2 text-left text-xs transition-colors duration-150 ${
+      data-subagent-row={session.id}
+      className={`relative flex w-full items-center gap-1.5 rounded-lg py-1 pl-7 pr-2 text-left text-xs transition-colors duration-150 ${
         isActive ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'
       }`}
     >
-      <span
-        aria-hidden
-        className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
-      />
-      <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
+      <span aria-hidden data-subagent-tree={last ? 'last' : 'tee'} className="subagent-tree" />
       <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, wakeSourcesOf(session))} />
+      <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
     </button>
   );
 }

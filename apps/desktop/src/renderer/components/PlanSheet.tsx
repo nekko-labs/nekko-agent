@@ -7,23 +7,43 @@ import { sheetPlan } from '../claudeAgentPlan.js';
 import { VERIFY_GROUP_ID, groupVerification } from '../planVerifyGroup.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
-import { CheckIcon, RobotIcon, RocketIcon, TagIcon } from '../icons.js';
+import { CheckIcon, CloseIcon, RocketIcon, TagIcon, WarningIcon } from '../icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
 import { PlanWorking } from './PlanWorking.js';
 
-function StepMark({ status, paused }: { status: PlanStep['status']; paused: boolean }) {
-  const label = status === 'active' ? (paused ? 'Paused' : 'Working') : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
-  return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" role="img" aria-label={label} title={label}>
-    {status === 'active' && !paused ? <PlanWorking /> : status === 'done' ? <CheckIcon className="h-3 w-3 text-success" /> :
-      <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: status === 'active' ? 'var(--accent)' : 'var(--ink-faint)' }}>
-        {status === 'active' ? (paused ? <path d="M8 5v14M16 5v14" /> : <path d="M12 3v3m6.36-.36-2.12 2.12M21 12h-3m.36 6.36-2.12-2.12M12 21v-3m-6.36.36 2.12-2.12M3 12h3m-.36-6.36 2.12 2.12" />) : <>
-          <circle cx="12" cy="12" r="8" />
-          {status === 'skipped' && <path d="M6 18 18 6" />}
-        </>}
-      </svg>}
-  </span>;
+/**
+ * The step's bullet. A reported check outranks the step's own status, so a
+ * done step whose check is still running shows the working ripple, and a
+ * failed or blocked check shows on the bullet rather than in a chip beside it.
+ * With evidence attached, the bullet opens it.
+ */
+function StepMark({ step, paused }: { step: Pick<PlanStep, 'status' | 'verification' | 'updatedAt'>; paused: boolean }) {
+  const { status } = step;
+  const v = step.verification;
+  const check = v && v.status !== 'pending' && v.status !== 'unknown' ? v.status : undefined;
+  // In progress: a running check, or an active step with no settled check. An
+  // interrupted run pauses either one.
+  const running = check === 'active' || (!check && status === 'active');
+  const stepLabel = status === 'active' ? 'Working' : status === 'done' ? 'Done' : status === 'skipped' ? 'Skipped' : 'Pending';
+  const checkLabel = v && `${(VERIFY[v.status] ?? VERIFY.unknown).label}${v.device ? ` on ${v.device}` : ''}`;
+  const evidence = safeProgressLink(v?.evidenceUrl);
+  // A reported check names the bullet; the step's own status is the fallback.
+  const label = running && paused ? 'Paused' : checkLabel ?? stepLabel;
+  const title = v ? `${label} · Agent-reported, not inferred from tool results · ${progressAge(step.updatedAt, Date.now(), ['active', 'pending'].includes(v.status))}${evidence ? ' · Open evidence' : ''}` : label;
+  const glyph = running ? (paused
+      ? <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--accent)' }}><path d="M8 5v14M16 5v14" /></svg>
+      : <PlanWorking />)
+    : check === 'passed' || (!check && status === 'done') ? <CheckIcon className="h-3 w-3 text-success" />
+    : check === 'failed' ? <span className="grid place-items-center" style={{ color: 'var(--danger)' }}><CloseIcon className="h-3 w-3" /></span>
+    : check === 'blocked' ? <span className="grid place-items-center" style={{ color: 'var(--warning)' }}><WarningIcon className="h-3 w-3" /></span>
+    : <svg aria-hidden="true" className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--ink-faint)' }}>
+        <circle cx="12" cy="12" r="8" />
+        {status === 'skipped' && <path d="M6 18 18 6" />}
+      </svg>;
+  if (evidence) return <button type="button" className="plan-sheet-mark mt-1 grid h-3 w-3 shrink-0 place-items-center" data-plan-check={v?.status} aria-label={label + ', open evidence'} title={title} onClick={(e) => { e.stopPropagation(); open(evidence); }}>{glyph}</button>;
+  return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" data-plan-check={v?.status} role="img" aria-label={label} title={title}>{glyph}</span>;
 }
 
 /** One PR as a chip: number, state, and CI from the PR poller's cached rollup. */
@@ -83,18 +103,6 @@ const VERIFY = {
 };
 const open = (url?: string) => { if (url) void window.nekko.openPath(url).catch(() => {}); };
 
-/** Only the agent's explicit report counts; a done step or a tool success is not a pass. */
-function VerificationChip({ step }: { step: PlanStep }) {
-  const v = step.verification!;
-  const { label, tone } = VERIFY[v.status] ?? VERIFY.unknown;
-  const evidence = safeProgressLink(v.evidenceUrl);
-  return <button type="button" className="plan-sheet-chip" data-plan-chip="verify" disabled={!evidence}
-    title={`Agent-reported, not inferred from tool results · ${progressAge(step.updatedAt, Date.now(), ['active', 'pending'].includes(v.status))}${evidence ? ' · Open evidence' : ''}`}
-    onClick={() => open(evidence)}>
-    <span className="plan-sheet-dot" style={{ background: tone }} />{label}{v.device ? ` on ${v.device}` : ''}
-  </button>;
-}
-
 /** One slim row: each failing or running check by name, the passing ones folded into a count. */
 function CiChips({ info }: { info: PrInfo }) {
   const items = info.checkProgress?.items ?? [];
@@ -151,8 +159,9 @@ type Child = { id: string; title: string; running: boolean };
 
 function SubagentChip({ child, onOpen }: { child: Child; onOpen: (id: string) => void }) {
   return <button type="button" className="plan-sheet-chip" data-plan-chip="subagent" title={`Open ${child.title}`} onClick={() => onOpen(child.id)}>
-    <RobotIcon className="h-3 w-3" /><span className="truncate">Sub-agent: {child.title}</span>
+    {/* Its status leads, where the robot used to sit, rather than trailing the title. */}
     {child.running ? <span className="plan-sheet-glyph is-running" role="img" aria-label="Running"><RocketIcon className="h-3 w-3" /></span> : <span className="plan-sheet-glyph" role="img" aria-label="Done"><CheckIcon className="h-3 w-3" /></span>}
+    <span className="truncate">Sub-agent: {child.title}</span>
   </button>;
 }
 
@@ -280,7 +289,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
     const shownPrs = !prsShown ? [] : own?.prs.length ? own.prs : [...links.values()].flatMap(l => l.prs).slice(-1);
     const chips = [
       allKids.length > 0 && <SubagentSummary key="subagents" children={allKids} />,
-      current.verification && <VerificationChip key="verify" step={current} />,
       ...shownPrs.map(prChip),
       // The step's own task links, else the chat's (the first step's), which say what this work is for.
       ...(own?.projects.length ? own.projects : links.get(plan[0].id)?.projects ?? []).map(link => <ProjectChip key={link.url} link={link} />),
@@ -289,7 +297,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
     return <div className="plan-sheet-dock"><div className="plan-sheet" data-plan-sheet data-folded aria-label="Agent plan">
       <button type="button" className="plan-sheet-fold" onClick={() => setCollapsed(false)} aria-expanded={false} title="Show the whole plan">
         <span className="plan-sheet-line">
-          <StepMark status={current.status} paused={paused} />
+          <StepMark step={current} paused={paused} />
           <Kind kind={current.kind} current={current.status === 'active'} />
           <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
           <Pass step={current} />
@@ -322,7 +330,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         // The grouped Verify step shows each check as a sub-bullet, each with its own report.
         const subs = step.id === VERIFY_GROUP_ID ? verifyChecks : [];
         const report = subs.length ? undefined : step.verification;
-        const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || report || checks.length);
+        const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || checks.length);
         const detail = subs.length ? step.note : report?.detail || step.note;
         const squeezed = step.status === 'done' || step.status === 'skipped';
         const more = !!(detail || chips || subs.length);
@@ -333,7 +341,7 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
           <Pass step={step} />
         </>;
         return <li key={step.id} className="plan-sheet-step" data-plan-step={squeezed ? 'done' : step.status} data-plan-step-id={step.id} data-open={isOpen || undefined}>
-          <StepMark status={step.status} paused={paused} />
+          <StepMark step={step} paused={paused} />
           <div className="min-w-0">
             {more
               ? <button type="button" className="plan-sheet-line plan-sheet-step-toggle" aria-expanded={isOpen} onClick={() => setStepOpen(o => ({ ...o, [step.id]: !isOpen }))}>
@@ -347,11 +355,10 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
                 {subs.map(sub => {
                   const subDetail = sub.verification?.detail || sub.note;
                   return <li key={sub.id} className="plan-sheet-substep" data-plan-substep={sub.id}>
-                    <StepMark status={sub.status} paused={paused} />
+                    <StepMark step={sub} paused={paused} />
                     <div className="min-w-0 flex-1">
                       <p className="plan-sheet-line">
                         <span className={`min-w-0 flex-1 truncate ${sub.status === 'done' || sub.status === 'skipped' ? 'text-ink-soft' : 'text-ink'}${sub.status === 'skipped' ? ' line-through' : ''}`} title={sub.title}>{sub.title}</span>
-                        {sub.verification && <VerificationChip step={sub} />}
                       </p>
                       {subDetail && <p className="truncate text-xs text-ink-faint" title={subDetail}>{subDetail}</p>}
                     </div>
@@ -361,7 +368,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
               {chips && <div className="plan-sheet-chips">
                 {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
                 {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}
-                {report && <VerificationChip step={step} />}
                 {prsShown && own?.prs.map(prChip)}
                 {checks.map(pr => <CiChips key={pr.url} info={pr} />)}
                 {own?.artifacts.map(artifactChip)}

@@ -2748,6 +2748,18 @@
    breathing between the accent and a lighter tint, the flame flickering and
    the speed streaks sliding past. Kept small and slow: it sits in a dense list.
    Stepped timing keeps a list of working rockets from repainting every frame. */
+/* Across the top of a sub-agent's chat: what it is and which chat it works for. */
+.subagent-banner { display: flex; min-width: 0; flex-shrink: 0; align-items: center; gap: 6px; border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 4px 12px; font-size: var(--text-2xs); color: var(--accent); }
+.subagent-banner-parent { display: inline-flex; min-width: 0; align-items: center; gap: 2px; border-radius: 999px; padding: 1px 6px; color: var(--ink); font-weight: 500; }
+.subagent-banner-parent:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+/* The tree line from a parent's card to each of its sub-agent rows: a tee for
+   every row, an elbow for the last. It reaches a little above the row so the
+   lines join across the gap between rows. */
+.subagent-tree { position: absolute; left: 14px; top: 0; bottom: 0; width: 8px; pointer-events: none; --tree-line: color-mix(in srgb, var(--ink) 32%, transparent); }
+.subagent-tree::before { content: ''; position: absolute; left: 0; top: -4px; bottom: 0; border-left: 1px solid var(--tree-line); }
+.subagent-tree::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; border-top: 1px solid var(--tree-line); }
+.subagent-tree[data-subagent-tree='last']::before { content: none; }
+.subagent-tree[data-subagent-tree='last']::after { top: -4px; height: calc(50% + 4px); border-top: 0; border-left: 1px solid var(--tree-line); border-bottom: 1px solid var(--tree-line); border-bottom-left-radius: 5px; }
 .status-rocket { color: var(--success); animation: rocket-breathe 2.4s steps(12, end) infinite; }
 .status-rocket svg { animation: rocket-hover 1.2s steps(10, end) infinite; overflow: visible; }
 .status-rocket .rocket-flame { animation: rocket-flame .35s steps(4, end) infinite alternate; transform-origin: 12px 18px; }

@@ -39,14 +39,21 @@ describe('working and paused marks', () => {
   });
 });
 
-describe('verification chips', () => {
-  it('shows only explicit reports, with device and detail, never a done step on its own', () => {
+describe('verification marks', () => {
+  const marks = (html: string) => html.match(/data-plan-check=/g)?.length ?? 0;
+  it('shows only explicit reports, on the bullet with device and detail, never as a chip', () => {
     const html = render([step('inspected', 'passed'), step('phone', 'blocked', { device: 'iPhone', detail: 'Waiting for pairing' }), { id: 'generic', title: 'generic', status: 'done', createdAt: now, updatedAt: now }]);
-    expect(chips(html, 'verify')).toBe(2);
-    expect(html).toContain('Verified');
-    expect(html).toContain('Check blocked on iPhone');
+    expect(chips(html, 'verify')).toBe(0);
+    // One per report, plus the Verify step that gathers them and carries their roll-up.
+    expect(marks(html)).toBe(3);
+    expect(html).toContain('aria-label="Verified"');
+    expect(html).toContain('aria-label="Check blocked on iPhone"');
     expect(html).toContain('Waiting for pairing');
     expect(html).toContain('not inferred from tool results');
+  });
+  it('shows the working ripple while a check runs, even on a done step, and only then', () => {
+    expect(render([step('running', 'active')])).toContain('class="plan-working"');
+    for (const status of ['pending', 'passed', 'failed', 'blocked']) expect(render([step('t', status)])).not.toContain('class="plan-working"');
   });
   it('gathers every Verify step and report under one Verify step, as sub-bullets', () => {
     const kinded = (id: string, kind: PlanStep['kind'], extra = {}) => ({ id, title: id, kind, status: 'done', createdAt: now, updatedAt: now, ...extra }) as PlanStep;
@@ -58,19 +65,20 @@ describe('verification chips', () => {
     ]);
     expect(html.match(/data-plan-kind="verify"/g)).toHaveLength(1);
     expect(html.match(/data-plan-substep=/g)).toHaveLength(3);
-    // The build step's report moved under Verify: its own row has no chip.
+    // The build step's report moved under Verify: its own row has no check on its bullet.
     const build = html.slice(html.indexOf('data-plan-step-id="Fix the parser"'), html.indexOf('data-plan-step-id="verify:all"'));
-    expect(chips(build, 'verify')).toBe(0);
+    expect(marks(build)).toBe(0);
     expect(html).toContain('Verified on Windows');
+    expect(chips(html, 'verify')).toBe(0);
   });
   it('marks waiting reports stale and leaves finished ones unstale', () => {
     vi.spyOn(Date, 'now').mockReturnValue(now + 180_000);
     for (const status of ['passed', 'failed', 'blocked', 'unknown']) expect(render([step('t', status)])).not.toContain(' · Stale');
     for (const status of ['active', 'pending']) expect(render([step('w', status)])).toContain('3m ago · Stale');
   });
-  it('opens only safe evidence links', () => {
-    expect(render([step('bad', 'passed', { evidenceUrl: 'javascript:alert(1)' })])).toMatch(/data-plan-chip="verify" disabled=""/);
-    expect(render([step('ok', 'passed', { evidenceUrl: 'https://example.com/proof.png' })])).not.toMatch(/data-plan-chip="verify" disabled=""/);
+  it('opens only safe evidence links from the bullet', () => {
+    expect(render([step('bad', 'passed', { evidenceUrl: 'javascript:alert(1)' })])).not.toContain('open evidence');
+    expect(render([step('ok', 'passed', { evidenceUrl: 'https://example.com/proof.png' })])).toMatch(/<button[^>]*class="plan-sheet-mark[^>]*aria-label="Verified, open evidence"/);
   });
 });
 
