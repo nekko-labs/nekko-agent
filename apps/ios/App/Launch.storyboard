@@ -16,7 +16,7 @@
             <constraint firstItem="launch-cat" firstAttribute="width" relation="greaterThanOrEqual" secondItem="launch-view" secondAttribute="height" multiplier="0.17" id="launch-h"/>
             <constraint firstItem="launch-cat" firstAttribute="width" constant="0" priority="250" id="launch-least"/>
         </constraints>
-        <viewLayoutGuide key="safeArea" id="launch-safe"/><color key="backgroundColor" red="0.615686" green="0.549020" blue="0.901961" alpha="1" colorSpace="custom" customColorSpace="sRGB"/></view></viewController>
+        <viewLayoutGuide key="safeArea" id="launch-safe"/><color key="backgroundColor" red="0.098039" green="0" blue="0.098039" alpha="1" colorSpace="custom" customColorSpace="sRGB"/></view></viewController>
         <placeholder placeholderIdentifier="IBFirstResponder" id="launch-responder" sceneMemberID="firstResponder"/>
     </objects></scene></scenes>
     <resources><image name="LaunchCat" width="40" height="40"/></resources>

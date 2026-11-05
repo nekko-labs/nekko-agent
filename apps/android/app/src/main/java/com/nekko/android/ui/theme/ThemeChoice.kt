@@ -30,6 +30,9 @@ data class ThemePreset(
     companion object {
         private val BASIC = setOf("system", "light", "dark")
 
+        /** The violet System, Light and Dark shipped before the plum palette; desktops still save them. */
+        val RETIRED_BASIC_ACCENTS = setOf(0xFF6D5EFCL, 0xFF8B7DFFL)
+
         fun find(id: String?): ThemePreset? = THEME_PRESETS.firstOrNull { it.id == id }
 
         /** The named presets (Nebula, Nord…), in the desktop's order. */

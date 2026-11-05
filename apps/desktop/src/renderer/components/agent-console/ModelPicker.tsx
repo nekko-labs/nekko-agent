@@ -410,7 +410,7 @@ export function ModelPicker({
                     )}
                     {column.providers.map((provider) => {
                       const g = groups.find((group) => group.provider.id === provider.id) ?? { provider, models: [] };
-                      const remaining = q ? g.models : g.models.filter((m) => !pinnedKeys.has(`${g.provider.id}::${m.id}`));
+                      const remaining = q ? g.models : g.models.filter((m) => (favSet.has(`${g.provider.id}::${m.id}`) || !pinnedKeys.has(`${g.provider.id}::${m.id}`)));
                       const missingDefault = defaultProvider?.id === provider.id && !defaultModel && !q;
                       if (!remaining.length && !missingDefault) return null;
                       // A local provider can serve models out of several folders; when
