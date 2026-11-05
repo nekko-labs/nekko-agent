@@ -258,8 +258,14 @@ pub fn turn_rig(name: &str, session: Value) -> TurnRig {
 }
 
 pub fn turn_rig_with(name: &str, session: Value, extra: Value) -> TurnRig {
+    turn_rig_env(name, session, extra, &[])
+}
+
+/// [`turn_rig_with`], with the daemon's own environment changed as
+/// [`start_with_env`] does.
+pub fn turn_rig_env(name: &str, session: Value, extra: Value, env: &[(&str, Option<&str>)]) -> TurnRig {
     let data = std::env::temp_dir().join(format!("nekkod-turn-{name}-{}", std::process::id()));
-    turn_rig_at_with_env(&data, session, extra, &[])
+    turn_rig_at_with_env(&data, session, extra, env)
 }
 
 pub fn turn_rig_at_with_env(
