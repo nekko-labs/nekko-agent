@@ -51,6 +51,7 @@ public struct Draft: Equatable, Sendable {
     public var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && skill == nil && images.isEmpty
             && providerId == nil && modelId == nil && workspaceId == nil && mode == nil && effort == nil && refusal == nil
+            && useDefaultFolders != false && supportingWorkspaceIds.isEmpty
     }
 
     /// Something to send: words, a skill or a photo.
@@ -67,7 +68,9 @@ public struct Draft: Equatable, Sendable {
         out.images = Array((back.images + images).prefix(Draft.maxImages))
         out.providerId = providerId ?? back.providerId
         out.modelId = modelId ?? back.modelId
-        out.workspaceId = workspaceId ?? back.workspaceId
+        out.workspaceId = useDefaultFolders == false ? workspaceId : (workspaceId ?? back.workspaceId)
+        out.useDefaultFolders = useDefaultFolders ?? back.useDefaultFolders
+        out.supportingWorkspaceIds = useDefaultFolders == nil ? back.supportingWorkspaceIds : supportingWorkspaceIds
         out.mode = mode ?? back.mode
         out.effort = effort ?? back.effort
         out.refusal = back.refusal ?? refusal

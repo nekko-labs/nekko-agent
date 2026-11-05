@@ -7,7 +7,7 @@ final class PhoneParityTests: XCTestCase {
         let start = app.buttons["newChat.start"]
         XCTAssertTrue(start.waitForExistence(timeout: 10))
         XCTAssertFalse(start.isEnabled)
-        XCTAssertTrue(app.staticTexts["Connect to start"].exists)
+        XCTAssertEqual(start.label, "Connect to start")
         XCTAssertEqual(app.textViews["newChat.prompt"].value as? String, "Review both folders")
         attach(app, "offline-starred-folders")
     }

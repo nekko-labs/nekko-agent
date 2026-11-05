@@ -14,6 +14,12 @@ final class WorkspaceTests: XCTestCase {
         XCTAssertEqual(Draft.from(draft.json)?.useDefaultFolders, true)
         XCTAssertEqual(Draft.from(draft.json)?.supportingWorkspaceIds, ["docs"])
         XCTAssertEqual(Draft.from(["text": "legacy"])?.supportingWorkspaceIds, [])
+        let restored = Draft().merging(draft)
+        XCTAssertEqual(restored.supportingWorkspaceIds, ["docs"])
+        let explicitNone = Draft(useDefaultFolders: false).merging(draft)
+        XCTAssertNil(explicitNone.workspaceId)
+        XCTAssertTrue(explicitNone.supportingWorkspaceIds.isEmpty)
+        XCTAssertFalse(Draft(useDefaultFolders: false).isEmpty)
     }
 
     func testPathsAndLegacyFoldersRoundTripThroughCache() {

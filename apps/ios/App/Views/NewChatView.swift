@@ -142,6 +142,8 @@ struct NewChatView: View {
         .onChange(of: model?.0) { _, _ in saveDraft() }
         .onChange(of: model?.1) { _, _ in saveDraft() }
         .onChange(of: folder) { _, _ in saveDraft() }
+        .onChange(of: choseFolder) { _, _ in saveDraft() }
+        .onChange(of: cachedSupportingFolders) { _, _ in saveDraft() }
         .onChange(of: mode) { _, _ in saveDraft() }
         .onChange(of: effort) { _, _ in saveDraft() }
         // A chat started offline that the computer turned down comes back here.
@@ -555,6 +557,10 @@ struct NewChatView: View {
     }
 
     private func apply(_ d: Draft) {
+        if let defaults = d.useDefaultFolders {
+            choseFolder = !defaults
+            cachedSupportingFolders = d.supportingWorkspaceIds
+        }
         if !d.text.isEmpty { text = d.text }
         if !d.images.isEmpty { images = d.images }
         if let p = d.providerId, let m = d.modelId { model = (p, m) }
