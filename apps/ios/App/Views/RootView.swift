@@ -133,7 +133,7 @@ struct RootView: View {
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
     private func syncCover() {
-        // Before the first unlock the cover is the launch animation's held first frame, so
+        // Before the first unlock the cover is the launch animation, building and holding, so
         // the animation underneath takes over without a seam; after that it is the dissolving cat.
         let lock = LockView(phase: phase, cat: app.lock.everUnlocked, opening: !covered) { cover.opened() }
             .environment(app)
@@ -331,8 +331,8 @@ struct LockView: View {
             if cat {
                 SplashView(kind: .resume, ready: opening, onDone: opened)
             } else {
-                // The launch animation's first frame (the launch screen's cat), held: unlocked,
-                // the cover goes at once and the same frame underneath starts its zoom.
+                // The launch animation itself, building the cat and holding it: unlocked, the cover
+                // goes at once and the same frame underneath (same clock) carries on into the zoom.
                 SplashView(ready: false) {}
             }
             if app.lock.locked && phase == .active && prompted && !app.lock.authenticating {
