@@ -148,7 +148,7 @@ An image set up by an older Nekko may lack `node`, `gh` or `jq`, and a job that 
 before its own setup fails in seconds with `command not found`. The runner card then says, for
 example, "node and gh are missing from this Mac's runner image. Jobs that need them will fail."
 Choose **Install them**: Nekko copies the image, starts the copy once to install them with
-Homebrew, checks its disk for them and test-boots it, in about ten minutes. The image in use keeps
+Homebrew, checks its disk for them and test-boots it: minutes, not a rebuild's half hour. The image in use keeps
 taking jobs until then, and the sheet shows the stages and any failure like setup does.
 
 ## Use an app you already have
