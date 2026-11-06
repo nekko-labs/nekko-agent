@@ -204,5 +204,3 @@ export const COMPUTER_ICON_GLYPHS: Record<ComputerIconName, (p: P) => React.Reac
   cat: (p) => <S {...p}><path d="M5 5v9a7 7 0 0 0 14 0V5l-4 3a8 8 0 0 0-6 0L5 5Z" /><path d="M9.5 13h.01M14.5 13h.01" /></S>,
 };
 
-/** Hands up: YOLO runs without asking, except for explicit deny rules. */
-export const YoloIcon = ({ className }: { className?: string }) => <span className={className} aria-hidden="true" data-yolo-icon>🙌</span>;

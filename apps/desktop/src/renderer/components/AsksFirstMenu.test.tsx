@@ -2,7 +2,8 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { ChatMode } from '@nekko-agent/shared';
-import { HandIcon, ShieldCheckIcon, YoloIcon } from '../icons.js';
+import { HandIcon, ShieldCheckIcon } from '../icons.js';
+import { YoloIcon } from '../gentleface-icons.js';
 import { ASKS_FIRST, ASKS_MENU_WIDTH } from './AsksFirstMenu.js';
 
 describe('the asks-first selector', () => {
@@ -11,7 +12,7 @@ describe('the asks-first selector', () => {
     expect(Object.fromEntries(ASKS_FIRST.map((o) => [o.mode, o.label]))).toEqual(values);
   });
 
-  it("shows each choice with its icon: Expert's Approvals tiles for ask and guardrails, hands up for yolo", () => {
+  it("shows each choice with its icon: the same icons as Expert's Approvals tiles", () => {
     const icons: Record<ChatMode, unknown> = { ask: HandIcon, guardrails: ShieldCheckIcon, yolo: YoloIcon };
     expect(Object.fromEntries(ASKS_FIRST.map((o) => [o.mode, o.icon]))).toEqual(icons);
   });
@@ -21,7 +22,7 @@ describe('the asks-first selector', () => {
   });
 });
 
-it('uses the hands-up emoji for Works on its own', () => {
+it('uses the Gentleface running figure for Works on its own', () => {
   expect(ASKS_FIRST.find(o => o.mode === 'yolo')?.icon).toBe(YoloIcon);
-  expect(renderToStaticMarkup(<YoloIcon />)).toContain('🙌');
+  expect(renderToStaticMarkup(<YoloIcon />)).toContain('data-gf-icon="running"');
 });

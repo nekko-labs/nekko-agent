@@ -50,6 +50,8 @@ describe('Mode panel markup', () => {
     expect(out).toMatch(/aria-checked="true"[^>]*data-memory="all"/);
     expect(out).toMatch(/aria-checked="true"[^>]*data-guidance="rules"/);
     expect(out).toMatch(/data-chat-mode="guardrails"|aria-checked="true"[^>]*data-chat-mode="guardrails"/);
+    // The yolo tile wears the same Gentleface running figure as Simple's Works on its own.
+    expect(out).toMatch(/data-chat-mode="yolo"[^]*?data-gf-icon="running"/);
   });
   it('counts MCP servers and connectors this chat sees', () => {
     store.settings = { ...store.settings, mcpServers: [{ id: 'web', name: 'web', enabled: true }, { id: 'files', name: 'files', enabled: true }, { id: 'off', name: 'off', enabled: false }], connectors: [{ kind: 'github', connected: true }, { kind: 'slack', connected: true }, { kind: 'linear', connected: false }] };

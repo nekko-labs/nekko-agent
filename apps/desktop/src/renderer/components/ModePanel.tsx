@@ -12,9 +12,9 @@ import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
   ExternalIcon, FileIcon, FolderIcon, GaugeIcon, InfoIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
-  RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
+  RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon,
 } from '../icons.js';
-import { BrainCircuitIcon, GfGaugeIcon, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
+import { BrainCircuitIcon, GfGaugeIcon, GfLockIcon, ShieldQuestionIcon, YoloIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
 
 const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
