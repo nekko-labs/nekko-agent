@@ -8,7 +8,7 @@ import { BASELINE_WINDOW_MS, CODEX_BUDGET, CODEX_WAIT_MS, RETRY_BUDGET, baseline
 
 const HEAD = 'a'.repeat(40);
 const OLD = 'b'.repeat(40);
-const pr = (over = {}) => ({ draft: false, crossRepo: false, queued: false, labels: [], mergeable: 'MERGEABLE', head: HEAD, gate: 'SUCCESS', gateAttempt: 0, markers: [], ...over });
+const pr = (over = {}) => ({ draft: false, crossRepo: false, labels: [], mergeable: 'MERGEABLE', head: HEAD, gate: 'SUCCESS', gateAttempt: 0, markers: [], ...over });
 const mark = (kind, sha = HEAD, at = 0) => ({ kind, sha, at });
 
 test('rules cover only files that need no judgment', () => {
@@ -33,8 +33,8 @@ test('markers are read from both the repair and the sweeper comments', () => {
   ]);
 });
 
-test('drafts, forks, holds and queued PRs are left alone', () => {
-  for (const over of [{ draft: true }, { crossRepo: true }, { labels: ['hold'] }, { queued: true }]) {
+test('drafts, forks and holds are left alone', () => {
+  for (const over of [{ draft: true }, { crossRepo: true }, { labels: ['hold'] }]) {
     assert.equal(decide(pr({ ...over, mergeable: 'CONFLICTING' })).action, 'skip', JSON.stringify(over));
   }
 });
@@ -49,9 +49,8 @@ test('a red gate goes to Codex only after the sweeper re-ran it', () => {
   assert.deepEqual(decide(pr({ gate: 'FAILURE', gateAttempt: 2 })), { action: 'codex', kind: 'ci', why: "gate is FAILURE after the sweeper's re-run" });
 });
 
-test('a second ejection at the same head goes to Codex', () => {
-  assert.equal(decide(pr({ markers: [mark('sweeper-enqueued')] })).kind, 'queue');
-  assert.equal(decide(pr({ markers: [mark('sweeper-enqueued', OLD)] })).action, 'skip');
+test('old merge-queue markers no longer hand a green PR to Codex', () => {
+  for (const markers of [[mark('sweeper-enqueued')], [mark('baseline-queue')]]) assert.equal(decide(pr({ markers })).action, 'skip', JSON.stringify(markers));
 });
 
 test('Codex gets an hour per request, then a person is asked', () => {
@@ -193,7 +192,7 @@ test('a branch that already contains main needs nothing', () => {
   assert.equal(r.status, 'up-to-date');
 });
 
-test("a job failing in other PRs' merge groups is main's, not this PR's", () => {
+test("a job failing in other PRs' CI runs is main's, not this PR's", () => {
   const now = Date.parse('2026-11-04T16:00:00Z');
   const runs = [
     { pr: 1716, at: now - 1000, failed: ['perf', 'gate'] },
@@ -210,12 +209,12 @@ test("a job failing in other PRs' merge groups is main's, not this PR's", () => 
 });
 
 test('a PR waiting on main is not handed to Codex, and is retried a bounded number of times', () => {
-  const waiting = decide(pr({ markers: [mark('sweeper-enqueued'), mark('baseline-queue')] }));
-  assert.deepEqual(waiting, { action: 'baseline', kind: 'queue', retries: 0 });
-  const retried = decide(pr({ markers: [mark('baseline-queue'), ...Array.from({ length: RETRY_BUDGET }, () => mark('retried'))] }));
+  const waiting = decide(pr({ gate: 'FAILURE', markers: [mark('baseline-ci')] }));
+  assert.deepEqual(waiting, { action: 'baseline', kind: 'ci', retries: 0 });
+  const retried = decide(pr({ markers: [mark('baseline-ci'), ...Array.from({ length: RETRY_BUDGET }, () => mark('retried'))] }));
   assert.equal(retried.retries, RETRY_BUDGET);
   assert.equal(decide(pr({ markers: [mark('baseline-ci', OLD)] })).action, 'skip', 'a marker at an old head does not hold a new push');
-  assert.equal(decide(pr({ mergeable: 'CONFLICTING', markers: [mark('baseline-queue')] })).action, 'merge', 'a conflict is still merged');
+  assert.equal(decide(pr({ mergeable: 'CONFLICTING', markers: [mark('baseline-ci')] })).action, 'merge', 'a conflict is still merged');
 });
 
 test("the spec index is rebuilt with main's code, never by running the branch's script", () => {
