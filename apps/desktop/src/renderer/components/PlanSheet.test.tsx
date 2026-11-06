@@ -44,8 +44,8 @@ describe('verification marks', () => {
   it('shows only explicit reports, on the bullet with device and detail, never as a chip', () => {
     const html = render([step('inspected', 'passed'), step('phone', 'blocked', { device: 'iPhone', detail: 'Waiting for pairing' }), { id: 'generic', title: 'generic', status: 'done', createdAt: now, updatedAt: now }]);
     expect(chips(html, 'verify')).toBe(0);
-    // One per report, plus the Verify step that gathers them and carries their roll-up.
-    expect(marks(html)).toBe(3);
+    // Exactly one mark per explicit report, on its original step.
+    expect(marks(html)).toBe(2);
     expect(html).toContain('aria-label="Verified"');
     expect(html).toContain('aria-label="Check blocked on iPhone"');
     expect(html).toContain('Waiting for pairing');
@@ -55,7 +55,7 @@ describe('verification marks', () => {
     expect(render([step('running', 'active')])).toContain('class="plan-working"');
     for (const status of ['pending', 'passed', 'failed', 'blocked']) expect(render([step('t', status)])).not.toContain('class="plan-working"');
   });
-  it('gathers every Verify step and report under one Verify step, as sub-bullets', () => {
+  it('keeps checks and reports on their original flat rows in published order', () => {
     const kinded = (id: string, kind: PlanStep['kind'], extra = {}) => ({ id, title: id, kind, status: 'done', createdAt: now, updatedAt: now, ...extra }) as PlanStep;
     const html = render([
       kinded('Fix the parser', 'build', { verification: { status: 'passed', device: 'Windows' } }),
@@ -63,11 +63,17 @@ describe('verification marks', () => {
       kinded('Screenshot it', 'verify', { status: 'active' }),
       kinded('Open the PR', 'ship', { status: 'pending' }),
     ]);
-    expect(html.match(/data-plan-kind="verify"/g)).toHaveLength(1);
-    expect(html.match(/data-plan-substep=/g)).toHaveLength(3);
-    // The build step's report moved under Verify: its own row has no check on its bullet.
-    const build = html.slice(html.indexOf('data-plan-step-id="Fix the parser"'), html.indexOf('data-plan-step-id="verify:all"'));
-    expect(marks(build)).toBe(0);
+    expect(html).not.toContain('data-plan-kind');
+    expect(html).not.toContain('data-plan-substep');
+    expect(html).not.toContain('verify:all');
+    expect(html).not.toContain('Check the work');
+    expect(html.match(/data-plan-step-id="([^"]+)"/g)).toEqual([
+      'data-plan-step-id="Fix the parser"', 'data-plan-step-id="Run the tests"',
+      'data-plan-step-id="Screenshot it"', 'data-plan-step-id="Open the PR"',
+    ]);
+    expect(html).toContain('2 of 4 done');
+    const build = html.slice(html.indexOf('data-plan-step-id="Fix the parser"'), html.indexOf('data-plan-step-id="Run the tests"'));
+    expect(marks(build)).toBe(1);
     expect(html).toContain('Verified on Windows');
     expect(chips(html, 'verify')).toBe(0);
   });
@@ -86,9 +92,9 @@ describe('CI chips', () => {
   const pr = { url: 'https://github.com/o/r/pull/9', number: 9, state: 'open', checks: 'failing', checkProgress: { total: 4, completed: 2, pending: 1, failing: 1, unknown: 0, items: [
     { name: 'build', state: 'completed', link: null }, { name: 'gate', state: 'pending', link: null }, { name: 'lint', state: 'completed', link: null }, { name: 'e2e', state: 'failing', link: null },
   ] } } as unknown as PrInfo;
-  it('go under the Verify step in one row: failing first, passing folded into a count', () => {
+  it('go under the last reported step in one row: failing first, passing folded into a count', () => {
     const html = render([step('first', 'passed'), { id: 'work', title: 'work', status: 'active', createdAt: now, updatedAt: now }, step('check', 'active')], [pr]);
-    const row = html.slice(html.indexOf('data-plan-step-id="verify:all"'));
+    const row = html.slice(html.indexOf('data-plan-step-id="check"'));
     expect(chips(row, 'ci')).toBe(3);
     expect(row.indexOf('e2e')).toBeLessThan(row.indexOf('gate'));
     expect(row).toContain('CI: 2 passed');
@@ -122,6 +128,22 @@ describe('step disclosure', () => {
     // Each step is its own button; the sheet no longer opens steps from tabindex or hover.
     expect(html.match(/class="plan-sheet-line plan-sheet-step-toggle" aria-expanded/g)).toHaveLength(4);
     expect(html).not.toContain('tabindex');
+  });
+  it('keeps results under their related check instead of merging checks together', () => {
+    linked.links = new Map([
+      ['unit', own({ prs: ['https://github.com/o/r/pull/1'] })],
+      ['visual', own({ artifacts: [{ path: '/tmp/evidence.png', filename: 'evidence.png' }] })],
+    ]);
+    const html = render([
+      { ...plain('unit', 'done', 'Tests passed'), kind: 'verify' },
+      { ...plain('visual', 'active', 'Inspect the pixels'), kind: 'verify' },
+    ]);
+    expect(html).toContain('1 of 2 done');
+    expect(tag(html, 'unit')).toContain('PR #1');
+    expect(tag(html, 'unit')).not.toContain('evidence.png');
+    expect(tag(html, 'visual')).toContain('File: evidence.png');
+    expect(tag(html, 'visual')).not.toContain('PR #1');
+    expect(html).not.toContain('data-plan-substep');
   });
   it('draws no card per step and opens no step from hover or focus on the sheet', () => {
     const rules: string[] = [];

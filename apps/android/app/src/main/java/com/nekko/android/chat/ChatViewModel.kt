@@ -99,7 +99,7 @@ class ChatViewModel(
     val simpleChoices: StateFlow<String> = phonePrefs?.flow(SimpleMode.CHOICES) ?: MutableStateFlow("")
 
     /** Expert mode's hardware and loaded models; the screen polls it only while Expert is on and the chat is visible. */
-    val hardware = HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" }
+    val hardware = HardwareMonitorController(repo.caller, repo::callRaising) { repo.state.value.active?.name ?: "your computer" }
 
     /** The model and effort sheet: change the chat's model or effort on the computer. Throws so the sheet can say why. */
     suspend fun setOptions(providerId: String? = null, modelId: String? = null, effort: Effort? = null) =
@@ -295,6 +295,15 @@ class ChatViewModel(
     suspend fun setRunOption(key: String, value: kotlinx.serialization.json.JsonElement) {
         repo.setRunOption(sessionId, key, value)
         controller.reload()
+    }
+
+    /** The tools the computer's agents can call, for the chat's Tools list. */
+    suspend fun tools(): List<com.nekko.protocol.ToolInfo> = com.nekko.protocol.ToolInfo.list(repo.caller.call(com.nekko.protocol.Channels.TOOLS_LIST))
+
+    /** Switch one tool on or off for this chat; the computer asks for the screen lock either way. */
+    suspend fun setTool(name: String, on: Boolean, disabled: List<String>) {
+        val off = disabled.filter { it != name } + if (on) emptyList() else listOf(name)
+        setRunOption("disabledTools", kotlinx.serialization.json.JsonArray(off.map { kotlinx.serialization.json.JsonPrimitive(it) }))
     }
 
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {

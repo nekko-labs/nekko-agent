@@ -16,7 +16,11 @@ Any PR that changes what the app looks like ships the proof in its description:
   light/dark theme pair is not required; keep before/after captures in that same
   default theme.
 - Cover every surface the change actually affects: mobile and desktop widths on web,
-  iOS and Android for native.
+  iOS and Android for native. Native pairs must use the same simulator/emulator device
+  and OS runtime. For `native-mode-evidence.yml`, set `ios_runtime` to an exact installed
+  identifier (for example `com.apple.CoreSimulator.SimRuntime.iOS-27-0`) and compare
+  both `revisions.txt` manifests. Hosted images can have different runtime inventories;
+  an unavailable explicit runtime must fail rather than fall back silently.
 - Media belongs in the PR description, not in git. Use the shared `pr-media`
   pre-release series for all screenshots and recordings; never create a release
   per PR. GitHub caps a release at 1,000 assets, so when the newest release cannot

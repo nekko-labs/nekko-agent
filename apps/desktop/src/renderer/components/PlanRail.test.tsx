@@ -31,14 +31,14 @@ describe('plan sheet, folded and open (#1317)', () => {
     { id: 'c', createdAt: 1, updatedAt: 1, title: 'Auth tests pass', status: 'pending', kind: 'verify' },
     { id: 'd', createdAt: 1, updatedAt: 1, title: 'Open the PR', status: 'pending', kind: 'ship' },
   ] } as unknown as Session;
-  it('opens by default to every step; folded, it collapses to the step being worked: kind, title, pass and its place, with no Change plan', () => {
+  it('opens by default to every step; folded, it collapses to the step being worked: title, pass and its place, with no Change plan', () => {
     const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} />);
     expect(open).toContain('1 of 4 done');
     expect(open).toContain('Find every inline check');
     const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
     expect(folded).toContain('data-folded');
     expect(folded).toContain('aria-expanded="false"');
-    expect(folded).toMatch(/data-plan-kind="build" data-current="true">Build<\/span>/);
+    expect(folded).not.toContain('data-plan-kind');
     expect(folded).toContain('Move checks into one middleware');
     expect(folded).toContain('Pass 2');
     expect(folded).toContain('2 of 4');
@@ -57,10 +57,9 @@ describe('plan sheet, folded and open (#1317)', () => {
       expect(folded).not.toContain('Not mine');
       const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
       expect(open).toContain('1 of 4 done');
-      for (const kind of ['Build', 'Verify', 'Ship']) expect(open).toContain(`>${kind}</span>`);
-      // A step saved as `explore` reads as Build: looking is part of building.
-      expect(open).not.toContain('>Explore</span>');
-      expect(open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('data-plan-step-id="b"'))).toContain('data-plan-kind="build"');
+      // Legacy kinds remain saved metadata, never labels or groups in the list.
+      expect(open).not.toContain('data-plan-kind');
+      expect(open).not.toContain('data-plan-substep');
       // No plan update in the transcript yet: sub-agents land on the first step.
       const first = open.slice(open.indexOf('data-plan-step-id="a"'), open.indexOf('data-plan-step-id="b"'));
       expect(first.match(/data-plan-chip="subagent"/g)).toHaveLength(2);
