@@ -4,7 +4,7 @@ import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNot
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, shell, systemPreferences } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
@@ -60,6 +60,18 @@ function showWindow(): void {
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win) { createWindow(); return; }
   raise(win);
+}
+
+/**
+ * Show the window in answer to a notification click. Windows can refuse a
+ * background app the foreground and only flash its taskbar button; a moment
+ * always-on-top puts the window in front either way.
+ */
+function showWindowOverOthers(): void {
+  const win = process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  win?.setAlwaysOnTop(true);
+  showWindow();
+  win?.setAlwaysOnTop(false);
 }
 
 /** The engine (nekkod); set once the app is ready. */
@@ -194,6 +206,17 @@ function resolveWindowIcon(): string | undefined {
     join(__dirname, '../../src/renderer/public/icon-512.png'),
   ];
   return candidates.find((path) => existsSync(path));
+}
+
+/** A Windows toast loads its image itself, so a packaged icon has to leave app.asar. */
+function toastIconFile(): string | undefined {
+  const icon = resolveWindowIcon();
+  if (!icon) return undefined;
+  try {
+    const file = join(app.getPath('userData'), 'notification-icon.png');
+    writeFileSync(file, readFileSync(icon));
+    return file;
+  } catch { return undefined; }
 }
 
 /**
@@ -656,7 +679,8 @@ app.whenReady().then(async () => {
   nativeNotifications = createNativeNotificationPoster({
     isSupported: () => Notification.isSupported(),
     create: options => new Notification(options),
-  }, url => { showWindow(); deliverLink(url); }, resolveWindowIcon());
+    ...(process.platform === 'win32' ? { windowsToast: { icon: toastIconFile() } } : {}),
+  }, url => { showWindowOverOthers(); deliverLink(url); }, resolveWindowIcon());
   stopNotifications = startMainNotifications(engine, holdNotices(foreground, nativeNotifications.post), undefined, () => {
     const focused = BrowserWindow.getFocusedWindow();
     const owned = focused && applicationWindows.has(focused.webContents.id) ? focused : null;
@@ -676,6 +700,8 @@ app.whenReady().then(async () => {
   // (Windows/Linux); park it so the first load replays it.
   pendingLink = linkFromArgv(process.argv);
   createWindow();
+  // After the window: a click that launched the app is replayed here at once.
+  if (process.platform === 'win32') Notification.handleActivation(details => nativeNotifications?.activated(details.arguments));
   registerDisplayWindows(dataDir);
   // Always-on dictation never keeps listening behind a locked screen or through sleep.
   const stopVoice = () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IpcEvents.voiceLockStop); };
