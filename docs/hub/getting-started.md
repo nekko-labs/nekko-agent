@@ -284,7 +284,7 @@ Hover the edge between the agent list and chat wall, or the edge beside Monitors
 
 ### Skills and Connectors shortcuts
 
-Open **Settings** to find large **Skills** and **Connectors** chips at the top. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
 ### Download progress in Model Server
 
