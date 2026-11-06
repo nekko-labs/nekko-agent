@@ -3517,6 +3517,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-section[data-wall-composer] [data-composer-foot] { flex: 0 1 auto; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
 .composer-section[data-wall-composer] [data-composer-foot] > * { flex-shrink: 1; min-width: 0; }
 .composer-section[data-wall-composer] [data-composer-foot] button { white-space: nowrap; }
+/* Squeezed, Effort clips its word behind the dial rather than spilling onto Mode. */
+.composer-section[data-wall-composer] [data-composer-foot] .effort-slider { flex-shrink: 1; min-width: 26px; }
+.composer-section[data-wall-composer] [data-composer-foot] .effort-trigger { min-width: 0; overflow: hidden; justify-content: flex-start; }
+.composer-section[data-wall-composer] [data-composer-foot] .effort-trigger > :first-child { flex-shrink: 0; }
 
 /* The wall composer's panel clips its overflow, so the composer's outer
    focus halo and drop shadow were cut into a band along the bottom edge and
@@ -3524,16 +3528,18 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
 
-/* Prompt suggestions as one chip among the composer's actions. */
-.composer-suggestions-row { display: flex; justify-content: flex-end; min-width: 0; padding: 0 8px 6px; }
-.composer-suggestions-row:not(:has(button)) { display: none; }
+/* Prompt suggestions as one chip among the composer's actions. In a crowded
+   bar it gives up its words before the model and Mode give up theirs, down to
+   the grade badge. */
+.composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
+.composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
 .agent-chip-chat[data-agent-active] { background: var(--accent-soft); }
 .agent-chip-chat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .composer-suggestions-chip {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
-  font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; flex-shrink: 0;
+  font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; min-width: 0; overflow: hidden;
   transition: border-color 0.12s ease, color 0.12s ease;
 }
 .composer-suggestions-chip.is-open { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); color: var(--ink); }
