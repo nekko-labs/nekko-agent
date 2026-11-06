@@ -10,6 +10,7 @@ struct ChatView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var displayScale
     @State private var chat: ChatModel?
     @State private var showModels = false
     @State private var showChanges = false
@@ -102,6 +103,11 @@ struct ChatView: View {
           // a short transcript then moves up when an approval or question card
           // grows the bar, instead of staying pinned where the card now covers it.
           GeometryReader { geo in
+            // Round inward in window coordinates: a fractional viewport origin
+            // must not let Text's pixel rounding consume the 16pt gutters.
+            let bounds = geo.frame(in: .global)
+            let left = ceil((bounds.minX + 16) * displayScale) / displayScale
+            let right = floor((bounds.maxX - 16) * displayScale) / displayScale
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let n = chat.session?.omittedMessages, n > 0 {
@@ -182,8 +188,10 @@ struct ChatView: View {
                 // A vertical ScrollView must propose the viewport's exact column
                 // width. Text's pixel-rounded ideal width can otherwise grow it
                 // by a fraction of a point at accessibility sizes.
-                .frame(width: max(0, geo.size.width - 32), alignment: .leading)
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                .frame(width: max(0, right - left), alignment: .leading)
+                .padding(.leading, left - bounds.minX)
+                .padding(.trailing, bounds.maxX - right)
+                .padding(.vertical, 12)
                 .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
             }
             .accessibilityIdentifier("chat.transcript")

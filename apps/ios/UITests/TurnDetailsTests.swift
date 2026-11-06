@@ -146,7 +146,9 @@ final class TurnDetailsTests: XCTestCase {
                 .withOffset(CGVector(dx: viewport.maxX - 8, dy: viewport.midY))
             let end = app.coordinate(withNormalizedOffset: .zero)
                 .withOffset(CGVector(dx: viewport.maxX - 8, dy: viewport.midY + delta))
-            start.press(forDuration: 0.01, thenDragTo: end)
+            // The default drag velocity flung ~250pt for a ~52pt gesture in
+            // the measured 148pt viewport, oscillating past the target line.
+            start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
             result = try reading(app, name: name + "-scroll-\(attempt)", rendered: false)
         }
         XCTFail("The full \(name) metric line was not reachable in the actual transcript viewport")
