@@ -1,100 +1,21 @@
 name: CI
-
-# Two tiers (scripts/ci-scope.mjs decides which jobs each run needs):
-#
-#   pull_request   build, the speed contract and the loopback itests, gated by
-#                  the paths the PR touches. A change only to the native phone
-#                  apps (apps/ios, apps/android) skips all three: their own
-#                  workflows test them. `gate` here is what main requires;
-#                  there is no merge queue, so this is the last check before
-#                  main (decision 0059).
-#   schedule       nightly: every job on every OS (the Linux, Windows and macOS
-#                  daemon and capture), the speed contract and the itests.
-#                  Skipped when main has not moved.
-#
-# Platform builds run nightly rather than per change, here and in the iOS,
-# Android, installer and development-identity workflows. A `deploy:linux`,
-# `deploy:windows`, `deploy:macos`, `deploy:ios` or `deploy:android` label opts
-# a single PR into that platform's runs (`ci:perf` forces the speed contract), and
-# `gate` waits for the runs a deploy label turns on in other workflows
-# (scripts/ci-label-gate.mjs). Adding a label re-runs CI so it takes effect.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
-  schedule:
-    # 03:17 JST.
-    - cron: '17 18 * * *'
-  # Full run on any branch: `gh workflow run ci.yml --ref <branch>`.
   workflow_dispatch:
-
-# Read-only, except `issues: write` for the scheduled run to file its failure.
+    inputs:
+      source_ref:
+        description: Unchanged source revision to compare on one runner
+        required: true
+        default: bdd59fa38
 permissions:
   contents: read
-  pull-requests: read
-  actions: read
-  issues: write
-
-# Cancel stale PR revisions; keep every schedule and dispatch run.
-concurrency:
-  group: ci-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-  scope:
+  cold-browser-comparison:
     runs-on: ubuntu-latest
-    outputs:
-      build: ${{ steps.scope.outputs.build }}
-      daemon_os: ${{ steps.scope.outputs.daemon_os }}
-      capture_os: ${{ steps.scope.outputs.capture_os }}
-      perf: ${{ steps.scope.outputs.perf }}
-      itests: ${{ steps.scope.outputs.itests }}
-      licenses: ${{ steps.scope.outputs.licenses }}
-      run: ${{ steps.fresh.outputs.run }}
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-      # Here rather than in `build`, so it holds every change, `build` or not:
-      # Claude sign-in, Claude credential reads and Claude plan limits must not
-      # come back (Anthropic's third-party rules).
-      - name: Claude compliance check
-        run: node scripts/check-claude-compliance.mjs
-      - name: Skip a scheduled run when main has not moved
-        id: fresh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          run=true
-          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
-            last=$(gh run list -R "$GITHUB_REPOSITORY" --workflow ci.yml --event schedule --status success --limit 1 --json headSha -q '.[0].headSha' || true)
-            if [ "$last" = "$GITHUB_SHA" ]; then
-              echo "main is still at $GITHUB_SHA, which already passed a full run."
-              run=false
-            fi
-          fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-      - name: Changed files
-        if: github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        # Failure leaves the list empty, which ci-scope treats as "run everything".
-        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
-      - id: scope
-        if: steps.fresh.outputs.run == 'true'
-        env:
-          CI_CHANGED_FILES: ${{ github.event_name == 'pull_request' && format('{0}/changed.txt', runner.temp) || '' }}
-          CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: node scripts/ci-scope.mjs
-
-  build:
-    needs: scope
-    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.build == 'true'
-    runs-on: ubuntu-latest
-    # Each job's timeout is about 3x its slowest green run, so a hung test fails
-    # `gate` instead of holding it pending for GitHub's 6-hour default (#796's
-    # `cargo test` hung for hours with nothing to stop it).
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref }}
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -102,328 +23,62 @@ jobs:
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      # Build every workspace first: @nekko-agent/local-web-ui imports the CLI
-      # package, so its dist must exist before `npm test` / typecheck run.
-      - run: npm run build:web
-      # The TypeScript build is OS-independent: `perf` downloads this one rather
-      # than rebuilding it. Uploaded only when perf runs, so the PR tier pays
-      # nothing for it. (nekkod is per-OS and per-profile; each job builds its own.)
-      - name: Upload the web build for perf
-        if: needs.scope.outputs.perf == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          name: web-dist
-          retention-days: 1
-          path: |
-            packages/*/dist/
-            apps/*/dist/
-            apps/desktop/out/
-          if-no-files-found: error
-      - uses: dtolnay/rust-toolchain@stable
-      # Pinned to the v2 tag's commit (v2.9.2): the required job must not pick up
-      # a moved tag unreviewed.
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          # Keep this debug build separate from clippy/test and release caches.
-          shared-key: ci-build
-      - run: cargo build -p nekkod --locked
-      - run: npm test
-      - run: npm run test:cli-package
-      - run: npm run typecheck
-
-  # The engine daemon (crates/). Real ptys on every platform the app ships on,
-  # since ConPTY and Unix ptys fail differently.
-  daemon:
-    needs: scope
-    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.daemon_os != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJSON(needs.scope.outputs.daemon_os) }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - if: runner.os == 'Linux'
-        run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
-
-  capture:
-    needs: scope
-    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.capture_os != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJSON(needs.scope.outputs.capture_os) }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Cache pinned native browser dependencies and build
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            .scratch/agent-browser-native/cli/target
-          key: native-browser-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vendor/agent-browser/pin.json', 'vendor/agent-browser/stdio.patch', 'vendor/agent-browser/main.rs', 'scripts/build-agent-browser.mjs') }}
-      # Always verify the source pin/patch and run Cargo --locked, even on cache hits
-      # (a fresh checkout has no shared binary cache). `--dev` skips fat LTO, which
-      # tests do not need; -Dwarnings keeps the maintained patch warning-free on
-      # Windows, the platform it is verified on (dependencies are capped by Cargo,
-      # so it only checks agent-browser itself).
-      - name: Build and stage pinned native browser
-        run: node scripts/build-agent-browser.mjs --dev
-        env:
-          RUSTFLAGS: ${{ runner.os == 'Windows' && '-Dwarnings' || '' }}
-      # shared + profile take 1-2 s here; waiting on another job's artifact would cost more.
-      - run: npm run build:core
-      - name: Grid model selection and mode-menu regressions
-        run: npm run test:grid-bugs -w @nekko-agent/desktop
-      # Consolidated end-to-end journeys (apps/desktop/e2e): hidden, non-focusable
-      # Electron windows over the real renderer; replaces the per-feature sandboxes.
-      - name: End-to-end journeys (Agents sidebar, chat finder)
-        run: npm run test:e2e -w @nekko-agent/desktop
-      - name: Fresh settings, server and page recovery regressions
-        run: node apps/desktop/scripts/fresh-pages-integration.cjs
-      - name: Hidden owned-window screenshots
-        if: runner.os != 'Windows'
-        run: node apps/desktop/scripts/capture-smoke.mjs capture-results
-      - name: Hidden and actual native captures without foreground activation
-        if: runner.os == 'Windows'
-        run: node apps/desktop/scripts/capture-smoke.mjs capture-results --native
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: capture-${{ runner.os }}
-          retention-days: 14
-          path: |
-            capture-results/
-            .shots/wall-controls-integration/
-            .shots/e2e/report/
-            .shots/e2e/results/
-          if-no-files-found: error
-
-  # The speed contract (spec/platform/speed-responsiveness-the-speed-contract.md): headless Chrome over
-  # the DevTools protocol against the Local Web UI and a scripted model. Fails
-  # when a p95 exceeds its budget; the report is uploaded either way so a
-  # regression shows its numbers, not only a red cross. It runs on every PR that
-  # changes what it measures (renderer, web server, packages, daemon, harness),
-  # or with the `ci:perf` label, and `gate` waits for it, so a regression is
-  # stopped before main. It also runs nightly.
-  perf:
-    needs: scope
-    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
-    runs-on: ubuntu-latest
-    # A green run takes about 12 minutes; a failed one also builds the base
-    # and measures it against head six times (about 15 more).
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      # The Local Web UI runs behind the engine daemon, as the desktop does; the
-      # server finds this release build in target/ (so the terminal keypress
-      # budget measures nekkod's pty and its /api/term socket).
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build -p nekkod --release --locked
-      # The web build comes from the `build` job (uploaded right after its
-      # build:web, long before this release cargo build finishes). It is fetched
-      # without a job-level `needs: build`, which would hold this job until all of
-      # build's tests finished and lengthen the run's critical path. If build
-      # ends without uploading it, this job builds its own.
-      - name: Wait for the build job's web build
-        id: dist
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - run: npm run build:web
+      - name: Fetch official Chrome for Testing builds
         run: |
-          api="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          for _ in $(seq 1 120); do
-            if [ "$(gh api "$api/artifacts?name=web-dist" --jq '.total_count' || echo 0)" != 0 ]; then
-              echo ready=true >> "$GITHUB_OUTPUT"; exit 0
-            fi
-            state=$(gh api "$api/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" --jq '.jobs[] | select(.name == "build") | .status' || true)
-            if [ "$state" = completed ]; then break; fi
-            sleep 5
-          done
-          echo 'No web-dist artifact from the build job; building here.'
-          echo ready=false >> "$GITHUB_OUTPUT"
-      - if: steps.dist.outputs.ready == 'true'
-        uses: actions/download-artifact@v7
-        with:
-          name: web-dist
-      - if: steps.dist.outputs.ready != 'true'
-        run: npm run build:web
-      - name: Speed contract
-        id: contract
-        # Judged against the 2x regression gate in budgets.mjs; a missed budget is
-        # measured once more before it fails the job (noisy shared runners). The
-        # runner has no GPU, so Chrome runs without its software GPU emulation.
-        run: node scripts/perf/run.mjs --out perf-results --attempts 3 --no-gpu
-      # Diagnostic only: the failed speed contract stays failed. It measures the
-      # budgets that failed (not a fixed part: a cold-switch failure is
-      # latency, which the old streaming-only profile never measured) on the
-      # unchanged base and on this head, alternately on this same runner
-      # (base, head, head, base), then one timeline-traced pair. The table goes
-      # to the job summary; reports and traces to the perf-report artifact.
-      - name: Measure the failed budgets on the unchanged base and on head
-        if: failure() && steps.contract.outcome == 'failure' && github.event_name == 'pull_request'
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          mkdir -p cold-browser-results
+          python3 - <<'PY'
+          import json, pathlib, urllib.request, zipfile
+          root = pathlib.Path('cold-browser-results').resolve()
+          index = json.load(urllib.request.urlopen('https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json'))
+          selected = {}
+          for major in (155, 156):
+              rows = [v for v in index['versions'] if v['version'].startswith(str(major) + '.') and any(d['platform'] == 'linux64' for d in v.get('downloads', {}).get('chrome-headless-shell', []))]
+              row = max(rows, key=lambda v: tuple(map(int, v['version'].split('.'))))
+              url = next(d['url'] for d in row['downloads']['chrome-headless-shell'] if d['platform'] == 'linux64')
+              if not url.startswith('https://storage.googleapis.com/chrome-for-testing-public/'):
+                  raise RuntimeError('Unexpected browser download host')
+              archive = root / (str(major) + '.zip')
+              urllib.request.urlretrieve(url, archive)
+              dest = root / str(major)
+              with zipfile.ZipFile(archive) as z:
+                  if any(not (dest / name).resolve().is_relative_to(dest.resolve()) for name in z.namelist()):
+                      raise RuntimeError('Unsafe archive path')
+                  z.extractall(dest)
+              for name in ('chrome-headless-shell', 'chrome_crashpad_handler'):
+                  binary = dest / 'chrome-headless-shell-linux64' / name
+                  if binary.exists(): binary.chmod(0o755)
+              selected[str(major)] = {'version': row['version'], 'revision': row['revision'], 'url': url}
+              archive.unlink()
+          (root / 'browsers.json').write_text(json.dumps(selected, indent=2))
+          print(json.dumps(selected, indent=2))
+          PY
+      - name: Same runner, same source, full workload (155 / 156 / 155)
         run: |
-          parts=$(node scripts/perf/compare.mjs parts perf-results/perf-report.json)
-          if [ -z "$parts" ]; then echo 'No failed budget to compare.'; exit 0; fi
-          git fetch --no-tags origin "$BASE_SHA"
-          git worktree add --detach ../perf-base "$BASE_SHA"
-          (cd ../perf-base && npm ci && npm run build:web && cargo build -p nekkod --release --locked)
-          out="$GITHUB_WORKSPACE/perf-results/compare"
-          for part in $parts; do
-            for phase in base-1 head-1 head-2 base-2; do
-              tree=../perf-base; [ "${phase%-*}" = head ] && tree=.
-              (cd "$tree" && node scripts/perf/run.mjs --out "$out/$part/$phase" --only "$part" --attempts 1 --no-gpu --report-only) || echo "$phase did not finish its run"
-            done
-            for side in base head; do
-              tree=../perf-base; [ "$side" = head ] && tree=.
-              (cd "$tree" && node scripts/perf/run.mjs --out "$out/$part/trace-$side" --only "$part" --attempts 1 --timeline --dump-trace --no-gpu --report-only) || echo "trace-$side did not finish its run"
-            done
-            node scripts/perf/compare.mjs summary perf-results/perf-report.json "$out/$part" "$part" | tee -a "$out/summary.md"
+          git rev-parse HEAD > cold-browser-results/source.txt
+          lscpu > cold-browser-results/cpu.txt
+          node --version > cold-browser-results/node.txt
+          for phase in 155-before 156-middle 155-after; do
+            major=${phase%%-*}
+            PERF_BROWSER="$PWD/cold-browser-results/$major/chrome-headless-shell-linux64/chrome-headless-shell" node scripts/perf/run.mjs --only latency --no-gpu --report-only --out "cold-browser-results/$phase"
           done
-      - name: Report
-        if: always()
-        run: cat perf-results/perf-report.md perf-results/compare/summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+      - name: Cold-switch timeline attribution for each browser
+        run: |
+          for major in 155 156; do
+            PERF_BROWSER="$PWD/cold-browser-results/$major/chrome-headless-shell-linux64/chrome-headless-shell" node scripts/perf/run.mjs --only latency --timeline --no-gpu --report-only --out "cold-browser-results/trace-$major"
+            gzip cold-browser-results/trace-$major/*.trace.json
+          done
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: perf-report
+          name: cold-browser-comparison
+          path: |
+            cold-browser-results/browsers.json
+            cold-browser-results/*.txt
+            cold-browser-results/*/*.json
+            cold-browser-results/*/*.md
+            cold-browser-results/*/*.gz
           retention-days: 14
-          path: perf-results/
-          if-no-files-found: ignore
-
-  # Loopback end-to-end checks: the Local Web UI behind nekkod, with scripted
-  # models and fake services on 127.0.0.1 (a fake Telegram Bot API and GitHub, a
-  # local relay, a Hypergate daemon from its public repo). Each script makes its
-  # own temporary data dir and home and ends its process trees. Runs on every PR
-  # that needs `build`, and nightly; `gate` waits for it.
-  itests:
-    needs: scope
-    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.itests == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/checkout@v7
-        with:
-          repository: nekko-labs/hypergate
-          path: hypergate
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      - run: npm run build:web
-      - run: npm run build -w @nekko-agent/relay-server
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # nekkod, and the stand-in sd-server the image turn runs on.
-      - run: cargo build -p nekkod --examples --bins --locked
-      - name: Hypergate (for the MCP HTTP transport)
-        working-directory: hypergate
-        run: npm ci && npm run build -w @hypergate/shared && npm run build -w @hypergate/core
-      # Each step runs whatever the one before left; `if: !cancelled()` so one
-      # failure still reports the others.
-      - name: Turn variants (compaction, cancel, interrupt queued, image turn)
-        run: node scripts/itest-turn-variants.mjs
-      - name: Phone relay through the daemon
-        if: ${{ !cancelled() }}
-        run: node scripts/itest-relay-daemon.mjs
-      - name: Telegram bridge through the daemon
-        if: ${{ !cancelled() }}
-        run: node scripts/itest-messaging-daemon.mjs
-      - name: Small services through the daemon
-        if: ${{ !cancelled() }}
-        run: node scripts/itest-small-services.mjs
-      # nekkod alone (no TS backend) as the MCP client, on the build above.
-      - name: MCP streamable-HTTP transport through Hypergate
-        if: ${{ !cancelled() }}
-        run: node scripts/itest-mcp-http.mjs --spawn hypergate
-
-  # The one required check. It passes when every job this run needed passed and
-  # the skipped ones were skipped on purpose, so branch protection need not
-  # know which jobs a change runs. A scheduled run that fails
-  # opens (or comments on) one `ci-scheduled` issue, so nobody has to watch it.
-  #
-  # With a `deploy:*` label it also waits (up to about 3 hours: macOS runners
-  # queue) for the label's runs in other workflows, so nothing merges a PR
-  # before they are green.
-  # Only when dependencies or ASSETS.md change: a new package with a license the
-  # policy has not seen stops here, before it ships. docs/runbooks/third-party.md.
-  licenses:
-    needs: scope
-    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.licenses == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - run: node scripts/third-party.mjs check
-
-  gate:
-    needs: [scope, build, daemon, capture, perf, itests, licenses]
-    if: always()
-    runs-on: ubuntu-latest
-    timeout-minutes: 190
-    steps:
-      - name: Every needed job passed
-        env:
-          RESULTS: ${{ toJSON(needs.*.result) }}
-        run: |
-          echo "$RESULTS"
-          if echo "$RESULTS" | grep -Eq '"(failure|cancelled)"'; then
-            echo 'A required job failed or was cancelled.' >&2
-            exit 1
-          fi
-      - uses: actions/checkout@v7
-        if: contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
-        with:
-          sparse-checkout: scripts
-      - name: The platform runs the deploy labels turned on passed
-        if: github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: node scripts/ci-label-gate.mjs pr --pr "$PR" --sha "$SHA"
-      - name: File the scheduled failure
-        if: failure() && github.event_name == 'schedule'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          body="The nightly full CI run (every OS and the speed contract) failed on $GITHUB_SHA: $RUN_URL"
-          open=$(gh issue list -R "$GITHUB_REPOSITORY" --label ci-scheduled --state open --limit 1 --json number -q '.[0].number')
-          if [ -n "$open" ]; then
-            gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$body"
-          else
-            gh issue create -R "$GITHUB_REPOSITORY" --label ci-scheduled --title 'Scheduled full CI is failing on main' \
-              --body "$body. Fix it before the nightly release; close this issue once a scheduled run is green."
-          fi
