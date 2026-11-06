@@ -79,3 +79,63 @@ Interpretation:
 ## Known limitations
 
 No production fix has been demonstrated, no repair PR opened, and no gate changed. Baseline screenshots do not verify a future candidate. A local YAML validation initially referenced the absent `yaml` package; validation subsequently passed with the already installed `js-yaml`, and GitHub accepted the workflow. Delegation failed before child creation due to invalid routing parameters; no child is running. Continue directly rather than silently assuming delegated work exists.
+
+
+## Same-runner Linux browser control (2026-11-06)
+
+Run [42230357748](https://github.com/nekko-labs/nekko-agent/actions/runs/42230357748)
+checked out exact source `bdd59fa3870f52e5dff3884308a782b14e372db6`, built the
+release daemon and renderer once, then ran the unchanged complete latency
+workload in order 155 → 156 → 155 on the same AMD EPYC 9V74 Linux runner.
+The official headless shells were 155.0.8035.0 and 156.0.8078.4. Each phase had
+33 cold samples, 40 warm samples and 150 composer samples; one attempt, no GPU.
+
+| Phase | Cold frame p95 | Newest history p95 | Warm p95 | Composer p95 |
+| --- | --- | --- | --- | --- |
+| Chrome 155 before | 32.9 ms | 50.2 ms | 10.6 ms | 5.9 ms |
+| Chrome 156 middle | 29.6 ms | 50.1 ms | 10.0 ms | 5.9 ms |
+| Chrome 155 after | 31.1 ms | 50.1 ms | 9.7 ms | 5.9 ms |
+| Chrome 155 traced | 32.1 ms | 50.0 ms | 11.6 ms | 6.6 ms |
+| Chrome 156 traced | 34.5 ms | 50.0 ms | 11.2 ms | 7.0 ms |
+
+All five reports' nearest-rank p95s were recomputed from the raw attempt samples.
+The traced 156 phase exceeded 33 ms: the job's green report-only exit is **not**
+gate clearance. This comparison does not support a Chrome156-specific slowdown
+or justify browser pinning. It also does not establish the cause of earlier CI
+failures on different runners. The first dispatch 42230171853 failed checkout
+because the abbreviated SHA was interpreted as a branch; it collected no data.
+The temporary workflow branch is diagnostic-only and must not merge.
+
+In 33 click dispatches per trace, median synchronous style-recalculation time
+was 4.448 ms (155) / 3.698 ms (156); worst 6.394 / 6.032 ms. The warmest three
+initial clicks did no synchronous style recalculation. Only about 1.5 ms total
+synchronous layout appeared across the full click phase. These events indicate
+mount-time style work, not a browser-version conclusion. Raw reports, compressed
+traces and derived per-click attribution are in ignored
+`.shots/cold-mount/linux-browser-compare/`.
+
+## SVG clock candidate (in progress)
+
+A local CPU-profiled baseline attributed **78.7 ms** of samples across the cold
+switch phase to native `setCurrentTime`, under GfIcon's layout-effect `stop`
+(mount/unmount). Profiled cold frame p95 was 16.5 ms, history 33.7 ms, warm 7.6 ms,
+composer 4.1 ms. These are instrumented macOS/debug-daemon diagnostics, not a
+Linux release-daemon result.
+
+Unlike the earlier experiment hiding motion SVGs, the candidate removes
+redundant clock seeks themselves: synchronously pause a fresh SVG at time zero;
+on removal cancel callbacks/listeners without seeking a discarded SVG. Key the
+motion SVG by icon identity so name changes cannot inherit its old playhead.
+Actual interaction playback and return-to-rest frames are unchanged. Nothing is
+scheduled later to evade the first-frame probe. No budget or harness changes.
+
+Hidden, network-blocked Electron baseline and candidate each passed ten checks
+covering all16 animated glyphs initially paused at zero, hover, one-shot reset,
+focus-event handler, disabled controls, touch hover, click, live reduced motion,
+name replacement and unmount. Both used separate disposable profiles and no
+daemon/credential access; the user-owned app was not interacted with. Native
+keyboard focus in a hidden non-focusable window is not proven. Baseline fixture
+errors (counting static Stop as animated, sampling less than the2.3s interval,
+and relying on native focus in a hidden window) were diagnosed and corrected
+before accepting the baseline. The initial resting baseline PNG was inspected;
+after/motion review and paired uninstrumented measurements are pending.

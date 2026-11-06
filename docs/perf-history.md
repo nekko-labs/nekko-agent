@@ -1472,3 +1472,20 @@ Final scheduling refinement: keep the CSS transform animation paused and advance
 Source `bdd59fa3870f52e5dff3884308a782b14e372db6`, Apple M1 Max, HeadlessChrome156.0.8078.4, full six-zone `--only latency --no-gpu` workload. Diagnostic `.command-wall-window .command-wall-content { contain: layout paint; }` measured cold-frame p95 **18.4 ms**. The traced base initially measured20.2ms, but the matched uninstrumented base control measured **17.3 ms**. Reject containment: the apparent gain was instrumentation noise, not a demonstrated repair. Other uninstrumented rows: base/diagnostic history39.1/37.7ms, warm10.1/9.0ms, typing4.8/5.5ms. Terminal skipped (no pty from the reused debug host); memory and streaming-frame phases not requested. This local debug-daemon result is not Linux/release proof. No production CSS or budget changed.
 
 A hidden, network-blocked synthetic Electron fixture passed six checks for zone replacement, board cardinality, newest message, separate editor/draft, outgoing draft restoration, and narrow horizontal fit; baseline PNGs were captured/inspected, motion frames captured but not yet reviewed. No after-state exists. [Same-runner unchanged-source Chrome155/156/155 diagnostic](https://github.com/nekko-labs/nekko-agent/actions/runs/42230357748) is pending; report its result before accepting the browser-version hypothesis or choosing another renderer candidate. Initial dispatch42230171853 failed before samples because checkout interpreted a short SHA as a branch; corrected input uses the full SHA. No blind gate retry or budget increase.
+
+## 2026-11-06 — matched Linux browser control and SVG attribution (#1998)
+
+Result: Chrome 156 slowdown not supported; SVG clock candidate under test, not gate clearance.
+Conditions: exact `bdd59fa3870f52e5dff3884308a782b14e372db6`, single Linux AMD EPYC 9V74 runner, release daemon, unchanged full six-zone latency workload, headless no-GPU, one attempt, 33 cold samples per phase. Official Chrome shells 155.0.8035.0 / 156.0.8078.4.
+
+| Phase | Cold-frame p95 | Newest-history p95 | Warm p95 | Composer p95 |
+|---|---|---|---|---|
+| 155 before | 32.9 ms | 50.2 ms | 10.6 ms | 5.9 ms |
+| 156 middle | 29.6 ms | 50.1 ms | 10.0 ms | 5.9 ms |
+| 155 after | 31.1 ms | 50.1 ms | 9.7 ms | 5.9 ms |
+| 155 traced | 32.1 ms | 50.0 ms | 11.6 ms | 6.6 ms |
+| 156 traced | 34.5 ms | 50.0 ms | 11.2 ms | 7.0 ms |
+
+All raw-sample p95s recomputed. The report-only job passed despite traced 156 exceeding the unchanged **33 ms** gate. Do not infer gate clearance or pin a browser from these data. The first dispatch failed abbreviated-SHA checkout and collected no samples; corrected run: [42230357748](https://github.com/nekko-labs/nekko-agent/actions/runs/42230357748). The temporary workflow-only branch must not merge.
+
+A separate local Apple M1 Max / Chrome 156 CPU-profiled baseline (same debug daemon and full workload as above) attributed 78.7 ms across cold switches to SVG `setCurrentTime` under icon mount/unmount layout effects. Cold-frame p95 16.5 ms, history 33.7 ms, warm 7.6 ms, composer 4.1 ms. This is attribution with instrumentation, not an uninstrumented before/after result. The candidate removes redundant initial/discarded-clock seeks, leaving actual playback/reset unchanged; paired uninstrumented and Linux candidate validation remain pending. Reports and provenance: [investigation](../reports/cold-chat-paint-investigation.md), ignored `.shots/cold-mount/{linux-browser-compare,base-cpu}/`.

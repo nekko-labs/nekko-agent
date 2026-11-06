@@ -1,0 +1,59 @@
+// Hidden synthetic SVG clock evidence. No native dialogs, daemon or network.
+const { app, BrowserWindow, session } = require('electron');
+const fs = require('node:fs');
+const path = require('node:path');
+const out = process.env.NEKKO_INTEGRATION_OUT;
+if (!out) throw Error('Launch through layout-evidence-integration.cjs');
+app.setPath('userData', path.join(out, 'profile'));
+app.setPath('sessionData', path.join(out, 'profile'));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+app.whenReady().then(async () => {
+  session.defaultSession.webRequest.onBeforeRequest((r, done) => done({ cancel: !/^(file:|data:|blob:)/.test(r.url) }));
+  session.defaultSession.setPermissionCheckHandler(() => false);
+  session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
+  const win = new BrowserWindow({ width: 1440, height: 740, useContentSize: true, show: false, focusable: false, skipTaskbar: true, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
+  const report = { checks: [], failed: [], captures: [], errors: [], inspected: false };
+  const run = s => win.webContents.executeJavaScript(s, true);
+  const check = async (name, s) => (await run(s) ? report.checks : report.failed).push(name);
+  const shot = async name => { const file = path.join(out, name + '.png'); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
+  try {
+    await win.loadFile(path.join(out, 'index.html')); await sleep(250);
+    report.initial = await run('({ calls: [...icons.calls], states: icons.states() })');
+    await check('all motion SVGs rest paused at time zero', 'icons.states().length === 16 && icons.states().every(s => s.paused && s.time < .001)');
+    await shot('resting');
+    fs.mkdirSync(path.join(out, 'motion'), { recursive: true });
+    await run(`document.querySelector('#icon-0').dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }))`);
+    await check('pointer hover starts motion', '!document.querySelector("#icon-0 svg").animationsPaused()');
+    for (let i = 0; i < 30; i++) { await shot('motion/' + String(i).padStart(3, '0')); await sleep(80); }
+    await sleep(300);
+    await check('one-shot returns to paused time zero', 'icons.states().every(s => s.paused && s.time < .001)');
+    await run(`document.querySelector('#icon-0').dispatchEvent(new FocusEvent('focus'))`);
+    await check('focus event starts motion', '!document.querySelector("#icon-0 svg").animationsPaused()');
+    await run(`document.querySelector('#icon-1').disabled = true; document.querySelector('#icon-1').click()`);
+    await check('disabled control stays paused', 'document.querySelector("#icon-1 svg").animationsPaused()');
+    await run(`document.querySelector('#icon-2').dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'touch' }))`);
+    await check('touch hover stays paused', 'document.querySelector("#icon-2 svg").animationsPaused()');
+    await run(`document.querySelector('#icon-3').click()`);
+    await check('click starts motion', '!document.querySelector("#icon-3 svg").animationsPaused()');
+    win.webContents.debugger.attach('1.3');
+    await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+    await sleep(100);
+    await run(`document.querySelector('#icon-4').click()`);
+    await check('reduced motion stops running icons and refuses new motion', 'icons.states().every(s => s.paused && s.time < .001)');
+    await shot('reduced');
+    await run('icons.clear(); icons.render(true)');
+    report.nameChange = await run('({ calls: [...icons.calls], states: icons.states() })');
+    await check('changing icon name starts the replacement at rest', 'icons.states().every(s => s.paused && s.time < .001)');
+    await run('icons.clear(); icons.unmount()');
+    report.unmount = await run('[...icons.calls]');
+    await check('unmount removes every SVG', '!document.querySelector("svg")');
+    await sleep(1200);
+    report.afterUnmount = await run('[...icons.calls]');
+    report.window = { visible: win.isVisible(), focused: win.isFocused() };
+    if (win.isVisible() || win.isFocused()) throw Error('Fixture became visible or focused');
+  } catch (e) { report.errors.push(String(e.stack || e)); }
+  report.success = !report.failed.length && !report.errors.length;
+  fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify({ success: report.success, checks: report.checks, failed: report.failed, errors: report.errors, output: out }, null, 2));
+  win.destroy(); app.exit(report.success ? 0 : 1);
+});
