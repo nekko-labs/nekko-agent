@@ -39,6 +39,23 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Cold-switch frame gate recalibrated on the six-zone board, 33 to 48 ms (#712, 2026-11-06)
+
+Area: perf harness. Result: measurement fix (gate recalibration); product target unchanged.
+Approval: Philip explicitly approved the separate 33 to 48 ms recalibration on 2026-11-06. This supersedes the earlier instruction to keep 33 ms for #712, not the 8.3 ms product target or the remount optimization in #1998.
+Conditions: the `perf` job logs of 778 CI reports from 2026-11-03 04:04 to 2026-11-06 10:30 UTC (pull request, merge-queue, scheduled and dispatched runs; mostly PRs that do not touch the renderer), all after #1521 moved the harness onto the six-zone board. GitHub Linux runners, 4 threads, Chrome 156, 33 cold switches per attempt, up to three attempts per report.
+
+| Best-of-three cold first-frame p95 | Value |
+|---|---|
+| Median | 36.9 ms |
+| p90 / p95 / p99 | 42.8 / 44.0 / 46.9 ms |
+| Max | 51.2 ms (AMD EPYC 7763, run 41750085139) |
+| Reports over 33 / 44 / 48 ms | 512 / 38 / 2 of 778 |
+| First attempts over 48 ms (a second attempt needed) | 34 of 778 |
+
+By runner, median best-of-three p95 / max: AMD EPYC 7763 40.2 / 51.2 ms (326 reports), AMD EPYC 9V74 33.0 / 45.6 (165), AMD EPYC 9V45 31.0 / 37.3 (152), Xeon Platinum 8370C 43.4 / 47.4 (38), Xeon 6975P-C 31.4 / 33.0 (30), Xeon 6973P-C 33.7 / 36.4 (11), CPU not printed 36.3 / 43.3 (56).
+
+Why: the 33 ms gate was set on 2026-10-17 on the board the app converted to two zones; the step to the real six-zone board came from the harness (#1521; analysis in #1997), not from app code, and left unchanged `main` failing it in about two reports out of three. 48 ms sits about a third above the median, the sensitivity the 2026-10-17 calibration chose, rather than that calibration's max-plus-10% (56 ms), which would have followed the single 51.2 ms outlier. The figures include PRs, so a real regression among them would make the gate looser, not tighter. The remount that costs the extra time is a real product cost, tracked in #1998; lower the gate again when that lands. Source: #712, #1998, CI job logs in that window.
 ## Cold-switch step of 2026-11-03: the harness, not the app (#712, 2026-11-06)
 
 Area: perf harness. Result: measurement change; no app regression found in the window.
