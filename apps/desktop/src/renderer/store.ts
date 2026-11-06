@@ -6,7 +6,7 @@ import { rememberSplashColours } from './splash.js';
 import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
 import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
-import { syncTitleBarOverlay } from './chrome.js';
+import { setPageZoom, syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
 import { putCachedSession } from './sessionCache.js';
 import { autoDismisses, overflowToasts, TOAST_EXIT_MS, TOAST_MS } from './toastQueue.js';
@@ -931,7 +931,8 @@ export const useStore = create<UiState>((set, get) => ({
     if (mono) root.style.setProperty('--font-mono', mono);
     else root.style.removeProperty('--font-mono');
     const scale = textScaleOf(settings?.textScale);
-    root.style.zoom = scale === 100 ? '' : `${scale}%`;
+    // A browser tab has no page zoom to set, so it falls back to CSS zoom.
+    root.style.zoom = setPageZoom(scale / 100) || scale === 100 ? '' : `${scale}%`;
 
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
