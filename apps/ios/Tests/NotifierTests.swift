@@ -108,6 +108,8 @@ final class NotifierTests: XCTestCase {
         model.opened = "Release plan"
         XCTAssertEqual(model.count, 2)
         model.answerActive()
+        await model.notifier.finishBadgeWrites()
+        XCTAssertEqual(model.delivery.badges.last, 1)
         model.remoteDismiss()
         await model.notifier.finishBadgeWrites()
         XCTAssertEqual(model.delivery.badges.last, 0)

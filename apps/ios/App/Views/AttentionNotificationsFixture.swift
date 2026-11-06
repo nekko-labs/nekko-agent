@@ -67,12 +67,15 @@ final class AttentionNotificationsFixtureModel {
         await notifier.finishPosts()
     }
 
+    // A resolution only invalidates; the app then re-reads chat:pending, so the fixture does too.
     func answerActive() {
         active.receive(.done(sessionId: "active-chat", messageId: nil))
+        active.replace([:], ticket: active.beginSnapshot())
         notifier.reconcileBadge()
     }
     func remoteDismiss() {
         fleet.dismiss(tag: E2E.activityTag("fleet-chat"))
+        fleet.replace([:], ticket: fleet.beginSnapshot())
         notifier.reconcileBadge()
     }
     func reconnectEmpty() {
