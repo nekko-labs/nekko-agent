@@ -15,6 +15,7 @@ import {
   imageFraction,
   imageLine,
   imageStageRows,
+  missingToolsLine,
   settingsPatch,
   todayText,
   reasonText,
@@ -282,6 +283,19 @@ describe('image progress', () => {
     expect(marks(v)).toEqual(['done', 'now', 'todo']);
     // No build at all lists a full one.
     expect(imageStageRows(image({ kind: null, state: 'none', stage: null, doneStages: [] }))).toHaveLength(6);
+  });
+
+  it('adding tools lists only its own stages', () => {
+    const v = image({ kind: 'tools', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh and jq' });
+    expect(imageStageRows(v).map((r) => r.label)).toEqual(['Check this Mac', 'Install the missing tools', 'Test a boot']);
+    expect(marks(v)).toEqual(['done', 'now', 'todo']);
+    expect(imageLine(v)).toBe('Install the missing tools: Installing node, gh and jq');
+  });
+
+  it('names the missing tools in a plain sentence', () => {
+    expect(missingToolsLine(['node', 'gh'])).toBe("node and gh are missing from this Mac's runner image. Jobs that need them will fail.");
+    expect(missingToolsLine(['node', 'gh', 'jq'])).toBe("node, gh and jq are missing from this Mac's runner image. Jobs that need them will fail.");
+    expect(missingToolsLine(['gh'])).toBe("gh is missing from this Mac's runner image. Jobs that need it will fail.");
   });
 
   it('marks each stage of a running build', () => {

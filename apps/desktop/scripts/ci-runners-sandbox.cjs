@@ -121,6 +121,8 @@ app.whenReady().then(async () => {
     },
     'image-retry': async () => { await run('integration.pushRunners()'); await sleep(300); },
     'card-ready': async () => {},
+    'missing-tools': async () => {},
+    'missing-tools-install': async () => { await click(byText('[data-runner-card] button', 'Install them')); await sleep(400); },
     settings: async () => { await click(`document.querySelector('[aria-label^="Runner settings for"]')`); await sleep(500); },
     // The sheet is taller than the window: the same sheet scrolled to its end shows Max job time.
     'settings-bottom': async () => {
@@ -178,7 +180,11 @@ app.whenReady().then(async () => {
     'rebuild-cancelled': [['a cancelled rebuild closes, never ready', "!document.querySelector('[role=dialog]')&&!document.body.innerText.includes('This Mac is ready')"]],
     'connect-busy': [['Escape waits for the connect', "[...document.querySelectorAll('[role=dialog]')].some(d=>d.innerText.includes('GitHub is connected'))"]],
     'image-retry': [['the card recovers after a refused first status', "document.querySelector('[data-runner-card]').innerText.includes('Set up this Mac')"]],
-    'card-ready': [['workflow action on the card', "document.querySelector('[data-runner-card]').innerText.includes('Connect to a workflow')"]],
+    'card-ready': [['workflow action on the card', "document.querySelector('[data-runner-card]').innerText.includes('Connect to a workflow')"],
+      ['no missing-tools notice on an image that has them', "!document.querySelector('[data-missing-tools]')"]],
+    'missing-tools': [['the card names the missing tools and offers to install them', "(()=>{const n=document.querySelector('[data-runner-card] [data-missing-tools]');return n&&n.innerText.includes(\"node and gh are missing from this Mac's runner image. Jobs that need them will fail.\")&&[...n.querySelectorAll('button')].some(b=>b.textContent==='Install them')})()"]],
+    'missing-tools-install': [['Install them follows the install in the setup sheet', "(()=>{const d=document.querySelector('[role=dialog]').innerText;return d.includes('Installing the missing tools')&&d.includes('Install the missing tools')&&d.includes('Installing node, gh and jq')&&d.includes('keeps taking jobs')&&!d.includes('Lock the VM down')})()"],
+      ['the notice gives way to the progress row', "!document.querySelector('[data-missing-tools]')&&document.querySelector('[data-runner-card]').innerText.includes('Install the missing tools: Installing node, gh and jq')"]],
     settings: [['Update scripts beside Rebuild image', "[...document.querySelectorAll('[role=dialog] button')].some(b=>b.textContent==='Update scripts')"],
       ['exact mode labels present', "[\"Do not disturb: Only run when I'm idle\",'Balanced: in the background','Runner first','System default','While a runner is active','Always','Let jobs use the internet directly while a VPN is on'].every(s=>document.querySelector('[role=dialog]').innerText.includes(s))"],
       ['recommendation shown', "document.body.innerText.includes('Recommended: 20 GB for this Mac')"]],
