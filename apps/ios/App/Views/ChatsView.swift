@@ -226,7 +226,7 @@ struct ChatsView: View {
                         if live { ChatGroupActivity(kind: g.key) }
                         Spacer(minLength: 4)
                         if live || !open {
-                            Text("\(g.key == ChatSections.completed ? g.doneCount : g.activeCount)")
+                            Text("\(g.chats.count)")
                                 .font(.caption2.weight(live ? .semibold : .regular).monospacedDigit())
                                 .foregroundStyle(live ? palette.success : palette.inkFaint)
                                 .padding(.horizontal, 8).padding(.vertical, 2)
