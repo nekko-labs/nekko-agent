@@ -123,6 +123,25 @@ pub struct Harness {
 pub struct BridgeEntry {
     pub session_id: String,
     pub roots: Vec<PathBuf>,
+    /// The Nekko tools this launch's bridge offers Claude Code (beside
+    /// `approve`), as the Claude policy allowed them at launch. A call is
+    /// checked against the policy again when it arrives.
+    pub tools: Vec<String>,
+}
+
+/// Nekko's own tools the bridge can offer a Claude Code chat, by bridge tool
+/// name. Only offered where the Claude policy's `nekko_tools` row allows it.
+pub const BRIDGE_WATCH: &str = "agent_watch";
+/// The name Claude Code calls it by (and asks permission for).
+pub const BRIDGE_WATCH_TOOL: &str = "mcp__nekko_bridge__agent_watch";
+
+/// Whether a `claude:capability` answer enables the row for a Claude auth.
+/// Only an explicit `enabled` counts: anything else fails closed.
+pub fn policy_enabled(row: Option<&serde_json::Value>) -> bool {
+    row.is_some_and(|r| {
+        r.get("claude") == Some(&serde_json::Value::Bool(true))
+            && r.get("state").and_then(|s| s.as_str()) == Some("enabled")
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -361,7 +380,18 @@ impl Harness {
     /// `--mcp-config` file that starts `nekko-agent mcp --bridge` with it.
     /// An error means Claude Code must not start: nothing could answer its
     /// permission prompts.
+    #[cfg(test)]
     pub fn prepare_bridge(&self, session_id: &str, roots: &[PathBuf]) -> Result<PathBuf, String> {
+        self.prepare_bridge_with(session_id, roots, &[])
+    }
+
+    /// [`Harness::prepare_bridge`], with the Nekko tools the bridge offers.
+    pub fn prepare_bridge_with(
+        &self,
+        session_id: &str,
+        roots: &[PathBuf],
+        tools: &[String],
+    ) -> Result<PathBuf, String> {
         const UNAVAILABLE: &str = "Nekko's approval bridge is not available (the nekko-agent CLI was not found), so Claude Code was not started.";
         let setup = self.bridge.get().ok_or(UNAVAILABLE)?;
         let command = setup.command.as_ref().ok_or(UNAVAILABLE)?;
@@ -369,10 +399,16 @@ impl Harness {
         let token = new_token();
         let file = setup.dir.join(format!("{session_id}.mcp.json"));
         // The file holds the token: owner-only (0600), written atomically.
-        nekko_settings::write_json_atomic(&file, &command.mcp_config(&setup.wire_url, &token))
+        nekko_settings::write_json_atomic(&file, &command.mcp_config_with(&setup.wire_url, &token, tools))
             .map_err(|e| format!("Could not write the approval bridge's config: {e}"))?;
-        lock(&self.bridges).insert(token, BridgeEntry { session_id: session_id.into(), roots: roots.to_vec() });
+        lock(&self.bridges)
+            .insert(token, BridgeEntry { session_id: session_id.into(), roots: roots.to_vec(), tools: tools.to_vec() });
         Ok(file)
+    }
+
+    /// The Nekko tools the chat's current bridge offers; `None` with no bridge.
+    pub fn bridge_tools(&self, session_id: &str) -> Option<Vec<String>> {
+        lock(&self.bridges).values().find(|e| e.session_id == session_id).map(|e| e.tools.clone())
     }
 
     /// Which chat a bridge token answers for.
@@ -468,9 +504,19 @@ impl BridgeCommand {
     }
 
     /// The chat's `--mcp-config` document.
+    #[cfg(test)]
     pub fn mcp_config(&self, wire_url: &str, token: &str) -> serde_json::Value {
+        self.mcp_config_with(wire_url, token, &[])
+    }
+
+    /// The `--mcp-config` document, with the Nekko tools the bridge lists
+    /// (`--tools a,b`; none: `approve` only).
+    pub fn mcp_config_with(&self, wire_url: &str, token: &str, tools: &[String]) -> serde_json::Value {
         let mut args = self.args.clone();
         args.extend(["mcp".into(), "--bridge".into(), "--url".into(), wire_url.into()]);
+        if !tools.is_empty() {
+            args.extend(["--tools".into(), tools.join(",")]);
+        }
         let mut env: serde_json::Map<String, serde_json::Value> =
             self.env.iter().map(|(k, v)| (k.clone(), serde_json::json!(v))).collect();
         env.insert(BRIDGE_TOKEN_ENV.into(), serde_json::json!(token));
@@ -566,6 +612,13 @@ pub fn decide(
 ) -> Decision {
     use nekko_tools::Action;
     let ask = |reason: String, sev: &'static str| Decision::Ask { reason, severity: sev };
+    // Nekko's own watch: it only schedules a wake-up of this chat and grants
+    // nothing, so it runs without asking, as `agent_watch` does in a Nekko
+    // engine chat. Whether it may run at all is the Claude policy's call,
+    // checked when the call reaches nekkod (`/harness/tool`).
+    if tool == BRIDGE_WATCH_TOOL {
+        return Decision::Allow;
+    }
     if SHELL_TOOLS.contains(&tool) {
         let command = input.get("command").and_then(serde_json::Value::as_str).unwrap_or_default();
         // Claude Code's Bash tool runs bash (Git Bash on Windows).
@@ -866,6 +919,55 @@ mod tests {
         h.forget("s1");
         assert!(!file.exists());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_bridge_offers_nekko_tools_only_when_told() {
+        let cmd = BridgeCommand::launcher("/bin/nekko-agent");
+        let args = |c: serde_json::Value| c["mcpServers"][BRIDGE_SERVER]["args"].clone();
+        assert!(!args(cmd.mcp_config("http://x", "t")).as_array().unwrap().iter().any(|a| a == "--tools"));
+        let with = args(cmd.mcp_config_with("http://x", "t", &[BRIDGE_WATCH.into()]));
+        assert_eq!(
+            with.as_array().unwrap().iter().rev().take(2).collect::<Vec<_>>(),
+            [&serde_json::json!("agent_watch"), &serde_json::json!("--tools")]
+        );
+
+        let dir = std::env::temp_dir().join(format!("nekko-harness-test-{}", new_token()));
+        let h = Harness::new();
+        h.configure(BridgeSetup { wire_url: "http://127.0.0.1:1".into(), command: Some(cmd), dir: dir.clone() });
+        assert_eq!(h.bridge_tools("s1"), None);
+        h.prepare_bridge("s1", &roots()).unwrap();
+        assert_eq!(h.bridge_tools("s1"), Some(vec![]));
+        h.prepare_bridge_with("s1", &roots(), &[BRIDGE_WATCH.into()]).unwrap();
+        assert_eq!(h.bridge_tools("s1"), Some(vec![BRIDGE_WATCH.to_string()]));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn nekkos_watch_runs_without_asking_in_every_mode() {
+        for mode in ["ask", "guardrails", "yolo", "plan"] {
+            assert_eq!(
+                decide(mode, BRIDGE_WATCH_TOOL, &serde_json::json!({}), &[], &roots()),
+                Decision::Allow,
+                "{mode}"
+            );
+        }
+        // Another tool on the bridge's server is not waved through.
+        assert_ne!(
+            decide("guardrails", "mcp__nekko_bridge__other", &serde_json::json!({}), &[], &roots()),
+            Decision::Allow
+        );
+    }
+
+    #[test]
+    fn only_an_explicitly_enabled_claude_row_counts() {
+        use serde_json::json;
+        assert!(policy_enabled(Some(&json!({ "claude": true, "auth": "api_key", "state": "enabled" }))));
+        assert!(!policy_enabled(Some(
+            &json!({ "claude": true, "auth": "subscription", "state": "awaiting_approval" })
+        )));
+        assert!(!policy_enabled(Some(&json!({ "claude": false }))));
+        assert!(!policy_enabled(None));
     }
 
     #[test]

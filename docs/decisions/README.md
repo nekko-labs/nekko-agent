@@ -69,3 +69,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0059](0059-speed-contract-and-itests-run-on-every-pr.md) | The speed contract and the loopback itests run on every PR again (path-gated), and `gate` waits for both, since no queue tests a PR before `main` | accepted |
 | [0060](0060-text-size-is-page-zoom-on-the-desktop.md) | Text size is page zoom on the desktop, so every coordinate scales alike; the Local Web UI stays on CSS `zoom` |
 | [0061](0061-ios-and-android-stay-in-step.md) | iOS and Android carry the same features; an OS feature gets its counterpart, and each app keeps its platform's design manners | accepted |
+| [0062](0062-nekkos-watch-reaches-claude-code-through-the-approval-bridge.md) | Nekko's watch reaches Claude Code as a tool on the approval bridge, offered and checked per call only where the Claude policy enables Nekko tools and unattended runs | accepted |

@@ -47,6 +47,7 @@ until the user came back. Every user and project now gets the watch by default.
   on an API key or a cloud account, and a plan whose row the user or a signed
   policy turned on, are watched as before. A watch armed before the fix still
   fails once and then stops.
+- Claude Code chats can also arm watches themselves where the Claude policy allows it (an API key or cloud account): the approval bridge offers `agent_watch`, and the transcript shows the call as Nekko's watch row. See [Claude policy](../product/claude-policy.md).
 - Not armed in incognito, offline, archived or training-run chats. Child
   (delegated) chats are armed like any chat, since the parent's transcript does
   not show the PR as opened.

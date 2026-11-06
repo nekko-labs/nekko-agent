@@ -794,8 +794,16 @@ fn tool_call(b: &Value) -> Value {
         input["title"] = json!(str_at(&input, "description").unwrap_or_default());
         input["task"] = json!(str_at(&input, "prompt").unwrap_or_default());
     }
+    // Nekko's own watch, called through the bridge: shown as Nekko's
+    // `agent_watch`, so every client draws its watch row and live chip.
+    if name == NEKKO_WATCH_TOOL {
+        name = "agent_watch";
+    }
     json!({ "id": str_at(b, "id").unwrap_or_default(), "name": name, "input": input, "executedBy": "claude-code" })
 }
+
+/// The name Claude Code gives Nekko's watch on the approval bridge's server.
+const NEKKO_WATCH_TOOL: &str = "mcp__nekko_bridge__agent_watch";
 
 #[cfg(test)]
 mod tests {
@@ -812,6 +820,16 @@ mod tests {
                 { "type": "text", "text": "look" },
             ])
         );
+    }
+
+    #[test]
+    fn nekkos_watch_through_the_bridge_reads_as_agent_watch() {
+        let input = json!({ "action": "create", "kind": "pr", "url": "https://github.com/o/r/pull/1", "prompt": "p" });
+        let call = tool_call(&json!({ "id": "t1", "name": "mcp__nekko_bridge__agent_watch", "input": input }));
+        assert_eq!((call["name"].clone(), call["input"].clone()), (json!("agent_watch"), input));
+        assert_eq!(call["executedBy"], "claude-code");
+        // Other MCP tools keep their names.
+        assert_eq!(tool_call(&json!({ "id": "t2", "name": "mcp__github__get_pr" }))["name"], "mcp__github__get_pr");
     }
 
     #[test]
