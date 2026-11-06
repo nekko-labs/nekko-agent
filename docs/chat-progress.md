@@ -12,6 +12,12 @@ This changes only the display. It does not send another chat message to the mode
 
 In the desktop app and Local Web UI, a closing summary after tool activity is marked by a colored left border, without a card background or rounded outline. Text, topic headers, and message actions keep their positions. Mid-turn questions and other attention panels keep their highlighted background; ordinary conversation stays plain prose.
 
+## A flat plan, with related details together
+
+The desktop app and Local Web UI show the agent's steps as one flat list in the order the agent published them. There are no Build, Verify or Ship labels, and checks are not gathered into a separate “Check the work” group. Each check keeps its own row and status mark; progress counts the original steps.
+
+Related details still belong together: expand a step to see its note or check report, PRs, task links, files, previews and subagents. Unfinished steps start expanded; finished steps start folded, except the last one with results for you. You can open or close each step independently. Fold the whole plan to keep only the current step, its position and its links.
+
 ## Plan step activity
 
 In the desktop and Local Web UI plan sheet, each active step has an accent-coloured concentric ripple, including when several steps work at once. The centre pulses every 1.5 seconds and outward rings repeat over 3 seconds. An interrupted step shows pause bars instead. Reduced motion uses still rings. Done, pending and skipped retain their usual marks. Activity indicators are not verification passes.
@@ -20,7 +26,7 @@ In the desktop and Local Web UI plan sheet, each active step has an accent-colou
 
 Subagents stay listed beneath their parent in the Agents panel when you switch to another chat. Completed children remain accessible until archived; explicitly collapsed groups stay collapsed.
 
-An expanded plan shows its running subagents above the steps, even when the step that started them is folded. Select a subagent chip to open its chat. The folded plan keeps the subagent count. Link chips say what they open: **PR**, **CI**, **Task**, **File**, or **Preview**. Verification chips describe the reported check state and device.
+Subagents appear as live cards beneath the plan, whether the plan is open or folded. Select a card or a step’s subagent chip to open its chat. Link chips say what they open: **PR**, **CI**, **Task**, **File**, or **Preview**. A reported check appears on its step’s status mark, not as a separate verification chip; hover the mark for its reported state, device and freshness, or select it to open attached evidence.
 
 ## Verification checklist
 

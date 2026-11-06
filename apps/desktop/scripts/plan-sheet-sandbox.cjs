@@ -95,13 +95,14 @@ app.whenReady().then(async () => {
     const opened = id => `(document.querySelector('[data-plan-step-id="${id}"] [data-plan-more]')?.getBoundingClientRect().height ?? 0) > 10`;
     await check('finished step 1 starts closed', `!(${opened('step_1')})`);
     await check('step 2, the last with a PR, starts open', opened('step_2'));
-    await check('the active step starts open', opened('verify:all'));
+    await check('the active step starts open', opened('step_3'));
     await check('no card border on a step', `[...document.querySelectorAll('.plan-sheet-step')].every(e => getComputedStyle(e).borderTopWidth === '0px')`);
-    await check('the kind word is bold', `document.querySelectorAll('.plan-sheet-steps .plan-sheet-kind').length === 4 && [...document.querySelectorAll('.plan-sheet-steps .plan-sheet-kind')].every(e => +getComputedStyle(e).fontWeight >= 600)`);
+    await check('details align with their flat step title', `(() => { const row = document.querySelector('[data-plan-step-id="step_3"]'); return Math.abs(row.querySelector('.plan-sheet-more > p').getBoundingClientRect().left - row.querySelector('.plan-sheet-line > span').getBoundingClientRect().left) < 1; })()`);
+    await check('phase labels are absent', `!document.querySelector('[data-plan-kind]')`);
     await check('PR chip on step 2', `!!document.querySelector('[data-plan-step-id="step_2"] [data-plan-chip="pr"]')`);
     await check('verification panel is gone', `!document.querySelector('[data-verification-checklist]')`);
-    await check('one Verify step holds every check as a sub-bullet', `document.querySelectorAll('[data-plan-step-id="verify:all"] [data-plan-substep] [data-plan-check]').length === 2 && !document.querySelector('[data-plan-chip="verify"]') && !document.querySelector('[data-plan-step-id="step_3"]')`);
-    await check('CI chips on the Verify step', `document.querySelectorAll('[data-plan-step-id="verify:all"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
+    await check('flat steps keep their original order and reports', `JSON.stringify([...document.querySelectorAll('[data-plan-step-id]')].map(e => e.dataset.planStepId)) === JSON.stringify(['step_1','step_2','step_3','step_4']) && document.querySelector('[data-plan-step-id="step_1"] [data-plan-check="passed"]') && document.querySelector('[data-plan-step-id="step_3"] [data-plan-check="active"]') && !document.querySelector('[data-plan-substep]')`);
+    await check('CI chips on the reported check step', `document.querySelectorAll('[data-plan-step-id="step_3"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
     await check('design link on step 1', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="link"]')`);
     const hover = await run(`(() => { const r = document.querySelector('[data-plan-step-id="step_3"]')?.getBoundingClientRect(); return r ? { x: Math.round(r.x + 40), y: Math.round(r.y + 8) } : { x: 1, y: 1 }; })()`);
     win.webContents.sendInputEvent({ type: 'mouseMove', ...hover });
@@ -127,6 +128,14 @@ app.whenReady().then(async () => {
       await check('interrupted active steps retain pause bars without ripple', `(() => { const marks = [...document.querySelectorAll('[data-plan-sheet] [aria-label="Paused"]')]; return marks.length > 0 && marks.every(e => e.querySelector('path')?.getAttribute('d') === 'M8 5v14M16 5v14') && !document.querySelector('[data-plan-sheet] .plan-working'); })()`);
       await shot('plan-paused');
     }
+    // The Local Web UI shares this renderer at phone widths.
+    await run(SEED);
+    await run(`layoutFixture.store.getState().refreshSessions()`);
+    win.setContentSize(390, 844);
+    await run(`layoutFixture.showComposer('composer')`);
+    await sleep(800);
+    await shot('plan-mobile');
+    report.mobile = await run(`({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth, sheet: document.querySelector('[data-plan-sheet]')?.getBoundingClientRect().toJSON() })`);
     report.hidden = !win.isVisible(); report.focused = win.isFocused(); report.bounds = win.getBounds();
     if (!report.hidden || report.focused) throw Error('Isolation invariant failed');
     report.success = true;

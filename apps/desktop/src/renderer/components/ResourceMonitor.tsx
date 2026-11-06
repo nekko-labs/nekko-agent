@@ -45,12 +45,19 @@ function publish(next: ResourceSample) {
 
 /** The connected computer the readings are from; null is this one. */
 let target: string | null = null;
+const targetListeners = new Set<() => void>();
 
 /** Point the readings at a connected computer. What this one read before is dropped, not shown as that one's. */
 export function watchComputer(id: string | null) {
   target = id;
+  for (const l of targetListeners) l();
   publish({ gpu: null, system: null });
   poll();
+}
+
+/** The computer the monitors read, null for this one: Hardware, Local models and Utilization all follow it. */
+export function useWatchedComputer(): string | null {
+  return useSyncExternalStore((fn) => { targetListeners.add(fn); return () => { targetListeners.delete(fn); }; }, () => target, () => target);
 }
 
 function poll() {
@@ -498,14 +505,14 @@ export function ResourceHud() {
 /** Which computer the Hardware monitor reads. Absent with none connected. */
 export function MonitorComputerSwitch() {
   const computers = useStore((s) => s.computers) ?? [];
-  const [chosen, setChosen] = useState('');
+  const chosen = useWatchedComputer() ?? '';
   if (!useShown('computers', { computers: computers.length > 0 })) return null;
   return (
     <select
       className="input w-auto max-w-[110px] py-0.5 text-2xs"
-      aria-label="Computer the hardware readings are from"
+      aria-label="Computer the monitors read"
       value={chosen}
-      onChange={(e) => { setChosen(e.target.value); watchComputer(e.target.value || null); }}
+      onChange={(e) => watchComputer(e.target.value || null)}
     >
       <option value="">This computer</option>
       {computers.map((c) => <option key={c.id} value={c.id} disabled={c.state !== 'online'}>{c.name}</option>)}

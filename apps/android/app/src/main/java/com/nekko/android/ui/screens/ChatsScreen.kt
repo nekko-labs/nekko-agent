@@ -182,7 +182,7 @@ fun ChatsScreen(
     // The computer's monitors: a loaded local model brings them into Simple, the mode pill shows them,
     // and the pill opens into the details.
     val yourComputer = stringResource(R.string.your_computer)
-    val monitor = remember(repo) { HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: yourComputer } }
+    val monitor = remember(repo) { HardwareMonitorController(repo.caller, repo::callRaising) { repo.state.value.active?.name ?: yourComputer } }
     val hardware by monitor.state.collectAsStateWithLifecycle()
     val simple = LocalSimple.current.withLocalModel(hardware.localModelLoaded)
     val showHardware = simple.shown("hardware") && s.active != null
@@ -524,7 +524,7 @@ fun ChatsScreen(
         ModePill(
             pill, barBottom, floor = null,
             gauges = if (showHardware) { vertical, open -> MiniMonitor(hardware, onOpen = open, compact = pane != null, vertical = vertical, modelName = modelName) } else null,
-            details = { AgentDetails(hardware, null, computerName, modelName, monitor::unload) },
+            details = { AgentDetails(hardware, null, computerName, modelName, monitor::unload, monitor.actions) },
             visible = !searching,
         )
     }

@@ -18,6 +18,10 @@ A desktop can connect to another computer the same way a phone does (Settings, C
 
 If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.
 
+**Watching another computer.** Once a computer is connected, the Monitors panel has a switch beside its title. Pick the computer, and Hardware, Local models and Utilization all read that one: its CPU, memory and GPU, the models its Model Server holds, and its cloud plans' quota and token use. A model's Settings, Open Model Server and Manage providers stay with this computer, so they hide while you watch another.
+
+**Its Model Server from here.** While the Monitors panel watches a connected computer, Local models can load a model there, unload one or all, and set how many stay loaded, when an idle one unloads and whether a chat may load one, unless that Model Server keeps its own model settings.
+
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
 
 ## How it works
@@ -527,7 +531,11 @@ changes how the computer itself is set up:
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
   the computer's hardware readings, the Model Server's loaded models and a chat's context size,
-  and unload a model;
+  and unload a model; load a model, unload them all, and choose how many stay loaded, when an idle
+  one unloads and whether a chat may load one, while the Model Server lets connected devices choose
+  model settings (each change confirmed with Face ID or the screen lock); a chat's run settings, including its memory, project rules, Privacy Shield
+  and which tools it may call (from the computer's list of tool names), each confirmed with Face ID
+  or the screen lock;
   git in a chat's folder and its terminals and SSH (below); a chat's or saved folder's files and the computer's logs (below);
   and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
