@@ -209,7 +209,12 @@ final class StoreTests: XCTestCase {
         c.control(.dismiss(tag: E2E.activityTag("s1")))
         await settle()
         XCTAssertEqual(s.relayDelivers, true)
-        XCTAssertEqual(dismissed, [E2E.activityTag("s1")])
+        XCTAssertTrue(dismissed.isEmpty, "a legacy dismiss cannot clear the question still returned by chat:pending")
+        XCTAssertEqual(s.attentionCount, 1)
+        c.replies[Channels.chatPending] = { _ in [:] }
+        await s.refreshAttention()
+        XCTAssertEqual(dismissed, [E2E.activityTag("s1")], "only a fresh empty snapshot proves the chat-wide dismissal")
+        XCTAssertEqual(s.attentionCount, 0)
 
         // The computer answers push:test and the relay can push: the relay path.
         c.replies[Channels.pushTest] = { _ in ["ok": true] }
