@@ -17,9 +17,9 @@ split-from: SPEC.md (2026-10-22)
 
 ## Group header hierarchy
 
-Implemented: project, status, date and Completed group labels use the theme's primary accent color and 14px medium sentence-case text (no caps or letter spacing since the 2026-11 design pass), with accent disclosure chevrons. Vertical groups have 6px of separation (10px between collapsed headings) and 4px between each heading and its contents, so headings stand apart from agent-card metadata. Horizontal groups retain their existing column alignment. Collapsing, project actions, drag/drop, and ungrouped lists are unchanged. No new storage, network access or permissions.
+Implemented: project, status, date and Completed group labels use the theme's primary accent color and 14px medium sentence-case text (no caps or letter spacing since the 2026-11 design pass), with accent disclosure chevrons. Vertical groups have 20px of separation and a faint inset 1px divider centred in each gap (2026-11 panel polish), with 4px between each heading and its contents. Horizontal groups use a 24px gap and a vertical divider instead, retaining their column alignment and compact card density. Dividers appear only between groups, never before the first, and do not intercept input or replace the project drag/drop padding. Collapsing, project actions, drag/drop, and ungrouped lists are unchanged. No new storage, network access or permissions.
 
-Verification: regression tests and isolated matching light/dark renderer captures cover the hierarchy; packaged-app verification remains separate.
+Verification: CSS/markup regression tests cover spacing, theme-aware dividers and unchanged drag/drop padding. Matching isolated full-App Electron captures were inspected in light/dark at 1440px for both column and row layouts. The 760px captures verify the bottom-navigation icon and horizontal scrolling, but the vertical panel is hidden/covered on both base and change (existing narrow-drawer limitation, [#1909](https://github.com/nekko-labs/nekko-agent/issues/1909)); narrow column visual acceptance is not claimed. Group collapse/expand and divider placement checks pass. Packaged-app verification remains separate.
 
 ## Cards that need you, and the model line (2026-10-23)
 
@@ -103,3 +103,9 @@ A subagent used to leave the panel the moment it had a reply and stopped running
 - Otherwise finished subagents fold away, and the card's **N sub-agents** line, which now counts all of them, stands in. Opening the chat brings them back.
 
 Archived subagents do not appear. A subagent whose parent is archived stays in saved chats, as before.
+
+## Scheduled Tasks navigation icon (2026-11 panel polish)
+
+Implemented: the shared desktop/Local Web UI rail uses Gentleface 0.3.0's **workflow-clock**, solid-round on its native 16px grid at 22px. The exact upstream workflow and clock subpaths are colored indigo and amber to match the rail's playful palette, independent of the selected text color. Existing rail hover/active effects and accessible navigation labels remain unchanged. The artwork is bundled locally under the existing MIT notice; there are no runtime downloads, new dependencies or permissions. This changes the navigation icon, not the New scheduled task action's workflow icon or scheduling behavior.
+
+Verification: icon markup/palette regression coverage, desktop typecheck and production build pass. Synthetic full-App checks identify the actual Scheduled Tasks rail icon in both themes. Matching before/after screenshots were inspected in both themes, including the shared renderer’s 760px bottom navigation. Packaged apps and native phone UI are not tested by this renderer-only change.
