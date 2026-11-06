@@ -4,6 +4,15 @@ import XCTest
 /// The shared purpose fixture (packages/shared/fixtures/tool-purpose.json), the
 /// same cases the TS classifier (Vitest) and the Kotlin port run.
 final class ToolPurposeTests: XCTestCase {
+    func testPurposeHeaderIconsDescribeWorkNotCompletion() {
+        XCTAssertEqual(Purpose.icon(.explore, [PurposeCall(name: "read_file"), PurposeCall(name: "functions.Read")]), "doc.text")
+        XCTAssertEqual(Purpose.icon(.explore, [PurposeCall(name: "read_file"), PurposeCall(name: "grep")]), "magnifyingglass")
+        XCTAssertEqual(Purpose.icon(.explore, [PurposeCall(name: "list_dir")]), "folder")
+        XCTAssertEqual(Purpose.icon(.check, [PurposeCall(name: "bash", input: ["command": .string("npm test")], failed: true)]), "checkmark")
+        let icons: [(ToolPurpose, String)] = [(.guidance, "doc.text"), (.explore, "magnifyingglass"), (.edit, "pencil"), (.check, "checkmark"), (.run, "terminal"), (.git, "arrow.triangle.branch"), (.web, "globe"), (.plan, "list.bullet"), (.other, "wrench.and.screwdriver")]
+        for (purpose, icon) in icons { XCTAssertEqual(Purpose.icon(purpose, []), icon) }
+    }
+
     private func fixture() throws -> JSONValue {
         let file = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

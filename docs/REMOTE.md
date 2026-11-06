@@ -4,6 +4,12 @@ Drive the Nekko Agent running on your computer from your phone: start and manage
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
+## Groups on iPhone
+
+Chat-list groups start folded. Tap a heading to reveal its chats; its activity icon stays visible while folded, showing attention, working, watching or done. Search reveals matching chats without changing which groups you opened. General and ungrouped chats stay visible, as does the separate Needs you section.
+
+Inside a conversation, related tool calls fold under a purpose heading with an icon for reading, searching, editing, checking, running commands or other work. Running dots and failure text remain visible beside that purpose. Failed groups start open so errors are not hidden; you can fold them yourself.
+
 ## From another computer
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
