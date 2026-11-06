@@ -536,7 +536,10 @@ async fn job_finds_the_runner_by_name() {
             ..Default::default()
         })
     );
-    assert_eq!(t.http.urls()[1], "GET https://api.github.com/repos/o/r/actions/runs?status=in_progress&per_page=10");
+    assert_eq!(
+        t.http.urls()[1],
+        "GET https://api.github.com/repos/o/r/actions/runs?status=in_progress&per_page=10&page=1"
+    );
     // A runner that never took a job has none.
     assert_eq!(t.gh.job(&r, 0, "nekko-mac1-9-9").await, Ok(None));
 }
@@ -569,9 +572,101 @@ async fn job_that_already_ended_is_found_with_its_pull_request() {
         true,
     );
     let job = t.gh.job(&repo_record(), 0, "nekko-mac1-1-1").await.unwrap().unwrap();
-    assert_eq!(t.http.urls()[2], "GET https://api.github.com/repos/o/r/actions/runs?status=completed&per_page=10");
+    assert_eq!(
+        t.http.urls()[2],
+        "GET https://api.github.com/repos/o/r/actions/runs?status=completed&per_page=10&page=1"
+    );
     assert_eq!(job.url, "https://github.com/o/r/actions/runs/100/job/5");
     assert_eq!(job.pr, Some(PrRef { number: 42, url: "https://github.com/o/r/pull/42".into() }));
+}
+
+#[tokio::test]
+async fn job_finds_an_older_attempt_on_a_later_jobs_page() {
+    let first: Vec<Value> = (0..100).map(|id| json!({ "id": id, "runner_name": "other" })).collect();
+    let t = rig(
+        vec![
+            token(),
+            (200, json!({ "workflow_runs": [{ "id": 100 }] })),
+            (200, json!({ "jobs": first })),
+            (200, json!({ "jobs": [{ "id": 999, "runner_name": "ours", "run_attempt": 1 }] })),
+        ],
+        true,
+    );
+    assert_eq!(t.gh.job(&repo_record(), 0, "ours").await.unwrap().unwrap().job_id, 999);
+    assert_eq!(t.http.urls().len(), 4);
+    assert!(t.http.urls()[3].ends_with("/actions/runs/100/jobs?filter=all&per_page=100&page=2"));
+}
+
+#[tokio::test]
+async fn job_finds_a_run_on_the_second_page() {
+    let runs: Vec<Value> = (1..=10).map(|id| json!({ "id": id })).collect();
+    let mut replies = vec![token(), (200, json!({ "workflow_runs": runs }))];
+    replies.extend((0..10).map(|_| (200, json!({ "jobs": [] }))));
+    replies.push((200, json!({ "workflow_runs": [{ "id": 11 }] })));
+    replies.push((200, json!({ "jobs": [{ "id": 42, "runner_name": "ours" }] })));
+    let t = rig(replies, true);
+    assert_eq!(t.gh.job(&repo_record(), 0, "ours").await.unwrap().unwrap().run_id, 11);
+    assert!(t.http.urls()[12].ends_with("status=in_progress&per_page=10&page=2"));
+    assert_eq!(t.http.urls().len(), 14);
+}
+
+#[tokio::test]
+async fn job_propagates_job_page_errors() {
+    let t = rig(
+        vec![token(), (200, json!({ "workflow_runs": [{ "id": 100 }] })), (403, json!({ "message": "denied" }))],
+        true,
+    );
+    assert!(
+        matches!(t.gh.job(&repo_record(), 0, "ours").await, Err(ProviderError::Other(message)) if message.contains("the jobs") && message.contains("403"))
+    );
+    assert_eq!(t.http.urls().len(), 3);
+}
+
+#[tokio::test]
+async fn job_searches_later_repo_before_paginating_busy_first_repo() {
+    let runs: Vec<Value> = (1..=10).map(|id| json!({ "id": id })).collect();
+    let jobs: Vec<Value> = (0..100).map(|id| json!({ "id": id, "runner_name": "other" })).collect();
+    let mut replies = vec![token(), (200, json!({ "workflow_runs": runs }))];
+    replies.extend((0..10).map(|_| (200, json!({ "jobs": jobs }))));
+    replies.push((200, json!({ "workflow_runs": [{ "id": 99 }] })));
+    replies.push((200, json!({ "jobs": [{ "id": 42, "runner_name": "ours" }] })));
+    let t = rig(replies, true);
+    let mut r = repo_record();
+    gh_mut(&mut r).repos.push("o/second".into());
+    let found = t.gh.job(&r, 0, "ours").await.unwrap().unwrap();
+    assert_eq!((found.repo.as_str(), found.run_id, found.job_id), ("o/second", 99, 42));
+    let urls = t.http.urls();
+    assert_eq!(urls.len(), 14);
+    assert!(urls[12].contains("/repos/o/second/actions/runs?status=in_progress"));
+    assert!(urls[13].contains("/repos/o/second/actions/runs/99/jobs"));
+    assert!(urls.iter().all(|url| !url.contains("page=2")));
+}
+
+#[tokio::test]
+async fn job_no_match_covers_all_repos_and_caps_extra_requests_per_status() {
+    let runs: Vec<Value> = (1..=10).map(|id| json!({ "id": id })).collect();
+    let jobs: Vec<Value> = (0..100).map(|id| json!({ "id": id, "runner_name": "other" })).collect();
+    let mut replies = vec![token()];
+    for _ in 0..2 {
+        for _ in 0..2 {
+            replies.push((200, json!({ "workflow_runs": runs })));
+            replies.extend((0..10).map(|_| (200, json!({ "jobs": jobs }))));
+        }
+        replies.extend((0..10).map(|_| (200, json!({ "jobs": jobs }))));
+        replies.push((200, json!({ "workflow_runs": runs })));
+        replies.extend((0..10).map(|_| (200, json!({ "jobs": jobs }))));
+        replies.push((200, json!({ "workflow_runs": runs })));
+        replies.extend((0..2).map(|_| (200, json!({ "jobs": jobs }))));
+    }
+    let t = rig(replies, true);
+    let mut r = repo_record();
+    gh_mut(&mut r).repos.push("o/second".into());
+    assert_eq!(t.gh.job(&r, 0, "ours").await, Ok(None));
+    let urls = t.http.urls();
+    assert_eq!(urls.len(), 93);
+    assert!(urls[12].contains("/repos/o/second/actions/runs?status=in_progress"));
+    assert!(urls[47].contains("status=completed"));
+    assert!(urls[58].contains("/repos/o/second/actions/runs?status=completed"));
 }
 
 #[tokio::test]
