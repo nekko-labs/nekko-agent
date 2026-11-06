@@ -59,9 +59,14 @@ gh pr merge --auto --squash                 # it merges itself when `gate` is gr
 `main` requires one check, `gate`, a PR, and resolved review threads. There is no
 merge queue (removed 2026-11-06, [decision 0056](../decisions/0056-no-merge-queue-speed-contract-and-itests-run-nightly.md)):
 a PR merges itself through GitHub's native auto-merge (squash) as soon as `gate`
-passes. The speed contract and the loopback itests run nightly, not on the PR, so
-add `ci:perf` to a PR that changes a path the speed contract measures if you want
-the numbers before it lands. Do not merge with `--admin`: it skips `gate`.
+passes. With no queue, `gate` on the PR is the last check before `main`, so it
+also waits for the speed contract (`perf`, when the PR touches what it measures:
+the renderer, the Local Web UI, `packages/`, the Rust crates or `scripts/perf/`;
+`ci:perf` forces it) and the loopback itests (every PR that needs `build`)
+([decision 0059](../decisions/0059-speed-contract-and-itests-run-on-every-pr.md)).
+Both also run nightly. Until #712 is fixed, `perf` misses the cold-chat paint
+budget on unchanged code about half the time; see
+[failing checks](failing-checks.md). Do not merge with `--admin`: it skips `gate`.
 
 The auto-merge workflow arms auto-merge on every ready PR into main, so `gh pr
 merge --auto --squash` is a belt to its braces. It also runs on every push, so a

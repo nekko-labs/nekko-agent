@@ -2,10 +2,12 @@ name: CI
 
 # Two tiers (scripts/ci-scope.mjs decides which jobs each run needs):
 #
-#   pull_request   fast feedback: build, gated by the paths the PR touches. A
-#                  change only to the native phone apps (apps/ios, apps/android)
-#                  skips it: their own workflows test them. `gate` here is what
-#                  main requires; there is no merge queue.
+#   pull_request   build, the speed contract and the loopback itests, gated by
+#                  the paths the PR touches. A change only to the native phone
+#                  apps (apps/ios, apps/android) skips all three: their own
+#                  workflows test them. `gate` here is what main requires;
+#                  there is no merge queue, so this is the last check before
+#                  main (decision 0059).
 #   schedule       nightly: every job on every OS (the Linux, Windows and macOS
 #                  daemon and capture), the speed contract and the itests.
 #                  Skipped when main has not moved.
@@ -13,7 +15,7 @@ name: CI
 # Platform builds run nightly rather than per change, here and in the iOS,
 # Android, installer and development-identity workflows. A `deploy:linux`,
 # `deploy:windows`, `deploy:macos`, `deploy:ios` or `deploy:android` label opts
-# a single PR into that platform's runs (`ci:perf` into the speed contract), and
+# a single PR into that platform's runs (`ci:perf` forces the speed contract), and
 # `gate` waits for the runs a deploy label turns on in other workflows
 # (scripts/ci-label-gate.mjs). Adding a label re-runs CI so it takes effect.
 on:
@@ -216,9 +218,10 @@ jobs:
   # The speed contract (spec/platform/speed-responsiveness-the-speed-contract.md): headless Chrome over
   # the DevTools protocol against the Local Web UI and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
-  # regression shows its numbers, not only a red cross. It runs nightly, and on
-  # a PR only with the `ci:perf` label; a regression that lands without the
-  # label shows up in the next nightly run's `ci-scheduled` issue.
+  # regression shows its numbers, not only a red cross. It runs on every PR that
+  # changes what it measures (renderer, web server, packages, daemon, harness),
+  # or with the `ci:perf` label, and `gate` waits for it, so a regression is
+  # stopped before main. It also runs nightly.
   perf:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
@@ -300,9 +303,8 @@ jobs:
   # Loopback end-to-end checks: the Local Web UI behind nekkod, with scripted
   # models and fake services on 127.0.0.1 (a fake Telegram Bot API and GitHub, a
   # local relay, a Hypergate daemon from its public repo). Each script makes its
-  # own temporary data dir and home and ends its process trees. Never on a PR,
-  # and `gate` does not need this job: it reports on main (the nightly schedule,
-  # a dispatch) without holding anything.
+  # own temporary data dir and home and ends its process trees. Runs on every PR
+  # that needs `build`, and nightly; `gate` waits for it.
   itests:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.itests == 'true'
@@ -369,7 +371,7 @@ jobs:
       - run: node scripts/third-party.mjs check
 
   gate:
-    needs: [scope, build, daemon, capture, perf, licenses]
+    needs: [scope, build, daemon, capture, perf, itests, licenses]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 190
