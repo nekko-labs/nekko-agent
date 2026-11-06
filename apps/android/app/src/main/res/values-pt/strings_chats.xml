@@ -186,6 +186,13 @@
     <string name="chats_run_on">Executar em</string>
     <string name="chats_run_on_note">Um modelo local roda no próprio hardware do computador. Escolher outro computador mostra os modelos e pastas dele.</string>
     <string name="chats_run_on_state">%1$s · %2$s</string>
+    <string name="chats_auto">Automático</string>
+    <string name="chats_auto_note">Um computador livre</string>
+    <string name="chats_auto_finding">Procurando um computador livre…</string>
+    <string name="chats_auto_free_busy">Auto escolheu %1$s: %2$s está ocupado.</string>
+    <string name="chats_auto_free">Auto escolheu %1$s: está livre.</string>
+    <string name="chats_auto_all_busy">Todos os computadores estão ocupados, então Auto manteve %1$s, o último usado.</string>
+    <string name="chats_auto_none">Nenhum outro computador pode rodar um modelo local agora, então Auto manteve %1$s.</string>
     <string name="chats_shared_with">Compartilhado com o Nekko</string>
     <string name="chats_shared_note">Vai para a caixa de mensagem do chat. Você envia.</string>
     <string name="chats_remove_shared">Remover texto compartilhado</string>

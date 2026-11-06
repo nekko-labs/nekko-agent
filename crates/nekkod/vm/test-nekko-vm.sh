@@ -49,6 +49,18 @@ check "clone has a new locally administered MAC ($mac)" \
 check "clone keeps the other config keys" "[ \"\$(plutil -extract hardwareModel raw '$tmp/c1/config.json')\" = AAAA ]"
 check "clone never touches the source" "[ \"\$(cat '$src'/* | shasum)\" = '$src_sum' ]"
 
+# A Linux bundle (decision 0053): clone takes its kernel and initrd too; run refuses one without them
+lsrc="$tmp/lsrc"
+mkdir -p "$lsrc"
+printf '{"version":1,"os":"linux","arch":"arm64","macAddress":"aa:bb:cc:dd:ee:01"}' >"$lsrc/config.json"
+for f in disk.img vmlinux initrd; do head -c 4096 /dev/urandom >"$lsrc/$f"; done
+out=$("$helper" clone --from "$lsrc" --to "$tmp/l1"); code=$?
+check "clone copies a Linux bundle's kernel and initrd" \
+  "[ $code -eq 0 ] && cmp -s '$lsrc/vmlinux' '$tmp/l1/vmlinux' && cmp -s '$lsrc/initrd' '$tmp/l1/initrd' && [ ! -e '$tmp/l1/nvram.bin' ]"
+rm "$tmp/l1/vmlinux"
+out=$("$helper" run --bundle "$tmp/l1" --cpus 2 --memory-mb 4096 --net-fd 3 3</dev/null); code=$?
+check "run refuses a Linux bundle with no kernel" "[ $code -eq 1 ] && [[ '$out' == *'no vmlinux'* ]]"
+
 # run with a missing bundle reports an error and exits 1
 out=$("$helper" run --bundle "$tmp/nope" --cpus 2 --memory-mb 4096 --net-fd 3 3</dev/null); code=$?
 check "run with a missing bundle stops with an error" "[ $code -eq 1 ] && [[ '$out' == '{\"event\":\"stopped\",\"reason\":\"error\",\"detail\":'* ]]"

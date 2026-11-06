@@ -59,7 +59,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'computers', area: 'Agents wall', label: 'Connected computers', hint: 'Run on, the computer chip, grouping and icons. Only once a computer is connected', platforms: D, default: 'show', needs: 'computers' },
   { id: 'ph-subtitle', area: 'Chat · header', label: 'Model and computer under the title', hint: 'Like "Opus 5.5 · Studio Mac"', platforms: P, default: 'expert' },
   { id: 'model', area: 'Chat · message box', label: 'Model name and picker', hint: 'Switch between Claude, ChatGPT or a local model', platforms: DP, default: 'show' },
-  { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'How hard the model thinks before it answers. Inside the model menu in Simple', platforms: DP, default: 'show' },
+  { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'Provider-reported effort choices beside the model in both modes', platforms: DP, default: 'show' },
   { id: 'asks', area: 'Chat · message box', label: 'Asks first', hint: 'When the agent stops to ask you, in plain words', platforms: DP, default: 'show' },
   { id: 'context', area: 'Chat · message box', label: 'Usage ring', hint: 'How full this chat is. Simple shows only the ring; the numbers are in its tooltip', platforms: DP, default: 'show' },
   { id: 'cost', area: 'Chat · message box', label: 'Cost and limits', hint: 'What this chat has cost, and plan limits', platforms: D, default: 'expert' },

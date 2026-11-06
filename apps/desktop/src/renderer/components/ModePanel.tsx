@@ -2,12 +2,12 @@ import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatEffort, modelDefaultEffort, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
+  CONNECTOR_CATALOG, WORK_MODES, chatEffort, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
   modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionFolders.js';
-import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
+import { effortLabel, effortRungs } from './ChatMetrics.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
@@ -277,7 +277,8 @@ export function ModePanel({
   const mcpServers = settings?.mcpServers ?? [];
   const workspaces = settings?.workspaces ?? [];
   const folders = getSessionWorkspaceIds(session).map((id) => ({ id, folder: workspaces.find((w) => w.id === id) }));
-  const rungs = effortRungs(chatEffort(session, settings?.effort) ?? 'normal', modelId);
+  const effortMetadata = useStore((s) => s.models?.find((m) => m.id === modelId && m.providerId === session.providerId)?.effort);
+  const rungs = effortRungs(chatEffort(session, settings?.effort) ?? 'normal', modelId, effortMetadata);
   const mcpOff = new Set(session.disabledMcpServers ?? []);
   const mcpOn = mcpServers.filter((s) => s.enabled && !mcpOff.has(s.id)).length;
   const connected = (settings?.connectors ?? []).filter((c) => c.connected);
@@ -436,9 +437,9 @@ export function ModePanel({
             </div>
             <div className="mode-row is-stacked">
               <span className="mode-ic"><GfGaugeIcon /></span>
-              <span className="min-w-0 flex-1">{title('Effort', `How long the model thinks before acting. Your choice is remembered for new chats on this computer. Recommended: ${EFFORT_LABEL[modelDefaultEffort(modelId)]}.`)}</span>
-              {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
-                (v) => void actions.setEffort(v))}
+              <span className="min-w-0 flex-1">{title('Effort', 'How long the model thinks before acting. Your choice is remembered for new chats on this computer.')}</span>
+              {rungs.options.length ? tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, effortLabel(o), <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
+                (v) => void actions.setEffort(v)) : <span className="text-xs text-ink-faint" aria-disabled="true">Effort unavailable: provider choices not reported.</span>}
             </div>
           </section>
 

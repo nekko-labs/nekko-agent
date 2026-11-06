@@ -48,6 +48,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,6 +83,7 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Channels
 import com.nekko.protocol.Effort
 import com.nekko.protocol.LocalProviders
+import com.nekko.protocol.MachinePick
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.Session
@@ -131,6 +133,15 @@ fun NewChatScreen(
     var switched by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    /** Automatic (2026-11-05): a local-model chat starts on a free computer. Off once a computer is picked by hand. */
+    var autoOn by rememberSaveable { mutableStateOf(true) }
+    /** What Automatic chose last, and why (the line under Run on). */
+    var autoPick by remember { mutableStateOf<MachinePick?>(null) }
+    var autoFinding by remember { mutableStateOf(false) }
+    /** Bumped to ask again: a local model picked, or Automatic chosen. */
+    var autoRun by remember { mutableIntStateOf(0) }
+    /** Automatic set the model (a local one), on a computer whose providers may still be loading. */
+    var autoChoseModel by rememberSaveable { mutableStateOf(false) }
 
     // The models are the computer's: ask every enabled provider there, in parallel.
     LaunchedEffect(online, c.providers) {
@@ -157,9 +168,53 @@ fun NewChatScreen(
         if (effort != null && Effort.levels(pick?.modelId).none { it.wire == effort }) effort = null
     }
     val pickedKind = c.providers.firstOrNull { it.id == pick?.providerId }?.kind
+    val isLocal = LocalProviders.isLocal(pickedKind) || (autoChoseModel && pickedKind == null)
     // A local model runs on its computer's hardware: offer the other paired computers.
-    val showRunOn = c.computers.size > 1 && (switched || LocalProviders.isLocal(pickedKind))
+    val showRunOn = c.computers.size > 1 && (switched || isLocal)
+    // Automatic can choose: a local model, other computers connected, and no folder (a folder decides the computer).
+    val autoOffered = isLocal && workspaceId == null && c.computers.size > 1 && c.peers.isNotEmpty()
+    val autoShown = autoOn && autoOffered
+    // Ask every computer whether it is in use and move the chat to a free one, with a local model there.
+    LaunchedEffect(autoRun, autoShown, online) {
+        val chosen = pick
+        if (!autoShown || !online || autoPick != null || busy || chosen == null) return@LaunchedEffect
+        autoFinding = true
+        try {
+            val from = repo.state.value.activeId
+            val result = repo.pickMachine(from)
+            if (!autoOn || pick != chosen) return@LaunchedEffect
+            val target = result.computerId
+            if (target == null || target == from) {
+                autoPick = result
+                return@LaunchedEffect
+            }
+            val next = repo.localModel(target, listOf(chosen.providerId to chosen.modelId))
+            if (next == null) {
+                // It has no model to start with after all: stay, and say every other computer was busy.
+                autoPick = MachinePick(from, MachinePick.Reason.ALL_BUSY)
+                return@LaunchedEffect
+            }
+            if (!autoOn || pick != chosen || busy) return@LaunchedEffect
+            // Moved by Automatic: the folder stays unset, and the model is that computer's.
+            repo.connect(target)
+            pick = ModelPick(next.first, next.second)
+            touched = true
+            autoChoseModel = true
+            effort = null
+            error = null
+            autoPick = result
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Nothing moved: the chat starts where it is.
+        } finally {
+            autoFinding = false
+        }
+    }
     val runOn: (String) -> Unit = { id ->
+        // Picking a computer by hand turns Automatic off for this chat.
+        autoOn = false
+        autoPick = null
         if (id != c.activeId) {
             switched = true
             // The model, folder and effort are the old computer's; the new one's defaults are picked when its models arrive.
@@ -262,7 +317,13 @@ fun NewChatScreen(
                             onPick = {
                                 pick = it
                                 touched = true
+                                autoChoseModel = false
                                 error = null
+                                // A local model picked: Automatic asks again.
+                                if (LocalProviders.isLocal(c.providers.firstOrNull { pr -> pr.id == it.providerId }?.kind)) {
+                                    autoPick = null
+                                    autoRun++
+                                }
                             },
                             onRetry = {
                                 scope.launch {
@@ -312,17 +373,39 @@ fun NewChatScreen(
                     NCard {
                         Label(Icons.Filled.Computer, stringResource(R.string.chats_run_on))
                         Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.runOn"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (autoOffered) {
+                                Chip(stringResource(R.string.chats_auto), autoShown) {
+                                    autoOn = true
+                                    autoPick = null
+                                    autoRun++
+                                }
+                            }
                             c.computers.forEach { pc ->
                                 // Every paired computer stays connected: each says whether it can take the chat now.
                                 val label = if (pc.id == c.activeId || c.peers.isEmpty()) pc.name
                                 else stringResource(R.string.chats_run_on_state, pc.name, stringResource(stateName(c.connOf(pc.id))))
-                                Chip(label, pc.id == c.activeId, pc.icon) { runOn(pc.id) }
+                                Chip(label, !autoShown && pc.id == c.activeId, pc.icon) { runOn(pc.id) }
                             }
                         }
+                        val name = active?.name.orEmpty()
+                        val made = autoPick
+                        val line = when {
+                            !autoShown -> stringResource(R.string.chats_run_on_note)
+                            autoFinding -> stringResource(R.string.chats_auto_finding)
+                            made == null -> stringResource(R.string.chats_auto_note)
+                            made.reason == MachinePick.Reason.FREE -> {
+                                val busyName = made.skipped.firstOrNull()?.let { id -> c.computers.firstOrNull { it.id == id }?.name }
+                                if (busyName != null) stringResource(R.string.chats_auto_free_busy, name, busyName)
+                                else stringResource(R.string.chats_auto_free, name)
+                            }
+                            made.reason == MachinePick.Reason.ALL_BUSY -> stringResource(R.string.chats_auto_all_busy, name)
+                            else -> stringResource(R.string.chats_auto_none, name)
+                        }
                         Text(
-                            stringResource(R.string.chats_run_on_note),
+                            line,
                             style = MaterialTheme.typography.bodySmall,
                             color = p.inkSoft,
+                            modifier = if (autoShown) Modifier.testTag("newChat.auto") else Modifier,
                         )
                     }
                 }

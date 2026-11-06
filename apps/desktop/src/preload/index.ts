@@ -364,6 +364,9 @@ const api: NekkoApi = {
   buildImage: (req) => inv(IpcChannels.runnerImageBuild, req),
   resumeImage: () => inv(IpcChannels.runnerImageResume),
   cancelImage: () => inv(IpcChannels.runnerImageCancel),
+  linuxImageStatus: () => inv(IpcChannels.runnerLinuxImageStatus),
+  buildLinuxImage: () => inv(IpcChannels.runnerLinuxImageBuild),
+  cancelLinuxImage: () => inv(IpcChannels.runnerLinuxImageCancel),
   listRunners: () => inv(IpcChannels.runnerList),
   connectRunner: (req) => inv(IpcChannels.runnerConnect, req),
   updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
@@ -541,6 +544,11 @@ const api: NekkoApi = {
     const listener = (_: unknown, view: import('@nekko-agent/shared').ImageView) => cb(view);
     bus.on(IpcEvents.runnerImageChanged, listener);
     return () => bus.removeListener(IpcEvents.runnerImageChanged, listener);
+  },
+  onLinuxImageChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').LinuxImageView) => cb(view);
+    bus.on(IpcEvents.runnerLinuxImageChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerLinuxImageChanged, listener);
   },
   onRunnersChanged: (cb) => {
     const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);

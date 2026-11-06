@@ -100,10 +100,11 @@ describe('workspace card model line and attention', () => {
     state.providers = [];
   });
 
-  it('keeps chat rows flat while status and title carry attention and selection', () => {
+  it('marks only the selected chat for its background, independently of status', () => {
     for (const patch of [{}, { status: 'input' as const }, { status: 'error' as const }, { isActive: true }]) {
       const html = render(patch);
       expect(html).toContain('agent-chip-chat');
+      expect(html.includes('data-agent-active="true"')).toBe('isActive' in patch && patch.isActive === true);
       expect(html).not.toContain('bg-accent-soft');
       expect(html).not.toContain('border-color:');
     }

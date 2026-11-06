@@ -350,11 +350,12 @@ export function PromptAnalyzer({
           className={`composer-suggestions-chip ${open ? 'is-open' : ''}`}
           aria-expanded={open}
           aria-haspopup="dialog"
+          aria-label={label}
           title={`Prompt health ${a.grade} · ${present}/${a.parts.length} parts · ${a.model.tier} model`}
           onClick={() => setOpen((o) => !o)}
         >
           <GradeBadge grade={a.grade} />
-          <span>{label}</span>
+          <span className="composer-suggestions-label">{label}</span>
         </button>
         {open && anchor && createPortal(
           <div ref={popRef} role="dialog" aria-label="Prompt suggestions" className="card fixed z-[100] max-h-[60vh] w-[480px] max-w-[calc(100vw-16px)] overflow-y-auto shadow-(--shadow-float)" style={{ left: anchor.left, bottom: anchor.bottom, background: 'var(--paper)' }}>

@@ -798,8 +798,10 @@
 }
 .titlebar-mac .developer-server-controls { margin-right: 12px; }
 /* The Agents controls share the title bar row. Keep them clear of the
-   Windows/Linux caption buttons unless the developer controls already do. */
-.titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 138px; }
+   Windows/Linux caption buttons unless the developer controls already do:
+   their 138px, then the 16px the add bar's divider leaves before the layout
+   switcher, so the row has the same space at both ends. */
+.titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 154px; }
 .titlebar-mac:not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 12px; }
 /* The strip is 46px with 12px top padding (mark and heading centred at 29px),
    but the native caption buttons keep their 38px band (`TITLEBAR_HEIGHT`).
@@ -3517,6 +3519,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-section[data-wall-composer] [data-composer-foot] { flex: 0 1 auto; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
 .composer-section[data-wall-composer] [data-composer-foot] > * { flex-shrink: 1; min-width: 0; }
 .composer-section[data-wall-composer] [data-composer-foot] button { white-space: nowrap; }
+/* Squeezed, Effort clips its word behind the dial rather than spilling onto Mode. */
+.composer-section[data-wall-composer] [data-composer-foot] .effort-slider { flex-shrink: 1; min-width: 26px; }
+.composer-section[data-wall-composer] [data-composer-foot] .effort-trigger { min-width: 0; overflow: hidden; justify-content: flex-start; }
+.composer-section[data-wall-composer] [data-composer-foot] .effort-trigger > :first-child { flex-shrink: 0; }
 
 /* The wall composer's panel clips its overflow, so the composer's outer
    focus halo and drop shadow were cut into a band along the bottom edge and
@@ -3524,15 +3530,18 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
 
-/* Prompt suggestions as one chip among the composer's actions. */
-.composer-suggestions-row { display: flex; justify-content: flex-end; min-width: 0; padding: 0 8px 6px; }
-.composer-suggestions-row:not(:has(button)) { display: none; }
+/* Prompt suggestions as one chip among the composer's actions. In a crowded
+   bar it gives up its words before the model and Mode give up theirs, down to
+   the grade badge. */
+.composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
+.composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
+.agent-chip-chat[data-agent-active] { background: var(--accent-soft); }
 .agent-chip-chat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .composer-suggestions-chip {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
-  font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; flex-shrink: 0;
+  font-size: var(--text-xs); color: var(--ink-soft); white-space: nowrap; min-width: 0; overflow: hidden;
   transition: border-color 0.12s ease, color 0.12s ease;
 }
 .composer-suggestions-chip.is-open { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); color: var(--ink); }
@@ -3719,6 +3728,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window > .panel { transition: none; }
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] > .panel::before { animation: none; }
 }
+/* Dither the selected conversation's field as well as new chat. Reuse the
+   fixed monochrome tile behind content; never grain inactive panes or the
+   standalone composer, and do not add another layer to new chat. */
+:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] [data-chat-surface]:not([data-chat-surface='composer']):not([data-clean-start]) > section::after,
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='grain' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cpath fill='white' filter='url(%23grain)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
