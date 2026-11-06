@@ -1,4 +1,5 @@
 import type { ModelInfo, ProviderConfig } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 
 // Kept out of ModelPicker.tsx so that file only exports components and Fast Refresh keeps working.
 /** How long one provider's model list may take before it is shown as unreachable. */
@@ -46,6 +47,23 @@ export function modelRowLabel(model: Pick<ModelInfo, 'id' | 'name' | 'details'>,
   const parts = model.id.split(/[\\/]/).filter(Boolean);
   const name = (parts.pop() ?? model.id).replace(/\.gguf$/i, '');
   return { name, sub: path ?? (parts.join('/') || undefined) };
+}
+
+/**
+ * What a chat's model becomes once its provider's list is back. `listed` is
+ * null when the call failed; a failed `models:list` also arrives as `[]`. A list
+ * that cannot confirm a model only revokes it when the user did not just pick
+ * it: they picked from a list a moment ago, so a rate limit is not evidence.
+ */
+export function reconcileModelAfterList(
+  current: string | null,
+  listed: readonly ModelInfo[] | null,
+  picked: string | null,
+): { modelId: string | null; unavailable: string | null } {
+  if (!current || current === AUTO_MODEL_ID) return { modelId: current, unavailable: null };
+  if (listed?.some((m) => m.id === current)) return { modelId: current, unavailable: null };
+  if (!listed?.length && current === picked) return { modelId: current, unavailable: null };
+  return { modelId: null, unavailable: current };
 }
 
 export function nextFavoriteModels(current: readonly string[] | undefined, key: string): string[] {

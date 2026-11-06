@@ -54,6 +54,21 @@ Both unchanged-base runs and both head runs fail the unchanged 33 ms gate. Raw n
 Separate timeline-instrumented base/head runs measured 38.4 / 39.2 ms p95 (p50 31.6 / 31.3 ms). Inspected cold traces contain 176562 / 171446 events; nested renderer-main totals for style UpdateLayoutTree 481.215 / 442.285 ms, Layout 200.154 / 194.624 ms, Paint 502.808 / 469.747 ms and Layerize 1604.836 / 1502.413 ms are whole-phase observations, not per-click causal attribution. Profiling overhead means this pair is not equivalent to the unprofiled controls. Earlier automatic streaming-only profiles do not measure cold-chat latency.
 
 Source: [exact matched reports, provenance and timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42035974208), [PR #1854](https://github.com/nekko-labs/nekko-agent/pull/1854), baseline [#712](https://github.com/nekko-labs/nekko-agent/issues/712). The diagnostic workflow completed, but all six measurements missed the budget; workflow success is not a passed product gate. No budget change. The temporary diagnostic workflow must never merge.
+## Existing-chat static grain (#1904, 2026-11-06)
+
+Area: renderer. Result: no regression reproduced in two matched latency pairs; original runner-specific cold-paint failure remains unexplained. No speedup or zero-effect claim.
+Conditions: exact queue parent `50d6e93c6f26424870cf2ad0743c69a21d97094f`, head `fce171e745563042fa7c0bdc79363e719f179df6`; same Linux Intel Xeon 6973P-C runner (4 threads, 16 GB), Chrome 156.0.8078.79, Node 22.23.4, 1440x1000, scripted model, 33 cold switches per measurement. Clean snapshots, unchanged latency harness and independently built identical release daemon binaries (SHA256 `debfcc01554946e966330170e802054153e88d7d49a7f6d198243cabe4358e6b`). Order base/head/head/base, full latency workload, one attempt each.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-frame p95 | 31.4 / 32.6 ms | 28.4 / 31.9 ms |
+| Cold-chat first-frame p50 | 23.7 / 22.9 ms | 23.4 / 25.2 ms |
+
+All four full latency measurements passed their budgets, including the unchanged 33 ms cold-paint gate. Raw nearest-rank samples, snapshot identities, clean-tree assertions and daemon hashes were inspected. The original queue run on AMD EPYC 7763 (same Chrome, Linux 4 threads, 16 GB) failed only cold first-frame paint at p95 36.6 / 40.6 / 37.1 ms, 33 samples each. Other measured speed/memory rows and build/integration tests passed; terminal typing was skipped. Automatic streaming-only profiles did not measure the failing cold-switch metric. The Intel comparison does not reproduce a baseline failure or establish the cause on AMD; it supports one evidence-backed protected requeue, not repeated retries if the failure recurs. Related baseline investigation: [#712](https://github.com/nekko-labs/nekko-agent/issues/712).
+
+Separate timeline-instrumented base/head cold-paint p95 was 31.0 / 32.8 ms. Inspected cold traces contain 195607 / 196657 events. Renderer-main whole-phase totals in ms: UpdateLayoutTree 384.870 / 394.106, Layout 167.313 / 167.238, Paint 420.876 / 418.657, Layerize 1310.728 / 1309.487. Nested events overlap; totals are not per-click causality or unprofiled gate measurements. Grain implementation and budgets were not changed during diagnosis.
+
+Source: [matched reports, raw samples, provenance and cold-paint traces](https://github.com/nekko-labs/nekko-agent/actions/runs/42134801181), [original queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/42131946898). Raw artifacts retained locally under `.shots/chat-gradient-dither/`. Temporary `ci/1904-cold-paint` workflow is diagnostic only and must never merge.
 ## Inline PR lifecycle model queue diagnosis (#1820/#1821, 2026-11-05)
 
 Area: renderer / shared projection. Result: unchanged-base cold-paint failure reproduced; no product optimization or zero-regression claim.
@@ -159,6 +174,18 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-11
+
+### #1894 iPhone: pixel build-up before Face ID, about a second in all (2026-11-06)
+Area: renderer
+Result: improvement
+Conditions: as #1833 (iPhone 17 Pro simulator, iOS 27.0, Xcode 27.2, Debug signed ad hoc, app lock on, simulated Face ID, 1/30 s frame reading); before is main after #1836. Two cold launches per build.
+
+| Metric | Before | After |
+|---|---|---|
+| Face ID sheet gone to app fully on screen, fresh install | not detected (probe missed) | 0.47 s |
+| Face ID sheet gone to app fully on screen, relaunch | 0.93 s | 0.50 s |
+
+Why: the build-up is back but plays from the first frame, under the Face ID prompt, at a 0.28 s beat; after unlock only the 0.294 s zoom is left (was 0.525 s). Lock off, first drawn frame to app on screen is about 0.95 s (read off frames, not probed).
 
 ### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
 Area: renderer
