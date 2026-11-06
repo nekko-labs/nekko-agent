@@ -1,0 +1,116 @@
+name: iOS turn details and attention evidence
+# Disposable hosted simulators only; overlays fixture/test code, never implementation.
+on:
+  workflow_call:
+    inputs:
+      baseline_ref:
+        required: true
+        type: string
+      source_ref:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  evidence:
+    runs-on: xcode-27
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref }}
+          path: .evidence-harness
+          persist-credentials: false
+          sparse-checkout: |
+            apps/ios/App/Views/TurnDetailsFixture.swift
+            apps/ios/App/Views/TurnDetailsLayoutProbe.swift
+            apps/ios/UITests/TurnDetailsTests.swift
+          sparse-checkout-cone-mode: false
+      - name: Install identical fixture and record exact revisions
+        env:
+          BASELINE: ${{ inputs.baseline_ref }}
+          SOURCE: ${{ inputs.source_ref }}
+          REVISION: ${{ matrix.revision }}
+        run: |
+          set -euo pipefail
+          [[ "$BASELINE" =~ ^[0-9a-fA-F]{40}$ && "$SOURCE" =~ ^[0-9a-fA-F]{40}$ ]]
+          mkdir -p apps/ios/evidence
+          { echo "app=$(git rev-parse HEAD)"; echo "harness=$(git -C .evidence-harness rev-parse HEAD)"; xcodebuild -version; } > apps/ios/evidence/revisions.txt
+          cp .evidence-harness/apps/ios/App/Views/TurnDetailsFixture.swift apps/ios/App/Views/
+          cp .evidence-harness/apps/ios/App/Views/TurnDetailsLayoutProbe.swift apps/ios/App/Views/
+          cp .evidence-harness/apps/ios/UITests/TurnDetailsTests.swift apps/ios/UITests/
+          if [ "$REVISION" = before ]; then
+            python3 - <<'PY'
+          from pathlib import Path
+          p = Path('apps/ios/App/NekkoApp.swift')
+          s = p.read_text()
+          if 'TurnDetailsFixture()' not in s:
+              needle = 'if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {'
+              assert needle in s
+              s = s.replace(needle, 'if ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") {\n            TurnDetailsFixture()\n        } else ' + needle, 1)
+              s = s.replace('app.start()', 'if !ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { app.start() }')
+              s = s.replace('switch p {', 'if ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { return }\n            switch p {')
+              s = s.replace('.task(id: spooky) { SpookyIcon.sync(spooky: spooky) }', '.task(id: spooky) { if !ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { SpookyIcon.sync(spooky: spooky) } }')
+              p.write_text(s)
+          PY
+          fi
+      - run: brew install xcodegen
+      - name: Create disposable simulator and build native app
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          # Pin both matrix jobs: auto-picking the newest installed runtime gave
+          # iOS 27.0 before but 27.2 after in run 42127842332.
+          RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-0
+          TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro
+          xcrun simctl list runtimes -j | ruby -rjson -e 'abort "Pinned iOS 27.0 runtime unavailable" unless JSON.parse(STDIN.read)["runtimes"].any? { |r| r["isAvailable"] && r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-27-0" }'
+          DEVICE=$(xcrun simctl create Nekko-Attention-Evidence "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl ui "$DEVICE" appearance light
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData build-for-testing CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO
+      - name: Capture matched surface and run after-only regression tests
+        working-directory: apps/ios
+        env:
+          REVISION: ${{ matrix.revision }}
+        run: |
+          set -euo pipefail
+          TESTS=(-only-testing:NekkoNativeUITests/TurnDetailsTests/testCaptureFixture)
+          if [ "$REVISION" = after ]; then
+            TESTS=(-only-testing:NekkoNativeTests/TurnDetailsRowTests -only-testing:NekkoNativeUITests/TurnDetailsTests)
+            if [ -f Tests/NotifierTests.swift ]; then
+              TESTS+=(-only-testing:NekkoNativeTests/NotifierTests -only-testing:NekkoNativeUITests/AttentionNotificationsUITests)
+            fi
+          fi
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData -resultBundlePath evidence/attention.xcresult test-without-building "${TESTS[@]}" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM=""
+      - name: Export screenshots and remove owned simulator
+        if: always()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -n "${DEVICE:-}" ]; then
+            xcrun simctl shutdown "$DEVICE" || true
+            xcrun simctl delete "$DEVICE" || true
+          fi
+          if [ -d evidence/attention.xcresult ]; then
+            xcrun xcresulttool export attachments --path evidence/attention.xcresult --output-path evidence/shots
+          fi
+          test -n "$(find evidence/shots -name '*.png' -print -quit)"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-attention-${{ matrix.revision }}
+          path: apps/ios/evidence/**
+          if-no-files-found: error

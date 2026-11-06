@@ -44,6 +44,11 @@ on:
         description: 'Evidence only: after app full SHA (defaults to the dispatched commit)'
         required: false
         default: ''
+      attention_evidence:
+        description: 'Capture turn details and test attention notifications instead of mode labels'
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
   statuses: write
@@ -56,6 +61,14 @@ concurrency:
 jobs:
   # The existing registered workflow is the entry point for pre-merge evidence;
   # a new workflow_dispatch file alone is not registered on main yet.
+  attention-evidence:
+    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != '' && inputs.attention_evidence
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-attention-evidence.yml
+    with:
+      baseline_ref: ${{ inputs.baseline_ref }}
+      source_ref: ${{ inputs.source_ref || github.sha }}
   automatic-evidence:
     if: github.event_name == 'workflow_dispatch' && inputs.automatic_baseline_ref != ''
     permissions:
@@ -64,7 +77,7 @@ jobs:
     with:
       baseline_ref: ${{ inputs.automatic_baseline_ref }}
   mode-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != '' && !inputs.attention_evidence
     permissions:
       contents: read
     uses: ./.github/workflows/native-mode-evidence.yml
