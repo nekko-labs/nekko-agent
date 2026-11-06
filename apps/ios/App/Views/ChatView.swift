@@ -179,6 +179,10 @@ struct ChatView: View {
                         .onAppear { atBottom = true }
                         .onDisappear { atBottom = false }
                 }
+                // A vertical ScrollView must propose the viewport's exact column
+                // width. Text's pixel-rounded ideal width can otherwise grow it
+                // by a fraction of a point at accessibility sizes.
+                .frame(width: max(0, geo.size.width - 32), alignment: .leading)
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
             }

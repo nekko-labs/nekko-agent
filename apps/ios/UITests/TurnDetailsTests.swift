@@ -112,18 +112,45 @@ final class TurnDetailsTests: XCTestCase {
     private func assertContentBounds(_ result: LayoutReading, app: XCUIApplication) throws {
         let box = try result.frame("footer")
         let metrics = try result.frame("metrics")
-        let transcript = try result.frame("transcript")
         XCTAssertGreaterThan(box.width, 0)
         XCTAssertGreaterThan(metrics.height, 0)
         // Keep the real 16pt transcript gutter. No epsilon and no expanded bounds.
         XCTAssertGreaterThanOrEqual(box.minX, app.frame.minX + 16)
         XCTAssertLessThanOrEqual(box.maxX, app.frame.maxX - 16)
-        XCTAssertGreaterThanOrEqual(box.minY, transcript.minY)
-        XCTAssertLessThanOrEqual(box.maxY, transcript.maxY)
+        // At accessibility5 the footer is taller than the transcript viewport.
+        // Vertical reachability is checked by scrolling each end below.
         XCTAssertGreaterThanOrEqual(metrics.minX, box.minX)
         XCTAssertLessThanOrEqual(metrics.maxX, box.maxX)
         XCTAssertGreaterThanOrEqual(metrics.minY, box.minY)
         XCTAssertLessThanOrEqual(metrics.maxY, box.maxY)
+    }
+
+    /// Exercise the real selectable Text, using line rectangles measured by the
+    /// equal-size renderer control. A tall footer need not fit all at once, but
+    /// the entire first and last metric lines must be reachable inside the clip.
+    private func revealLine(_ local: [Double], app: XCUIApplication, name: String) throws -> LayoutReading {
+        var result = try reading(app, name: name + "-start", rendered: false)
+        for attempt in 0..<12 {
+            let text = try result.frame("metrics")
+            let viewport = try result.frame("transcript").intersection(app.frame)
+            let line = CGRect(x: text.minX + local[0], y: text.minY + local[1], width: local[2], height: local[3])
+            if line.minY >= viewport.minY && line.maxY <= viewport.maxY {
+                try assertContentBounds(result, app: app)
+                capture(app, name)
+                return result
+            }
+            // Drag only in the transcript's trailing gutter, never the composer
+            // or selectable text. Bounded short drags avoid fling/overscroll.
+            let delta = min(viewport.height * 0.35, max(-viewport.height * 0.35, viewport.midY - line.midY))
+            let start = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: viewport.maxX - 8, dy: viewport.midY))
+            let end = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: viewport.maxX - 8, dy: viewport.midY + delta))
+            start.press(forDuration: 0.01, thenDragTo: end)
+            result = try reading(app, name: name + "-scroll-\(attempt)", rendered: false)
+        }
+        XCTFail("The full \(name) metric line was not reachable in the actual transcript viewport")
+        return result
     }
 
     func testDetailsWrapAtLargestDynamicType() throws {
@@ -160,17 +187,32 @@ final class TurnDetailsTests: XCTestCase {
         let first = try XCTUnwrap(rendered.lines.first)
         let defaultFirst = try XCTUnwrap(normal.lines.first)
         XCTAssertGreaterThan(first[3], defaultFirst[3], "the font must really scale, not just the launch flag")
-        let size = try rendered.frame("metrics").size
+        let textFrame = try rendered.frame("metrics")
+        let footerFrame = try rendered.frame("footer")
         for line in rendered.lines {
             XCTAssertEqual(line.count, 4)
             XCTAssertGreaterThan(line[2], 0)
             XCTAssertGreaterThan(line[3], 0)
             XCTAssertGreaterThanOrEqual(line[0], 0)
-            XCTAssertGreaterThanOrEqual(line[1], 0)
-            XCTAssertLessThanOrEqual(line[0] + line[2], size.width)
-            XCTAssertLessThanOrEqual(line[1] + line[3], size.height)
+            XCTAssertLessThanOrEqual(line[0] + line[2], textFrame.width)
+            // Typographic ascent can extend fractionally above Text's origin
+            // (measured -0.0859375pt), but must stay inside the real footer.
+            // No glyphs or lines are clipped at that Text origin.
+            XCTAssertGreaterThanOrEqual(textFrame.minY + line[1], footerFrame.minY)
+            XCTAssertLessThanOrEqual(textFrame.minY + line[1] + line[3], footerFrame.maxY)
         }
         renderedApp.terminate()
+
+        let scrollApp = launch(measure + largest)
+        let top = try revealLine(first, app: scrollApp, name: "turn-details-xxxl-first-line")
+        let last = try XCTUnwrap(rendered.lines.last)
+        let bottom = try revealLine(last, app: scrollApp, name: "turn-details-xxxl-last-line")
+        XCTAssertEqual(try top.frame("metrics").size, textFrame.size)
+        XCTAssertEqual(try bottom.frame("metrics").size, textFrame.size)
+        // Prove the successful endpoint checks did not simply read the same
+        // clipped position twice when the content is taller than the viewport.
+        XCTAssertNotEqual(try top.frame("metrics").minY, try bottom.frame("metrics").minY)
+        scrollApp.terminate()
 
         // Diagnostic control only: selection stays enabled in the shipped view.
         // Comparing this AX frame isolates selection-related accessibility inflation.
