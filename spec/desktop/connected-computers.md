@@ -40,6 +40,7 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 
 `[implemented 2026-11-02; picker and engine tested, not yet on real machines]`
 
+- **Keep this computer awake while agents run.** `[implemented 2026-11-06; the hold tested on macOS, the Settings row captured, Linux and Windows not yet run]` A switch under *Let a computer connect to this one*, off by default and set only on the machine itself (`keepAwakeWhileAgentsRun`), since it spends that machine's battery. On, the engine holds off idle sleep while any turn runs here, re-deciding every 15 seconds, and lets go when the last one ends: `caffeinate -i` on macOS, `systemd-inhibit` on Linux, `SetThreadExecutionState` on Windows, each ending with the engine so a crash never leaves the machine held awake. Closing the lid or pressing the power button still sleeps it. It works with no window too (`computer serve`).
 - **Run on.** New chat gets a *Run on* row once a computer is connected, as on the iPhone. Choosing one swaps the model list to that computer's models and subscriptions, and the folder list to its folders, and picks its first model so starting there is still one click. A computer that is offline, or that allows watching only, can't be chosen. A chat started there has one working folder; supporting folders stay a local feature for now.
 - **Monitors.** A switch in the dock points the Hardware monitor at a connected computer. Local models and Utilization still read this one.
 
