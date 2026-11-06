@@ -31,13 +31,14 @@ public final class ChatModel {
         // Parsed once per read, not on every streamed token.
         didSet {
             savedBlocks = session.map { Transcript.fromMessages($0.messages) } ?? []
+            updateTurnDetails()
             // What the computer lists has arrived: it leaves the outbox.
             if let ids = session?.clientMessageIds, !ids.isEmpty { store.outbox.confirm(sessionId, ids) }
         }
     }
     private var savedBlocks: [Block] = [] { didSet { merge() } }
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
-    private var shownIds: [String: String] = [:] { didSet { merge() } }
+    private var shownIds: [String: String] = [:] { didSet { merge(); updateTurnDetails() } }
     /// Only the current outgoing prompt, until the computer returns its thumbnails.
     private var outgoingPhotos: (id: String, images: [String])?
     public private(set) var turn = LiveTurn() {
@@ -62,6 +63,14 @@ public final class ChatModel {
     /// Stored, not computed: a streamed token patches only the last block
     /// (`patchLastBlock`) instead of merging the whole transcript again.
     public private(set) var blocks: [Block] = []
+    /// Persisted turn footers under the same ids the transcript actually shows.
+    /// Rebuilt only on saved reads/id changes, never on streamed tokens.
+    public private(set) var turnDetails: [String: TurnDetails] = [:]
+
+    private func updateTurnDetails() {
+        let next = TurnDetails.footers(session?.messages ?? [], shownIds: shownIds)
+        if next != turnDetails { turnDetails = next }
+    }
     /// Bumped whenever `blocks` changes anywhere but its last block, so a view
     /// can keep what it derived from the earlier blocks across streamed tokens.
     public private(set) var blocksLayout = 0
@@ -607,6 +616,19 @@ public final class ChatModel {
             return outgoingPhotos.images
         }
         return []
+    }
+
+    /// One of a message's photos at full size (`session:photo`), sharp on a phone screen: a data
+    /// URL, or nil when the computer has none to send (a photo it can't read, or an older computer).
+    public func fullPhoto(_ messageId: String, _ index: Int) async throws -> String? {
+        // A saved message can stay on screen under the id it first had (`shownIds`); the computer knows the saved one.
+        let savedId = shownIds.first { $0.value == messageId }?.key ?? messageId
+        if session?.messages.contains(where: { $0.id == savedId }) != true, let outgoingPhotos, outgoingPhotos.id == messageId,
+           outgoingPhotos.images.indices.contains(index) {
+            // Not saved on the computer yet: the phone still holds the photo it just sent.
+            return outgoingPhotos.images[index]
+        }
+        return try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(savedId), .int(Int64(index))]).string
     }
 
     // MARK: Projection

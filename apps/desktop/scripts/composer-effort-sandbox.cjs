@@ -75,7 +75,7 @@ app.whenReady().then(async () => {
     await run("localStorage.setItem('nekko.chatMode','expert')"); await win.reload(); await sleep(1500); await run("document.querySelector('[contenteditable=plaintext-only]').focus()"); await win.webContents.insertText("Make this better and fix everything"); await sleep(500);
     if (!before) {
       assert.equal(await run('document.querySelectorAll("[data-prompt-suggestions]").length'), 1, 'one suggestions control in Detailed');
-      assert.equal(await run('!!document.querySelector("[data-composer-suggestions] [data-prompt-suggestions]")'), true, 'suggestions stay in their separate row');
+      assert.equal(await run('!!document.querySelector(".composer-bar [data-composer-suggestions] [data-prompt-suggestions]")'), true, 'suggestions sit in the action bar');
     }
     await shot('expert');
     win.setContentSize(420, 800); await sleep(250); await shot('narrow');

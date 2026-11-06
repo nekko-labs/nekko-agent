@@ -60,6 +60,7 @@
   "session:delete",
   "session:fork",
   "session:get",
+  "session:photo",
   "session:setOptions",
   "session:setSupportingWorkspaces",
   "session:watches",
@@ -160,6 +161,7 @@
   "providers:list",
   "providers:sealKey",
   "session:get",
+  "session:photo",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -544,7 +546,9 @@
   "textChars": 4000,
   "images": 40,
   "thumbSide": 384,
-  "thumbChars": 98304
+  "thumbChars": 98304,
+  "photoSide": 2048,
+  "photoChars": 6291456
  },
  "changesView": {
   "files": 50,

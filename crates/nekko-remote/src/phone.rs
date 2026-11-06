@@ -52,6 +52,9 @@ pub struct Policy {
     pub session_images: usize,
     pub thumb_side: u32,
     pub thumb_chars: usize,
+    /// `session:photo`: a photo opened full size, its long side and its largest data URL.
+    pub photo_side: u32,
+    pub photo_chars: usize,
     /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
     pub max_frame_bytes: usize,
     /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
@@ -140,6 +143,8 @@ pub fn policy() -> &'static Policy {
             session_images: v["sessionView"]["images"].as_u64().unwrap_or(0) as usize,
             thumb_side: v["sessionView"]["thumbSide"].as_u64().unwrap_or(0) as u32,
             thumb_chars: v["sessionView"]["thumbChars"].as_u64().unwrap_or(0) as usize,
+            photo_side: v["sessionView"]["photoSide"].as_u64().unwrap_or(0) as u32,
+            photo_chars: v["sessionView"]["photoChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
             views: crate::phone_views::Views::from_policy(&v),
@@ -393,6 +398,16 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 return Err(denied("value-invalid", "refresh"));
             }
         }
+        "session:photo" => {
+            id(0, "chat id")?;
+            id(1, "message id")?;
+            if !arg(2).as_f64().is_some_and(|i| i.fract() == 0.0 && i >= 0.0) {
+                return Err(denied("value-invalid", "photo index"));
+            }
+            if args.len() > 3 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
         "session:fork" => {
             id(0, "chat id")?;
             if args.len() > 1 && !arg(1).is_null() && arg(1).as_str().is_none_or(|s| s.is_empty()) {
@@ -596,6 +611,11 @@ pub fn redact(channel: &str, result: Value) -> Value {
             _ => json!([]),
         },
         "session:get" | "chat:steer" => session_view(result),
+        // One photo's data URL, nothing else.
+        "session:photo" => match result {
+            Value::String(s) if s.starts_with("data:image/") => Value::String(s),
+            _ => Value::Null,
+        },
         "changes:list" => crate::phone_changes::view(&result, &policy().changes_view),
         "chat:editQueued" => match &result {
             Value::Object(o) => json!({
@@ -845,6 +865,7 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         },
         "chat:editQueued" => vec![first.clone(), args[1].clone(), pick(&args[2], &policy().queue_edit_keys)],
         "pr:sessionList" => vec![first.clone(), json!(args.get(1) == Some(&Value::Bool(true)))],
+        "session:photo" => args[..3].to_vec(),
         "limits:get" => {
             // The phone names a provider; the computer reads that provider's limits key itself.
             let providers = run("providers:list".to_string(), json!([])).await?;
@@ -886,6 +907,9 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
     let mut result = run(channel.clone(), Value::Array(args)).await?;
     if channel == "session:get" {
         result = crate::phone_thumbs::thumbnail_images(result).await;
+    }
+    if channel == "session:photo" {
+        result = crate::phone_thumbs::full_photo(result).await;
     }
     Ok(redact(&channel, result))
 }

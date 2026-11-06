@@ -93,6 +93,24 @@ public struct ChatSection: Equatable, Sendable, Identifiable {
     public let activeCount: Int
     public let doneCount: Int
     public var id: String { key }
+
+    /// Ungrouped chats have no disclosure; search temporarily reveals every match.
+    public func isOpen(opened: Set<String>, searching: Bool) -> Bool {
+        searching || key == ChatGroup.general || key == "all" || opened.contains(key)
+    }
+
+    /// Attention wins over work, then armed watches, then finished chats.
+    /// Archived chats do not make a group appear busy.
+    public func headerActivity(_ activity: [String: Activity]) -> Activity? {
+        let active = chats.filter { !$0.archived }
+        if active.contains(where: { activity[$0.id] == .needsYou }) { return .needsYou }
+        if active.contains(where: { activity[$0.id] == .running }) { return .running }
+        return nil
+    }
+
+    public var watchingCount: Int64 {
+        chats.filter { !$0.archived }.reduce(0) { $0 + $1.activeWatchCount }
+    }
 }
 
 public enum ChatSections {

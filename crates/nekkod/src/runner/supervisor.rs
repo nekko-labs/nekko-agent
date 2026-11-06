@@ -8,15 +8,16 @@
 
 use super::audit::{self, AuditLine, AuditResult, SlotEvent, Today};
 use super::awake::Awake;
-use super::provider::{JobRef, Provider, ProviderError, RunnerStatus};
+use super::provider::{JobRef, Provider, ProviderError, QueuedJob, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
 use super::store::{RunnerRecord, overlaps};
 use super::updates::write_atomic;
 use super::vm::{CONSOLE_LOG, RunHandle, RunSpec, Stopped, Vm, reap};
 use nekko_runner::{
-    Decision, Guest, HostFacts, MAX_MACOS_VMS, Reason, RunnerConfig, SizeSuggestion, SlotLimit, Usage,
-    blank_stats_disk, cpus_per_vm, evaluate, hold_awake, keep_idle, linux_slots_available, macos_slots_explained,
-    parse_stats, recommended_runner_memory_mb, runner_memory_mb, suggest_size, vms_wanted, warm_slots,
+    Decision, Guest, HostFacts, MAX_MACOS_VMS, Priority, Reason, RunnerConfig, RunnerSettings, SizeSuggestion,
+    SlotLimit, Usage, blank_stats_disk, cpus_per_vm, evaluate, hold_awake, keep_idle, linux_slots_available,
+    macos_slots_explained, parse_stats, recommended_runner_memory_mb, runner_memory_mb, suggest_size, vms_wanted,
+    warm_slots,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -80,6 +81,10 @@ pub enum SlotState {
 pub struct SlotView {
     pub guest: Guest,
     pub state: SlotState,
+    /// The VM's name, for `runner:liveLog`.
+    pub vm: String,
+    /// Started for a job the owner accepted now.
+    pub boosted: bool,
     pub job: Option<JobRef>,
     pub since: u64,
     pub drain_ends_at: Option<u64>,
@@ -108,6 +113,10 @@ pub struct RunnerView {
     pub fork_approval_open: bool,
     /// This runner's last jobs, newest first.
     pub recent: Vec<AuditLine>,
+    /// Jobs waiting for a runner with this one's labels, as last polled.
+    pub queue: Vec<QueuedJob>,
+    /// Why Accept now would not start a VM (the hard limits Runner first still keeps); empty when it would.
+    pub accept_why: Vec<Reason>,
     /// The VM size that fits its last jobs; `None` until the Mac has been read.
     pub suggested_size: Option<SizeSuggestion>,
 }
@@ -179,6 +188,8 @@ struct Slot {
     drain_ends_at: Option<f64>,
     stop: Option<Stop>,
     events: Vec<SlotEvent>,
+    /// Started for an accepted job: judged as if the runner were in Runner first.
+    boosted: bool,
 }
 
 impl Slot {
@@ -217,6 +228,7 @@ struct LinuxSlots {
     wanted: u8,
     queued: u32,
     queue_polled_at: Option<f64>,
+    queue: Vec<QueuedJob>,
     blocked: Option<String>,
 }
 
@@ -241,6 +253,14 @@ struct Runner {
     wanted: u8,
     queued: u32,
     queue_polled_at: Option<f64>,
+    queue: Vec<QueuedJob>,
+    /// (repo, job id) the owner declined or accepted; each is dropped once the job leaves the queue.
+    declined: HashSet<(String, u64)>,
+    accepted: HashSet<(String, u64)>,
+    /// `gates_pass` and `keep_idle` as if the runner were in Runner first, for accepted jobs.
+    boost_pass: bool,
+    boost_keep: bool,
+    boost_why: Vec<Reason>,
     linux: LinuxSlots,
     /// After a transient mint error, no mint before this.
     mint_after: Option<f64>,
@@ -269,6 +289,12 @@ impl Runner {
             wanted: 0,
             queued: 0,
             queue_polled_at: None,
+            queue: Vec::new(),
+            declined: HashSet::new(),
+            accepted: HashSet::new(),
+            boost_pass: false,
+            boost_keep: false,
+            boost_why: Vec::new(),
             linux: LinuxSlots::default(),
             mint_after: None,
             awake: false,
@@ -329,6 +355,24 @@ struct Rerun {
     job: JobRef,
     first_at: f64,
     next_at: f64,
+}
+
+/// What the owner asked of one runner's jobs from the UI; applied on the next tick.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ask {
+    /// Start no VM for this queued job.
+    Decline(String, u64),
+    /// Start a VM for this queued job now, as if the runner were in Runner first.
+    Accept(String, u64),
+    /// Forget a decline or an accept.
+    Undo(String, u64),
+    /// Re-run this job once its run has finished (a cancelled one finishes within seconds).
+    Rerun(JobRef),
+}
+
+/// `s` in Runner first: what Accept now judges an accepted job's VM by.
+fn boosted(s: &RunnerSettings) -> RunnerSettings {
+    RunnerSettings { priority: Priority::RunnerFirst, ..s.clone() }
 }
 
 /// A registration whose removal failed; a live one still accepts jobs, so it is retried.
@@ -685,6 +729,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     .map(|s| SlotView {
                         guest: s.guest,
                         state: s.state,
+                        vm: s.name.clone(),
+                        boosted: s.boosted,
                         job: s.job.clone(),
                         since: s.since as u64,
                         drain_ends_at: s.drain_ends_at.map(|t| t as u64),
@@ -702,6 +748,17 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 repos: r.record.repos().to_vec(),
                 fork_approval_open: r.record.fork_approval_open(),
                 recent: r.recent.iter().cloned().collect(),
+                queue: r
+                    .queue
+                    .iter()
+                    .chain(&r.linux.queue)
+                    .map(|q| QueuedJob {
+                        declined: r.declined.contains(&q.key()),
+                        accepted: r.accepted.contains(&q.key()),
+                        ..q.clone()
+                    })
+                    .collect(),
+                accept_why: r.boost_why.clone(),
                 suggested_size: self.mac.as_ref().map(|m| {
                     let host = HostFacts {
                         ram_mb: m.ram_mb,
@@ -760,6 +817,11 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             let keep = keep_idle(s, &sig);
             r.keep_idle = keep == Decision::Take;
             r.idle_why = why(&keep).to_vec();
+            let b = boosted(s);
+            let d = evaluate(&b, &sig, false);
+            r.boost_pass = d == Decision::Take;
+            r.boost_why = why(&d).to_vec();
+            r.boost_keep = keep_idle(&b, &sig) == Decision::Take;
         }
         if self.vm.is_err() {
             self.awake.set(false);
@@ -830,7 +892,8 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         // 3. Stop what must stop.
         for r in &mut self.runners {
             let s = &r.record.config.settings;
-            let running = evaluate(s, &signals_for(m, s), true);
+            let sig = signals_for(m, s);
+            let (normal, boost) = (evaluate(s, &sig, true), evaluate(&boosted(s), &sig, true));
             let max_secs = f64::from(s.max_job_minutes) * 60.0;
             let idle_why = reason_names(&r.idle_why);
             for slot in &mut r.slots {
@@ -838,15 +901,16 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     slot.halt(now, vec!["removed".into()], true, true);
                     continue;
                 }
+                let running = if slot.boosted { &boost } else { &normal };
                 let Some(busy_since) = slot.busy_since else {
                     // No job here, so stopping loses nothing.
-                    if !r.keep_idle {
+                    if !(if slot.boosted { r.boost_keep } else { r.keep_idle }) {
                         slot.halt(now, idle_why.clone(), true, true);
                     }
                     continue;
                 };
                 if slot.stop.is_some() {
-                    if let Decision::StopNow { why } = &running {
+                    if let Decision::StopNow { why } = running {
                         slot.halt(now, reason_names(why), true, true);
                     }
                     continue;
@@ -856,7 +920,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     slot.halt(now, vec!["maxJobTime".into()], false, false);
                     continue;
                 }
-                match &running {
+                match running {
                     Decision::Take | Decision::Hold { .. } => {
                         slot.drain_ends_at = None;
                         slot.set_state(SlotState::Running, now);
@@ -900,49 +964,83 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             // A runner with no macOS slots needs no macOS image.
             r.blocked = (s.macos_slots > 0 && !image.is_dir()).then(|| NO_IMAGE.into());
             r.linux.blocked = (s.linux_slots > 0 && !linux_image.is_dir()).then(|| NO_LINUX_IMAGE.into());
+            if r.error.is_some() || !s.enabled {
+                continue;
+            }
+            // Polled whenever the runner is on, so the owner sees what waits even while the mode holds it.
+            let poll_due = |at: Option<f64>| at.is_none_or(|t| now - t >= QUEUE_POLL.as_secs_f64());
+            if s.macos_slots == 0 || r.blocked.is_some() {
+                r.queue.clear();
+            } else if poll_due(r.queue_polled_at) {
+                r.queue_polled_at = Some(now);
+                match call(self.provider.queued(&r.record, Guest::Macos)).await {
+                    Ok(q) => r.queue = q,
+                    Err(e) => r.note(e),
+                }
+            }
+            if s.linux_slots == 0 || r.linux.blocked.is_some() {
+                r.linux.queue.clear();
+            } else if poll_due(r.linux.queue_polled_at) {
+                r.linux.queue_polled_at = Some(now);
+                match call(self.provider.queued(&r.record, Guest::Linux)).await {
+                    Ok(q) => r.linux.queue = q,
+                    Err(e) => r.note(e),
+                }
+            }
+            let waiting: HashSet<(String, u64)> = r.queue.iter().chain(&r.linux.queue).map(QueuedJob::key).collect();
+            r.declined.retain(|k| waiting.contains(k));
+            r.accepted.retain(|k| waiting.contains(k));
+            let count =
+                |q: &[QueuedJob], set: &HashSet<(String, u64)>| q.iter().filter(|j| set.contains(&j.key())).count();
+            r.queued = u32::try_from(r.queue.len() - count(&r.queue, &r.declined)).unwrap_or(u32::MAX);
+            r.linux.queued =
+                u32::try_from(r.linux.queue.len() - count(&r.linux.queue, &r.declined)).unwrap_or(u32::MAX);
+            let accepted_mac = u8::try_from(count(&r.queue, &r.accepted)).unwrap_or(u8::MAX);
+            let accepted_linux = u8::try_from(count(&r.linux.queue, &r.accepted)).unwrap_or(u8::MAX);
+            let boosting = !r.accepted.is_empty() && r.boost_keep;
             // `wanted` is kept while booted VMs may stay, so a start-only gate (memory headroom,
             // which counts our own VMs as used) never idles them out.
-            if !r.keep_idle || r.error.is_some() {
+            if !r.keep_idle && !boosting {
                 continue;
             }
-            let poll_due = |at: Option<f64>| at.is_none_or(|t| now - t >= QUEUE_POLL.as_secs_f64());
-            if r.blocked.is_none() {
-                let warm = warm_slots(&s, available);
-                if warm < available && poll_due(r.queue_polled_at) {
-                    r.queue_polled_at = Some(now);
-                    match call(self.provider.queued(&r.record, Guest::Macos)).await {
-                        Ok(q) => r.queued = q,
-                        Err(e) => r.note(e),
-                    }
-                }
-                r.wanted = vms_wanted(available, warm, r.busy(Guest::Macos), r.queued);
-            }
-            if r.linux.available > 0 {
-                if poll_due(r.linux.queue_polled_at) {
-                    r.linux.queue_polled_at = Some(now);
-                    match call(self.provider.queued(&r.record, Guest::Linux)).await {
-                        Ok(q) => r.linux.queued = q,
-                        Err(e) => r.note(e),
-                    }
-                }
-                r.linux.wanted = vms_wanted(r.linux.available, 0, r.busy(Guest::Linux), r.linux.queued);
-            }
-            if started || !r.gates_pass || r.error.is_some() || r.mint_after.is_some_and(|t| now < t) {
-                continue;
-            }
-            let next = if r.blocked.is_none() && r.may_add(Guest::Macos, r.wanted, available) {
-                Some((Guest::Macos, image))
-            } else if r.may_add(Guest::Linux, r.linux.wanted, r.linux.available) {
-                Some((Guest::Linux, linux_image.clone()))
-            } else {
-                None
+            // (what the mode wants, that plus a VM beside the busy ones for each accepted job).
+            let keep = r.keep_idle;
+            let want = |available: u8, warm: u8, busy: u8, queued: u32, accepted: u8| {
+                let normal = if keep { vms_wanted(available, warm, busy, queued) } else { busy };
+                let more = if boosting { normal.max(busy.saturating_add(accepted).min(available)) } else { normal };
+                (normal, more)
             };
-            let Some((guest, image)) = next else { continue };
+            let mac = if r.blocked.is_none() {
+                want(available, warm_slots(&s, available), r.busy(Guest::Macos), r.queued, accepted_mac)
+            } else {
+                (0, 0)
+            };
+            let linux = if r.linux.available > 0 {
+                want(r.linux.available, 0, r.busy(Guest::Linux), r.linux.queued, accepted_linux)
+            } else {
+                (0, 0)
+            };
+            (r.wanted, r.linux.wanted) = (mac.1, linux.1);
+            if started || r.mint_after.is_some_and(|t| now < t) {
+                continue;
+            }
+            // Some(boosted): by the mode's gates up to what it wants, else by the boosted gates up to the accepted jobs.
+            let pick = |guest: Guest, (normal, more): (u8, u8), available: u8| {
+                if r.gates_pass && r.may_add(guest, normal, available) {
+                    Some(false)
+                } else {
+                    (boosting && r.boost_pass && r.may_add(guest, more, available)).then_some(true)
+                }
+            };
+            let next = pick(Guest::Macos, mac, available).map(|b| (Guest::Macos, image, b)).or_else(|| {
+                pick(Guest::Linux, linux, r.linux.available).map(|b| (Guest::Linux, linux_image.clone(), b))
+            });
+            let Some((guest, image, boost)) = next else { continue };
             started = true;
             let spec = (cpus_per_vm(&s, &host), s.memory_per_vm_mb);
             // A start can hold this tick for minutes (bounded by the provider and Vm timeouts);
             // a hard limit that appears meanwhile is acted on next tick.
-            self.start_vm(ri, &image, spec, now, guest).await;
+            self.start_vm(ri, &image, spec, now, guest, boost).await;
         }
 
         // 5. Follow booting and ready VMs.
@@ -951,6 +1049,17 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             let mut excess_linux = r.live(Guest::Linux).saturating_sub(usize::from(r.linux.wanted));
             for slot in &mut r.slots {
                 let excess = if slot.guest == Guest::Linux { &mut excess_linux } else { &mut excess_mac };
+                // A running job's steps move on: ask again, as often as a booting VM's status.
+                if slot.stop.is_none() && slot.busy_since.is_some() && now - slot.polled_at >= STATUS_POLL.as_secs_f64()
+                {
+                    slot.polled_at = now;
+                    match call(self.provider.job(&r.record, slot.runner_id, &slot.name)).await {
+                        Ok(Some(job)) => slot.job = Some(job),
+                        Ok(None) => {}
+                        Err(ProviderError::Auth(e)) => r.error = Some(e),
+                        Err(e) => eprintln!("runner {}: {e}", r.record.config.id),
+                    }
+                }
                 if slot.stop.is_some() || slot.busy_since.is_some() {
                     continue;
                 }
@@ -1050,7 +1159,15 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
 
     /// Mint, seed, clone, start. A failure removes whatever it made, the
     /// registration included, and counts toward `MAX_START_FAILURES`.
-    async fn start_vm(&mut self, ri: usize, image: &Path, (cpus, memory_mb): (u8, u32), now: f64, guest: Guest) {
+    async fn start_vm(
+        &mut self,
+        ri: usize,
+        image: &Path,
+        (cpus, memory_mb): (u8, u32),
+        now: f64,
+        guest: Guest,
+        boosted: bool,
+    ) {
         let Ok(vm) = &self.vm else { return };
         self.serial += 1;
         let name = format!("{}{}-{}", self.prefix(), now as u64, self.serial);
@@ -1110,6 +1227,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                     drain_ends_at: None,
                     stop: None,
                     events: vec![SlotEvent { ts: now as u64, state: SlotState::Starting }],
+                    boosted,
                 });
             }
             Err(e) => {
@@ -1250,6 +1368,28 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         {
             let next_at = now + RERUN_EVERY.as_secs_f64();
             self.reruns.push(Rerun { record, job, first_at: now, next_at });
+        }
+    }
+
+    /// Applies what the owner asked of runner `id`'s jobs; an unknown runner is ignored.
+    pub fn ask(&mut self, id: &str, ask: Ask) {
+        let now = self.wall_now();
+        let Some(r) = self.runners.iter_mut().find(|r| r.record.config.id == id && !r.dropped) else { return };
+        match ask {
+            Ask::Decline(repo, job) => {
+                r.accepted.remove(&(repo.clone(), job));
+                r.declined.insert((repo, job));
+            }
+            Ask::Accept(repo, job) => {
+                r.declined.remove(&(repo.clone(), job));
+                r.accepted.insert((repo, job));
+            }
+            Ask::Undo(repo, job) => {
+                r.declined.remove(&(repo.clone(), job));
+                r.accepted.remove(&(repo, job));
+            }
+            // The owner's own re-run: not limited to once per job like a lost job's.
+            Ask::Rerun(job) => self.reruns.push(Rerun { record: r.record.clone(), job, first_at: now, next_at: 0.0 }),
         }
     }
 

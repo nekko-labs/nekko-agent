@@ -6,15 +6,63 @@ whose logs anyone with access to the repo can open.
 
 ## Headline
 
-On a 2021 MacBook Pro, our iOS CI job took **39 minutes** in a throwaway VM, against **65 minutes**
+On a MacBook Pro with an **Apple M5 Max**, our iOS CI job took a median **40 minutes** over three
+runs in a throwaway VM, against a median **59 minutes** for the same suite on GitHub's hosted Macs
+that week: **31% less time**. The simulator tests ran **2x** faster and the app build **4.6x**. Of
+the Mac's 40 minutes, 7.5 were downloads and uploads over a home connection; without them it needed
+32 minutes, **1.8x** faster than hosted.
+
+On a 2021 MacBook Pro with an **Apple M1 Max**, the job took **39 minutes** against **65 minutes**
 for the same code on GitHub's hosted Mac that day: **40% less time**. Against the hosted job's usual
 47 minutes it was still **16% faster**. App builds were **2.6x** faster, the Rust build **1.8x**, and
 the simulator test suite finished in a little over half the time.
 
-The Mac was an **Apple M1 Max**, first-generation Apple silicon from 2021. Newer Macs (M2 to M5) have more
-and faster cores, so they should be faster still; that is expected, not yet measured.
+## Native iOS on an M5 Max, 2026-11-05
 
-## Native iOS, 2026-11-03
+**Job:** the same `protocol-and-build` job as [on the M1 Max](#native-ios-on-an-m1-max-2026-11-03).
+Three runs were dispatched on `main` one after another, two minutes apart, with no other job on the
+Mac during any of them. The first started with no Rust cache; the other two restored the one it
+saved. Since [#1826](https://github.com/nekko-labs/nekko-agent/pull/1826) the first-run suite splits
+across simulator clones by the VM's size: 4 here, 1 on a hosted Mac (3 vCPUs, 7 GB), so that change
+did not alter the hosted runs.
+
+| | This Mac | GitHub-hosted |
+| --- | --- | --- |
+| Runs | [42034873319](https://github.com/nekko-labs/nekko-agent/actions/runs/42034873319) (40.3 min), [42041430164](https://github.com/nekko-labs/nekko-agent/actions/runs/42041430164) (44.5 min), [42049565775](https://github.com/nekko-labs/nekko-agent/actions/runs/42049565775) (36.3 min) | the 23 passed runs of the full suite (light and dark) from 2026-11-01 to 2026-11-05 |
+| Result | all passed | all passed |
+| Machine | MacBook Pro (Mac17,6), Apple M5 Max, 18 cores, 128 GB, macOS 27.2, Xcode 27.2 | `xcode-27` image |
+| The job's share | one VM: 16 vCPUs, 16 GB (Runner first mode), 4 parallel simulators | the whole hosted machine, 1 simulator |
+
+Medians. The M1 Max column is the four passed full-suite runs on that Mac from 2026-11-03 to
+2026-11-05, all before #1826, so their tests ran one at a time.
+
+| Step | M5 Max | M1 Max | GitHub-hosted | M5 vs hosted |
+| --- | --- | --- | --- | --- |
+| Protocol and app-state tests | 106 s | 74 s | 92 s | 1.2x slower |
+| `cargo build -p nekkod --locked`, no cache | 43 s | 51 s | 94 s | 2.2x |
+| Phone, relay and computer over URLSession | 42 s | 46 s | 47 s | 1.1x |
+| Build the app and its tests for the simulator | 27 s | 50 s | 123 s | 4.6x |
+| Simulator tests and live screenshots | 25.7 min | 35.2 min | 50.4 min | 2.0x |
+| Downloads and uploads (checkout, Node, Rust cache restore and save) | 7.5 min | 1.8 min | 0.6 min | 13x slower |
+| **Whole job** | **40.3 min** | **41.7 min** | **58.6 min** | **1.45x** |
+
+The cold Rust build rows are one run each: the M5's first run, and the M1 and hosted runs in the
+section below. A hosted run of a PR branch going at the same time,
+[42037359296](https://github.com/nekko-labs/nekko-agent/actions/runs/42037359296), took 71.7 min.
+
+### Caveats
+
+- **The network, not the chip, set the M5's whole-job time.** Checkout took 33 to 290 s, Node setup
+  35 to 213 s and the Rust cache restore 47 to 436 s across the three runs, all downloads from
+  GitHub over a home connection. A hosted Mac does them inside GitHub's network. The protocol tests
+  lose for the same reason: they first fetch `swift-crypto` (56 s of the step in the second run).
+- **M5 against M1 is not like for like.** The M1 ran a smaller VM and its tests one at a time,
+  before #1826. To compare the chips, use the app build (**1.85x**) and the cold Rust build
+  (**1.2x**), which neither change affects.
+- Three runs on one side; the hosted median spans five days of different commits.
+- Wall-clock step times from the GitHub API, which rounds to the second.
+
+## Native iOS on an M1 Max, 2026-11-03
 
 **Job:** `protocol-and-build` in [`ios-native.yml`](../.github/workflows/ios-native.yml): Swift
 protocol tests, a Rust build of `nekkod`, a relay round trip, the app build for the simulator, then

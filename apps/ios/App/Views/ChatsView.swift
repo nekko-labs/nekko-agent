@@ -17,8 +17,8 @@ struct ChatsView: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var query = ""
-    /// Groups folded shut by a tap on their heading; every group starts open.
-    @State private var collapsed: Set<String> = []
+    /// Explicitly opened groups; headed groups start folded.
+    @State private var opened: Set<String> = []
     /// Groups showing every chat, past the first few recent ones.
     @State private var expanded: Set<String> = []
     @State private var reorderingGroups = false
@@ -167,9 +167,9 @@ struct ChatsView: View {
             }
             ForEach(query.isEmpty || !filtered.isEmpty ? sections : []) { g in
                 Section {
-                    if g.key == ChatGroup.general || !collapsed.contains(g.key) || !query.isEmpty { sectionRows(g) }
+                    if g.isOpen(opened: opened, searching: !query.isEmpty) { sectionRows(g) }
                 } header: {
-                    if g.key != ChatGroup.general { sectionHeading(g) }
+                    if g.key != ChatGroup.general && g.key != "all" { sectionHeading(g) }
                 }
             }
             // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
@@ -208,9 +208,9 @@ struct ChatsView: View {
 
     /// A group's heading: tap to fold it, and on project groups, drag it to a new place.
     @ViewBuilder private func sectionHeading(_ g: ChatSection) -> some View {
-        let open = !collapsed.contains(g.key) || !query.isEmpty
+        let open = g.isOpen(opened: opened, searching: !query.isEmpty)
         let heading = Button {
-            withAnimation { flip(&collapsed, g.key) }
+            withAnimation { flip(&opened, g.key) }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkFaint)
@@ -218,6 +218,10 @@ struct ChatsView: View {
                 // By computer: the place's mark in its colour, as on its rows.
                 if let id = sourceId(g), let place = ChatPlace.of(id, store: store) {
                     PlaceMark(place: place, showIcon: view.showComputerIcons, size: 14)
+                }
+                if !g.chats.isEmpty {
+                    ChatStatusIcon(activity: g.headerActivity(listActivity), activeWatchCount: g.watchingCount)
+                        .frame(width: 18, height: 18)
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     GroupHeading(groupTitle(g), count: counts(g))
@@ -235,6 +239,7 @@ struct ChatsView: View {
         .buttonStyle(.plain)
         .accessibilityValue(open ? String(localized: "Expanded") : String(localized: "Collapsed"))
         .accessibilityHint("Double-tap to fold or unfold the group.")
+        .accessibilityIdentifier("chats.group.\(g.key)")
         if view.canReorderGroups && query.isEmpty {
             heading
                 .draggable(g.key)

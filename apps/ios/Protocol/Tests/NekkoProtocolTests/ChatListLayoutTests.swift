@@ -3,6 +3,29 @@ import XCTest
 @testable import NekkoProtocol
 
 final class ChatListLayoutTests: XCTestCase {
+    func testGroupDisclosureDefaultsAndSearch() {
+        let project = ChatSection(key: "project", name: "Project", chats: [], activeCount: 0, doneCount: 0)
+        XCTAssertFalse(project.isOpen(opened: [], searching: false))
+        XCTAssertTrue(project.isOpen(opened: ["project"], searching: false))
+        XCTAssertTrue(project.isOpen(opened: [], searching: true))
+        for key in [ChatGroup.general, "all"] {
+            let section = ChatSection(key: key, name: key, chats: [], activeCount: 0, doneCount: 0)
+            XCTAssertTrue(section.isOpen(opened: [], searching: false))
+        }
+    }
+
+    func testGroupHeaderActivityPrioritizesAttentionAndIgnoresArchived() throws {
+        let list = try chats("""
+        [{"id":"a","title":"A"}, {"id":"b","title":"B","activeWatchCount":2},
+         {"id":"c","title":"C","archivedAt":100,"activeWatchCount":4}]
+        """)
+        let section = ChatSection(key: "project", name: "Project", chats: list, activeCount: 2, doneCount: 1)
+        XCTAssertEqual(section.headerActivity(["a": .running, "b": .needsYou]), .needsYou)
+        XCTAssertEqual(section.headerActivity(["a": .running, "c": .needsYou]), .running)
+        XCTAssertNil(section.headerActivity(["c": .running]))
+        XCTAssertEqual(section.watchingCount, 2)
+    }
+
     private let day: Int64 = 24 * 60 * 60 * 1000
     /// 2026-10-24 12:00 UTC.
     private let now: Int64 = 1_792_843_200_000

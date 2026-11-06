@@ -66,7 +66,7 @@ public enum Transcript {
                 out.append(.user(id: m.id, text: text, at: m.createdAt, images: m.imageCount))
             case "assistant":
                 let reasoning = m.reasoning.flatMap { $0.isEmpty ? nil : $0 }
-                if !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+                if !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) || (m.turnStats != nil && m.toolCalls.isEmpty) {
                     out.append(.assistant(id: m.id, text: m.content, reasoning: reasoning, streaming: false, interrupted: m.interrupted))
                 }
                 for call in m.toolCalls {
