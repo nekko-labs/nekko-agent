@@ -84,10 +84,13 @@ pub fn assert_in_jail(target: &str, ctx: &ToolContext) -> Result<(), String> {
     if ctx.sandbox_mode != SandboxMode::WorkspaceJail {
         return Ok(());
     }
-    let roots: Vec<String> = ctx.workspaces.iter().map(|w| native::resolve(&[&w.path])).collect();
+    let mut roots: Vec<String> = ctx.workspaces.iter().map(|w| native::resolve(&[&w.path])).collect();
     // Nothing to jail against yet.
     if roots.is_empty() {
         return Ok(());
+    }
+    if let Some(root) = &ctx.app_data_root {
+        roots.push(native::resolve(&[root]));
     }
     let outside = || {
         Err(format!(

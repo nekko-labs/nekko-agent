@@ -48,6 +48,8 @@ export interface WindowChromeBridge {
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => void;
+  /** Settings' text size: Chromium's page zoom, so every coordinate scales alike. */
+  setPageZoom: (factor: number) => void;
   onPageReloading: (listener: (fadeMs: number) => void) => void;
   /** Multi-monitor screen windows (see `displayWindows.ts`). */
   displays: import('./displayWindows.js').DisplaysBridge;

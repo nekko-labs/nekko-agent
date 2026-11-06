@@ -1,3 +1,4 @@
+import { terminalPresentation, terminalPrUrl } from './terminalActivity.js';
 import { ComputerChip, useComputerOf } from './ComputerChip.js';
 import React, { memo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
@@ -244,7 +245,8 @@ function WorkspaceCardImpl({
 
   const windows = workspace ? allPanes(workspace.root).length : 0;
   const lastReply = session?.lastReplyAt;
-  const title = session?.title ?? terminal?.title ?? 'Agent';
+  const terminalView = terminal ? terminalPresentation(terminal) : null;
+  const title = session?.title ?? terminalView?.title ?? 'Agent';
   const isChat = !!session;
   // Claude Code picks the version from the plan: when its `system/init` reports
   // a specific id for the alias we sent ("claude-opus-4-7" against our "opus"),
@@ -287,15 +289,16 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* Only the selected chat gets a background; status keeps its own icon. */
-      className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : 'border border-line bg-surface hover:bg-surface-2'}`}
+      /* Selection persists; hover/focus adds a soft glow. Status keeps its icon. */
+      className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : isActive ? 'border border-accent/40 bg-accent-soft' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
+      data-terminal-row={terminal?.id}
       title={title}
       data-zone-tint={zoneTint}
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
       <div className="flex items-center gap-2">
-        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />
+        {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
           : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
@@ -339,6 +342,8 @@ function WorkspaceCardImpl({
         </button>
       </div>
 
+      {terminalView && <div className="mt-0.5 truncate pl-3 text-2xs leading-[15px]" style={{ color: terminalView.tone }} title={terminalView.detail || terminalView.status}>{terminalView.status}{showMetadata && terminalView.detail ? ` · ${terminalView.detail}` : ''}</div>}
+
       {/* Line 2: what is running it: the model, then how full the context
           window is. Where it comes from is in the tooltip, not a line of its own. */}
       {showMetadata && <>
@@ -351,9 +356,7 @@ function WorkspaceCardImpl({
         >
           {model}
         </Fact>
-        {terminal && !terminal.running && (
-          <Fact tone="var(--danger)" title="This shell has exited">exited</Fact>
-        )}
+        {terminal && terminalPrUrl(terminal) && <Fact title="PR link observed in terminal output; open the terminal to check its status">PR #{terminalPrUrl(terminal)!.split('/').pop()}</Fact>}
         {compacting && (
           <span
             className="status-compacting inline-grid shrink-0 place-items-center"

@@ -57,8 +57,10 @@ model servers are first-class, not an afterthought.
 - **Add provider** lets you configure a server manually, or add a cloud provider -
   Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
   base URL + key).
-- For **Ollama**, you can **pull** new models and **load / unload** them into memory
-  right from the card.
+- For **Google Gemini**, choose Gemini and paste a key from [Google AI Studio](https://aistudio.google.com/apikey). This is API billing, not a Google AI subscription sign-in.
+- For **Claude on Vertex AI**, choose the separate Vertex option, enter your Google Cloud project and location, and follow the Google Application Default Credentials instructions on the computer running Nekko Agent. No Claude subscription sign-in is needed.
+- For **Ollama Cloud**, use an [Ollama Cloud API key](https://ollama.com/settings/keys). Requests go directly to Ollama's hosted service; no desktop app or model download is needed.
+- For local **Ollama**, use **Local servers**. You can **pull** new models and **load / unload** them into memory right from the card. Existing local connections are not converted to cloud connections.
 - The **Token usage** panel charts input/output tokens over time and breaks them
   down per model and per provider.
 

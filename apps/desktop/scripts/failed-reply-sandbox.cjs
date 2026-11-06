@@ -56,6 +56,26 @@ app.whenReady().then(async () => {
     await sleep(800);
     await check('a failure the transcript has moved past shows nothing', `!${notice}`);
     await capture('moved-on');
+
+    await run('integration.stopped()');
+    await sleep(800);
+    await check('a saved Stop reads as paused and offers Retry', `${notice}?.textContent.includes('Reply paused') && !!${button('Retry')}`);
+    await capture('stopped');
+
+    await run('integration.cutOff()');
+    await sleep(800);
+    await check('a transcript ending on a tool result offers Retry with no record', `${notice}?.textContent.includes('Reply interrupted') && !!${button('Retry')}`);
+    await capture('cut-off');
+    await run(`${notice}.querySelector('button[title=Dismiss]').click()`);
+    await sleep(400);
+    await check('Dismiss hides the inferred notice', `!${notice}`);
+    await run('integration.reopen()');
+    await sleep(800);
+    await check('a dismissed inferred notice stays gone after reopening', `!${notice}`);
+
+    await run('integration.running()');
+    await sleep(800);
+    await check('a run still going is not called interrupted', `!${notice}`);
   } catch (e) {
     report.errors.push(String(e));
   }

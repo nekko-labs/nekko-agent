@@ -18,6 +18,7 @@ import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { UsageReportsSection } from '../components/UsageReports.js';
 import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
+import { zoomOf } from '../textScale.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -102,6 +103,12 @@ export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   return cur as SettingsGroupId;
 }
 
+/** The `scrollTop` that brings `target` to the top of `scroller`, or as near as the page's end allows. */
+export function scrollTopFor(scroller: HTMLElement, target: HTMLElement): number {
+  const distance = (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / zoomOf(scroller);
+  return Math.min(scroller.scrollTop + distance, scroller.scrollHeight - scroller.clientHeight);
+}
+
 export function SettingsView() {
   const { applyTheme, onboardingOpen, wavePreset, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, wavePreset: s.resolvedPreset, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
@@ -129,7 +136,7 @@ export function SettingsView() {
     const target = document.getElementById(`settings-${id}`);
     if (!scroller || !target) return;
     const from = scroller.scrollTop;
-    const to = Math.min(from + target.getBoundingClientRect().top - scroller.getBoundingClientRect().top, scroller.scrollHeight - scroller.clientHeight);
+    const to = scrollTopFor(scroller, target);
     cancelAnimationFrame(jumping.current);
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { scroller.scrollTop = to; return; }
     // Native smooth scroll takes ~500ms over a long page; this lands in 200ms with an ease-out.

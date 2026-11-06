@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ImageView, RunnerView } from '@nekko-agent/shared';
+import { useStore } from '../store.js';
 import { EmptyHint } from '../components/primitives/index.js';
 import { RunnerCard } from '../components/RunnerCard.js';
 import { ConnectRunnerSheet } from '../components/ConnectRunnerSheet.js';
@@ -96,7 +97,9 @@ export const retryDelay = (attempt: number) => Math.min(60_000, 2000 * 2 ** atte
 const nowSecs = () => Date.now() / 1000;
 
 /** The CI runners section at the foot of the Scheduled Tasks list: this Mac's runners from nekkod. */
-export function CiRunnersView({ now = nowSecs }: { now?: () => number }) {
+export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => number; panel?: boolean }) {
+  const focusRequested = useStore((s) => s.ciRunnersFocus);
+  const section = useRef<HTMLElement>(null);
   const [state, setState] = useState<RunnersState>({ kind: 'loading' });
   const [clock, setClock] = useState(now);
   const [connecting, setConnecting] = useState(false);
@@ -139,7 +142,15 @@ export function CiRunnersView({ now = nowSecs }: { now?: () => number }) {
     };
   }, []);
 
-  const running = state.kind === 'ready' && state.views.some((v) => v.slots.some((s) => s.state === 'running'));
+  // Wait for the cards, not just the section shell, before scrolling to it.
+  useEffect(() => {
+    if (panel || !focusRequested || state.kind === 'loading') return;
+    section.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    section.current?.focus({ preventScroll: true });
+    useStore.setState({ ciRunnersFocus: false });
+  }, [panel, focusRequested, state.kind]);
+
+  const running = state.kind === 'ready' && state.views.some((v) => (v.queue?.length ?? 0) > 0 || v.slots.some((s) => s.state === 'running' || s.state === 'draining'));
   useEffect(() => {
     if (!running) return;
     setClock(now());
@@ -161,16 +172,22 @@ export function CiRunnersView({ now = nowSecs }: { now?: () => number }) {
   if (state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
 
   return (
-    <section data-ci-runners>
+    <section ref={section} tabIndex={-1} data-ci-runners className={panel ? 'mb-3 shrink-0' : undefined}>
       <div className="flex flex-wrap items-baseline gap-2 py-1">
         <h2 className="text-sm font-semibold">CI runners</h2>
-        {hasRunners && (
+        {panel && <button className="btn btn-outline ml-auto py-1! text-xs" onClick={() => {
+          useStore.setState({ ciRunnersFocus: true });
+          useStore.getState().setView('workflows');
+        }}>View CI runners</button>}
+        {!panel && hasRunners && (
           <button className="btn btn-outline ml-auto py-1!" onClick={() => setConnecting(true)}>
             <PlugIcon className="h-3.5 w-3.5" /> Connect GitHub
           </button>
         )}
       </div>
-      {runnersBody(state, {
+      {panel && state.kind === 'loading' ? <p role="status" className="py-2 text-xs text-ink-faint">Loading CI runners…</p>
+        : panel && state.kind === 'ready' && !hasRunners ? <p className="py-2 text-xs text-ink-faint">No CI runners connected. Open the full view to connect this Mac.</p>
+        : runnersBody(state, {
         now: clock,
         image,
         onConnect: () => setConnecting(true),
