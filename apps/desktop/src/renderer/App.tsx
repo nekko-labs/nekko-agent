@@ -346,7 +346,7 @@ export function App() {
               <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
-          <ErrorBoundary key={view} label={t(`nav.${view}`)}>
+          <ErrorBoundary key={view === 'modelserver' ? 'models' : view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
@@ -410,7 +410,7 @@ export function App() {
 /** Catalog pages remain reachable from the rail, with a clear route back to Settings. */
 function SettingsDestination({ children }: { children: React.ReactNode }) {
   return <div className="settings-destination">
-    <div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div>
+    <div className="settings-bar"><div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div></div>
     <div className="settings-destination-content">{children}</div>
   </div>;
 }

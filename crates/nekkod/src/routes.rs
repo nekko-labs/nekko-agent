@@ -1093,6 +1093,7 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:purgeArchived",
     "session:get",
     "session:page",
+    "session:photo",
     "session:images",
     "session:delete",
     "session:setOptions",
@@ -1200,6 +1201,17 @@ async fn session_op(
                 arg(&args, 1).as_str(),
                 arg(&args, 2).as_f64(),
             )),
+            // One photo a user attached, as stored: `(chatId, messageId, index)`.
+            "session:photo" => Ok(store
+                .get(id)
+                .as_ref()
+                .and_then(|s| {
+                    s.get("messages")?.as_array()?.iter().find(|m| {
+                        str_arg(&args, 1).is_some_and(|want| m.get("id").and_then(Value::as_str) == Some(want))
+                    })
+                })
+                .and_then(|m| m.get("images")?.get(arg(&args, 2).as_u64()? as usize)?.as_str().map(str::to_string))
+                .map_or(Value::Null, Value::String)),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
             "session:delete" => {
                 delete_log(id)?;

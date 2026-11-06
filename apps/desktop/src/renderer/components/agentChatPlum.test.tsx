@@ -6,7 +6,7 @@ import { cssRule, hasSelector, stylesheet } from '../tests/css.js';
 
 vi.mock('../store.js', (original) => liveStore(original as never));
 vi.mock('../liveRuns.js', async (original) => ({ ...(await original<object>()), useLiveRun: () => undefined }));
-// Suggestions are a Detailed-only row (#1687), so render the composer in Detailed.
+// Suggestions are Detailed-only (#1687), so render the composer in Detailed.
 vi.mock('../simpleMode.js', async (original) => {
   const { simpleShown } = await import('@nekko-agent/shared');
   return { ...(await original<object>()), useExpertMode: () => [true, () => {}], useShown: (id: string) => simpleShown(id, true, {}) };
@@ -38,11 +38,12 @@ describe('agent chat visual continuity', () => {
     expect(cssRule(css, '.agent-chip-chat[data-agent-active]').background).toBe('var(--accent-soft)');
     expect(cssRule(css, '.agent-chip-chat:focus-visible').outline).toContain('var(--accent)');
   });
-  it.each([false, true])('puts suggestions after the action bar in Detailed, clean start: %s', (cleanStart) => {
+  it.each([false, true])('puts suggestions inside the action bar in Detailed, clean start: %s', (cleanStart) => {
     const html = renderChatPane(chatSession({ messages: cleanStart ? [] : chatSession().messages }), { commandCenter: true, cleanStart });
     const box = composerBox(html);
-    expect(box).toContain('data-composer-suggestions-row');
-    expect(box.indexOf('data-composer-suggestions-row')).toBeGreaterThan(box.indexOf('data-composer-action'));
+    expect(box).toContain('data-composer-suggestions');
+    expect(box.indexOf('data-composer-suggestions')).toBeGreaterThan(box.indexOf('composer-bar'));
+    expect(box.indexOf('data-composer-suggestions')).toBeLessThan(box.indexOf('data-composer-action'));
     const effort = box.match(/<button[^>]*class="([^"]*)"[^>]*aria-label="Reasoning effort:/)?.[1];
     expect(effort).toBeDefined();
     expect(effort).not.toMatch(/\bborder\b/);

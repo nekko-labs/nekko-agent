@@ -25,6 +25,13 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!(missing, Value::Null);
     let (_, images) = post(d.port, "session:images", json!(["s_one", 4]), Some(TOKEN)).await;
     assert_eq!(images, json!([{ "messageId": "a", "src": "data:x" }]));
+    // One photo as stored, for a phone opening it full size; anything else is null.
+    let (_, photo) = post(d.port, "session:photo", json!(["s_one", "a", 0]), Some(TOKEN)).await;
+    assert_eq!(photo, json!("data:x"));
+    for args in [json!(["s_one", "a", 1]), json!(["s_one", "u", 0]), json!(["s_one", "nope", 0]), json!(["s_one"])] {
+        let (_, none) = post(d.port, "session:photo", args.clone(), Some(TOKEN)).await;
+        assert_eq!(none, Value::Null, "{args}");
+    }
     // The UI's own writes are the daemon's too, chat creation included: a
     // folder that is not one of the user's is refused, as the host refused it.
     let (status, refused) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;

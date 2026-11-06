@@ -13,6 +13,7 @@ the runbooks it links. Read a runbook before the work it names.
 | The task list | GitHub issues (one per change, see Landing work). Tasks up to 2026-11-04, and the task IDs code comments cite, are in [docs/history/tasks-archive.md](docs/history/tasks-archive.md) |
 | Why a technical or product choice was made | [docs/decisions/](docs/decisions/README.md) |
 | Landing a change: worktrees, PRs, auto-merge, stacks | [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md) |
+| Version numbers, cutting a release (a `vMAJOR.MINOR.0` tag; never bump a version in a PR) | [docs/runbooks/releasing.md](docs/runbooks/releasing.md) |
 | Cutting an iOS release / TestFlight upload (manual GitHub action, not EAS or desktop tags) | [docs/runbooks/ios-release.md](docs/runbooks/ios-release.md) |
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
 | A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |

@@ -139,7 +139,7 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 
 Closing the desktop window hides it to the tray; the engine and running work remain alive. This is not Quit. **Quit Nekko Agent** stops the service and managed processes; **Stop Nekko service** stops the service while leaving the UI available. This does not promise execution during OS sleep, shutdown or logout.
 
-**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
+**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification, on screen or later from the Windows notification centre, brings the window forward and opens that chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
 
 **Full-screen games (Windows).** While a game runs in exclusive fullscreen, Nekko Agent holds its notices and shows them together when you leave the game, one per chat and kind. Windows you open yourself (launching the app, a link, the tray) still open at once.
 
@@ -179,7 +179,7 @@ The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
 
 The selected agent has a tinted background across its row, so you can spot the chat you are viewing without hovering. Other rows stay flat; their status icons still show whether they are working, waiting or finished.
 
-By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. Use the sliders button to group by project, date or computer instead.
+By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Accessibility > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
@@ -284,7 +284,7 @@ Hover the edge between the agent list and chat wall, or the edge beside Monitors
 
 ### Skills and Connectors shortcuts
 
-Open **Settings** to find large **Skills** and **Connectors** chips at the top. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
 ### Download progress in Model Server
 
