@@ -166,9 +166,6 @@
     <string name="settings_confirm_delete_detail">ここと %1$s で先に確認します</string>
     <string name="settings_pc_footer_online">%1$s に保存されます。そちらの Nekko Agent と同じ設定です。各チャットは引き続き独自にモードを変更できます。</string>
     <string name="settings_pc_footer_offline">%1$s はオフラインです。設定を変更するには接続してください。</string>
-    <string name="settings_yolo_title">新しいチャットで YOLO を使いますか？</string>
-    <string name="settings_yolo_text">%1$s の新しいチャットは、確認なしでコマンドを実行しファイルを編集します。拒否ルールは引き続き有効です。ここまたは %1$s でいつでも戻せます。</string>
-    <string name="settings_use_yolo">YOLO を使う</string>
     <string name="settings_step_up_switch">%1$s の新しいチャットを %2$s に切り替え</string>
     <string name="settings_step_up_change">%1$s の設定を変更</string>
     <string name="settings_mode_ask">確認</string>
@@ -388,4 +385,6 @@
     <string name="settings_card_detailed_detail">最新の返信の最初の一文も表示します</string>
     <string name="settings_card_footer_private">ロック画面のためにチャットの文章がコンピュータから送られることはありません。</string>
     <string name="settings_card_footer_text">チャット名とステップは端末のロック解除中に表示されます。機密情報を隠す設定のロック中の端末では、「最小」の表示になります。許可するには先にロックを解除する必要があります。</string>
+    <string name="settings_warn_yolo">YOLO の前に警告</string>
+    <string name="settings_warn_yolo_detail">チャットやコンピューターの既定が YOLO に切り替わる前に、YOLO で何が通るかを説明します</string>
 </resources>

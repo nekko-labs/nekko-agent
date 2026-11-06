@@ -72,9 +72,6 @@
     <string name="chat_title">Title</string>
     <string name="chat_rename">Rename</string>
     <string name="chat_cancel">Cancel</string>
-    <string name="chat_use_yolo_title">Use YOLO for this chat?</string>
-    <string name="chat_use_yolo_body">This chat will run commands and edit files on %1$s without asking you first. Your deny rules still block.</string>
-    <string name="chat_use_yolo">Use YOLO</string>
     <string name="chat_chat_mode">Chat mode</string>
     <string name="chat_follows_default">This chat follows %1$s’s default, %2$s.</string>
     <string name="chat_waiting_to_send_one">Waiting to send</string>
@@ -237,4 +234,7 @@
     <string name="chat_card_allow">Allow</string>
     <string name="chat_card_stop">Stop</string>
     <string name="chat_card_next">Next</string>
+    <string name="chat_always_allow_tool">Always allow this tool</string>
+    <string name="chat_always_allowing_tool">Allowing…</string>
+    <string name="chat_always_allow_tool_detail">Allows this call and stops asking for this tool in this chat. Other tools still ask.</string>
 </resources>

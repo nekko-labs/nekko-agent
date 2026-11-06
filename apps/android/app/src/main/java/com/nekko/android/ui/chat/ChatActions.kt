@@ -31,6 +31,9 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.nekko.android.ui.settings.modeDetailRes
 import com.nekko.android.ui.settings.modeTitleRes
+import com.nekko.android.ui.security.YoloWarning
+import com.nekko.android.ui.security.YoloWarningDialog
+import com.nekko.android.ui.security.skipsYoloWarning
 import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PcSettings.ChatMode
@@ -61,8 +64,8 @@ fun RenameChatDialog(title: String, onDismiss: () -> Unit, onRename: (String) ->
 /**
  * The chat's ⋮ → Chat mode: this chat's tool policy on the computer. A chat
  * without one of its own follows the computer's default, which is what shows
- * as chosen. YOLO asks once before it is set; a raise is confirmed with the
- * fingerprint or screen lock by the caller.
+ * as chosen. Switching to YOLO shows the YOLO warning first (unless this phone
+ * skips it); a raise is confirmed with the fingerprint or screen lock by the caller.
  */
 @Composable
 fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDismiss: () -> Unit, onPick: (ChatMode) -> Unit) {
@@ -72,15 +75,11 @@ fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDi
     val title = { m: ChatMode -> if (expert) modeTitleRes(m) else asksTitleRes(m) }
     val detail = { m: ChatMode -> if (expert) modeDetailRes(m) else asksDetailRes(m) }
     val shown = current ?: default
+    val skipWarning = skipsYoloWarning()
     var askYolo by rememberSaveable { mutableStateOf(false) }
     if (askYolo) {
-        AlertDialog(
-            onDismissRequest = { askYolo = false },
-            title = { Text(stringResource(R.string.chat_use_yolo_title)) },
-            text = { Text(stringResource(R.string.chat_use_yolo_body, computer)) },
-            confirmButton = { TextButton(onClick = { askYolo = false; onPick(ChatMode.YOLO) }) { Text(stringResource(R.string.chat_use_yolo), color = p.danger) } },
-            dismissButton = { TextButton(onClick = { askYolo = false }) { Text(stringResource(R.string.chat_cancel)) } },
-        )
+        // Keep asking goes back to the choices, with nothing changed.
+        YoloWarningDialog(onKeepAsking = { askYolo = false }, onTurnOn = { askYolo = false; onPick(ChatMode.YOLO) })
         return
     }
     AlertDialog(
@@ -97,7 +96,7 @@ fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDi
                                 .selectable(selected = shown == m, role = Role.RadioButton) {
                                     when {
                                         m == current -> onDismiss()
-                                        m == ChatMode.YOLO -> askYolo = true
+                                        YoloWarning.needed(shown, m, skipWarning) -> askYolo = true
                                         else -> onPick(m)
                                     }
                                 }

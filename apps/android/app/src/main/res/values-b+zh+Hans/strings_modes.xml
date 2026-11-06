@@ -69,4 +69,11 @@
     <string name="pill_move_top">移到顶部</string>
     <string name="pill_dock_left">停靠在左侧</string>
     <string name="pill_dock_right">停靠在右侧</string>
+    <string name="yolo_warning_title">开启 YOLO？</string>
+    <string name="yolo_warning_text">智能体将运行命令、编辑文件、访问地址并调用工具，而不会先询问你。它读取的网页、搜索结果或工具输出可能带有指令，而在 YOLO 下，没有任何东西能阻止它们把你的文件或数据发送到这台电脑之外。你的拒绝规则仍会拦截。</string>
+    <string name="yolo_warning_recommend">防护规则只在重要时询问，是推荐的模式。</string>
+    <string name="yolo_warning_skip">不再提醒我</string>
+    <string name="yolo_warning_skip_detail">仅限此手机。你可以在 设置 → 安全 中重新开启提醒。</string>
+    <string name="yolo_warning_keep_asking">继续询问</string>
+    <string name="yolo_warning_turn_on">开启 YOLO</string>
 </resources>

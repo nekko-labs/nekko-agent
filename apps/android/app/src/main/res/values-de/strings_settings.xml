@@ -166,9 +166,6 @@
     <string name="settings_confirm_delete_detail">Erst fragen, hier und auf %1$s</string>
     <string name="settings_pc_footer_online">Auf %1$s gespeichert, dieselben Einstellungen wie in Nekko Agent dort. Jeder Chat kann seinen eigenen Modus weiterhin ändern.</string>
     <string name="settings_pc_footer_offline">%1$s ist offline. Verbinde dich, um seine Einstellungen zu ändern.</string>
-    <string name="settings_yolo_title">YOLO für neue Chats verwenden?</string>
-    <string name="settings_yolo_text">Neue Chats auf %1$s führen Befehle aus und bearbeiten Dateien, ohne dich vorher zu fragen. Deine Sperrregeln blockieren weiterhin. Du kannst jederzeit hier oder auf %1$s zurückwechseln.</string>
-    <string name="settings_use_yolo">YOLO verwenden</string>
     <string name="settings_step_up_switch">Neue Chats auf %1$s auf %2$s umstellen</string>
     <string name="settings_step_up_change">Einstellungen von %1$s ändern</string>
     <string name="settings_mode_ask">Fragen</string>
@@ -388,4 +385,6 @@
     <string name="settings_card_detailed_detail">Zeigt zusätzlich die erste Zeile der letzten Antwort</string>
     <string name="settings_card_footer_private">Kein Chat-Text verlässt deinen Computer für den Sperrbildschirm.</string>
     <string name="settings_card_footer_text">Chat-Namen und Schritte erscheinen, wenn das Telefon entsperrt ist; ein gesperrtes Telefon, das vertrauliche Inhalte ausblendet, zeigt die Minimal-Texte. Erlauben fragt zuerst nach dem Entsperren.</string>
+    <string name="settings_warn_yolo">Vor YOLO warnen</string>
+    <string name="settings_warn_yolo_detail">Erklären, was YOLO durchlässt, bevor ein Chat oder der Standard eines Computers dorthin wechselt</string>
 </resources>

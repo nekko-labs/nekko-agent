@@ -297,16 +297,30 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
 >
 > **Your computer's settings from the phone** (Android): **Settings → On <computer>** changes three
-> of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
-> before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
+> of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; switching to
+> YOLO shows the YOLO warning first), what a long-press on a chat does (Complete, which moves it to Completed, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
 > and **Rename**; a pinned chat shows a pin beside its time.
 >
 > **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Ask, Guardrails
 > or YOLO; a chat without its own follows the computer's default; switching to a mode that asks less
-> is confirmed with your fingerprint, face or screen lock, and YOLO asks once first), **Rename**,
+> is confirmed with your fingerprint, face or screen lock, and YOLO shows the YOLO warning first), **Rename**,
 > **Pin** / **Unpin** and **Complete**, each saved on the computer.
+>
+> **Turn on YOLO?** (Android): before a chat, or the computer's default for new chats, switches to
+> YOLO, the phone explains that the agent will then run commands, edit files, fetch addresses and
+> call tools without asking, and that a page, search result or tool output it reads can get your
+> files or data sent out; your deny rules still block. **Keep asking** changes nothing; **Turn on
+> YOLO** goes ahead. **Don't warn me again** is kept on this phone only; **Settings → Security →
+> Warn before YOLO** turns the warning back on.
+>
+> **Always allow this tool** (Android): once a chat has read web pages, search results or a tool's
+> output, the computer asks before every MCP tool call. On such an approval the chat's card offers
+> **Always allow this tool** beside Allow and Deny: it allows this call and stops asking for that one
+> tool in that chat, after your fingerprint, face or screen lock (and your security key or code
+> when the computer asks for one). Other tools keep asking, a new chat starts with none allowed, and
+> the chat never switches to YOLO. Monitors and notifications still offer Allow and Deny only.
 >
 > **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
