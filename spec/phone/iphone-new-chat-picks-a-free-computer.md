@@ -5,7 +5,7 @@ area: phone
 
 # iPhone: New chat picks a free computer for a local model (2026-11-05)
 
-`[implemented 2026-11-05, iPhone only: ranking, fleet probes and the activity:state phone view have unit coverage (NekkoKit MachinePickTests on native macOS CI, nekko-remote, packages/shared). The SwiftUI screen builds and the isolated simulator Automatic/manual/all-busy/pending-probe tests pass in run 42025582777 at 408528bef. Captured screenshots and timing video still require visual inspection; the full native suite is pending. Two real computers remain unverified. Android and the desktop don't pick]` Decision: [0052](../../docs/decisions/0052-new-chat-picks-a-free-computer-on-the-phone.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
+`[implemented 2026-11-05, iPhone only: ranking, fleet probes and the activity:state phone view have unit coverage (NekkoKit MachinePickTests on native macOS CI, nekko-remote, packages/shared). The SwiftUI screen builds and the isolated simulator Automatic/manual/all-busy/pending-probe tests pass in run 42025582777 at 408528bef. Captured screenshots and timing video still require visual inspection; the full native suite is pending. Two real computers remain unverified. Android picks the same way since 2026-11-05 (native-android-app.md); the desktop doesn't pick]` Decision: [0052](../../docs/decisions/0052-new-chat-picks-a-free-computer-on-the-phone.md). Builds on [every computer at once](iphone-every-computer-at-once.md).
 
 ## User intent
 
