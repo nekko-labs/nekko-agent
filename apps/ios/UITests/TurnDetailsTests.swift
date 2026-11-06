@@ -109,14 +109,38 @@ final class TurnDetailsTests: XCTestCase {
         return try JSONDecoder().decode(LayoutReading.self, from: Data(value.utf8))
     }
 
+    /// Canonicalize only floating-point arithmetic residue at integer physical
+    /// pixel coordinates, never a visual tolerance. At 48px this permits ~6e-14px,
+    /// not a fraction of a pixel. Raw measurements remain attached unchanged.
+    private func physicalCoordinate(_ points: Double, scale: Double) -> Double {
+        let pixels = points * scale
+        let integer = pixels.rounded()
+        return abs(pixels - integer) <= max(pixels.ulp, integer.ulp) * 8 ? integer : pixels
+    }
+
+    func testCoordinateNormalizationRejectsPhysicalOverflow() {
+        for scale in [2.0, 3.0] {
+            let boundary = 16.0 * scale
+            XCTAssertEqual(physicalCoordinate(15.999999999999982, scale: scale), boundary)
+            for shortfall in [0.25, 0.5, 1.0] {
+                XCTAssertLessThan(physicalCoordinate(16 - shortfall / scale, scale: scale), boundary)
+                XCTAssertGreaterThan(physicalCoordinate(386 + shortfall / scale, scale: scale), 386 * scale)
+            }
+        }
+    }
+
     private func assertContentBounds(_ result: LayoutReading, app: XCUIApplication) throws {
         let box = try result.frame("footer")
         let metrics = try result.frame("metrics")
         XCTAssertGreaterThan(box.width, 0)
         XCTAssertGreaterThan(metrics.height, 0)
-        // Keep the real 16pt transcript gutter. No epsilon and no expanded bounds.
-        XCTAssertGreaterThanOrEqual(box.minX, app.frame.minX + 16)
-        XCTAssertLessThanOrEqual(box.maxX, app.frame.maxX - 16)
+        // Keep strict 16pt gutters in physical coordinates, stripping only ULP
+        // residue demonstrated by native readings (15.999999999999982pt).
+        XCTAssertGreaterThan(result.scale, 0)
+        XCTAssertGreaterThanOrEqual(physicalCoordinate(box.minX, scale: result.scale),
+                                    physicalCoordinate(app.frame.minX + 16, scale: result.scale))
+        XCTAssertLessThanOrEqual(physicalCoordinate(box.maxX, scale: result.scale),
+                                physicalCoordinate(app.frame.maxX - 16, scale: result.scale))
         // At accessibility5 the footer is taller than the transcript viewport.
         // Vertical reachability is checked by scrolling each end below.
         XCTAssertGreaterThanOrEqual(metrics.minX, box.minX)
