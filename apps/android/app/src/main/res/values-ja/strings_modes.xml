@@ -69,4 +69,6 @@
     <string name="pill_move_top">上部に移動</string>
     <string name="pill_dock_left">左にドック</string>
     <string name="pill_dock_right">右にドック</string>
+    <string name="pill_tuck">しまう</string>
+    <string name="pill_show">モード切り替えを表示</string>
 </resources>

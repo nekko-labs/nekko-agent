@@ -69,4 +69,6 @@
     <string name="pill_move_top">移到顶部</string>
     <string name="pill_dock_left">停靠在左侧</string>
     <string name="pill_dock_right">停靠在右侧</string>
+    <string name="pill_tuck">收起</string>
+    <string name="pill_show">显示模式切换</string>
 </resources>

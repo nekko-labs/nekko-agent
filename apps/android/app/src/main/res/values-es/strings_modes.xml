@@ -69,4 +69,6 @@
     <string name="pill_move_top">Mover arriba</string>
     <string name="pill_dock_left">Acoplar a la izquierda</string>
     <string name="pill_dock_right">Acoplar a la derecha</string>
+    <string name="pill_tuck">Recoger</string>
+    <string name="pill_show">Mostrar el selector de modo</string>
 </resources>

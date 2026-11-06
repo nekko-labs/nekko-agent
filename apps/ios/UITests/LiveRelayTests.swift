@@ -590,11 +590,31 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertGreaterThan(panel.frame.midX, window.frame.width * 0.7, "the pill docks on the right")
         XCTAssertGreaterThan(panel.frame.height, panel.frame.width, "docked at a side, the gauges stack")
         attach(app, "modes-3b-docked-right")
+        // A swipe into the edge tucks it away as a slim tab; a tap on the tab brings it back.
+        let tab = app.buttons["chat.pill.tab"]
+        // A real swipe's length: XCUITest's swipeRight stays inside the slim docked pill.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.995, dy: 0.4)), withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe into the side tucks the pill away")
+        XCTAssertFalse(panel.exists)
+        settle()
+        attach(app, "modes-3c-tucked-right")
+        tab.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5), "the tab brings the pill back")
+        settle()
         // And back under the bar, across.
         panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.14)))
         settle()
         XCTAssertLessThan(panel.frame.height, panel.frame.width, "back across the top")
+        // Under the bar, a swipe up tucks it into the bar.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.02)), withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe up tucks the pill under the bar")
+        attach(app, "modes-3d-tucked-top")
+        tab.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        settle()
         // A tap opens the pill into the agent's details.
         panel.tap()
         // The pill opens into the agent's details.
@@ -611,6 +631,53 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(simple.waitForExistence(timeout: 5))
         simple.tap()
         XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")
+    }
+
+    // TOUR-TEMP: paced pill tour for the PR's GIF; not committed.
+    func testPillTour() throws {
+        guard ProcessInfo.processInfo.environment["NEKKO_ITEST_TOUR"] != nil,
+              let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else { throw XCTSkip("tour") }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "NO", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        app.buttons["Pair with your computer"].firstMatch.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30))
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30))
+        app.buttons["Expert: every control"].tap()
+        let panel = app.buttons["chat.monitor"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 15))
+        let window = app.windows.firstMatch
+        let tab = app.buttons["chat.pill.tab"]
+        func pause(_ s: Double) { RunLoop.current.run(until: Date().addingTimeInterval(s)) }
+        func at(_ x: Double, _ y: Double) -> XCUICoordinate { window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y)) }
+        func center(_ e: XCUIElement) -> XCUICoordinate { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)) }
+        func move(to x: Double, _ y: Double) { center(panel).press(forDuration: 0.6, thenDragTo: at(x, y), withVelocity: XCUIGestureVelocity(500), thenHoldForDuration: 0.25) }
+        func flick(to x: Double, _ y: Double) { center(panel).press(forDuration: 0.01, thenDragTo: at(x, y), withVelocity: .fast, thenHoldForDuration: 0) }
+        pause(4)
+        print("TOUR-MARK start \(Date().timeIntervalSince1970)")
+        pause(1)
+        panel.tap(); pause(2.5)
+        app.buttons["Done"].firstMatch.tap(); pause(1.5)
+        move(to: 0.94, 0.42); pause(1.5)
+        flick(to: 0.995, 0.42); XCTAssertTrue(tab.waitForExistence(timeout: 5)); pause(1.8)
+        tab.tap(); XCTAssertTrue(panel.waitForExistence(timeout: 5)); pause(1.5)
+        move(to: 0.5, 0.14); pause(1.5)
+        flick(to: 0.5, 0.02); XCTAssertTrue(tab.waitForExistence(timeout: 5)); pause(1.8)
+        tab.tap(); XCTAssertTrue(panel.waitForExistence(timeout: 5)); pause(1.5)
+        print("TOUR-MARK end \(Date().timeIntervalSince1970)")
     }
 
     func testPairFromADeepLink() throws {

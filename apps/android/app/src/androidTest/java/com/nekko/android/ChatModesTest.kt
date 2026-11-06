@@ -38,6 +38,7 @@ import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.chat.ModeTags
 import com.nekko.android.ui.simple.EXPERT_DESCRIPTION
 import com.nekko.android.ui.simple.SIMPLE_DESCRIPTION
+import com.nekko.android.ui.simple.PILL_TAB_TAG
 import com.nekko.android.ui.simple.PILL_TAG
 import com.nekko.android.data.PillDock
 import com.nekko.android.data.PillPlace
@@ -316,6 +317,84 @@ class ChatModesTest {
         assertTrue("upright: $docked", docked.height > docked.width)
         assertTrue("on the right: $docked", docked.right > width * 0.9f)
         shot("pill-docked-right")
+        prefs.reset(PillPlace.KEY)
+    }
+
+    /** A swipe into its edge tucks the pill into a slim tab; a tap on the tab brings it back. */
+    @Test fun pillTucksIntoItsEdge() {
+        prefs.set(PillPlace.KEY, PillPlace(PillDock.RIGHT, 0.3f))
+        show()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty() }
+        settle()
+        compose.onAllNodesWithTag(PILL_TAG).onFirst().performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(25f, 0f)) }
+            up()
+        }
+        settle()
+        assertTrue(prefs.get(PillPlace.KEY).tucked)
+        assertEquals(0, compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().size)
+        val tab = compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().fetchSemanticsNode().boundsInRoot
+        val width = compose.onRoot().fetchSemanticsNode().size.width
+        assertTrue("against the right edge: $tab", tab.right >= width - 1f)
+        shot("pill-tucked-right")
+        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick()
+        settle()
+        assertEquals(PillPlace(PillDock.RIGHT, 0.3f), prefs.get(PillPlace.KEY))
+
+        // Under the top bar, a swipe up tucks it into the bar.
+        prefs.set(PillPlace.KEY, PillPlace.DEFAULT)
+        settle()
+        compose.onAllNodesWithTag(PILL_TAG).onFirst().performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(0f, -25f)) }
+            up()
+        }
+        settle()
+        assertEquals(PillPlace(tucked = true), prefs.get(PillPlace.KEY))
+        shot("pill-tucked-top")
+        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick()
+        settle()
+        assertEquals(PillPlace.DEFAULT, prefs.get(PillPlace.KEY))
+        prefs.reset(PillPlace.KEY)
+    }
+
+    // TOUR-TEMP: paced tour for the PR's GIF, frames advanced in real time; not committed.
+    @Test fun tourForGif() {
+        if (androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("tour") == null) return
+        prefs.set(EXPERT_MODE, true)
+        show()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty() }
+        settle()
+        compose.mainClock.autoAdvance = false
+        fun play(ms: Int) = repeat(ms / 16) { compose.mainClock.advanceTimeByFrame(); Thread.sleep(16) }
+        val pill = { compose.onAllNodesWithTag(PILL_TAG).onFirst() }
+        val root = compose.onRoot().fetchSemanticsNode().size
+        fun drag(lift: Boolean, to: Offset) {
+            val c = pill().fetchSemanticsNode().boundsInRoot.center
+            pill().performTouchInput { down(center) }
+            play(if (lift) 520 else 16)
+            val steps = if (lift) 24 else 6
+            val d = (to - c) / steps.toFloat()
+            repeat(steps) {
+                pill().performTouchInput { moveBy(d) }
+                play(if (lift) 32 else 16)
+            }
+            pill().performTouchInput { up() }
+        }
+        play(1500)
+        android.util.Log.i("TOUR", "start ${System.currentTimeMillis()}")
+        play(800)
+        compose.onAllNodesWithContentDescription("CPU, 38%").onFirst().performClick(); play(2500)
+        compose.onAllNodes(hasText("Done")).onFirst().performClick(); play(1500)
+        drag(true, Offset(root.width - 60f, root.height * 0.42f)); play(1500)
+        drag(false, Offset(root.width + 200f, root.height * 0.42f)); play(1800)
+        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick(); play(1500)
+        drag(true, Offset(root.width / 2f, 300f)); play(1500)
+        drag(false, Offset(root.width / 2f, -300f)); play(1800)
+        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick(); play(1500)
+        android.util.Log.i("TOUR", "end ${System.currentTimeMillis()}")
+        compose.mainClock.autoAdvance = true
         prefs.reset(PillPlace.KEY)
     }
 

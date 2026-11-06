@@ -69,4 +69,6 @@
     <string name="pill_move_top">Mover para o topo</string>
     <string name="pill_dock_left">Fixar à esquerda</string>
     <string name="pill_dock_right">Fixar à direita</string>
+    <string name="pill_tuck">Recolher</string>
+    <string name="pill_show">Mostrar o seletor de modo</string>
 </resources>

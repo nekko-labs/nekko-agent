@@ -69,4 +69,6 @@
     <string name="pill_move_top">Déplacer en haut</string>
     <string name="pill_dock_left">Ancrer à gauche</string>
     <string name="pill_dock_right">Ancrer à droite</string>
+    <string name="pill_tuck">Replier</string>
+    <string name="pill_show">Afficher le sélecteur de mode</string>
 </resources>
