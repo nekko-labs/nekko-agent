@@ -83,18 +83,19 @@ export function SkillsView() {
   const [tab, setTab] = useState<Tab>('library');
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-1 border-b border-line px-4 pt-3">
-        {(['library', 'market'] as Tab[]).map((k) => (
-          <button
-            key={k}
-            className={`rounded-t-lg border-b-2 px-4 py-2 text-sm font-medium transition ${
-              tab === k ? 'border-accent text-ink' : 'border-transparent text-ink-faint hover:text-ink'
-            }`}
-            onClick={() => setTab(k)}
-          >
-            {k === 'library' ? 'Library' : 'Marketplace'}
-          </button>
-        ))}
+      <div className="settings-bar border-b border-line">
+        <div className="mx-auto flex max-w-5xl items-center gap-1 px-4 py-2">
+          {(['library', 'market'] as Tab[]).map((k) => (
+            <button
+              key={k}
+              className={`rounded-lg border px-3 py-1 text-xs transition ${tab === k ? 'border-transparent' : 'border-line text-ink-faint hover:text-ink'}`}
+              style={tab === k ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
+              onClick={() => setTab(k)}
+            >
+              {k === 'library' ? 'Library' : 'Marketplace'}
+            </button>
+          ))}
+        </div>
       </div>
       {tab === 'library' ? <LibraryTab /> : <MarketplaceTab />}
     </div>
@@ -174,8 +175,8 @@ function LibraryTab() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Card grid */}
-      <div className="@container min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1400px] px-6 pt-5 pb-8">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="@container mx-auto max-w-5xl px-4 pt-3 pb-8">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div className="min-w-0">
               {!hasAppChrome && <h1 className="view-title">Skills</h1>}

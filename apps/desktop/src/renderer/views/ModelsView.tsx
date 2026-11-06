@@ -536,7 +536,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       <div className="flex items-start justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className={`font-semibold ${enabled ? '' : 'text-ink-faint'}`}>{provider.label}</h3>
+            <h3 className={`text-sm font-semibold ${enabled ? '' : 'text-ink-faint'}`}>{provider.label}</h3>
             {!enabled && <span className="chip">disabled</span>}
             {enabled && conn.state === 'ok' && (
               <Badge tone="success" variant="solid" className="px-2 py-0.5">

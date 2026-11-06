@@ -32,7 +32,7 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0021](0021-opt-in-reports-sent-by-the-engine.md) | Opt-in usage and crash reports, sent by the engine with an allow-list and scrubbing; no PostHog SDK | accepted |
 | [0022](0022-ci-runners-vm-and-network.md) | CI runners use our own `nekko-vm` helper, a userspace public-only NAT in nekkod and a read-only seed disk; no privileged helper | accepted |
 | [0023](0023-place-bytes-in-three-places-and-pass-placement-explicitly.md) | Plan a load across VRAM, RAM and disk by weight kind, and pass the placement to llama.cpp explicitly | accepted |
-| [0024](0024-one-models-workspace-with-local-and-cloud-sections.md) | One Models rail entry with local and cloud subnavigation, preserving existing destinations | accepted |
+| [0024](0024-one-models-workspace-with-local-and-cloud-sections.md) | One Models rail entry with local and cloud subnavigation, preserving existing destinations | accepted; navigation amended by 0057 |
 | [0026](0026-thinking-on-with-local-expert-overrides.md) | Thinking on for cloud turns, local overrides only in model Expert settings | accepted |
 | [0025](0025-the-computer-serves-what-the-agent-linked-to-the-phone.md) | The computer serves the phone what the agent linked in a chat (files, a page's assets, loopback previews), and nothing more | proposed |
 | [0026](0026-retire-expo-in-favor-of-native-phone-apps.md) | Retire Expo in favor of native phone apps | accepted |
@@ -64,3 +64,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0054](0054-gate-egress-in-chats-that-read-untrusted-content.md) | Gate egress in chats that read untrusted content (taint gate; domain allowlist later for Team); YOLO stays "never ask" with a warning; Team security and a Claude Agent Shield proxy not started | proposed |
 | [0055](0055-versions-are-major-minor-and-a-per-platform-nightly-build.md) | Versions are MAJOR.MINOR.BUILD: MAJOR.MINOR from a release tag a person pushes, BUILD a per-platform nightly counter kept as `nightly/<platform>/v…` tags; store codes MAJOR\*10000000 + MINOR\*10000 + BUILD | accepted |
 | [0056](0056-no-merge-queue-speed-contract-and-itests-run-nightly.md) | No merge queue: PRs land through native auto-merge on `gate`; the speed contract and itests run nightly (or with `ci:perf`); draft and `hold` disarm auto-merge | accepted |
+| [0057](0057-models-is-one-page-without-a-side-menu.md) | Models is one page without a side menu; its section headings carry the structure | accepted |
