@@ -185,10 +185,6 @@ class ComputersRepository(
     /** The active computer's connection history (memory only, content-free), for Settings → Connection. */
     val connectionLog: StateFlow<List<ConnectionLog.Entry>> = _connectionLog.asStateFlow()
 
-    private val _dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
-    /** The active computer's relay `dismiss` frames: chat tags whose needs-you notification can go. */
-    val dismissals: SharedFlow<String> = _dismissals.asSharedFlow()
-
     // ---- route checks and Share diagnostics (IO-21) ----
 
     private val _checks = MutableStateFlow<List<RouteReport>>(emptyList())
@@ -305,6 +301,10 @@ class ComputersRepository(
     private var connJob: Job? = null
     private var summariesJob: Job? = null
     private var summariesDirty = false
+    private val attentionLock = Any()
+    private var attentionJob: Job? = null
+    private var attentionDirty = false
+    @Volatile private var attentionLink = 0L
     private var cachedDeviceId: String? = null
     /** Change actions on the live connection: its key registration is per connection. */
     @Volatile private var changeCalls: Pair<Remote, ChangeCalls>? = null
@@ -320,11 +320,22 @@ class ComputersRepository(
 
     /** Calls the active computer at call time; throws when none is connected. */
     val caller: Caller = object : Caller {
-        override suspend fun call(channel: String, vararg args: JsonElement): JsonElement =
-            remote().call(channel, *args)
+        override suspend fun call(channel: String, vararg args: JsonElement): JsonElement {
+            val c = remote()
+            return c.call(channel, *args).also { if (client === c) answered(channel, args) }
+        }
 
-        override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement =
-            remote().callWithTimeout(timeoutMs, channel, *args)
+        override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement {
+            val c = remote()
+            return c.callWithTimeout(timeoutMs, channel, *args).also { if (client === c) answered(channel, args) }
+        }
+    }
+
+    private fun answered(channel: String, args: Array<out JsonElement>) {
+        if (channel != Channels.TOOL_APPROVE && channel != Channels.CHAT_ANSWER) return
+        if (args.size < 2) return
+        _state.update { it.copy(attention = it.attention.invalidate()) }
+        scheduleAttention()
     }
 
     fun remote(): Remote = client ?: throw RelayException("Not connected to a computer.")
@@ -469,7 +480,7 @@ class ComputersRepository(
         _state.update {
             it.copy(
                 activeId = id, conn = RelayState.CONNECTING, denied = null, connDetail = null,
-                summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(),
+                summaries = emptyList(), providers = emptyList(), models = emptyMap(), modelErrors = emptyMap(), activity = emptyMap(), attention = AttentionState(),
                 // Another computer, or the same one later: its settings are unknown until it answers.
                 pcSettings = PcSettings(),
                 quitFromPhone = false,
@@ -507,7 +518,9 @@ class ComputersRepository(
             launch {
                 c.status.collect { s ->
                     if (client !== c) return@collect
-                    _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied, route = s.route) }
+                    if (s.state != RelayState.ONLINE) cancelAttention()
+                    _state.update { it.copy(conn = s.state, connDetail = s.detail, denied = s.denied ?: it.denied, route = s.route,
+                        attention = if (s.state == RelayState.ONLINE) it.attention else it.attention.invalidate()) }
                     logStatus(s.state, s.detail, s.denied)
                     if (s.state == RelayState.ONLINE) scope.launch {
                         refresh()
@@ -516,7 +529,14 @@ class ComputersRepository(
                     }
                 }
             }
-            launch { c.dismissals.collect { _dismissals.emit(it) } }
+            launch {
+                c.dismissals.collect {
+                    if (client !== c) return@collect
+                    // Older relays may dismiss after just the newest input resolves.
+                    _state.update { it.copy(attention = it.attention.invalidate()) }
+                    scheduleAttention()
+                }
+            }
             launch {
                 c.welcome.collect { w ->
                     if (client === c) _state.update { it.copy(hostProtocol = w.protocol) }
@@ -539,11 +559,14 @@ class ComputersRepository(
                     if (channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
                     outbox.onEvent(e)
-                    _events.emit(e)
                     _state.update { s ->
-                        val activity = ActivityTracker.next(s.activity, e)
-                        if (activity === s.activity) s else s.copy(activity = activity)
+                        val attention = s.attention.next(e)
+                        val activity = ActivityTracker.next(s.activity, e).toMutableMap()
+                        attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
+                        s.copy(activity = activity, attention = attention)
                     }
+                    if (e is AgentEvent.ToolResultReady || e is AgentEvent.QuestionResolved || e is AgentEvent.Done || e is AgentEvent.Error) scheduleAttention()
+                    _events.emit(e)
                     // Keep the list fresh when a turn ends anywhere (another device, a task).
                     if (e is AgentEvent.Done || e is AgentEvent.SessionMeta) scheduleSummaries()
                 }
@@ -809,10 +832,11 @@ class ComputersRepository(
         connJob?.cancel(); connJob = null
         summariesJob?.cancel(); summariesJob = null
         summariesDirty = false
+        cancelAttention()
         client?.close()
         client = null
         changeCalls = null
-        _state.update { it.copy(conn = RelayState.IDLE, route = null) }
+        _state.update { it.copy(conn = RelayState.IDLE, route = null, attention = it.attention.invalidate()) }
     }
 
     /** App came to the foreground: reconnect now rather than after the backoff. */
@@ -1025,7 +1049,7 @@ class ComputersRepository(
     }
 
     private fun dropFromList(sessionId: String) {
-        _state.update { s -> s.copy(summaries = s.summaries.filter { it.id != sessionId }, activity = s.activity - sessionId) }
+        _state.update { s -> s.copy(summaries = s.summaries.filter { it.id != sessionId }, activity = s.activity - sessionId, attention = s.attention.remove(sessionId)) }
     }
 
     /** The phone changed network, or the socket may have died while frozen: dial a fresh one now. */
@@ -1053,6 +1077,7 @@ class ComputersRepository(
 
     suspend fun refresh() {
         val c = client ?: return
+        val link = attentionLink
         _state.update { it.copy(summariesLoading = true, lastError = null) }
         try {
             val r = coroutineScope {
@@ -1063,18 +1088,17 @@ class ComputersRepository(
                 val settings = async { c.call(Channels.SETTINGS_GET).let { Triple(RemoteDefaults.from(it), Appearance.from(it), PcSettings.from(it)) } }
                 val workspaces = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } ?: emptyList() }
                 val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
-                val pending = async { orNull { PendingInput.map(c.call(Channels.CHAT_PENDING)) } ?: emptyMap() }
+                // Apply pending independently of slower metadata reads.
+                val pending = async { refreshAttention(c, link) }
                 val (defaults, appearance, pcSettings) = settings.await()
-                Refresh(summaries.await(), providers.await(), defaults, appearance, pcSettings, workspaces.await(), info.await(), pending.await())
+                pending.await()
+                Refresh(summaries.await(), providers.await(), defaults, appearance, pcSettings, workspaces.await(), info.await())
             }
             if (client !== c) return
             _state.update { s ->
-                // Approvals and questions already waiting when we (re)connect.
-                val activity = s.activity.toMutableMap()
-                r.pending.forEach { (sid, p) -> if (p.approval != null || p.question != null) activity[sid] = Activity.NEEDS_YOU }
                 s.copy(
                     summaries = r.summaries, providers = r.providers, defaults = r.defaults, appearance = r.appearance, pcSettings = r.pcSettings,
-                    workspaces = r.workspaces, activity = activity, summariesLoading = false, savedListAt = null,
+                    workspaces = r.workspaces, summariesLoading = false, savedListAt = null,
                 )
             }
             _state.update { it.copy(quitFromPhone = r.info?.quitFromPhone == true) }
@@ -1158,6 +1182,88 @@ class ComputersRepository(
     /** Read the chat list again soon (a chat was forked or created from here). */
     fun reloadList() = scheduleSummaries()
 
+    private fun cancelAttention() = synchronized(attentionLock) {
+        attentionLink++
+        attentionJob?.cancel(); attentionJob = null
+        attentionDirty = false
+    }
+
+    /** Coalesce bursts; only a new invalidation retries, never a failed read alone. */
+    private fun scheduleAttention(): Unit = synchronized(attentionLock) {
+        val c = client ?: return
+        if (_state.value.conn != RelayState.ONLINE) return
+        val link = attentionLink
+        attentionDirty = true
+        if (attentionJob != null) return
+        // Calls and relay collectors can use different dispatchers. Publish the
+        // worker before starting it, and retire it atomically with the dirty bit.
+        val worker = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
+            try {
+                while (isActive) {
+                    delay(100)
+                    synchronized(attentionLock) {
+                        if (client !== c || attentionLink != link) return@launch
+                        attentionDirty = false
+                    }
+                    refreshAttention(c, link)
+                    synchronized(attentionLock) {
+                        if (!attentionDirty || client !== c || attentionLink != link) {
+                            if (attentionJob === coroutineContext[Job]) attentionJob = null
+                            return@launch
+                        }
+                    }
+                }
+            } finally {
+                synchronized(attentionLock) {
+                    if (attentionJob === coroutineContext[Job]) attentionJob = null
+                }
+            }
+        }
+        attentionJob = worker
+        worker.start()
+    }
+
+    private suspend fun refreshAttention(c: Remote, link: Long) {
+        if (client !== c || attentionLink != link || _state.value.conn != RelayState.ONLINE) return
+        var ticket: Long? = null
+        _state.update {
+            if (client !== c || attentionLink != link || it.conn != RelayState.ONLINE) {
+                ticket = null
+                it
+            } else {
+                val attention = it.attention.beginSnapshot()
+                ticket = attention.version
+                it.copy(attention = attention)
+            }
+        }
+        val requestedAt = ticket ?: return
+        val snapshot = orNull {
+            // Both bound the RPC and protect fake/legacy transports that ignore its timeout.
+            withTimeoutOrNull(5_000) {
+                val raw = c.callWithTimeout(5_000, Channels.CHAT_PENDING) as? JsonObject
+                raw?.takeIf { it.size <= 4096 }?.let { objectValue ->
+                    val parsed = PendingInput.map(objectValue)
+                    parsed.takeIf {
+                        parsed.size == objectValue.size && objectValue.all { (id, value) ->
+                            val input = value as? JsonObject ?: return@all false
+                            val p = parsed[id]
+                            (input["approval"] == null || input["approval"] == JsonNull || p?.approval != null) &&
+                                (input["question"] == null || input["question"] == JsonNull || p?.question != null)
+                        }
+                    }
+                }
+            }
+        }
+        if (client !== c || attentionLink != link) return
+        _state.update { s ->
+            if (client !== c || attentionLink != link) return@update s
+            val attention = s.attention.reconcile(snapshot, requestedAt)
+            val activity = s.activity.filterValues { it != Activity.NEEDS_YOU }.toMutableMap()
+            attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
+            s.copy(attention = attention, activity = activity)
+        }
+    }
+
     private fun scheduleSummaries() {
         val c = client ?: return
         summariesDirty = true
@@ -1237,7 +1343,6 @@ class ComputersRepository(
         val pcSettings: PcSettings,
         val workspaces: List<WorkspaceFolder>,
         val info: AppInfo?,
-        val pending: Map<String, PendingInput>,
     )
 
     companion object {

@@ -29,9 +29,65 @@ class Notices(private val context: Context) {
 
     /** The chats with a needs-you notification up, by their tag: what a relay `dismiss` can take down. */
     private val needsYou = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val waitingNotices = HashMap<String, EventNotice>()
+    private var attentionComputer: String? = null
+
+    /** Reconcile local notifications with actual waiting inputs, including resolutions missed offline. */
+    @Synchronized fun syncAttention(computer: String?, waiting: List<EventNotice>, silent: Boolean, authoritative: Boolean = true, resolved: Set<String> = emptySet()) {
+        val allowed = allowed()
+        val wanted = if (allowed) waiting.associateBy { it.sessionId } else emptyMap()
+        val switched = attentionComputer != null && computer != attentionComputer
+        if (computer != attentionComputer) {
+            waitingNotices.clear()
+            needsYou.clear()
+        }
+        val activeAttention = manager.activeNotifications.filter { it.id == ID_EVENT && it.notification.channelId == CHANNEL_NEEDS_YOU && it.tag?.startsWith("chat:") == true }
+        // Unknown after process restart/offline is not resolved. Keep OS notices until a snapshot or explicit resolution.
+        activeAttention.filter { active ->
+            val previousComputer = active.notification.extras.getString(EXTRA_COMPUTER)
+            !allowed || switched || (previousComputer != null && previousComputer != computer) ||
+                ((authoritative || resolved.any { EventNotice.tag(it) == active.tag }) && wanted.keys.none { EventNotice.tag(it) == active.tag })
+        }.forEach { manager.cancel(it.tag, it.id) }
+        attentionComputer = computer
+        (waitingNotices.keys - wanted.keys).filter { authoritative || it in resolved || !allowed }.forEach { id ->
+            waitingNotices.remove(id)
+            needsYou.values.remove(id)
+        }
+        val active = manager.activeNotifications.filter { it.id == ID_EVENT }.map { it.tag }.toSet()
+        wanted.forEach { (id, notice) ->
+            if (waitingNotices[id] != notice || EventNotice.tag(id) !in active) {
+                post(notice, silent = silent)
+                waitingNotices[id] = notice
+            }
+        }
+    }
 
     init {
         createChannels()
+        migrateReplies()
+    }
+
+    /** Channel badge settings cannot be changed after creation. Move old replies without losing unread alerts. */
+    private fun migrateReplies() {
+        if (!allowed()) return
+        manager.activeNotifications.filter { it.notification.channelId == LEGACY_CHANNEL_REPLIES }.forEach { active ->
+            val notification = Notification.Builder.recoverBuilder(context, active.notification)
+                .setChannelId(CHANNEL_REPLIES)
+                .setNumber(0)
+                .setBadgeIconType(Notification.BADGE_ICON_NONE)
+                .setOnlyAlertOnce(true)
+                // Platform equivalent of Compat.setSilent: silence group children, with no alerting summary.
+                .setGroup("nekko-silent-migration")
+                .setGroupSummary(false)
+                .setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY)
+                .build()
+            try {
+                manager.notify(active.tag, ID_REPLY, notification)
+                if (active.id != ID_REPLY) manager.cancel(active.tag, active.id)
+            } catch (_: SecurityException) {
+                // Permission changed while migrating; no new notification is delivered.
+            }
+        }
     }
 
     /** Notifications need POST_NOTIFICATIONS on Android 13+; the user can also turn them off. */
@@ -42,7 +98,7 @@ class Notices(private val context: Context) {
         return manager.areNotificationsEnabled()
     }
 
-    fun post(n: EventNotice) {
+    fun post(n: EventNotice, silent: Boolean = false) {
         if (!allowed()) return
         val notification = NotificationCompat.Builder(context, if (n.needsYou) CHANNEL_NEEDS_YOU else CHANNEL_REPLIES)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -52,23 +108,33 @@ class Notices(private val context: Context) {
             .setPriority(if (n.needsYou) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             // Text is already free of content; PRIVATE still hides it on a secure lock screen.
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            .setAutoCancel(true)
+            .setAutoCancel(!n.needsYou)
+            .setOngoing(n.needsYou)
+            .setOnlyAlertOnce(n.needsYou)
+            .setSilent(silent)
+            // Android launchers may show this as a number or just a dot. One unit per chat.
+            .setNumber(if (n.needsYou) 1 else 0)
+            .setBadgeIconType(if (n.needsYou) NotificationCompat.BADGE_ICON_SMALL else NotificationCompat.BADGE_ICON_NONE)
             .setContentIntent(openChat(n.sessionId))
             .apply {
+                if (n.needsYou) addExtras(android.os.Bundle().apply {
+                    putString(EXTRA_COMPUTER, attentionComputer)
+                })
                 // Deny is safe to answer unseen (nothing runs), so it skips the app lock;
                 // Allow needs the command in view, so it is only in the chat.
                 if (n.canDeny) addAction(0, context.getString(R.string.chat_notice_deny), deny(n.sessionId, n.callId!!))
             }
             .build()
-        if (n.needsYou) needsYou[E2E.activityTag(n.sessionId)] = n.sessionId else needsYou.values.remove(n.sessionId)
+        if (n.needsYou) needsYou[E2E.activityTag(n.sessionId)] = n.sessionId
         try {
-            manager.notify(EventNotice.tag(n.sessionId), ID_EVENT, notification)
+            // A reply cannot replace a waiting notification, nor can a racing dismissal cancel the reply.
+            manager.notify(EventNotice.tag(n.sessionId), if (n.needsYou) ID_EVENT else ID_REPLY, notification)
         } catch (_: SecurityException) {
             // Permission revoked between the check and the post.
         }
     }
 
-    /** The chat was opened: its notification is no longer news. */
+    /** Explicit resolution only. Opening a chat must not call this. */
     fun clear(sessionId: String) {
         needsYou.values.remove(sessionId)
         manager.cancel(EventNotice.tag(sessionId), ID_EVENT)
@@ -80,18 +146,20 @@ class Notices(private val context: Context) {
      * its tag, and its needs-you notification goes. A finished or failed one stays.
      */
     fun dismissNeedsYou(tag: String) {
-        val sessionId = needsYou.remove(tag) ?: return
-        manager.cancel(EventNotice.tag(sessionId), ID_EVENT)
+        needsYou.remove(tag)?.let { manager.cancel(EventNotice.tag(it), ID_EVENT) }
+        // Android may retain the notification after this process lost its in-memory tag index.
+        manager.activeNotifications.filter { it.id == ID_EVENT && it.tag?.takeIf { it.startsWith("chat:") }?.removePrefix("chat:")?.let(E2E::activityTag) == tag }
+            .forEach { manager.cancel(it.tag, it.id) }
     }
 
     /**
-     * *Send a test notification*: one shown by the app now, on the approvals
-     * channel. Android has no push from the relay yet (AN-6), so this is what
+     * *Send a test notification*: one shown by the app now, on the non-badging replies
+     * channel (a test is not an awaiting chat). Android has no push from the relay yet (AN-6), so this is what
      * a notification from a chat looks like while the app runs in the background.
      */
     fun postTest(computer: String): Boolean {
         if (!allowed()) return false
-        val notification = NotificationCompat.Builder(context, CHANNEL_NEEDS_YOU)
+        val notification = NotificationCompat.Builder(context, CHANNEL_REPLIES)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(context.getString(R.string.chat_notice_test_title))
             .setContentText(context.getString(R.string.chat_notice_test_text, computer))
@@ -263,13 +331,27 @@ class Notices(private val context: Context) {
     private fun createChannels() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
+        // Copy legacy reply controls once; badge eligibility itself is immutable after channel creation.
+        val previous = if (nm.getNotificationChannel(CHANNEL_REPLIES) == null) nm.getNotificationChannel(LEGACY_CHANNEL_REPLIES) else null
         nm.createNotificationChannels(
             listOf(
                 NotificationChannel(CHANNEL_NEEDS_YOU, context.getString(R.string.chat_channel_needs_you), NotificationManager.IMPORTANCE_HIGH).apply {
                     description = context.getString(R.string.chat_channel_needs_you_description)
+                    setShowBadge(true)
                 },
-                NotificationChannel(CHANNEL_REPLIES, context.getString(R.string.chat_channel_replies), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                NotificationChannel(CHANNEL_REPLIES, context.getString(R.string.chat_channel_replies), previous?.importance ?: NotificationManager.IMPORTANCE_DEFAULT).apply {
                     description = context.getString(R.string.chat_channel_replies_description)
+                    setShowBadge(false)
+                    previous?.let { old ->
+                        setSound(old.sound, old.audioAttributes)
+                        vibrationPattern = old.vibrationPattern
+                        enableVibration(old.shouldVibrate())
+                        enableLights(old.shouldShowLights())
+                        lightColor = old.lightColor
+                        lockscreenVisibility = old.lockscreenVisibility
+                        group = old.group
+                        if (nm.isNotificationPolicyAccessGranted) setBypassDnd(old.canBypassDnd())
+                    }
                 },
                 NotificationChannel(CHANNEL_CONNECTION, context.getString(R.string.chat_channel_connection), NotificationManager.IMPORTANCE_LOW).apply {
                     description = context.getString(R.string.chat_channel_connection_description)
@@ -320,6 +402,7 @@ class Notices(private val context: Context) {
             prefs.set(ENABLED, on)
         }
 
+        private const val EXTRA_COMPUTER = "attention.computer"
         const val TAG_TEST = "test"
 
         /** The start of [EventNotice]'s line for a chat without a title. */
@@ -329,10 +412,12 @@ class Notices(private val context: Context) {
         private val KEEP_ALIVE_LINE = Regex("""(\d+) chats? running on (.+)""", RegexOption.DOT_MATCHES_ALL)
 
         const val CHANNEL_NEEDS_YOU = "needs_you"
-        const val CHANNEL_REPLIES = "replies"
+        private const val LEGACY_CHANNEL_REPLIES = "replies"
+        const val CHANNEL_REPLIES = "replies_no_badge"
         const val CHANNEL_CONNECTION = "connection"
         const val ID_EVENT = 1
         const val ID_KEEP_ALIVE = 2
+        const val ID_REPLY = 3
 
         /** Which channel a [PhoneEvent] goes to. */
         fun channelOf(e: PhoneEvent) = if (e == PhoneEvent.APPROVAL || e == PhoneEvent.NEEDS_INPUT) CHANNEL_NEEDS_YOU else CHANNEL_REPLIES
