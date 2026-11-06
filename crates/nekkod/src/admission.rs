@@ -583,7 +583,12 @@ async fn admit(
         result = crate::providers::resolve(ctx, &provider) => result,
     };
     let model_id = s(&opts, "modelId");
-    let metadata = resolution.as_ref().ok().and_then(|p| crate::providers::cached_effort(p, model_id));
+    // Claude Code's levels need no catalog snapshot, so a first turn resolves like any other.
+    let metadata = if s(&provider, "kind") == "claude-code" {
+        Some(nekko_agent::providers::claude_code::effort_levels())
+    } else {
+        resolution.as_ref().ok().and_then(|p| crate::providers::cached_effort(p, model_id))
+    };
     let (resolved, provider_error) = match resolution {
         Ok(p) => (Some(host_provider_config(ctx, &p)), None),
         Err(e) => (None, Some(e)),
