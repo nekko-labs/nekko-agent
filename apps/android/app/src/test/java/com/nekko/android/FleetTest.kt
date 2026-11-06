@@ -46,6 +46,10 @@ class FleetTest {
             Channels.SESSIONS_SUMMARIES -> Json.parseToJsonElement("""[{"id":"${room}1","title":"One","updatedAt":5}]""")
             Channels.WORKSPACE_LIST -> Json.parseToJsonElement("""[{"id":"w-$room","name":"App"}]""")
             Channels.APP_INFO -> Json.parseToJsonElement("""{"version":"0.9.0","platform":"win32"}""")
+            // `aaaa` has someone at its keyboard; both have Ollama, `bbbb` with its `small` model loaded.
+            Channels.ACTIVITY_STATE -> Json.parseToJsonElement("""{"userActive":${room == "aaaa"},"chatActive":false,"headless":false,"strain":[]}""")
+            Channels.PROVIDERS_LIST -> Json.parseToJsonElement("""[{"id":"ollama","kind":"ollama","label":"Ollama","enabled":true}]""")
+            Channels.MODELS_LIST -> Json.parseToJsonElement("""[{"id":"big","name":"Big"},{"id":"small","name":"Small","loaded":${room != "aaaa"}}]""")
             else -> FakeRemotes.defaultAnswer(c)
         }
     }
@@ -145,6 +149,35 @@ class FleetTest {
         runCurrent()
         assertTrue(peer.closed)
         assertNull(repo.state.value.peers[a])
+    }
+
+    @Test
+    fun `New chat asks every computer and picks the free one with a model there`() = runTest {
+        val remotes = Rooms()
+        val repo = repo(FakeStore(), remotes)
+        val b = repo.pair(link("bbbb"))
+        remotes.of("bbbb").goOnline()
+        runCurrent()
+        val a = repo.pair(link("aaaa"))
+        remotes.of("aaaa").goOnline()
+        runCurrent()
+        assertEquals(a, repo.state.value.activeId)
+
+        val pick = repo.pickMachine(lastUsed = a)
+        assertEquals(com.nekko.protocol.MachinePick(b, com.nekko.protocol.MachinePick.Reason.FREE, listOf(a)), pick)
+        for (r in remotes.created) {
+            val asked = r.calls.filter { it.channel == Channels.ACTIVITY_STATE }
+            assertTrue(asked.isNotEmpty())
+            assertTrue("never sets the threshold", asked.all { it.args.isEmpty() })
+        }
+        // The model there: the one asked for if it has it, else one already loaded.
+        assertEquals("ollama" to "big", repo.localModel(b, listOf("ollama" to "big")))
+        assertEquals("ollama" to "small", repo.localModel(b, listOf("ollama" to "gone")))
+
+        // Offline, it is neither asked nor picked.
+        remotes.of("bbbb").status.value = com.nekko.protocol.RelayStatus(RelayState.OFFLINE)
+        runCurrent()
+        assertEquals(com.nekko.protocol.MachinePick(a, com.nekko.protocol.MachinePick.Reason.ALL_BUSY), repo.pickMachine(lastUsed = a))
     }
 
     @Test
