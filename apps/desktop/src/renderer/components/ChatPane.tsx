@@ -70,7 +70,7 @@ import { PERSISTED_INTERRUPTION, shouldShowPersistedInterruption, reconcileInter
 import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messageCut.js';
 
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
-import { ContextGauge, EffortChoices, EffortSlider, formatContextTokens } from './ChatMetrics.js';
+import { ContextGauge, EffortSlider, formatContextTokens } from './ChatMetrics.js';
 import { AsksFirstMenu } from './AsksFirstMenu.js';
 import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.js';
 import { hasAppChrome } from '../chrome.js';
@@ -434,7 +434,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
   if (row.kind === 'stats') return <div className="msg-ai"><ReplyStatsRow stats={row.stats} /></div>;
   if (row.kind === 'prs') {
     // Historical milestones stay anchored to their original transcript positions.
-    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} sessionId={sessionId} />)}</>;
+    return <>{row.urls.map((u) => <PrCard key={`${row.event}_${u}`} url={u} info={prByUrl.get(u)} event={row.event} sessionId={sessionId} live={row.live} />)}</>;
   }
   const persisted = !row.displayOnly && row.message.id !== 'tmp' && row.message.id !== 'live';
   const editable = !readOnly && !streaming && row.message.role === 'user' && persisted;
@@ -2391,6 +2391,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // a regular expression over every message, and it used to run on every
   // render of the pane, including each streaming frame.
   const prByUrl = useMemo(() => new Map(prs.map((p) => [p.url, p])), [prs]);
+  const priorPrUrls = useMemo(() => rows.flatMap((row) => row.kind === 'prs' ? row.urls : []), [rows]);
   // Handlers handed to rows go through refs, so a row never re-renders because
   // this pane re-rendered.
   const editResendRef = useRef(editResend);
@@ -2511,6 +2512,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // The Mode button already says this; the plain selector is for when it is out of sight.
   const asksFirst = showAsks && !showMode && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} /> : null;
   const effortProps = {
+    metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
     onChanged: () => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } },
   };
@@ -2532,8 +2534,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       }}
     />
   ) : null;
-  // Simple keeps effort, and Auto's quality, inside the model menu, as Claude Code does.
-  const effortInMenu = !expertMode && showEffort && (showModel || needsModel);
   const modelControls = (
     <div className="flex min-w-0 shrink items-center gap-2 rounded-lg">
     {(showModel || needsModel) && <ModelPicker
@@ -2549,7 +2549,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       unavailableModel={needsModel ? unavailableModel : null}
       footer={expertMode ? undefined : <>
         {autoQualityControl && <div className="mt-1 shrink-0 border-t border-line px-1 pt-1">{autoQualityControl}</div>}
-        {effortInMenu && <EffortChoices {...effortProps} />}
       </>}
       onProvider={setProviderId}
       onModel={(pid, v) => {
@@ -2576,8 +2575,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           .catch((e) => useStore.getState().pushToast('error', String(e)));
       }}
     />}
-    {/* In Expert effort rides the composer on every surface, as on the phones; in Simple it is in the model menu. */}
-    {showEffort && !effortInMenu && (wallWindow || detailsShown || cleanStart) && <EffortSlider {...effortProps} />}
+    {/* Effort stays beside the model in both Simple and Expert. */}
+    {showEffort && <EffortSlider {...effortProps} />}
     </div>
   );
 
@@ -2707,7 +2706,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* The reply being written: repaints once a frame on its own. */}
                 {imageMode
                   ? <ImageLiveTurn sessionId={sessionId} streaming={streaming} />
-                  : <LiveTurn sessionId={sessionId} held={held} onImageClick={setLightbox} pendingCallId={approval?.call.id} />}
+                  : <LiveTurn sessionId={sessionId} held={held} prs={prs} priorPrUrls={priorPrUrls} onImageClick={setLightbox} pendingCallId={approval?.call.id} />}
                 <LiveReplyStatus
                   sessionId={sessionId}
                   startedAt={turnStart.current}
@@ -3376,24 +3375,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
-                {/* Suggestions get their own row, clear of the model and send controls. */}
-                {!imageMode && showSuggest && <div className="composer-suggestions-row" data-composer-suggestions-row>
-                    <PromptAnalyzer
-                      variant="chip"
-                      text={deferredDraft}
-                      sessionId={sessionId}
-                      canModelFill={hasProvider}
-                      workspaces={settings?.workspaces ?? []}
-                      contextItems={ctx?.items ?? []}
-                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-                      onFill={({ snippet, placement }) => {
-                        setDraft((d) =>
-                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-                        );
-                        composerRef.current?.focus();
-                      }}
-                    />
-                </div>}
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}
@@ -3451,6 +3432,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     {modelControls}
                   </div>
                 )}
+                {/* Suggestions get their own row at the bottom of the composer, clear of the model and send controls, in Detailed only (#1687, #1791). */}
+                {!imageMode && expertMode && showSuggest && <div className="composer-suggestions-row empty:hidden" data-composer-suggestions data-composer-suggestions-row>
+                    <PromptAnalyzer
+                      variant="chip"
+                      text={deferredDraft}
+                      sessionId={sessionId}
+                      canModelFill={hasProvider}
+                      workspaces={settings?.workspaces ?? []}
+                      contextItems={ctx?.items ?? []}
+                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
+                      onFill={({ snippet, placement }) => {
+                        setDraft((d) =>
+                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
+                        );
+                        composerRef.current?.focus();
+                      }}
+                    />
+                </div>}
             </div>
           </div>
         </div>
