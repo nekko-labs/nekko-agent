@@ -46,10 +46,10 @@ Conditions: CI figures are the `perf` job logs of scheduled and merge-queue runs
 
 The step on `main` falls between `9a8bed34` (#1573) and `13338095` (#1617). Cold first-frame p50 / first-attempt p95 on the same CPU class:
 
-| Runner | Before (last runs up to `9a8bed34`) | After (`13338095` onwards) |
+| Runner | Before (2026-11-02 up to `9a8bed34`) | After (`13338095` to 2026-11-05) |
 |---|---|---|
-| AMD EPYC 9V45 | 15.1-17.4 / 17.2-21.3 ms | 22.2-26.7 / 28.3-37.3 ms |
-| AMD EPYC 9V74 | 16.6-18.2 / 19.2-22.7 ms (one 22.6 / 27.9) | 23.4-28.3 / 29.4-36.4 ms |
+| AMD EPYC 9V45 | 15.1-18.1 / 17.2-23.1 ms (7 commits) | 22.2-26.7 / 27.0-37.3 ms (24 commits) |
+| AMD EPYC 9V74 | 16.6-22.6 / 19.2-28.2 ms (9 commits) | 23.4-28.3 / 29.2-36.4 ms (22 commits) |
 
 Local 2x2, harness of `9a8bed34` or `13338095` against the app of either, alternated (order old/old, new/old, old/new, new/new, then reversed):
 
