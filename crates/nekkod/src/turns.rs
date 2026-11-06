@@ -2924,31 +2924,61 @@ impl TurnTools {
     /// An MCP call in the daemon: ask first when the policy says so, then run it.
     async fn call_mcp(&self, mcp: &Mcp, call: &Value, name: &str) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
-        // An MCP tool can send data out, and its server alone says whether
-        // it only reads: in a tainted chat every call asks, unless the user
-        // chose "Always allow this tool" for it in this chat.
+        let input = call.get("input").cloned().unwrap_or(Value::Null);
+        let disk = self.disk().await;
+        let strings = |key: &str| -> Vec<String> {
+            disk.as_ref()
+                .and_then(|s| s.get(key))
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                .unwrap_or_default()
+        };
+        // "Always allow this tool" (decision 0054) and the recipients this
+        // chat already wrote to (decision 0063), read from disk so a choice
+        // made on the approval bar applies to the next call of the same turn.
+        let allowed = strings("allowedMcpTools").iter().any(|t| t == name);
+        let known = strings("knownRecipients");
+        let tainted = self.gated();
+        // The server's read-only claim counts only in a clean chat: in a
+        // tainted one, its output may have been written to fool the agent.
+        let read_only = !tainted && mcp.read_only(name);
+        let fresh = if read_only { Vec::new() } else { crate::outward::unknown(&input, &known) };
+        let to = if fresh.is_empty() { String::new() } else { format!(" It writes to {}.", fresh.join(", ")) };
         let ask = match turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref()) {
-            Some(reason) => Some((reason, "medium")),
-            None if self.gated() && !self.mcp_tool_allowed(name).await => {
-                Some((format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer."), "high"))
+            Some(reason) => Some((format!("{reason}{to}"), "medium")),
+            None if self.mode == "yolo" => None,
+            None if tainted && !allowed => {
+                Some((format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer.{to}"), "high"))
             }
+            None if !read_only && !allowed => Some((
+                format!(
+                    "Call {name}? Its server does not mark it read-only, so it may send data out of this computer (a message, a post, a change).{to}"
+                ),
+                "medium",
+            )),
+            None if !fresh.is_empty() => Some((
+                format!(
+                    "{name} writes to someone this chat has not written to before: {}. Approve only if you expected it.",
+                    fresh.join(", ")
+                ),
+                "high",
+            )),
             None => None,
         };
-        if let Some((reason, severity)) = ask
-            && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
-        {
-            return error(id, "Call not approved by user.");
+        if let Some((reason, severity)) = ask {
+            if !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await {
+                return error(id, "Call not approved by user.");
+            }
+            // The approval showed these recipients: they are known in this chat now.
+            if !fresh.is_empty() {
+                let mut all = known;
+                all.extend(fresh);
+                let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
+                let _ =
+                    tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "knownRecipients": all }))).await;
+            }
         }
         mcp.call(call).await
-    }
-
-    /// The user chose "Always allow this tool" for MCP tool `name` in this
-    /// chat (`allowedMcpTools`). Read from disk, so a choice made on the
-    /// approval bar applies to the next call of the same turn.
-    async fn mcp_tool_allowed(&self, name: &str) -> bool {
-        self.disk().await.is_some_and(|s| {
-            s.get("allowedMcpTools").and_then(Value::as_array).is_some_and(|a| a.iter().any(|t| t == name))
-        })
     }
 
     async fn disk(&self) -> Option<Value> {
