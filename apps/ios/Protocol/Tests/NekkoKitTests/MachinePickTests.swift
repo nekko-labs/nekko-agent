@@ -118,8 +118,10 @@ final class MachinePickTests: XCTestCase {
             stayConnected: true)
     }
 
+    /// Two computers, two host keys: a known host key is the same computer re-paired.
     func link(_ room: String) -> PairingLink {
-        PairingLink(relayUrl: "wss://relay.example", room: room, key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: nil)
+        PairingLink(relayUrl: "wss://relay.example", room: room, key: "00112233445566778899aabbccddeeff",
+                    hostKey: room == "aaaa" ? testHostKey : otherTestHostKey, pair: nil)
     }
 
     func settle() async {
