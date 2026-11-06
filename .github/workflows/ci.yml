@@ -1,84 +1,92 @@
+# Diagnostic-only branch: MUST NOT MERGE. Production budgets/harness are unchanged.
 name: CI
 on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: Unchanged source revision to compare on one runner
+        description: Exact unchanged source SHA
         required: true
         default: bdd59fa3870f52e5dff3884308a782b14e372db6
+      candidate_ref:
+        description: Exact candidate SHA (only gentleface-icons.tsx is applied)
+        required: true
+        default: 806629f807b9006f6ca16f966c70fc83cdbecd7c
 permissions:
   contents: read
 jobs:
-  cold-browser-comparison:
+  cold-mount-comparison:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_ref }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22'
           cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - run: npm ci
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build -p nekkod --release --locked
-      - run: npm run build:web
-      - name: Fetch official Chrome for Testing builds
+      - name: Build unchanged renderer and release daemon
         run: |
-          mkdir -p cold-browser-results
-          python3 - <<'PY'
-          import json, pathlib, urllib.request, zipfile
-          root = pathlib.Path('cold-browser-results').resolve()
-          index = json.load(urllib.request.urlopen('https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json'))
-          selected = {}
-          for major in (155, 156):
-              rows = [v for v in index['versions'] if v['version'].startswith(str(major) + '.') and any(d['platform'] == 'linux64' for d in v.get('downloads', {}).get('chrome-headless-shell', []))]
-              row = max(rows, key=lambda v: tuple(map(int, v['version'].split('.'))))
-              url = next(d['url'] for d in row['downloads']['chrome-headless-shell'] if d['platform'] == 'linux64')
-              if not url.startswith('https://storage.googleapis.com/chrome-for-testing-public/'):
-                  raise RuntimeError('Unexpected browser download host')
-              archive = root / (str(major) + '.zip')
-              urllib.request.urlretrieve(url, archive)
-              dest = root / str(major)
-              with zipfile.ZipFile(archive) as z:
-                  if any(not (dest / name).resolve().is_relative_to(dest.resolve()) for name in z.namelist()):
-                      raise RuntimeError('Unsafe archive path')
-                  z.extractall(dest)
-              for name in ('chrome-headless-shell', 'chrome_crashpad_handler'):
-                  binary = dest / 'chrome-headless-shell-linux64' / name
-                  if binary.exists(): binary.chmod(0o755)
-              selected[str(major)] = {'version': row['version'], 'revision': row['revision'], 'url': url}
-              archive.unlink()
-          (root / 'browsers.json').write_text(json.dumps(selected, indent=2))
-          print(json.dumps(selected, indent=2))
-          PY
-      - name: Same runner, same source, full workload (155 / 156 / 155)
+          npm run build:web
+          cargo build --release -p nekkod
+          mkdir -p .diagnostic-builds .diagnostic-out
+          cp -R apps/desktop/out/renderer .diagnostic-builds/base
+          git rev-parse HEAD > .diagnostic-out/source.txt
+          lscpu > .diagnostic-out/cpu.txt
+          node --version > .diagnostic-out/node.txt
+      - name: Apply only the candidate icon lifecycle and build renderer
+        env:
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
         run: |
-          git rev-parse HEAD > cold-browser-results/source.txt
-          lscpu > cold-browser-results/cpu.txt
-          node --version > cold-browser-results/node.txt
-          for phase in 155-before 156-middle 155-after; do
-            major=${phase%%-*}
-            PERF_BROWSER="$PWD/cold-browser-results/$major/chrome-headless-shell-linux64/chrome-headless-shell" node scripts/perf/run.mjs --only latency --no-gpu --report-only --out "cold-browser-results/$phase"
+          git fetch origin "$CANDIDATE_REF"
+          git rev-parse FETCH_HEAD > .diagnostic-out/candidate.txt
+          git checkout FETCH_HEAD -- apps/desktop/src/renderer/gentleface-icons.tsx
+          git diff HEAD -- apps/desktop/src/renderer/gentleface-icons.tsx > .diagnostic-out/candidate.patch
+          test -s .diagnostic-out/candidate.patch
+          npm run build:web
+          cp -R apps/desktop/out/renderer .diagnostic-builds/head
+          sha256sum .diagnostic-builds/{base,head}/assets/index-*.js > .diagnostic-out/build-hashes.txt
+      - name: Download official Chrome156 shell (same version as previous comparison)
+        run: |
+          node --input-type=module <<'NODE'
+          import { mkdirSync, writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const data = await (await fetch('https://googlechromelabs.github.io/chrome-for-testing/known-good-versions-with-downloads.json')).json();
+          const version = data.versions.find(v => v.version === '156.0.8078.4');
+          const url = version.downloads['chrome-headless-shell'].find(x => x.platform === 'linux64').url;
+          mkdirSync('.diagnostic-browsers', { recursive: true });
+          execFileSync('curl', ['--fail', '--location', '--output', '.diagnostic-browsers/156.zip', url], { stdio: 'inherit' });
+          execFileSync('unzip', ['-q', '.diagnostic-browsers/156.zip', '-d', '.diagnostic-browsers/156']);
+          writeFileSync('.diagnostic-out/browser.json', JSON.stringify({ version: version.version, url }, null, 2));
+          NODE
+      - name: Full uninstrumented latency workload base-head-head-base
+        env:
+          NEKKO_FILE_VAULT: '1'
+        run: |
+          export NEKKOD_PATH="$PWD/target/release/nekkod"
+          export PERF_BROWSER="$PWD/.diagnostic-browsers/156/chrome-headless-shell-linux64/chrome-headless-shell"
+          for phase in base-1 head-1 head-2 base-2; do
+            case "$phase" in base*) variant=base;; *) variant=head;; esac
+            NEKKO_RENDERER_DIR="$PWD/.diagnostic-builds/$variant" node scripts/perf/run.mjs --only latency --no-gpu --report-only --out ".diagnostic-out/$phase"
           done
-      - name: Cold-switch timeline attribution for each browser
+      - name: CPU profiles and cold-switch timelines for both builds
+        env:
+          NEKKO_FILE_VAULT: '1'
         run: |
-          for major in 155 156; do
-            PERF_BROWSER="$PWD/cold-browser-results/$major/chrome-headless-shell-linux64/chrome-headless-shell" node scripts/perf/run.mjs --only latency --timeline --no-gpu --report-only --out "cold-browser-results/trace-$major"
-            gzip cold-browser-results/trace-$major/*.trace.json
+          export NEKKOD_PATH="$PWD/target/release/nekkod"
+          export PERF_BROWSER="$PWD/.diagnostic-browsers/156/chrome-headless-shell-linux64/chrome-headless-shell"
+          for variant in base head; do
+            NEKKO_RENDERER_DIR="$PWD/.diagnostic-builds/$variant" node scripts/perf/run.mjs --only latency --profile --no-gpu --report-only --out ".diagnostic-out/profile-$variant"
+            gzip -9 .diagnostic-out/profile-$variant/*.trace.json
           done
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cold-browser-comparison
-          path: |
-            cold-browser-results/browsers.json
-            cold-browser-results/*.txt
-            cold-browser-results/*/*.json
-            cold-browser-results/*/*.md
-            cold-browser-results/*/*.gz
+          name: cold-mount-comparison
+          path: .diagnostic-out/
           retention-days: 14
