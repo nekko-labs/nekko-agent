@@ -257,6 +257,7 @@ final class MarkdownTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
                                "-theme", theme, "-uiTestMarkdownLab"] + extra
+        app.terminate()
         app.launch()
         return app
     }

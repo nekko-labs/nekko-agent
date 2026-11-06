@@ -199,6 +199,7 @@ export const PHONE_CHANNELS = [
   'session:get',
   'session:photo',
   'session:setOptions',
+  'session:setSupportingWorkspaces',
   'session:watches',
   'sessions:summaries',
   'settings:get',
@@ -468,6 +469,7 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
   // Saved-folder access changes need a signed proof, including revocation.
+  'session:setSupportingWorkspaces',
   'workspace:addByPath',
   'workspace:remove',
   ...PHONE_PROVIDER_CHANGE_CHANNELS,
@@ -583,6 +585,7 @@ export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): vo
 export const PHONE_SETTINGS_KEYS = [
   'chatPaneAction',
   'defaultChatMode',
+  'defaultWorkspaceIds',
   'machineIcon',
   'skipDeleteConfirmation',
   'voice.enabled',
@@ -602,6 +605,7 @@ export const PHONE_SETTINGS_VIEW = [
   'automationsPaused',
   'chatPaneAction',
   'defaultChatMode',
+  'defaultWorkspaceIds',
   'defaultModelId',
   'defaultProviderId',
   'machineIcon',
@@ -912,6 +916,9 @@ function chatMode(value: unknown, what: string): void {
 /** One phone-settable setting's value, or why not. */
 function settingValue(path: string, value: unknown): void {
   switch (path) {
+    case 'defaultWorkspaceIds':
+      if (Array.isArray(value) && value.length <= 100 && value.every((id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(id))) return;
+      break;
     case 'machineIcon':
       if (value === '' || (COMPUTER_ICONS as readonly unknown[]).includes(value)) return;
       break;
@@ -992,6 +999,10 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'session:setSupportingWorkspaces':
+      if (args.length !== 2 || typeof args[0] !== 'string' || !args[0]) throw new PhoneAccessError('value-invalid', 'session id');
+      settingValue('defaultWorkspaceIds', args[1]);
+      return {};
     case 'workspace:addByPath':
     case 'workspace:remove':
       if (typeof args[0] !== 'string' || args[0].trim() === '' || args[0].includes('\0')) {

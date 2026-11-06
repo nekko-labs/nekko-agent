@@ -36,11 +36,14 @@ import {
  *     they want ('needs-you' | 'finished' | 'failed'), and the relay answers
  *     { type:'push-registered', delivers } (whether it holds the credentials).
  *     The agent's content-free { type:'notify', kind, tag? } fans out to the
- *     phones that asked for that kind when none are connected; kind 'test'
- *     goes to one `deviceId` whether or not it is connected. { type:'dismiss',
+ *     phones that asked for that kind when that device is not connected; kind
+ *     'test' goes to one `deviceId` whether or not it is connected. { type:'dismiss',
  *     tag } (an approval or question was handled) goes to connected clients as
- *     is and to iPhones as a silent push. { type:'push-remove', deviceId }
- *     drops a revoked device's token.
+ *     is and to iPhones as a push. { type:'push-remove', deviceId } drops a
+ *     revoked device's token. Badge authority requires a complete agent
+ *     { type:'attention-snapshot', tags } on each connection and the phone's
+ *     complete `badgeRooms` membership on register-push. Unknown counts are
+ *     omitted, never represented by an observed subtotal or a guessed zero.
  *   - Live Activities: an iPhone registers an ActivityKit push token per chat
  *     under an opaque tag (a hash of the session id; { type:'register-activity' }),
  *     and the agent's content-free { type:'activity', tag, phase } updates or
@@ -102,7 +105,11 @@ interface Room {
   /** sha256 of the pairing key, claimed by the agent; clients must match. */
   keyHash: Buffer | null;
   /** Push tokens registered by paired devices, keyed by deviceId. */
-  pushTokens: Map<string, { token: string; platform: 'ios' | 'android'; app?: string; kinds?: string[] }>;
+  pushTokens: Map<string, PushRegistration>;
+  /** Relay-observed waiting chats, independent of Live Activity subscriptions. */
+  attention: Set<string>;
+  /** Only a complete snapshot on the current agent connection establishes authority. */
+  attentionKnown: boolean;
   pushOwners: Map<string, string>;
   /** The agent names who it welcomed, so registering needs that (`welcomed`). */
   gated: boolean;
@@ -113,6 +120,18 @@ interface Room {
   /** The Live Activity card per device (`register-card`). */
   cards: Map<string, CardRegistration>;
 }
+
+interface PushRegistration {
+  token: string;
+  platform: 'ios' | 'android';
+  app?: string;
+  kinds?: string[];
+  /** Complete set of this token/topic's needs-you rooms on this relay, supplied by the phone. */
+  badgeRooms?: string[];
+}
+
+const wantsAttention = (t: PushRegistration) => !t.kinds || t.kinds.includes('needs-you');
+const MAX_ATTENTION = 4096;
 
 interface CardRegistration {
   /** The card that is up; gone once it ended. */
@@ -179,15 +198,77 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
     let r = rooms.get(code);
     if (!r) {
       if (rooms.size >= limits.maxRooms) return null;
-      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), pushOwners: new Map(), gated: false, welcomed: new Map(), activities: new Map(), cards: new Map() };
+      r = { agent: null, clients: new Map(), keyHash: null, pushTokens: new Map(), attention: new Set(), attentionKnown: false, pushOwners: new Map(), gated: false, welcomed: new Map(), activities: new Map(), cards: new Map() };
       rooms.set(code, r);
     }
     return r;
   };
   const cleanup = (code: string) => {
     const r = rooms.get(code);
-    if (r && !r.agent && r.clients.size === 0) rooms.delete(code);
+    // Keep registered offline rooms as unknown, not silently absent from app-wide counts.
+    // They remain bounded by maxRooms, and disappear when their registrations are revoked.
+    if (r && !r.agent && r.clients.size === 0 && r.pushTokens.size === 0) rooms.delete(code);
   };
+
+  // APNs badges are app-wide. Count each room once for a token/topic, even if
+  // two device ids registered it. Equal tags in different rooms are distinct.
+  const targetKey = (t: PushRegistration) => JSON.stringify([t.token.toLowerCase(), pushSender.apnsTopic?.(t.app) ?? t.app ?? 'dev.nekkolabs.nekkoagent']);
+  const badgeCount = (target: PushRegistration): number | undefined => {
+    const key = targetKey(target);
+    let manifest: string | undefined;
+    const contributing = new Set<string>();
+    let count = 0;
+    for (const [code, r] of rooms) {
+      const registrations = [...r.pushTokens.values()].filter((t) => t.platform === 'ios' && targetKey(t) === key);
+      for (const t of registrations) {
+        // Room snapshots alone cannot prove membership after a relay restart.
+        // Require all registrations to agree on the phone's complete room list.
+        if (!t.badgeRooms) return undefined;
+        const list = JSON.stringify(t.badgeRooms);
+        if (manifest !== undefined && manifest !== list) return undefined;
+        manifest = list;
+      }
+      if (!registrations.some(wantsAttention)) continue;
+      if (!r.agent || !r.attentionKnown) return undefined;
+      contributing.add(code);
+      count += r.attention.size;
+    }
+    if (manifest === undefined || manifest !== JSON.stringify([...contributing].sort())) return undefined;
+    return count;
+  };
+  const sendCurrentBadge = (t: PushRegistration) => sendIos(t, () => {
+    const badge = badgeCount(t);
+    if (badge !== undefined) return pushSender.sendBadge?.(t.token, badge, t.app);
+  });
+  // Serialize badge-bearing requests across rooms: a slow older request must
+  // not be submitted after a newer zero. APNs delivery itself is best effort.
+  const pendingPushes = new Map<string, Promise<void>>();
+  const sendIos = (t: PushRegistration, send: () => Promise<void> | undefined) => {
+    const key = targetKey(t);
+    const next = (pendingPushes.get(key) ?? Promise.resolve()).then(send).then(() => {}, () => {});
+    pendingPushes.set(key, next);
+    void next.then(() => { if (pendingPushes.get(key) === next) pendingPushes.delete(key); });
+  };
+  const updateBadges = (r: Room) => {
+    const seen = new Set<string>();
+    for (const t of r.pushTokens.values()) {
+      if (t.platform !== 'ios' || !wantsAttention(t) || seen.has(targetKey(t))) continue;
+      seen.add(targetKey(t));
+      sendCurrentBadge(t);
+    }
+  };
+  const setAttention = (r: Room, tag: string, waiting: boolean) => {
+    if (r.attention.has(tag) === waiting) return;
+    if (waiting && r.attention.size >= MAX_ATTENTION) {
+      r.attentionKnown = false;
+      return;
+    }
+    waiting ? r.attention.add(tag) : r.attention.delete(tag);
+    updateBadges(r);
+  };
+  const deviceOnline = (r: Room, deviceId: string) =>
+    [...r.welcomed].some(([cid, id]) => id === deviceId && r.clients.has(cid)) ||
+    (!r.gated && r.clients.has(r.pushOwners.get(deviceId) ?? ''));
 
   const authorizeAgent = async (access: string | undefined): Promise<boolean> => {
     if (!authzUrl) return allowUnauthenticated;
@@ -255,13 +336,18 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
         if (q.proto) r.gated = true;
         if (r.agent) r.agent.close(1000, 'replaced by a newer agent');
         r.agent = socket;
+        r.attentionKnown = false;
+        r.attention.clear();
         for (const [cid, c] of r.clients) {
           safeSend(c, { type: 'agent-online' });
           safeSend(socket, { type: 'client-open', cid });
         }
         socket.on('message', (data: Buffer) => {
           if (r.agent !== socket) return;
-          if (!allow(bucket, limits)) return;
+          if (!allow(bucket, limits)) {
+            r.attentionKnown = false; // A dropped delta may have changed the set.
+            return;
+          }
           const s = data.toString();
           const ctrl = controlFrame(s);
           if (!ctrl) return; // v2 agents always speak routing envelopes
@@ -287,39 +373,78 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
               if (r.clients.has(String(ctrl.cid)) && typeof ctrl.deviceId === 'string') r.welcomed.set(String(ctrl.cid), ctrl.deviceId);
               return;
             }
+            case 'attention-snapshot': {
+              // Atomic, complete replacement. Never truncate an invalid or oversized list.
+              if (!Array.isArray(ctrl.tags) || ctrl.tags.length > MAX_ATTENTION ||
+                  !ctrl.tags.every((tag: unknown) => typeof tag === 'string' && TAG.test(tag))) {
+                r.attentionKnown = false;
+                return;
+              }
+              r.attention = new Set(ctrl.tags);
+              r.attentionKnown = true;
+              updateBadges(r);
+              return;
+            }
+            case 'attention-unknown': {
+              r.attentionKnown = false;
+              return;
+            }
             case 'notify': {
               const kind = ctrl.kind === 'test' || PUSH_KINDS.has(ctrl.kind) ? String(ctrl.kind) : 'finished';
-              const payload = {
-                title: String(ctrl.title || 'Nekko Agent'),
-                body: String(ctrl.body || 'Your task finished.'),
-                kind,
-                ...(typeof ctrl.tag === 'string' && TAG.test(ctrl.tag) ? { tag: ctrl.tag } : {}),
-              };
+              const tag = typeof ctrl.tag === 'string' && TAG.test(ctrl.tag) ? ctrl.tag : undefined;
+              if (kind !== 'test') {
+                if (tag) setAttention(r, tag, kind === 'needs-you');
+                else r.attentionKnown = false;
+              }
+              // Never forward agent-supplied text into an ordinary notification.
+              const body = kind === 'needs-you' ? 'Your computer needs your attention.'
+                : kind === 'failed' ? 'A task stopped with an error.'
+                : kind === 'test' ? 'Test notification: your computer can reach this phone.' : 'Your task finished.';
+              const payload = { title: 'Nekko Agent', body, kind, ...(tag ? { tag } : {}) };
               if (kind === 'test') {
                 // The phone asked for it, so it goes to that phone even while it is connected.
                 const t = typeof ctrl.deviceId === 'string' ? r.pushTokens.get(ctrl.deviceId) : undefined;
-                if (t) void pushSender.send(t.token, t.platform, payload, t.app);
+                // A test must not create attention or reset the app badge.
+                if (t?.platform === 'ios') sendIos(t, () => pushSender.send(t.token, t.platform, payload, t.app));
+                else if (t) void pushSender.send(t.token, t.platform, payload, t.app);
                 return;
               }
-              // Content-free push when no device has a live connection, to the phones that want this kind.
-              if (r.clients.size === 0) {
-                for (const { token, platform, app, kinds } of r.pushTokens.values()) {
-                  if (!kinds || kinds.includes(kind)) void pushSender.send(token, platform, payload, app);
-                }
+              // A different connected phone must not suppress this device's alert.
+              const sent = new Set<string>();
+              for (const [deviceId, t] of r.pushTokens) {
+                if (deviceOnline(r, deviceId) || (t.kinds && !t.kinds.includes(kind))) continue;
+                if (t.platform === 'ios') {
+                  if (sent.has(targetKey(t))) continue;
+                  sent.add(targetKey(t));
+                  sendIos(t, () => {
+                    const badge = badgeCount(t);
+                    return pushSender.send(t.token, t.platform, { ...payload, ...(badge !== undefined ? { badge } : {}) }, t.app);
+                  });
+                } else void pushSender.send(t.token, t.platform, payload, t.app);
               }
               return;
             }
             case 'dismiss': {
               if (typeof ctrl.tag !== 'string' || !TAG.test(ctrl.tag)) return;
+              setAttention(r, ctrl.tag, false);
               for (const c of r.clients.values()) safeSend(c, { type: 'dismiss', tag: ctrl.tag });
-              for (const { token, platform, app, kinds } of r.pushTokens.values()) {
-                if (platform === 'ios' && (!kinds || kinds.includes('needs-you'))) void pushSender.sendDismiss?.(token, ctrl.tag, app);
+              const seen = new Set<string>();
+              for (const t of r.pushTokens.values()) {
+                if (t.platform !== 'ios' || !wantsAttention(t) || seen.has(targetKey(t))) continue;
+                seen.add(targetKey(t));
+                sendIos(t, () => pushSender.sendDismiss?.(t.token, ctrl.tag, t.app, badgeCount(t)));
               }
               return;
             }
             case 'push-remove': {
               if (typeof ctrl.deviceId === 'string') {
+                const previous = r.pushTokens.get(ctrl.deviceId);
                 r.pushTokens.delete(ctrl.deviceId);
+                // Recompute only if remaining membership still proves a complete total.
+                // A removed room in an old manifest stays unknown until the phone refreshes it.
+                if (previous?.platform === 'ios' && wantsAttention(previous)) {
+                  sendCurrentBadge(previous);
+                }
                 for (const devices of r.activities.values()) devices.delete(ctrl.deviceId);
                 r.cards.delete(ctrl.deviceId);
               }
@@ -327,8 +452,10 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
             }
             case 'activity': {
               const tag = typeof ctrl.tag === 'string' ? ctrl.tag : '';
+              if (!TAG.test(tag) || !PHASES.has(ctrl.phase)) return;
+              setAttention(r, tag, ctrl.phase === 'approval' || ctrl.phase === 'question');
               const devices = r.activities.get(tag);
-              if (!devices || !PHASES.has(ctrl.phase)) return;
+              if (!devices) return;
               const end = ctrl.phase === 'done' || ctrl.phase === 'failed';
               const push: ActivityPush = { event: end ? 'end' : 'update', phase: ctrl.phase };
               if (ctrl.phase === 'approval' && typeof ctrl.callId === 'string' && ctrl.callId.length <= 200) {
@@ -375,6 +502,7 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
           // A replaced agent's late close says nothing: its successor is online.
           if (r.agent === socket) {
             r.agent = null;
+            r.attentionKnown = false;
             for (const c of r.clients.values()) safeSend(c, { type: 'agent-offline' });
           }
           cleanup(code);
@@ -417,14 +545,23 @@ export function buildRelay(opts: RelayOptions = {}): { app: FastifyInstance; roo
             const kinds: string[] | undefined = Array.isArray(ctrl.kinds)
               ? [...new Set<string>(ctrl.kinds.filter((k: unknown) => typeof k === 'string' && PUSH_KINDS.has(k)))]
               : undefined;
+            const badgeRooms = Array.isArray(ctrl.badgeRooms) && ctrl.badgeRooms.length <= 64 &&
+              ctrl.badgeRooms.every((code: unknown) => typeof code === 'string' && code.length > 0 && code.length <= 256)
+              ? [...new Set<string>(ctrl.badgeRooms)].sort() : undefined;
             if (validDevice && validToken && platform && (!owner || owner === cid)) {
+              const previous = r.pushTokens.get(deviceId);
               r.pushOwners.set(deviceId, cid);
               r.pushTokens.set(deviceId, {
-                token,
+                token: platform === 'ios' ? token.toLowerCase() : token,
                 platform,
                 ...(app ? { app } : {}),
                 ...(kinds ? { kinds } : {}),
+                ...(badgeRooms ? { badgeRooms } : {}),
               });
+              const current = r.pushTokens.get(deviceId)!;
+              if (current.platform === 'ios') sendCurrentBadge(current);
+              if (previous?.platform === 'ios' && targetKey(previous) !== targetKey(current)) sendCurrentBadge(previous);
+              // No badge (not even zero) until snapshots and the full membership agree.
               // So the phone's *Send a test notification* can say which path it took.
               safeSend(socket, { type: 'push-registered', delivers: pushSender.delivers ? pushSender.delivers(platform) : pushSender.enabled });
             }

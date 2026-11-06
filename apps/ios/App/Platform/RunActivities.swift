@@ -289,6 +289,7 @@ final class RunActivities {
             switch src.activity[s.id] {
             case .needsYou?: (state, step) = (.needsYou, live?.step ?? "")
             case .running?: (state, step) = (.working, live?.step ?? "")
+            case .failed?: (state, step) = (.failed, run?.step ?? "")
             case nil:
                 if let live, now.timeIntervalSince(live.lastEventAt) < Self.quietRun { (state, step) = (.working, live.step) }
                 else if s.activeWatchCount > 0 { (state, step) = (.watching, String(localized: "Watching PR…")) }

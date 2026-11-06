@@ -349,6 +349,7 @@ public final class ChatModel {
     /// URLs. Returns the prompt's `clientMessageId`.
     @discardableResult
     public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
+        try Task.checkCancellation()
         let outbox = store.outbox
         let id = outbox.newId()
         guard store.conn == .online, let r = try? store.remote() else {

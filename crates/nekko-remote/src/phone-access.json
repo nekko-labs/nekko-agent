@@ -62,6 +62,7 @@
   "session:get",
   "session:photo",
   "session:setOptions",
+  "session:setSupportingWorkspaces",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -196,6 +197,7 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "session:setSupportingWorkspaces",
   "workspace:addByPath",
   "workspace:remove",
   "providers:saveSealed",
@@ -291,6 +293,7 @@
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
   "machineIcon",
   "skipDeleteConfirmation",
   "voice.enabled",
@@ -302,6 +305,7 @@
   "automationsPaused",
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
   "defaultModelId",
   "defaultProviderId",
   "machineIcon",

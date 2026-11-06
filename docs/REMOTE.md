@@ -81,6 +81,14 @@ credentials. For safety the phone does not merge different keys just because the
 Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
 to old duplicates that were saved with different identity keys.
 
+## iPhone chat controls
+
+New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
+
+The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
+
+From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
+
 ## The phone app
 
 > **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in
@@ -150,6 +158,20 @@ to old duplicates that were saved with different identity keys.
 > Then pick **This iPhone** under **New chat → Run on**. These chats sit in the same list as your
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
+>
+> **Connectors** (iPhone): **Settings → Connectors** (or **Connectors** in the chat list's menu)
+> connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
+> project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist). Each token stays in this
+> iPhone's Keychain and goes only to its own service; your computers keep their own connectors.
+> Connect checks the token first and says who it signed in as.
+>
+> **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
+> review, opened by you and assigned to you on the selected git provider; **Projects** lists the
+> ones in the repositories your computers' folders hold, plus any you add. Tap one for **Review
+> it**, **Fix the failing checks**, **Address the review comments**, **Summarize it**, **Update
+> from the base branch** or **Ask about it** (also on touch and hold, and swipe right to review).
+> Each opens New chat with the prompt written, on the computer that has that repository and in
+> its folder; nothing is sent until you tap **Start**.
 >
 > **Simple and Detailed** (iPhone and Android): on iPhone the chat's **More** menu (or the chats list's view menu) picks the
 > mode; on Android the switch at the top left of a chat does. The phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
