@@ -10,9 +10,9 @@ const emails = vi.hoisted(() => ({ byToken: {} as Record<string, string> }));
 vi.mock('../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('../accountEmails.js')>()), useAccountEmails: () => emails.byToken }));
 vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
-const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null }));
-vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
-import { LocalModels, MonitorsDock, MonitorsToggle } from './MonitorsDock.js';
+const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null, watched: null as string | null }));
+vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useWatchedComputer: () => resources.watched, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
+import { LocalModels, MonitorsDock, MonitorsToggle, readComputerUtilization } from './MonitorsDock.js';
 function render(minimized = false) {
   const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, insights: false, hardware: true, localModels: false }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
   return renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
@@ -216,5 +216,45 @@ describe('Local models monitor', () => {
     expect(none).toContain('No local engine installed.');
     expect(none).toContain('Set up a local model');
     expect(none).not.toContain('data-local-model-settings');
+  });
+});
+
+describe('monitors follow the computer switch', () => {
+  const vitals = { working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] };
+  it("reads a connected computer's providers, quota by provider id, and usage through its gate", async () => {
+    const calls: unknown[][] = [];
+    const read = vi.fn(async (id: string, channel: string, args: unknown[] = []) => {
+      calls.push([id, channel, ...args]);
+      if (channel === 'providers:list') return [{ id: 'cg', kind: 'chatgpt', label: 'ChatGPT', enabled: true }, { id: 'off', kind: 'openai', label: 'Off', enabled: false }, { id: 'lm', kind: 'lmstudio', label: 'LM Studio', enabled: true }, { id: 'bad', kind: 'anthropic', label: 'Claude', enabled: true }];
+      if (channel === 'limits:get') { if (args[0] === 'bad') throw new Error('refused'); return { windows: [{ label: '5-hour', usedPercent: 40 }] }; }
+      return { daily: [{ date: '2026-11-06', input: 10, output: 5, cost: 0 }] };
+    });
+    const got = await readComputerUtilization('gomi', read as never);
+    expect(got.providers.map((p) => p.id)).toEqual(['cg', 'bad']);
+    expect(Object.keys(got.byToken)).toEqual(['cg']);
+    expect([...got.answered]).toEqual(['cg', 'bad']);
+    expect(got.usage?.daily[0].input).toBe(10);
+    expect(calls).toContainEqual(['gomi', 'limits:get', 'cg']);
+  });
+  it("shows a watched computer's resident models without this computer's settings jumps", () => {
+    resources.watched = 'gomi';
+    try {
+      const html = renderToStaticMarkup(<LocalModels initial={{ status: { running: true, installed: true, resident: [{ id: 'qwen', loadedOn: 'gpu', gpuLayers: 36, totalLayers: 36 }] } as any, models: [] }} />);
+      expect(html).toContain('qwen');
+      expect(html).toContain('on GPU · 36/36 layers');
+      expect(html).not.toContain('data-local-model-settings');
+      expect(html).not.toContain('Open Model Server');
+      expect(renderToStaticMarkup(<LocalModels initial={{ status: { running: true, installed: false, resident: [] } as any, models: [] }} />)).toContain('No local engine installed.');
+    } finally { resources.watched = null; }
+  });
+  it("swaps Utilization to the watched computer's, without this computer's providers or Manage providers", () => {
+    resources.watched = 'gomi';
+    try {
+      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
+      const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'mine', kind: 'chatgpt', label: 'My ChatGPT', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'mine' }]} usage={null} vitals={vitals} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+      expect(html).toContain("Reading that computer&#x27;s providers…");
+      expect(html).not.toContain('My ChatGPT');
+      expect(html).not.toContain('Manage providers');
+    } finally { resources.watched = null; }
   });
 });

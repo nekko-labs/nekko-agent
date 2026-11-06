@@ -426,6 +426,7 @@ const api: NekkoApi = {
   setComputerIcon: (id, icon) => inv(IpcChannels.computersSetIcon, id, icon),
   computerStats: (id) => inv(IpcChannels.computersStats, id),
   computerEngineStatus: (id) => inv(IpcChannels.computersCall, id, 'engine:status', []),
+  computerRead: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   createSessionOn: (computerId, workspaceId) => inv(IpcChannels.computersCreateSession, computerId, workspaceId),
   computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
