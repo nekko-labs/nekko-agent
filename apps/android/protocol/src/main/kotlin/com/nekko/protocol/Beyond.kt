@@ -28,11 +28,36 @@ data class RunOption(val key: String, val values: List<String> = emptyList()) {
             RunOption("gitIsolation"),
             RunOption("workMode", listOf("default", "better-review", "design", "best-output")),
             RunOption("toolApproach", listOf("list", "code")),
+            RunOption("memory", listOf("all", "project", "off")),
+            RunOption("guidance", listOf("rules", "root", "off")),
+            RunOption("privacy", listOf("default", "redact", "off")),
         )
 
         /** A chat's run settings, as the computer holds them. */
         fun values(o: JsonObject?): Map<String, JsonElement> =
             all.mapNotNull { option -> o?.get(option.key)?.takeIf { it !is JsonNull }?.let { option.key to it } }.toMap()
+    }
+
+    /** The choice shown: Privacy Shield's mode, `default` while the chat follows the computer. */
+    fun shown(v: JsonElement?): String? =
+        if (key == "privacy") (v.obj()?.get("mode") as? JsonPrimitive)?.takeIf { it.isString }?.content ?: "default"
+        else (v as? JsonPrimitive)?.takeIf { it.isString }?.content
+
+    /** What to send for [picked]. Privacy Shield keeps the chat's kinds and allowed values and changes only its mode. */
+    fun wire(picked: String, current: JsonElement?): JsonElement {
+        if (key != "privacy") return JsonPrimitive(picked)
+        val kept = current.obj().orEmpty().filterKeys { it != "mode" }
+        return JsonObject(if (picked == "default") kept else kept + ("mode" to JsonPrimitive(picked)))
+    }
+}
+
+/** A tool the computer's agents can call (`tools:list`): the name a chat's `disabledTools` holds. */
+data class ToolInfo(val name: String, val description: String) {
+    companion object {
+        fun list(v: JsonElement?): List<ToolInfo> = v.arr().orEmpty().mapNotNull { t ->
+            val o = t.obj() ?: return@mapNotNull null
+            o.str("name")?.let { ToolInfo(it, o.str("description").orEmpty()) }
+        }
     }
 }
 

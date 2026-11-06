@@ -94,7 +94,7 @@ enum NativeFixtureRoute {
         #if DEBUG
         let flags = ["-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
                      "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
-                     "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications"]
+                     "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications", "-uiTestModelServer", "-uiTestRunSettings"]
         return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
         #else
         return false
@@ -122,6 +122,8 @@ private struct NativeAppContent: View {
         if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") { PhoneComposerFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") { PhoneParityFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestModelServer") { ModelServerFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestRunSettings") { RunSettingsFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {
             PhotoPreviewFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {

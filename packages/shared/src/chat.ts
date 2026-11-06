@@ -342,6 +342,12 @@ export interface Session {
    * this chat's turns; the servers keep running for other chats.
    */
   disabledMcpServers?: string[];
+  /**
+   * MCP tools (`mcp__<server>__<tool>`) the user chose "Always allow this tool"
+   * for in this chat: once the chat has read untrusted content, other MCP calls
+   * ask first (the egress gate, decision 0054); these run without asking.
+   */
+  allowedMcpTools?: string[];
   /** Connector kinds whose context this chat's turns do not fetch. */
   disabledConnectors?: string[];
   /**

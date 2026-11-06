@@ -81,6 +81,7 @@
   "terminal:write",
   "terminals:list",
   "tool:approve",
+  "tools:list",
   "usage:summary",
   "voice:status",
   "voice:transcribe",
@@ -167,6 +168,7 @@
   "settings:get",
   "skills:runnable",
   "tasks:list",
+  "tools:list",
   "usage:summary",
   "voice:status",
   "workflows:list",
@@ -385,6 +387,10 @@
   "name",
   "source"
  ],
+ "toolView": [
+  "description",
+  "name"
+ ],
  "queueKeys": [
   "clientMessageId",
   "images",
@@ -392,6 +398,7 @@
   "text"
  ],
  "sessionOptionKeys": [
+  "allowedMcpTools",
   "archivedAt",
   "autoModel",
   "autoProviderSwitch",
@@ -422,6 +429,7 @@
   "workMode"
  ],
  "guardedOptionKeys": [
+  "allowedMcpTools",
   "cloudOnly",
   "disabledConnectors",
   "disabledMcpServers",

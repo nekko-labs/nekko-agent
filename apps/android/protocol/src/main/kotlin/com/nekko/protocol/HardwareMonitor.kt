@@ -3,6 +3,7 @@ package com.nekko.protocol
 import java.util.Locale
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.longOrNull
 
 /**
@@ -80,6 +81,8 @@ data class EngineStatus(
     val budgetBytes: Long? = null,
     /** `vram`, `unified` or `ram`. */
     val memoryKind: String? = null,
+    /** Null from a computer too old to send them. */
+    val server: ModelServerSettings? = null,
 ) {
     /** A model the Model Server holds in memory (`ResidentModel`). */
     data class Resident(
@@ -129,6 +132,34 @@ data class EngineStatus(
                 },
                 budgetBytes = memory?.long("budgetBytes"),
                 memoryKind = memory?.str("kind"),
+                server = ModelServerSettings.from(o["settings"]),
+            )
+        }
+    }
+}
+
+/** What a device may set of how the Model Server loads and keeps models (`PHONE_ENGINE_KEYS`). Mirrors the iPhone's. */
+data class ModelServerSettings(
+    /** How many models may stay loaded at once. */
+    val maxLoaded: Int? = null,
+    /** Unload a model after this many idle seconds; 0 keeps it. */
+    val idleTtlSeconds: Int? = null,
+    /** Load a model when a chat asks for it. */
+    val jitLoad: Boolean? = null,
+    /** Off, the Model Server's own saved settings decide and devices can't change them. */
+    val devicesChoose: Boolean = true,
+) {
+    companion object {
+        /** The idle times offered, in seconds: 5 minutes, 15 minutes, an hour, never. */
+        val IDLE_CHOICES = listOf(300, 900, 3600, 0)
+
+        fun from(e: JsonElement?): ModelServerSettings? {
+            val o = e.obj() ?: return null
+            return ModelServerSettings(
+                maxLoaded = o.long("maxLoaded")?.toInt(),
+                idleTtlSeconds = o.long("idleTtlSeconds")?.toInt(),
+                jitLoad = (o["jitLoad"] as? JsonPrimitive)?.booleanOrNull,
+                devicesChoose = (o["clientModelSettings"] as? JsonPrimitive)?.booleanOrNull ?: true,
             )
         }
     }

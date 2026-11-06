@@ -48,6 +48,7 @@ const OPTION_KEYS: &[&str] = &[
     "imageParams",
     "archivedAt",
     "privacy",
+    "allowedMcpTools",
 ];
 
 /// `STARTER_MODES` (packages/shared/src/saved-modes.ts): the saved modes until
@@ -184,6 +185,7 @@ const USER_FIELDS: &[&str] = &[
     "archivedAt",
     "privacy",
     "connectivityNotices",
+    "allowedMcpTools",
 ];
 
 /// A queued prompt's text, when text is all it is.

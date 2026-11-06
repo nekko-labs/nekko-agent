@@ -39,6 +39,40 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Flat agent plan (#2013, 2026-11-06)
+
+Area: renderer. Result: an older cold-frame differential did not reproduce in two additional matched pairs; no speedup or zero-effect claim.
+Conditions: all comparisons use Linux 4-thread runners, Chrome/156.0.8078.79, 1440x1000, the full latency workload (1000 + 12x400-message chats), 33 cold switches per phase, one unprofiled attempt in base/head/head/base order. Do not compare different CPUs as a speedup time series.
+
+| Comparison | Runner | Base first / last p95 | Head first / second p95 |
+|---|---|---|---|
+| Original CI attempt 1 | AMD EPYC 7763 | 35.6 / 38.8 ms | 41.5 / 38.1 ms |
+| Original CI attempt 2 | AMD EPYC 9V74 | 33.9 / 32.9 ms | 35.8 / 37.2 ms |
+| Additional exact-current pairs | AMD EPYC 7763 | 38.9 / 40.2 ms | 38.3 / 39.9 ms |
+
+Original [CI 42223817760](https://github.com/nekko-labs/nekko-agent/actions/runs/42223817760) measured unchanged base `b05c1d5567af38cd9c76b690b5cc7c7d5560eb11` against synthetic merge `e37af938958756a2b1fc769705227b17c5efd690`, containing feature head `5ffd683ae48cf238c9d7e3c104f5349355326b25`. Attempt 1 reproduced the former 33 ms baseline failure. The single permitted retry showed both head controls slower than both base controls, requiring further matched measurements rather than another blind retry. Original attempt-1 full-contract cold-frame p95 samples were 42.6 / 40.7 / 42.4 ms, n=33 each; other measured timing/memory rows passed and terminal latency was skipped.
+
+[Additional diagnostic 42232720879](https://github.com/nekko-labs/nekko-agent/actions/runs/42232720879) measured exact base `0c80faed99a2978e0f30bbb30ddc0f3b6db52b8c` and refreshed feature head `28701069386a3cdabff25fd2372c54cf45e22082`. Harness and daemon sources were identical, and every phase used one release daemon (SHA256 `1dac40c3ffce48c39233c4c92f4949683b234a6918562ad9ab814234372b6b1a`), Node 22.23.4, no GPU. Raw nearest-rank p95s and revisions were checked. The head slowdown does not reproduce in either additional pair. Separate timeline-instrumented base/head cold-frame p95 was 43.3 / 41.6 ms; both cold-switch traces were parsed with Layout/Paint events. Trace overhead means those values are not equivalent to the unprofiled controls, and event counts do not establish per-click causality. Artifact 13510119925 ZIP SHA256 was verified as `fec19f422b25ac48ddd940d85d35345558381de97117af3598d95d9435878da8`.
+
+Why: #2013 removes presentation-only plan phase/group wrappers while retaining per-step details. Its refreshed feature patch has the same stable patch ID as the tested original; normal current-head [CI 42232970013](https://github.com/nekko-labs/nekko-agent/actions/runs/42232970013) passed build, perf, integration tests and gate. The differential hold was cleared after inspecting the additional pairs, not merely because the separately approved #1999 recalibrated the gate to 48 ms. Neither the 8.3 ms product target nor the actual remount cost improved here; optimization remains #1998. The original runner-specific differential is not causally explained. Source: [original baseline evidence](https://github.com/nekko-labs/nekko-agent/issues/712#issuecomment-6686247689), [additional measurements](https://github.com/nekko-labs/nekko-agent/issues/712#issuecomment-6687599109), [landed PR #2013](https://github.com/nekko-labs/nekko-agent/pull/2013). This entry was added in the documentation-only #2028 follow-up because it was omitted before feature landing. Temporary diagnostic refs must never merge.
+
+## Cold-switch frame gate recalibrated on the six-zone board, 33 to 48 ms (#712, 2026-11-06)
+
+Area: perf harness. Result: measurement fix (gate recalibration); product target unchanged.
+Approval: Philip explicitly approved the separate 33 to 48 ms recalibration on 2026-11-06. This supersedes the earlier instruction to keep 33 ms for #712, not the 8.3 ms product target or the remount optimization in #1998.
+Conditions: the `perf` job logs of 778 CI reports from 2026-11-03 04:04 to 2026-11-06 10:30 UTC (pull request, merge-queue, scheduled and dispatched runs; mostly PRs that do not touch the renderer), all after #1521 moved the harness onto the six-zone board. GitHub Linux runners, 4 threads, Chrome 156, 33 cold switches per attempt, up to three attempts per report.
+
+| Best-of-three cold first-frame p95 | Value |
+|---|---|
+| Median | 36.9 ms |
+| p90 / p95 / p99 | 42.8 / 44.0 / 46.9 ms |
+| Max | 51.2 ms (AMD EPYC 7763, run 41750085139) |
+| Reports over 33 / 44 / 48 ms | 512 / 38 / 2 of 778 |
+| First attempts over 48 ms (a second attempt needed) | 34 of 778 |
+
+By runner, median best-of-three p95 / max: AMD EPYC 7763 40.2 / 51.2 ms (326 reports), AMD EPYC 9V74 33.0 / 45.6 (165), AMD EPYC 9V45 31.0 / 37.3 (152), Xeon Platinum 8370C 43.4 / 47.4 (38), Xeon 6975P-C 31.4 / 33.0 (30), Xeon 6973P-C 33.7 / 36.4 (11), CPU not printed 36.3 / 43.3 (56).
+
+Why: the 33 ms gate was set on 2026-10-17 on the board the app converted to two zones; the step to the real six-zone board came from the harness (#1521; analysis in #1997), not from app code, and left unchanged `main` failing it in about two reports out of three. 48 ms sits about a third above the median, the sensitivity the 2026-10-17 calibration chose, rather than that calibration's max-plus-10% (56 ms), which would have followed the single 51.2 ms outlier. The figures include PRs, so a real regression among them would make the gate looser, not tighter. The remount that costs the extra time is a real product cost, tracked in #1998; lower the gate again when that lands. Source: #712, #1998, CI job logs in that window.
 ## Cold-switch step of 2026-11-03: the harness, not the app (#712, 2026-11-06)
 
 Area: perf harness. Result: measurement change; no app regression found in the window.
@@ -228,6 +262,16 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #2021 Light-theme alignment: baseline cold-paint failure (2026-11-06)
+Area: renderer. Result: no regression demonstrated; unchanged base also fails.
+Conditions: AMD EPYC 7763 (4 threads), Linux, Chrome/156.0.8078.79, 1440x1000; 33 cold switches per unprofiled attempt, base/head/head/base order on one runner.
+
+| Metric | Before (base-1 / base-2) | After (head-1 / head-2) |
+|---|---|---|
+| Cold chat first frame p95, 33 ms gate | 40.0 / 41.9 ms | 39.6 / 39.6 ms |
+
+Why: the light palette changes do not demonstrate a cold-switch regression in these matched runs; this does not establish a speedup or zero impact. Base `3a82ab9e19d9e3d25c9b5419ca801b37ce6dd7be` fails twice; synthetic PR merge `e1ce917179516a7ce49e319c2351dc070319a52d` is faster in both pairs. The original contract failed only cold first-frame paint (p95 attempts 38.0 / 39.8 / 42.3 ms); other measured budgets passed. Raw samples were recomputed and both cold-switch browser traces contain Layout and Paint events. Source: [CI run 42233008104](https://github.com/nekko-labs/nekko-agent/actions/runs/42233008104), `perf-report` artifact (matched reports and traced pair), baseline issue #712. No budget was changed and no causal claim is made from the traces alone.
+
 ### #1894 iPhone: pixel build-up before Face ID, about a second in all (2026-11-06)
 Area: renderer
 Result: improvement
@@ -280,6 +324,19 @@ Conditions: hidden, non-focusable Electron 45 window on a Ryzen 9 9950X3D (Windo
 Why: #1663 redrew every dot 20 times a second and finished each frame with a full-canvas gradient tint; #1686 paints each column in its slice of the gradient (no tint pass) and returns to Travis's original 15 frames a second. The masked variant halved main-thread time but doubled raster and was dropped.
 
 Not caused by the wave: the merge-queue failures of "Switch to a cold chat, frame painted" on 2026-11-04 (45 queue runs at 33.8-51.2 ms against the 33 ms gate). The speed contract's seed uses the dark theme with no preset and only chats with messages, so no wave renders there, and two CI runs dispatched back to back at 2026-11-04 ~04:00 UTC both passed: `58983c0d5` (before #1662 and #1663) at p95 32.4 ms, and `main` at `2d2bf4117` (with them) at 33.1 then 32.0 ms. Splitting the queue runs by whether they contained #1663 had looked decisive, but every run without it was from the previous day: the split followed time, not code. The empty-agent wave script's CPU samples showed no difference between #1495 and #1663; they evidently did not exercise the per-frame drawing in a hidden window. Source: #1663, #1686, CI runs 41769575641 and 41769578921.
+### #1652 Gentleface cold-chat paint investigation (2026-11-03)
+Area: renderer. Result: regression in paired local diagnostics; cause unresolved.
+Conditions: Apple M1 Max, macOS, Node 26.8.1, Chrome 156.0.8078.4, identical debug daemon binary, headless no-GPU, 1440x1000, 33 cold switches per run, timeline tracing enabled. Order: base `720cd6eb`, head `330f6bf4`, head, base; one attempt per run. These are diagnostics, not Linux release-daemon gate clearance.
+
+| Metric | Before | After |
+|---|---|---|
+| Cold-chat frame paint p95, first pair | 22.2 ms | 24.8 ms |
+| Cold-chat frame paint p95, reverse-order pair | 22.6 ms | 24.7 ms |
+| Head-only diagnostic with motion SVGs hidden, two runs | Normal head: 24.8 / 24.7 ms | Hidden SVGs: 24.6 / 24.1 ms |
+
+Why: the icon fix embeds native animated SVGs and initializes their paused timelines on mount. The paired increase is consistent but its cause is not established; hiding the SVGs did not remove it, so visible SVG paint alone is not supported as the explanation. No optimization or budget change was made. Two Linux merge-group runs failed the 33 ms cold-frame gate at 40.7 and 39.2 ms; a concurrent unchanged-main run passed at 29.7 ms. Other speed/memory rows passed. Next: matched base/head Linux release-daemon cold-switch traces, including mount/timeline initialization attribution. Local raw reports and traces are retained under the task worktree's ignored `.shots/paired-latency/`; they are not published media.
+
+Source: [PR #1652](https://github.com/nekko-labs/nekko-agent/pull/1652), [first queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/41662276439), [second queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/41664320798), [unchanged-main pass](https://github.com/nekko-labs/nekko-agent/actions/runs/41664853114).
 
 ### Perf harness: warm pair on the board, sample end, tile read before the screenshot (2026-11-03)
 Area: perf harness

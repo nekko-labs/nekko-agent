@@ -684,6 +684,53 @@ impl Turns {
         }
     }
 
+    /// Whether the Claude policy enables `capability` for this Claude Code
+    /// provider's auth, as `claude:capability` reports it. Fails closed: no
+    /// router, an error, an unread sign-in or a row awaiting approval is no.
+    async fn claude_allows(&self, provider: &Value, capability: &str) -> bool {
+        let Some(d) = self.dispatch.get().cloned() else { return false };
+        let id = provider.get("id").cloned().unwrap_or(Value::Null);
+        let row = d("claude:capability".into(), vec![id, json!(capability)]).await;
+        crate::harness::policy_enabled(row.as_ref().ok())
+    }
+
+    /// `POST /harness/tool`: a Nekko tool Claude Code called through a chat's
+    /// bridge. `None` when the token is not a live bridge's. Runs only a tool
+    /// that launch offered, and only while the Claude policy still allows it
+    /// for the chat's provider (the user's approval can be turned off, or a
+    /// signed policy can change, after launch).
+    pub async fn claude_code_tool(self: &Arc<Self>, token: &str, call: &Value) -> Option<Value> {
+        let entry = self.harness.bridge_session(token)?;
+        let fail = |message: &str| json!({ "ok": false, "error": message });
+        let name = str_at(call, "name").unwrap_or_default();
+        if !entry.tools.iter().any(|t| t == name) {
+            return Some(fail(&format!("Nekko Agent does not offer {name} to this chat.")));
+        }
+        let store = self.store.clone();
+        let id = entry.session_id.clone();
+        let session = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
+        let Some(session) = session else { return Some(fail("Chat no longer exists")) };
+        let provider_id = session.get("providerId").cloned().unwrap_or(Value::Null);
+        let settings = self.settings.shared();
+        let provider = settings
+            .get("providers")
+            .and_then(Value::as_array)
+            .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(&provider_id)).cloned())
+            .unwrap_or(Value::Null);
+        if !(self.claude_allows(&provider, "nekko_tools").await
+            && self.claude_allows(&provider, "unattended_runs").await)
+        {
+            return Some(fail(
+                "Nekko's watch is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
+            ));
+        }
+        let input = call.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        Some(match self.watches.tool(&entry.session_id, &input).await {
+            Ok(text) => json!({ "ok": true, "text": text }),
+            Err(e) => fail(&e),
+        })
+    }
+
     /// `getSession(id)?.mode ?? settings.defaultChatMode ?? 'guardrails'`.
     async fn live_mode(&self, shared: &Shared) -> String {
         let store = self.store.clone();
@@ -1459,7 +1506,24 @@ impl Turns {
         // A wake-up reads the child that woke, whatever it was launched with:
         // its work is already running, and a change of model, mode or folders
         // applies at the next message (#1408).
-        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && (wake || wanted.matches(&s.spec)));
+        // Nekko's own tools ride on the same bridge, only where the Claude
+        // policy allows them for this provider's auth (`nekko_tools`); the
+        // watch also needs its wake-up allowed (`unattended_runs`). Never
+        // in incognito or training-run chats, as in a Nekko engine chat.
+        let training = js::truthy(lock(session).get("trainingRunId"));
+        let mut tools = Vec::new();
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "unattended_runs").await
+        {
+            tools.push(crate::harness::BRIDGE_WATCH.to_string());
+        }
+        // A child launched with other Nekko tools is relaunched (a provider
+        // switch, or the policy changed), so its bridge lists the right ones.
+        let same_tools = self.harness.bridge_tools(&session_id).as_deref() == Some(&tools[..]);
+        let reuse =
+            slot.session.as_mut().is_some_and(|s| s.alive() && (wake || (wanted.matches(&s.spec) && same_tools)));
         if wake && !reuse {
             // The child that woke is gone: drop it, or its unread line would
             // wake the chat again at once.
@@ -1479,7 +1543,7 @@ impl Turns {
             let mut spec = wanted.launch(bin, stored.as_deref());
             // Every permission prompt goes to Nekko through the bridge; with
             // no bridge Claude Code does not start (fail closed).
-            match self.harness.prepare_bridge(&session_id, &paths) {
+            match self.harness.prepare_bridge_with(&session_id, &paths, &tools) {
                 Ok(config) => spec.mcp_config = Some(config),
                 Err(e) => return fail(&e, &history),
             }
@@ -2861,12 +2925,14 @@ impl TurnTools {
     async fn call_mcp(&self, mcp: &Mcp, call: &Value, name: &str) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         // An MCP tool can send data out, and its server alone says whether
-        // it only reads: in a tainted chat every call asks.
+        // it only reads: in a tainted chat every call asks, unless the user
+        // chose "Always allow this tool" for it in this chat.
         let ask = match turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref()) {
             Some(reason) => Some((reason, "medium")),
-            None => self.gated().then(|| {
-                (format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer."), "high")
-            }),
+            None if self.gated() && !self.mcp_tool_allowed(name).await => {
+                Some((format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer."), "high"))
+            }
+            None => None,
         };
         if let Some((reason, severity)) = ask
             && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
@@ -2874,6 +2940,15 @@ impl TurnTools {
             return error(id, "Call not approved by user.");
         }
         mcp.call(call).await
+    }
+
+    /// The user chose "Always allow this tool" for MCP tool `name` in this
+    /// chat (`allowedMcpTools`). Read from disk, so a choice made on the
+    /// approval bar applies to the next call of the same turn.
+    async fn mcp_tool_allowed(&self, name: &str) -> bool {
+        self.disk().await.is_some_and(|s| {
+            s.get("allowedMcpTools").and_then(Value::as_array).is_some_and(|a| a.iter().any(|t| t == name))
+        })
     }
 
     async fn disk(&self) -> Option<Value> {
