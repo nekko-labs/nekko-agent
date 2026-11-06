@@ -16,7 +16,7 @@
 // the last batch's result standing. When main did change one, the new batch
 // cancels the last one's run, whose result nobody would read any more.
 // A head that already passed is left out: a new batch would run it again whenever main
-// moved, and its pending status would push the PR back out of the merge queue.
+// moved, and its pending status would hold the PR's `gate`.
 // A red batch marks every PR in it red: dispatch Native iOS on one branch
 // (`gh workflow run ios-native.yml --ref <branch>`) to see whether it is yours.
 //

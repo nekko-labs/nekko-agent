@@ -21,6 +21,29 @@ describe('PR milestones and live card', () => {
     expect(markup).toContain(`PR ${event}`);
     expect(markup).not.toContain('<button');
   });
+  it.each([
+    ['created-draft', 'Draft PR created'], ['auto-merge', 'Auto-merge enabled'], ['draft', 'PR set to draft'], ['ready', 'PR ready for review'], ['queued', 'PR queued'],
+    ['merge-requested', 'Merge requested'], ['reopened', 'PR reopened'], ['updated', 'PR updated'],
+    ['reviewed', 'PR reviewed'], ['viewed', 'PR viewed'],
+  ] as const)('keeps the %s label historical without claiming a merge', (event, label) => {
+    const markup = renderToStaticMarkup(<PrCard url={url} info={{ ...pr, state: 'merged' }} event={event} sessionId="s" live={false} />);
+    expect(markup).toContain(label);
+    expect(markup).not.toContain('PR merged');
+    expect(markup).not.toContain('<button');
+  });
+  it('keeps draft creation live and labels whole on narrow columns', () => {
+    expect(renderToStaticMarkup(<PrCard url={url} info={pr} event="created-draft" sessionId="s" />)).toContain('data-pr-actions');
+    const markup = renderToStaticMarkup(<PrCard url={url} info={pr} event="auto-merge" live={false} />);
+    expect(markup).toMatch(/class="[^"]*shrink-0 whitespace-nowrap[^"]*"[^>]*>Auto-merge enabled/);
+    expect(markup).not.toContain('merged-wash');
+    expect(markup).not.toContain('data-pr-actions');
+  });
+  it('gives an existing PR its first live card without pretending it was created here', () => {
+    const markup = renderToStaticMarkup(<PrCard url={url} info={pr} event="viewed" sessionId="s" live />);
+    expect(markup).toContain('PR viewed');
+    expect(markup).toContain('data-pr-actions');
+    expect(markup).not.toContain('PR created');
+  });
   it('colours the merged banner from theme tokens, not fixed light violets', () => {
     const markup = renderToStaticMarkup(<PrCard url={url} info={{ ...pr, state: 'merged' }} event="merged" />);
     expect(markup).toContain('var(--merged-wash)');

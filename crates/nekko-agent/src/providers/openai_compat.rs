@@ -462,13 +462,8 @@ fn openai_reasoning_model(model: &str) -> bool {
 }
 
 /// The rung as OpenAI's ladder speaks it; `normal` leaves the model's default.
-fn openai_effort(req: &ChatRequest) -> Option<&'static str> {
-    match crate::claude::effective_effort(req.effort, &req.model) {
-        EffortLevel::Low => Some("low"),
-        EffortLevel::Medium => Some("medium"),
-        EffortLevel::Normal => None,
-        _ => Some("high"),
-    }
+fn openai_effort(req: &ChatRequest) -> Option<&str> {
+    req.effort.as_ref().filter(|e| **e != EffortLevel::Normal && !e.as_str().trim().is_empty()).map(EffortLevel::as_str)
 }
 
 /// Optional body fields a request can survive losing. `model`, `messages` and

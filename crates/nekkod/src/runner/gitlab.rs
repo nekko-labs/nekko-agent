@@ -12,7 +12,7 @@ use nekko_cloud::vault::Vault;
 use nekko_connectors::connectors::gitlab_base;
 use nekko_connectors::js::{encode_uri_component as enc, parse_url};
 use nekko_connectors::{Http, Request};
-use nekko_runner::{HostNets, RunnerConfig, RunnerSettings, Scope, guest_may_connect};
+use nekko_runner::{Guest, HostNets, RunnerConfig, RunnerSettings, Scope, guest_may_connect};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -103,7 +103,15 @@ pub fn runner_toml(base_url: &str, glrt: &str) -> String {
 }
 
 pub fn tag_list(label: &str) -> String {
-    format!("{label},macos,arm64")
+    guest_tags(label, Guest::Macos)
+}
+
+/// A Linux VM's tags are `<label>-linux,linux,arm64`, so a job tagged for one never lands on the other.
+pub fn guest_tags(label: &str, guest: Guest) -> String {
+    match guest {
+        Guest::Macos => format!("{label},macos,arm64"),
+        Guest::Linux => format!("{label}-linux,linux,arm64"),
+    }
 }
 
 fn ok(status: u16) -> bool {
@@ -463,7 +471,7 @@ impl<H: Http> GitLab<H> {
 }
 
 impl<H: Http + 'static> Provider for GitLab<H> {
-    async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+    async fn mint(&self, r: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
         let l = link(r)?;
         let mut body = match &r.config.scope {
             Scope::Repo { .. } => json!({ "runner_type": "project_type", "project_id": l.namespace_id }),
@@ -474,7 +482,7 @@ impl<H: Http + 'static> Provider for GitLab<H> {
             "paused": false,
             "locked": true,
             "run_untagged": false,
-            "tag_list": tag_list(&r.config.label),
+            "tag_list": guest_tags(&r.config.label, guest),
             "access_level": if l.protected_only { "ref_protected" } else { "not_protected" },
             "maximum_timeout": u64::from(r.config.settings.max_job_minutes) * 60,
         });
@@ -542,9 +550,9 @@ impl<H: Http + 'static> Provider for GitLab<H> {
         }))
     }
 
-    async fn queued(&self, r: &RunnerRecord) -> Result<Vec<QueuedJob>, ProviderError> {
+    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
         let l = link(r)?;
-        let tags = tag_list(&r.config.label);
+        let tags = guest_tags(&r.config.label, guest);
         let ours: Vec<&str> = tags.split(',').collect();
         let mut out = Vec::new();
         let group = matches!(r.config.scope, Scope::Org { .. });

@@ -11,7 +11,7 @@ use super::vm::GITHUB_SEED;
 use base64::Engine as _;
 use nekko_cloud::vault::Vault;
 use nekko_connectors::{Http, Request};
-use nekko_runner::{RunnerConfig, RunnerSettings, Scope};
+use nekko_runner::{Guest, RunnerConfig, RunnerSettings, Scope};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -198,8 +198,13 @@ fn base(scope: &Scope) -> String {
     }
 }
 
-fn labels(r: &RunnerRecord) -> [String; 4] {
-    ["self-hosted".into(), "macOS".into(), "ARM64".into(), r.config.label.clone()]
+/// A macOS VM keeps the owner's label; a Linux VM gets `<label>-linux`, so a job naming
+/// one never lands on the other.
+pub fn labels(r: &RunnerRecord, guest: Guest) -> [String; 4] {
+    match guest {
+        Guest::Macos => ["self-hosted".into(), "macOS".into(), "ARM64".into(), r.config.label.clone()],
+        Guest::Linux => ["self-hosted".into(), "Linux".into(), "ARM64".into(), format!("{}-linux", r.config.label)],
+    }
 }
 
 impl<H: Http> GitHub<H> {
@@ -546,7 +551,7 @@ impl<H: Http> GitHub<H> {
 }
 
 impl<H: Http + 'static> Provider for GitHub<H> {
-    async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+    async fn mint(&self, r: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
         // A repo can go public after connect: check again before a job of a stranger's PR could land here.
         if let (Scope::Repo { owner, repo }, false) = (&r.config.scope, link(r)?.allow_public) {
             let full = format!("{owner}/{repo}");
@@ -567,7 +572,8 @@ impl<H: Http + 'static> Provider for GitHub<H> {
                 return Err(ProviderError::Auth("This org runner has no runner group; connect again.".into()));
             }
         };
-        let body = json!({ "name": name, "runner_group_id": group, "labels": labels(r), "work_folder": "_work" });
+        let body =
+            json!({ "name": name, "runner_group_id": group, "labels": labels(r, guest), "work_folder": "_work" });
         let path = format!("{}/actions/runners/generate-jitconfig", base(&r.config.scope));
         let (s, v) = self.call(r, "POST", &path, Some(body)).await?;
         match (ok(s), v["runner"]["id"].as_u64(), v["encoded_jit_config"].as_str()) {
@@ -608,8 +614,8 @@ impl<H: Http + 'static> Provider for GitHub<H> {
         Ok(None)
     }
 
-    async fn queued(&self, r: &RunnerRecord) -> Result<Vec<QueuedJob>, ProviderError> {
-        let ours = labels(r);
+    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
+        let ours = labels(r, guest);
         Ok(self
             .jobs(r, "queued")
             .await?

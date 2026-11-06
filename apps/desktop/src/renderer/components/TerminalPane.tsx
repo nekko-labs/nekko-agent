@@ -60,13 +60,13 @@ function readTheme(): Record<string, string> {
   const cs = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
   const ink = v('--ink', '#17171d');
-  const accent = v('--accent', '#6d5efc');
+  const accent = v('--accent', '#5a2352');
   return {
     background: v('--surface-2', '#f2f2f7'),
     foreground: ink,
     cursor: accent,
     cursorAccent: v('--paper', '#fafaf8'),
-    selectionBackground: resolveColor('var(--ring)') ?? 'rgba(109,94,252,0.35)',
+    selectionBackground: resolveColor('var(--ring)') ?? 'rgba(90,35,82,0.35)',
   };
 }
 

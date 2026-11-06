@@ -1,6 +1,6 @@
-import { ASK_CANCELLED, ASK_UNATTENDED, groupByPurpose, parseAskRequest } from '@nekko-agent/shared';
+import { ASK_CANCELLED, ASK_UNATTENDED, collectSessionPrInteractions, groupByPurpose, parseAskRequest } from '@nekko-agent/shared';
 import type { PurposeCall, ToolPurpose } from '@nekko-agent/shared';
-import type { ChatMessage, ToolCall, ToolResult, PrInfo, PrState } from '@nekko-agent/shared';
+import type { ChatMessage, ToolCall, ToolResult, PrEvent, PrInfo } from '@nekko-agent/shared';
 import { speaksToUser } from '../../replyTopics.js';
 
 /** Display-only projection of the persisted tool reply, never model history.
@@ -178,7 +178,7 @@ const PR_CARD_GAP = 8;
 export type TranscriptRow =
   | { key: string; kind: 'msg'; message: ChatMessage; voice?: Voice; prUrls: string[]; displayOnly?: boolean; gapAfter?: number }
   | { key: string; kind: 'activity'; items: Activity[]; gapAfter?: number }
-  | { key: string; kind: 'prs'; urls: string[]; event: 'created' | PrState; gapAfter?: number }
+  | { key: string; kind: 'prs'; urls: string[]; event: PrEvent; live?: boolean; gapAfter?: number }
   /** A compaction summary: a divider under the turns it replaced, then the summary. */
   | { key: string; kind: 'compaction'; message: ChatMessage; latest: boolean; gapAfter?: number }
   /** A reply's stats when its last message was folded into working steps. */
@@ -200,37 +200,51 @@ export function toTranscriptRows(
   const persisted = new Set(messages);
   const known = new Set(collectUrls(messages));
   const shown = new Set<string>();
-  const anchors = new Map<number, Array<{ url: string; event: 'created' | PrState }>>();
-  const add = (index: number, url: string, event: 'created' | PrState) => {
+  const interactions = collectSessionPrInteractions(messages, prs.map((pr) => pr.url));
+  const byCall = new Map(interactions.map((event) => [event.toolCallId, event]));
+  const terminalEvents = new Set(interactions.filter((e) => e.event === 'merged' || e.event === 'closed').map((e) => `${e.url}_${e.event}`));
+  const anchors = new Map<number, Array<{ url: string; event: PrEvent; live?: boolean; callId?: string }>>();
+  const add = (index: number, url: string, event: PrEvent, callId?: string) => {
     const events = anchors.get(index) ?? [];
-    events.push({ url, event });
+    const live = !shown.has(url);
+    shown.add(url);
+    events.push({ url, event, live, callId });
     anchors.set(index, events);
   };
-  // Anchor tool-only discoveries to their original turn, never to the moving tail.
   const contextTools = new Set(['read_file', 'grep', 'glob', 'list_dir']);
   const calls = new Map(messages.flatMap((m) => (m.toolCalls ?? []).map((c) => [c.id, c.name] as const)));
+  const observed = new Set<string>();
   messages.forEach((m, i) => {
-    const tool = m.toolResult?.toolCallId ? calls.get(m.toolResult.toolCallId) : undefined;
-    if (m.role !== 'tool' || (tool && contextTools.has(tool))) return;
+    if (m.role !== 'tool') return;
+    const callId = m.toolResult?.toolCallId;
+    const interaction = callId ? byCall.get(callId) : undefined;
+    if (interaction && !observed.has(callId!)) {
+      add(i, interaction.url, interaction.event, callId);
+      observed.add(callId!);
+    }
+    const tool = callId ? calls.get(callId) : undefined;
+    if (m.toolResult?.isError || (tool && contextTools.has(tool))) return;
+    // Compatibility for collectors that supply an already-proven discovery.
     for (const url of extractUrls([m.content, m.toolResult?.output].filter(Boolean).join('\n'))) {
-      if (!known.has(url) || shown.has(url)) continue;
-      shown.add(url);
-      add(i, url, 'created');
-      const pr = prs.find((p) => p.url === url);
-      if (pr && pr.state !== 'open') {
-        const time = Date.parse((pr.state === 'merged' ? pr.mergedAt : pr.closedAt) ?? '');
-        // Missing timestamps stay next to discovery, not after future messages.
-        let terminal = i;
-        if (Number.isFinite(time)) {
-          for (let n = i; n < messages.length; n++) {
-            if (messages[n].createdAt <= time) terminal = n;
-            else break;
-          }
-        }
-        add(terminal, url, pr.state);
-      }
+      if (known.has(url) && !shown.has(url)) add(i, url, 'created');
     }
   });
+  // A fresh poll may observe closure outside this chat. Preserve the existing
+  // timestamp anchor, without duplicating an explicit confirmed tool milestone.
+  for (const url of shown) {
+    const pr = prs.find((p) => p.url === url);
+    if (!pr || pr.state === 'open' || terminalEvents.has(`${url}_${pr.state}`)) continue;
+    const discovery = [...anchors].find(([, events]) => events.some((e) => e.url === url))![0];
+    const time = Date.parse((pr.state === 'merged' ? pr.mergedAt : pr.closedAt) ?? '');
+    let terminal = discovery;
+    if (Number.isFinite(time)) {
+      for (let n = discovery; n < messages.length; n++) {
+        if (messages[n].createdAt <= time) terminal = n;
+        else break;
+      }
+    }
+    add(terminal, url, pr.state);
+  }
   const keys = new Set<string>();
   const unique = (k: string) => {
     let key = k;
@@ -260,7 +274,7 @@ export function toTranscriptRows(
     const events = anchors.get(i);
     if (!events) return;
     append(messages.slice(start, i + 1));
-    for (const e of events) rows.push({ key: unique('pr_' + e.url + '_' + e.event), kind: 'prs', urls: [e.url], event: e.event, gapAfter: PR_CARD_GAP });
+    for (const e of events) rows.push({ key: unique('pr_' + e.url + '_' + e.event + (e.callId ? '_' + e.callId : '')), kind: 'prs', urls: [e.url], event: e.event, live: e.live, gapAfter: PR_CARD_GAP });
     start = i + 1;
   });
   append(messages.slice(start));
@@ -291,7 +305,7 @@ export function toTranscriptRows(
 export function estimateRowHeight(row: TranscriptRow, width: number): number {
   const gap = row.gapAfter ?? 20;
   if (row.kind === 'activity') return 22 + gap;
-  if (row.kind === 'prs') return row.urls.length * 90 + gap;
+  if (row.kind === 'prs') return row.urls.length * (row.live ? 90 : 46) + gap;
   if (row.kind === 'stats') return 18 + gap;
   // An older summary folds to its divider; the latest shows its text.
   if (row.kind === 'compaction') {
