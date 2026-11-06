@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -116,6 +117,9 @@ import com.nekko.protocol.MonitorFormat
 import com.nekko.protocol.MonitorTone
 import com.nekko.protocol.PcSettings.ChatMode
 import com.nekko.protocol.RunOption
+import com.nekko.protocol.ModelServerSettings
+import com.nekko.android.monitors.ServerActions
+import com.nekko.protocol.ToolInfo
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -125,6 +129,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** Test tags the instrumented tests find the controls by. */
 object ModeTags {
@@ -254,6 +260,9 @@ private val RUN_OPTION_TITLES = mapOf(
     "gitIsolation" to "Separate Git branch",
     "workMode" to "Work mode",
     "toolApproach" to "Tool style",
+    "memory" to "Memory",
+    "guidance" to "Project rules",
+    "privacy" to "Privacy Shield",
 )
 
 private val RUN_VALUE_LABELS = mapOf(
@@ -263,6 +272,12 @@ private val RUN_VALUE_LABELS = mapOf(
     "best-output" to "Best output",
     "list" to "List",
     "code" to "Code",
+    "all" to "Everything",
+    "project" to "Project",
+    "off" to "Off",
+    "rules" to "Rules",
+    "root" to "Root files",
+    "redact" to "On",
 )
 
 /** One run setting: a switch, or a choice of its values. */
@@ -276,11 +291,11 @@ private fun RunOptionRow(option: RunOption, value: JsonElement?, onSet: (JsonEle
             Switch(checked = (value as? JsonPrimitive)?.booleanOrNull == true, onCheckedChange = { onSet(JsonPrimitive(it)) })
         }
     } else {
-        val current = (value as? JsonPrimitive)?.contentOrNull ?: option.values.first()
+        val current = option.shown(value) ?: option.values.first()
         Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink)
         Row(Modifier.fillMaxWidth().testTag("run.${option.key}"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             option.values.forEach { v ->
-                FilterChip(selected = v == current, onClick = { onSet(JsonPrimitive(v)) }, label = { Text(RUN_VALUE_LABELS[v] ?: v) })
+                FilterChip(selected = v == current, onClick = { onSet(option.wire(v, value)) }, label = { Text(RUN_VALUE_LABELS[v] ?: v) })
             }
         }
     }
@@ -367,12 +382,15 @@ fun ModelEffortSheet(
     onSet: suspend (providerId: String?, modelId: String?, effort: Effort?) -> Unit,
     onLoadModels: suspend () -> Unit,
     onRunOption: suspend (key: String, value: JsonElement) -> Unit,
+    onLoadTools: suspend () -> List<ToolInfo>,
+    onSetTool: suspend (name: String, on: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
     var picking by remember { mutableStateOf(false) }
+    var choosingTools by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf<Effort?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -448,10 +466,18 @@ fun ModelEffortSheet(
                         }
                     }
                 }
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { choosingTools = true }.testTag("run.disabledTools"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Tools", style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+                    if (chat.disabledTools.isNotEmpty()) Text("${chat.disabledTools.size} off", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
+                }
             }
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         }
     }
+    if (choosingTools) ToolsSheet(chat.disabledTools, onLoadTools, onSetTool, onDismiss = { choosingTools = false })
 }
 
 /**
@@ -850,6 +876,7 @@ fun AgentDetails(
     computer: String,
     modelName: (String) -> String,
     onUnload: suspend (String) -> String,
+    server: ServerActions? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -883,6 +910,12 @@ fun AgentDetails(
         }
         if (state.engine?.resident?.isNotEmpty() == true) Footnote(stringResource(R.string.monitor_unload_footer, computer))
         notice?.let { (text, ok) -> Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) p.ink else p.danger) }
+        val e = state.engine
+        val settings = e?.server
+        if (server != null && e != null && e.installed && e.running && settings != null) {
+            SectionTitle("Model Server")
+            ModelServerControls(state, settings, server, computer, modelName) { notice = it }
+        }
         if (chat != null) {
             SectionTitle(stringResource(R.string.monitor_this_chat))
             BreakdownRow(stringResource(R.string.model_section), chat.modelName ?: chat.modelId ?: stringResource(R.string.model_choose), null)
@@ -941,6 +974,59 @@ private fun Models(state: HardwareState, computer: String, modelName: (String) -
     }
 }
 
+/** Load a model, unload them all, and how the Model Server keeps models, while it lets devices choose. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModelServerControls(
+    state: HardwareState,
+    settings: ModelServerSettings,
+    server: ServerActions,
+    computer: String,
+    modelName: (String) -> String,
+    report: (Pair<String, Boolean>?) -> Unit,
+) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    val enabled = !busy && settings.devicesChoose
+    LaunchedEffect(Unit) { server.loadLibrary() }
+    fun run(work: suspend () -> Unit) {
+        busy = true
+        report(null)
+        scope.launch {
+            try { work() } catch (e: CancellationException) { throw e } catch (e: Exception) { report((e.message ?: "Couldn’t change that.") to false) } finally { busy = false }
+        }
+    }
+    if (state.loadable.isNotEmpty()) {
+        Text("Load a model", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("monitor.load")) {
+            state.loadable.forEach { m -> AssistChip(enabled = enabled, onClick = { run { server.load(m.id) } }, label = { Text(modelName(m.id).takeIf { it != m.id } ?: m.name) }) }
+        }
+    }
+    if (state.engine?.resident?.isNotEmpty() == true) {
+        TextButton(enabled = enabled, onClick = { run { server.unloadAll() } }, modifier = Modifier.testTag("monitor.unloadAll")) { Text("Unload all", color = p.danger) }
+    }
+    val kept = settings.maxLoaded ?: 1
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("monitor.maxLoaded"), verticalAlignment = Alignment.CenterVertically) {
+        Text("Models kept loaded", style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+        TextButton(enabled = enabled && kept > 1, onClick = { run { server.set(buildJsonObject { put("maxLoaded", kept - 1) }) } }) { Text("−") }
+        Text("$kept", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        TextButton(enabled = enabled && kept < 8, onClick = { run { server.set(buildJsonObject { put("maxLoaded", kept + 1) }) } }) { Text("+") }
+    }
+    Text("Unload when idle", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+    Row(Modifier.fillMaxWidth().testTag("monitor.idleTtl"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModelServerSettings.IDLE_CHOICES.forEach { t ->
+            FilterChip(enabled = enabled, selected = t == (settings.idleTtlSeconds ?: 900), onClick = { run { server.set(buildJsonObject { put("idleTtlSeconds", t) }) } },
+                label = { Text(when (t) { 0 -> "Never"; 300 -> "5 min"; 3600 -> "1 hour"; else -> "15 min" }) })
+        }
+    }
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("monitor.jitLoad"), verticalAlignment = Alignment.CenterVertically) {
+        Text("Load when a chat asks", style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+        Switch(enabled = enabled, checked = settings.jitLoad ?: true, onCheckedChange = { on -> run { server.set(buildJsonObject { put("jitLoad", on) }) } })
+    }
+    Footnote(if (settings.devicesChoose) "Each change asks for your screen lock." else "$computer’s Model Server keeps its own model settings. Change them there, or turn on Connected devices choose model settings.")
+}
+
 /** One model the Model Server holds: where it runs, its context and memory, and Unload. */
 @Composable
 private fun ResidentRow(model: EngineStatus.Resident, name: String, budget: Long?, unloading: Boolean, onUnload: () -> Unit) {
@@ -972,6 +1058,41 @@ private fun ResidentRow(model: EngineStatus.Resident, name: String, budget: Long
         val bytes = model.bytes
         if (budget != null && budget > 0 && bytes != null) {
             LinearProgressIndicator(progress = { min(1f, bytes.toFloat() / budget) }, modifier = Modifier.fillMaxWidth(), color = p.accent)
+        }
+    }
+}
+
+/** The tools a chat may call, each with a switch, from the computer's own list. A change asks for the screen lock. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ToolsSheet(disabled: List<String>, onLoad: suspend () -> List<ToolInfo>, onSet: suspend (name: String, on: Boolean) -> Unit, onDismiss: () -> Unit) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    var tools by remember { mutableStateOf<List<ToolInfo>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        try { tools = onLoad() } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "Could not read the tools." }
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
+            Text("Tools this chat can use", style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.padding(bottom = 8.dp))
+            error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
+            val list = tools
+            if (list == null && error == null) CircularProgressIndicator(color = p.accent, modifier = Modifier.padding(16.dp))
+            list?.forEach { tool ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("run.tool.${tool.name}"), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tool.name, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), color = p.ink)
+                        if (tool.description.isNotEmpty()) Text(tool.description, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    Switch(checked = tool.name !in disabled, onCheckedChange = { on ->
+                        error = null
+                        scope.launch {
+                            try { onSet(tool.name, on) } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "Could not change that tool." }
+                        }
+                    })
+                }
+            }
         }
     }
 }

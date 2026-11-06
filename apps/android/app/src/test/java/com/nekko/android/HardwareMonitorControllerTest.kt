@@ -57,6 +57,35 @@ class HardwareMonitorControllerTest {
         assertTrue(caller.calls.all { it.args.isEmpty() })
     }
 
+    @Test fun `model server settings, loading and unloading all go through the signed call`() = runTest {
+        val status = json("""{"installed":true,"running":true,"resident":[{"id":"gemma"}],"settings":{"maxLoaded":2,"idleTtlSeconds":900,"jitLoad":true}}""")
+        val caller = FakeCaller {
+            when (it.channel) {
+                Channels.ENGINE_STATUS -> status
+                Channels.MODELS_LIST -> json("""[{"id":"gemma","name":"Gemma"},{"id":"qwen","name":"Qwen"}]""")
+                else -> replies[it.channel] ?: JsonNull
+            }
+        }
+        val signed = mutableListOf<Pair<String, List<JsonElement>>>()
+        val m = HardwareMonitorController(caller, { ch, args -> signed += ch to args; JsonNull }) { "Mac" }
+        m.refresh()
+        m.loadLibrary()
+        assertEquals(com.nekko.protocol.ModelServerSettings(2, 900, true, true), m.state.value.engine!!.server)
+        assertEquals("what is loaded is not offered again", listOf("qwen"), m.state.value.loadable.map { it.id })
+        m.load("qwen")
+        m.unloadAll()
+        m.setServer(buildJsonObject { put("maxLoaded", 3) })
+        assertEquals(
+            listOf(
+                Channels.MODEL_LOAD to listOf<JsonElement>(JsonPrimitive(ENGINE_PROVIDER_ID), JsonPrimitive("qwen")),
+                Channels.ENGINE_UNLOAD_ALL to emptyList(),
+                Channels.ENGINE_SETTINGS to listOf<JsonElement>(buildJsonObject { put("maxLoaded", 3) }),
+            ),
+            signed,
+        )
+        assertEquals(false, com.nekko.protocol.ModelServerSettings.from(json("""{"clientModelSettings":false}"""))!!.devicesChoose)
+    }
+
     @Test fun `an older computer says it has no monitors, and one missing reading leaves the rest`() = runTest {
         val refuse: suspend (Call) -> JsonElement = { throw RelayException("Not allowed from a paired phone (channel-denied): ${it.channel}") }
         val m = HardwareMonitorController(FakeCaller(refuse)) { "Mac" }

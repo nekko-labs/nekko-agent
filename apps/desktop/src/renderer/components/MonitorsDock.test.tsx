@@ -12,7 +12,7 @@ vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null, watched: null as string | null }));
 vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useWatchedComputer: () => resources.watched, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
-import { LocalModels, MonitorsDock, MonitorsToggle, readComputerUtilization } from './MonitorsDock.js';
+import { ComputerModelServer, LocalModels, MonitorsDock, MonitorsToggle, readComputerUtilization } from './MonitorsDock.js';
 function render(minimized = false) {
   const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, insights: false, hardware: true, localModels: false }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
   return renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
@@ -256,5 +256,29 @@ describe('monitors follow the computer switch', () => {
       expect(html).not.toContain('My ChatGPT');
       expect(html).not.toContain('Manage providers');
     } finally { resources.watched = null; }
+  });
+});
+
+describe("a connected computer's Model Server from the dock", () => {
+  it('offers Unload per model and the Model Server controls while watching a computer', () => {
+    resources.watched = 'gomi';
+    try {
+      const html = renderToStaticMarkup(<LocalModels initial={{ status: { running: true, installed: true, resident: [{ id: 'qwen' }], settings: { maxLoaded: 2, idleTtlSeconds: 3600, jitLoad: false } } as any, models: [] }} />);
+      expect(html).toContain('data-local-model-unload="qwen"');
+      expect(html).toContain('data-computer-model-server');
+      expect(html).toContain('Unload all');
+      expect(html).toMatch(/<option value="3600" selected="">1 hour<\/option>/);
+      expect(html).not.toContain('checked=""');
+    } finally { resources.watched = null; }
+  });
+  it("shows the computer's choices but no way to change them while its server keeps its own", () => {
+    const html = renderToStaticMarkup(<ComputerModelServer id="gomi" server={{ maxLoaded: 1, clientModelSettings: false }} resident={[]} change={vi.fn()} />);
+    expect(html).toContain('keeps its own model settings');
+    expect(html.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(4);
+    expect(html).not.toContain('Unload all');
+  });
+  it('shows no Model Server controls for this computer, which has its own page', () => {
+    const html = renderToStaticMarkup(<LocalModels initial={{ status: { install: { binPath: '/x' }, running: true, resident: [], log: [], settings: { maxLoaded: 2 } } as any, models: [] }} />);
+    expect(html).not.toContain('data-computer-model-server');
   });
 });

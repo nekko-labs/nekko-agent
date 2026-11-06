@@ -243,6 +243,9 @@ struct RunOptionRow: View {
         case "incognito": "Incognito"
         case "gitIsolation": "Separate Git branch"
         case "workMode": "Work mode"
+        case "memory": "Memory"
+        case "guidance": "Project rules"
+        case "privacy": "Privacy Shield"
         default: "Tool style"
         }
     }
@@ -254,6 +257,12 @@ struct RunOptionRow: View {
         case "best-output": "Best output"
         case "list": "List"
         case "code": "Code"
+        case "all": "Everything"
+        case "project": "Project"
+        case "off": "Off"
+        case "rules": "Rules"
+        case "root": "Root files"
+        case "redact": "On"
         default: "Default"
         }
     }
@@ -264,11 +273,58 @@ struct RunOptionRow: View {
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("run.\(option.key)")
         } else {
-            Picker(title, selection: Binding(get: { value?.string ?? option.values[0] }, set: { set(.string($0)) })) {
+            Picker(title, selection: Binding(get: { option.shown(value) ?? option.values[0] }, set: { set(option.wire($0, current: value)) })) {
                 ForEach(option.values, id: \.self) { Text(label($0)).tag($0) }
             }
             .frame(minHeight: 44)
             .accessibilityIdentifier("run.\(option.key)")
+        }
+    }
+}
+
+/// The tools a chat may call, each with a switch, from the computer's own list.
+/// A change asks for Face ID: the computer says when.
+struct ToolsList: View {
+    let load: () async throws -> [ToolInfo]
+    /// Read in `body`, so the switches follow the chat as it reloads.
+    let disabled: () -> [String]
+    let set: (String, Bool) async throws -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    @State private var tools: [ToolInfo]?
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
+                }
+                if let tools {
+                    ForEach(tools) { tool in
+                        Toggle(isOn: Binding(get: { !disabled().contains(tool.name) }, set: { on in
+                            error = nil
+                            Task { do { try await set(tool.name, on) } catch { self.error = error.localizedDescription } }
+                        })) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(tool.name).font(.subheadline.monospaced())
+                                if !tool.description.isEmpty {
+                                    Text(tool.description).font(.caption).foregroundStyle(palette.inkSoft).lineLimit(2)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("run.tool.\(tool.name)")
+                    }
+                } else if error == nil {
+                    ProgressView("Loading tools…")
+                }
+            }
+            .navigationTitle("Tools this chat can use")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .task {
+                do { tools = try await load() } catch { self.error = error.localizedDescription }
+            }
         }
     }
 }
@@ -281,6 +337,7 @@ struct ModelEffortPanel: View {
     @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
     @State private var picking = false
+    @State private var choosingTools = false
     @State private var error: String?
     @State private var busy: Effort?
 
@@ -333,6 +390,19 @@ struct ModelEffortPanel: View {
                         }
                     }
                 }
+                Button { choosingTools = true } label: {
+                    HStack {
+                        Text("Tools").foregroundStyle(palette.ink)
+                        Spacer(minLength: 8)
+                        if !chat.disabledTools.isEmpty {
+                            Text("\(chat.disabledTools.count) off").font(.subheadline).foregroundStyle(palette.inkSoft)
+                        }
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                    }
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("run.disabledTools")
             }
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
@@ -346,6 +416,9 @@ struct ModelEffortPanel: View {
                     do { try await chat.setOptions(providerId: p, modelId: m) } catch { self.error = error.localizedDescription }
                 }
             }
+        }
+        .sheet(isPresented: $choosingTools) {
+            ToolsList(load: { try await chat.tools() }, disabled: { chat.disabledTools }, set: { try await chat.setTool($0, on: $1) })
         }
         .task { await store.loadAllModels() }
     }
@@ -880,6 +953,18 @@ struct AgentPanel: View {
                 } footer: {
                     Text("Unloading frees the model’s memory on \(computer). The next reply that uses it loads it again.")
                 }
+                if let e = monitor.engine, e.installed, e.running, let server = e.server {
+                    Section {
+                        ModelServerControls(server: server, loadable: monitor.loadable, holdsModels: !e.resident.isEmpty,
+                                            load: { try await monitor.load($0) }, unloadAll: { try await monitor.unloadAll() },
+                                            set: { try await monitor.setServer($0) }) { notice = $0 }
+                            .task { await store.loadAllModels() }
+                    } header: {
+                        Text("Model Server")
+                    } footer: {
+                        Text(server.devicesChoose ? "Each change asks for Face ID." : "\(computer)’s Model Server keeps its own model settings. Change them there, or turn on Connected devices choose model settings.")
+                    }
+                }
                 if let chat {
                     Section("This chat") {
                         LabeledContent("Model", value: chat.modelName ?? String(localized: "Not chosen yet"))
@@ -962,6 +1047,63 @@ struct AgentPanel: View {
             } catch {
                 notice = (store.readable(error).localizedDescription, false)
             }
+        }
+    }
+}
+
+/// Load a model, unload them all, and how the Model Server keeps models, while it lets devices choose.
+struct ModelServerControls: View {
+    let server: ModelServerSettings
+    let loadable: [ModelInfo]
+    let holdsModels: Bool
+    let load: (String) async throws -> Void
+    let unloadAll: () async throws -> Void
+    let set: ([String: JSONValue]) async throws -> Void
+    var report: ((text: String, ok: Bool)?) -> Void
+    @State private var busy = false
+
+    var body: some View {
+        Group {
+            Menu {
+                ForEach(loadable) { m in Button(m.name) { run { try await load(m.id) } } }
+            } label: {
+                Label("Load a model", systemImage: "arrow.down.circle")
+            }
+            .disabled(loadable.isEmpty)
+            .accessibilityIdentifier("monitor.load")
+            if holdsModels {
+                Button("Unload all", role: .destructive) { run { try await unloadAll() } }
+                    .accessibilityIdentifier("monitor.unloadAll")
+            }
+            Stepper(value: Binding(get: { server.maxLoaded ?? 1 }, set: { n in run { try await set(["maxLoaded": .int(Int64(n))]) } }), in: 1...8) {
+                LabeledContent("Models kept loaded", value: "\(server.maxLoaded ?? 1)")
+            }
+            .accessibilityIdentifier("monitor.maxLoaded")
+            Picker("Unload when idle", selection: Binding(get: { server.idleTtlSeconds ?? 900 }, set: { t in run { try await set(["idleTtlSeconds": .int(Int64(t))]) } })) {
+                ForEach(ModelServerSettings.idleChoices, id: \.self) { t in Text(Self.idle(t)).tag(t) }
+            }
+            .accessibilityIdentifier("monitor.idleTtl")
+            Toggle("Load when a chat asks", isOn: Binding(get: { server.jitLoad ?? true }, set: { on in run { try await set(["jitLoad": .bool(on)]) } }))
+                .accessibilityIdentifier("monitor.jitLoad")
+        }
+        .disabled(busy || !server.devicesChoose)
+    }
+
+    static func idle(_ seconds: Int) -> String {
+        switch seconds {
+        case 0: String(localized: "Never")
+        case 300: String(localized: "5 minutes")
+        case 3600: String(localized: "1 hour")
+        default: String(localized: "15 minutes")
+        }
+    }
+
+    private func run(_ work: @escaping () async throws -> Void) {
+        busy = true
+        report(nil)
+        Task {
+            do { try await work() } catch { report((error.localizedDescription, false)) }
+            busy = false
         }
     }
 }

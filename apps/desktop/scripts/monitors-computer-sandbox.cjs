@@ -27,8 +27,10 @@ const seed = `Object.defineProperty(window, 'nekko', { configurable: true, set(b
   b.getSystemStats = async () => ({ cpuPct: 14, memUsedMB: 9000, memTotalMB: 32768 });
   b.getGpuStats = async () => ({ usedMB: 6200, totalMB: 24576, devices: [{ name: 'Apple M3 Max', memoryTotalMB: 24576, memoryUsedMB: 6200, memoryFreeMB: 18376, utilizationPct: 22 }] });
   b.computerStats = async () => ({ system: { cpuPct: 71, memUsedMB: 98000, memTotalMB: 131072 }, gpu: { usedMB: 40000, totalMB: 49152, devices: [{ name: 'NVIDIA RTX 6000 Ada', memoryTotalMB: 49152, memoryUsedMB: 40000, memoryFreeMB: 9152, utilizationPct: 93 }] } });
-  b.computerEngineStatus = async () => ({ running: true, installed: true, resident: [{ id: 'gpt-oss-120b', loadedOn: 'gpu+cpu', gpuLayers: 30, totalLayers: 36, contextLength: 131072, sizeBytes: ${63 * GB} }] });
-  b.computerRead = async (_id, channel, args) => channel === 'providers:list' ? [{ id: 'claude', kind: 'claude-code', label: 'Claude Agent', enabled: true }]
+  b.computerEngineStatus = async () => ({ running: true, installed: true, resident: [{ id: 'gpt-oss-120b', loadedOn: 'gpu+cpu', gpuLayers: 30, totalLayers: 36, contextLength: 131072, sizeBytes: ${63 * GB} }], settings: { maxLoaded: 2, idleTtlSeconds: 900, jitLoad: true } });
+  b.computerModelServer = async () => ({ ok: true });
+  b.computerRead = async (_id, channel, args) => channel === 'models:list' ? [{ id: 'gpt-oss-120b', name: 'gpt-oss 120B' }, { id: 'qwen3-coder-30b', name: 'Qwen3 Coder 30B' }]
+    : channel === 'providers:list' ? [{ id: 'claude', kind: 'claude-code', label: 'Claude Agent', enabled: true }]
     : channel === 'limits:get' ? { updatedAt: Date.now(), windows: [{ label: '5-hour', usedPercent: 64, resetAt: Date.now() + 2 * 3600e3 }, { label: '7-day', usedPercent: 31, resetAt: Date.now() + 4 * 86400e3 }] }
     : { daily: [{ date: new Date().toISOString().slice(0, 10), input: 1840000, output: 212000, cost: 0 }] };
   b.listComputers = async () => [{ id: 'gomi', name: 'gomi', state: 'online', color: 0, route: 'tailnet' }];
@@ -65,6 +67,7 @@ app.whenReady().then(async () => {
     const there = await capture('gomi');
     report.checks.push({ name: 'Hardware reads gomi', pass: /RTX 6000/.test(there) });
     report.checks.push({ name: "Local models reads gomi's engine", pass: /gpt-oss-120b/.test(there) && !/Qwen3 8B/.test(there) });
+    report.checks.push({ name: "gomi's Model Server controls show", pass: /Load a model/.test(there) && /Models kept loaded/.test(there) });
     report.checks.push({ name: "Utilization reads gomi's plan", pass: /Claude Agent/.test(there) && !/ChatGPT/.test(there) });
     report.checks.push({ name: 'This computer before switching', pass: /Qwen3 8B/.test(here) && /ChatGPT/.test(here) });
   } catch (e) { report.errors.push(String(e && e.stack || e)); process.exitCode = 1; }

@@ -40,6 +40,7 @@ pub struct Policy {
     pub machine_view: Vec<String>,
     pub machine_resident_view: Vec<String>,
     pub skill_view: Vec<String>,
+    pub tool_view: Vec<String>,
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
@@ -132,6 +133,7 @@ pub fn policy() -> &'static Policy {
             machine_view: strings(&v["machineView"]),
             machine_resident_view: strings(&v["machineResidentView"]),
             skill_view: strings(&v["skillView"]),
+            tool_view: strings(&v["toolView"]),
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
@@ -610,6 +612,10 @@ pub fn redact(channel: &str, result: Value) -> Value {
             Value::Array(list) => Value::Array(list.iter().map(|s| pick(s, &policy().skill_view)).collect()),
             _ => json!([]),
         },
+        "tools:list" => match result {
+            Value::Array(list) => Value::Array(list.iter().map(|t| pick(t, &policy().tool_view)).collect()),
+            _ => json!([]),
+        },
         "session:get" | "chat:steer" => session_view(result),
         // One photo's data URL, nothing else.
         "session:photo" => match result {
@@ -652,7 +658,14 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         "system:stats" => crate::phone_views::system(&result, &policy().views),
         "gpu:stats" => crate::phone_views::gpu(&result, &policy().views),
-        "engine:status" => crate::phone_views::engine(&result, &policy().views),
+        "engine:status" => {
+            // With what a device may set, so reading the Model Server's choices needs no change proof.
+            let mut view = crate::phone_views::engine(&result, &policy().views);
+            if let (Some(o), Some(s)) = (view.as_object_mut(), result.get("settings").filter(|s| s.is_object())) {
+                o.insert("settings".into(), pick(s, &policy().model_server_view));
+            }
+            view
+        }
         "context:preview" => crate::phone_views::context(&result, &policy().views),
         "engine:settings" => pick(&result, &policy().model_server_view),
         "activity:state" => pick(&result, &policy().activity_view),
@@ -1649,6 +1662,13 @@ mod tests {
                             "pending": false, "failures": 1, "lastError": "x".repeat(600) }]);
         assert_eq!(got, want);
         assert_eq!(redact("session:watches", Value::Null), json!([]));
+    }
+
+    #[test]
+    fn tools_reach_a_phone_as_names_and_what_they_do() {
+        let raw = json!([{ "name": "bash", "description": "Run a command", "inputSchema": { "type": "object" } }, { "name": "mcp__gh__issue" }]);
+        assert_eq!(redact("tools:list", raw), json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }]));
+        assert_eq!(redact("tools:list", Value::Null), json!([]));
     }
     use super::*;
     use std::sync::Mutex;
@@ -3117,10 +3137,10 @@ mod tests {
         }
 
         #[test]
-        fn sends_the_model_server_without_paths_log_or_settings() {
+        fn sends_the_model_server_without_paths_or_log_and_only_settable_settings() {
             let results = json!({ "engine:status": {
                 "install": { "binPath": "C:/secret/llama-server.exe" }, "running": true, "port": 8080, "log": ["C:/models/x.gguf"],
-                "settings": { "modelsDir": "C:/models" },
+                "settings": { "modelsDir": "C:/models", "bind": "lan", "apiKey": "k", "maxLoaded": 2, "jitLoad": true, "clientModelSettings": false },
                 "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu", "path": "C:/m.gguf" }],
                 "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1, "path": "x" }],
                 "memory": { "budgetBytes": 24, "kind": "vram" },
@@ -3133,6 +3153,7 @@ mod tests {
                     "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu" }],
                     "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1 }],
                     "memory": { "budgetBytes": 24, "kind": "vram" },
+                    "settings": { "maxLoaded": 2, "jitLoad": true, "clientModelSettings": false },
                 })
             );
             let (got, _) =
