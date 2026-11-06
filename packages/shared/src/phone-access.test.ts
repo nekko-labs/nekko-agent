@@ -322,6 +322,11 @@ describe('skills from a phone', () => {
     expect(redactPhoneResult('skills:runnable', null)).toEqual([]);
   });
 
+  it('lists the tools by name and what they do, without their schemas', () => {
+    expect(redactPhoneResult('tools:list', [{ name: 'bash', description: 'Run a command', inputSchema: { type: 'object' } }])).toEqual([{ name: 'bash', description: 'Run a command' }]);
+    expect(redactPhoneResult('tools:list', null)).toEqual([]);
+  });
+
   it('expands a skill turn on the computer, replacing what the phone sent as text', async () => {
     const dispatch = host();
     await callFromPhone(dispatch, 'chat:send', [

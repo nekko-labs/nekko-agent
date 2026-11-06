@@ -56,6 +56,30 @@ extension BeyondTests {
         }
     }
 
+    func testModelServerSettingsLoadingAndUnloadingAll() async throws {
+        let (s, c) = try await makeStore()
+        monitorReplies(c)
+        c.replies[MonitorChannels.engineStatus] = { _ in
+            ["installed": true, "running": true, "resident": [["id": "gemma"]],
+             "settings": ["maxLoaded": 2, "idleTtlSeconds": 900, "jitLoad": true]]
+        }
+        c.replies[MonitorChannels.modelLoad] = { _ in ["ok": true] }
+        c.replies[MonitorChannels.unloadAll] = { _ in ["ok": true] }
+        c.replies[MonitorChannels.engineSettings] = { args in args[0] }
+        let m = HardwareMonitorModel(store: s)
+        await m.refresh()
+        XCTAssertEqual(m.engine?.server, ModelServerSettings(maxLoaded: 2, idleTtlSeconds: 900, jitLoad: true, devicesChoose: true),
+                       "devices choose unless the server says otherwise")
+        try await m.load("qwen")
+        XCTAssertEqual(c.callsTo(MonitorChannels.modelLoad).last, [.string(engineProviderId), "qwen"])
+        try await m.unloadAll()
+        XCTAssertEqual(c.callsTo(MonitorChannels.unloadAll).count, 1)
+        try await m.setServer(["maxLoaded": 3])
+        XCTAssertEqual(c.callsTo(MonitorChannels.engineSettings).last, [["maxLoaded": 3]])
+        XCTAssertEqual(ModelServerSettings.from(["clientModelSettings": false])?.devicesChoose, false)
+        XCTAssertNil(ModelServerSettings.from(nil), "an older computer sends none")
+    }
+
     func testTheChatReadsItsContextAndEffort() async throws {
         let (s, c) = try await makeStore()
         c.replies[MonitorChannels.contextPreview] = { args in

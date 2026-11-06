@@ -16,7 +16,7 @@ vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => ({ byToken
 vi.mock('../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('../accountEmails.js')>()), useAccountEmails: () => ({}) }));
 vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
-vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: null }) }));
+vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useWatchedComputer: () => null, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: null }) }));
 import { MonitorsDock } from './MonitorsDock.js';
 
 const vitals = { working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] };
