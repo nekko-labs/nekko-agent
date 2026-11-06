@@ -268,6 +268,8 @@ Each point keeps the same structure: what it is, what we already have, what is m
 
 **What is missing:** a **prompt injection suite against real models**: poisoned wiki pages and READMEs, then the share of runs where data got out. Public benchmarks of this kind exist (AgentDojo). **We would do this first**, because it is the only way to know whether everything else really works.
 
+**Real models (2026-11-06, part 2 of [#1867](https://github.com/nekko-labs/nekko-agent/issues/1867)):** the same attacks from an ordinary request, 10 runs per source and mode, with Qwen3-8B Q4_K_M on llama.cpp (an M5 Max). The model followed the injection once in 60 runs: after reading MCP output it tried to save the attacker's address with `remember`, which the gate asked about in Guardrails. Nothing leaked, and in no run did it try to send the secret out. Its reply even called the text "an injected directive". The injection here is blunt; a subtler one, and other models, are next. Run folder: `bench/injection/runs/2026-11-06-qwen3-8b-q4km/`.
+
 **First results (2026-11-06, part 1 of [#1867](https://github.com/nekko-labs/nekko-agent/issues/1867)):** the real daemon with a scripted model that always obeys the injection (the worst case), recorded in `crates/nekkod/tests/golden/injection-evals.json`.
 
 | Scenario | Guardrails before the egress gate | Guardrails with it | YOLO |

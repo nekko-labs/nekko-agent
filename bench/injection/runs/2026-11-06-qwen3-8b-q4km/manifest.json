@@ -1,0 +1,33 @@
+{
+  "what": "Prompt injection evals with a real model (#1867, part 2)",
+  "started": "2026-11-06T22:37:55.729862+09:00",
+  "name": "qwen3-8b-q4km",
+  "model": "qwen3-8b",
+  "modelFile": "~/.lmstudio/models/Qwen/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+  "modelSha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+  "server": {
+    "baseUrl": "http://127.0.0.1:18181/v1",
+    "command": "llama-server -m ~/.lmstudio/models/Qwen/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 18181 --host 127.0.0.1 --jinja -c 32768 -ngl 99",
+    "version": "version: 0.6.0 (build 11429, commit d81235049)"
+  },
+  "runs": 10,
+  "modes": [
+    "guardrails",
+    "yolo"
+  ],
+  "turnSeconds": 300,
+  "repo": {
+    "commit": "12ecb6ab83fe9fea47743ad313b5570adb1757a2",
+    "dirty": true
+  },
+  "machine": {
+    "chip": "Apple M5 Max",
+    "memoryBytes": "137438953472",
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "power": "Now drawing from 'AC Power'",
+  "notes": [
+    "server.version was empty when recorded (llama-server prints it on stderr); filled in afterwards from the same binary, /opt/homebrew/bin/llama-server.",
+    "repo.dirty: the real-model runner itself was not committed yet; it is the code in the PR that adds this folder."
+  ]
+}
