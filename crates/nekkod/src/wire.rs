@@ -56,6 +56,7 @@ pub fn router(app: App) -> Router {
         .route("/api/term/{id}", get(term))
         .route("/api/{channel}", post(call))
         .route("/harness/approve", post(harness_approve))
+        .route("/harness/tool", post(harness_tool))
         .with_state(app)
 }
 
@@ -98,6 +99,49 @@ fn check(app: &App, headers: &HeaderMap, query: &HashMap<String, String>) -> Res
 /// bridge token alone, never the daemon's: the token is written into the
 /// chat's MCP config, so it may only ever answer that chat's prompts. No
 /// browser may call it, and only on a loopback host.
+/// The bridge's caller: loopback only, no browser origin, the chat's bridge
+/// token, and a JSON body. `Err` is the response to send instead.
+async fn bridge_call(headers: &HeaderMap, request: Request) -> Result<(String, Value), Response> {
+    let refuse = |code: StatusCode| (code, axum::Json(json!({ "error": "unauthorized" }))).into_response();
+    if headers.contains_key(header::ORIGIN) {
+        return Err(refuse(StatusCode::FORBIDDEN));
+    }
+    if let Some(host) = headers.get(header::HOST).and_then(|h| h.to_str().ok()) {
+        let name = host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host);
+        if !matches!(name, "127.0.0.1" | "localhost" | "[::1]") {
+            return Err(refuse(StatusCode::FORBIDDEN));
+        }
+    }
+    let Some(token) = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .map(|t| t.trim().to_string())
+    else {
+        return Err(refuse(StatusCode::UNAUTHORIZED));
+    };
+    let Ok(body) = to_bytes(request.into_body(), CALL_BODY_LIMIT).await else {
+        return Err((StatusCode::PAYLOAD_TOO_LARGE, axum::Json(json!({ "error": "body too large" }))).into_response());
+    };
+    let Ok(value) = serde_json::from_slice::<Value>(&body) else {
+        return Err((StatusCode::BAD_REQUEST, axum::Json(json!({ "error": "body is not JSON" }))).into_response());
+    };
+    Ok((token, value))
+}
+
+/// `POST /harness/tool`: a Nekko tool (`agent_watch`) Claude Code called
+/// through the chat's bridge, authenticated like `/harness/approve`.
+async fn harness_tool(State(app): State<App>, headers: HeaderMap, request: Request) -> Response {
+    let (token, call) = match bridge_call(&headers, request).await {
+        Ok(v) => v,
+        Err(r) => return r,
+    };
+    match app.ctx.turns.claude_code_tool(&token, &call).await {
+        Some(answer) => axum::Json(answer).into_response(),
+        None => (StatusCode::UNAUTHORIZED, axum::Json(json!({ "error": "unauthorized" }))).into_response(),
+    }
+}
+
 async fn harness_approve(State(app): State<App>, headers: HeaderMap, request: Request) -> Response {
     let refuse = |code: StatusCode| (code, axum::Json(json!({ "error": "unauthorized" }))).into_response();
     if headers.contains_key(header::ORIGIN) {

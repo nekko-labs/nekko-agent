@@ -226,7 +226,9 @@ jobs:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # A green run takes about 12 minutes; a failed one also builds the base
+    # and measures it against head six times (about 15 more).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -270,28 +272,43 @@ jobs:
       - if: steps.dist.outputs.ready != 'true'
         run: npm run build:web
       - name: Speed contract
+        id: contract
         # Judged against the 2x regression gate in budgets.mjs; a missed budget is
         # measured once more before it fails the job (noisy shared runners). The
         # runner has no GPU, so Chrome runs without its software GPU emulation.
         run: node scripts/perf/run.mjs --out perf-results --attempts 3 --no-gpu
-      - name: Profile streaming frame work against the unchanged base after a failed gate
-        if: failure() && github.event_name == 'pull_request'
+      # Diagnostic only: the failed speed contract stays failed. It measures the
+      # budgets that failed (not a fixed part: a cold-switch failure is
+      # latency, which the old streaming-only profile never measured) on the
+      # unchanged base and on this head, alternately on this same runner
+      # (base, head, head, base), then one timeline-traced pair. The table goes
+      # to the job summary; reports and traces to the perf-report artifact.
+      - name: Measure the failed budgets on the unchanged base and on head
+        if: failure() && steps.contract.outcome == 'failure' && github.event_name == 'pull_request'
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Diagnostic only: keep the failed speed-contract result and its budgets.
-          node scripts/perf/run.mjs --out perf-results/profile-head --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Head diagnostic missed a budget; original gate remains failed."
+          parts=$(node scripts/perf/compare.mjs parts perf-results/perf-report.json)
+          if [ -z "$parts" ]; then echo 'No failed budget to compare.'; exit 0; fi
           git fetch --no-tags origin "$BASE_SHA"
           git worktree add --detach ../perf-base "$BASE_SHA"
-          cd ../perf-base
-          npm ci
-          npm run build:web
-          cargo build -p nekkod --release --locked
-          node scripts/perf/run.mjs --out "$GITHUB_WORKSPACE/perf-results/profile-base" --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Base diagnostic missed a budget; inspect uploaded report."
+          (cd ../perf-base && npm ci && npm run build:web && cargo build -p nekkod --release --locked)
+          out="$GITHUB_WORKSPACE/perf-results/compare"
+          for part in $parts; do
+            for phase in base-1 head-1 head-2 base-2; do
+              tree=../perf-base; [ "${phase%-*}" = head ] && tree=.
+              (cd "$tree" && node scripts/perf/run.mjs --out "$out/$part/$phase" --only "$part" --attempts 1 --no-gpu --report-only) || echo "$phase did not finish its run"
+            done
+            for side in base head; do
+              tree=../perf-base; [ "$side" = head ] && tree=.
+              (cd "$tree" && node scripts/perf/run.mjs --out "$out/$part/trace-$side" --only "$part" --attempts 1 --timeline --dump-trace --no-gpu --report-only) || echo "trace-$side did not finish its run"
+            done
+            node scripts/perf/compare.mjs summary perf-results/perf-report.json "$out/$part" "$part" | tee -a "$out/summary.md"
+          done
       - name: Report
         if: always()
-        run: cat perf-results/perf-report.md >> "$GITHUB_STEP_SUMMARY" || true
+        run: cat perf-results/perf-report.md perf-results/compare/summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
