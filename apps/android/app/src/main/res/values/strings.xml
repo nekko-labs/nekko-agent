@@ -9,5 +9,5 @@
     <string name="chats_showmodel">Model</string>
     <string name="chats_showcontext">Context window</string>
     <string name="chats_showpullrequests">Pull requests</string>
-    <string name="chats_showupdated">Last updated</string>
+    <string name="chats_showupdated">Updated time</string>
 </resources>

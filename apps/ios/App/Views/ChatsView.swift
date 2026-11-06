@@ -170,7 +170,7 @@ struct ChatsView: View {
                     if g.isOpen(opened: opened, searching: !query.isEmpty) { sectionRows(g) }
                 } header: {
                     if g.key != ChatGroup.general && g.key != "all" { sectionHeading(g) }
-                }
+                }.listSectionSeparator(.hidden)
             }
             // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
             if query.isEmpty && !store.computers.isEmpty && prefs.shows("ph-monitors", localModelLoaded: monitor?.localModelLoaded ?? false) {
@@ -492,6 +492,7 @@ struct ChatsView: View {
                     showModel: view.showModel, showContext: view.showContext, showUpdated: view.showUpdated)
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
+        .listRowSeparator(.hidden)
         .listRowBackground(RowBackground(needsYou: listActivity[s.id] == .needsYou,
                                          selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")

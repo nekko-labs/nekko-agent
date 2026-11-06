@@ -28,7 +28,11 @@ fs.writeFileSync(file, source);
 const root = 'apps/ios/App/NekkoApp.swift';
 source = fs.readFileSync(root, 'utf8');
 replace('if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {', 'if ProcessInfo.processInfo.arguments.contains("-uiTestGroupList") {\n            NavigationStack { ChatsView(path: .constant([])) }\n        } else if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {');
-replace('                    app.start()', '                    if ProcessInfo.processInfo.arguments.contains("-uiTestGroupList") { return }\n                    app.start()');
+if (source.includes('let flags = ["-uiTestChatRefresh"')) {
+  replace('let flags = ["-uiTestChatRefresh"', 'let flags = ["-uiTestGroupList", "-uiTestChatRefresh"');
+} else {
+  replace('app.start()', 'if !ProcessInfo.processInfo.arguments.contains("-uiTestGroupList") { app.start() }');
+}
 fs.writeFileSync(root, source);
 const prefs = 'apps/ios/App/Platform/Prefs.swift';
 source = fs.readFileSync(prefs, 'utf8');

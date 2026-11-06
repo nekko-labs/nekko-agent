@@ -32,7 +32,10 @@ app.whenReady().then(async () => {
     await click(`document.querySelector('[data-view-menu-row="${after ? 'details' : 'show'}"]')`);
     await shot('cards-menu');
     if (after) {
-      for (const [label, key, selector] of [['Model','showModel','[title*="fixture / claude-opus-4-7"]'],['Context window','showContext','[title^="Context window:"]'],['Pull requests','showPullRequests','[data-session-pr-chip]'],['Last reply time','showUpdated','time']]) {
+      for (const [label, key, selector] of [['Model','showModel','[title$="/ claude-opus-4-7"]'],['Context window','showContext','[title^="Context window:"]'],['Pull requests','showPullRequests','[data-session-pr-chip]'],['Last reply time','showUpdated','time']]) {
+        const present = await run(`!!document.querySelector('.agent-chip ${selector}')`);
+        // Last reply time is plain text, so its independent visibility is covered by the renderer unit matrix.
+        if (key !== 'showUpdated' && !present) throw Error(`Missing baseline fact: ${label}`);
         await menu();
         await click(`Array.from(document.querySelectorAll('[role="menuitemcheckbox"]')).find(e => e.textContent.trim() === ${JSON.stringify(label)})`);
         const saved = await run(`JSON.parse(localStorage.getItem('nekko.agentPanelView'))[${JSON.stringify(key)}]`);
@@ -48,8 +51,14 @@ app.whenReady().then(async () => {
       if (await run(`!!document.querySelector('.agent-chip [title^="Context window:"]')`)) throw Error('Context reappeared after reload');
       report.checks.push('choices survive reload');
     }
-    win.setContentSize(760, 900); await sleep(400);
-    // The narrow menu is still operable; existing main's drawer limitation is recorded separately.
+    await run(`localStorage.setItem('nekko.agentPanelView', JSON.stringify({groupBy:'none'})); location.reload()`).catch(() => {});
+    await sleep(500); await ready(); await seed();
+    win.setContentSize(430, 900); await sleep(400);
+    await click(`document.querySelector('[title="View options: group, sort and show"]')`);
+    await click(`document.querySelector('[data-view-menu-row="${after ? 'details' : 'show'}"]')`);
+    const fits = await run(`Array.from(document.querySelectorAll('[role="menu"]')).every(e => { const r=e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; })`);
+    if (!fits) throw Error('Narrow menu clipped outside viewport');
+    report.checks.push('430px menu fits viewport');
     await shot('cards-narrow');
     report.hidden = !win.isVisible(); report.bounds = win.getBounds();
     if (!report.hidden) throw Error('sandbox became visible');

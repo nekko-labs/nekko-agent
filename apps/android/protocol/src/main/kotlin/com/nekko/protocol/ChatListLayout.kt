@@ -17,8 +17,8 @@ import java.util.Locale
  * setting.
  *
  * The defaults are the list as it was: by project, in the desktop's dragged
- * order (newest first for the rest), with previews, completed chats and every
- * project folder shown.
+ * order (newest first for the rest), with previews and completed chats shown,
+ * and empty project folders hidden.
  */
 data class ChatListView(
     val groupBy: GroupBy = GroupBy.PROJECT,

@@ -111,6 +111,11 @@ class CardDetailsDeviceTest {
         show()
         val before = InstrumentationRegistry.getArguments().getString("baseline") == "true"
         shot("default")
+        if (!before) {
+            compose.onNodeWithTag("chats.row.model", useUnmergedTree = true).assertExists()
+            compose.onNodeWithTag("chats.row.context", useUnmergedTree = true).assertExists()
+            compose.onNodeWithTag("chats.row.prs", useUnmergedTree = true).assertExists()
+        }
         compose.onNodeWithTag("chats.view").performClick()
         settle()
         if (before) { shot("menu"); return }
@@ -119,7 +124,7 @@ class CardDetailsDeviceTest {
         compose.onNodeWithText("Model").performClick()
         assertEquals(false, WireJson.parseToJsonElement(prefs.get(ChatListPrefs.VIEW).encoded()).toString().contains("\"showModel\":true"))
         // Dropdown stays open while choosing details. Each remaining control is independent.
-        for (label in listOf("Context window", "Pull requests", "Last updated")) {
+        for (label in listOf("Context window", "Pull requests", "Updated time")) {
             compose.onNodeWithText(label).performScrollTo().performClick()
             settle()
         }

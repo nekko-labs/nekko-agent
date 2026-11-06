@@ -472,8 +472,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             exchangeCount: v.long("exchangeCount"), phase: v.str("phase"),
             prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [],
             transcriptTokens: v.long("transcriptTokens").flatMap { $0 > 0 ? $0 : nil },
-            contextUsed: v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("used").flatMap { $0 >= 0 ? $0 : nil } : nil,
-            contextWindow: v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("window").flatMap { $0 > 0 ? $0 : nil } : nil)
+            contextUsed: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("used").flatMap { $0 >= 0 ? $0 : nil } : nil,
+            contextWindow: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("window").flatMap { $0 > 0 ? $0 : nil } : nil)
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.

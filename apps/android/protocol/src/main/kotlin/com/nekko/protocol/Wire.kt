@@ -380,8 +380,8 @@ data class SessionSummary(
                 pinned = o.bool("pinned"),
                 prUrls = o["prUrls"].arr()?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList(),
                 transcriptTokens = o.long("transcriptTokens")?.takeIf { it > 0 },
-                contextUsed = o["claudeCodeContext"].obj()?.takeIf { it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
-                contextWindow = o["claudeCodeContext"].obj()?.takeIf { it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
+                contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
+                contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
         }
 
