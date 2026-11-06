@@ -10,7 +10,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const js = (v) => JSON.stringify(v).replace(/[<>/  ]/g, (c) => '\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.on('window-all-closed', () => {});
 
 app.whenReady().then(async () => {

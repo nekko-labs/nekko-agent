@@ -10,7 +10,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const js = (v) => JSON.stringify(v).replace(/[<>/  ]/g, (c) => '\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.on('window-all-closed', () => {});
 
 app.whenReady().then(async () => {
@@ -26,8 +26,8 @@ app.whenReady().then(async () => {
   win.on('focus', () => report.errors.push('Fixture took focus'));
   const run = (source) => win.webContents.executeJavaScript(source, true);
   const capture = async (name) => {
-    await run(`document.getElementById('settings-accessibility').scrollIntoView({ block: 'start' })`);
-    await sleep(500);
+    await run(`[...document.querySelectorAll('.settings-nav-item')].find((n) => n.textContent.trim() === 'Accessibility').click()`);
+    await sleep(800);
     fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
   };
   const click = async (label) => {
@@ -45,6 +45,8 @@ app.whenReady().then(async () => {
     await sleep(1500);
     await run(`layoutFixture.store.getState().setView('settings')`);
     await sleep(1500);
+    // A hidden window runs no animation frames until its first capture, so the nav's scroll starts here.
+    await capture('accessibility-100');
     await capture('accessibility-100');
     const text = await sectionText();
     check('text size comes before the animation toggle', text.indexOf('Text size') > -1 && text.indexOf('Text size') < text.indexOf('Agent activity animation'));
