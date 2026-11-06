@@ -3,6 +3,7 @@ import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ToolCall } from '@nekko-agent/shared';
 import { ShieldQuestionIcon } from '../../gentleface-icons.js';
 import type { ApprovalScope } from './approval-decision.js';
+import { confirmYolo } from '../YoloWarning.js';
 
 export interface PendingApproval {
   call: ToolCall;
@@ -61,6 +62,8 @@ export function ApprovalBar({ approval, onDecide, computerName }: { approval: Pe
   // Do not steal focus from another chat; shortcuts require focus inside this prompt.
   const decide = async (ok: boolean, scope: ApprovalScope = 'once') => {
     if (deciding.current) return;
+    // Both "Allow all" choices switch the chat to YOLO.
+    if (ok && scope !== 'once' && !await confirmYolo()) return;
     deciding.current = true;
     setBusy(true);
     setError(null);

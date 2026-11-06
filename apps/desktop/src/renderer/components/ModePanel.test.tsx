@@ -12,6 +12,8 @@ const store = vi.hoisted(() => ({
 }));
 vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: typeof store) => unknown) => select(store), { getState: () => store }) }));
 vi.mock('../sessionFolders.js', () => ({ addFolderToChat: vi.fn(), applyFolderSelection: vi.fn(), withExcluded: vi.fn() }));
+const yolo = vi.hoisted(() => ({ allow: vi.fn(async (_current: string | undefined, _next: string) => true) }));
+vi.mock('./YoloWarning.js', () => ({ allowModeChange: yolo.allow }));
 vi.mock('react-dom', async (original) => ({ ...(await original<typeof import('react-dom')>()), createPortal: (node: unknown) => node }));
 
 const base = { id: 'chat', messages: [], executionMode: 'worktree', gitIsolation: true, workspaceId: 'w1' } as unknown as Session;
@@ -104,6 +106,17 @@ describe('Mode panel writes', () => {
     await modePanelActions(d).setApprovals('yolo');
     expect(window.nekko.updateSettings).not.toHaveBeenCalled();
     expect(store.pushToast).toHaveBeenCalledWith('error', 'Error: unavailable');
+  });
+  it('asks before switching to YOLO, and changes nothing when the user keeps asking', async () => {
+    const d = deps();
+    yolo.allow.mockResolvedValueOnce(false);
+    await modePanelActions(d).setApprovals('yolo');
+    expect(yolo.allow).toHaveBeenCalledWith('guardrails', 'yolo');
+    expect(window.nekko.setSessionOptions).not.toHaveBeenCalled();
+    expect(window.nekko.updateSettings).not.toHaveBeenCalled();
+    yolo.allow.mockResolvedValueOnce(false);
+    await modePanelActions(d).applyMode({ ...starter('fusion'), options: { ...starter('fusion').options, mode: 'yolo' } });
+    expect(window.nekko.setSessionOptions).not.toHaveBeenCalled();
   });
   it('keeps execution default persistence and sends Sandbox through its setup', async () => {
     const d = deps();

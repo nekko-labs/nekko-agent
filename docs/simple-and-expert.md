@@ -30,7 +30,7 @@ The monitors you tick in the panel's **Configure** menu are exactly the ones it 
 In the message box's bottom row, Simple shows the folder, the model, how the agent asks you, and a ring for how full the chat is. Hover over the ring for the numbers.
 
 - **Effort** is inside the model menu.
-- **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**. Each choice has the same icon as in Expert's Mode panel (a hand, a shield and a bolt) and a one-line description.
+- **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**. Each choice has the same icon as in Expert's Mode panel (a hand, a shield and a bolt) and a one-line description. Choosing **Works on its own** (YOLO) first shows a warning: in that mode the agent never asks, so a web page or tool output it reads can get your files or data sent out. Tick **Don't warn me again** to skip it; **Settings > General > Warn before YOLO** turns it back on. The same warning shows wherever YOLO can be turned on: the Mode panel, the default in Settings, a saved mode and the approval bar's **Allow all** buttons.
 - **Incognito and Automate** are in the **+** menu.
 - **The Agent Monitor** appears while agents are working in the background.
 - **In replies:** each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them.

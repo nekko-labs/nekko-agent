@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { allowModeChange } from './YoloWarning.js';
 import { createPortal } from 'react-dom';
 import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
@@ -107,6 +108,7 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
     },
     /** Approvals for this chat; saved as the default only once the chat took it. */
     async setApprovals(mode: ChatMode) {
+      if (!await allowModeChange(session.mode ?? settings()?.defaultChatMode, mode)) return;
       try {
         const next = await patchChat({ mode });
         if (next) await saveSettings({ defaultChatMode: mode });
@@ -174,6 +176,7 @@ export function modePanelActions({ session, isCloudModel, onChange, onSandboxSet
       const skipped = modePatchSkips(mode.options, { cloudModel: isCloudModel });
       const intoSandbox = mode.options.executionMode === 'sandbox' && getExecutionMode(session) !== 'sandbox';
       if (intoSandbox) { delete patch.executionMode; delete patch.gitIsolation; delete patch.mode; }
+      if (patch.mode && !await allowModeChange(session.mode ?? settings()?.defaultChatMode, patch.mode)) return;
       try {
         const next = await patchChat(patch);
         lastApplied.set(session.id, mode.id);
