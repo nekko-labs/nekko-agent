@@ -20,9 +20,9 @@ You find it in **Scheduled Tasks**, as the **CI runners** section below your tas
 
 ## Why run jobs on your Mac
 
-- **Faster.** On a 2021 MacBook Pro (M1 Max), our iOS CI job took 39 minutes in a VM against 65
-  minutes on GitHub's hosted Mac the same day, and 47 minutes on a typical hosted run. App builds
-  were 2.6x faster. Newer Macs should do better. Numbers, runs and caveats:
+- **Faster.** On an M5 Max MacBook Pro, our iOS CI job took a median 40 minutes in a VM against
+  59 minutes on GitHub's hosted Macs, with simulator tests 2x and app builds 4.6x faster. On a 2021
+  M1 Max it took 39 minutes against 65 the same day. Numbers, runs and caveats:
   [CI runner performance](ci-runner-performance.md).
 - **No hosted macOS minutes.** Jobs on your own Mac don't use GitHub's hosted macOS minutes, the
   most expensive kind.
