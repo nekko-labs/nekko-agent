@@ -380,6 +380,9 @@ before the agent:
 - hands work to a sub-agent, which starts without this chat's history;
 - saves a note to memory, which would apply to every later chat.
 
+For an MCP tool, **Always allow this tool** approves the call and stops asking for that
+tool in this chat; other tools still ask, and a new chat starts asking again.
+
 The approval names the address or tool so you can tell whether you expected it. Ask
 mode already asks for all of these; YOLO never asks. Files in your project folders do
 not count as outside content.

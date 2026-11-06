@@ -2925,12 +2925,14 @@ impl TurnTools {
     async fn call_mcp(&self, mcp: &Mcp, call: &Value, name: &str) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
         // An MCP tool can send data out, and its server alone says whether
-        // it only reads: in a tainted chat every call asks.
+        // it only reads: in a tainted chat every call asks, unless the user
+        // chose "Always allow this tool" for it in this chat.
         let ask = match turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref()) {
             Some(reason) => Some((reason, "medium")),
-            None => self.gated().then(|| {
-                (format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer."), "high")
-            }),
+            None if self.gated() && !self.mcp_tool_allowed(name).await => {
+                Some((format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer."), "high"))
+            }
+            None => None,
         };
         if let Some((reason, severity)) = ask
             && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
@@ -2938,6 +2940,15 @@ impl TurnTools {
             return error(id, "Call not approved by user.");
         }
         mcp.call(call).await
+    }
+
+    /// The user chose "Always allow this tool" for MCP tool `name` in this
+    /// chat (`allowedMcpTools`). Read from disk, so a choice made on the
+    /// approval bar applies to the next call of the same turn.
+    async fn mcp_tool_allowed(&self, name: &str) -> bool {
+        self.disk().await.is_some_and(|s| {
+            s.get("allowedMcpTools").and_then(Value::as_array).is_some_and(|a| a.iter().any(|t| t == name))
+        })
     }
 
     async fn disk(&self) -> Option<Value> {

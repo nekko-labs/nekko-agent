@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { IpcChannels } from './ipc.js';
 import {
+  PHONE_GUARDED_OPTION_KEYS,
   PHONE_ALWAYS_DENIED,
   PHONE_CHANNELS,
   PHONE_SETTINGS_KEYS,
@@ -248,6 +249,11 @@ describe('chat options from a phone', () => {
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 'xhigh' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 'ludicrous' }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 3 }]))).toBe('value-invalid');
+    // "Always allow this tool" (decision 0054): MCP tool names only; the gate asks a proof for it.
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { allowedMcpTools: ['mcp__slack__post_message'] }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { allowedMcpTools: ['bash'] }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { allowedMcpTools: 'mcp__x__y' }]))).toBe('value-invalid');
+    expect(PHONE_GUARDED_OPTION_KEYS).toContain('allowedMcpTools');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { disabledTools: [] }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { workMode: 'design', autoModel: true }]))).toBe('ok');

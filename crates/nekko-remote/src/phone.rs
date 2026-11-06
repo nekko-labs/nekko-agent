@@ -111,6 +111,15 @@ pub struct Policy {
     pub step_up: crate::step_up::Limits,
 }
 
+/// `allowedMcpTools` from a phone: MCP tool names (`mcp__<server>__<tool>`) only,
+/// as `isMcpToolList` in packages/shared/src/phone-access.ts.
+fn mcp_tool_list(v: &Value) -> bool {
+    v.as_array().is_some_and(|a| {
+        a.len() <= 200
+            && a.iter().all(|t| t.as_str().is_some_and(|s| s.starts_with("mcp__") && s.encode_utf16().count() <= 200))
+    })
+}
+
 fn strings(v: &Value) -> Vec<String> {
     v.as_array().map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default()
 }
@@ -464,6 +473,10 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
             if let Some(mode) = arg(1).get("mode") {
                 chat_mode(mode, "mode")?;
+            }
+            // "Always allow this tool" (decision 0054): MCP tool names only.
+            if arg(1).get("allowedMcpTools").is_some_and(|v| !mcp_tool_list(v)) {
+                return Err(denied("value-invalid", "allowedMcpTools"));
             }
             if let Some(effort) = arg(1).get("effort")
                 && !effort.as_str().is_some_and(|e| has(&policy().effort_levels, e))
@@ -1667,7 +1680,10 @@ mod tests {
     #[test]
     fn tools_reach_a_phone_as_names_and_what_they_do() {
         let raw = json!([{ "name": "bash", "description": "Run a command", "inputSchema": { "type": "object" } }, { "name": "mcp__gh__issue" }]);
-        assert_eq!(redact("tools:list", raw), json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }]));
+        assert_eq!(
+            redact("tools:list", raw),
+            json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }])
+        );
         assert_eq!(redact("tools:list", Value::Null), json!([]));
     }
     use super::*;
@@ -2255,8 +2271,13 @@ mod tests {
                 json!({ "incognito": true }),
                 json!({ "memory": "all" }),
                 json!({ "guidance": "off" }),
+                json!({ "allowedMcpTools": ["mcp__slack__post_message"] }),
             ] {
                 assert!(set(guarded.clone()).unwrap_err().contains("proof-required"), "{guarded}");
+            }
+            // "Always allow this tool" names MCP tools only, whatever the proof.
+            for bad in [json!({ "allowedMcpTools": ["bash"] }), json!({ "allowedMcpTools": "mcp__x__y" })] {
+                assert!(set(bad.clone()).unwrap_err().contains("value-invalid"), "{bad}");
             }
             assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 1);
         }

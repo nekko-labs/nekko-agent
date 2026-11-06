@@ -398,6 +398,7 @@
   "text"
  ],
  "sessionOptionKeys": [
+  "allowedMcpTools",
   "archivedAt",
   "autoModel",
   "autoProviderSwitch",
@@ -428,6 +429,7 @@
   "workMode"
  ],
  "guardedOptionKeys": [
+  "allowedMcpTools",
   "cloudOnly",
   "disabledConnectors",
   "disabledMcpServers",
