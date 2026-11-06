@@ -6,29 +6,33 @@ import type { ContextBundle } from '@nekko-agent/shared';
 import { ContextGauge, EffortSlider, effortRungs, formatContextTokens } from './ChatMetrics.js';
 
 describe('effort slider', () => {
-  it('puts Low at the left end for Opus 5.5 and shows its concrete Medium rung', () => {
-    expect(effortRungs('normal', 'claude-opus-5-5')).toEqual({ options: ['low', 'medium', 'high', 'xhigh', 'max'], index: 1, shown: 'Medium' });
-    expect(effortRungs('low', 'claude-opus-5-5')).toMatchObject({ index: 0, shown: 'Low' });
-    expect(effortRungs('max', 'claude-opus-5-5')).toMatchObject({ index: 4, shown: 'Max' });
-    // First render resolves the model-compatible concrete value.
-    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" />);
+  const metadata = { levels: ['low', 'medium', 'high', 'xhigh', 'max'].map((effort) => ({ effort })), default: 'medium' };
+  it('uses only the provider choices and default', () => {
+    expect(effortRungs('normal', 'claude-opus-5-5', metadata)).toEqual({ options: ['low', 'medium', 'high', 'xhigh', 'max'], index: 1, shown: 'Medium' });
+    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" metadata={metadata} />);
     expect(html).toContain('data-effort-count="5"');
     expect(html).toContain('data-effort-index="1"');
     expect(html).toContain('aria-label="Reasoning effort: Medium"');
+    expect(html).not.toContain('border-line');
   });
   it('shows the chat effort when given a chat', () => {
-    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" session={{ id: 'c', effort: 'max' }} />);
+    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" metadata={metadata} session={{ id: 'c', effort: 'max' }} />);
     expect(html).toContain('data-effort-index="4"');
     expect(html).toContain('Reasoning effort for this chat');
   });
-  it('normalizes legacy aliases to concrete supported rungs', () => {
-    expect(effortRungs('medium', 'claude-opus-5-5').shown).toBe('Medium');
-    expect(effortRungs('high', 'claude-opus-5')).toMatchObject({ options: ['low', 'medium', 'high', 'xhigh', 'max'], index: 2, shown: 'High' });
-    expect(effortRungs('medium', 'claude-opus-5')).toMatchObject({ index: 1, shown: 'Medium' });
+  it.each(['claude-opus-5-5', 'llama3', 'gpt-5'])('does not guess choices for %s without metadata', (modelId) => {
+    expect(effortRungs('normal', modelId)).toEqual({ options: [], index: -1, shown: 'Unavailable' });
+    const html = renderToStaticMarkup(<EffortSlider modelId={modelId} />);
+    expect(html).toContain('disabled=""');
+    expect(html).toContain('Reasoning effort: Unavailable');
+    expect(html).not.toContain('Normal');
   });
-  it('leaves non-native scales unchanged', () => {
-    expect(effortRungs('normal', 'llama3')).toEqual({ options: ['low', 'normal', 'high'], index: 1, shown: 'Normal' });
-    expect(effortRungs('high', 'gpt-5')).toEqual({ options: ['low', 'medium', 'normal', 'high'], index: 3, shown: 'High' });
+  it('labels future provider levels without a hardcoded map entry', () => {
+    expect(effortRungs('ultra', 'new-model', { levels: [{ effort: 'ultra' }] })).toEqual({ options: ['ultra'], index: 0, shown: 'ultra' });
+  });
+  it('does not present the legacy normal sentinel as an advertised choice', () => {
+    expect(effortRungs('normal', 'new-model', { levels: [{ effort: 'high' }] })).toEqual({ options: ['high'], index: -1, shown: 'Provider default' });
+    expect(effortRungs('normal', 'new-model', { levels: [] })).toEqual({ options: [], index: -1, shown: 'Unavailable' });
   });
 });
 
