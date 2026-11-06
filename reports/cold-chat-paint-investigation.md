@@ -139,3 +139,25 @@ errors (counting static Stop as animated, sampling less than the2.3s interval,
 and relying on native focus in a hidden window) were diagnosed and corrected
 before accepting the baseline. The initial resting baseline PNG was inspected;
 after/motion review and paired uninstrumented measurements are pending.
+
+
+## 2026-11-06 — SVG clock candidate local checkpoint (#1998)
+
+Same M1 Max / Chrome156.0.8078.4 / debug daemon, full six-zone latency workload, immutable base/head renderer builds, uninstrumented, one attempt and33 cold samples each. No concurrent tests or builds. All p95s recomputed from raw samples. Milliseconds:
+
+| Phase | Cold p50 | Cold p95 | History p95 | Warm p95 | Composer p95 |
+|---|---|---|---|---|---|
+| base-1 | 16 | 20.3 | 33.5 | 11.8 | 3.9 |
+| head-1 | 13.4 | 20.2 | 29.7 | 12.7 | 4.3 |
+| head-2 | 12.6 | 17.9 | 31.9 | 10.4 | 3.5 |
+| base-2 | 15.2 | 22 | 33.7 | 11.6 | 4.1 |
+
+The median improved in both pairs; p95 was nearly unchanged in the first pair and lower in the reverse pair. Promising but insufficient for a Linux repair claim. Raw data: `.shots/cold-mount/icon-paired/`; base/head bundles in `icon-builds/`.
+
+Candidate-only five-lap memory check: heap12.4→12.8MB (0.10MB/lap), DOM2401→2401, listeners2252→2252; six/six windows working, tile memory197.80MB. Worst animated-layer/clip ratio unavailable, not a measured zero; no native GPU claim. Raw report inspected, not accepted from report-only exit status.
+
+65 focused tests pass (10 lifecycle,5 artwork,36 CommandWall,6 composer,8 drafts). No VirtualTranscript test file exists at this revision; none counted. Desktop typecheck, web builds, sandbox syntax, spec-index and diff checks pass. Enhanced hidden Electron baseline/candidate each pass11 checks, including replacing an actively playing icon and waiting past its unmounted timer deadline. The six-zone fixture passes6 isolation/history/horizontal-fit checks.
+
+Resting/reduced-motion native PNGs are byte-identical. Inspected baseline/candidate resting artwork,8 sampled native motion frames each, and matching dark wide/narrow full-chat screenshots. Both narrow screenshots share the existing absence of a visibly accessible composer at this fixture size; the fit check verifies horizontal bounds only. Native keyboard focus, light theme, real-device motion and native GPU remain unverified. Review browser/server closed; no further screenshot replays needed to decide this candidate.
+
+Matched Linux base/head/head/base plus CPU profiles: [run42243393085](https://github.com/nekko-labs/nekko-agent/actions/runs/42243393085), only the candidate icon file applied to exact bdd59fa source. Pending actual results inspection. The33ms gate and full harness are unchanged.
