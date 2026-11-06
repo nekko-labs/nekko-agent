@@ -197,6 +197,7 @@ export const PHONE_CHANNELS = [
   'session:delete',
   'session:fork',
   'session:get',
+  'session:photo',
   'session:setOptions',
   'session:watches',
   'sessions:summaries',
@@ -376,6 +377,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'providers:list',
   'providers:sealKey',
   'session:get',
+  'session:photo',
   'session:watches',
   'sessions:summaries',
   'settings:get',
@@ -804,9 +806,21 @@ export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
  *   side, `thumbnailPhoneImages`), then only the newest `images` of them, each
  *   at most `thumbChars` long, are kept. Any other photo becomes `''`, so the
  *   phone still knows how many there were.
+ * - one photo at a time at full size when the phone opens it (`session:photo`):
+ *   the stored photo when it fits `photoSide` and `photoChars`, else a JPEG
+ *   copy with its long side at most `photoSide` px, so a phone screen shows it
+ *   sharp and it still fits one relay frame.
  * The computer keeps the whole chat; the desktop is where the full detail lives.
  */
-export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, thumbSide: 384, thumbChars: 96 * 1024 } as const;
+export const PHONE_SESSION_VIEW = {
+  messages: 300,
+  textChars: 4000,
+  images: 40,
+  thumbSide: 384,
+  thumbChars: 96 * 1024,
+  photoSide: 2048,
+  photoChars: 6 * 1024 * 1024,
+} as const;
 
 /**
  * The largest sealed reply frame the agent sends a phone. The relay drops
@@ -999,6 +1013,12 @@ export function screenPhoneCall(
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
+    case 'session:photo':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'message id');
+      if (!Number.isInteger(args[2]) || (args[2] as number) < 0) throw new PhoneAccessError('value-invalid', 'photo index');
+      if (args.length > 3) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'session:fork':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (args[1] !== undefined && args[1] !== null && (typeof args[1] !== 'string' || args[1] === '')) throw new PhoneAccessError('value-invalid', 'message id');
@@ -1181,6 +1201,9 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'session:get':
     case 'chat:steer':
       return phoneSessionView(result);
+    case 'session:photo':
+      // One photo's data URL, nothing else.
+      return typeof result === 'string' && result.startsWith('data:image/') ? result : null;
     case 'changes:list':
       return phoneChangesView(result);
     case 'chat:editQueued':
@@ -1386,6 +1409,7 @@ export async function callFromPhone(
   if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
+  if (channel === 'session:photo') callArgs = [args[0], args[1], args[2]];
   if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
   if (channel === 'terminal:create') {
     // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.

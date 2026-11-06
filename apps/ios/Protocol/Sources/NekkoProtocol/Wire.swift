@@ -16,6 +16,8 @@ public enum Channels {
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
     public static let sessionGet = "session:get"
+    /// One photo a user attached, sharp enough for the full-screen viewer: `(chatId, messageId, index)` → a data URL or null.
+    public static let sessionPhoto = "session:photo"
     /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
     public static let sessionWatches = "session:watches"
     /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
@@ -121,7 +123,7 @@ public enum Channels {
     public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove])
 
     public static let all = [
-        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
+        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,

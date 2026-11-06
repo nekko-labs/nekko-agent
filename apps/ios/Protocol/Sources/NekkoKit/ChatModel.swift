@@ -608,6 +608,19 @@ public final class ChatModel {
         return []
     }
 
+    /// One of a message's photos at full size (`session:photo`), sharp on a phone screen: a data
+    /// URL, or nil when the computer has none to send (a photo it can't read, or an older computer).
+    public func fullPhoto(_ messageId: String, _ index: Int) async throws -> String? {
+        // A saved message can stay on screen under the id it first had (`shownIds`); the computer knows the saved one.
+        let savedId = shownIds.first { $0.value == messageId }?.key ?? messageId
+        if session?.messages.contains(where: { $0.id == savedId }) != true, let outgoingPhotos, outgoingPhotos.id == messageId,
+           outgoingPhotos.images.indices.contains(index) {
+            // Not saved on the computer yet: the phone still holds the photo it just sent.
+            return outgoingPhotos.images[index]
+        }
+        return try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(savedId), .int(Int64(index))]).string
+    }
+
     // MARK: Projection
 
     /// The session's own model, else the computer's default (never the `__auto__` sentinel).

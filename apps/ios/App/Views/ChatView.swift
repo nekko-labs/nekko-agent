@@ -125,7 +125,7 @@ struct ChatView: View {
                         switch row {
                         case .block(let b):
                             BlockView(block: b, chat: chat, voice: rowCache.voices[b.id], photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: reasoning) { i in
-                                viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                                viewing = PhotoSet(photos: chat.photos(b.id), index: i, messageId: b.id)
                             }
                             .id(b.id)
                             // Drag a message to the other pane's composer (FD-4); it lands as text, never sent.
@@ -328,7 +328,9 @@ struct ChatView: View {
         .sheet(isPresented: $showGitScreen) { GitView(chatId: sessionId) }
         .sheet(isPresented: $showTerminals) { TerminalsView(chatId: sessionId) }
         .sheet(isPresented: $showFiles) { FilesView(root: .chat(sessionId), title: chat.title) }
-        .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
+        .fullScreenCover(item: $viewing) { set in
+            ImageViewer(photos: set.photos, index: set.index, load: set.messageId.map { id -> (Int) async throws -> String? in { i in try await chat.fullPhoto(id, i) } })
+        }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}
