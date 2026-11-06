@@ -53,9 +53,9 @@ val LightPalette = Palette(
     ink = Color(0xFF17171D),
     inkSoft = Color(0xFF52525E),
     inkFaint = Color(0xFF6A6A76),
-    accent = Color(0xFF5A4AE8),
+    accent = Color(0xFF5A2352),
     accentInk = Color(0xFFFFFFFF),
-    accentSoft = Color(0x215A4AE8),
+    accentSoft = Color(0x215A2352),
     success = Color(0xFF1E7A4A),
     successSoft = Color(0x241E7A4A),
     danger = Color(0xFFB42318),
@@ -63,7 +63,7 @@ val LightPalette = Palette(
     warning = Color(0xFF8F5C0A),
     warningSoft = Color(0x248F5C0A),
     running = Color(0xFF1D4ED8),
-    userBubble = Color(0xFF5A4AE8),
+    userBubble = Color(0xFF5A2352),
     userInk = Color(0xFFFFFFFF),
     code = Color(0xFFF2F2F7),
 )
@@ -76,9 +76,9 @@ val DarkPalette = Palette(
     ink = Color(0xFFECEAF3),
     inkSoft = Color(0xFFA3A1B0),
     inkFaint = Color(0xFF8E8E9B),
-    accent = Color(0xFF8B7DFF),
+    accent = Color(0xFFC084B5),
     accentInk = Color(0xFF0C0C11),
-    accentSoft = Color(0x2E8B7DFF),
+    accentSoft = Color(0x2EC084B5),
     success = Color(0xFF4CC38A),
     successSoft = Color(0x294CC38A),
     danger = Color(0xFFEF6A5B),
@@ -86,13 +86,13 @@ val DarkPalette = Palette(
     warning = Color(0xFFE3A446),
     warningSoft = Color(0x29E3A446),
     running = Color(0xFF60A5FA),
-    userBubble = Color(0xFF2A2550),
+    userBubble = Color(0xFF3A1438),
     userInk = Color(0xFFECEAF3),
     code = Color(0xFF101016),
 )
 
 /**
- * The palette with the computer's accent in place of Nekko's indigo: the
+ * The palette with the computer's accent in place of Nekko's plum: the
  * accent, its soft tint, the text drawn on it (dark or white, whichever reads
  * better) and, in light mode, the user's bubble, as the desktop paints them.
  */
@@ -115,7 +115,9 @@ fun Palette.withAccent(argb: Long?, dark: Boolean): Palette {
  * the mode it was drawn for, its paper, surfaces, ink and line.
  */
 fun Palette.withPreset(preset: ThemePreset?, accent: Long?, dark: Boolean): Palette {
-    var p = withAccent(accent ?: preset?.takeIf { !it.isBasic }?.accent, dark)
+    // A basic preset's old shipped violet (a computer from before the plum palette) reads as none.
+    val sent = accent?.takeUnless { preset?.isBasic != false && it in ThemePreset.RETIRED_BASIC_ACCENTS }
+    var p = withAccent(sent ?: preset?.takeIf { !it.isBasic }?.accent, dark)
     // A preset's surfaces only fit the mode it was drawn for.
     if (preset == null || (preset.mode == ThemePreset.Mode.DARK) != dark) return p
     fun c(v: Long?, old: Color) = v?.let { Color(it) } ?: old

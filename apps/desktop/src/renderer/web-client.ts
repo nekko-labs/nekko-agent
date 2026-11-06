@@ -421,7 +421,7 @@ function makeWebClient(): NekkoApi {
     telemetryCapture: (event, props) => call(IpcChannels.telemetryCapture, event, props),
     telemetryStatus: () => call(IpcChannels.telemetryStatus),
     feedbackInfo: () => call(IpcChannels.feedbackInfo),
-    feedbackSend: (message, includeAppInfo) => call(IpcChannels.feedbackSend, message, includeAppInfo),
+    feedbackSend: (message, includeAppInfo, screenshots) => call(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
     syncTurnOn: () => call(IpcChannels.syncTurnOn),
     syncConfirmRecoveryKey: (text) => call(IpcChannels.syncConfirmRecoveryKey, text),
     syncRestore: (text) => call(IpcChannels.syncRestore, text),

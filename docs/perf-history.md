@@ -145,6 +145,18 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #1894 iPhone: pixel build-up before Face ID, about a second in all (2026-11-06)
+Area: renderer
+Result: improvement
+Conditions: as #1833 (iPhone 17 Pro simulator, iOS 27.0, Xcode 27.2, Debug signed ad hoc, app lock on, simulated Face ID, 1/30 s frame reading); before is main after #1836. Two cold launches per build.
+
+| Metric | Before | After |
+|---|---|---|
+| Face ID sheet gone to app fully on screen, fresh install | not detected (probe missed) | 0.47 s |
+| Face ID sheet gone to app fully on screen, relaunch | 0.93 s | 0.50 s |
+
+Why: the build-up is back but plays from the first frame, under the Face ID prompt, at a 0.28 s beat; after unlock only the 0.294 s zoom is left (was 0.525 s). Lock off, first drawn frame to app on screen is about 0.95 s (read off frames, not probed).
+
 ### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
 Area: renderer
 Result: no effect

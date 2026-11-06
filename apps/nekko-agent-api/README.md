@@ -91,7 +91,14 @@ hostname).
   `{ message, app? }` (`src/feedback.ts`). Unauthenticated, not request-logged,
   10 per IP per hour (counted in memory). `app` comes only when the sender
   switched on "Include app info", and only `app`, `version`, `os`, `osVersion`
-  and `arch` are kept.
+  and `arch` are kept. A body with `screenshots` is refused here.
+- `POST /v1/feedback/screenshots`: the same note with 1 to 3 screenshots,
+  `{ message, app?, screenshots: [{ type, data }] }`, `data` base64 of a PNG or
+  JPEG up to 5 MB (`src/screenshots.ts`). Each must be a whole, well-formed
+  image of its type (`400 bad-screenshot` with its index otherwise, and nothing
+  is stored); metadata is stripped before storing. Counts against the 10 notes
+  per IP per hour, plus 3 with screenshots per IP per hour and 2 uploads at
+  once (`503 busy`), all checked before the body is read.
 - `GET /healthz`: Fly's health check. The machine stops when idle and wakes on
   the next request in about a second; the signup page should call this on load
   so that happens before anyone presses Join.
@@ -129,6 +136,11 @@ fly secrets set ALERT_EMAIL='<who gets alerts>'
 - `feedback`: Send feedback notes (migration `0005`), with no user, device or
   IP column and only the day each arrived. Read them with
   `select received_on, message, app_info from feedback order by received_on desc`.
+- `feedback_screenshots`: a note's screenshots (migration `0013`), cleaned of
+  metadata, with no file name; deleted with the note and 90 days after it
+  arrived (`purgeFeedbackScreenshots`). Read them with
+  `select position, type, encode(data, 'base64') from feedback_screenshots where feedback_id = $1 order by position`
+  and decode the base64 locally.
 - `cloud_machines`: one row per Nekko Cloud machine (migration `0006`): region,
   size, state, the hosting provider's machine id, the relay room, the hashes of
   the pairing key and of the relay access token, the scope, hours used.
