@@ -115,12 +115,12 @@ function RecentJob({ line: l, runnerId, rerun }: { line: AuditLine; runnerId: st
           {l.jobId != null ? (
             <LogBlock title="Job log" kind="job" load={() => window.nekko.runnerJobLog(runnerId, l.jobId!)} />
           ) : (
-            l.result !== 'failedToStart' && ranVm && <p className="text-ink-faint">No job log: this runner did not learn which job the VM ran.</p>
+            l.result !== 'failedToStart' && ranVm && <p className="text-ink-faint">No job log here: this runner could not match the VM to a job. Find the workflow run on GitHub to read its log.</p>
           )}
           {l.vm ? (
             <LogBlock title="VM log" kind="vm" load={() => window.nekko.runnerVmLog(runnerId, l.vm!)} />
           ) : (
-            ranVm && <p className="text-ink-faint">No VM log for this job. VMs write one once the image has the latest scripts (Update scripts in runner settings).</p>
+            ranVm && <p className="text-ink-faint">No VM log was saved for this job. Older image scripts or a log collection failure can cause this. Use Update scripts in runner settings for future VMs; a log lost when the VM was deleted cannot be recovered.</p>
           )}
         </div>
       )}
