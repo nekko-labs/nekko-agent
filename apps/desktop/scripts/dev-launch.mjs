@@ -8,7 +8,6 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync, spawn, execFileSync } from 'node:child_process';
 import { devBanner } from './dev-banner.mjs';
 const require = createRequire(import.meta.url);
-const electron = require('electron');
 if (process.env.ELECTRON_RUN_AS_NODE) throw new Error('Unset ELECTRON_RUN_AS_NODE before launching Nekko Agent');
 const env = { ...process.env, NEKKO_DEV_OWNER: randomUUID() };
 // The app quits itself cleanly when this file appears (see devLaunchProcess.ts).
@@ -31,6 +30,8 @@ export function runtimeIsCurrent(readyPath, stamp) {
   try { return readFileSync(readyPath, 'utf8') === stamp; } catch { return false; }
 }
 export function prepareMacBundle() {
+  // electron may download its binary on require; plain imports must stay inert.
+  const electron = require('electron');
 
   const cache = resolve('.dev-runtime', require('electron/package.json').version);
   const bundle = join(cache, 'Nekko Agent.app');
@@ -70,6 +71,7 @@ export function prepareMacBundle() {
  * name (the download itself stays untouched for other worktrees).
  */
 export async function prepareWindowsRuntime() {
+  const electron = require('electron');
   const version = require('electron/package.json').version;
   const cache = resolve('.dev-runtime', `${version}-win`);
   const exe = join(cache, 'Nekko Agent.exe');

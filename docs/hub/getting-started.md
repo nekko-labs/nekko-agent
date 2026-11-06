@@ -157,6 +157,14 @@ When a tool needs permission, its approval card appears in that agent's own wind
 
 For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent cards along the bottom of the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
 
+### Model and effort controls
+
+The composer shows the model title without a subscription suffix. Open its menu for provider and account details. Cloud providers appear first under **Cloud**, followed by **Local**; when both exist they occupy independently scrolling columns. Your default model is marked inside its provider group instead of repeated at the top.
+
+**Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog.
+
+Prompt-writing **Suggestions** appear in their own bottom composer row in Expert only.
+
 ### Quickly filter the model picker
 
 At the top of the model picker, use **All**, **Fusion**, **Cloud**, or **Local**.
@@ -187,11 +195,13 @@ When older conversation is summarized, a **Conversation compacted** event card s
 
 ### Answering agent questions
 
-When an agent needs a choice, its question opens at the bottom of the conversation. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Choose an option or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. The pixel question-mark icon identifies the question.
+When an agent needs a choice, its question opens at the bottom of the conversation without moving your typing focus, even when another agent asks while you are writing. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Click or Tab into the question to answer it: use the options, arrow and number keys, or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. Moving between steps keeps the keyboard in the question only while you are interacting with it. The pixel question-mark icon identifies the question.
 
 ### Links and files in replies
 
-A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser. Other web links have a **Preview** button that loads the page inside the message.
+A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser.
+
+In agent chats, confirmed PR command results also leave inline cards where the interaction happened: created (including draft creation), set to draft, ready for review, auto-merge enabled, queued, merged, closed, reopened, updated, reviewed or viewed. They appear while the agent is working and remain in saved history. **Merge requested** means the command was accepted, not that the PR merged; **PR queued** and **PR merged** require their own confirmation. The first card for an open PR keeps its live status and review actions, while older event labels stay historical. Ambiguous scripts and failed commands do not create success cards. Other web links have a **Preview** button that loads the page inside the message.
 
 Click a file link to open the file in a window beside the chat. Code is coloured by language, and the toolbar shows which language was detected. You can edit the file there: it saves itself a moment after you stop typing (turn **Auto-save** off in the toolbar if you prefer), and **Ctrl+S** (**Cmd+S** on macOS) saves at once. The toolbar tells you when a save happens: *Auto-saved at 9:41* or *Saved at 9:41*.
 
