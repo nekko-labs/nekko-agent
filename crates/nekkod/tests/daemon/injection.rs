@@ -442,3 +442,59 @@ async fn a_tainted_chat_follows_a_link_the_page_showed_without_asking() {
     assert!(asked.is_empty(), "nothing should ask: {asked:?}");
     assert!(world.seen.lock().unwrap().iter().any(|u| u.contains("/next-steps")), "the link was followed");
 }
+
+/// "Always allow this tool" (decision 0054): in a tainted chat, an MCP tool the
+/// user always allowed runs without asking for the rest of the chat, and every
+/// other MCP tool still asks. The choice is the chat's `allowedMcpTools`,
+/// saved before the approval that made it is released, as the approval bar does.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_always_allowed_mcp_tool_stops_asking_and_others_still_ask() {
+    let docs = mcp().await;
+    let session = json!({
+        "id": SESSION, "title": "Eval", "mode": "guardrails", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
+    });
+    let rig = turn_rig("eval-always-allow", session);
+    let model = scripted_model(vec![
+        call_tool("c_source", "mcp__srv__search_docs", json!({ "query": "onboarding" })),
+        call_tool("c_first", "mcp__srv__post_message", json!({ "channel": "general", "text": "one" })),
+        call_tool("c_second", "mcp__srv__post_message", json!({ "channel": "general", "text": "two" })),
+        call_tool("c_other", "mcp__srv__search_docs", json!({ "query": "more" })),
+        say_text("done"),
+    ])
+    .await;
+    let mut spec = turn_spec(&rig, &model, "turn_eval", SESSION, json!({ "text": "Post the onboarding summary" }));
+    spec["settings"]["defaultChatMode"] = json!("guardrails");
+    spec["facts"]["mcpServers"] = json!([{
+        "id": "srv", "name": "srv", "enabled": true, "command": "", "args": [],
+        "url": format!("http://127.0.0.1:{}/mcp", docs.port),
+    }]);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+
+    // The first post asks: the user picks "Always allow this tool".
+    wait_pending(rig.d.port, SESSION, "approval", "c_first").await;
+    let (status, saved) = post(
+        rig.d.port,
+        "session:setOptions",
+        json!([SESSION, { "allowedMcpTools": ["mcp__srv__post_message"] }]),
+        Some(TOKEN),
+    )
+    .await;
+    assert_eq!(status, 200, "{saved}");
+    assert_eq!(saved["allowedMcpTools"], json!(["mcp__srv__post_message"]));
+    post(rig.d.port, "tool:approve", json!([SESSION, "c_first", true]), Some(TOKEN)).await;
+    // The second post runs unasked; another MCP tool still asks.
+    wait_pending(rig.d.port, SESSION, "approval", "c_other").await;
+    post(rig.d.port, "tool:approve", json!([SESSION, "c_other", true]), Some(TOKEN)).await;
+    let (events, end) = turn_record(&rig, "turn_eval", SESSION).await;
+    assert_eq!(end["stop"], "complete", "{end}");
+    let asked: Vec<String> = events
+        .iter()
+        .filter(|e| e["type"] == "tool_approval_required")
+        .map(|e| e["call"]["id"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert_eq!(asked, ["c_first", "c_other"]);
+    assert_eq!(docs.sent.lock().unwrap().len(), 2, "both posts ran");
+    // A running turn's save keeps what the user chose mid-turn.
+    assert_eq!(saved_session(&rig, SESSION)["allowedMcpTools"], json!(["mcp__srv__post_message"]));
+}

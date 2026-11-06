@@ -1886,7 +1886,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
   const approve = async (okDecision: boolean, scope: ApprovalScope = 'once') => {
     if (!approval) return;
-    const saved = await decideApproval(window.nekko, sessionId, approval.call.id, okDecision, scope);
+    const saved = await decideApproval(window.nekko, sessionId, approval.call.id, okDecision, scope, { name: approval.call.name, allowed: session?.allowedMcpTools });
     if (saved.session) setSession(saved.session);
     if (saved.settings) useStore.setState({ settings: saved.settings });
     setApproval(null);
