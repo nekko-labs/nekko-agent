@@ -26,6 +26,7 @@ import {
   type RunnerState,
   type RunnerView,
   type SlotView,
+  type SlotLine,
 } from '@nekko-agent/shared';
 import { Badge, StatusDot, Toggle } from './primitives/index.js';
 import type { StatusTone } from '../tokens.js';
@@ -84,7 +85,7 @@ function RecentJob({ line: l, runnerId, rerun }: { line: AuditLine; runnerId: st
   const ranVm = l.result !== 'notRemoved';
   return (
     <li data-recent-job={l.ts}>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button className="flex min-w-0 flex-1 items-center gap-2 text-left hover:text-ink" aria-expanded={open} onClick={() => setOpen(!open)}>
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
           <StatusDot tone={l.result === 'finished' ? 'success' : 'warning'} size={6} />
@@ -204,7 +205,7 @@ function RunningJob({ slot, runnerId, now }: { slot: SlotView; runnerId: string;
   };
   return (
     <li data-running-job={slot.vm ?? ''} className="space-y-1.5">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <StatusDot tone="running" pulse size={6} />
         <span className="min-w-0 truncate text-ink">
           Working on {j?.url ? <ExternalLink url={j.url}>{name}</ExternalLink> : name}
@@ -333,6 +334,22 @@ function Jobs({ view, now }: { view: RunnerView; now: number }) {
   );
 }
 
+/** The actual VM identity stays visible through boot, ready, running and cleanup. */
+function VmTile({ slot: s, runnerId }: { slot: SlotLine; runnerId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-runner-vm={s.vm} className={`min-w-0 rounded-xl border px-3 py-2 ${s.dim ? 'opacity-50' : ''}`} style={{ borderColor: 'var(--line)', background: 'var(--paper)' }}>
+      <p className="text-xs text-ink-soft">{s.title}</p>
+      <p className={`mt-0.5 break-words text-sm ${s.active ? '' : 'text-ink-faint'}`}>{s.text}</p>
+      {s.vm && <>
+        <code className="mt-1 block break-all text-2xs text-ink-faint">{s.vm}</code>
+        <button className="btn btn-outline mt-2 py-1! text-xs" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Hide live log' : 'Live log'}</button>
+        {open && <div className="mt-2"><LiveLog runnerId={runnerId} vm={s.vm} /></div>}
+      </>}
+    </div>
+  );
+}
+
 /** Where the image stands: the same stage and bar as the setup sheet, so the sheet is optional. */
 function ImageRow({ image, onSetup }: { image: ImageView; onSetup?(): void }) {
   const fraction = imageFraction(image);
@@ -420,7 +437,7 @@ export function RunnerCard({ view: given, now, image = null, onSettings, onSetup
             <p className="text-xs text-ink-faint">{runnerSubtitle(view)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={TONE[state] ?? 'neutral'}>{STATE_LABELS[state] ?? state}</Badge>
           <Toggle value={config.settings.enabled} disabled={busy} onChange={(v) => void setEnabled(v)} label={`Runner on for ${scopeName(config.scope)}`} />
           <button className="btn btn-outline px-2! py-1!" aria-label={`Runner settings for ${scopeName(config.scope)}`} title="Runner settings" onClick={onSettings}>
@@ -448,16 +465,11 @@ export function RunnerCard({ view: given, now, image = null, onSettings, onSetup
         </ul>
       )}
 
-      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3">
-        {slotLines(view, now).map((s) => (
-          <div key={s.title} className={`rounded-xl border px-3 py-2 ${s.dim ? 'opacity-50' : ''}`} style={{ borderColor: 'var(--line)', background: 'var(--paper)' }}>
-            <p className="text-xs text-ink-soft">{s.title}</p>
-            <p className={`mt-0.5 text-sm ${s.active ? '' : 'text-ink-faint'}`}>{s.text}</p>
-          </div>
-        ))}
+      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3">
+        {slotLines(view, now).map((s) => <VmTile key={s.vm ?? s.title} slot={s} runnerId={config.id} />)}
       </div>
 
-      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2 text-xs text-ink-soft">
+      <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(min(150px,100%),1fr))] gap-2 text-xs text-ink-soft">
         <div>
           <b className="block text-sm text-ink">
             {sampled ? `${Math.round(config.settings.memoryPerVmMb / 1024)} GB · ${host.cpusPerVm} cores` : view.error ? 'Unavailable' : 'Not known yet'}

@@ -4,6 +4,22 @@ Run your GitHub Actions jobs on this Mac. Each job gets its own throwaway macOS 
 deleted when the job ends, and your own work comes first: by default the runner only takes jobs
 while you are away and the Mac is plugged in.
 
+## Watch runners from Automations
+
+The **Automations** panel on the Agent board shows your connected CI runners even
+when no chat automations are scheduled. VM tiles show their names and state; **Live
+log** opens output from that VM, including while it is starting or ready for a job.
+The card's switch and settings apply to the whole runner, not just one VM.
+
+Jobs appear under **Queued**, **In progress**, and **Completed**. Use the existing
+Accept now/Decline, Cancel/Re-run, and log controls there. Cancel and restart still
+ask for confirmation because they affect the workflow run on GitHub.
+
+Choose **View CI runners** to open the full CI section in Scheduled Tasks, where you
+can also connect GitHub and set up this Mac. With no connected runners the panel
+shows a short setup hint. Runners are hidden when the connected service does not
+support them; a temporary service failure shows an error and retries.
+
 ## What it does
 
 Nekko Agent registers this Mac as a GitHub Actions **self-hosted runner** for one repo or one

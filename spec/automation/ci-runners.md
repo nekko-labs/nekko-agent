@@ -7,6 +7,30 @@ area: automation
 
 **Status: `[planned]` product; T211 helper and NAT implemented and run on a real macOS 15 guest; T212 implemented: the supervisor, the Mac's signals, the VM lifecycle, GitHub App connect and the `runner:*` channels. T213 implemented: the CI runners section (first-visit card, connect sheet, runner card, settings sheet) and the menu bar dot; not yet seen against a live job (T214 pilot). T214 implemented: the image guide and provision script, the picker in Native iOS (off until NEKKO_MAC_RUNNERS is on), nekko-vm signed with its own entitlement in packaged builds; pilot pending.** Verified with the spike example on a macOS 15.7.7 guest: it boots, gets its address by DHCP, resolves through the gateway, and reaches the public internet, while curls from the guest to the host's LAN address, the router, Tailscale addresses, the gateway's other ports and DNS-rebinding names are all refused. Orphan behavior: when the example is SIGKILLed the helper exits about 0.56 s later and `count-vms` returns to 0; when the helper is SIGKILLed the VM is gone about 0.05 s later. Throughput is in [docs/perf-history.md](../../docs/perf-history.md). Verified 2026-11-03: Native iOS jobs on this repo ran end to end in a VM on a MacBook Pro (M1 Max) and passed, 39 minutes against 65 on a hosted Mac the same day ([docs/ci-runner-performance.md](../../docs/ci-runner-performance.md)). Not yet verified: the VPN binding against a real tunnel. The daemon runs the supervisor whenever the `nekko-vm` helper is staged beside it on an Apple silicon Mac; the UI is the CI runners section of the Workflows tab (T213), documented in [docs/ci-runners.md](../../docs/ci-runners.md); the golden image is built by hand with [docs/ci-runners-image.md](../../docs/ci-runners-image.md), not yet booted in a VM (the check waits on Tart being installed); the pilot runbook is [docs/runbooks/ci-runner-pilot.md](../../docs/runbooks/ci-runner-pilot.md). Not yet done: a Developer ID signed and notarized release with `nekko-vm`. All product journeys and remaining sections below are planned unless explicitly identified as T211 implementation details. Issue: [nekko-labs/nekko-agent#1038](https://github.com/nekko-labs/nekko-agent/issues/1038). Choices behind it: [decision 0022](../../docs/decisions/0022-ci-runners-vm-and-network.md). Tasks: T210 to T214 in [TASKS.md](../../TASKS.md).
 
+## Automations board visibility `[implemented; renderer verification]`
+
+The Automations panel shows the connected computer's CI runner cards above scheduled
+chat automations, even when no chat automation exists. Each card uses the same live
+runner subscription and controls as Scheduled Tasks: runner on/off and settings,
+VM slots with their actual names and live logs, and Queued, In progress and Completed
+job groups. Queued jobs offer Accept now/Decline/Undo; running jobs keep their
+cancel/re-run confirmation; completed entries retain provider links and logs. Empty
+slots never invent a VM identity or log action. The existing daemon controls remain
+the authority; this adds no direct VM shell, console window, or per-VM stop API.
+
+**View CI runners** opens Scheduled Tasks, reveals its CI section for that visit,
+and scrolls/focuses it after runner data loads. The panel shows a short empty state
+instead of the setup wizard. Loading and service failures are explicit; unsupported
+daemons omit the section. Queue wait times and draining-job timers continue updating.
+
+Acceptance: runner push updates and removal appear without reopening the panel;
+VM logs target the displayed VM; job actions target the right repo/job; cancellation
+still requires confirmation; the full-view action lands on the CI section; controls
+wrap at narrow widths. Verified with synthetic runner data in hidden macOS Electron
+at 1000px and 390px and focused tests. Live provider/VM actions and native mobile
+surfaces are not exercised by this change. No credentials or host data enter the
+fixture, and no new network or runner permissions are granted.
+
 ## What it is for `[planned]`
 
 One button turns a Mac running Nekko Agent into a CI runner. The provider's own job queue hands it `runs-on` jobs, and every job runs in a throwaway macOS VM that is deleted when the job ends. Job code never runs on the host.
