@@ -11,6 +11,10 @@ export type UpdateState =
 
 export interface AppInfo {
   version: string;
+  /** System hostname, without the local-network suffix. */
+  hostname?: string;
+  /** Owner-selected display name, or the system hostname. */
+  computerName?: string;
   platform: string;
   edition: 'desktop' | 'web';
   /** SK-3: whether a phone may quit Nekko Agent here (`app:quit`), the desktop's switch; absent from older computers. */
