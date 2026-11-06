@@ -15,6 +15,10 @@ on:
         required: false
         type: string
         default: ''
+      ios_runtime:
+        required: false
+        type: string
+        default: ''
       ios_test_file:
         required: false
         type: string
@@ -47,6 +51,11 @@ on:
         type: string
       harness_ref:
         description: 'Commit whose evidence test files run on both revisions (default: this workflow run''s commit)'
+        required: false
+        type: string
+        default: ''
+      ios_runtime:
+        description: 'Exact simulator runtime identifier for matched evidence; empty uses the existing auto-selection'
         required: false
         type: string
         default: ''
@@ -117,12 +126,16 @@ jobs:
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
       - run: brew install xcodegen
-      - name: Generate project and create simulator (same selection as Native iOS)
+      - name: Generate project and create simulator (optionally pinned for matched evidence)
         working-directory: apps/ios
+        env:
+          IOS_RUNTIME: ${{ inputs.ios_runtime }}
         run: |
           set -euo pipefail
           xcodegen generate
-          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          # Fail closed if a requested runtime is missing; never silently compare different OS versions.
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'requested = ENV.fetch("IOS_RUNTIME", ""); JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") && (requested.empty? || r["identifier"] == requested) }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          test -n "$RUNTIME" && test -n "$TYPE"
           DEVICE=$(xcrun simctl create Nekko-Mode-Evidence "$TYPE" "$RUNTIME")
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt

@@ -82,6 +82,7 @@ final class BeyondTests: XCTestCase {
                 return .null
             },
             Channels.sessionFork: { _ in ["id": "s_fork", "title": "New chat"] },
+            Channels.toolsList: { _ in [["name": "bash", "description": "Run a command"], ["name": "web_fetch"], ["description": "no name"]] },
             Channels.sessionPhoto: { args in args.last?.int64 == 0 ? "data:image/jpeg;base64,AAAA" : .null },
             Channels.tasksList: { _ in [["id": "t1", "title": "Nightly tests", "kind": "recurring", "intervalMs": 86_400_000, "status": "active",
                                          "runCount": 3, "lastResult": "All 40 passed.", "lastRunAt": 5]] },
@@ -165,6 +166,27 @@ final class BeyondTests: XCTestCase {
         try await chat.setRunOption("workMode", "design")
         XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, [.string("s1"), ["workMode": "design"]])
         XCTAssertEqual(RunOption.values(of: ["autoModel": true, "title": "x", "offline": .null]), ["autoModel": true], "only run settings, and only set ones")
+    }
+
+    func testPrivacyShieldChangesOnlyItsMode() throws {
+        let privacy = try XCTUnwrap(RunOption.all.first { $0.key == "privacy" })
+        let current: JSONValue = ["mode": "off", "allow": ["me@example.com"]]
+        XCTAssertEqual(privacy.shown(current), "off")
+        XCTAssertEqual(privacy.shown(nil), "default", "no mode follows the computer")
+        XCTAssertEqual(privacy.wire("redact", current: current), ["mode": "redact", "allow": ["me@example.com"]], "the allowed values stay")
+        XCTAssertEqual(privacy.wire("default", current: current), ["allow": ["me@example.com"]])
+        let memory = try XCTUnwrap(RunOption.all.first { $0.key == "memory" })
+        XCTAssertEqual(memory.wire("project", current: nil), "project")
+    }
+
+    func testToolsListAndSwitchingOneOff() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        let tools = try await chat.tools()
+        XCTAssertEqual(tools.map(\.name), ["bash", "web_fetch"], "a tool with no name is dropped")
+        try await chat.setTool("bash", on: false)
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, [.string("s1"), ["disabledTools": ["bash"]]])
     }
 
     func testForksBeforeAPromptWithItsTextOrAfterAReply() async throws {

@@ -1356,6 +1356,14 @@ impl Turns {
                 ctx
             })
         };
+        // Its own statement: the session lock must be released before the
+        // fields below take it again.
+        let taint = {
+            let s = lock(&session);
+            crate::taint::Taint::from_messages(
+                s.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default(),
+            )
+        };
         let runner = TurnTools {
             sandbox: sandbox.then(|| self.sandboxes.clone()),
             // The decision runner the host picked; the local one is this daemon's.
@@ -1385,6 +1393,7 @@ impl Turns {
             decide_with: facts.get("decideWith").and_then(Value::as_str).map(str::to_string),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
+            taint: Mutex::new(taint),
         };
 
         let mut history: Vec<Value> =
@@ -2274,7 +2283,14 @@ struct TurnTools {
     allow_spawn: bool,
     /// Which decision runner `decide` uses (`facts.decideWith`): `local`, `typesafe`, or none.
     decide_with: Option<String>,
+    /// Whether this chat has read untrusted content, and the addresses it
+    /// was shown (the egress gate, decision 0054).
+    taint: Mutex<crate::taint::Taint>,
 }
+
+/// Why a call in a tainted chat asks (decision 0054).
+const TAINT_NOTE: &str =
+    "This chat has read content from the web or a tool, which can carry instructions to the agent.";
 
 fn result(id: &str, output: impl Into<String>) -> Value {
     json!({ "toolCallId": id, "output": output.into() })
@@ -2436,7 +2452,26 @@ impl TurnTools {
         }
     }
 
+    /// A call run for the user, then noted for the egress gate: a tool that
+    /// brought in outside text taints the chat, and every address in any
+    /// output counts as shown to it.
     async fn attended(&self, call: &Value) -> Result<Value, String> {
+        let out = self.dispatch(call).await;
+        if let Ok(v) = &out {
+            let name = str_at(call, "name").unwrap_or_default();
+            let text = v.get("output").map(js::display).unwrap_or_default();
+            lock(&self.taint).observe(name, &text, js::truthy(v.get("isError")));
+        }
+        out
+    }
+
+    /// Decision 0054: this chat has read untrusted content and is not in
+    /// YOLO, so a call that can send data out asks first.
+    fn gated(&self) -> bool {
+        self.mode != "yolo" && lock(&self.taint).tainted()
+    }
+
+    async fn dispatch(&self, call: &Value) -> Result<Value, String> {
         if let Some(sandboxes) = &self.sandbox {
             return Ok(self.sandbox_tool(sandboxes, call).await);
         }
@@ -2448,7 +2483,7 @@ impl TurnTools {
         }
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
-            "remember" => return Ok(self.remember(id, &input).await),
+            "remember" => return Ok(self.remember(call, id, &input).await),
             "complete_session" => return Ok(self.complete(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -2655,9 +2690,27 @@ impl TurnTools {
                 return error(id, LOCAL_FETCH_REFUSED);
             }
             approved.insert(host);
-        } else if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await
-        {
-            return error(id, "Fetch not approved by user.");
+        } else {
+            // In a tainted chat, a public address the chat was never shown
+            // (a new query string included) can carry data out.
+            let unseen = self.gated() && !lock(&self.taint).allows(&url);
+            let ask = if asks {
+                Some((format!("Fetch {url}"), "low"))
+            } else if unseen {
+                Some((
+                    format!(
+                        "Fetch {url}? {TAINT_NOTE} This address did not appear in it or in your messages, and a request can carry data out. Approve only if you expected the agent to go there."
+                    ),
+                    "high",
+                ))
+            } else {
+                None
+            };
+            if let Some((reason, severity)) = ask
+                && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
+            {
+                return error(id, "Fetch not approved by user.");
+            }
         }
         let cancel = nekko_tools::Cancel::new();
         let c2 = cancel.clone();
@@ -2781,8 +2834,21 @@ impl TurnTools {
             MAX_CHILD_RESUMES, can_resume_child_failure, child_interrupted_message, sub_agent_answer, sub_agent_failure,
         };
         let id = str_at(call, "id").unwrap_or_default().to_string();
-        if let Some(reason) = turn::host_tool_approval("spawn_agent", Some(&self.mode), self.sandbox_mode.as_deref())
-            && !self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
+        // A sub-agent starts without this chat's history, so this chat's
+        // taint does not follow it: in a tainted chat, delegating asks.
+        let ask = match turn::host_tool_approval("spawn_agent", Some(&self.mode), self.sandbox_mode.as_deref()) {
+            Some(reason) => Some((reason, "medium")),
+            None => self.gated().then(|| {
+                (
+                    format!(
+                        "Delegate work to a sub-agent? {TAINT_NOTE} The sub-agent starts without this chat's history, so this chat's checks do not follow it."
+                    ),
+                    "high",
+                )
+            }),
+        };
+        if let Some((reason, severity)) = ask
+            && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
         {
             return error(&id, "Call not approved by user.");
         }
@@ -2858,10 +2924,59 @@ impl TurnTools {
     /// An MCP call in the daemon: ask first when the policy says so, then run it.
     async fn call_mcp(&self, mcp: &Mcp, call: &Value, name: &str) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
-        if let Some(reason) = turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref())
-            && !self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
-        {
-            return error(id, "Call not approved by user.");
+        let input = call.get("input").cloned().unwrap_or(Value::Null);
+        let disk = self.disk().await;
+        let strings = |key: &str| -> Vec<String> {
+            disk.as_ref()
+                .and_then(|s| s.get(key))
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+                .unwrap_or_default()
+        };
+        // "Always allow this tool" (decision 0054) and the recipients this
+        // chat already wrote to (decision 0063), read from disk so a choice
+        // made on the approval bar applies to the next call of the same turn.
+        let allowed = strings("allowedMcpTools").iter().any(|t| t == name);
+        let known = strings("knownRecipients");
+        let tainted = self.gated();
+        // The server's read-only claim counts only in a clean chat: in a
+        // tainted one, its output may have been written to fool the agent.
+        let read_only = !tainted && mcp.read_only(name);
+        let fresh = if read_only { Vec::new() } else { crate::outward::unknown(&input, &known) };
+        let to = if fresh.is_empty() { String::new() } else { format!(" It writes to {}.", fresh.join(", ")) };
+        let ask = match turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref()) {
+            Some(reason) => Some((format!("{reason}{to}"), "medium")),
+            None if self.mode == "yolo" => None,
+            None if tainted && !allowed => {
+                Some((format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer.{to}"), "high"))
+            }
+            None if !read_only && !allowed => Some((
+                format!(
+                    "Call {name}? Its server does not mark it read-only, so it may send data out of this computer (a message, a post, a change).{to}"
+                ),
+                "medium",
+            )),
+            None if !fresh.is_empty() => Some((
+                format!(
+                    "{name} writes to someone this chat has not written to before: {}. Approve only if you expected it.",
+                    fresh.join(", ")
+                ),
+                "high",
+            )),
+            None => None,
+        };
+        if let Some((reason, severity)) = ask {
+            if !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await {
+                return error(id, "Call not approved by user.");
+            }
+            // The approval showed these recipients: they are known in this chat now.
+            if !fresh.is_empty() {
+                let mut all = known;
+                all.extend(fresh);
+                let (st, sid) = (self.store.clone(), self.shared.session_id.clone());
+                let _ =
+                    tokio::task::spawn_blocking(move || st.set_options(&sid, &json!({ "knownRecipients": all }))).await;
+            }
         }
         mcp.call(call).await
     }
@@ -2897,10 +3012,21 @@ impl TurnTools {
 
     /// `remember`: a global memory note. The chat's memory card reads the
     /// call's title and body and this result's first word after "Memory".
-    async fn remember(&self, id: &str, input: &Value) -> Value {
+    async fn remember(&self, call: &Value, id: &str, input: &Value) -> Value {
         let dir = self.turns.data_dir.clone();
         let text = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
         let (title, body) = (text("title"), text("body"));
+        // A note applies to every later chat: in a tainted chat, it could be
+        // an attacker's instruction that outlives it.
+        if self.gated() {
+            let reason = format!(
+                "Save to memory: \"{}\"? {TAINT_NOTE} A memory note applies to every later chat; approve only if you asked for it.",
+                js::slice16(&title, 80)
+            );
+            if !self.turns.request_approval(&self.shared, call, &reason, &json!("high")).await {
+                return error(id, "Memory was not saved: not approved by user.");
+            }
+        }
         let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body))
             .await
             .unwrap_or_else(|e| Err(e.to_string()));

@@ -5,12 +5,52 @@ use crate::common::*;
 /// A relay socket as the test sees it (it plays apps/relay-server).
 type RelaySide = tokio_tungstenite::WebSocketStream<tokio::net::TcpStream>;
 
+/// Relay-only controls must not be mistaken for frames addressed to a phone.
+fn relay_housekeeping(f: &Value) -> bool {
+    match f["type"].as_str() {
+        Some("welcomed") => true,
+        Some("attention-unknown") => {
+            assert_eq!(*f, json!({ "type": "attention-unknown" }));
+            true
+        }
+        Some("attention-snapshot") => {
+            let tags = f["tags"].as_array().expect("attention snapshot tags");
+            assert!(tags.len() <= 4096, "oversized attention snapshot: {f}");
+            assert!(
+                tags.iter().all(|tag| tag.as_str().is_some_and(|s| {
+                    s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                })),
+                "invalid attention snapshot: {f}"
+            );
+            assert_eq!(f.as_object().unwrap().len(), 2, "unexpected snapshot fields: {f}");
+            true
+        }
+        _ => false,
+    }
+}
+
+#[test]
+fn relay_housekeeping_only_consumes_known_valid_controls() {
+    assert!(relay_housekeeping(&json!({ "type": "attention-unknown" })));
+    assert!(relay_housekeeping(&json!({ "type": "attention-snapshot", "tags": [] })));
+    assert!(relay_housekeeping(&json!({ "type": "attention-snapshot", "tags": ["0123456789abcdef0123456789abcdef"] })));
+    assert!(!relay_housekeeping(&json!({ "type": "d", "cid": "c1" })));
+    assert!(!relay_housekeeping(&json!({ "type": "notify" })));
+    assert!(!relay_housekeeping(&json!({ "type": "unexpected" })));
+    assert!(
+        std::panic::catch_unwind(|| relay_housekeeping(&json!({ "type": "attention-snapshot", "tags": ["bad"] })))
+            .is_err()
+    );
+    assert!(
+        std::panic::catch_unwind(|| relay_housekeeping(&json!({ "type": "attention-unknown", "cid": "c1" }))).is_err()
+    );
+}
+
 /// The agent's next frame, and what it seals when it is a data frame.
 async fn next_agent_frame(agent: &mut RelaySide, key: &Phones) -> (Value, Option<Value>) {
     let f = loop {
         let f = next_json(agent, Duration::from_secs(20)).await.expect("an agent frame");
-        // For the relay alone, which this test doesn't gate on.
-        if f["type"] != "welcomed" {
+        if !relay_housekeeping(&f) {
             break f;
         }
     };
@@ -139,7 +179,7 @@ async fn the_daemon_runs_the_phone_relay_agent() {
     agent.send(Message::text(json!({ "type": "client-open", "cid": "c1" }).to_string())).await.unwrap();
     // The agent challenges each new connection before anything else.
     let (f, challenge) = next_agent_frame(&mut agent, &key).await;
-    assert_eq!(f["cid"], "c1");
+    assert_eq!(f["cid"], "c1", "first agent frame: {f}");
     let challenge = challenge.unwrap();
     assert_eq!(challenge["type"], "challenge", "{challenge}");
     phones.challenged("c1", &challenge);

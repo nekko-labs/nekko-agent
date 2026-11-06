@@ -916,7 +916,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -1220,7 +1220,11 @@ export interface NekkoApi {
   /** Its live hardware readings, for the Monitors dock. */
   computerStats(id: string): Promise<{ system: import('./monitor.js').SystemStats | null; gpu: import('./models.js').GpuStats | null }>;
   /** Its Model Server, as the phone view reports it. Null with Read off over there. */
-  computerEngineStatus(id: string): Promise<{ running: boolean; resident: unknown[] } | null>;
+  computerEngineStatus(id: string): Promise<{ running: boolean; installed?: boolean; resident: unknown[] } | null>;
+  /** What a connected computer's monitors read, through the computer's own gate (its phone views). */
+  computerRead(id: string, channel: 'providers:list' | 'limits:get' | 'usage:summary' | 'models:list', args?: unknown[]): Promise<unknown>;
+  /** How a connected computer's Model Server loads and keeps models; its gate refuses these while it keeps its own settings. */
+  computerModelServer(id: string, channel: 'model:load' | 'model:unload' | 'engine:unloadAll' | 'engine:settings', args?: unknown[]): Promise<unknown>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
   /** Set the icon in that machine's own settings; empty removes it. */
