@@ -179,7 +179,8 @@ export function ModelPicker({
   // Named from every provider: a filtered-out selection still says what it is.
   const currentProvider = allProviders.find((p) => p.id === providerId);
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
-  const currentModel = models.find((m) => m.id === modelId);
+  // `models` is the previous provider's until the new list lands; the picker may already hold it.
+  const currentModel = models.find((m) => m.id === modelId) ?? (providerId ? byProvider[providerId]?.find((m) => m.id === modelId) : undefined);
   // A Claude subscription chat gets its model picked by Claude Code, not us:
   // the picker still shows the alias "Opus"/"Sonnet" row that we send with
   // `--model`, but once Claude Code has reported which version it resolved
@@ -192,7 +193,7 @@ export function ModelPicker({
       : claudeCodeResolved
         ? claudeCodeResolved
         : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name
-        : 'No model';
+        : modelId ?? 'No model';
 
   const pick = (pid: string, mid: string) => {
     if (pid !== providerId) onProvider(pid);
@@ -398,7 +399,7 @@ export function ModelPicker({
               </>
             )}
             {groups.map((g) => {
-              const remaining = q ? g.models : g.models.filter((m) => !pinnedKeys.has(`${g.provider.id}::${m.id}`));
+              const remaining = q ? g.models : g.models.filter((m) => (favSet.has(`${g.provider.id}::${m.id}`) || !pinnedKeys.has(`${g.provider.id}::${m.id}`)));
               if (!remaining.length) return null;
               // A local provider can serve models out of several folders; when
               // the rows say where they live, group them under that heading.

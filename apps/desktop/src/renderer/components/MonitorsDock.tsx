@@ -1,3 +1,4 @@
+import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SystemStats, UsageSummary } from '@nekko-agent/shared';
 import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
@@ -21,7 +22,7 @@ import { SubscriptionSignIn } from './SubscriptionSignIn.js';
 import { SUBSCRIPTION_KINDS, reconnectProviderConfig } from './providers/AddProvider.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { dockMinimizeTransition } from './dockMinimize.js';
-import { useShown } from '../simpleMode.js';
+import { useExpertMode } from '../simpleMode.js';
 import { EASE_OUT } from '../easing.js';
 
 const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
@@ -58,19 +59,33 @@ export function MonitorsToggle({ show, side, onToggle }: { show: boolean; side: 
   );
 }
 
-/** A flow-layout sibling of the wall stage. The parent places it using data-dock-side. */
-/** Monitors that Settings > Simple mode can keep for Expert. */
-const HW_MONITORS = new Set<string>(['hardware', 'localModels']);
-const BUDGET_MONITORS = new Set<string>(['budget', 'utilization', 'cost', 'tokens']);
-
+/**
+ * A flow-layout sibling of the wall stage. The parent places it using data-dock-side.
+ * Simple and Detailed only open or close the panel, each remembering its own
+ * toggle (`simpleShow`, `show`); the monitors checked in Configure are exactly
+ * the ones it shows, in both modes.
+ */
 export function MonitorsDock(props: MonitorsDockProps) {
-  const hwShown = useShown('mon-hw');
-  const budgetShown = useShown('mon-budget');
+  const [expert] = useExpertMode();
   const { state, setState } = props;
-  const { dock } = state;
+  const dock = { ...state.dock, show: expert ? state.dock.show : !!state.dock.simpleShow };
   const background = useBackgroundState();
   const present = usePanelPresence(dock.show);
   const reorderDrag = useRef<MonitorKey | null>(null);
+  const pickup = useRef(monitorPickup()).current;
+  useEffect(() => {
+    window.addEventListener('pointermove', pickup.move);
+    window.addEventListener('pointerup', pickup.release);
+    window.addEventListener('pointercancel', pickup.release);
+    window.addEventListener('blur', pickup.reset);
+    return () => {
+      pickup.reset();
+      window.removeEventListener('pointermove', pickup.move);
+      window.removeEventListener('pointerup', pickup.release);
+      window.removeEventListener('pointercancel', pickup.release);
+      window.removeEventListener('blur', pickup.reset);
+    };
+  }, [pickup]);
   const [reorderAnnouncement, setReorderAnnouncement] = useState('');
   const sideDock = dock.side === 'left' || dock.side === 'right';
   const reorder = (key: MonitorKey, target: MonitorKey) => {
@@ -196,7 +211,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
     minimizeTransition.current.start(!value || window.matchMedia('(prefers-reduced-motion: reduce)').matches, () => setCollapsing(key), commit);
   };
 
-  const setShow = (show: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, show } }));
+  const setShow = (show: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, ...(expert ? { show } : { simpleShow: show }) } }));
   // Hidden, the dock leaves only its own show button where it was, the way the
   // agent panel leaves its controls, so the way back is where it went.
   const collapsed = !dock.show && (
@@ -205,7 +220,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
     </div>
   );
   if (!present) return collapsed;
-  const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key] && (hwShown || !HW_MONITORS.has(p.key)) && (budgetShown || !BUDGET_MONITORS.has(p.key)));
+  const selectedMonitors = normalizeMonitorOrder(dock.monitorOrder).map(key => MONITORS.find(p => p.key === key)!).filter((p) => dock.monitors[p.key]);
   const expandedMonitors = selectedMonitors.filter((p) => !dock.minimized[p.key]);
   return (
     <>
@@ -278,8 +293,12 @@ export function MonitorsDock(props: MonitorsDockProps) {
           <header className="monitors-dock__monitor-header" draggable={sideDock && collapsing === null} tabIndex={sideDock ? 0 : undefined}
             aria-label={sideDock ? `${p.label} monitor header; use Alt+ArrowUp or Alt+ArrowDown to reorder` : undefined}
             title={sideDock ? 'Drag header to reorder; Alt+ArrowUp/Down moves this monitor' : undefined}
+            onPointerDown={(e) => {
+              pickup.reset();
+              if (sideDock && collapsing === null && e.button === 0 && !(e.target as Element).closest('button, a, input, select, textarea, [role="button"]')) pickup.arm(p.key, e);
+            }}
             onDragStart={(e) => {
-              if (!sideDock || collapsing !== null || (e.target as HTMLElement).closest('button')) { e.preventDefault(); return; }
+              if (!pickup.consume(p.key) || !sideDock || collapsing !== null || (e.target as HTMLElement).closest('button')) { e.preventDefault(); return; }
               reorderDrag.current = p.key;
               e.dataTransfer.effectAllowed = 'move';
               e.dataTransfer.setData('application/x-nekko-monitor', p.key);

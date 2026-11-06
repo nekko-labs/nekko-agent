@@ -95,6 +95,11 @@ describe('subscription model version labels', () => {
 });
 
 describe('model chip name priority', () => {
+  it('names a saved model its list has not delivered yet instead of No model', () => {
+    const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{ id: 'or', kind: 'openrouter', label: 'OpenRouter', enabled: true, baseUrl: 'http://localhost' }]} providerId="or" modelId="x-ai/grok-5" models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+    expect(out).toContain('x-ai/grok-5');
+    expect(out).not.toContain('No model');
+  });
   it('wraps the complete model name rather than ellipsizing it for the account label', () => {
     const out = renderToStaticMarkup(<ModelPicker open={false} providers={[{id:'p',kind:'anthropic',label:'Claude API very long account',enabled:true,baseUrl:''}]} providerId="p" modelId="m" models={[{id:'m',providerId:'p',name:'Claude Opus 4.6'}]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
     expect(out).toContain('whitespace-normal break-words text-left');
@@ -133,5 +138,18 @@ describe('account switcher', () => {
     const out = renderToStaticMarkup(<ModelPicker {...base} modelId="opus" models={[{ id: 'opus', providerId: 'cc', name: 'Opus' }]} providers={[cc('cc', 'Claude Agent'), cc('ccw', 'Claude Agent · Work', 'work')]} providerId="cc" />);
     expect(out).toContain('Claude Agent · Work');
     expect(out).toContain('new Claude Code conversation');
+  });
+});
+
+ describe('starred provider rows', () => {
+  it.each(['starred', 'recent', 'default'])('keeps a %s favorite in its provider group too', (pin) => {
+    const prev = useStore.getState().settings;
+    useStore.setState({ settings: { ...prev, favoriteModels: ['p::m'], defaultProviderId: pin === 'default' ? 'p' : undefined, defaultModelId: pin === 'default' ? 'm' : undefined } as NonNullable<typeof prev> });
+    try {
+      const html = renderToStaticMarkup(<ModelPicker expanded open providers={[{ id: 'p', kind: 'openai', label: 'Provider', enabled: true, baseUrl: '' }]} providerId='p' modelId='m' models={[{ id: 'm', providerId: 'p', name: 'Favorite' }]} recent={pin === 'recent' ? ['p::m'] : []} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+      expect(html.match(/role="option"/g)).toHaveLength(2);
+      expect(html).toContain('data-provider-heading="true">Provider');
+      expect(html.match(/data-model-name="true">Favorite</g)).toHaveLength(2);
+    } finally { useStore.setState({ settings: prev }); }
   });
 });

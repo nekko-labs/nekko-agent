@@ -20,8 +20,6 @@ export type AgentPanelView = {
   direction: SortDirection;
   /** The model, context, git and sub-agent lines under each card's title. */
   showMetadata: boolean;
-  /** The model provider ("Claude", "Local") as subtext under the model. */
-  showProvider: boolean;
   /** Chats an automation started (they carry a task id). */
   showAutomations: boolean;
   /** Groups with nothing in them, shown with a muted dash placeholder. */
@@ -37,7 +35,6 @@ export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
   sortBy: 'manual',
   direction: 'desc',
   showMetadata: true,
-  showProvider: true,
   showAutomations: true,
   showEmptyGroups: true,
   showComputer: true,
@@ -77,7 +74,6 @@ export function parseAgentPanelView(raw: string | null): AgentPanelView {
     sortBy: SORTS.includes(saved.sortBy as AgentSortBy) ? saved.sortBy as AgentSortBy : d.sortBy,
     direction: saved.direction === 'asc' || saved.direction === 'desc' ? saved.direction : d.direction,
     showMetadata: bool(saved.showMetadata, d.showMetadata),
-    showProvider: bool(saved.showProvider, d.showProvider),
     showAutomations: bool(saved.showAutomations, d.showAutomations),
     showEmptyGroups: bool(saved.showEmptyGroups, d.showEmptyGroups),
     showComputer: bool(saved.showComputer, d.showComputer),

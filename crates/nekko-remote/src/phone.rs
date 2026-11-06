@@ -65,6 +65,8 @@ pub struct Policy {
     pub option_switches: Vec<String>,
     pub engine_keys: Vec<String>,
     pub model_server_view: Vec<String>,
+    /// `activity:state`: yes/no answers only, never idle time, battery or temperatures.
+    pub activity_view: Vec<String>,
     pub model_setting_channels: Vec<String>,
     pub preset_path_keys: Vec<String>,
     pub computer_refused: Vec<String>,
@@ -153,6 +155,7 @@ pub fn policy() -> &'static Policy {
             option_switches: strings(&v["optionSwitches"]),
             engine_keys: strings(&v["engineKeys"]),
             model_server_view: strings(&v["modelServerView"]),
+            activity_view: strings(&v["activityView"]),
             model_setting_channels: strings(&v["modelSettingChannels"]),
             preset_path_keys: strings(&v["presetPathKeys"]),
             computer_refused: strings(&v["computerAccess"]["refused"]),
@@ -617,6 +620,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "engine:status" => crate::phone_views::engine(&result, &policy().views),
         "context:preview" => crate::phone_views::context(&result, &policy().views),
         "engine:settings" => pick(&result, &policy().model_server_view),
+        "activity:state" => pick(&result, &policy().activity_view),
         "model:unload" => {
             if result.is_object() {
                 pick(&result, &["message".into(), "ok".into()])
@@ -815,6 +819,8 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         "task:runNow" | "workflow:run" => vec![first.clone()],
         "tasks:list" | "workflows:list" | "usage:summary" => Vec::new(),
         "system:stats" | "gpu:stats" | "engine:status" => Vec::new(),
+        // The computer's own idle threshold: the phone never sets it.
+        "activity:state" => Vec::new(),
         // A chat's own context only: the phone never attaches a path.
         "context:preview" => vec![first.clone(), json!([])],
         "model:unload" => vec![first.clone(), args[1].clone()],
@@ -3037,6 +3043,21 @@ mod tests {
                 got.unwrap(),
                 json!({ "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "utilizationPct": 77 }] })
             );
+        }
+
+        #[test]
+        fn says_whether_the_computer_is_in_use_and_nothing_more() {
+            assert!(has(&policy().read_channels, "activity:state"));
+            let results = json!({ "activity:state": {
+                "userActive": true, "present": ["input"], "strain": ["battery"], "idleSeconds": 12.5, "headless": false,
+                "idleAfterSeconds": 300, "chatActive": false, "power": { "onBattery": true, "percent": 40 }, "cpuC": 71, "gpuC": 65,
+            }});
+            let (got, calls) = call_with(results, "activity:state", json!([{ "idleAfterSeconds": 1 }]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "userActive": true, "chatActive": false, "headless": false, "strain": ["battery"] })
+            );
+            assert_eq!(calls, vec![json!(["activity:state", []])], "the phone never sets the threshold");
         }
 
         #[test]

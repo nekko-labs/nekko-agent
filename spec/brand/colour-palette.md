@@ -75,6 +75,18 @@ Plum in every theme (there is no indigo icon).
 - **Mark (the cat):** `#854F6C`.
 - Source of truth: `apps/desktop/scripts/icon-art.cjs`; regenerate with `npx electron apps/desktop/scripts/make-icons.cjs`.
 
+## Base looks and other brand surfaces
+
+`[updated 2026-11-05]` The last places that still drew the old lilac and violet now use the palette above.
+
+- **System, Light and Dark** (the base looks, and the default accent a fresh profile saves): Light `#5A2352` / `#8A4A7F`, Dark `#C084B5` / `#C99BB3`, on the desktop, the iPhone and Android. A saved `#6D5EFC` (the old default) migrates to `#5A2352` on load, and the old base accents (`#6D5EFC`, `#06B6D4`, `#8B7DFF`, `#22D3EE`) read as the new ones, so nobody who never picked a colour keeps the violet. A phone paired to a computer that still sends the old violet keeps plum.
+- **Startup splash, first launch** (desktop) and the **iPhone launch screen, opening animation and lock cover**: `#190019` with the white cat.
+- **iPhone brand mark** (first run, pairing): the cat in `#854F6C`, as on Android.
+- **Tray companion and memory warning popups** (desktop): `#16161C` panel, `#C99BB3` outlines, `#190019` main button with a `#854F6C` outline.
+- **Nekko Cloud beta emails and the confirm/unsubscribe pages**: `#FBF6F8` page, `#5A2352` wordmark and links (`#C99BB3` in dark), `#190019` to `#3A1438` button, `#5A2352` to `#C084B5` headline.
+
+Not changed: themes a user picks by name (Nebula, and the older Lilac, Lavender and Nekko Dark presets, no longer in the picker) keep their own colours, as do the multicolour nav icons.
+
 ## Website
 
 The site is plum only. Dark and White are its two main looks; Colourful follows the same palette.

@@ -28,8 +28,9 @@ describe('agent chat visual continuity', () => {
     expect(grain.animation).toBeUndefined();
     expect(grain.filter).toBeUndefined();
   });
-  it('keeps flat rows and keyboard focus feedback', () => {
+  it('tints only the selected row while keeping flat rows and keyboard focus feedback', () => {
     expect(cssRule(css, '.agent-chip-chat')).toMatchObject({ background: 'transparent', border: '0', 'box-shadow': 'none' });
+    expect(cssRule(css, '.agent-chip-chat[data-agent-active]').background).toBe('var(--accent-soft)');
     expect(cssRule(css, '.agent-chip-chat:focus-visible').outline).toContain('var(--accent)');
   });
   it.each([false, true])('puts suggestions after the action bar, clean start: %s', (cleanStart) => {

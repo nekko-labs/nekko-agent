@@ -249,8 +249,9 @@ fun routeName(r: RelayRoute) = when (r) {
     RelayRoute.INTERNET -> "Internet relay"
 }
 
+/** A computer's connection state in words (Settings → Connection, New chat's Run on). */
 @StringRes
-private fun stateName(s: RelayState) = when (s) {
+internal fun stateName(s: RelayState) = when (s) {
     RelayState.IDLE -> R.string.settings_state_idle
     RelayState.CONNECTING -> R.string.settings_state_connecting
     RelayState.ONLINE -> R.string.settings_state_online

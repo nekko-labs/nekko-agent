@@ -130,6 +130,8 @@ export const IpcChannels = {
   /** The loaded local models, how many are replying, and what their processes hold: what shutting them down frees. */
   engineMemory: 'engine:memory',
   gpuStats: 'gpu:stats',
+  /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
+  activityState: 'activity:state',
   systemStats: 'system:stats',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
   monitorSummary: 'monitor:summary',
@@ -560,8 +562,8 @@ export interface NekkoApi {
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
-  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */
-  feedbackSend(message: string, includeAppInfo: boolean): Promise<{ ok: true }>;
+  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`, and any screenshots. */
+  feedbackSend(message: string, includeAppInfo: boolean, screenshots?: import('./feedback.js').FeedbackScreenshot[]): Promise<{ ok: true }>;
   syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
   syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
   syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;

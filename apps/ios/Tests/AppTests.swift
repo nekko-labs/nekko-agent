@@ -60,7 +60,7 @@ final class MarkdownTests: XCTestCase {
 final class PaletteTests: XCTestCase {
     func testPicksReadableInkOnTheAccent() {
         XCTAssertGreaterThan(Palette.luminance(0xFFFFFF), 0.99)
-        XCTAssertLessThan(Palette.luminance(0x6D5EFC), 0.45)
+        XCTAssertLessThan(Palette.luminance(0x5A2352), 0.45)
         XCTAssertEqual(Palette.contrast(0xFFFFFF, 0x000000), 21, accuracy: 0.01)
     }
 
@@ -78,21 +78,21 @@ final class PaletteTests: XCTestCase {
             }
             return ch(16) | ch(8) | ch(0)
         }
-        let light = [0xFBFBFD, 0xFFFFFF, 0xF2F2F7, wash(0xFBFBFD, 0x5A4AE8, AppBackdrop.lightWash)]
-        let dark = [0x0C0C11, 0x16161C, 0x20202A, wash(0x0C0C11, 0x8B7DFF, AppBackdrop.darkWash)]
+        let light = [0xFBFBFD, 0xFFFFFF, 0xF2F2F7, wash(0xFBFBFD, 0x5A2352, AppBackdrop.lightWash)]
+        let dark = [0x0C0C11, 0x16161C, 0x20202A, wash(0x0C0C11, 0xC084B5, AppBackdrop.darkWash)]
         for bg in light {
-            for ink in [0x17171D, 0x52525E, 0x5E5E6A, 0x5A4AE8, 0xB42318, 0x875709, 0x1D4ED8, 0x1A7043] {
+            for ink in [0x17171D, 0x52525E, 0x5E5E6A, 0x5A2352, 0xB42318, 0x875709, 0x1D4ED8, 0x1A7043] {
                 XCTAssertGreaterThanOrEqual(Palette.contrast(ink, bg), 4.5, String(format: "%06X on %06X", ink, bg))
             }
         }
         for bg in dark {
-            for ink in [0xECEAF3, 0xA3A1B0, 0x8E8E9B, 0x8B7DFF, 0xEF6A5B, 0xE3A446, 0x60A5FA, 0x4CC38A] {
+            for ink in [0xECEAF3, 0xA3A1B0, 0x8E8E9B, 0xC084B5, 0xEF6A5B, 0xE3A446, 0x60A5FA, 0x4CC38A] {
                 XCTAssertGreaterThanOrEqual(Palette.contrast(ink, bg), 4.5, String(format: "%06X on %06X", ink, bg))
             }
         }
         // Button labels on the default accents.
-        XCTAssertGreaterThanOrEqual(Palette.contrast(0xFFFFFF, 0x5A4AE8), 4.5)
-        XCTAssertGreaterThanOrEqual(Palette.contrast(0x0C0C11, 0x8B7DFF), 4.5)
+        XCTAssertGreaterThanOrEqual(Palette.contrast(0xFFFFFF, 0x5A2352), 4.5)
+        XCTAssertGreaterThanOrEqual(Palette.contrast(0x0C0C11, 0xC084B5), 4.5)
     }
 }
 
@@ -108,7 +108,9 @@ final class ThemePresetTests: XCTestCase {
         // The computer's own accent wins over the preset's.
         XCTAssertEqual(Palette.make(dark: true, accent: 0x112233, preset: nord).accent, Color(hex: 0x112233))
         // System, Light and Dark keep the phone's contrast-tuned accent.
-        XCTAssertEqual(Palette.make(dark: false, accent: nil, preset: ThemePreset.find("light")).accent, Color(hex: 0x5A4AE8))
+        XCTAssertEqual(Palette.make(dark: false, accent: nil, preset: ThemePreset.find("light")).accent, Color(hex: 0x5A2352))
+        // A computer from before the plum palette sends its old violet: the phone keeps plum.
+        XCTAssertEqual(Palette.make(dark: false, accent: 0x6D5EFC, preset: ThemePreset.find("system")).accent, Color(hex: 0x5A2352))
     }
 
     func testMatchingTheComputerUsesItsPreset() {
