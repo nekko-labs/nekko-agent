@@ -81,7 +81,7 @@ describe('compact board and navigation spacing', () => {
   });
 
   it('paints static wings with the darker fill and only widens their viewport', () => {
-    expect(cssRule(styles, '.rail')).toMatchObject({ top: '5%', bottom: '5%', 'pointer-events': 'none' });
+    expect(cssRule(styles, '.rail')).toMatchObject({ top: cssValue('max(0px, calc(5% - 42px))'), bottom: cssValue('calc(5% + 42px)'), 'pointer-events': 'none' });
     expect(cssRule(styles, '.rail').background).toBeUndefined();
     expect(cssRule(styles, '.rail-feedback')['pointer-events']).toBe('auto');
     expect(cssRule(styles, '.rail-backdrop')).toMatchObject({ width: 'var(--rail-w-rest)', 'pointer-events': 'none' });

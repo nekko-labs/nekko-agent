@@ -613,7 +613,8 @@
   isolation: isolate;
   pointer-events: none;
   z-index: 1;
-  top: 5%; bottom: 5%;
+  /* Lift the whole section without moving it above a short viewport. */
+  top: max(0px, calc(5% - 42px)); bottom: calc(5% + 42px);
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
 .rail-feedback { pointer-events: auto; flex-shrink: 0; }
@@ -2748,6 +2749,18 @@
    breathing between the accent and a lighter tint, the flame flickering and
    the speed streaks sliding past. Kept small and slow: it sits in a dense list.
    Stepped timing keeps a list of working rockets from repainting every frame. */
+/* Across the top of a sub-agent's chat: what it is and which chat it works for. */
+.subagent-banner { display: flex; min-width: 0; flex-shrink: 0; align-items: center; gap: 6px; border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); padding: 4px 12px; font-size: var(--text-2xs); color: var(--accent); }
+.subagent-banner-parent { display: inline-flex; min-width: 0; align-items: center; gap: 2px; border-radius: 999px; padding: 1px 6px; color: var(--ink); font-weight: 500; }
+.subagent-banner-parent:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+/* The tree line from a parent's card to each of its sub-agent rows: a tee for
+   every row, an elbow for the last. It reaches a little above the row so the
+   lines join across the gap between rows. */
+.subagent-tree { position: absolute; left: 14px; top: 0; bottom: 0; width: 8px; pointer-events: none; --tree-line: color-mix(in srgb, var(--ink) 32%, transparent); }
+.subagent-tree::before { content: ''; position: absolute; left: 0; top: -4px; bottom: 0; border-left: 1px solid var(--tree-line); }
+.subagent-tree::after { content: ''; position: absolute; left: 0; top: 50%; width: 100%; border-top: 1px solid var(--tree-line); }
+.subagent-tree[data-subagent-tree='last']::before { content: none; }
+.subagent-tree[data-subagent-tree='last']::after { top: -4px; height: calc(50% + 4px); border-top: 0; border-left: 1px solid var(--tree-line); border-bottom: 1px solid var(--tree-line); border-bottom-left-radius: 5px; }
 .status-rocket { color: var(--success); animation: rocket-breathe 2.4s steps(12, end) infinite; }
 .status-rocket svg { animation: rocket-hover 1.2s steps(10, end) infinite; overflow: visible; }
 .status-rocket .rocket-flame { animation: rocket-flame .35s steps(4, end) infinite alternate; transform-origin: 12px 18px; }
@@ -2857,6 +2870,18 @@
 .plan-sheet-glyph { display: inline-grid; place-items: center; color: var(--ink-faint); }
 .plan-sheet-glyph.is-running { color: var(--success); }
 .plan-sheet-dot { width: 6px; height: 6px; border-radius: 50%; }
+/* Sub-agents as live cards along the bottom of the plan: a status glyph and the
+ * task on one line, what it is doing now under it. One row that scrolls
+ * sideways, so many sub-agents never push the composer down. */
+.plan-sheet-agents { display: flex; gap: 6px; overflow-x: auto; padding: 6px 0 2px; scrollbar-width: thin; }
+.plan-sheet-agent { display: flex; flex: 0 0 auto; flex-direction: column; gap: 1px; width: 200px; min-width: 0; border-radius: 8px; background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid color-mix(in srgb, var(--ink) 8%, transparent); padding: 5px 8px; text-align: left; font-size: var(--text-xs); transition: background-color 120ms ease, border-color 120ms ease; }
+.plan-sheet-agent[data-status="working"] { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.plan-sheet-agent[data-status="input"] { border-color: color-mix(in srgb, var(--attention) 55%, transparent); }
+.plan-sheet-agent[data-status="done"] .plan-sheet-agent-line .text-ink { color: var(--ink-soft); }
+.plan-sheet-agent:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--accent); }
+.plan-sheet-agent-line { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.plan-sheet-agent-detail { display: block; padding-left: 18px; font-size: var(--text-2xs); color: var(--ink-faint); }
+@media (hover: hover) { .plan-sheet-agent:hover { background: var(--surface); border-color: color-mix(in srgb, var(--ink) 16%, transparent); } }
 /* The small CI/state icon on a PR chip. `is-pending` spins so a watcher can see
  * the checks are still running even if the colour reads the same as another
  * state's tone. */
@@ -3503,6 +3528,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-suggestions-row { display: flex; justify-content: flex-end; min-width: 0; padding: 0 8px 6px; }
 .composer-suggestions-row:not(:has(button)) { display: none; }
 .agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
+.agent-chip-chat[data-agent-active] { background: var(--accent-soft); }
 .agent-chip-chat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .composer-suggestions-chip {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
@@ -3694,6 +3720,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window > .panel { transition: none; }
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] > .panel::before { animation: none; }
 }
+/* Dither the selected conversation's field as well as new chat. Reuse the
+   fixed monochrome tile behind content; never grain inactive panes or the
+   standalone composer, and do not add another layer to new chat. */
+:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] [data-chat-surface]:not([data-chat-surface='composer']):not([data-clean-start]) > section::after,
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='grain' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cpath fill='white' filter='url(%23grain)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
