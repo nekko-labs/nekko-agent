@@ -10,6 +10,9 @@ const emails = vi.hoisted(() => ({ byToken: {} as Record<string, string> }));
 vi.mock('../../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('../../accountEmails.js')>()), useAccountEmails: () => emails.byToken }));
 import { useStore } from '../../store.js';
 import { ModelPicker } from './ModelPicker.js';
+import type { ProviderConfig, SubscriptionLimits } from '@nekko-agent/shared';
+const quota = vi.hoisted(() => ({ byToken: {} as Record<string, SubscriptionLimits>, answered: new Set<string>() }));
+vi.mock('../../useLimits.js', () => ({ useProviderLimitsPortfolio: () => quota }));
 
 describe('default model in the picker', () => {
   it('hides settings mutation controls in read-only mode', () => {
@@ -164,6 +167,40 @@ describe('account switcher', () => {
     const out = renderToStaticMarkup(<ModelPicker {...base} modelId="opus" models={[{ id: 'opus', providerId: 'cc', name: 'Opus' }]} providers={[cc('cc', 'Claude Agent'), cc('ccw', 'Claude Agent · Work', 'work')]} providerId="cc" />);
     expect(out).toContain('Claude Agent · Work');
     expect(out).toContain('new Claude Code conversation');
+  });
+});
+
+describe('account-scoped provider usage', () => {
+  const snapshot: SubscriptionLimits = { updatedAt: Date.now(), staleAfterMs: 60000, windows: [{ id: 'session', label: '5 hours', scope: 'session', usedPercent: 72, status: 'allowed', resetAt: Date.now() + 60000 }] };
+  const render = (provider: ProviderConfig) => renderToStaticMarkup(<ModelPicker expanded open={false} providers={[provider]} providerId={provider.id} modelId="m" models={[{ id: 'm', name: 'Model', providerId: provider.id }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
+  it.each([
+    [{ id: 'gpt', kind: 'chatgpt', auth: 'subscription', tokenKey: 'account:work' }, 'account:work'],
+    [{ id: 'cc', kind: 'claude-code' }, 'claude-code:cc'],
+    [{ id: 'or', kind: 'openrouter', apiKey: 'fixture' }, 'provider:or'],
+  ] as const)('reads the canonical account key for %s', (fields, key) => {
+    quota.byToken = { [key]: snapshot };
+    try {
+      expect(render({ ...fields, label: 'Provider', baseUrl: '', enabled: true } as ProviderConfig)).toContain('72% used');
+      quota.byToken = { 'another-account': snapshot };
+      expect(render({ ...fields, label: 'Provider', baseUrl: '', enabled: true } as ProviderConfig)).not.toContain('72% used');
+    } finally { quota.byToken = {}; }
+  });
+  it('retains the meter when the only model is pinned as default', () => {
+    const prev = useStore.getState().settings;
+    useStore.setState({ settings: { ...prev, defaultProviderId: 'cc', defaultModelId: 'm' } as NonNullable<typeof prev> });
+    quota.byToken = { 'claude-code:cc': snapshot };
+    try {
+      const out = render({ id: 'cc', kind: 'claude-code', label: 'Claude', baseUrl: '', enabled: true });
+      expect(out).toContain('72% used');
+      expect(out.match(/role="option"/g)).toHaveLength(1);
+    } finally { quota.byToken = {}; useStore.setState({ settings: prev }); }
+  });
+  it('does not fabricate quota for local and unsupported API providers', () => {
+    for (const kind of ['ollama', 'openai'] as const) {
+      const out = render({ id: 'local', kind, label: 'Provider', baseUrl: '', enabled: true });
+      expect(out).not.toContain('role="meter"');
+      expect(out).not.toContain('Reading usage');
+    }
   });
 });
 
