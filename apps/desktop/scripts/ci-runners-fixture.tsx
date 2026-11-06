@@ -106,6 +106,9 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'setup-resume': async () => noImageYet(),
   'setup-rebuild': async () => [view({})],
   ready: async () => [view({})],
+  // An image built before Nekko installed the job tools (#1845).
+  'missing-tools': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
+  'missing-tools-install': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
   'ready-left-off': async () => [off({ forkApprovalOpen: true })],
   'ready-second-runner': async () => [off()],
   'rebuild-cancelled': async () => [view({})],
@@ -135,6 +138,8 @@ const image = (over: Partial<ImageView> = {}): ImageView => ({
 });
 const READY = image({ state: 'ready', info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' } });
 const NONE = image();
+const NO_TOOLS = image({ state: 'ready', info: { ...READY.info!, missingTools: ['node', 'gh'] } });
+const ADDING_TOOLS = image({ kind: 'tools', state: 'building', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh and jq', info: NO_TOOLS.info });
 const toXcode: ImageView['doneStages'] = ['check', 'download', 'install'];
 const download = image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] });
 const images: Record<string, ImageView | null> = {
@@ -153,7 +158,8 @@ const images: Record<string, ImageView | null> = {
   'setup-refused-helper': image({ state: 'failed', stage: 'check', error: 'This copy of Nekko cannot build a VM on its own. Update Nekko, or bring your own image.', canResume: true }),
   'setup-resume': image({ stage: 'xcode', doneStages: toXcode, canResume: true }),
   'setup-rebuild': READY, ready: download, 'ready-left-off': download, 'ready-second-runner': download, 'card-ready': READY,
-  'rebuild-cancelled': image({ ...download, info: READY.info }), 'connect-busy': NONE, 'image-retry': NONE,
+  'rebuild-cancelled': image({ ...download, info: READY.info }),
+  'missing-tools': NO_TOOLS, 'missing-tools-install': NO_TOOLS, 'connect-busy': NONE, 'image-retry': NONE,
 };
 const plans: Record<string, ImagePlan> = { 'setup-no-xcode': { xcode: null, freeGb: 369.4, needsGb: 110, cachedMacos: false } };
 const PLAN: ImagePlan = { xcode: '27.2', freeGb: 369.4, needsGb: 110, cachedMacos: false };
@@ -214,6 +220,8 @@ const bridge: any = {
     return scene in images ? images[scene] : READY;
   },
   cancelImage: async () => { imageChanged(READY); return READY; },
+  // Installing the job tools starts at once, as the daemon does.
+  buildImage: async (req: { kind: string }) => { if (req.kind !== 'tools') return null; imageChanged(ADDING_TOOLS); return ADDING_TOOLS; },
   imagePlan: async () => plans[scene] ?? PLAN,
   linuxImageStatus: async () => (scene === 'settings-linux-building'
     ? { state: 'building', stage: 'download', progress: 0.42, message: 'Downloading Ubuntu 24.04 (1 of 3)', proof: null }

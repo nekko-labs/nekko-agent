@@ -495,15 +495,20 @@ export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Part
   ) as Partial<RunnerSettings>;
 }
 
-/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`. */
-export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'test', 'finish'] as const;
+/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`, adding tools only `TOOLS_STAGES`. */
+export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'tools', 'test', 'finish'] as const;
 export type ImageStage = (typeof IMAGE_STAGES)[number];
-/** A build from Apple's image (with or without Xcode), or the image in use with Nekko's scripts replaced. */
-export type ImageKind = 'xcode' | 'macosOnly' | 'refresh';
+/**
+ * A build from Apple's image (with or without Xcode), or the image in use with Nekko's
+ * scripts replaced, or with the job tools it lacks installed.
+ */
+export type ImageKind = 'xcode' | 'macosOnly' | 'refresh' | 'tools';
 const REFRESH_STAGES: readonly ImageStage[] = ['check', 'scripts', 'test', 'finish'];
-const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts');
+const TOOLS_STAGES: readonly ImageStage[] = ['check', 'tools', 'test', 'finish'];
+const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts' && s !== 'tools');
 /** The stages a build of `kind` runs; a view with no build lists a full one. */
-export const imageStages = (kind: ImageKind | null): readonly ImageStage[] => (kind === 'refresh' ? REFRESH_STAGES : FULL_STAGES);
+export const imageStages = (kind: ImageKind | null): readonly ImageStage[] =>
+  kind === 'refresh' ? REFRESH_STAGES : kind === 'tools' ? TOOLS_STAGES : FULL_STAGES;
 export type ImageState = 'none' | 'ready' | 'building' | 'waiting' | 'failed';
 
 /** What the image holds, from the proof file `provision.sh` writes. */
@@ -512,6 +517,19 @@ export interface ImageInfo {
   xcode: string | null;
   actionsRunner: string;
   built: string;
+  /** The job tools found on the image's disk; absent for an image built before Nekko looked. */
+  tools?: string[];
+  /** Tools jobs run before their own setup (node, gh, jq) that this image lacks; absent from an older daemon. */
+  missingTools?: string[];
+}
+
+/** "a", "a and b", "a, b and c". */
+const andList = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
+/** The runner card's notice for an image without some job tools. */
+export function missingToolsLine(tools: string[]): string {
+  const one = tools.length === 1;
+  return `${andList(tools)} ${one ? 'is' : 'are'} missing from this Mac's runner image. Jobs that need ${one ? 'it' : 'them'} will fail.`;
 }
 
 export interface ImageView {
@@ -565,6 +583,7 @@ export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
   xcode: 'Add Xcode and tools',
   lockdown: 'Lock the VM down',
   scripts: "Update Nekko's scripts",
+  tools: 'Install the missing tools',
   test: 'Test a boot',
   finish: 'Turn the runner on',
 };
