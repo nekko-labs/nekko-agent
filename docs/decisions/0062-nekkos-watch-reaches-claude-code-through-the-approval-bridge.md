@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-04
 ---
 
-# 0061. Nekko's watch reaches Claude Code as a tool on the approval bridge, gated by the Claude policy
+# 0062. Nekko's watch reaches Claude Code as a tool on the approval bridge, gated by the Claude policy
 
 ## Context
 
