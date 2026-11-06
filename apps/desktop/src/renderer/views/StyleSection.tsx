@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import type { AppSettings } from '@nekko-agent/shared';
 import { useStore, textScaleOf } from '../store.js';
+import { TEXT_SCALES } from '../textScale.js';
 import { ExternalIcon, FolderIcon } from '../icons.js';
 
 type Props = { settings: AppSettings; update: (patch: Partial<AppSettings>) => void };
 
-const SCALES = [80, 90, 100, 110, 125, 150];
 const FONTS_DOCS = 'https://nekkoagent.com/docs/fonts-and-text';
 
 /**
@@ -36,7 +36,7 @@ export function StyleSection({ settings, update }: Props) {
       <div className="min-w-0"><label htmlFor="style-text-size" className="text-sm">Text size</label>
         <p className="text-2xs text-ink-faint">Scales all text and controls in the app.</p></div>
       <select id="style-text-size" className="input max-w-[220px] py-1" value={textScaleOf(settings.textScale)} onChange={(e) => update({ textScale: Number(e.target.value) })}>
-        {SCALES.map((s) => <option key={s} value={s}>{s}%{s === 100 ? ' (default)' : ''}</option>)}
+        {TEXT_SCALES.map((s) => <option key={s} value={s}>{s}%{s === 100 ? ' (default)' : ''}</option>)}
       </select>
     </div>
     <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">

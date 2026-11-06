@@ -1,3 +1,4 @@
+import { TerminalContext } from './TerminalContext.js';
 import React, { useEffect, useRef, useState } from 'react';
 import type { TerminalEvent, TerminalInfo, TerminalStream, TerminalRenderer } from '@nekko-agent/shared';
 import '@xterm/xterm/css/xterm.css';
@@ -221,6 +222,7 @@ function MenuRow({ label, hint }: { label: string; hint?: string }) {
 export function TerminalPane({ terminalId }: { terminalId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [info, setInfo] = useState<TerminalInfo | null>(null);
+  const liveInfo = useStore((s) => s.terminals.find((t) => t.id === terminalId));
   const prefer = useStore((s) => s.settings?.terminal?.renderer) ?? 'xterm';
   const termRef = useRef<TermSurface | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; selection: boolean; canPaste: boolean } | null>(null);
@@ -398,7 +400,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-      {framed ? (
+      {!terminalId.startsWith('agent_') && (liveInfo || info) ? <TerminalContext terminal={liveInfo || info!} /> : framed ? (
         <PaneActions>{status}</PaneActions>
       ) : (
         <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1">{status}</div>

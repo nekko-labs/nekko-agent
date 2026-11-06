@@ -10,6 +10,8 @@ Change them in **Settings > Style**:
 
 Each list offers the default, **System** (your operating system's own font) and any fonts you have added.
 
+You can also change text size in **Settings > Accessibility**. Press **−** or **+** and a preview shows the new size, then press **Apply** to use it across the app, or **Cancel** to keep the size you have. It is the same setting as the one in Style.
+
 ## Add your own fonts
 
 1. Open **Settings > Style** and press **Open fonts folder**. It is `fonts` inside your Nekko data folder (`~/.nekko-agent/fonts` unless you set `NEKKO_DATA_DIR`).

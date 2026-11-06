@@ -316,7 +316,7 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 
 
 /* Keep the drop surface stationary while its contents make room. */
-.agent-panel-group { padding-top: 0; transition: padding-top 140ms var(--ease-out); }
+.agent-panel-group { position: relative; padding-top: 0; transition: padding-top 140ms var(--ease-out); }
 .agent-panel-group[data-group-gap] { padding-top: 36px; }
 .agent-panel-row > .agent-panel-group { position: relative; padding-top: 0; padding-left: 0; transition: padding-left 140ms var(--ease-out); }
 .agent-panel-row > .agent-panel-group[data-group-gap] { padding-left: 48px; }
@@ -341,11 +341,15 @@ body.wall-resizing .command-wall-content[data-focus-chat] .command-wall-primary,
 @media (max-width: 767px) { .wall-agents-presence { width: auto; overflow: visible; clip-path: none; } }
 @media (prefers-reduced-motion: reduce) { .wall-agents-presence { transition: none; transform: none; } }
 
-/* Separate project/status/date sections without inflating the agent cards. */
-.agent-panel-group + .agent-panel-group { margin-top: 6px; }
+/* Give sections breathing room without changing card density or drop padding.
+   The rule lives in the gap, not on the rounded group/drop-target surface. */
+.agent-panel-group + .agent-panel-group { margin-top: 20px; }
+.agent-panel-group + .agent-panel-group::before { content: ""; position: absolute; inset-inline: 8px; top: -10px; height: 1px; background: color-mix(in srgb, var(--line) 65%, transparent); pointer-events: none; }
 .agent-panel-group-heading { margin-bottom: 4px; }
 .agent-panel-group-label { font-size: var(--text-sm); line-height: 20px; color: var(--accent); }
+.agent-panel-row { column-gap: 24px; }
 .agent-panel-row > .agent-panel-group + .agent-panel-group { margin-top: 0; }
+.agent-panel-row > .agent-panel-group + .agent-panel-group::before { inset-inline: auto; inset-inline-start: -12px; top: 8px; bottom: 8px; width: 1px; height: auto; }
 
 .hover-tip-multiline { max-width: min(420px, calc(100vw - 16px)); white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 400; }
 

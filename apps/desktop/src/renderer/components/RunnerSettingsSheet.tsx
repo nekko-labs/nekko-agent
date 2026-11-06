@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KEEP_AWAKE_LABELS,
   LINUX_SLOT_CHOICES,
@@ -140,7 +140,7 @@ export function LinuxImageRow({ image, onAction }: { image: LinuxImageView; onAc
 }
 
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, toggling = false }: {
+export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, saveError = null, toggling = false }: {
   view: RunnerView;
   image?: ImageView | null;
   /** `null` while unknown, or where the daemon builds no Linux image. */
@@ -157,6 +157,7 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
   onRebuild?(): void;
   onRefresh?(): void;
   saving: boolean;
+  saveError?: string | null;
   toggling?: boolean;
 }) {
   const { host } = view;
@@ -170,9 +171,10 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
   const jobChoices = MAX_JOB_CHOICES.includes(draft.maxJobMinutes) ? MAX_JOB_CHOICES : [...MAX_JOB_CHOICES, draft.maxJobMinutes];
 
   return (
-    <div className="flex flex-col gap-4 p-5">
+    <div className="flex flex-col gap-4 p-5" aria-busy={saving}>
       <h2 className="text-base font-semibold text-ink">Runner settings · This Mac</h2>
 
+      <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4">
       <Row label="Runner">
         <div className="flex items-center gap-3">
           <Toggle value={enabled} disabled={toggling} onChange={onEnabled} label="Runner on" />
@@ -343,10 +345,14 @@ export function SettingsBody({ view, image = null, linuxImage = null, onLinuxIma
         </Row>
       )}
 
+      </fieldset>
+
       {/* Sticky: the sheet is taller than a laptop window, and Save must stay in reach. */}
       <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center gap-2 border-t bg-surface px-5 pt-3 pb-5" style={{ borderColor: 'var(--line)' }}>
+        {saving && <p role="status" className="w-full text-sm text-ink-soft">Saving runner settings…</p>}
+        {saveError && <p role="alert" className="w-full text-sm text-danger">{saveError}</p>}
         <button type="button" className="btn btn-outline text-[var(--danger)]" disabled={saving} onClick={onRemove}>Remove runner</button>
-        <button type="button" className="btn btn-outline ml-auto" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-outline ml-auto" disabled={saving} onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-primary" disabled={saving} onClick={onSave}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
     </div>
@@ -364,12 +370,15 @@ export interface Edits { base: RunnerSettings; draft: RunnerSettings }
 /** The first edit snapshots the settings it started from; later edits keep that base. */
 export const editDraft = (edits: Edits | null, view: RunnerView, draft: RunnerSettings): Edits => ({ base: edits?.base ?? view.config.settings, draft });
 
-/** Runner settings for one runner. After Save, the form shows what the daemon kept. */
+/** Runner settings for one runner. Save closes only after the daemon confirms persistence. */
 export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, onRefresh, beginReply }: { view: RunnerView; image?: ImageView | null; onClose(): void; onRebuild?(): void; onRefresh?(): Promise<void>; beginReply(): (v: RunnerView) => void }) {
   const pushToast = useStore((s) => s.pushToast);
   const [edits, setEdits] = useState<Edits | null>(null);
   const draft = shownSettings(view, edits?.draft ?? null);
   const [saving, setSaving] = useState(false);
+  const inFlight = useRef(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const close = () => { if (!inFlight.current) onClose(); };
 
   const [linuxImage, setLinuxImage] = useState<LinuxImageView | null>(null);
   useEffect(() => {
@@ -401,24 +410,39 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
     }
   };
   const save = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
-    const reply = beginReply();
-    const res = await saveSettings(view, edits?.base ?? view.config.settings, draft, { updateRunner: window.nekko.updateRunner, pushToast });
-    setSaving(false);
-    if (!res) return;
-    setEdits(null); // the view now carries what the daemon kept
-    reply(res.view);
+    setSaveError(null);
+    try {
+      const reply = beginReply();
+      const res = await saveSettings(view, edits?.base ?? view.config.settings, draft, {
+        updateRunner: window.nekko.updateRunner,
+        pushToast: (_kind, message) => setSaveError(message),
+      });
+      if (!res) return;
+      reply(res.view);
+      pushToast('success', 'Runner settings saved.');
+      onClose();
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
   };
   // Apply saves the two sizes now and keeps any other edits in the form.
   const applySize = async (patch: Pick<RunnerSettings, 'cpusPerVm' | 'memoryPerVmMb'>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setSaveError(null);
     setSaving(true);
     try {
       const reply = beginReply();
       reply(await window.nekko.updateRunner(view.config.id, patch));
       setEdits((e) => e && { base: { ...e.base, ...patch }, draft: { ...e.draft, ...patch } });
     } catch (e) {
-      pushToast('error', `Could not apply the suggested size: ${e instanceof Error ? e.message : String(e)}`);
+      setSaveError(`Could not apply the suggested size: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };
@@ -440,7 +464,7 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
   };
 
   return (
-    <Modal title="Runner settings · This Mac" onClose={onClose} overlayClassName="p-4" className="card w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
+    <Modal title="Runner settings · This Mac" onClose={close} overlayClassName="p-4" className="card w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       <SettingsBody
         view={view}
         image={image}
@@ -452,10 +476,11 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
         onSave={() => void save()}
         onApplySize={(p) => void applySize(p)}
         onRemove={() => void remove()}
-        onCancel={onClose}
+        onCancel={close}
         onRebuild={onRebuild}
         onRefresh={onRefresh && (() => void refresh())}
         saving={saving}
+        saveError={saveError}
         toggling={toggling}
       />
     </Modal>

@@ -4,6 +4,22 @@ Run your GitHub Actions jobs on this Mac. Each job gets its own throwaway macOS 
 deleted when the job ends, and your own work comes first: by default the runner only takes jobs
 while you are away and the Mac is plugged in.
 
+## Watch runners from Automations
+
+The **Automations** panel on the Agent board shows your connected CI runners even
+when no chat automations are scheduled. VM tiles show their names and state; **Live
+log** opens output from that VM, including while it is starting or ready for a job.
+The card's switch and settings apply to the whole runner, not just one VM.
+
+Jobs appear under **Queued**, **In progress**, and **Completed**. Use the existing
+Accept now/Decline, Cancel/Re-run, and log controls there. Cancel and restart still
+ask for confirmation because they affect the workflow run on GitHub.
+
+Choose **View CI runners** to open the full CI section in Scheduled Tasks, where you
+can also connect GitHub and set up this Mac. With no connected runners the panel
+shows a short setup hint. Runners are hidden when the connected service does not
+support them; a temporary service failure shows an error and retries.
+
 ## What it does
 
 Nekko Agent registers this Mac as a GitHub Actions **self-hosted runner** for one repo or one
@@ -442,9 +458,22 @@ each with its time), the end of the job's log, read from GitHub when you open it
 own log: what the VM printed while it started the runner, took the job and shut down. That last
 one is where to look when a job never reached GitHub. The logs only load for jobs this runner ran.
 
-The VM log needs an image with the current scripts. If a job says "No VM log", open runner
-settings and choose **Update scripts** (a few minutes). This Mac keeps the last 20 VM logs, up
-to 1 MB each.
+The two logs have different sources:
+
+- **Job log** comes from GitHub and needs a match between the VM runner and its job. If no match
+  was found, open the workflow run in GitHub Actions to read its log there. Nekko searches a
+  bounded recent history, including earlier attempts; a busy history or delayed GitHub result
+  can still leave an unidentified job. Old unidentified entries are not backfilled.
+- **VM log** comes from inside the VM. Updating Nekko does not update an existing image's
+  guest scripts. Open runner settings and choose **Update scripts**, then wait for its test
+  boot to finish before checking a job in a newly started VM. This updates future VMs, not a VM
+  already running or a log lost when its VM was deleted. Empty output or a collection failure
+  can also leave no saved log; the message alone does not prove the image is old. This Mac
+  keeps the last 20 nonempty VM logs, up to 1 MB each.
+
+Runner settings **Save** shows **Saving runner settings…**, prevents edits and dismissal while
+saving, and closes with a confirmation after the service accepts the change. On failure, the
+sheet stays open with your edits and the service's error beside **Save**, so you can retry.
 
 ## The menu bar dot
 

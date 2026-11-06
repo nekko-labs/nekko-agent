@@ -96,6 +96,10 @@ jobs:
           ref: ${{ inputs.harness_ref || github.sha }}
           path: .evidence-harness
           persist-credentials: false
+          sparse-checkout: |
+            ${{ inputs.ios_test_file }}
+            apps/ios/App/Views/SecurityEvidenceFixture.swift
+          sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
           BASELINE: ${{ inputs.baseline_ref }}
@@ -114,8 +118,9 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
-          # Add the same debug-only in-memory fixture to both app revisions. The
-          # baseline's production views and behavior remain unchanged.
+          # Only the security comparison needs the debug-only in-memory fixture.
+          # Production views and behavior remain unchanged in both revisions.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/SecurityComparisonTests.swift" ]]; then
           cp .evidence-harness/apps/ios/App/Views/SecurityEvidenceFixture.swift apps/ios/App/Views/
           python3 - <<'PYFIX'
           from pathlib import Path
@@ -128,6 +133,7 @@ jobs:
               s = s.replace(needle, '        if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") { SecurityEvidenceFixture() } else\n' + needle, 1)
           p.write_text(s)
           PYFIX
+          fi
       - run: brew install xcodegen
       - name: Generate project and create simulator (same selection as Native iOS)
         working-directory: apps/ios

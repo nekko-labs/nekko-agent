@@ -62,6 +62,8 @@ pub struct LaunchSpec {
     pub session: SessionStart,
     /// A Claude Code model alias or id (`opus`, `sonnet`, `claude-opus-5-5`).
     pub model: Option<String>,
+    /// `--effort`; `None` keeps the user's Claude Code setting.
+    pub effort: Option<String>,
     pub permission_mode: PermissionMode,
     /// The per-chat MCP config with the approval bridge.
     pub mcp_config: Option<PathBuf>,
@@ -75,6 +77,10 @@ pub struct LaunchSpec {
     /// Environment changes for the child: set a variable, or remove it (`None`).
     pub env: Vec<(String, Option<String>)>,
 }
+
+/// The first Claude Code that takes every level Nekko offers on `--effort`
+/// (`xhigh` arrived here). An older one would refuse the turn over the flag.
+const EFFORT_SINCE: (u32, u32, u32) = (2, 1, 111);
 
 /// The command line, without the binary. Always stream-json both ways with
 /// partial messages (without them text arrives in one block), and with each
@@ -100,6 +106,11 @@ pub fn launch_args(spec: &LaunchSpec) -> Vec<String> {
     }
     if let Some(model) = spec.model.as_ref().filter(|m| !m.trim().is_empty()) {
         a.extend(["--model".into(), model.clone()]);
+    }
+    if let Some(effort) = &spec.effort
+        && crate::parse_version(&spec.bin.version).is_some_and(|(_, v)| v >= EFFORT_SINCE)
+    {
+        a.extend(["--effort".into(), effort.clone()]);
     }
     a.extend(["--permission-mode".into(), spec.permission_mode.flag().into()]);
     if let Some(config) = &spec.mcp_config {
@@ -459,6 +470,7 @@ mod tests {
             cwd: ".".into(),
             session,
             model: Some("opus".into()),
+            effort: None,
             permission_mode: PermissionMode::AcceptEdits,
             mcp_config: Some("C:/data/harness/s1.mcp.json".into()),
             permission_prompt_tool: Some("mcp__nekko_bridge__approve".into()),
@@ -499,6 +511,19 @@ mod tests {
         let r = launch_args(&spec(SessionStart::Resume("u-2".into())));
         assert!(r.windows(2).any(|w| w == ["--resume", "u-2"]));
         assert!(!r.contains(&"--session-id".to_string()));
+    }
+
+    #[test]
+    fn passes_effort_only_to_a_claude_code_that_takes_it() {
+        let mut s = spec(SessionStart::New("u".into()));
+        let effort = |s: &LaunchSpec| launch_args(s).windows(2).any(|w| w == ["--effort", "xhigh"]);
+        assert!(!effort(&s));
+        s.effort = Some("xhigh".into());
+        assert!(effort(&s));
+        s.bin.version = "2.1.111".into();
+        assert!(effort(&s));
+        s.bin.version = "2.1.110".into();
+        assert!(!effort(&s));
     }
 
     /// The compliance line: no flag that replaces Claude Code's prompt, skips

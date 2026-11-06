@@ -112,8 +112,10 @@ function useInlineTerminal(onTick: () => void) {
       });
       setTerm({ id: t.id, purpose, account });
       await window.nekko.runInTerminal(t.id, purpose === 'install' ? claudeInstallCommand(hostPlatform()) : CLAUDE_SIGNIN_COMMAND);
+      return true;
     } catch (e) {
       pushToast('error', `Could not open a terminal: ${String(e)}`);
+      return false;
     }
   };
   /** Start the sign-in again in the open terminal, after a cancelled or expired one. */
@@ -152,7 +154,10 @@ export function ClaudeSetup({
   const choose = (c: ClaudeChoice) => {
     setChoice(c);
     onChoice(c);
+    if (c !== 'subscription') setAuto(false);
   };
+  // One click runs the steps left in the workflow, each starting when the last one finishes.
+  const [auto, setAuto] = useState(false);
   const providers = useStore((s) => s.providers);
   const refreshProviders = useStore((s) => s.refreshProviders);
   const newChat = useStore((s) => s.newChat);
@@ -224,25 +229,47 @@ export function ClaudeSetup({
   };
 
   const usualCheck = status?.installed && status.loggedIn ? claudeAccountCheck(status, identities) : null;
-  const subscriptionButton = (() => {
-    if (usual) {
-      return <button type="button" className="btn btn-outline claude-connect-done" disabled><CheckIcon className="h-4 w-4" />Connected</button>;
+  const blocked = usualCheck?.verdict === 'blocked';
+  const flowStep = claudeFlowStep(status, !!usual);
+  const termOpen = !!terminal.term;
+  useEffect(() => {
+    if (!auto || termOpen) return;
+    if (flowStep === 'install' || flowStep === 'signin') {
+      void terminal.open(flowStep).then((opened) => { if (!opened) setAuto(false); });
+    } else {
+      if (flowStep === 'connect' && !blocked) void save();
+      setAuto(false);
     }
-    if (!status) return <button type="button" className="btn btn-primary" disabled>Checking…</button>;
-    if (!status.installed) {
-      return (
-        <button type="button" className="btn btn-primary" onClick={() => void terminal.open('install')} disabled={terminal.term?.purpose === 'install'}>
-          <TerminalIcon className="h-4 w-4" />{terminal.term?.purpose === 'install' ? 'Installing…' : 'Install Claude Code'}
-        </button>
-      );
-    }
-    if (!status.loggedIn) {
-      const signingIn = terminal.term?.purpose === 'signin' && !terminal.term.account;
-      return <button type="button" className="btn btn-primary" onClick={() => void terminal.open('signin')} disabled={signingIn}>{signingIn ? 'Signing in…' : 'Connect: sign in to Claude Code'}</button>;
-    }
-    if (usualCheck?.verdict === 'blocked') return <button type="button" className="btn btn-primary" disabled>Already connected</button>;
-    return <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={saving}>{saving ? 'Connecting…' : 'Connect'}</button>;
-  })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, flowStep, termOpen]);
+  const hideTerminal = () => { setAuto(false); terminal.close(); };
+  // Once connected, the steps stay only for the moment that finished them.
+  const showFlow = choice === 'subscription' && (!usual || !!connected);
+
+  const terminalPanel = terminal.term && (
+    <div className="claude-terminal">
+      <div className="claude-terminal-bar">
+        <TerminalIcon className="h-4 w-4" />
+        <span className="min-w-0 flex-1">
+          {terminal.term.purpose === 'install'
+            ? 'Installing Claude Code with Anthropic’s installer. Sign-in starts by itself when it finishes.'
+            : 'Claude Code is signing you in. Nekko never sees your login.'}
+        </span>
+        {terminal.term.purpose === 'signin' && (
+          <button type="button" className="btn btn-ghost py-1 text-xs" onClick={terminal.retry}>Start sign-in again</button>
+        )}
+        <button type="button" className="btn btn-ghost py-1 text-xs" onClick={hideTerminal}>Hide</button>
+      </div>
+      {terminal.term.purpose === 'signin' && (
+        <ol className="claude-signin-steps">
+          <li><b>Finish in your browser.</b> Claude Code opened Anthropic’s sign-in page. Sign in with the Claude account that has your plan and approve.</li>
+          <li><b>No page opened?</b> Open the link Claude Code shows below. If the page gives you a code, paste it into the terminal and press Enter.</li>
+          <li><b>That’s it.</b> This connects by itself once Claude Code is signed in.</li>
+        </ol>
+      )}
+      <div className="claude-terminal-body"><TerminalPane terminalId={terminal.term.id} /></div>
+    </div>
+  );
 
   return (
     <div className="claude-setup col-span-2" aria-live="polite">
@@ -260,46 +287,37 @@ export function ClaudeSetup({
 
       <ClaudeOptionsList choice={choice} onChoose={choose} subscriptionNote={claudeCodeNote(status, !!usual)} />
 
-      <ClaudeDetect status={status} checking={checking} installing={terminal.term?.purpose === 'install'} onRetry={refresh} />
+      {showFlow ? (
+        <ClaudeConnectFlow
+          status={status}
+          step={flowStep}
+          busy={auto || saving || (termOpen && !terminal.term?.account)}
+          blocked={blocked}
+          checking={checking}
+          onStart={() => setAuto(true)}
+          onRecheck={refresh}
+        />
+      ) : (
+        <ClaudeDetect status={status} checking={checking} onRetry={refresh} />
+      )}
+
+      {choice === 'subscription' && blocked && !usual && (
+        <p className="claude-verdict" data-verdict="blocked" role="alert">{usualCheck?.message}</p>
+      )}
+
+      {!terminal.term?.account && terminalPanel}
 
       <ClaudeChoiceTable
         table={table}
         choice={choice}
         onChoose={choose}
         footer={{
-          subscription: subscriptionButton,
+          subscription: showFlow ? null : <button type="button" className="btn btn-outline claude-connect-done" disabled><CheckIcon className="h-4 w-4" />Connected</button>,
           api: apiOpen ? null : <button type="button" className="btn btn-primary" onClick={onConnectApi}>Connect: add a key or cloud account</button>,
         }}
       />
 
-      {choice === 'subscription' && usualCheck?.verdict === 'blocked' && !usual && (
-        <p className="claude-verdict" data-verdict="blocked" role="alert">{usualCheck.message}</p>
-      )}
-
-      {terminal.term && (
-        <div className="claude-terminal">
-          <div className="claude-terminal-bar">
-            <TerminalIcon className="h-4 w-4" />
-            <span className="min-w-0 flex-1">
-              {terminal.term.purpose === 'install'
-                ? 'Installing Claude Code with Anthropic’s installer. This closes by itself when it finishes.'
-                : 'Claude Code is signing you in. Nekko never sees your login.'}
-            </span>
-            {terminal.term.purpose === 'signin' && (
-              <button type="button" className="btn btn-ghost py-1 text-xs" onClick={terminal.retry}>Start sign-in again</button>
-            )}
-            <button type="button" className="btn btn-ghost py-1 text-xs" onClick={terminal.close}>Hide</button>
-          </div>
-          {terminal.term.purpose === 'signin' && (
-            <ol className="claude-signin-steps">
-              <li><b>Finish in your browser.</b> Claude Code opened Anthropic’s sign-in page. Sign in with the Claude account that has your plan and approve.</li>
-              <li><b>No page opened?</b> Open the link Claude Code shows below. If the page gives you a code, paste it into the terminal and press Enter.</li>
-              <li><b>That’s it.</b> This panel moves on by itself once Claude Code is signed in.</li>
-            </ol>
-          )}
-          <div className="claude-terminal-body"><TerminalPane terminalId={terminal.term.id} /></div>
-        </div>
-      )}
+      {terminal.term?.account && terminalPanel}
 
       {choice === 'subscription' && usual && another === null && (
         <button type="button" className="claude-link" onClick={() => setAnother('')}>+ Another subscription account</button>
@@ -335,8 +353,7 @@ function claudeCodeNote(status: ClaudeCodeStatus | null, connected: boolean): { 
 }
 
 /** "Checking if Claude Code is already installed…" and what the check found. */
-function ClaudeDetect({ status, checking, installing, onRetry }: { status: ClaudeCodeStatus | null; checking: boolean; installing: boolean; onRetry: () => void }) {
-  if (installing) return <div className="claude-detect"><span className="claude-spin" />Installing Claude Code in a Nekko terminal…</div>;
+function ClaudeDetect({ status, checking, onRetry }: { status: ClaudeCodeStatus | null; checking: boolean; onRetry: () => void }) {
   if (!status) return <div className="claude-detect"><span className="claude-spin" />Checking if Claude Code is already installed…</div>;
   if (!status.installed) {
     return (
@@ -356,6 +373,96 @@ function ClaudeDetect({ status, checking, installing, onRetry }: { status: Claud
         {status.loggedIn ? (who ? `Signed in as ${who}.` : 'Signed in.') : "It isn't signed in yet."}
       </span>
     </div>
+  );
+}
+
+export type ClaudeFlowStep = 'install' | 'signin' | 'connect' | 'done';
+
+/** Which step of the subscription workflow this computer is on; `null` while still checking. */
+export function claudeFlowStep(status: ClaudeCodeStatus | null, connected: boolean): ClaudeFlowStep | null {
+  if (connected) return 'done';
+  if (!status) return null;
+  if (!status.installed) return 'install';
+  return status.loggedIn ? 'connect' : 'signin';
+}
+
+const FLOW_ORDER: ClaudeFlowStep[] = ['install', 'signin', 'connect', 'done'];
+
+/**
+ * Install, sign in, connect, as three columns. The button only ever sits on
+ * the current step; pressing it runs that step and every one after it.
+ */
+export function ClaudeConnectFlow({
+  status,
+  step,
+  busy,
+  blocked,
+  checking,
+  onStart,
+  onRecheck,
+}: {
+  status: ClaudeCodeStatus | null;
+  step: ClaudeFlowStep | null;
+  busy: boolean;
+  blocked: boolean;
+  checking: boolean;
+  onStart: () => void;
+  onRecheck: () => void;
+}) {
+  const at = step ? FLOW_ORDER.indexOf(step) : 0;
+  const who = claudeIdentityLine(status);
+  const columns: { id: ClaudeFlowStep; title: string; action: string; note: string; working: string; finished: string; waiting: string }[] = [
+    {
+      id: 'install',
+      title: 'Install Claude Code',
+      action: 'Install Claude Code',
+      note: 'Anthropic’s installer runs in a terminal here. You need it to use your subscription.',
+      working: step ? 'Installing in the terminal below…' : 'Checking this computer…',
+      finished: status?.installed ? `Version ${status.version} is here.` : 'Installed.',
+      waiting: '',
+    },
+    {
+      id: 'signin',
+      title: 'Sign in',
+      action: 'Sign in',
+      note: 'Sign in with the Claude account that has your plan. Nekko never sees your login.',
+      working: 'Finish in your browser…',
+      finished: who ? `Signed in as ${who}.` : 'Signed in.',
+      waiting: 'Opens your browser when the install finishes.',
+    },
+    {
+      id: 'connect',
+      title: 'Connect',
+      action: blocked ? 'Already connected' : 'Connect',
+      note: blocked ? 'This login is already connected to Nekko.' : 'Use this login for Claude chats in Nekko.',
+      working: 'Connecting…',
+      finished: 'Ready to chat.',
+      waiting: 'Finishes by itself after you sign in.',
+    },
+  ];
+  return (
+    <ol className="claude-flow" aria-label="Connect your Claude subscription" data-step={step ?? 'checking'}>
+      {columns.map((c, i) => {
+        const state = i < at ? 'done' : i === at ? 'active' : 'waiting';
+        const working = state === 'active' && (busy || !step);
+        const text = state === 'done' ? c.finished : state === 'waiting' ? c.waiting : working ? c.working : c.note;
+        return (
+          <li key={c.id} className="claude-flow-step" data-flow={c.id} data-state={state} data-working={working || undefined} aria-current={state === 'active' ? 'step' : undefined}>
+            <span className="claude-flow-mark" aria-hidden="true">
+              {state === 'done' ? <CheckIcon className="h-3.5 w-3.5" /> : working ? <span className="claude-spin" /> : i + 1}
+            </span>
+            <strong>{c.title}</strong>
+            <span key={text} className="claude-flow-note">{text}</span>
+            {state === 'active' && !working && (
+              <button type="button" className="btn btn-primary claude-flow-go" onClick={onStart} disabled={blocked && c.id === 'connect'}>{c.action}</button>
+            )}
+            {state === 'active' && !working && c.id === 'install' && (
+              <button type="button" className="claude-link" onClick={onRecheck} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</button>
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -469,7 +576,7 @@ function ClaudeChoiceTable({
             {table.needs.map((n, i) => <td key={table.columns[i].id} {...col(table.columns[i].id)}>{n}</td>)}
           </tr>
         </tbody>
-        {choice && (
+        {choice && footer[choice] && (
           <tfoot>
             <tr>
               <td />

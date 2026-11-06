@@ -32,7 +32,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 @OptIn(ExperimentalCoroutinesApi::class)
 class FleetTest {
     private val key = "00112233445566778899aabbccddeeff"
-    private fun link(room: String) = PairingLink("wss://relay.example.dev", room, key, hostKey = TEST_HOST_KEY)
+    /** Each computer proves itself with its own key: pairing one the phone knows by its key re-pairs that computer. */
+    private val hostKeys = mapOf("aaaa" to TEST_HOST_KEY, "bbbb" to "BE4Fn5F4K5mkw+MBYHvdQT/kC5NZN9rHpVgZBu5TJjT8ZDQi5gfJoAAZUNSiXhFQAHF+CVRUTY3F9l4HofyGWbA=")
+    private fun link(room: String) = PairingLink("wss://relay.example.dev", room, key, hostKey = hostKeys.getValue(room))
 
     /** Each computer (room) answers with its own chats and folder. */
     private class Rooms : RemoteFactory {

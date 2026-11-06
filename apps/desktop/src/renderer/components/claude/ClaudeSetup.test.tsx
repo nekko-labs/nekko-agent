@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ProviderConfig } from '@nekko-agent/shared';
-import { ClaudeHowItWorks, ClaudeSetup, claudeInstallCommand, claudeSourceLine } from './ClaudeSetup.js';
+import { ClaudeConnectFlow, ClaudeHowItWorks, ClaudeSetup, claudeFlowStep, claudeInstallCommand, claudeSourceLine } from './ClaudeSetup.js';
 
 const noop = () => {};
 const setup = (props: Partial<React.ComponentProps<typeof ClaudeSetup>> = {}) =>
@@ -45,6 +45,57 @@ describe('Claude setup', () => {
     expect(sub).toContain('Cloud');
     const api = renderToStaticMarkup(<ClaudeHowItWorks choice="api" />);
     expect((api.match(/class="claude-feat" data-on="true"/g) ?? []).length).toBe(6);
+  });
+});
+
+describe('Claude subscription workflow', () => {
+  const missing = { installed: false, message: 'not found' } as const;
+  const signedOut = { installed: true, version: '2.1.319', loggedIn: false, authMethod: 'none' } as const;
+  const signedIn = { installed: true, version: '2.1.319', loggedIn: true, authMethod: 'claude.ai', auth: 'subscription', email: 'me@example.com', subscriptionType: 'max' } as const;
+  const flow = (status: Parameters<typeof claudeFlowStep>[0], props: Partial<React.ComponentProps<typeof ClaudeConnectFlow>> = {}) =>
+    renderToStaticMarkup(<ClaudeConnectFlow status={status} step={claudeFlowStep(status, false)} busy={false} blocked={false} checking={false} onStart={noop} onRecheck={noop} {...props} />);
+  const states = (html: string) => [...html.matchAll(/data-flow="(\w+)" data-state="(\w+)"/g)].map((m) => `${m[1]}:${m[2]}`);
+  const buttons = (html: string) => (html.match(/claude-flow-go/g) ?? []).length;
+
+  it('works out the step from what Claude Code reports', () => {
+    expect(claudeFlowStep(null, false)).toBeNull();
+    expect(claudeFlowStep(missing, false)).toBe('install');
+    expect(claudeFlowStep(signedOut, false)).toBe('signin');
+    expect(claudeFlowStep(signedIn, false)).toBe('connect');
+    expect(claudeFlowStep(signedIn, true)).toBe('done');
+    expect(claudeFlowStep(null, true)).toBe('done');
+  });
+
+  it('marks finished steps done and offers one button, on the current step', () => {
+    expect(states(flow(missing))).toEqual(['install:active', 'signin:waiting', 'connect:waiting']);
+    expect(flow(missing)).toContain('>Install Claude Code</button>');
+    expect(buttons(flow(missing))).toBe(1);
+    expect(states(flow(signedOut))).toEqual(['install:done', 'signin:active', 'connect:waiting']);
+    expect(flow(signedOut)).toContain('Version 2.1.319');
+    expect(buttons(flow(signedOut))).toBe(1);
+    expect(states(flow(signedIn))).toEqual(['install:done', 'signin:done', 'connect:active']);
+    expect(flow(signedIn)).toContain('Signed in as me@example.com · Max plan.');
+    expect(states(flow(signedIn, { step: 'done' }))).toEqual(['install:done', 'signin:done', 'connect:done']);
+    expect(buttons(flow(signedIn, { step: 'done' }))).toBe(0);
+  });
+
+  it('shows no button while a step runs or while it is still checking', () => {
+    const running = flow(signedOut, { busy: true });
+    expect(running).toContain('data-working="true"');
+    expect(running).toContain('Finish in your browser');
+    expect(buttons(running)).toBe(0);
+    expect(flow(null)).toContain('Checking this computer');
+    expect(buttons(flow(null))).toBe(0);
+  });
+
+  it('refuses a login that is already connected', () => {
+    expect(flow(signedIn, { blocked: true })).toMatch(/<button[^>]*disabled[^>]*>Already connected/);
+  });
+
+  it('only shows the workflow on the subscription choice', () => {
+    expect(setup()).not.toContain('claude-flow');
+    expect(setup({ initialChoice: 'api' })).not.toContain('claude-flow');
+    expect(setup({ initialChoice: 'subscription' })).toContain('class="claude-flow"');
   });
 });
 
