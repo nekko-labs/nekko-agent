@@ -1,14 +1,14 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DEFAULT_RUNNER_SETTINGS, KEEP_AWAKE_LABELS, PRIORITY_LABELS, type HostView, type ImageView, type RunnerSettings, type RunnerView } from '@nekko-agent/shared';
+import { DEFAULT_RUNNER_SETTINGS, KEEP_AWAKE_LABELS, PRIORITY_LABELS, type HostView, type ImageView, type LinuxImageView, type RunnerSettings, type RunnerView } from '@nekko-agent/shared';
 
 vi.mock('./primitives/index.js', async (original) => ({
   ...await original<typeof import('./primitives/index.js')>(),
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { SettingsBody, editDraft, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
+import { LinuxImageRow, SettingsBody, editDraft, saveSettings, shownSettings, trustNetwork } from './RunnerSettingsSheet.js';
 
 const host: HostView = {
   ramMb: 36864, cores: 12, recommendedMemoryMb: 24576, runnerMemoryMb: 18432, cpusPerVm: 4,
@@ -49,7 +49,7 @@ describe('RunnerSettingsSheet', () => {
     ]) expect(html).toContain(s);
     for (const l of [...Object.values(PRIORITY_LABELS), ...Object.values(KEEP_AWAKE_LABELS)]) expect(html).toContain(esc(l));
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>3 not allowed<\/button>/);
-    for (const s of ['Linux slots', 'Run fork pull requests', 'Build cache', 'Outside 9:00', '\u2014', 'keep 25 GB free']) expect(html).not.toContain(s);
+    for (const s of ['Run fork pull requests', 'Build cache', 'Outside 9:00', '\u2014', 'keep 25 GB free']) expect(html).not.toContain(s);
     expect(html).not.toContain('Trust this network');
   });
 
@@ -162,5 +162,22 @@ describe('RunnerSettingsSheet', () => {
 
   it('max_job_time_shows_an_odd_value', () => {
     expect(render(view({}, { maxJobMinutes: 45 }))).toMatch(/aria-pressed="true"[^>]*>45 min</);
+  });
+
+  it('linux_slots_and_their_image_row', () => {
+    const html = render(view({}, { linuxSlots: 2 }));
+    expect(html).toContain('aria-label="Linux slots"');
+    expect(html).toContain('nekko-cloud-mac-linux');
+    const img = (over: Partial<LinuxImageView>): LinuxImageView => ({ state: 'none', stage: null, progress: null, message: null, proof: null, ...over });
+    const row = (i: LinuxImageView) => renderToStaticMarkup(<LinuxImageRow image={i} onAction={() => {}} />);
+    expect(row(img({}))).toContain('Set up Linux image');
+    expect(row(img({ state: 'building', stage: 'download', message: 'Downloading Ubuntu 24.04 (1 of 3)', progress: 0.42 }))).toContain('Downloading: Downloading Ubuntu 24.04 (1 of 3) 42%');
+    expect(row(img({ state: 'building', stage: 'provision' }))).toContain('Cancel');
+    const ready = row(img({ state: 'ready', proof: { distro: 'ubuntu-24.04', runner: '2.338.1', docker: '29.1.3' } }));
+    expect(ready).toContain('Rebuild Linux image');
+    expect(ready).toContain('ubuntu-24.04 · runner 2.338.1 · Docker 29.1.3');
+    expect(row(img({ state: 'failed', message: 'The download stalled. Try again.' }))).toContain('The download stalled. Try again.');
+    // Without a Linux image view (an older daemon), the sheet shows no image row.
+    expect(html).not.toContain('Linux image');
   });
 });

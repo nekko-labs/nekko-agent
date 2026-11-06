@@ -45,4 +45,4 @@ the computer used last and says so; the iPhone first.
   say", ranked after one that says it is free and before one that is busy.
 - Computers the phone isn't paired with are never considered. Option 1 stays
   open for teams and CI runners and would replace the probe, not the ranking.
-- Android and the desktop don't pick yet.
+- Android picks the same way (`MachinePick.kt`, over its own fleet links); the desktop doesn't pick yet.

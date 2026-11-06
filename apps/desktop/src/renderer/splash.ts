@@ -20,8 +20,8 @@ const KEY = 'nekko.splash';
 const B = 500;
 const OUT = 'cubic-bezier(.2,.8,.2,1)';
 const NS = 'http://www.w3.org/2000/svg';
-/** The website's own pairing, for a first launch with nothing stored yet. */
-const DEFAULT = { bg: '#9d8ce6', fg: '#ffffff', paper: '#0c0c11' };
+/** The brand plum (the app icon's tile), for a first launch with nothing stored yet. */
+const DEFAULT = { bg: '#190019', fg: '#ffffff', paper: '#0c0c11' };
 const RELOAD_FADE_OUT = 180;
 
 type Colours = { bg: string; fg: string; paper: string };
@@ -29,7 +29,7 @@ type Colours = { bg: string; fg: string; paper: string };
 /**
  * Store the current theme's splash colours. The ground is always a solid colour
  * from the theme, never a pale one, so the splash can't flash white: the first
- * of `candidates` that is dark enough, else the website's lavender.
+ * of `candidates` that is dark enough, else the brand plum.
  */
 export function rememberSplashColours(candidates: (string | undefined)[]): void {
   try {

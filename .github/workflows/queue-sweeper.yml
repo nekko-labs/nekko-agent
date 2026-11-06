@@ -1,28 +1,26 @@
 name: Queue sweeper
 
-# auto-merge.yml queues a PR when it opens, leaves draft or gets a push. Three
-# things still left ready PRs sitting open with nobody watching:
+# auto-merge.yml arms native auto-merge when a PR opens, leaves draft or gets
+# a push. Two things still left ready PRs sitting open with nobody watching:
 #
-#   - The merge queue ejects a PR on a flaky queue-tier job and nothing puts it
-#     back. #787 went green, was queued, was ejected by a Windows daemon test
-#     that passes on main (a BrokenPipe while listing tests), and sat.
-#   - `gate` goes green after the auto-merge job has given up waiting, and the
-#     armed auto-merge request never turns into a queue entry (see #756).
+#   - The arm step failed (an API hiccup) and nothing retried it.
 #   - A PR-tier job flakes once (a 30 s Playwright timeout on the Windows
 #     capture runner) and the PR stays red until someone re-runs it by hand.
 #
 # Every 15 minutes this looks at every ready PR into main and:
 #
-#   - enqueues it when its head's `gate` is green, it has no conflicts and it
-#     is not already queued. Once per head commit: if the queue ejects it
-#     again, that is a real failure, and the PR waits for a new push;
+#   - arms auto-merge (squash) when its head's `gate` is green, it has no
+#     conflicts and auto-merge is not already armed;
 #   - re-runs the failed jobs of a red `gate` once (attempt 1 only), so a
 #     flake heals itself and a real failure stays red for the author.
+#
+# There is no merge queue since 2026-11-06; the file keeps its name so the
+# runbooks and history that point at it still resolve.
 #
 # Drafts, stacked layers (base is not main), conflicting PRs and PRs labelled
 # `hold` are left alone. queue-repair.yml takes the PRs this cannot fix: it
 # merges main into a conflicting one, and hands a PR that stays red after the
-# re-run, or is ejected again, to Codex. Version-release's own schedule
+# re-run to Codex. Version-release's own schedule
 # releases whatever this lands.
 
 on:
@@ -45,9 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Enqueueing uses the repo's GitHub App, not GITHUB_TOKEN: a merge group
-      # created by GITHUB_TOKEN starts no `merge_group` runs, so `gate` never
-      # reports and the entry times out (same reason as auto-merge.yml).
+      # Arming uses the repo's GitHub App, which has write access; this job's
+      # GITHUB_TOKEN is read-only.
       - name: Create repository-scoped App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
@@ -71,14 +68,14 @@ jobs:
               pullRequests(states:OPEN,baseRefName:"main",first:100){nodes{
                 id number isDraft headRefOid mergeable
                 labels(first:20){nodes{name}}
-                mergeQueueEntry{state}
+                autoMergeRequest{enabledAt}
                 commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{
                   ... on CheckRun{name status conclusion checkSuite{workflowRun{databaseId}}}
                 }}}}}}
               }}}}' --jq '.data.repository.pullRequests.nodes[]
                 | select(.isDraft | not)
                 | select([.labels.nodes[].name] | index("hold") | not)
-                | {id, number, head: .headRefOid, mergeable, queued: (.mergeQueueEntry != null),
+                | {id, number, head: .headRefOid, mergeable, armed: (.autoMergeRequest != null),
                    gate: ([.commits.nodes[0].commit.statusCheckRollup.contexts.nodes[]? | select(.name == "gate")] | last)}
                 | @json')
 
@@ -89,24 +86,15 @@ jobs:
             gate=$(jq -r '.gate.conclusion // ""' <<<"$pr")
             run=$(jq -r '.gate.checkSuite.workflowRun.databaseId // ""' <<<"$pr")
 
-            if [ "$(jq -r .queued <<<"$pr")" = true ]; then echo "#$n: in the queue."; continue; fi
             if [ "$(jq -r .mergeable <<<"$pr")" = CONFLICTING ]; then echo "#$n: has conflicts; queue-repair.yml merges main in."; continue; fi
 
             case "$gate" in
               SUCCESS)
-                marker="<!-- queue-sweeper:enqueued:$head -->"
-                if gh pr view "$n" --json comments -q '.comments[].body' | grep -qF "$marker"; then
-                  echo "#$n: already re-queued once at ${head:0:8} and dropped out again; waiting for a new push."
-                  continue
-                fi
-                # A stacked PR fails here; a person queues it with `gh stack merge` (see auto-merge.yml).
-                if gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{position}}}' \
-                     -f id="$(jq -r .id <<<"$pr")" -f head="$head" >/dev/null; then
-                  echo "#$n: gate is green and it was not queued; enqueued."
-                  gh pr comment "$n" --body "Queue sweeper: \`gate\` is green at ${head:0:8} but the PR was not in the merge queue (ejected by a flaky job, or never picked up), so it is queued again. If the queue drops it once more, that is a real failure: push a fix and it re-queues. $marker" \
-                    || echo "::warning::Could not comment on #$n."
+                if [ "$(jq -r .armed <<<"$pr")" = true ]; then echo "#$n: gate is green and auto-merge is armed."; continue; fi
+                if gh pr merge --auto --squash "$n"; then
+                  echo "#$n: gate is green and auto-merge was not armed; armed it."
                 else
-                  echo "::warning::Could not enqueue #$n."
+                  echo "::warning::Could not arm auto-merge on #$n."
                 fi
                 ;;
               FAILURE|CANCELLED|TIMED_OUT)

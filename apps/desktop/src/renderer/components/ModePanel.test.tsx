@@ -77,12 +77,12 @@ describe('Mode panel markup', () => {
     session = { ...base, toolApproach: 'code', executionMode: 'sandbox' } as Session;
     expect(html()).not.toContain('on · code mode');
   });
-  it('follows the chat effort over the app default', () => {
+  it('does not guess effort choices when the provider has not reported them', () => {
     session = { ...base, effort: 'low' } as Session;
     const out = html();
-    expect(out).toMatch(/aria-checked="true" data-effort="low"/);
+    expect(out).toContain('Effort unavailable: provider choices not reported.');
+    expect(out).not.toContain('data-effort=');
     expect(out).toContain('remembered for new chats on this computer');
-    expect(out).not.toContain('Use the app default');
   });
   it('locks internet on for a cloud model and approvals in a sandbox', () => {
     expect(renderToStaticMarkup(<ModePanel {...deps({ isCloudModel: true })} />)).toMatch(/aria-checked="true" aria-label="Internet access" class="mode-switch" disabled/);

@@ -29,12 +29,12 @@ import { rememberConnectivityNotice } from './components/ConnectivityNotices.js'
  */
 
 import { useCallback, useSyncExternalStore } from 'react';
-import type { AgentEvent, AgentReplay, ToolCall } from '@nekko-agent/shared';
+import type { AgentEvent, AgentReplay, ChatMessage, ToolCall } from '@nekko-agent/shared';
 import type { Activity } from './components/agent-console/transcript.js';
-import { accumulateDecodeMs, describeLiveActivity, emptyLiveActivity, reduceLiveActivity, type LiveActivity } from '@nekko-agent/shared';
+import { accumulateDecodeMs, describeLiveActivity, emptyLiveActivity, isPrInteractionCall, reduceLiveActivity, type LiveActivity } from '@nekko-agent/shared';
 import { reportAgentWorking } from './workingAgents.js';
 
-export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; items: Activity[] };
+export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; items: Activity[] } | { kind: 'pr'; toolCallId: string };
 
 /** One session's in-flight turn, as much of it as a pane needs to redraw. */
 export interface LiveRun {
@@ -49,6 +49,8 @@ export interface LiveRun {
   reasoning: string;
   /** Tool calls made this turn, in order. */
   tools: ToolCall[];
+  /** Only attributable PR calls/results, stable while text streams. Large outputs wait for saved history. */
+  prMessages?: Pick<ChatMessage, 'role' | 'toolCalls' | 'toolResult'>[];
   /** When the turn started, for the elapsed clock. */
   startedAt: number;
   /** Output tokens and decode time, summed across the turn's steps. */
@@ -272,6 +274,7 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
         next.reasoningStartedAt = 0;
       }
       next.tools = [...prev.tools, event.call];
+      if (isPrInteractionCall(event.call)) next.prMessages = [...(prev.prMessages ?? []), { role: 'assistant', toolCalls: [event.call] }];
       break;
     case 'usage':
       next.generation = undefined;
@@ -284,6 +287,12 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
         ...b,
         items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now, ...(event.result.isError ? { failed: true } : {}) } : it),
       });
+      if (!event.result.isError && event.result.output.length <= LIVE_STREAM_MAX
+        && prev.prMessages?.some((m) => m.toolCalls?.some((call) => call.id === event.result.toolCallId))
+        && !prev.prMessages.some((m) => m.toolResult?.toolCallId === event.result.toolCallId)) {
+        next.prMessages = [...prev.prMessages, { role: 'tool', toolResult: event.result }];
+        next.blocks = [...next.blocks, { kind: 'pr', toolCallId: event.result.toolCallId }];
+      }
       // A step boundary: the next model call starts from here.
       next.stepMark = { blocks: next.blocks, text: next.text, reasoning: next.reasoning };
       break;

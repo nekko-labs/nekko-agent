@@ -1,8 +1,8 @@
 /**
  * The Nekko Agent mark, as vector art: an outline cat head (two ears, a soft
  * curve of forehead between them, a round jaw, nothing inside) in one thin
- * stroke with sharp corners, in white on the brand's indigo-to-lavender
- * gradient tile, plus the installer banners that
+ * stroke with sharp corners, in the brand's plum secondary (#854F6C) on the
+ * plum gradient tile, plus the installer banners that
  * reuse it. Pure
  * string-building with no renderer behind it, so anything that needs the mark
  * -- the desktop icon pipeline, the phone app's icons, the marketing site's

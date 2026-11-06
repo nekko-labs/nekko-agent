@@ -54,13 +54,15 @@ extension RelayClient: RemoteConnection {}
 public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public var name: String
-    public let relayUrl: String
+    public var relayUrl: String
     public let pairedAt: Int64
     public var platform: String?
     /// Other addresses of the same relay, from the pairing link (TASKS.md IO-20).
     public var alts: [String]
     /// Its `machineIcon`, learned from `app:info` once connected. Nil shows nothing.
     public var icon: String?
+    /// True only for a phone-local nickname; nil migrates older saved names.
+    public var nameIsCustom: Bool?
 
     public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = [], icon: String? = nil) {
         self.id = id
@@ -70,6 +72,7 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         self.platform = platform
         self.alts = alts
         self.icon = icon
+        self.nameIsCustom = nil
     }
 
     /// Pairings saved before routes existed have no `alts`.
@@ -82,6 +85,7 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         platform = try c.decodeIfPresent(String.self, forKey: .platform)
         alts = try c.decodeIfPresent([String].self, forKey: .alts) ?? []
         icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        nameIsCustom = try c.decodeIfPresent(Bool.self, forKey: .nameIsCustom)
     }
 
     /// Every address, best first (the order the client tries them).
@@ -116,7 +120,7 @@ public struct ModelGroup: Equatable, Sendable, Identifiable {
 
 public let defaultComputerName = "My computer"
 
-/// Name the computer after its OS (`app:info` platform), like the other phone apps.
+/// Fallback for older computers that report a platform but no hostname.
 public func osName(_ platform: String?) -> String {
     switch platform {
     case "win32": return "Windows PC"
@@ -639,7 +643,9 @@ public final class ComputersStore {
     public func pair(_ link: PairingLink) async throws -> String {
         guard let hostKey = link.hostKey else { throw PairingRefusal.noHostKey }
         // Re-scanning a computer we already know keeps its id and name.
-        let existing = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        let sameRoute = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        if let pinned = sameRoute.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
+        let existing = computers.last { secret($0.id)?.pinned == hostKey } ?? sameRoute
         if let pinned = existing.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
         let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
         let id = existing?.id ?? newId()
@@ -647,11 +653,13 @@ public final class ComputersStore {
         if existing == nil {
             computers.append(Computer(id: id, name: defaultComputerName, relayUrl: link.relayUrl, pairedAt: now(), alts: link.alts))
             saveIndex()
-        } else if let i = computers.firstIndex(where: { $0.id == id }), computers[i].alts != link.alts {
+        } else if let i = computers.firstIndex(where: { $0.id == id }) {
             // A fresh QR carries the computer's routes as they are now.
+            computers[i].relayUrl = link.relayUrl
             computers[i].alts = link.alts
             saveIndex()
         }
+        dropLink(id) // A fleet link still holds the old credentials and routes.
         connect(id)
         return id
     }
@@ -660,6 +668,7 @@ public final class ComputersStore {
         let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
         guard !trimmed.isEmpty, let i = computers.firstIndex(where: { $0.id == id }) else { return }
         computers[i].name = trimmed
+        computers[i].nameIsCustom = true
         saveIndex()
     }
 
@@ -1114,7 +1123,7 @@ public final class ComputersStore {
             let appInfo = AppInfo.from(r.4)
             hostVersion = appInfo.version
             quitFromPhone = appInfo.quitFromPhone
-            learnPlatform(appInfo.platform, for: activeId)
+            learnPlatform(appInfo.platform, for: activeId, name: appInfo.computerName ?? appInfo.hostname)
             // A failed read says nothing about the icon; an answer without one clears it.
             if r.4 != nil, let id = activeId { learnIcon(appInfo.machineIcon, for: id) }
             summariesLoading = false
@@ -1412,13 +1421,18 @@ public final class ComputersStore {
         cache.save(id, SavedChatList(savedAt: now(), summaries: summaries, folders: workspaces))
     }
 
-    func learnPlatform(_ platform: String?, for id: String?) {
-        guard let platform, let id, let i = computers.firstIndex(where: { $0.id == id }),
-              computers[i].platform != platform else { return }
-        // First connection names the computer after its OS, unless the user renamed it.
-        if computers[i].name == defaultComputerName { computers[i].name = osName(platform) }
-        computers[i].platform = platform
-        saveIndex()
+    func learnPlatform(_ platform: String?, for id: String?, name: String? = nil) {
+        guard let id, let i = computers.firstIndex(where: { $0.id == id }) else { return }
+        let old = computers[i]
+        let generic = [defaultComputerName, "Mac", "Windows PC", "Linux PC"].contains(old.name)
+        let custom = old.nameIsCustom ?? !generic
+        let reported = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !custom {
+            computers[i].name = reported.flatMap { $0.isEmpty ? nil : String($0.prefix(40)) } ?? (generic ? osName(platform ?? old.platform) : old.name)
+        }
+        computers[i].nameIsCustom = custom
+        if let platform { computers[i].platform = platform }
+        if computers[i] != old { saveIndex() }
     }
 
     func learnIcon(_ icon: String?, for id: String) {
