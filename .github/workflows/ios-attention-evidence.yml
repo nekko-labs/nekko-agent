@@ -101,7 +101,7 @@ jobs:
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl ui "$DEVICE" appearance light
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
-          CONDITIONS=()
+          CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG')
           if [ "$REVISION" = before ]; then
             CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG NEKKO_ATTENTION_BASELINE')
           fi
@@ -119,7 +119,7 @@ jobs:
             test -f Tests/NotifierTests.swift
             TESTS+=(-only-testing:NekkoNativeTests/NotifierTests -only-testing:NekkoNativeUITests/AttentionNotificationsUITests)
           fi
-          CONDITIONS=()
+          CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG')
           if [ "$REVISION" = before ]; then
             CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG NEKKO_ATTENTION_BASELINE')
           fi
@@ -131,7 +131,7 @@ jobs:
           REVISION: ${{ matrix.revision }}
         run: |
           set -euo pipefail
-          CONDITIONS=()
+          CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG')
           BASELINE=0
           if [ "$REVISION" = before ]; then
             BASELINE=1

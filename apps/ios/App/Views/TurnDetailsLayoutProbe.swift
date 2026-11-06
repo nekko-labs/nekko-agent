@@ -59,12 +59,13 @@ struct TurnDetailsProbeSelection: ViewModifier {
 /// this renderer before trusting its line count/bounds/truncation readings.
 struct TurnDetailsMeasureText: ViewModifier {
     func body(content: Content) -> some View {
-        if TurnDetailsLayoutProbe.enabled && TurnDetailsLayoutProbe.rendersLines {
+        if #available(iOS 18.0, *), TurnDetailsLayoutProbe.enabled && TurnDetailsLayoutProbe.rendersLines {
             content.textRenderer(TurnDetailsLineProbe())
         } else { content }
     }
 }
 
+@available(iOS 18.0, *)
 private struct TurnDetailsLineProbe: TextRenderer {
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
         let lines = layout.map { $0.typographicBounds.rect }

@@ -36,3 +36,12 @@ test('after route and fixture retain strict debug and store isolation', () => {
   assert.match(fixture, /#if !NEKKO_ATTENTION_BASELINE\s+notifier.badgeCount/);
   assert.doesNotMatch(fixture, /AppModel\.shared|UserDefaults|ComputersStore\(|UNNotificationRequest\(/);
 });
+
+test('workflow avoids Bash 3.2 empty-array nounset and layout probe guards iOS 18 APIs', () => {
+  const workflow = readFileSync(new URL('../../../.github/workflows/ios-attention-evidence.yml', import.meta.url), 'utf8');
+  assert.doesNotMatch(workflow, /CONDITIONS=\(\)/);
+  assert.equal((workflow.match(/CONDITIONS=\(/g) ?? []).length, 6);
+  const probe = readFileSync(new URL('../App/Views/TurnDetailsLayoutProbe.swift', import.meta.url), 'utf8');
+  assert.match(probe, /if #available\(iOS 18.0, \*\), TurnDetailsLayoutProbe/);
+  assert.match(probe, /@available\(iOS 18.0, \*\)\nprivate struct TurnDetailsLineProbe/);
+});
