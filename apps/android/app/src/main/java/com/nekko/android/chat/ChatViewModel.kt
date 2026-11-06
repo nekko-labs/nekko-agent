@@ -293,6 +293,15 @@ class ChatViewModel(
         controller.reload()
     }
 
+    /** The tools the computer's agents can call, for the chat's Tools list. */
+    suspend fun tools(): List<com.nekko.protocol.ToolInfo> = com.nekko.protocol.ToolInfo.list(repo.caller.call(com.nekko.protocol.Channels.TOOLS_LIST))
+
+    /** Switch one tool on or off for this chat; the computer asks for the screen lock either way. */
+    suspend fun setTool(name: String, on: Boolean, disabled: List<String>) {
+        val off = disabled.filter { it != name } + if (on) emptyList() else listOf(name)
+        setRunOption("disabledTools", kotlinx.serialization.json.JsonArray(off.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+    }
+
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)
         controller.reload()

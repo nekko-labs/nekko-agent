@@ -218,6 +218,7 @@ export const PHONE_CHANNELS = [
   'terminal:write',
   'terminals:list',
   'tool:approve',
+  'tools:list',
   'usage:summary',
   'voice:status',
   'voice:transcribe',
@@ -384,6 +385,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'settings:get',
   'skills:runnable',
   'tasks:list',
+  'tools:list',
   'usage:summary',
   'voice:status',
   'workflows:list',
@@ -780,6 +782,9 @@ export const PHONE_CHAT_SEND_KEYS = [
  * for skills imported from other tools, folder paths on this computer.
  */
 export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as const;
+
+/** What a phone receives of each tool (`tools:list`): the name a chat's `disabledTools` holds, and what it does. */
+export const PHONE_TOOL_VIEW = ['description', 'name'] as const;
 
 /** `chat:queue` payload fields a phone may set (a plain string is text). */
 export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] as const;
@@ -1209,6 +1214,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return Array.isArray(result) ? result.map((p) => pick(p, PHONE_PROVIDER_VIEW)) : [];
     case 'skills:runnable':
       return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
+    case 'tools:list':
+      return Array.isArray(result) ? result.map((t) => pick(t, PHONE_TOOL_VIEW)) : [];
     case 'session:get':
     case 'chat:steer':
       return phoneSessionView(result);
@@ -1476,6 +1483,7 @@ export function phoneAccessPolicy() {
     machineView: [...PHONE_MACHINE_VIEW],
     machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],
     skillView: [...PHONE_SKILL_VIEW],
+    toolView: [...PHONE_TOOL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
     guardedOptionKeys: [...PHONE_GUARDED_OPTION_KEYS],

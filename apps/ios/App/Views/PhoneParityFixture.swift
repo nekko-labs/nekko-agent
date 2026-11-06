@@ -1,5 +1,6 @@
 #if DEBUG
 import NekkoKit
+import NekkoProtocol
 import SwiftUI
 
 /// The production views over deterministic in-memory data; never pairs or calls a host.
@@ -53,6 +54,38 @@ struct VoiceConversationFixture: View {
                     return "The iPhone changes are ready for review."
                 }, speak: { _ in try await Task.sleep(for: .seconds(3)) }, stopAudio: {})
             }
+    }
+}
+
+/// The chat's new Run settings rows and its Tools list, with fixed values, for captures.
+struct RunSettingsFixture: View {
+    @Environment(\.palette) private var palette
+    @State private var options: [String: JSONValue] = ["memory": "project", "guidance": "rules", "privacy": ["mode": "redact"]]
+    @State private var off: [String] = ["web_fetch"]
+    @State private var showTools = ProcessInfo.processInfo.arguments.contains("-uiTestRunSettingsTools")
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Run settings") {
+                    ForEach(RunOption.all.filter { ["memory", "guidance", "privacy"].contains($0.key) }) { option in
+                        RunOptionRow(option: option, value: options[option.key]) { options[option.key] = $0 }
+                    }
+                    Button { showTools = true } label: {
+                        HStack { Text("Tools"); Spacer(); Text("\(off.count) off").foregroundStyle(palette.inkSoft) }
+                    }
+                    .accessibilityIdentifier("run.disabledTools")
+                }
+            }
+            .navigationTitle("Run settings")
+            .sheet(isPresented: $showTools) {
+                        ToolsList(load: { [ToolInfo(name: "bash", description: "Run a shell command in the chat's folder."),
+                                           ToolInfo(name: "read_file", description: "Read a file in the chat's folders."),
+                                           ToolInfo(name: "web_fetch", description: "Fetch a web page and read it as text."),
+                                           ToolInfo(name: "spawn_agent", description: "Start a sub-agent for part of the work.")] },
+                                  disabled: { off },
+                                  set: { name, on in off = off.filter { $0 != name } + (on ? [] : [name]) })
+            }
+        }
     }
 }
 #endif

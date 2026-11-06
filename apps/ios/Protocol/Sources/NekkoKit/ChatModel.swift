@@ -534,6 +534,20 @@ public final class ChatModel {
         await reload()
     }
 
+    /// The tools the computer's agents can call, for the chat's Tools list.
+    public func tools() async throws -> [ToolInfo] {
+        ToolInfo.list(try await store.remote().call(Channels.toolsList))
+    }
+
+    public var disabledTools: [String] { session?.disabledTools ?? [] }
+
+    /// Switch one tool on or off for this chat. The computer asks for Face ID either way.
+    public func setTool(_ name: String, on: Bool) async throws {
+        var off = disabledTools.filter { $0 != name }
+        if !on { off.append(name) }
+        try await setRunOption("disabledTools", .array(off.map { .string($0) }))
+    }
+
     // MARK: The queue, forks and pull requests
 
     /// Editing the computer's queue needs the computer: an edit made offline could land after the prompt ran.

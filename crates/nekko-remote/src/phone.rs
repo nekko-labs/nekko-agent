@@ -40,6 +40,7 @@ pub struct Policy {
     pub machine_view: Vec<String>,
     pub machine_resident_view: Vec<String>,
     pub skill_view: Vec<String>,
+    pub tool_view: Vec<String>,
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
@@ -132,6 +133,7 @@ pub fn policy() -> &'static Policy {
             machine_view: strings(&v["machineView"]),
             machine_resident_view: strings(&v["machineResidentView"]),
             skill_view: strings(&v["skillView"]),
+            tool_view: strings(&v["toolView"]),
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
@@ -608,6 +610,10 @@ pub fn redact(channel: &str, result: Value) -> Value {
         },
         "skills:runnable" => match result {
             Value::Array(list) => Value::Array(list.iter().map(|s| pick(s, &policy().skill_view)).collect()),
+            _ => json!([]),
+        },
+        "tools:list" => match result {
+            Value::Array(list) => Value::Array(list.iter().map(|t| pick(t, &policy().tool_view)).collect()),
             _ => json!([]),
         },
         "session:get" | "chat:steer" => session_view(result),
@@ -1649,6 +1655,13 @@ mod tests {
                             "pending": false, "failures": 1, "lastError": "x".repeat(600) }]);
         assert_eq!(got, want);
         assert_eq!(redact("session:watches", Value::Null), json!([]));
+    }
+
+    #[test]
+    fn tools_reach_a_phone_as_names_and_what_they_do() {
+        let raw = json!([{ "name": "bash", "description": "Run a command", "inputSchema": { "type": "object" } }, { "name": "mcp__gh__issue" }]);
+        assert_eq!(redact("tools:list", raw), json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }]));
+        assert_eq!(redact("tools:list", Value::Null), json!([]));
     }
     use super::*;
     use std::sync::Mutex;

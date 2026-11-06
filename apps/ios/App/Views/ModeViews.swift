@@ -243,6 +243,9 @@ struct RunOptionRow: View {
         case "incognito": "Incognito"
         case "gitIsolation": "Separate Git branch"
         case "workMode": "Work mode"
+        case "memory": "Memory"
+        case "guidance": "Project rules"
+        case "privacy": "Privacy Shield"
         default: "Tool style"
         }
     }
@@ -254,6 +257,12 @@ struct RunOptionRow: View {
         case "best-output": "Best output"
         case "list": "List"
         case "code": "Code"
+        case "all": "Everything"
+        case "project": "Project"
+        case "off": "Off"
+        case "rules": "Rules"
+        case "root": "Root files"
+        case "redact": "On"
         default: "Default"
         }
     }
@@ -264,11 +273,58 @@ struct RunOptionRow: View {
                 .frame(minHeight: 44)
                 .accessibilityIdentifier("run.\(option.key)")
         } else {
-            Picker(title, selection: Binding(get: { value?.string ?? option.values[0] }, set: { set(.string($0)) })) {
+            Picker(title, selection: Binding(get: { option.shown(value) ?? option.values[0] }, set: { set(option.wire($0, current: value)) })) {
                 ForEach(option.values, id: \.self) { Text(label($0)).tag($0) }
             }
             .frame(minHeight: 44)
             .accessibilityIdentifier("run.\(option.key)")
+        }
+    }
+}
+
+/// The tools a chat may call, each with a switch, from the computer's own list.
+/// A change asks for Face ID: the computer says when.
+struct ToolsList: View {
+    let load: () async throws -> [ToolInfo]
+    /// Read in `body`, so the switches follow the chat as it reloads.
+    let disabled: () -> [String]
+    let set: (String, Bool) async throws -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+    @State private var tools: [ToolInfo]?
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let error {
+                    Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
+                }
+                if let tools {
+                    ForEach(tools) { tool in
+                        Toggle(isOn: Binding(get: { !disabled().contains(tool.name) }, set: { on in
+                            error = nil
+                            Task { do { try await set(tool.name, on) } catch { self.error = error.localizedDescription } }
+                        })) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(tool.name).font(.subheadline.monospaced())
+                                if !tool.description.isEmpty {
+                                    Text(tool.description).font(.caption).foregroundStyle(palette.inkSoft).lineLimit(2)
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("run.tool.\(tool.name)")
+                    }
+                } else if error == nil {
+                    ProgressView("Loading tools…")
+                }
+            }
+            .navigationTitle("Tools this chat can use")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .task {
+                do { tools = try await load() } catch { self.error = error.localizedDescription }
+            }
         }
     }
 }
@@ -281,6 +337,7 @@ struct ModelEffortPanel: View {
     @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
     @State private var picking = false
+    @State private var choosingTools = false
     @State private var error: String?
     @State private var busy: Effort?
 
@@ -333,6 +390,19 @@ struct ModelEffortPanel: View {
                         }
                     }
                 }
+                Button { choosingTools = true } label: {
+                    HStack {
+                        Text("Tools").foregroundStyle(palette.ink)
+                        Spacer(minLength: 8)
+                        if !chat.disabledTools.isEmpty {
+                            Text("\(chat.disabledTools.count) off").font(.subheadline).foregroundStyle(palette.inkSoft)
+                        }
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                    }
+                    .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("run.disabledTools")
             }
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
@@ -346,6 +416,9 @@ struct ModelEffortPanel: View {
                     do { try await chat.setOptions(providerId: p, modelId: m) } catch { self.error = error.localizedDescription }
                 }
             }
+        }
+        .sheet(isPresented: $choosingTools) {
+            ToolsList(load: { try await chat.tools() }, disabled: { chat.disabledTools }, set: { try await chat.setTool($0, on: $1) })
         }
         .task { await store.loadAllModels() }
     }

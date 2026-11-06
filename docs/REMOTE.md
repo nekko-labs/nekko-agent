@@ -529,7 +529,9 @@ changes how the computer itself is set up:
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
   the computer's hardware readings, the Model Server's loaded models and a chat's context size,
-  and unload a model;
+  and unload a model; a chat's run settings, including its memory, project rules, Privacy Shield
+  and which tools it may call (from the computer's list of tool names), each confirmed with Face ID
+  or the screen lock;
   git in a chat's folder and its terminals and SSH (below); a chat's or saved folder's files and the computer's logs (below);
   and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
