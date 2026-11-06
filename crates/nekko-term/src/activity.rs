@@ -101,12 +101,12 @@ impl Observer {
     }
 
     fn finish_word(&mut self, activity: &mut TerminalActivity) {
-        if !self.word_overflow {
-            if let Ok(s) = std::str::from_utf8(&self.word) {
-                let s = s.trim_end_matches(['.', ',', ';', ':']);
-                if valid_pr(s) {
-                    activity.pull_request_url = Some(s.to_owned());
-                }
+        if !self.word_overflow
+            && let Ok(s) = std::str::from_utf8(&self.word)
+        {
+            let s = s.trim_end_matches(['.', ',', ';', ':']);
+            if valid_pr(s) {
+                activity.pull_request_url = Some(s.to_owned());
             }
         }
         self.word.clear();
@@ -138,18 +138,18 @@ impl Observer {
         } else if let Some(body) = s.strip_prefix("777;notify;") {
             a.state = Some("attention".into());
             a.detail = Some(text(&body.replace(';', " · ")));
-        } else if let Some(body) = s.strip_prefix("777;nekko;") {
-            if let Some((state, detail)) = body.split_once(';') {
-                let state = match state {
-                    "working" => "running",
-                    "idle" => "idle",
-                    "attention" => "attention",
-                    _ => return,
-                };
-                a.state = Some(state.into());
-                a.detail = Some(text(detail));
-                a.last_exit_code = None;
-            }
+        } else if let Some(body) = s.strip_prefix("777;nekko;")
+            && let Some((state, detail)) = body.split_once(';')
+        {
+            let state = match state {
+                "working" => "running",
+                "idle" => "idle",
+                "attention" => "attention",
+                _ => return,
+            };
+            a.state = Some(state.into());
+            a.detail = Some(text(detail));
+            a.last_exit_code = None;
         }
     }
 }
@@ -162,7 +162,7 @@ fn valid_pr(s: &str) -> bool {
             !p.is_empty()
                 && *p != "."
                 && *p != ".."
-                && p.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_ .".contains(&b) && b != b' ')
+                && p.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
         })
         && parts[2] == "pull"
         && !parts[3].is_empty()
