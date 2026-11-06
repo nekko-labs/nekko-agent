@@ -18,6 +18,9 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.CopyOnWriteArrayList
 
+/** A computer's host key, as a pairing link names it: every pairing needs one (decision 0041). */
+const val TEST_HOST_KEY = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+
 class FakeStore : SecureStore {
     val map = LinkedHashMap<String, String>()
     override suspend fun get(key: String): String? = map[key]
@@ -59,6 +62,7 @@ open class FakeCaller(
 class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement) : FakeCaller(handler), Remote {
     override val status = MutableStateFlow(RelayStatus(RelayState.IDLE))
     override val events = MutableSharedFlow<Pair<String, JsonElement>>(extraBufferCapacity = 64)
+    override val dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
     override val welcome = MutableSharedFlow<WelcomedDevice>(replay = 1, extraBufferCapacity = 1)
     var connected = false
     var closed = false

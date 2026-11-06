@@ -31,19 +31,22 @@ afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe('Mode panel markup', () => {
   const html = () => renderToStaticMarkup(<ModePanel {...deps()} />);
-  it('shows the rail, the four sections and every setting', () => {
+  it('shows the rail, environment, privacy and approach settings without duplicate model controls', () => {
     const out = html();
     for (const name of STARTER_MODES.map((m) => m.name)) expect(out).toContain(name);
-    for (const text of ['Environment', 'Model', 'Privacy', 'Approach', 'Run on', 'Use worktrees', 'Incognito', 'Internet access', 'Folders', 'Approvals', 'Tools', 'MCP servers', 'Connectors', 'Skills', 'System prompt', 'Memory', 'Model router', 'Models run', 'Effort']) expect(out).toContain(text);
+    for (const text of ['Environment', 'Privacy', 'Approach', 'Run on', 'Use worktrees', 'Incognito', 'Internet access', 'Folders', 'Approvals', 'Tools', 'MCP servers', 'Connectors', 'Skills', 'System prompt', 'Memory']) expect(out).toContain(text);
     expect(out).toContain('git-scm.com/docs/git-worktree');
     expect(out).toContain('agent-nekko');
+    // Explanation copy still ships, now as HoverTip labels on the row's info trigger.
+    expect(out).toContain('data-hover-tip="Your machine, with your shell, apps and credentials.');
+    expect(out).toContain('data-hover-tip="This chat is not saved to your history.');
   });
   it('marks the matching saved mode and the planned settings', () => {
     session = { ...base, cloudOnly: true };
     const out = html();
     expect(out).toMatch(/aria-checked="true"[^>]*data-saved-mode="cloud"/);
-    expect(out).toMatch(/aria-checked="true" data-model-scope="cloud"/);
-    expect(out.match(/Coming soon/g)).toHaveLength(2);
+    expect(out).not.toContain("data-model-scope");
+    expect(out.match(/Coming soon/g)).toHaveLength(1);
     expect(out).toMatch(/aria-checked="true"[^>]*data-memory="all"/);
     expect(out).toMatch(/aria-checked="true"[^>]*data-guidance="rules"/);
     expect(out).toMatch(/data-chat-mode="guardrails"|aria-checked="true"[^>]*data-chat-mode="guardrails"/);
@@ -74,12 +77,14 @@ describe('Mode panel markup', () => {
     session = { ...base, toolApproach: 'code', executionMode: 'sandbox' } as Session;
     expect(html()).not.toContain('on · code mode');
   });
-  it('follows the chat effort over the app default', () => {
+  it('leaves model and effort controls to the composer', () => {
     session = { ...base, effort: 'low' } as Session;
     const out = html();
-    expect(out).toMatch(/aria-checked="true" data-effort="low"/);
-    expect(out).toContain('remembered for new chats on this computer');
-    expect(out).not.toContain('Use the app default');
+    expect(out).not.toContain('Nekko router');
+    expect(out).not.toContain('Models run');
+    expect(out).not.toContain('Model router');
+    expect(out).not.toContain('data-effort=');
+    expect(out).not.toContain('What effort does');
   });
   it('locks internet on for a cloud model and approvals in a sandbox', () => {
     expect(renderToStaticMarkup(<ModePanel {...deps({ isCloudModel: true })} />)).toMatch(/aria-checked="true" aria-label="Internet access" class="mode-switch" disabled/);

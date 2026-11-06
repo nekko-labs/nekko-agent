@@ -48,6 +48,10 @@ pub struct Ctx {
     pub automation: Arc<crate::automation::Automation>,
     /// Phone remote access (`remote:*`) and the relay agent.
     pub remote: Arc<crate::remote::Remote>,
+    /// This computer's Model Server, for connected computers (`model:*`).
+    pub tunnel: Arc<crate::model_tunnel::Tunnel>,
+    /// Links to other computers (`computers:*`), answered in wire.rs for the window only.
+    pub computers: Arc<crate::computers::Computers>,
     /// Settings → Security and the step-up check on the desktop's and the
     /// Local Web UI's guarded calls (`security:*`, SK-4/SK-5). Reached from the
     /// wire only (wire.rs), never through `route`, so a phone cannot call it.
@@ -183,6 +187,7 @@ impl Table {
             &["claude:planUsage"],
             handler!(|ctx, channel, args| crate::claude_policy::plan_usage_route(ctx, &args).await),
         );
+        t.add(&["claude:backgroundTasks"], handler!(|ctx, channel, args| Ok(ctx.turns.harness.background_tasks())));
         t.add(
             &["claude:codeStatus"],
             handler!(|ctx, channel, args| crate::claude_policy::code_status_route(ctx, &args).await),
@@ -341,6 +346,21 @@ impl Table {
             handler!(|ctx, channel, args| Ok(merge_pending(json!({}), ctx.turns.pending.snapshot()))),
         );
         t.add(&["chat:running"], handler!(|ctx, channel, args| Ok(json!(running_chats(ctx)))));
+        t.add(
+            crate::model_tunnel::CHANNELS,
+            handler!(|ctx, channel, args| ctx.tunnel.clone().route(ctx, channel, &args).await),
+        );
+        // A callable form of the replay a window's socket gets when it starts
+        // showing a chat, for a paired computer that has no such socket.
+        t.add(
+            &["agent:replay"],
+            handler!(|ctx, channel, args| {
+                let id: std::sync::Arc<str> = str_arg(&args, 0).unwrap_or_default().into();
+                let frame = ctx.hub.replay(&[id]).into_iter().next();
+                let frame = frame.and_then(|(_, _, text)| serde_json::from_str::<Value>(&text).ok());
+                Ok(frame.map_or(Value::Null, |mut f| f["payload"].take()))
+            }),
+        );
         t.add(
             &["chat:steer"],
             handler!(|ctx, channel, args| {
@@ -532,6 +552,11 @@ impl Table {
             crate::runner::image::CHANNELS,
             handler!(|ctx, channel, args| ctx.runners.image_route(channel, &args).await),
         );
+        #[cfg(unix)]
+        t.add(
+            crate::runner::linux_image::CHANNELS,
+            handler!(|ctx, channel, _args| ctx.runners.linux_image_route(channel).await),
+        );
         t.add(crate::telemetry::CHANNELS, handler!(|ctx, channel, args| crate::telemetry::route(channel, &args).await));
         t.add(
             crate::connections::CHANNELS,
@@ -676,6 +701,7 @@ impl Table {
                     ctx.sessions.clone(),
                     Some(ctx.turns.agent_logs.clone()),
                     Some(ctx.turns.watches.clone()),
+                    Some(ctx.turns.harness.clone()),
                     protected,
                     channel,
                     args,
@@ -1066,6 +1092,8 @@ const SESSION_CHANNELS: &[&str] = &[
     "sessions:historyUsage",
     "sessions:purgeArchived",
     "session:get",
+    "session:page",
+    "session:photo",
     "session:images",
     "session:delete",
     "session:setOptions",
@@ -1123,6 +1151,7 @@ async fn session_op(
     store: Arc<nekko_store::SessionStore>,
     logs: Option<Arc<crate::agent_logs::AgentLogs>>,
     watches: Option<Arc<crate::watches::Watches>>,
+    harness: Option<Arc<crate::harness::Harness>>,
     protected: Option<ProtectedSession>,
     channel: &str,
     args: Vec<Value>,
@@ -1145,11 +1174,14 @@ async fn session_op(
                         *counts.entry(id.to_string()).or_default() += 1;
                     }
                 }
+                let watchers = harness.as_ref().map(|h| h.background_watchers()).unwrap_or_default();
                 for session in &mut sessions {
-                    let count =
-                        session.get("id").and_then(Value::as_str).and_then(|id| counts.get(id)).copied().unwrap_or(0);
+                    let id = session.get("id").and_then(Value::as_str);
+                    let count = id.and_then(|id| counts.get(id)).copied().unwrap_or(0);
+                    let watching = id.and_then(|id| watchers.get(id)).copied().unwrap_or(0);
                     if let Some(obj) = session.as_object_mut() {
                         obj.insert("activeWatchCount".into(), json!(count));
+                        obj.insert("backgroundWatchCount".into(), json!(watching));
                     }
                 }
                 Ok(Value::Array(sessions))
@@ -1164,6 +1196,22 @@ async fn session_op(
             }
             "sessions:purgeArchived" => store.purge_archived(delete_log).map(|n| json!(n)),
             "session:get" => Ok(store.get(id).unwrap_or(Value::Null)),
+            "session:page" => Ok(nekko_remote::phone::message_page(
+                &store.get(id).unwrap_or(Value::Null),
+                arg(&args, 1).as_str(),
+                arg(&args, 2).as_f64(),
+            )),
+            // One photo a user attached, as stored: `(chatId, messageId, index)`.
+            "session:photo" => Ok(store
+                .get(id)
+                .as_ref()
+                .and_then(|s| {
+                    s.get("messages")?.as_array()?.iter().find(|m| {
+                        str_arg(&args, 1).is_some_and(|want| m.get("id").and_then(Value::as_str) == Some(want))
+                    })
+                })
+                .and_then(|m| m.get("images")?.get(arg(&args, 2).as_u64()? as usize)?.as_str().map(str::to_string))
+                .map_or(Value::Null, Value::String)),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
             "session:delete" => {
                 delete_log(id)?;
@@ -1217,14 +1265,21 @@ mod tests {
             { "sessionId": "s1" }
         ]).to_string()).unwrap();
         let watches = crate::watches::Watches::new(tmp.path().to_path_buf(), store.clone(), Hub::new());
+        let harness = crate::harness::Harness::new();
+        harness.note_background("s3", 3, 2);
         for channel in ["sessions:list", "sessions:summaries"] {
-            let got = session_op(store.clone(), None, Some(watches.clone()), None, channel, vec![]).await.unwrap();
+            let got =
+                session_op(store.clone(), None, Some(watches.clone()), Some(harness.clone()), None, channel, vec![])
+                    .await
+                    .unwrap();
             let rows = got.as_array().unwrap();
             assert_eq!(rows.iter().map(|s| s["id"].as_str().unwrap()).collect::<Vec<_>>(), ["s3", "s2", "s1"]);
             assert_eq!(rows.iter().map(|s| s["activeWatchCount"].as_u64().unwrap()).collect::<Vec<_>>(), [0, 1, 3]);
+            assert_eq!(rows.iter().map(|s| s["backgroundWatchCount"].as_u64().unwrap()).collect::<Vec<_>>(), [2, 0, 0]);
             let mut expected = if channel == "sessions:list" { store.list() } else { store.summaries() };
-            for (session, count) in expected.iter_mut().zip([0, 1, 3]) {
+            for ((session, count), tasks) in expected.iter_mut().zip([0, 1, 3]).zip([2, 0, 0]) {
                 session["activeWatchCount"] = json!(count);
+                session["backgroundWatchCount"] = json!(tasks);
             }
             assert_eq!(got, json!(expected), "all other metadata and transcript behavior stays unchanged");
             if channel == "sessions:summaries" {
@@ -1241,8 +1296,10 @@ mod tests {
         }
         // Counts are live even when the session summaries came from the cache.
         std::fs::write(path, "[]").unwrap();
-        let got = session_op(store, None, Some(watches), None, "sessions:summaries", vec![]).await.unwrap();
-        assert!(got.as_array().unwrap().iter().all(|s| s["activeWatchCount"] == 0));
+        harness.note_background("s3", 0, 0);
+        let got =
+            session_op(store, None, Some(watches), Some(harness), None, "sessions:summaries", vec![]).await.unwrap();
+        assert!(got.as_array().unwrap().iter().all(|s| s["activeWatchCount"] == 0 && s["backgroundWatchCount"] == 0));
     }
 
     #[tokio::test]
@@ -1257,8 +1314,9 @@ mod tests {
             }
             for channel in ["sessions:list", "sessions:summaries"] {
                 for watches in [None, Some(watches.clone())] {
-                    let got = session_op(store.clone(), None, watches, None, channel, vec![]).await.unwrap();
+                    let got = session_op(store.clone(), None, watches, None, None, channel, vec![]).await.unwrap();
                     assert_eq!(got[0]["activeWatchCount"], 0);
+                    assert_eq!(got[0]["backgroundWatchCount"], 0);
                 }
             }
         }
@@ -1276,6 +1334,7 @@ mod tests {
         let protected: ProtectedSession = Arc::new(|id| id == "s_busy");
         let removed = session_op(
             store.clone(),
+            None,
             None,
             None,
             Some(protected),

@@ -1,3 +1,4 @@
+import { COMPUTER_USAGE, pairedDevices, serveComputer } from './computer.js';
 import { readFileSync } from 'node:fs';
 import { stdin } from 'node:process';
 import {
@@ -70,7 +71,8 @@ Usage:
   nekko-agent chat "<prompt>" [--approve guardrails|yolo|ask] [opts]
   nekko-agent workspace list|add|remove|index|search [opts]
   nekko-agent prompts|tasks|skills|tools|models [opts]
-  nekko-agent workflow list|run <name>|trigger <command>|runs [--json]
+  nekko-agent scheduled-task list|run <name>|trigger <command>|runs [--json]   (alias: workflow)
+  nekko-agent computer serve --relay <wss://…>|list|revoke <device>
   nekko-agent train start|status|hint|stop [opts]
   nekko-agent local status|list|search|download|downloads|cancel|load|unload|start|stop
   nekko-agent mcp
@@ -210,8 +212,9 @@ export async function runCli(argv: string[]): Promise<void> {
   if (cmd === 'mcp') return runMcpServer({ url: value(flags, 'url'), token: value(flags, 'token') });
   // Before getClient: building a client opens the data root, which refuses to start while an earlier profile is unmerged.
   if (cmd === 'migrate') { process.exitCode = await migrateCommand(flags); return; }
-  if (!['status', 'sessions', 'chat', 'watch', 'workspace', 'prompts', 'tasks', 'workflow', 'workflows', 'skills', 'tools', 'models', 'local', 'train'].includes(cmd)) throw new CliError(`Unknown command: ${cmd}`, EXIT_CODES.usage);
-  const client = getClient({ url: value(flags, 'url'), token: value(flags, 'token') });
+  if (!['status', 'sessions', 'chat', 'watch', 'computer', 'workspace', 'prompts', 'tasks', 'scheduled-task', 'scheduled-tasks', 'workflow', 'workflows', 'skills', 'tools', 'models', 'local', 'train'].includes(cmd)) throw new CliError(`Unknown command: ${cmd}`, EXIT_CODES.usage);
+  // `computer serve` stays up, with the model server, until it is stopped.
+  const client = getClient({ url: value(flags, 'url'), token: value(flags, 'token'), longLived: cmd === 'computer' && _[1] === 'serve' });
   const json = isMachine(flags);
   try {
     if (cmd === 'status') {
@@ -371,7 +374,8 @@ export async function runCli(argv: string[]): Promise<void> {
       }
       throw new CliError('Usage: nekko-agent tasks list|add|run|delete', EXIT_CODES.usage);
     }
-    if (cmd === 'workflow' || cmd === 'workflows') {
+    // `workflow` is the command's name from before the Scheduled Tasks rename; scripts still call it.
+    if (cmd === 'scheduled-task' || cmd === 'scheduled-tasks' || cmd === 'workflow' || cmd === 'workflows') {
       const sub = _[1] ?? 'list';
       if (sub === 'list') {
         const { workflows } = await client.listWorkflows();
@@ -398,13 +402,13 @@ export async function runCli(argv: string[]): Promise<void> {
         // Named by CLI command (what a `cli` trigger answers to), by exact name,
         // or by id, so a script doesn't have to know a uuid.
         const target = value(flags, 'name') ?? _[2] ?? '';
-        if (!target) throw new CliError('Usage: nekko-agent workflow run <name>', EXIT_CODES.usage);
+        if (!target) throw new CliError('Usage: nekko-agent scheduled-task run <name>', EXIT_CODES.usage);
         // `run` fires the named workflow directly; `trigger` offers the name as a
         // CLI event, so every workflow with a matching cli trigger reacts.
         if (sub === 'trigger') {
           const started = await client.dispatchWorkflowEvent({ kind: 'cli', command: target });
           if (started.length === 0) {
-            throw new CliError(`No enabled workflow listens for the CLI command "${target}".`, EXIT_CODES.usage);
+            throw new CliError(`No enabled scheduled task listens for the CLI command "${target}".`, EXIT_CODES.usage);
           }
           return void print(json ? started : started.map((r) => ({ run: r.id, status: r.status, message: r.message })), json);
         }
@@ -412,7 +416,7 @@ export async function runCli(argv: string[]): Promise<void> {
         const wf = workflows.find(
           (w) => w.id === target || w.name === target || cliCommand(w) === target.toLowerCase(),
         );
-        if (!wf) throw new CliError(`No workflow matches "${target}".`, EXIT_CODES.usage);
+        if (!wf) throw new CliError(`No scheduled task matches "${target}".`, EXIT_CODES.usage);
         const run = await client.runWorkflow(wf.id);
         if (!run) throw new CliError(`"${wf.name}" did not start (already running, or it has no steps).`, EXIT_CODES.usage);
         if (run.status !== 'success') {
@@ -420,7 +424,7 @@ export async function runCli(argv: string[]): Promise<void> {
         }
         return void print(json ? run : { workflow: wf.name, status: run.status, steps: run.steps.length }, json);
       }
-      throw new CliError('Usage: nekko-agent workflow list|run <name>|trigger <command>|runs', EXIT_CODES.usage);
+      throw new CliError('Usage: nekko-agent scheduled-task list|run <name>|trigger <command>|runs', EXIT_CODES.usage);
     }
     if (cmd === 'skills') {
       if (_[1] === 'install') {
@@ -444,6 +448,21 @@ export async function runCli(argv: string[]): Promise<void> {
         );
       }
       return void print(await client.listInstalledSkills(), json);
+    }
+    if (cmd === 'computer') {
+      const sub = _[1];
+      if (sub === 'list') return void print(await pairedDevices(client), json);
+      if (sub === 'revoke' && _[2]) return void print(await client.revokeDevice(_[2]), json);
+      if (sub === 'serve') {
+        const link = await serveComputer(client, value(flags, 'relay'));
+        console.log(`Reachable. On the desktop that will drive this computer, open Settings, Computers, Add a computer, and paste this. It works once, for 10 minutes.\n\n${link}\n`);
+        await new Promise<void>((resolve) => {
+          process.once('SIGINT', resolve);
+          process.once('SIGTERM', resolve);
+        });
+        return;
+      }
+      throw new CliError(COMPUTER_USAGE, EXIT_CODES.usage);
     }
     if (cmd === 'tools') return void print(await client.listTools(), json);
     if (cmd === 'models') {

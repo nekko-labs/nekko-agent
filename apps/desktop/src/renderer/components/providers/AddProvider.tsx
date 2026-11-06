@@ -4,6 +4,7 @@ import { PROVIDER_DEFAULTS, oauthProviderOffered } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 import { SubscriptionSignIn } from '../SubscriptionSignIn.js';
 import { ProviderChoices } from './ProviderChoices.js';
+import { CLOUD_PROVIDER_PRESETS, providerSetupDefaults, vertexEndpoint, type ProviderSetupKind } from './providerPresets.js';
 import { CheckIcon } from '../../icons.js';
 import { CLAUDE_API_KINDS, ClaudeSetup, isClaudeKind, type ClaudeChoice, type ClaudeConnected } from '../claude/ClaudeSetup.js';
 
@@ -125,21 +126,28 @@ export function AddProvider({
   optionalKey = false,
   bare = false,
   onCancel,
+  scope = 'all',
 }: {
   onDone: () => void;
-  fixedKind?: ProviderKind;
+  fixedKind?: ProviderSetupKind;
   /** Preselect a kind but keep the picker (a notice's action). */
-  initialKind?: ProviderKind;
+  initialKind?: ProviderSetupKind;
   apiKeyOnly?: boolean;
   optionalKey?: boolean;
   bare?: boolean;
   onCancel?: () => void;
+  scope?: 'all' | 'cloud' | 'local';
 }) {
   const pushToast = useStore((s) => s.pushToast);
   const startKind = fixedKind ?? initialKind;
-  const [kind, setKind] = useState<ProviderKind>(startKind ?? 'ollama');
-  const [label, setLabel] = useState(startKind ? PROVIDER_DEFAULTS[startKind].label : '');
-  const [baseUrl, setBaseUrl] = useState(PROVIDER_DEFAULTS[startKind ?? 'ollama'].baseUrl);
+  const [choice, setChoice] = useState<ProviderSetupKind>(startKind ?? (scope === 'cloud' ? 'gemini' : 'ollama'));
+  const defaults = providerSetupDefaults(choice);
+  const kind = defaults.kind;
+  const preset = choice in CLOUD_PROVIDER_PRESETS ? CLOUD_PROVIDER_PRESETS[choice as keyof typeof CLOUD_PROVIDER_PRESETS] : undefined;
+  const [label, setLabel] = useState(startKind ? providerSetupDefaults(startKind).label : '');
+  const [baseUrl, setBaseUrl] = useState(defaults.baseUrl);
+  const [googleProject, setGoogleProject] = useState('');
+  const [googleLocation, setGoogleLocation] = useState('global');
   const [apiKey, setApiKey] = useState('');
   // Where a kind has both a sign-in and an API key (Anthropic, if Claude
   // sign-in is ever offered), the sign-in is the primary path and the key
@@ -160,13 +168,13 @@ export function AddProvider({
   // Claude is one choice: Subscription (Claude Code) or API, whose form opens
   // from the API column's Connect button. The wizard's API-key-only Claude
   // card keeps the plain form.
-  const claude = isClaudeKind(kind) && !apiKeyOnly;
+  const claude = isClaudeKind(kind) && kind !== 'vertex' && !apiKeyOnly;
   const [claudeApiOpen, setClaudeApiOpen] = useState(false);
   const [claudeConnected, setClaudeConnected] = useState<ClaudeConnected | null>(null);
   const chooseClaude = (c: ClaudeChoice) => {
     setResult(null);
     if (c === 'subscription') {
-      setKind('claude-code');
+      setChoice('claude-code');
     } else if (!CLAUDE_API_KINDS.includes(kind)) {
       pickFields('anthropic');
     }
@@ -174,24 +182,26 @@ export function AddProvider({
   const showFields = !claude || (kind !== 'claude-code' && claudeApiOpen);
 
   const pickFields = (k: ProviderKind) => {
-    setKind(k);
-    setBaseUrl(PROVIDER_DEFAULTS[k].baseUrl);
-    setLabel(PROVIDER_DEFAULTS[k].label);
+    setChoice(k);
+    setBaseUrl(providerSetupDefaults(k).baseUrl);
+    setLabel(providerSetupDefaults(k).label);
     setApiKey('');
     setWorkspaceId('');
   };
 
-  const pick = (k: ProviderKind) => {
+  const pick = (k: ProviderSetupKind) => {
     setResult(null);
     setClaudeApiOpen(false);
     setClaudeConnected(null);
-    setKind(k);
-    setBaseUrl(PROVIDER_DEFAULTS[k].baseUrl);
-    setLabel(PROVIDER_DEFAULTS[k].label);
+    setChoice(k);
+    setBaseUrl(providerSetupDefaults(k).baseUrl);
+    setLabel(providerSetupDefaults(k).label);
     setUseApiKey(false);
     setApiKey('');
     setCustomModelId('');
     setWorkspaceId('');
+    setGoogleProject('');
+    setGoogleLocation('global');
   };
 
   const [testing, setTesting] = useState(false);
@@ -219,16 +229,25 @@ export function AddProvider({
   };
 
   const draft = (): ProviderConfig => ({
-    id: `${kind}-${Date.now().toString(36)}`,
+    id: `${choice}-${Date.now().toString(36)}`,
     kind,
-    label: label || PROVIDER_DEFAULTS[kind].label,
+    label: label || defaults.label,
     baseUrl,
-    apiKey: apiKey || undefined,
+    apiKey: apiKey.trim() || undefined,
+    auth: preset ? 'apikey' : undefined,
     workspaceId: kind === 'anthropic' ? workspaceId.trim() || undefined : undefined,
     enabled: true,
   });
 
+  const validInput = () => {
+    const message = preset && !apiKey.trim() ? `Enter your ${preset.label} API key.`
+      : kind === 'vertex' && (!googleProject.trim() || !/^[a-z0-9-]+$/.test(googleProject.trim()) || !/^[a-z0-9-]+$/.test(googleLocation.trim())) ? 'Enter a Google Cloud project ID and a valid location.' : undefined;
+    if (message) { setResult({ ok: false, message }); return false; }
+    return true;
+  };
+
   const test = async () => {
+    if (!validInput()) return;
     setTesting(true);
     setResult(null);
     try {
@@ -239,6 +258,7 @@ export function AddProvider({
   };
 
   const save = async () => {
+    if (!validInput()) return;
     setTesting(true);
     try {
       const config = draft();
@@ -267,10 +287,10 @@ export function AddProvider({
   };
 
   return (
-    <div className={bare ? undefined : 'card mt-5 p-5'}>
+    <div className={bare ? 'min-w-0' : 'card mt-5 min-w-0 p-5'}>
       <div className="grid grid-cols-2 gap-3">
         {!fixedKind && (
-          <div className="col-span-2"><ProviderChoices value={claude ? 'anthropic' : kind} onPick={pick} /></div>
+          <div className="col-span-2"><ProviderChoices value={claude ? 'anthropic' : choice} onPick={pick} scope={scope} /></div>
         )}
         {claude && (
           <ClaudeSetup
@@ -293,12 +313,31 @@ export function AddProvider({
           </div>
         )}
         {showFields && <>
-        <details className="col-span-2">
+        {preset && <div className="col-span-2 space-y-2">
+          <h2 className="text-base font-semibold">{preset.label}</h2>
+          <p className="text-xs text-ink-soft">{preset.description}</p>
+          <a className="text-xs text-accent hover:underline" href={preset.keyUrl} target="_blank" rel="noreferrer">Get your {preset.label} API key</a>
+        </div>}
+        {kind === 'vertex' && <div className="col-span-2 min-w-0 space-y-3">
+          <h2 className="text-base font-semibold">Google Cloud Vertex AI</h2>
+          <p className="text-xs text-ink-soft">Run Claude on your Google Cloud project, billed to Google Cloud. This is not a Claude subscription sign-in or a Gemini API key.</p>
+          <label className="block text-xs font-medium text-ink-soft">Google Cloud project ID
+            <input className="input mt-1" value={googleProject} placeholder="my-google-project" onChange={(e) => { setGoogleProject(e.target.value); setBaseUrl(vertexEndpoint(e.target.value, googleLocation)); }} />
+          </label>
+          <label className="block text-xs font-medium text-ink-soft">Google Cloud location
+            <input className="input mt-1" value={googleLocation} placeholder="global" onChange={(e) => { setGoogleLocation(e.target.value); setBaseUrl(vertexEndpoint(googleProject, e.target.value)); }} />
+          </label>
+          <p className="text-xs text-ink-soft">On the computer running Nekko Agent, sign in to Google using Application Default Credentials:</p>
+          <pre className="overflow-x-auto rounded-lg p-2 text-xs" style={{ background: 'var(--surface-2)' }}>gcloud auth application-default login</pre>
+          <p className="text-xs text-ink-faint">Or set GOOGLE_APPLICATION_CREDENTIALS on that computer. Enable Vertex AI and access to Claude in your project, then test the connection. Nekko uses your Google credentials, never Claude Code credentials.</p>
+          <a className="text-xs text-accent hover:underline" href="https://cloud.google.com/docs/authentication/provide-credentials-adc" target="_blank" rel="noreferrer">Google credentials setup guide</a>
+        </div>}
+        <details className="col-span-2 min-w-0">
           <summary className="cursor-pointer text-xs text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : ' — server address and name'}</summary>
           <div className="mt-3 grid grid-cols-2 gap-3">
         <label className="text-xs font-medium text-ink-soft">
           Label
-          <input className="input mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={PROVIDER_DEFAULTS[kind].label} />
+          <input className="input mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={defaults.label} />
         </label>
         <label className="text-xs font-medium text-ink-soft">
           Base URL
@@ -336,10 +375,10 @@ export function AddProvider({
             )}
           </div>
         )}
-        {(PROVIDER_DEFAULTS[kind].needsKey || optionalKey) && (!keyBehindSignIn || useApiKey) && (
+        {(defaults.needsKey || optionalKey) && (!keyBehindSignIn || useApiKey) && (
           <label className="col-span-2 text-xs font-medium text-ink-soft">
-            API key{optionalKey && !PROVIDER_DEFAULTS[kind].needsKey ? ' (optional)' : ''}
-            <input className="input mt-1" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-…" />
+            API key{optionalKey && !defaults.needsKey ? ' (optional)' : ''}
+            <input className="input mt-1" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={preset ? `${preset.label} API key` : "sk-…"} />
           </label>
         )}
         {kind === 'anthropic' && (!keyBehindSignIn || useApiKey) && (
@@ -366,7 +405,7 @@ export function AddProvider({
         )}
         </>}
       </div>
-      <div className="mt-4 flex items-center justify-between gap-2">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0 text-xs">
           {result && (
             <span style={{ color: result.ok ? 'var(--success)' : 'var(--danger)' }} className="inline-flex items-center gap-2">
@@ -375,7 +414,7 @@ export function AddProvider({
             </span>
           )}
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex min-w-0 flex-wrap gap-2">
           <button className="btn btn-ghost" onClick={onCancel ?? onDone}>Cancel</button>
           {/* Where a sign-in sits beside the key, the sign-in completes the
               add itself; test/save only make sense once the API-key path is

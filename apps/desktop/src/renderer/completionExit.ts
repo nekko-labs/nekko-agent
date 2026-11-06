@@ -16,11 +16,11 @@ export function findCompletionRow(sessionId: string): HTMLElement | null {
 }
 
 /**
- * Plays the completion exit on a sidebar row, then runs `complete`, which
- * removes the row from the list once the engine has saved the completion.
- * The row closes to the left, stardust drifts out of where it vanished, and
- * its height collapses so the rows below slide up into its place. If
- * `complete` reports failure the row is put back as it was.
+ * Plays the completion exit on a sidebar row while `complete` runs in parallel,
+ * so the engine work overlaps the animation instead of waiting for it. The row
+ * closes to the left, stardust drifts out of where it vanished, and its height
+ * collapses so the rows below slide up into its place. If `complete` reports
+ * failure the row is put back as it was.
  */
 export async function completeWithExit(row: HTMLElement | null, complete: () => Promise<boolean>): Promise<void> {
   if (!row || row.dataset.completing || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -31,6 +31,9 @@ export async function completeWithExit(row: HTMLElement | null, complete: () => 
   row.style.pointerEvents = 'none';
   const rect = row.getBoundingClientRect();
   const computed = getComputedStyle(row);
+
+  // Kick the engine work off immediately; the animation plays over it, not before it.
+  const completion = complete();
 
   const close = row.animate(
     [
@@ -53,7 +56,7 @@ export async function completeWithExit(row: HTMLElement | null, complete: () => 
 
   let done = false;
   try {
-    done = await complete();
+    done = await completion;
   } finally {
     // Completed rows are unmounted by now; a failed one comes back.
     if (!done) {

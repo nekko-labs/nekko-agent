@@ -13,8 +13,8 @@ import kotlinx.serialization.json.put
 /**
  * *Sign out this phone* that could not reach the computer yet (SK-8). The
  * phone forgets the computer at once; what is kept here is only what it takes
- * to say `device:signOut` once more: the relay, the room and its keys, and
- * this phone's id. Nothing else about the computer (name, chats, settings)
+ * to say `device:signOut` once more: the relay, the room and its keys, the
+ * computer's host key, and this phone's id. Nothing else about the computer (name, chats, settings)
  * survives the sign-out.
  *
  * Kept in [SecureStore] like any pairing secret, tried at every app start and
@@ -28,6 +28,7 @@ data class PendingSignOut(
     val room: String,
     val key: String,
     val keyHex: String,
+    val hostKey: String,
     val deviceId: String,
     val at: Long,
 ) {
@@ -78,6 +79,7 @@ class SignOutOutbox(private val store: SecureStore) {
                     put("room", p.room)
                     put("key", p.key)
                     put("keyHex", p.keyHex)
+                    put("hostKey", p.hostKey)
                     put("deviceId", p.deviceId)
                     put("at", p.at)
                 })
@@ -94,6 +96,8 @@ class SignOutOutbox(private val store: SecureStore) {
                     room = s("room") ?: return@mapNotNull null,
                     key = s("key") ?: return@mapNotNull null,
                     keyHex = s("keyHex") ?: return@mapNotNull null,
+                    // Queued before pairings pinned a host key: it can never be dialed again.
+                    hostKey = s("hostKey") ?: return@mapNotNull null,
                     deviceId = s("deviceId") ?: return@mapNotNull null,
                     at = (o["at"] as? JsonPrimitive)?.longOrNull ?: 0,
                 )

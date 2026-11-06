@@ -111,6 +111,46 @@ describe('relay v2 routing', () => {
     expect((await bad.closed).code).toBe(1008);
   });
 
+  it('takes registrations only from a device the agent welcomed, once it says it will', async () => {
+    const { url, rooms } = await startRelay();
+    const agent = await connect(url, { role: 'agent', room: 'gated', key: 'k', proto: '6' });
+    const stranger = await connect(url, { role: 'client', room: 'gated', key: 'k' });
+    const phone = await connect(url, { role: 'client', room: 'gated', key: 'k' });
+    await agent.next();
+    const { cid } = await agent.next();
+    const device = '11111111-2222-4333-8444-555555555555';
+    const card = (deviceId: string) => ({ type: 'register-card', deviceId, token: 'a'.repeat(64), level: 'detailed', computerId: 'c', computerName: 'n' });
+    const settle = () => new Promise((r) => setTimeout(r, 30));
+    // Holding the room credential is not enough, with any device id.
+    stranger.send(card(device));
+    await settle();
+    expect(rooms.get('gated')!.cards.size).toBe(0);
+    // Welcomed, a connection registers as that device and no other.
+    agent.send({ type: 'welcomed', cid, deviceId: device });
+    await settle();
+    phone.send(card('99999999-2222-4333-8444-555555555555'));
+    phone.send(card(device));
+    await settle();
+    expect([...rooms.get('gated')!.cards.keys()]).toEqual([device]);
+    // Kicked, it registers nothing more.
+    agent.send({ type: 'kick', cid });
+    await phone.closed;
+    expect(rooms.get('gated')!.welcomed.size).toBe(0);
+  });
+
+  it('does not call a room offline when its agent is replaced', async () => {
+    const { url } = await startRelay();
+    await connect(url, { role: 'agent', room: 'swap', key: 'k' });
+    const client = await connect(url, { role: 'client', room: 'swap', key: 'k' });
+    expect((await client.next()).type).toBe('agent-online');
+    const next = await connect(url, { role: 'agent', room: 'swap', key: 'k' });
+    expect((await client.next()).type).toBe('agent-online');
+    const { cid } = await next.next();
+    await new Promise((r) => setTimeout(r, 30));
+    next.send({ type: 'd', cid, data: JSON.stringify({ enc: 'fence' }) });
+    expect(await client.next()).toEqual({ enc: 'fence' });
+  });
+
   it('kicks a client on the agent’s request', async () => {
     const { url } = await startRelay();
     const agent = await connect(url, { room: 'r3', role: 'agent', key: 'k' });
@@ -364,7 +404,8 @@ describe('relay v2 routing', () => {
     agent.send({ type: 'notify', title: 't', body: 'b' });
     agent.send({ type: 'notify', kind: 'failed', tag: 'short', title: 't', body: 'b' });
     await new Promise((r) => setTimeout(r, 50));
-    expect(sent).toEqual([
+    // Per-target serialization does not impose an order between APNs and FCM.
+    expect(sent.toSorted((a, b) => a.token.localeCompare(b.token))).toEqual([
       { token: 'a'.repeat(64), kind: 'needs-you', tag: 'e'.repeat(32) },
       { token: 'b'.repeat(40), kind: 'needs-you', tag: 'e'.repeat(32) },
       { token: 'b'.repeat(40), kind: 'finished', tag: undefined },

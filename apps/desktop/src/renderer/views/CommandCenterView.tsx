@@ -12,7 +12,8 @@ import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
+import { BoltIcon, MagnetIcon } from '../icons.js';
+import { FocusIcon } from '../gentleface-icons.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
@@ -29,7 +30,6 @@ import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '..
 import { allPanes, type PaneKind } from '../layout.js';
 import {
   applySnap,
-  minimizeFinishedReply,
   DEFAULT_ASPECT,
   openWallPane,
   agentZoneTints,
@@ -202,7 +202,15 @@ export function CommandCenterView() {
     window.nekko.pendingInput().then(setPending).catch(() => {});
     window.nekko.runningSessions().then((ids) => setRunning((r) => (ids.every((id) => r.has(id)) ? r : new Set([...r, ...ids])))).catch(() => {});
     const off = window.nekko.onTasksUpdated(setTasks);
-    return off;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      if (disposed) return;
+      await refreshTerminals();
+      if (!disposed) timer = setTimeout(poll, 3000);
+    };
+    timer = setTimeout(poll, 3000);
+    return () => { disposed = true; clearTimeout(timer); off(); };
   }, [refreshSessions, refreshTerminals]);
 
   const refreshPending = () => { window.nekko.pendingInput().then(setPending).catch(() => {}); };
@@ -226,10 +234,11 @@ export function CommandCenterView() {
       if (e.type === 'done' && (!e.stop || e.stop === 'complete')) {
         // Recheck the host: a question can still be pending when a turn ends.
         // Ignore stale answers if another event/turn arrived or the view left.
+        // The pane stays in its zone when the agent finishes; the Agents panel's
+        // "Done" group lists it on the left (additive), as of 2026-11-03.
         void window.nekko.pendingInput().then((inputs) => {
           if (!live || eventVersions.current.get(e.sessionId) !== version) return;
           setPending(inputs);
-          setWall((w) => minimizeFinishedReply(w, e, inputs));
         }).catch(() => {}); // An unavailable input state must not hide a window.
       }
       if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
@@ -244,7 +253,7 @@ export function CommandCenterView() {
       if (!known.has(e.sessionId)) { known.add(e.sessionId); refreshSessions(); }
     });
     return () => { live = false; off(); };
-  }, [refreshSessions, setWall]);
+  }, [refreshSessions]);
 
   // The automation countdowns tick every 30s.
   useEffect(() => {
@@ -315,11 +324,13 @@ export function CommandCenterView() {
     // Folders picked in Add window override the project default: the first is
     // the chat's working folder, any others are supporting folders.
     const [primaryFolder, ...supportingFolders] = selection?.workspaceIds ?? [];
-    let s = unfinishedChat.current ?? await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId);
+    let s = unfinishedChat.current ?? (selection?.computerId
+      ? await window.nekko.createSessionOn(selection.computerId, primaryFolder)
+      : await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId));
     if (unfinishedChat.current && !selection) selection = { kind: 'chat', chatType: 'multimodal' };
     if (selection) {
       try {
-        if (unfinishedChat.current && selection.workspaceIds) {
+        if (unfinishedChat.current && selection.workspaceIds && !selection.computerId) {
           const relocated = await window.nekko.setSessionWorkspace(s.id, primaryFolder);
           if (!relocated) throw new Error('Could not configure the new agent working folder.');
           s = relocated;
@@ -333,7 +344,7 @@ export function CommandCenterView() {
           if (!updated) throw new Error('Could not configure the new agent window.');
           s = updated;
         }
-        if (needs.supporting) {
+        if (needs.supporting && !selection.computerId) {
           const configured = await window.nekko.setSessionSupportingWorkspaces(s.id, supportingFolders);
           if (!configured) throw new Error('Could not configure the new agent folders.');
           s = configured;
@@ -379,7 +390,7 @@ export function CommandCenterView() {
     // Placed on another screen: that window opens it; nothing to add here.
     if (fresh && !(await keepNewChat(ref))) return;
     setWall((w) => openWallPane(w, kind, ref));
-    if (kind === 'chat') setSelected(ref);
+    if (kind === 'chat' || kind === 'terminal') setSelected(ref);
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
   const reportAddFailure = (e: unknown) => useStore.getState().pushToast('error', `Could not add the window: ${e instanceof Error ? e.message : String(e)}`);
@@ -403,7 +414,7 @@ export function CommandCenterView() {
     setSelected(id);
     // The agent's zone becomes the active one too.
     setWall((w) => {
-      const activeZone = id ? zoneOf(w.root, 'chat', id) ?? w.activeZone : w.activeZone;
+      const activeZone = id ? zoneOf(w.root, 'chat', id) ?? zoneOf(w.root, 'terminal', id) ?? w.activeZone : w.activeZone;
       return w.hero === id && w.activeZone === activeZone ? w : { ...w, hero: id, activeZone };
     });
   }, [setWall]);
@@ -431,9 +442,10 @@ export function CommandCenterView() {
   const panel = readAgentPanel(wall.agentPanel);
   const agentsPresent = usePanelPresence(panel.show);
   useEffect(() => {
+    if (selected && allPanes(wall.root).some((p) => p.kind === 'terminal' && p.refId === selected)) return;
     if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
     if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
-  }, [agentsOnWall, selected, wall.hero]);
+  }, [agentsOnWall, selected, wall.hero, wall.root]);
   // An empty wall is the new-chat screen: Focused on an untouched chat (reused
   // when one exists, so emptying the wall again never piles up blank chats).
   // One attempt at a time; a failure is reported once and not retried until
@@ -612,7 +624,7 @@ function LayoutSegments({ mode, onPick }: { mode: 'focus' | 'grid'; onPick: (mod
       {pill && <span className="wall-layout-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.x}px)` }} />}
       {(['focus', 'grid'] as const).map((m) => (
         <button key={m} ref={(el) => { buttons.current[m] = el; }} type="button" title={`${LAYOUT_LABEL[m]} (${layoutShortcutLabel(m)})`} aria-pressed={mode === m} data-lit={lit === m ? '' : undefined}
-          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
+          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
       ))}
     </div>
   );

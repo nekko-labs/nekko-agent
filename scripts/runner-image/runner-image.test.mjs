@@ -21,14 +21,29 @@ function stubs() {
   const log = join(root, 'calls.log');
   const stub = (name, body = '') =>
     writeFileSync(join(bin, name), `#!/bin/bash\necho "${name} $*" >> '${log}'\n${body}\n`, { mode: 0o755 });
-  stub('diskutil');
+  // FAKE_SEED_LATE: the volume lands on its mount point at the first mount, as it does at boot.
+  stub('diskutil', `if [ "$1" = mount ] && [ -n "\${FAKE_SEED_LATE:-}" ]; then echo QUJD > "$FAKE_SEED_LATE"; fi`);
   stub('chown');
   stub('shutdown');
   stub('id', 'echo 501');
   stub('stat', 'echo "${FAKE_CONSOLE:-runner}"');
   stub('launchctl', 'shift 2; exec "$@"');
+  stub('top', 'sleep 0.1; echo "CPU usage: 10.0% user, 15.0% sys, 75.00% idle"');
+  stub(
+    'vm_stat',
+    `cat <<'EOF'
+Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               1000.
+Anonymous pages:                        131072.
+Pages wired down:                        65536.
+Pages occupied by compressor:             6400.
+Swapouts:                                   64.
+EOF`,
+  );
+  mkdirSync(join(root, 'dev'));
   // Exec only commands inside the temp root, so a real /usr/local/bin/gitlab-runner never runs.
-  stub('sudo', `shift 4; case "$1" in '${root}'/*) exec "$@";; esac`);
+  // `env PATH=...` in front of the job runs it as env would.
+  stub('sudo', `shift 4; [ "$1" = /usr/bin/env ] && shift 2; case "$1" in '${root}'/*) exec "$@";; esac`);
   // The fake job records whether the seed copy still exists while it runs, and with FAKE_HOSTILE
   // swaps ~/.nekko for a symlink to a victim directory the root-owned cleanup must not touch.
   const victim = join(root, 'victim');
@@ -36,6 +51,22 @@ function stubs() {
     join(home, 'actions-runner/run.sh'),
     `#!/bin/bash
 echo "run.sh $*" >> '${log}'
+sleep "\${FAKE_SLEEP:-0}"
+# FAKE_STATS_DISK (a name under dev/): the job lasts until a usage sample lands past that disk's
+# header block (at most 20 s), so a slow CI machine cannot end it before the sampler's first write.
+if [ -n "\${FAKE_STATS_DISK:-}" ]; then
+  for _ in $(seq 200); do
+    [ -n "$(tail -c +513 '${root}/dev/'"$FAKE_STATS_DISK" | tr -d '\\0')" ] && break
+    sleep 0.1
+  done
+fi
+# FAKE_PAGES: the runner writes a step's page, and a hostile job plants a symlink beside it.
+if [ -n "\${FAKE_PAGES:-}" ]; then
+  mkdir -p '${home}/actions-runner/_diag/pages'
+  echo "step output" > '${home}/actions-runner/_diag/pages/step_1.log'
+  ln -s /etc/master.passwd '${home}/actions-runner/_diag/pages/evil.log'
+  sleep 0.5
+fi
 if [ -e '${home}/.nekko/jit-config' ]; then echo "run.sh saw jit-config" >> '${log}'; fi
 if [ -n "\${FAKE_HOSTILE:-}" ]; then
   mkdir -p '${victim}' && echo keep > '${victim}/jit-config' && echo keep > '${victim}/gitlab-runner.toml'
@@ -54,7 +85,7 @@ function seed(files) {
   return s;
 }
 
-function run({ seed: files, env = {}, prepare } = {}) {
+function run({ seed: files, env = {}, prepare, late } = {}) {
   stubs();
   const seedDir = files ? seed(files) : join(root, 'missing');
   prepare?.(seedDir);
@@ -68,6 +99,9 @@ function run({ seed: files, env = {}, prepare } = {}) {
       NEKKO_SEED_WAIT: '1',
       NEKKO_LOGIN_WAIT: '1',
       NEKKO_POLL: '0.1',
+      NEKKO_DEV_DIR: join(root, 'dev'),
+      NEKKO_STATS_EVERY: '0',
+      ...(late && { FAKE_SEED_LATE: join(seedDir, 'jit-config') }),
       ...env,
     },
   });
@@ -106,6 +140,50 @@ test('github_seed_starts_run_sh_as_runner_then_shuts_down', () => {
   assert.match(out, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ /m);
 });
 
+test('step_pages_are_followed_as_the_runner_user_never_through_a_symlink', () => {
+  const { calls } = run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_PAGES: '1' } });
+  const tails = calls.filter((c) => c.includes(' tail -n +1 -f '));
+  assert.deepEqual(tails, [`sudo -u runner -H -- tail -n +1 -f ${home}/actions-runner/_diag/pages/step_1.log`]);
+});
+
+test('usage_is_sampled_onto_the_stats_disk_only', () => {
+  const header = Buffer.alloc(512);
+  header.write('NEKKOSTATS1\n');
+  const disk = (name, head) => writeFileSync(join(root, 'dev', name), Buffer.concat([head, Buffer.alloc(4096)]));
+  const { calls } = run({
+    seed: { 'jit-config': 'QUJD' },
+    env: { FAKE_STATS_DISK: 'disk9' },
+    prepare: () => {
+      disk('disk1', Buffer.alloc(512)); // the guest's own disk: no header
+      disk('disk1s1', header); // a partition is never the stats disk
+      disk('disk9', header);
+    },
+  });
+  startsRunSh(calls);
+  const body = (name) => readFileSync(join(root, 'dev', name)).subarray(512).toString().replace(/\0+$/, '');
+  const lines = body('disk9').trim().split('\n');
+  assert.ok(lines.length >= 1, 'at least one sample');
+  // 16 KiB pages: (65536 wired + 131072 app + 6400 compressed) pages is 3172 MB, 64 swapouts 1 MB.
+  for (const l of lines) assert.match(l, /^\d{10} 75\.00 3172 100 1$/);
+  assert.equal(body('disk1'), '');
+  assert.equal(body('disk1s1'), '');
+});
+
+test('no_stats_disk_samples_nothing', () => {
+  const { calls } = run({ seed: { 'jit-config': 'QUJD' } });
+  startsRunSh(calls);
+  assert.ok(!calls.some((c) => c.startsWith('top')), calls.join('\n'));
+});
+
+test('jobs_get_homebrew_on_their_path', () => {
+  // sudo's secure_path drops /opt/homebrew/bin, and `brew install` then fails with 127 (first real ios-native job, 2026-11-03).
+  const path = 'PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+  for (const files of [{ 'jit-config': 'QUJD' }, { 'gitlab-runner.toml': 'concurrent = 1\n' }]) {
+    const { calls } = run({ seed: files });
+    assert.ok(calls.some((c) => c.startsWith('launchctl asuser') && c.includes(`-- /usr/bin/env ${path} `)), calls.join('\n'));
+  }
+});
+
 test('cleanup_never_follows_a_job_controlled_path', () => {
   run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_HOSTILE: '1' } });
   assert.equal(readFileSync(join(root, 'victim/jit-config'), 'utf8'), 'keep\n');
@@ -134,7 +212,6 @@ test('runner_failure_still_shuts_down', () => {
 
 test('unexpected_seed_contents_shut_down_without_running', () => {
   const cases = [
-    {},
     { 'jit-config': 'a', 'gitlab-runner.toml': 'b' },
     { other: 'a' },
     { '.hidden': 'a', 'jit-config': 'b' },
@@ -166,6 +243,16 @@ test('no_seed_stays_up_and_runs_nothing', () => {
   const { status, calls, out } = run();
   assert.equal(status, 0);
   assert.ok(calls.includes('diskutil mount readOnly NEKKOSEED'));
+  assert.ok(!calls.some((c) => c.startsWith('launchctl') || c.startsWith('shutdown')));
+  assert.match(out, /no seed: no runner, staying up/);
+});
+
+test('an_empty_mount_point_is_not_a_seed_yet', () => {
+  startsRunSh(run({ seed: {}, late: true }).calls);
+});
+
+test('a_seed_that_stays_empty_is_no_seed', () => {
+  const { calls, out } = run({ seed: {} });
   assert.ok(!calls.some((c) => c.startsWith('launchctl') || c.startsWith('shutdown')));
   assert.match(out, /no seed: no runner, staying up/);
 });

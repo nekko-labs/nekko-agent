@@ -1,3 +1,4 @@
+import { CheckCircleIcon } from '../gentleface-icons.js';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
@@ -237,7 +238,7 @@ export function PaneFrame({
     >
       <div
         className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1"
-        style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: 'grab', ...stripStyle }}
+        style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: locked ? undefined : 'grab', ...stripStyle }}
         draggable={!locked && !onPickUp}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move';
@@ -258,7 +259,7 @@ export function PaneFrame({
           setMenu({ x: e.clientX, y: e.clientY });
         }}
         data-pane-title-strip=""
-        title="Drag to move this window"
+        title={locked ? undefined : 'Drag to move this window'}
       >
         {icon}
         {statusIndicator}
@@ -275,7 +276,7 @@ export function PaneFrame({
         {/* The pane's own actions, portalled in, so there is one bar per window
             rather than the frame's and the pane's stacked on each other. */}
         <div ref={setActionSlot} className="flex shrink-0 items-center gap-0.5" />
-        {!hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
+        {pane.kind !== 'chat' && !hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
         {focusAction}
         {onMinimize && <button
           type="button"
@@ -299,7 +300,7 @@ export function PaneFrame({
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}>Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
+          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}><CheckCircleIcon className="mr-1 h-3.5 w-3.5" />Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
           {isChat && <ContextAction onClick={() => { setMenu(null); void deleteWindow(); }}>Delete ({WINDOW_HOTKEYS.delete})</ContextAction>}
           {onMinimize && <ContextAction onClick={() => { setMenu(null); onMinimize(); }}>Minimize ({WINDOW_HOTKEYS.minimize})</ContextAction>}
           <ContextAction onClick={() => { setMenu(null); if (pane.kind === 'terminal') void deleteWindow(); else onClose(); }}>{pane.kind === 'terminal' ? `Close (${WINDOW_HOTKEYS.delete})` : 'Close'}</ContextAction>

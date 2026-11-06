@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { authenticate, type Caller, type Plan } from "./auth.js";
 import type { Db } from "./db.js";
@@ -80,6 +80,17 @@ export function egressHosts(scope: CloudScope, providerHosts: string[] = []): st
 const sha256 = (s: string) => createHash("sha256").update(s).digest();
 const b64 = (n: number) => randomBytes(n).toString("base64url");
 /** A relay room: lowercase letters and digits, as the desktop's rooms are. */
+/** The key the machine proves itself with: the private half goes to its environment, the public half in the link (decision 0041). */
+function newHostKey(): { secret: string; public: string } {
+  const { privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const jwk = privateKey.export({ format: "jwk" });
+  const bytes = (v?: string) => Buffer.from(v ?? "", "base64url");
+  return {
+    secret: bytes(jwk.d).toString("base64"),
+    public: Buffer.concat([Buffer.from([4]), bytes(jwk.x), bytes(jwk.y)]).toString("base64"),
+  };
+}
+
 const newRoom = () => randomBytes(12).toString("hex").slice(0, 20);
 /** An 8-character pairing code of the alphabet the phones expect. */
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -251,6 +262,7 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
     // Hex, as the phone's pairing-link parser requires (the desktop's keys are hex too).
     const key = randomBytes(16).toString("hex");
     const pair = newPairCode();
+    const host = newHostKey();
     const access = `nkm_${b64(32)}`;
     const { rows } = await db.query<MachineRow>(
       `insert into cloud_machines (user_id, name, region, room, key_hash, relay_access_hash, scope)
@@ -268,6 +280,7 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
           NEKKO_RELAY_URL: opts.relayUrl,
           NEKKO_ROOM: room,
           NEKKO_PAIR_KEY: key,
+          NEKKO_HOST_KEY: host.secret,
           NEKKO_PAIR_CODE: pair,
           NEKKO_RELAY_ACCESS: access,
           NEKKO_SANDBOX: "workspace-jail",
@@ -283,7 +296,7 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
       req.log.error({ err: String(e).slice(0, 200) }, "cloud machine create failed");
       return reply.code(502).send({ error: "machine-create-failed" });
     }
-    const link = `${pairScheme}?relay=${encodeURIComponent(opts.relayUrl)}&room=${room}&key=${key}&pair=${pair}`;
+    const link = `${pairScheme}?relay=${encodeURIComponent(opts.relayUrl)}&room=${room}&key=${key}&host=${encodeURIComponent(host.public)}&pair=${pair}`;
     return reply.code(201).send({ machine: wire(machine, caller.plan), pairingLink: link, pairingCode: pair });
   });
 

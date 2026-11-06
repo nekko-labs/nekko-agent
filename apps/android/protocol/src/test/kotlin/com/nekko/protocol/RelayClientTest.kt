@@ -21,6 +21,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -30,14 +31,17 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * The relay client against an in-memory relay + agent. The fake plays the
- * computer's side of `crates/nekko-remote/src/agent.rs`: it challenges each connection,
- * opens sealed frames with the room key, answers a HELLO that carries its
- * challenge, checks every request's seq and challenge (re-challenging on a bad
- * one, like the computer), and replies to requests. With [FakeRelay.challenges]
- * off it is a computer from before protocol 4.
+ * computer's side of `crates/nekko-remote/src/agent.rs` through [HostEnd]: it
+ * challenges each connection with its host key, opens the HELLO under the key the
+ * two derive, answers a HELLO that carries its challenge, checks every request's
+ * seq and challenge (re-challenging on a bad one, like the computer), and replies
+ * to requests. With [FakeRelay.challenges] off it never proves itself.
  */
 class RelayClientTest {
     private val key = E2E.randomBytes(32)
+    private val hostSigner = SoftwareHelloSigner.generate()
+    private val hostKey = java.util.Base64.getEncoder().encodeToString(hostSigner.publicKey())
+    private val room = "abcd1234"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @After fun tearDown() = scope.cancel()
@@ -53,14 +57,21 @@ class RelayClientTest {
         val unreachable = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
         /** The computer's phone protocol version in its welcome (IO-32); null sends none. */
         var welcomeProtocol: Int? = null
-        /** Protocol 4: challenge each connection and hold HELLOs and requests to it. */
+        /** Challenge each connection and hold HELLOs and requests to it. */
         var challenges = true
+        /** The computer answers HELLOs; off, it plays a replayed challenge with nobody behind it. */
+        var answersHello = true
+        /** What a device it doesn't know is told. */
+        var unknownReason = "unknown-device"
+        /** What signs the challenges; another key than the pinned one plays someone who only holds the room secret. */
+        var signer: HelloSigner = hostSigner
         /** Requests the computer dropped for a bad seq or challenge. */
         val rejected = CopyOnWriteArrayList<JsonObject>()
         var answer: (JsonObject) -> JsonObject? = { req -> buildJsonObject { put("type", "res"); put("id", req["id"]!!); put("result", JsonPrimitive("ok:${req["channel"]!!.jsonPrimitive.content}")) } }
 
         inner class Conn(val listener: WsListener) : WsConnection {
             @Volatile var open = true
+            val host = HostEnd(room, key, hostSigner)
             /** The challenge this connection must answer next, or null once answered. */
             @Volatile var issued: String? = null
             /** The challenge the welcomed HELLO answered, and the last seq seen since. */
@@ -68,37 +79,35 @@ class RelayClientTest {
             @Volatile var lastSeq = 0L
             private var n = 0
 
-            /** Seal a fresh challenge to this connection, as the computer does on client-open. */
+            /** Sign a fresh challenge to this connection, as the computer does on client-open. */
             fun challenge(): String {
                 val c = "challenge-${++n}-${E2E.toHex(E2E.randomBytes(4))}"
                 issued = c
                 welcomedWith = null
                 lastSeq = 0
-                push(buildJsonObject { put("type", "challenge"); put("challenge", c) })
+                listener.onMessage(host.challenge(c, signer))
                 return c
             }
 
             override fun send(text: String): Boolean {
                 if (!open) return false
-                val env = WireJson.parseToJsonElement(text).jsonObject
-                val frame = E2E.open(key, env["enc"]!!.jsonPrimitive.content).jsonObject
+                val frame = host.open(text)
                 when (frame["type"]!!.jsonPrimitive.content) {
                     "hello" -> {
                         hellos += frame
-                        if (challenges) {
-                            val answered = frame["challenge"]?.jsonPrimitive?.content
-                            if (answered == null || answered != issued) { challenge(); return true }
-                            issued = null
-                            welcomedWith = answered
-                            lastSeq = 0
-                        }
+                        val answered = frame["challenge"]?.jsonPrimitive?.content
+                        if (answered == null || answered != issued) { challenge(); return true }
+                        if (!answersHello) return true
+                        issued = null
+                        welcomedWith = answered
+                        lastSeq = 0
                         val id = frame["deviceId"]!!.jsonPrimitive.content
                         val pair = frame["pair"]?.jsonPrimitive?.content
                         val reply = when {
                             id in known -> null
                             pair != null && pair == code -> { known += id; code = null; null }
                             pair != null -> "bad-code"
-                            else -> "unknown-device"
+                            else -> unknownReason
                         }
                         if (reply == null) push(buildJsonObject {
                             put("type", "welcome")
@@ -112,9 +121,9 @@ class RelayClientTest {
                     "req" -> {
                         val seq = frame["seq"]?.jsonPrimitive?.content?.toLong()
                         val ch = frame["challenge"]?.jsonPrimitive?.content
-                        if (seq == null || seq <= lastSeq || (challenges && ch != welcomedWith)) {
+                        if (seq == null || seq <= lastSeq || ch != welcomedWith) {
                             rejected += frame
-                            if (challenges) challenge()
+                            challenge()
                             return true
                         }
                         lastSeq = seq
@@ -125,7 +134,9 @@ class RelayClientTest {
                 return true
             }
             override fun close(code: Int, reason: String) { if (open) { open = false; listener.onClosed(code, reason) } }
-            fun push(frame: JsonObject) = listener.onMessage(buildJsonObject { put("enc", E2E.seal(key, frame)) }.toString())
+            fun push(frame: JsonObject) = listener.onMessage(host.seal(frame))
+            /** What someone who kept the room secret can seal. */
+            fun pushRoom(frame: JsonObject) = listener.onMessage(host.sealRoom(frame))
             fun plain(frame: JsonObject) = listener.onMessage(frame.toString())
             fun drop(code: Int, reason: String) { if (open) { open = false; listener.onClosed(code, reason) } }
         }
@@ -154,13 +165,13 @@ class RelayClientTest {
 
     private fun CoroutineScope.launchSoon(block: () -> Unit) = async { delay(5); block() }
 
-    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1", transport: WsTransport = relay, challengeWaitMs: Long = 2_000) = RelayClient(
+    private fun client(relay: FakeRelay, pair: String? = null, id: String = "dev-1", transport: WsTransport = relay, url: String = "wss://relay.test/", challengeWaitMs: Long = 2_000, handshakeTimeoutMs: Long = 10_000) = RelayClient(
         RelayConfig(
-            relayUrl = "wss://relay.test/", room = "abcd1234", key = "k&ey", keyBytes = key,
+            relayUrl = url, room = room, key = "k&ey", keyBytes = key, hostKey = hostKey,
             deviceId = id, deviceName = "Pixel", pairCode = pair,
             // Generous: the first test on a cold JVM also pays for crypto setup, and no test here
             // waits for these to expire, so they only bound how long a real failure takes.
-            handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
+            handshakeTimeoutMs = handshakeTimeoutMs, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
             challengeWaitMs = challengeWaitMs,
         ),
         transport, scope,
@@ -183,6 +194,21 @@ class RelayClientTest {
     }
     private fun fx(k: String) = fixture[k]!!.jsonPrimitive.content
     private fun fxObj(k: String) = fixture[k]!!.jsonObject
+    private fun fxFrame(k: String) = fxObj("challenge")["frame"]!!.jsonObject[k]!!.jsonPrimitive.content
+    private fun fxKeyPair(k: String) = java.security.KeyPair(
+        P256.publicKey(b64(fxObj(k)["publicKey"]!!.jsonPrimitive.content)),
+        SealedBox.privateKey(E2E.fromHex(fxObj(k)["privateKeyHex"]!!.jsonPrimitive.content)),
+    )
+    private fun b64(s: String) = java.util.Base64.getDecoder().decode(s)
+    private val fxDeviceId get() = fxObj("device")["deviceId"]!!.jsonPrimitive.content
+
+    private fun fxSigner(k: String): HelloSigner {
+        val pair = fxKeyPair(k)
+        return SoftwareHelloSigner(pair.private, pair.public as java.security.interfaces.ECPublicKey)
+    }
+
+    /** The golden device key, so a HELLO matches the golden one but for its signature (ECDSA is randomized). */
+    private fun fxDeviceSigner() = fxSigner("helloKey")
 
     /** Records what the phone sends on each socket; the test plays the computer. Requests are answered. */
     inner class Recorder(private val k: ByteArray) : WsTransport {
@@ -191,10 +217,14 @@ class RelayClientTest {
 
         inner class Sock(val listener: WsListener) : WsConnection {
             val sent = CopyOnWriteArrayList<JsonObject>()
+            /** The frames as they left the phone. */
+            val raw = CopyOnWriteArrayList<String>()
+            val host = HostEnd(fx("room"), k, fxSigner("hostKey"))
             @Volatile var open = true
             override fun send(text: String): Boolean {
                 if (!open) return false
-                val frame = E2E.open(k, WireJson.parseToJsonElement(text).jsonObject["enc"]!!.jsonPrimitive.content).jsonObject
+                raw += text
+                val frame = host.open(text)
                 sent += frame
                 if (frame["type"]!!.jsonPrimitive.content == "req") {
                     push(buildJsonObject { put("type", "res"); put("id", frame["id"]!!); put("result", "ok") })
@@ -202,7 +232,12 @@ class RelayClientTest {
                 return true
             }
             override fun close(code: Int, reason: String) { if (open) { open = false; listener.onClosed(code, reason) } }
-            fun push(frame: JsonObject) = listener.onMessage(buildJsonObject { put("enc", E2E.seal(k, frame)) }.toString())
+            fun push(frame: JsonObject) = listener.onMessage(host.seal(frame))
+            /** The computer's recorded challenge, byte for byte. */
+            fun goldenChallenge() {
+                host.issued(fxFrame("challenge"), Ephemeral(fxKeyPair("hostEph")))
+                listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+            }
             fun of(type: String) = sent.filter { it["type"]!!.jsonPrimitive.content == type }
         }
 
@@ -219,6 +254,7 @@ class RelayClientTest {
         return RelayClient(
             RelayConfig(
                 relayUrl = "wss://relay.test", room = fx("room"), key = fx("secret"), keyBytes = E2E.fromHex(fx("key")),
+                hostKey = fxObj("hostKey")["publicKey"]!!.jsonPrimitive.content,
                 deviceId = d["deviceId"]!!.jsonPrimitive.content, deviceName = d["name"]!!.jsonPrimitive.content,
                 platform = d["platform"]!!.jsonPrimitive.content,
                 handshakeTimeoutMs = 10_000, requestTimeoutMs = 10_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
@@ -235,13 +271,44 @@ class RelayClientTest {
         protocol?.let { put("protocol", it) }
     })
 
+    @Test fun `the shared vector derives, signs and opens as the computer does`() {
+        val nonce = fxFrame("challenge")
+        val hostEph = fxObj("hostEph")["publicKey"]!!.jsonPrimitive.content
+        val clientEph = fxObj("clientEph")["publicKey"]!!.jsonPrimitive.content
+        val hostKey = fxObj("hostKey")["publicKey"]!!.jsonPrimitive.content
+        assertEquals(fx("hostText"), HostKey.text(fx("room"), nonce, hostEph))
+        assertEquals(fx("sessionInfo"), E2E.sessionInfo(fx("room"), nonce, hostEph, clientEph))
+        assertEquals(fxObj("helloKey")["text"]!!.jsonPrimitive.content, HelloKey.text(fxDeviceId, fx("room"), nonce, hostEph, clientEph))
+
+        // The challenge: the blob opens under the room key, and the host key signed it.
+        val roomKey = E2E.fromHex(fx("key"))
+        assertEquals(fxObj("challenge")["frame"], E2E.open(roomKey, fxObj("challenge")["blob"]!!.jsonPrimitive.content))
+        assertTrue(HostKey.verify(hostKey, fx("room"), nonce, hostEph, fxFrame("sig")))
+        assertFalse("not for another room", HostKey.verify(hostKey, "ffff", nonce, hostEph, fxFrame("sig")))
+        assertFalse("not by another key", HostKey.verify(fxObj("helloKey")["publicKey"]!!.jsonPrimitive.content, fx("room"), nonce, hostEph, fxFrame("sig")))
+
+        // The connection's key, from either end.
+        val ours = Ephemeral(fxKeyPair("clientEph"))
+        val session = ours.sessionKey(hostEph, fx("sessionInfo"))!!
+        assertEquals(clientEph, ours.public)
+        assertEquals(fx("sessionKey"), E2E.toHex(session))
+        assertEquals(fx("sessionKey"), E2E.toHex(Ephemeral(fxKeyPair("hostEph")).sessionKey(clientEph, fx("sessionInfo"))!!))
+
+        // The HELLO opens under it, not under the room key, and the device key signed it.
+        val enc = fxObj("helloFrame")["enc"]!!.jsonPrimitive.content
+        assertEquals(clientEph, fxObj("helloFrame")["eph"]!!.jsonPrimitive.content)
+        assertEquals(fxObj("hello"), E2E.open(session, enc))
+        assertTrue(runCatching { E2E.open(roomKey, enc) }.isFailure)
+        assertTrue(ChangeProof.verify(b64(fxObj("helloKey")["publicKey"]!!.jsonPrimitive.content), fxObj("helloKey")["text"]!!.jsonPrimitive.content, b64(fxObj("hello")["sig"]!!.jsonPrimitive.content)))
+    }
+
     @Test fun `the welcome carries the computer's protocol version, 1 when it says none`() = runBlocking {
         for ((sent, read) in listOf(5 to 5, null to 1)) {
             val t = Recorder(E2E.fromHex(fx("key")))
             val c = fixtureClient(t)
             c.connect()
             until("the socket") { t.sockets.isNotEmpty() }
-            t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+            t.last.goldenChallenge()
             until("the HELLO") { t.last.of("hello").isNotEmpty() }
             t.last.welcome(sent)
             c.await(RelayState.ONLINE)
@@ -251,28 +318,22 @@ class RelayClientTest {
     }
 
     @Test fun `the HELLO signs the shared text with the device key`() = runBlocking {
-        val k = fxObj("helloKey")
-        val text = k["text"]!!.jsonPrimitive.content
-        val nonce = fxObj("challenge")["frame"]!!.jsonObject["challenge"]!!.jsonPrimitive.content
-        assertEquals(text, HelloKey.text(fxObj("device")["deviceId"]!!.jsonPrimitive.content, fx("room"), nonce))
-        // The fixture's signature verifies with the fixture's key, as on the computer.
-        val fixtureKey = java.util.Base64.getDecoder().decode(k["publicKey"]!!.jsonPrimitive.content)
-        assertTrue(ChangeProof.verify(fixtureKey, text, java.util.Base64.getDecoder().decode(k["sig"]!!.jsonPrimitive.content)))
-        // A phone with a device key adds its key and a fresh signature; the rest is the shared HELLO.
-        val signer = SoftwareHelloSigner.generate()
+        // A phone with a device key adds its key and a signature over this exchange; the rest is the shared HELLO.
+        val signer = fxDeviceSigner()
         val t = Recorder(E2E.fromHex(fx("key")))
         val c = fixtureClient(t, signer = signer)
         c.connect()
         until("the socket") { t.sockets.isNotEmpty() }
-        t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+        t.last.goldenChallenge()
         until("the HELLO") { t.last.of("hello").isNotEmpty() }
         val hello = t.last.of("hello").single()
-        val key = java.util.Base64.getDecoder().decode(hello["helloKey"]!!.jsonPrimitive.content)
+        val key = b64(hello["helloKey"]!!.jsonPrimitive.content)
         assertTrue(key.contentEquals(signer.publicKey()))
-        val sig = java.util.Base64.getDecoder().decode(hello["sig"]!!.jsonPrimitive.content)
+        val sig = b64(hello["sig"]!!.jsonPrimitive.content)
         assertEquals(64, sig.size)
+        val text = HelloKey.text(fxDeviceId, fx("room"), fxFrame("challenge"), fxFrame("eph"), t.last.host.clientEph!!)
         assertTrue(ChangeProof.verify(key, text, sig))
-        assertEquals(fxObj("hello"), JsonObject(hello - "helloKey" - "sig"))
+        assertEquals(JsonObject(fxObj("hello") - "sig"), JsonObject(hello - "sig"))
         c.close()
     }
 
@@ -280,21 +341,25 @@ class RelayClientTest {
         assertEquals(fx("key"), E2E.toHex(E2E.deriveKey(fx("secret"), fx("room"))))
         assertEquals(PhoneProtocol.VERSION, fixture["protocol"]!!.jsonPrimitive.content.toInt())
         val t = Recorder(E2E.fromHex(fx("key")))
-        val c = fixtureClient(t)
+        val c = fixtureClient(t, signer = fxDeviceSigner())
         c.connect()
         until("the socket") { t.sockets.isNotEmpty() }
         delay(150)
         assertTrue("no HELLO before the challenge", t.last.sent.isEmpty())
 
-        t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+        t.last.goldenChallenge()
         until("the HELLO") { t.last.of("hello").isNotEmpty() }
-        assertEquals(fxObj("hello"), t.last.of("hello").single())
+        assertEquals(JsonObject(fxObj("hello") - "sig"), JsonObject(t.last.of("hello").single() - "sig"))
 
         t.last.welcome()
         c.await(RelayState.ONLINE)
         c.call(Channels.SESSIONS_SUMMARIES)
         c.call(Channels.SESSION_GET, JsonPrimitive("s1"))
         assertEquals(fixture["requests"]!!.jsonArray, JsonArray(t.last.of("req")))
+        val roomKey = E2E.fromHex(fx("key"))
+        assertTrue("nothing leaves the phone under the room key", t.last.raw.all { text ->
+            runCatching { E2E.open(roomKey, WireJson.parseToJsonElement(text).jsonObject["enc"]!!.jsonPrimitive.content) }.isFailure
+        })
         c.close()
     }
 
@@ -303,7 +368,7 @@ class RelayClientTest {
         val c = fixtureClient(t)
         c.connect()
         until("the socket") { t.sockets.isNotEmpty() }
-        t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+        t.last.goldenChallenge()
         until("the HELLO") { t.last.of("hello").isNotEmpty() }
         t.last.welcome()
         c.await(RelayState.ONLINE)
@@ -326,7 +391,7 @@ class RelayClientTest {
         val c = fixtureClient(t)
         c.connect()
         until("the socket") { t.sockets.isNotEmpty() }
-        t.last.listener.onMessage(buildJsonObject { put("enc", fxObj("challenge")["blob"]!!) }.toString())
+        t.last.goldenChallenge()
         until("the HELLO") { t.last.of("hello").isNotEmpty() }
         t.last.welcome()
         c.await(RelayState.ONLINE)
@@ -340,22 +405,6 @@ class RelayClientTest {
         assertEquals(args, signed["args"])
         assertEquals(proof, both["proof"])
         assertEquals(buildJsonObject { put("totp", "123456") }, both["stepUp"])
-        c.close()
-    }
-
-    @Test fun `a computer that never challenges gets the legacy HELLO and seq-only requests`() = runBlocking {
-        val t = Recorder(E2E.fromHex(fx("key")))
-        val c = fixtureClient(t, challengeWaitMs = 100)
-        c.connect()
-        until("the legacy HELLO") { t.sockets.isNotEmpty() && t.last.of("hello").isNotEmpty() }
-        assertEquals(fxObj("legacyHello"), t.last.of("hello").single())
-
-        t.last.welcome()
-        c.await(RelayState.ONLINE)
-        c.call(Channels.SESSIONS_SUMMARIES)
-        c.call(Channels.SESSION_GET, JsonPrimitive("s1"))
-        val want = fixture["requests"]!!.jsonArray.map { JsonObject(it.jsonObject - "challenge") }
-        assertEquals(want, t.last.of("req"))
         c.close()
     }
 
@@ -392,21 +441,146 @@ class RelayClientTest {
         c.close()
     }
 
-    @Test fun `once challenged, a socket without a challenge is dialed again instead of falling back`() = runBlocking {
-        val relay = FakeRelay(known = mutableSetOf("dev-1"))
-        val c = client(relay, challengeWaitMs = 100)
+    @Test fun `a socket without a challenge is dropped and dialed again, and never gets the pairing code`() = runBlocking {
+        val relay = FakeRelay(code = "ABCD2345")
+        relay.challenges = false // a computer that never proves itself, or a relay that hides it
+        val c = client(relay, pair = "ABCD2345", challengeWaitMs = 100)
         c.connect()
-        c.await(RelayState.ONLINE)
-        relay.challenges = false // a relay that hides the computer's challenge
-        relay.current!!.drop(1006, "network")
         until("two sockets without a challenge") { relay.urls.size >= 3 }
-        assertEquals("never a HELLO without a challenge", 1, relay.hellos.size)
-        assertTrue(relay.hellos.all { it["challenge"] != null && it["protocol"]!!.jsonPrimitive.content == PhoneProtocol.VERSION.toString() })
+        assertTrue("never a HELLO without a challenge", relay.hellos.isEmpty())
+        assertEquals(RelayState.CONNECTING, c.state)
 
         relay.challenges = true
         c.await(RelayState.ONLINE)
-        assertEquals(2, relay.hellos.size)
-        assertTrue(relay.hellos.all { it["challenge"] != null })
+        assertEquals(1, relay.hellos.size)
+        assertEquals("ABCD2345", relay.hellos.single()["pair"]!!.jsonPrimitive.content)
+        assertEquals(PhoneProtocol.VERSION.toString(), relay.hellos.single()["protocol"]!!.jsonPrimitive.content)
+        c.close()
+    }
+
+    @Test fun `a challenge signed by another key gets no HELLO, and no denial`() = runBlocking {
+        val relay = FakeRelay(code = "ABCD2345")
+        relay.signer = SoftwareHelloSigner.generate() // someone who only holds the room secret
+        val c = client(relay, pair = "ABCD2345", challengeWaitMs = 100)
+        c.connect()
+        until("two sockets, each with a forged challenge") { relay.urls.size >= 3 }
+        assertTrue("the forged challenge got no HELLO", relay.hellos.isEmpty())
+        assertEquals(RelayState.CONNECTING, c.state)
+
+        relay.signer = hostSigner
+        c.await(RelayState.ONLINE)
+        assertEquals(1, relay.hellos.size)
+        c.close()
+    }
+
+    @Test fun `a challenge missing its signature or its key gets no HELLO`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.challenges = false
+        val c = client(relay, challengeWaitMs = 10_000)
+        c.connect()
+        until("the socket") { relay.current != null }
+        delay(50)
+        val nonce = "challenge-bad"
+        val signed = relay.current!!.host.challenge(nonce)
+        val frame = E2E.open(key, WireJson.parseToJsonElement(signed).jsonObject["enc"]!!.jsonPrimitive.content).jsonObject
+        relay.current!!.pushRoom(buildJsonObject { put("type", "challenge"); put("challenge", nonce) })
+        relay.current!!.pushRoom(JsonObject(frame - "sig"))
+        relay.current!!.pushRoom(JsonObject(frame - "eph"))
+        relay.current!!.pushRoom(JsonObject(frame + ("sig" to JsonPrimitive("not base64!"))))
+        delay(100)
+        assertTrue(relay.hellos.isEmpty())
+        c.close()
+    }
+
+    @Test fun `every challenge gets a key of its own`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val c = client(relay)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        val first = relay.current!!.host.clientEph
+        val firstKey = relay.current!!.host.session!!
+        relay.current!!.challenge()
+        c.await(RelayState.ONLINE)
+        assertTrue(first != relay.current!!.host.clientEph)
+        assertFalse(firstKey.contentEquals(relay.current!!.host.session!!))
+        c.close()
+    }
+
+    @Test fun `after the welcome nothing but a challenge counts under the room key`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.answer = { null } // hold the call, so a forged reply has something to answer
+        val c = client(relay)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        val got = CopyOnWriteArrayList<String>()
+        val job = launch(Dispatchers.Default) { c.events.collect { got += it.first } }
+        delay(50)
+        val inflight = async { runCatching { c.call(Channels.CHAT_PENDING) } }
+        until("the held request") { relay.requests.isNotEmpty() }
+        val conn = relay.current!!
+        conn.pushRoom(buildJsonObject { put("type", "denied"); put("reason", "revoked") })
+        conn.pushRoom(buildJsonObject { put("type", "res"); put("id", relay.requests.single()["id"]!!); put("result", "forged") })
+        conn.pushRoom(buildJsonObject { put("type", "event"); put("channel", Events.AGENT_EVENT); put("payload", "forged") })
+        delay(100)
+        assertEquals(RelayState.ONLINE, c.state)
+        assertTrue("the forged reply settled nothing", inflight.isActive)
+        assertTrue("the forged event reached nobody", got.isEmpty())
+        assertTrue(conn.open)
+
+        conn.push(buildJsonObject { put("type", "res"); put("id", relay.requests.single()["id"]!!); put("result", "real") })
+        assertEquals("real", inflight.await().getOrThrow().jsonPrimitive.content)
+        job.cancel()
+        c.close()
+    }
+
+    @Test fun `a welcome under the room key brings nothing online`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.challenges = false
+        val c = client(relay, challengeWaitMs = 10_000)
+        c.connect()
+        until("the socket") { relay.current != null }
+        delay(50)
+        relay.current!!.pushRoom(buildJsonObject {
+            put("type", "welcome")
+            put("device", buildJsonObject { put("id", "dev-1"); put("name", "Pixel"); put("platform", "android") })
+        })
+        delay(100)
+        assertEquals(RelayState.CONNECTING, c.state)
+        c.close()
+    }
+
+    @Test fun `a welcome replayed from an old connection brings the next socket nothing`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val c = client(relay, challengeWaitMs = 10_000)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        val old = relay.current!!
+        val oldKey = old.host.session!!
+        relay.challenges = false // the relay holds the challenge back and plays a recording instead
+        old.drop(1006, "network")
+        until("the next socket") { relay.current !== old }
+        delay(50)
+        val next = relay.current!!
+        next.listener.onMessage(next.host.sealWith(oldKey, buildJsonObject {
+            put("type", "welcome")
+            put("device", buildJsonObject { put("id", "dev-1"); put("name", "Pixel"); put("platform", "android") })
+        }))
+        delay(100)
+        assertEquals(RelayState.CONNECTING, c.state)
+        c.close()
+    }
+
+    @Test fun `going offline voids the connection's key`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val c = client(relay)
+        c.connect()
+        c.await(RelayState.ONLINE)
+        val conn = relay.current!!
+        conn.plain(buildJsonObject { put("type", "agent-offline") })
+        c.await(RelayState.OFFLINE)
+        conn.push(buildJsonObject { put("type", "welcome"); put("device", buildJsonObject { put("id", "dev-1") }) })
+        delay(100)
+        assertEquals(RelayState.OFFLINE, c.state)
         c.close()
     }
 
@@ -540,7 +714,7 @@ class RelayClientTest {
         assertEquals(DenyReason.BAD_CODE, c.await(RelayState.DENIED).denied)
     }
 
-    @Test fun `revocation mid-connection (kick 4001) is terminal and fails in-flight calls`() = runBlocking {
+    @Test fun `a kick is not terminal, and fails in-flight calls`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
         relay.answer = { null } // never answer
         val c = client(relay)
@@ -548,17 +722,146 @@ class RelayClientTest {
         c.await(RelayState.ONLINE)
         val inflight = async { runCatching { c.call(Channels.CHAT_PENDING) } }
         delay(50)
-        relay.current!!.drop(4001, "kicked by agent")
-        assertEquals(DenyReason.KICKED, c.await(RelayState.DENIED).denied)
+        val first = relay.current!!
+        first.drop(4001, "kicked by agent") // anyone with the room credential can send this
         assertTrue(inflight.await().exceptionOrNull() is RelayException)
+        until("the redial") { relay.current !== first && relay.hellos.size == 2 }
+        c.await(RelayState.ONLINE)
+        c.close()
     }
 
-    @Test fun `a bad pairing key is terminal`() = runBlocking {
+    @Test fun `a real removal is a kick, then a sealed denied on the redial`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
-        relay.refuseNext = 1008 to "bad pairing key"
         val c = client(relay)
         c.connect()
-        assertEquals(DenyReason.BAD_KEY, c.await(RelayState.DENIED).denied)
+        c.await(RelayState.ONLINE)
+        relay.known.clear()
+        relay.unknownReason = "revoked"
+        relay.current!!.drop(4001, "kicked by agent")
+        assertEquals(DenyReason.REVOKED, c.await(RelayState.DENIED).denied)
+        assertEquals(2, relay.urls.size)
+        delay(150)
+        assertEquals("the sealed denial is terminal", 2, relay.urls.size)
+    }
+
+    @Test fun `a bad pairing key keeps polling and says so, and a good answer clears it`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.refuseNext = 1008 to "Bad pairing key"
+        val c = client(relay)
+        c.connect()
+        val s = c.await(RelayState.OFFLINE)
+        assertEquals(RelayStatus.BAD_KEY, s.detail)
+        assertNull("never a denial", s.denied)
+        val online = c.await(RelayState.ONLINE)
+        assertNull(online.detail)
+        assertEquals(2, relay.urls.size)
+        c.close()
+    }
+
+    @Test fun `a bad pairing key stays said while it dials again`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.refuseNext = 1008 to "bad pairing key"
+        relay.challenges = false
+        val c = client(relay, challengeWaitMs = 10_000)
+        c.connect()
+        c.await(RelayState.OFFLINE)
+        val dialing = c.awaitStatus { it.state == RelayState.CONNECTING }
+        assertEquals(RelayStatus.BAD_KEY, dialing.detail)
+        c.close()
+    }
+
+    @Test fun `a close on a LAN address before the computer answered only fails the route`() = runBlocking {
+        for (close in listOf(4001 to "kicked by agent", 1008 to "bad pairing key", 1008 to "room not paired (agent offline)")) {
+            val relay = FakeRelay(known = mutableSetOf("dev-1"))
+            relay.refuseNext = close
+            val c = twoRoutes(relay)
+            c.connect()
+            val s = c.awaitStatus { it.state != RelayState.CONNECTING }
+            assertEquals(close.second, RelayState.ONLINE, s.state)
+            assertEquals(close.second, tailnetRoute, s.route)
+            c.close()
+        }
+    }
+
+    @Test fun `an unsealed agent-offline on a LAN address before a welcome fails the route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.challenges = false
+        val c = twoRoutes(relay)
+        c.connect()
+        until("the LAN socket") { relay.current != null }
+        delay(50)
+        val lan = relay.current!!
+        relay.challenges = true
+        lan.plain(buildJsonObject { put("type", "agent-offline") })
+        assertEquals("a stranger can't hold the phone here", tailnetRoute, c.await(RelayState.ONLINE).route)
+        assertFalse(lan.open)
+        c.close()
+    }
+
+    @Test fun `after the welcome a LAN address is believed about the computer going away`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        val c = client(relay, url = "ws://192.168.1.20:4400")
+        c.connect()
+        c.await(RelayState.ONLINE)
+        relay.current!!.plain(buildJsonObject { put("type", "agent-offline") })
+        c.await(RelayState.OFFLINE)
+        assertTrue(relay.current!!.open)
+        relay.current!!.plain(buildJsonObject { put("type", "agent-online") })
+        relay.current!!.challenge()
+        c.await(RelayState.ONLINE)
+
+        relay.current!!.drop(1008, "bad pairing key")
+        assertEquals(RelayStatus.BAD_KEY, c.await(RelayState.OFFLINE).detail)
+        c.close()
+    }
+
+    @Test fun `repeating agent-online on a LAN address can't hold the route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.challenges = false
+        val c = client(relay, url = "ws://192.168.1.20:4400", challengeWaitMs = 300)
+        c.connect()
+        until("the socket") { relay.current != null }
+        val first = relay.current!!
+        withTimeout(5_000) {
+            while (first.open) {
+                first.plain(buildJsonObject { put("type", "agent-online") })
+                delay(50)
+            }
+        }
+        c.close()
+    }
+
+    @Test fun `a HELLO that gets no welcome fails the route`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.answersHello = false // a replayed challenge: genuine, and nobody behind it
+        val c = client(relay, handshakeTimeoutMs = 150)
+        c.connect()
+        until("the HELLO") { relay.hellos.isNotEmpty() }
+        val first = relay.current!!
+        until("the socket dropped") { !first.open }
+        relay.answersHello = true
+        c.await(RelayState.ONLINE)
+        assertTrue(relay.urls.size >= 2)
+
+        delay(300)
+        assertEquals("a welcome ends the wait", RelayState.ONLINE, c.state)
+        assertTrue(relay.current!!.open)
+        c.close()
+    }
+
+    @Test fun `a new challenge gives the HELLO a new wait`() = runBlocking {
+        val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.answersHello = false
+        val c = client(relay, handshakeTimeoutMs = 1_000)
+        c.connect()
+        until("the HELLO") { relay.hellos.isNotEmpty() }
+        val first = relay.current!!
+        delay(600)
+        first.challenge()
+        delay(600)
+        assertTrue("past the first wait, inside the second", first.open)
+        until("the socket dropped") { !first.open }
+        c.close()
     }
 
     @Test fun `an offline computer is polled, then the handshake completes`() = runBlocking {
@@ -635,7 +938,7 @@ class RelayClientTest {
         relay.refuseNext = 1006 to "network down"
         val c = RelayClient(
             RelayConfig(
-                relayUrl = "wss://relay.test/", room = "abcd1234", key = "k", keyBytes = key, deviceId = "dev-1", deviceName = "Pixel",
+                relayUrl = "wss://relay.test/", room = room, key = "k", keyBytes = key, hostKey = hostKey, deviceId = "dev-1", deviceName = "Pixel",
                 handshakeTimeoutMs = 2_000, requestTimeoutMs = 2_000, retryBaseMs = 60_000, retryMaxMs = 60_000,
             ),
             relay, scope,
@@ -691,7 +994,7 @@ class RelayClientTest {
 
     private fun twoRoutes(relay: FakeRelay, prober: RouteProber? = null, dwellMs: Long = 50, allowed: (String) -> Boolean = { true }) = RelayClient(
         RelayConfig(
-            relayUrl = tailnetRoute, room = "abcd1234", key = "k", keyBytes = key, deviceId = "dev-1", deviceName = "Pixel",
+            relayUrl = tailnetRoute, room = room, key = "k", keyBytes = key, hostKey = hostKey, deviceId = "dev-1", deviceName = "Pixel",
             handshakeTimeoutMs = 2_000, requestTimeoutMs = 5_000, retryBaseMs = 20, retryMaxMs = 80, offlinePollMs = 40,
             alts = listOf(lanRoute),
             routeRules = RouteRules(openTimeoutMs = 100, probeIntervalMs = 20, failureCooldownMs = 100, minDwellMs = dwellMs, successesToReturn = 3),
@@ -801,11 +1104,12 @@ class RelayClientTest {
 
     @Test fun `an offline computer is not a route failure`() = runBlocking {
         val relay = FakeRelay(known = mutableSetOf("dev-1"))
+        relay.unreachable["192.168.1.20:4400"] = false
         relay.refuseNext = 1008 to "room not paired (agent offline)"
         val c = twoRoutes(relay)
         c.connect()
-        assertEquals("the relay answered on the LAN; the computer is away, not the path", lanRoute, c.await(RelayState.OFFLINE).route)
-        c.awaitOn(lanRoute)
+        assertEquals("the relay answered on the tailnet; the computer is away, not the path", tailnetRoute, c.await(RelayState.OFFLINE).route)
+        c.awaitOn(tailnetRoute)
         c.close()
     }
 

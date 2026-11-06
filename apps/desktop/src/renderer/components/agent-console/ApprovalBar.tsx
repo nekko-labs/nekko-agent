@@ -1,7 +1,7 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ToolCall } from '@nekko-agent/shared';
-import { ShieldIcon } from '../../icons.js';
+import { ShieldQuestionIcon } from '../../gentleface-icons.js';
 import type { ApprovalScope } from './approval-decision.js';
 
 export interface PendingApproval {
@@ -25,7 +25,7 @@ export function needsFullTextToggle(text: string, overflowing: boolean, expanded
 }
 
 /** Keyboard decisions stay scoped to this approval surface; Y approves once. */
-export function ApprovalBar({ approval, onDecide }: { approval: PendingApproval; onDecide: (ok: boolean, scope?: ApprovalScope) => Promise<void> }) {
+export function ApprovalBar({ approval, onDecide, computerName }: { approval: PendingApproval; computerName?: string; onDecide: (ok: boolean, scope?: ApprovalScope) => Promise<void> }) {
   const denyRef = useRef<HTMLButtonElement>(null);
   const deciding = useRef(false);
   const codeRef = useRef<HTMLElement>(null);
@@ -82,7 +82,7 @@ export function ApprovalBar({ approval, onDecide }: { approval: PendingApproval;
       onKeyDown={(e) => handleApprovalKey(e, (ok) => void decide(ok))}
     >
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3">
-        <ShieldIcon className="h-5 w-5" />
+        <span data-icon-hover><ShieldQuestionIcon className="h-5 w-5" /></span>
         <div className="min-w-0 flex-1 basis-64">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold">Approval required</span>
@@ -111,7 +111,7 @@ export function ApprovalBar({ approval, onDecide }: { approval: PendingApproval;
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button ref={denyRef} disabled={busy} className={`${buttonClass} btn-outline`} onClick={() => void decide(false)} title="Deny (N or Esc)">Deny</button>
-          <button disabled={busy} className={`${buttonClass} btn-primary`} onClick={() => void decide(true)} title="Approve (Y)">Approve</button>
+          <button disabled={busy} className={`${buttonClass} btn-primary`} onClick={() => void decide(true)} title="Approve (Y)">{computerName ? `Approve on ${computerName}` : 'Approve'}</button>
           <button disabled={busy} className={`${buttonClass} btn-outline`} onClick={() => void decide(true, 'session')} title="Allow all for the rest of this chat (YOLO). Deny rules still block.">Allow all this session</button>
           <button disabled={busy} className={`${buttonClass} btn-outline`} onClick={() => void decide(true, 'always')} title="Allow all in this chat and set Settings → Chat modes to YOLO for new chats. Deny rules still block.">Always allow all</button>
         </div>

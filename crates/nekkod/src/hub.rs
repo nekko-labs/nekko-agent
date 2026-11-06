@@ -81,6 +81,9 @@ const REPLAY_MAX_BYTES: usize = 4 * 1024 * 1024;
 /// that died without its `done` cannot hide the next one from the sidebar.
 const QUIET: Duration = Duration::from_secs(30);
 
+/// The most running chats kept for one other computer.
+const MAX_REMOTE_TURNS: usize = 256;
+
 #[derive(Default)]
 struct Sessions {
     seq: u64,
@@ -90,6 +93,10 @@ struct Sessions {
 #[derive(Clone)]
 pub struct Hub {
     tx: broadcast::Sender<Event>,
+    /// Another computer's agent events. Only the desktop window's socket
+    /// listens: on [`tx`](Self::tx) they would reach this computer's phones,
+    /// its API server and its automation.
+    remote: broadcast::Sender<Event>,
     sessions: Arc<Mutex<Sessions>>,
 }
 
@@ -117,7 +124,7 @@ enum Kind {
 fn kind_of(event_type: &str) -> Kind {
     match event_type {
         "done" | "error" => Kind::End,
-        "session_meta" | "compaction" => Kind::Meta,
+        "session_meta" | "compaction" | "claude_code_background" => Kind::Meta,
         "tool_approval_required" | "question" => Kind::Wait,
         "question_resolved" | "steered" => Kind::Resume,
         _ => Kind::Stream,
@@ -140,11 +147,35 @@ fn approx_size(v: &Value) -> usize {
 impl Hub {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(16 * 1024);
-        Self { tx, sessions: Arc::default() }
+        let (remote, _) = broadcast::channel(16 * 1024);
+        Self { tx, remote, sessions: Arc::default() }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.tx.subscribe()
+    }
+
+    /// For the desktop window's socket only.
+    pub fn subscribe_remote(&self) -> broadcast::Receiver<Event> {
+        self.remote.subscribe()
+    }
+
+    /// An agent event from another computer, its ids already qualified. A
+    /// computer only gets so many running chats kept here, or one that makes
+    /// up ids could grow this process without end.
+    pub fn publish_remote(&self, payload: Value) {
+        if let Some(id) = payload.get("sessionId").and_then(Value::as_str)
+            && let Some((computer, _)) = crate::federation::split(id)
+        {
+            let s = self.lock();
+            let mine = format!("@{computer}:");
+            if !s.turns.contains_key(id) && s.turns.keys().filter(|k| k.starts_with(&mine)).count() >= MAX_REMOTE_TURNS
+            {
+                return;
+            }
+        }
+        let frame: Utf8Bytes = serde_json::json!({ "channel": "agent:event", "payload": payload }).to_string().into();
+        self.track_agent(frame, &payload, &self.remote);
     }
 
     /// Serialized with `channel` as the first key (serde_json keeps insertion
@@ -152,7 +183,7 @@ impl Hub {
     pub fn publish(&self, channel: &str, payload: Value, term_data: bool) {
         let frame: Utf8Bytes = serde_json::json!({ "channel": channel, "payload": payload }).to_string().into();
         if channel == "agent:event" {
-            self.publish_agent(frame, &payload);
+            self.track_agent(frame, &payload, &self.tx);
         } else {
             let _ = self.tx.send(Event { text: frame, term_data, scope: Scope::Global });
         }
@@ -163,9 +194,9 @@ impl Hub {
     }
 
     /// An agent event: scoped, numbered, and kept while its turn runs.
-    fn publish_agent(&self, text: Utf8Bytes, payload: &Value) {
+    fn track_agent(&self, text: Utf8Bytes, payload: &Value, tx: &broadcast::Sender<Event>) {
         let Some(id) = payload.get("sessionId").and_then(Value::as_str) else {
-            let _ = self.tx.send(Event { text, term_data: false, scope: Scope::Global });
+            let _ = tx.send(Event { text, term_data: false, scope: Scope::Global });
             return;
         };
         let event_type = payload.get("type").and_then(Value::as_str).unwrap_or("");
@@ -205,7 +236,7 @@ impl Hub {
         }
         // Sent under the lock, so a replay taken meanwhile and the live
         // stream agree on which events came before it.
-        let _ = self.tx.send(Event { text, term_data: false, scope: Scope::Session { id: key, seq, summary } });
+        let _ = tx.send(Event { text, term_data: false, scope: Scope::Session { id: key, seq, summary } });
     }
 
     /// What a socket that starts showing these chats missed of their running
@@ -304,6 +335,30 @@ mod tests {
         let ev = rx.recv().await.unwrap();
         assert!(ev.text.starts_with(r#"{"channel":"terminal:event""#), "{}", ev.text);
         assert!(matches!(ev.scope, Scope::Global));
+    }
+
+    #[test]
+    fn another_computers_events_reach_only_the_window() {
+        let hub = Hub::new();
+        let (mut local, mut window) = (hub.subscribe(), hub.subscribe_remote());
+        hub.publish_remote(serde_json::json!({ "type": "text", "sessionId": "@gomi1234:s1", "delta": "hi" }));
+        assert!(window.try_recv().is_ok());
+        assert!(local.try_recv().is_err(), "phones, the API server and automation listen here");
+        assert_eq!(hub.replay(&["@gomi1234:s1".into()]).len(), 1, "a window that opens it mid-turn still catches up");
+    }
+
+    #[test]
+    fn a_computer_gets_only_so_many_running_chats_kept() {
+        let hub = Hub::new();
+        let event = |id: String| serde_json::json!({ "type": "text", "sessionId": id, "delta": "x" });
+        for i in 0..MAX_REMOTE_TURNS + 50 {
+            hub.publish_remote(event(format!("@hostile1:s{i}")));
+        }
+        assert_eq!(hub.lock().turns.len(), MAX_REMOTE_TURNS);
+        // One running already carries on, and another computer has its own room.
+        hub.publish_remote(event("@hostile1:s0".into()));
+        hub.publish_remote(event("@gomi1234:s1".into()));
+        assert_eq!(hub.lock().turns.len(), MAX_REMOTE_TURNS + 1);
     }
 
     fn summaries(hub: &Hub, events: &[Value]) -> Vec<bool> {

@@ -56,7 +56,7 @@ describe('phone access classes', () => {
   });
 
   it('gates making the agent act on Change and reading the chats on Read (2026-10-22)', () => {
-    for (const c of ['chat:send', 'chat:queue', 'tool:approve', 'chat:answer', 'task:runNow', 'workflow:run', 'session:setOptions', 'settings:update']) {
+    for (const c of ['chat:send', 'chat:queue', 'chat:steer', 'chat:interruptQueued', 'tool:approve', 'chat:answer', 'task:runNow', 'workflow:run', 'session:setOptions', 'settings:update']) {
       expect(phoneChannelClass(c), c).toBe('agent');
     }
     for (const c of ['sessions:summaries', 'session:get', 'settings:get', 'chat:pending']) expect(phoneChannelClass(c), c).toBe('read');

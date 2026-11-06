@@ -64,6 +64,9 @@ public struct ConnectionLog: Equatable, Sendable {
 public enum ConnectionAdvice {
     public static func advise(route: RelayRoute, relayHost: String, computer: String, state: RelayState,
                               denied: DenyReason?, detail: String?, tailscaleOn: Bool) -> [String] {
+        if detail == RelayStatus.badPairingKey {
+            return advise(route: route, relayHost: relayHost, computer: computer, state: .denied, denied: .badKey, detail: nil, tailscaleOn: tailscaleOn)
+        }
         switch state {
         case .online, .idle:
             return []

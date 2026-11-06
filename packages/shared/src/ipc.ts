@@ -24,7 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
-import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, RunnerSettings, RunnerView } from './runners.js';
+import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, JobAction, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -130,6 +130,8 @@ export const IpcChannels = {
   /** The loaded local models, how many are replying, and what their processes hold: what shutting them down frees. */
   engineMemory: 'engine:memory',
   gpuStats: 'gpu:stats',
+  /** Whether someone is using this computer (input, a chat they started), for background work and New chat's machine pick. */
+  activityState: 'activity:state',
   systemStats: 'system:stats',
   /** The phone's Monitors pane (FD-1): answered by the phone gate from the other monitor, chat and automation reads. */
   monitorSummary: 'monitor:summary',
@@ -147,6 +149,8 @@ export const IpcChannels = {
   chatSend: 'chat:send',
   chatGenerateImage: 'chat:generateImage',
   sessionImages: 'session:images',
+  /** A phone opening one photo a user attached, full size (`session:photo`, served by the daemon). */
+  sessionPhoto: 'session:photo',
   chatAbort: 'chat:abort',
   chatCompact: 'chat:compact',
   chatCancelCompaction: 'chat:cancelCompaction',
@@ -259,6 +263,7 @@ export const IpcChannels = {
   prLinkStack: 'pr:linkStack',
   prCreate: 'pr:create',
   prChecks: 'pr:checks',
+  prInfo: 'pr:info',
 
   gitDiff: 'git:diff',
   gitLog: 'git:log',
@@ -337,12 +342,24 @@ export const IpcChannels = {
   runnerImageBuild: 'runner:imageBuild',
   runnerImageResume: 'runner:imageResume',
   runnerImageCancel: 'runner:imageCancel',
+  /** The Linux runner image (decision 0053), served by nekkod; never by a phone. */
+  runnerLinuxImageStatus: 'runner:linuxImageStatus',
+  runnerLinuxImageBuild: 'runner:linuxImageBuild',
+  runnerLinuxImageCancel: 'runner:linuxImageCancel',
   /** CI runners (T213), served by nekkod's runner supervisor; never by a phone. */
   runnerList: 'runner:list',
   runnerConnect: 'runner:connect',
   runnerUpdate: 'runner:update',
   runnerRemove: 'runner:remove',
   runnerSetEnabled: 'runner:setEnabled',
+  /** The end of a recent job's log, from GitHub or GitLab. */
+  runnerJobLog: 'runner:jobLog',
+  /** What a recent job's VM wrote to its console, kept by nekkod. */
+  runnerVmLog: 'runner:vmLog',
+  /** The end of a running VM's console: its boot, then the job's output as it runs. */
+  runnerLiveLog: 'runner:liveLog',
+  /** Decline, accept or undo a queued job; cancel or restart a running one; re-run a recent one. */
+  runnerJob: 'runner:job',
   /** The click-through GitHub connect, confirmed through `runner:connect`. */
   runnerGithubAccounts: 'runner:githubAccounts',
   runnerGithubStart: 'runner:githubStart',
@@ -378,6 +395,17 @@ export const IpcChannels = {
   messagingStatus: 'messaging:status',
   remotePairing: 'remote:pairing',
   remotePair: 'remote:pair',
+  remotePairComputer: 'remote:pairComputer',
+  computersList: 'computers:list',
+  computersPair: 'computers:pair',
+  computersRename: 'computers:rename',
+  computersSetColor: 'computers:setColor',
+  computersForget: 'computers:forget',
+  computersCall: 'computers:call',
+  computersCatalog: 'computers:catalog',
+  computersSetIcon: 'computers:setIcon',
+  computersCreateSession: 'computers:createSession',
+  computersStats: 'computers:stats',
   remoteDevices: 'remote:devices',
   remoteRevoke: 'remote:revoke',
   remoteRename: 'remote:rename',
@@ -416,6 +444,7 @@ export const IpcChannels = {
   claudePolicy: 'claude:policy',
   claudeCapability: 'claude:capability',
   claudePlanUsage: 'claude:planUsage',
+  claudeBackgroundTasks: 'claude:backgroundTasks',
   claudeCodeStatus: 'claude:codeStatus',
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
@@ -434,6 +463,7 @@ export const IpcChannels = {
   cloudBeginOAuth: 'cloud:beginOAuth',
   cloudCancelOAuth: 'cloud:cancelOAuth',
   cloudSignOut: 'cloud:signOut',
+  cloudDeleteAccount: 'cloud:deleteAccount',
   syncTurnOn: 'sync:turnOn',
   syncConfirmRecoveryKey: 'sync:confirmRecoveryKey',
   syncRestore: 'sync:restore',
@@ -480,11 +510,15 @@ export const IpcEvents = {
   workflowsUpdated: 'workflows:updated',
   /** The image builder's `ImageView`, after any change. */
   runnerImageChanged: 'runner:imageChanged',
+  /** The Linux image builder's `LinuxImageView`, after any change. */
+  runnerLinuxImageChanged: 'runner:linuxImageChanged',
   /** Every runner's `RunnerView`, after any change. */
   runnerChanged: 'runner:changed',
   /** The GitHub connect moved on: a `GithubSetupView`. */
   runnerGithubChanged: 'runner:githubChanged',
   limitsUpdated: 'limits:updated',
+  /** A connected computer's state changed, or the list did. */
+  computersUpdated: 'computers:updated',
   /** The look a paired phone mirrors changed: the theme fields of the settings, never anything else. */
   appearanceUpdated: 'appearance:updated',
   downloadsUpdated: 'downloads:updated',
@@ -526,6 +560,8 @@ export interface NekkoApi {
   cloudBeginOAuth(provider: import('./cloud.js').CloudOAuthProvider): Promise<{ authUrl: string }>;
   cloudCancelOAuth(): Promise<import('./cloud.js').CloudStatus>;
   cloudSignOut(): Promise<import('./cloud.js').CloudStatus>;
+  /** Erase the Nekko Cloud account (`DELETE /v1/account`), then forget it on this device. */
+  cloudDeleteAccount(): Promise<import('./cloud.js').CloudStatus>;
   /** Settings > Connections: the switch and each connection's counts. */
   connectionsStatus(): Promise<import('./connections.js').ConnectionsStatus>;
   /** A connection's recent events, newest first. */
@@ -538,8 +574,8 @@ export interface NekkoApi {
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
-  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`. */
-  feedbackSend(message: string, includeAppInfo: boolean): Promise<{ ok: true }>;
+  /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`, and any screenshots. */
+  feedbackSend(message: string, includeAppInfo: boolean, screenshots?: import('./feedback.js').FeedbackScreenshot[]): Promise<{ ok: true }>;
   syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
   syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
   syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;
@@ -880,7 +916,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -898,7 +934,8 @@ export interface NekkoApi {
   /** The fonts folder (created if missing) and the font files in it, base64 (Settings > Style). */
   listFonts(): Promise<{ dir: string; fonts: { family: string; file: string; data: string }[] }>;
   /** Delete everything: chats, settings, memory, and usage. */
-  wipeAllData(): Promise<AppSettings>;
+  /** Delete everything this app keeps on this computer; `models` also deletes downloaded models and runtimes. */
+  wipeAllData(opts?: { models?: boolean }): Promise<AppSettings>;
   listTools(): Promise<Array<{ name: string; description: string }>>;
 
   /** Open a native file picker (desktop) → chosen paths; browser → prompt. */
@@ -997,6 +1034,8 @@ export interface NekkoApi {
   createPr(workspaceId: string, opts: import('./pr.js').PrCreateOptions): Promise<import('./pr.js').PrCreateResult>;
   /** Each check on a PR's head commit, and their rollup. */
   getPrChecks(url: string): Promise<import('./pr.js').PrCheckList>;
+  /** Live state of any GitHub PR by URL (cached for a minute), or null when unreadable. */
+  getPrInfo(url: string): Promise<import('./pr.js').PrInfo | null>;
 
   /**
    * Git in a workspace's folder (IO-33 FA-2). `workspaceId` is a saved folder's
@@ -1099,6 +1138,10 @@ export interface NekkoApi {
   buildImage(req: ImageBuildRequest): Promise<ImageView>;
   resumeImage(): Promise<ImageView>;
   cancelImage(): Promise<ImageView>;
+  /** The Linux runner image: Ubuntu, provisioned on this Mac. Rejects with a sentence. */
+  linuxImageStatus(): Promise<LinuxImageView>;
+  buildLinuxImage(): Promise<LinuxImageView>;
+  cancelLinuxImage(): Promise<LinuxImageView>;
   /** CI runners on this Mac. Rejects where the daemon serves none (not macOS, or an older daemon). */
   listRunners(): Promise<RunnerView[]>;
   connectRunner(req: ConnectRequest): Promise<RunnerView>;
@@ -1107,6 +1150,14 @@ export interface NekkoApi {
   updateRunner(id: string, settings: Partial<RunnerSettings>): Promise<RunnerView>;
   removeRunner(id: string): Promise<null>;
   setRunnerEnabled(id: string, enabled: boolean): Promise<RunnerView>;
+  /** The end of a recent job's log; rejects with a sentence when it cannot be read. */
+  runnerJobLog(id: string, jobId: number): Promise<string>;
+  /** A recent job's VM console log, by the line's `vm`; rejects with a sentence. */
+  runnerVmLog(id: string, vm: string): Promise<string>;
+  /** A running slot's console so far, by the slot's `vm`; rejects with a sentence. */
+  runnerLiveLog(id: string, vm: string): Promise<string>;
+  /** Acts on a job the runner's view lists; rejects with a sentence. */
+  runnerJob(id: string, action: JobAction, repo: string, jobId: number): Promise<null>;
   /** Accounts `gh` is signed in to; empty without `gh`. */
   githubAccounts(): Promise<GithubAccounts>;
   /** `url` is the page to open in the browser, or null when GitHub has nothing left to do. */
@@ -1158,6 +1209,25 @@ export interface NekkoApi {
   getRemotePairing(): Promise<import('./remote.js').RemotePairing | null>;
   /** Mint a short-lived single-use pairing code for enrolling a new device. */
   startRemotePairing(): Promise<import('./remote.js').PairingGrant>;
+  /** A pairing code that enrolls a computer, not a phone. */
+  startComputerPairing(): Promise<import('./remote.js').PairingGrant>;
+  listComputers(): Promise<import('./computers.js').ComputerStatus[]>;
+  /** Connect to a computer with its pairing link. Rejects with what to do next. */
+  pairComputer(link: import('./computers.js').ComputerPairingLink): Promise<import('./computers.js').ComputerStatus>;
+  renameComputer(id: string, name: string): Promise<import('./computers.js').ComputerStatus[]>;
+  setComputerColor(id: string, color: number): Promise<import('./computers.js').ComputerStatus[]>;
+  forgetComputer(id: string): Promise<import('./computers.js').ComputerStatus[]>;
+  /** Its live hardware readings, for the Monitors dock. */
+  computerStats(id: string): Promise<{ system: import('./monitor.js').SystemStats | null; gpu: import('./models.js').GpuStats | null }>;
+  /** Its Model Server, as the phone view reports it. Null with Read off over there. */
+  computerEngineStatus(id: string): Promise<{ running: boolean; resident: unknown[] } | null>;
+  /** A new chat on that computer, in one of its folders. */
+  createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
+  /** Set the icon in that machine's own settings; empty removes it. */
+  setComputerIcon(id: string, icon: string): Promise<import('./computers.js').ComputerStatus[]>;
+  /** Its providers and folders; null when it has never answered. */
+  computerCatalog(id: string): Promise<import('./computers.js').ComputerCatalog | null>;
+  onComputersUpdated(cb: () => void): () => void;
   listRemoteDevices(): Promise<import('./remote.js').RemoteDevice[]>;
   revokeRemoteDevice(deviceId: string): Promise<import('./remote.js').RemoteDevice[]>;
   renameRemoteDevice(deviceId: string, name: string): Promise<import('./remote.js').RemoteDevice[]>;
@@ -1225,6 +1295,8 @@ export interface NekkoApi {
   getClaudeCapability(providerId: string, capability: import('./claude-policy.js').ClaudeCapability): Promise<import('./claude-policy.js').ClaudeCapabilityStatus>;
   /** Plan usage for a Claude provider: none today; example data in the dev-only preview. */
   getClaudePlanUsage(providerId: string): Promise<import('./claude-policy.js').ClaudePlanUsageStatus>;
+  /** How many background tasks each Claude Agent chat's Claude Code still runs, by chat id (chats with none are left out). */
+  claudeBackgroundTasks(): Promise<Record<string, number>>;
   /**
    * Whether the user's Claude Code is installed and signed in; records it for
    * `providerId`'s policy rows. Before a provider is saved, `account` names the
@@ -1291,6 +1363,7 @@ export interface NekkoApi {
   /** Fires when a workflow is edited or any run advances a step. */
   onWorkflowsUpdated(cb: (snapshot: WorkflowsSnapshot) => void): () => void;
   onImageChanged(cb: (view: ImageView) => void): () => void;
+  onLinuxImageChanged(cb: (view: LinuxImageView) => void): () => void;
   onRunnersChanged(cb: (views: RunnerView[]) => void): () => void;
   onGithubSetupChanged(cb: (view: GithubSetupView) => void): () => void;
   /** Fires when subscription limits are captured or polled for any token key. */

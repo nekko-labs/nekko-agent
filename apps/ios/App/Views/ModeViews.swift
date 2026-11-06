@@ -4,35 +4,29 @@ import SwiftUI
 
 // MARK: - Simple and Expert
 
-/// Simple or Expert, at the top left of a chat (2026-10-24), like the layout
-/// toggle at the top left of the desktop's Agent board. Simple keeps the
-/// chat's model, effort and context; Expert adds the computer's hardware and
-/// the models its Model Server holds.
-struct ModeToggle: View {
+/// Simple or Detailed, at the top of the chat list's view menu and a chat's More
+/// menu (2026-11-05; before, a switch in the floating pill): a chat bubble for
+/// Simple and code brackets for Detailed. Simple hides the controls
+/// Settings > Simple mode keeps to Detailed.
+struct ModeMenuPicker: View {
     @Environment(Prefs.self) private var prefs
-    @Environment(\.palette) private var palette
 
     var body: some View {
         @Bindable var prefs = prefs
-        Menu {
-            Picker("Mode", selection: $prefs.expertMode) {
-                Label("Simple", systemImage: Self.icon(expert: false)).tag(false)
-                Label("Expert", systemImage: Self.icon(expert: true)).tag(true)
-            }
+        Picker(selection: $prefs.expertMode) {
+            Label("Simple", systemImage: Self.icon(expert: false)).tag(false)
+                .accessibilityIdentifier("mode.simple")
+            Label("Detailed", systemImage: Self.icon(expert: true)).tag(true)
+                .accessibilityIdentifier("mode.detailed")
         } label: {
-            Label(prefs.expertMode ? "Expert" : "Simple", systemImage: Self.icon(expert: prefs.expertMode))
-                .labelStyle(.titleAndIcon)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(prefs.expertMode ? palette.accent : palette.ink)
+            Text("Mode")
         }
-        .accessibilityLabel("Mode")
-        .accessibilityValue(prefs.expertMode ? "Expert" : "Simple")
-        .accessibilityHint("Expert adds your computer’s hardware and loaded models")
+        .pickerStyle(.inline)
         .accessibilityIdentifier("chat.mode")
     }
 
     static func icon(expert: Bool) -> String {
-        expert ? "gauge.with.dots.needle.100percent" : "gauge.with.dots.needle.33percent"
+        expert ? "chevron.left.forwardslash.chevron.right" : "bubble.left"
     }
 }
 
@@ -135,6 +129,7 @@ struct EffortGauge: View {
     let count: Int
     var size: CGFloat = 24
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let f = level.map { Double($0 + 1) / Double(max(1, count)) }
@@ -149,7 +144,7 @@ struct EffortGauge: View {
             Circle().fill(f == nil ? palette.inkFaint : palette.ink).frame(width: size * 0.16, height: size * 0.16)
         }
         .frame(width: size, height: size)
-        .animation(.snappy, value: level)
+        .animation(reduceMotion ? nil : .snappy, value: level)
         .accessibilityHidden(true)
     }
 }
@@ -165,23 +160,58 @@ func effortLabel(_ e: Effort) -> String {
     }
 }
 
+// MARK: - Asks first
+
+/// Simple's view of the tool policy: one plain choice beside the model. Same
+/// values and behaviour as More > Tool policy in Expert.
+struct AsksFirstMenu: View {
+    let chat: ChatModel
+    @Environment(AppModel.self) private var app
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+    @State private var failed: String?
+
+    private var mode: PcSettings.ChatMode {
+        chat.session?.mode.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? app.prefs.newChatTools(computer: store.activeId, settings: store.pcSettings)
+    }
+
+    var body: some View {
+        ToolPolicyPicker(selection: Binding(get: { mode }, set: { m in
+            Task { do { try await chat.setOptions(mode: m) } catch { failed = error.localizedDescription } }
+        }))
+        .disabled(chat.savedAt != nil)
+        .accessibilityIdentifier("chat.asksFirst")
+        .alert("Couldn’t change it", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(failed ?? "") }
+    }
+}
+
 // MARK: - Model and effort
 
-/// The composer's one control for the chat's model and effort: an effort dial
-/// and the model's name. Opens the sheet that changes both.
+/// The composer's one control for the chat's model and effort: a small effort
+/// dial and the model's name. Opens the dropdown that changes both.
 struct ModelEffortButton: View {
     let chat: ChatModel
     @Environment(\.palette) private var palette
+    @Environment(Prefs.self) private var prefs
     @State private var open = false
+
+    /// Simple mode may hide either half; a chat with no model yet still offers the picker.
+    static func parts(_ prefs: Prefs, _ chat: ChatModel) -> (model: Bool, effort: Bool) {
+        (prefs.shows("model") || chat.modelId == nil, prefs.shows("effort"))
+    }
 
     var body: some View {
         let levels = Effort.levels(for: chat.modelId ?? "")
         let level = chat.effort.flatMap { levels.firstIndex(of: $0) }
         let name = chat.modelName ?? String(localized: "Choose a model")
+        let parts = Self.parts(prefs, chat)
         Button { open = true } label: {
             HStack(spacing: 6) {
-                EffortGauge(level: level, count: levels.count, size: 22)
-                Text(name).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle)
+                // The dial stays visible in either mode when effort is enabled.
+                if parts.effort { EffortGauge(level: level, count: levels.count, size: 16) }
+                if parts.model { Text(name).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle) }
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
             }
             .padding(.leading, 4).padding(.trailing, 8)
@@ -193,17 +223,63 @@ struct ModelEffortButton: View {
         .accessibilityLabel("Model and effort")
         .accessibilityValue("\(name), \(chat.effort.map(effortLabel) ?? String(localized: "Computer default"))")
         .accessibilityIdentifier("chat.modelEffort")
-        .sheet(isPresented: $open) { ModelEffortSheet(chat: chat) }
+        .popover(isPresented: $open, arrowEdge: .bottom) {
+            ModelEffortPanel(chat: chat).presentationCompactAdaptation(.popover)
+        }
     }
 }
 
-/// The chat's model, and its effort on a dial with one stop per level.
-struct ModelEffortSheet: View {
+/// One run setting: a switch, or a choice of its values.
+struct RunOptionRow: View {
+    let option: RunOption
+    let value: JSONValue?
+    var set: (JSONValue) -> Void
+
+    private var title: LocalizedStringKey {
+        switch option.key {
+        case "autoModel": "Choose the model automatically"
+        case "offline": "Offline"
+        case "cloudOnly": "Cloud only"
+        case "incognito": "Incognito"
+        case "gitIsolation": "Separate Git branch"
+        case "workMode": "Work mode"
+        default: "Tool style"
+        }
+    }
+
+    private func label(_ v: String) -> LocalizedStringKey {
+        switch v {
+        case "better-review": "Better review"
+        case "design": "Design"
+        case "best-output": "Best output"
+        case "list": "List"
+        case "code": "Code"
+        default: "Default"
+        }
+    }
+
+    var body: some View {
+        if option.values.isEmpty {
+            Toggle(title, isOn: Binding(get: { value?.bool ?? false }, set: { set(.bool($0)) }))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("run.\(option.key)")
+        } else {
+            Picker(title, selection: Binding(get: { value?.string ?? option.values[0] }, set: { set(.string($0)) })) {
+                ForEach(option.values, id: \.self) { Text(label($0)).tag($0) }
+            }
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("run.\(option.key)")
+        }
+    }
+}
+
+/// The chat's model, and its effort on a slider with one stop per level: a
+/// small dropdown under the composer's control.
+struct ModelEffortPanel: View {
     let chat: ChatModel
     @Environment(ComputersStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
+    @Environment(Prefs.self) private var prefs
     @Environment(\.palette) private var palette
-    @Environment(\.horizontalSizeClass) private var hClass
     @State private var picking = false
     @State private var error: String?
     @State private var busy: Effort?
@@ -212,72 +288,66 @@ struct ModelEffortSheet: View {
         let levels = Effort.levels(for: chat.modelId ?? "")
         let level = chat.effort.flatMap { levels.firstIndex(of: $0) }
         let computer = store.active?.name ?? String(localized: "your computer")
-        NavigationStack {
-            List {
-                Section("Model") {
-                    Button { picking = true } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(chat.modelName ?? String(localized: "Choose a model")).foregroundStyle(palette.ink)
-                                if let id = chat.modelId, id != chat.modelName { Text(id).font(.caption2).foregroundStyle(palette.inkFaint) }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(palette.inkFaint)
+        let parts = ModelEffortButton.parts(prefs, chat)
+        VStack(alignment: .leading, spacing: 14) {
+            if parts.model {
+                Button { picking = true } label: {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Model").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                            Text(chat.modelName ?? String(localized: "Choose a model")).font(.subheadline.weight(.medium))
+                                .foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle)
                         }
-                        .frame(minHeight: 44).contentShape(Rectangle())
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(palette.inkFaint)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("modelEffort.model")
+                    .frame(minHeight: 44).contentShape(Rectangle())
                 }
-                Section {
-                    VStack(spacing: 12) {
-                        EffortGauge(level: level, count: levels.count, size: 112)
-                        Text(chat.effort.map(effortLabel) ?? String(localized: "Computer default")).font(.headline).foregroundStyle(palette.ink)
-                        HStack(spacing: 6) {
-                            ForEach(Array(levels.enumerated()), id: \.element) { i, e in
-                                Button { set(e) } label: {
-                                    Group {
-                                        if busy == e { ProgressView().controlSize(.small) } else { Text(effortLabel(e)) }
-                                    }
-                                    .font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                                    .frame(maxWidth: .infinity, minHeight: 44)
-                                    .background(i == level ? palette.accent : palette.surface2, in: Capsule())
-                                    .foregroundStyle(i == level ? palette.onAccent : palette.ink)
-                                    .contentShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(busy != nil)
-                                .accessibilityAddTraits(i == level ? .isSelected : [])
-                                .accessibilityIdentifier("modelEffort.\(e.rawValue)")
-                            }
-                        }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("modelEffort.model")
+            }
+            if parts.model && parts.effort { Divider() }
+            if parts.effort {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Effort").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                        Spacer()
+                        Text(chat.effort.map(effortLabel) ?? String(localized: "Computer default"))
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(level == nil ? palette.inkSoft : palette.ink)
                     }
-                    .frame(maxWidth: .infinity).padding(.vertical, 8)
-                } header: {
-                    Text("Effort")
-                } footer: {
+                    EffortSlider(levels: levels, level: level, busy: busy, set: set)
                     Text(chat.effort == nil
                          ? "Following \(computer)’s effort setting. Higher effort thinks longer and spends more tokens."
                          : "Higher effort thinks longer and spends more tokens.")
-                }
-                if let error {
-                    Section { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger) }
+                        .font(.caption2).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .navigationTitle("Model and effort")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .sheet(isPresented: $picking) {
-                ModelPicker(selected: (chat.providerId, chat.modelId)) { p, m in
-                    Task {
-                        do { try await chat.setOptions(providerId: p, modelId: m) } catch { self.error = error.localizedDescription }
+            if prefs.shows("run-settings") {
+                Divider()
+                Text("Run settings").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                ForEach(RunOption.all) { option in
+                    RunOptionRow(option: option, value: chat.runOptions[option.key]) { value in
+                        error = nil
+                        Task {
+                            do { try await chat.setRunOption(option.key, value) } catch { self.error = error.localizedDescription }
+                        }
                     }
                 }
             }
-            .task { await store.loadAllModels() }
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
+            }
         }
-        // A form sheet on iPad or an open foldable: at medium height in landscape the levels fell below the fold.
-        .presentationDetents(hClass == .regular ? [.large] : [.medium, .large])
+        .padding(16)
+        .frame(width: 300)
+        .sheet(isPresented: $picking) {
+            ModelPicker(selected: (chat.providerId, chat.modelId)) { p, m in
+                Task {
+                    do { try await chat.setOptions(providerId: p, modelId: m) } catch { self.error = error.localizedDescription }
+                }
+            }
+        }
+        .task { await store.loadAllModels() }
     }
 
     private func set(_ e: Effort) {
@@ -288,6 +358,131 @@ struct ModelEffortSheet: View {
             do { try await chat.setOptions(effort: e) } catch { self.error = error.localizedDescription }
             busy = nil
         }
+    }
+}
+
+/// Effort as a bar that snaps to the model's levels: the part left of the
+/// thumb fills with a gradient that deepens toward it and with each level,
+/// with faint speed lines drifting through it. No level (the computer's own
+/// setting) leaves the bar empty and the thumb faint in the middle.
+struct EffortSlider: View {
+    let levels: [Effort]
+    let level: Int?
+    var busy: Effort?
+    var set: (Effort) -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The stop under a finger mid-drag.
+    @State private var dragged: Int?
+
+    var body: some View {
+        let count = max(1, levels.count)
+        let shown = dragged ?? level
+        VStack(spacing: 6) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let x = Self.x(shown, count: count, width: w)
+                let t = shown.map { Double($0 + 1) / Double(count) } ?? 0
+                ZStack(alignment: .leading) {
+                    Capsule().fill(palette.surface2).frame(height: 8)
+                    if shown != nil {
+                        ZStack {
+                            LinearGradient(colors: [palette.accent.opacity(0.12 + 0.18 * t), palette.accent.opacity(0.45 + 0.55 * t)],
+                                           startPoint: .leading, endPoint: .trailing)
+                            if !reduceMotion { SpeedLines(intensity: t) }
+                        }
+                        .frame(width: x, height: 8)
+                        .clipShape(Capsule())
+                    }
+                    ForEach(0..<count, id: \.self) { i in
+                        Circle().fill(i <= (shown ?? -1) ? palette.onAccent.opacity(0.7) : palette.inkFaint.opacity(0.5))
+                            .frame(width: 3, height: 3)
+                            .position(x: Self.x(i, count: count, width: w), y: 12)
+                    }
+                    Circle().fill(.white)
+                        .overlay(Circle().stroke(shown == nil ? palette.line : palette.accent, lineWidth: 2))
+                        .overlay { if busy != nil { ProgressView().controlSize(.mini) } }
+                        .frame(width: 20, height: 20)
+                        .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+                        .position(x: x, y: 12)
+                }
+                .frame(height: 24)
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0)
+                    .onChanged { v in dragged = Self.index(at: v.location.x, count: count, width: w) }
+                    .onEnded { v in
+                        let i = Self.index(at: v.location.x, count: count, width: w)
+                        dragged = nil
+                        if levels.indices.contains(i) { set(levels[i]) }
+                    })
+                .animation(.snappy(duration: 0.2), value: shown)
+            }
+            .frame(height: 24)
+            .accessibilityElement()
+            .accessibilityLabel("Effort")
+            .accessibilityValue(level.map { effortLabel(levels[$0]) } ?? String(localized: "Computer default"))
+            .accessibilityAdjustableAction { dir in
+                let now = level ?? (count - 1) / 2
+                let next = dir == .increment ? min(count - 1, now + 1) : max(0, now - 1)
+                if levels.indices.contains(next) { set(levels[next]) }
+            }
+            .accessibilityIdentifier("modelEffort.slider")
+            HStack(spacing: 0) {
+                ForEach(Array(levels.enumerated()), id: \.element) { i, e in
+                    Button { set(e) } label: {
+                        Text(effortLabel(e)).font(.caption2.weight(i == level ? .semibold : .regular))
+                            .foregroundStyle(i == level ? palette.accent : palette.inkSoft)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .frame(maxWidth: .infinity, minHeight: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(busy != nil)
+                    .accessibilityAddTraits(i == level ? .isSelected : [])
+                    .accessibilityIdentifier("modelEffort.\(e.rawValue)")
+                }
+            }
+        }
+    }
+
+    /// Stop `i` sits over the middle of its label's column; nil sits in the middle of the bar.
+    static func x(_ i: Int?, count: Int, width: CGFloat) -> CGFloat {
+        guard let i else { return width / 2 }
+        return (CGFloat(i) + 0.5) * width / CGFloat(max(1, count))
+    }
+
+    /// The stop nearest `x`.
+    static func index(at x: CGFloat, count: Int, width: CGFloat) -> Int {
+        guard width > 0 else { return 0 }
+        return min(count - 1, max(0, Int(x / (width / CGFloat(max(1, count))))))
+    }
+}
+
+/// Thin light streaks drifting left to right, faster and brighter as `intensity` (0...1) rises.
+struct SpeedLines: View {
+    let intensity: Double
+
+    var body: some View {
+        TimelineView(.animation) { tl in
+            Canvas { ctx, size in
+                let now = tl.date.timeIntervalSinceReferenceDate
+                let speed = 18 + 70 * intensity
+                for i in 0..<7 {
+                    let seed = Double(i) * 0.6180339887
+                    let length = 5 + 9 * (seed.truncatingRemainder(dividingBy: 1))
+                    let span = size.width + length
+                    let x = (now * speed * (0.7 + 0.6 * seed.truncatingRemainder(dividingBy: 1)) + seed * span)
+                        .truncatingRemainder(dividingBy: span) - length
+                    let y = size.height * (0.25 + 0.5 * (Double(i * 3 % 7) / 6))
+                    var p = Path()
+                    p.move(to: CGPoint(x: x, y: y))
+                    p.addLine(to: CGPoint(x: x + length, y: y))
+                    ctx.stroke(p, with: .color(.white.opacity(0.25 + 0.35 * intensity)), style: StrokeStyle(lineWidth: 1, lineCap: .round))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -404,7 +599,7 @@ struct ContextBreakdown: View {
     }
 }
 
-// MARK: - Expert monitor
+// MARK: - Monitor
 
 /// Hardware readings as dials, in the desktop Hardware monitor's order: CPU,
 /// memory, each GPU, then GPU memory.
@@ -424,100 +619,252 @@ struct HardwareDials: View {
         let fraction: Double?
         let value: String
         let temp: Double?
+        /// What the gauge's tooltip adds: the chip, cores, or memory used of the total.
+        var detail: String?
     }
 
     static func rows(_ m: HardwareMonitorModel) -> [Row] {
         let pct = { (f: Double?) in f.map { "\(Int(($0 * 100).rounded()))%" } ?? "–" }
+        let cpu = m.system.map { s in
+            [s.cpuModel, s.cpuCores > 0 ? String(localized: "\(s.cpuCores) cores") : nil].compactMap { $0 }.joined(separator: " · ")
+        }
         var rows = [
             Row(label: String(localized: "CPU"), fraction: m.system.map { min(1, max(0, $0.cpuPct / 100)) },
-                value: m.system.map { "\(Int($0.cpuPct.rounded()))%" } ?? "–", temp: m.system?.cpuC),
-            Row(label: String(localized: "Memory"), fraction: m.system?.memFraction, value: pct(m.system?.memFraction), temp: m.system?.memoryC),
+                value: m.system.map { "\(Int($0.cpuPct.rounded()))%" } ?? "–", temp: m.system?.cpuC, detail: cpu?.isEmpty == false ? cpu : nil),
+            Row(label: String(localized: "Memory"), fraction: m.system?.memFraction, value: pct(m.system?.memFraction), temp: m.system?.memoryC,
+                detail: m.system.flatMap { $0.memTotalMB > 0 ? MonitorFormat.memory(usedMB: $0.memUsedMB, totalMB: $0.memTotalMB) : nil }),
         ]
         let devices = m.gpu?.devices ?? []
         for d in devices {
             let f = d.utilizationPct.map { min(1, max(0, $0 / 100)) }
             let name = devices.count == 1 ? String(localized: "GPU") : String(localized: "GPU \(d.index + 1)")
             // The board's sensor fills in for the only GPU, as on the desktop.
-            rows.append(Row(label: name, fraction: f, value: pct(f), temp: d.temperatureC ?? (devices.count == 1 ? m.system?.gpuC : nil)))
+            rows.append(Row(label: name, fraction: f, value: pct(f), temp: d.temperatureC ?? (devices.count == 1 ? m.system?.gpuC : nil),
+                            detail: d.name.isEmpty ? nil : d.name))
         }
         if let g = m.gpu, g.totalMB > 0 {
-            rows.append(Row(label: g.unified ? String(localized: "GPU memory") : String(localized: "VRAM"), fraction: g.memFraction, value: pct(g.memFraction), temp: nil))
+            rows.append(Row(label: g.unified ? String(localized: "GPU memory") : String(localized: "VRAM"), fraction: g.memFraction, value: pct(g.memFraction), temp: nil,
+                            detail: MonitorFormat.memory(usedMB: g.usedMB, totalMB: g.totalMB)))
         }
         return rows
     }
 }
 
-/// Expert mode's panel under the chat's title: the computer's hardware as
-/// small dials and how many models it holds. Tap for the whole monitor.
-struct MonitorPanel: View {
-    let monitor: HardwareMonitorModel
-    let chat: ChatModel
-    @Environment(ComputersStore.self) private var store
+/// The colour at the top of `AppBackdrop`, solid, behind the chats list's search row.
+struct RowGround: View {
     @Environment(\.palette) private var palette
-    @State private var open = false
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        Button { open = true } label: {
-            HStack(alignment: .top, spacing: 10) {
-                hardware
-                VStack(spacing: 2) {
-                    Image(systemName: "cube.fill").font(.body).foregroundStyle(palette.accent)
-                    Text("\(monitor.engine?.resident.count ?? 0)").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink)
-                    Text("Loaded").font(.caption2).foregroundStyle(palette.inkSoft)
-                }
-                .frame(minWidth: 44)
+        palette.accent.opacity(scheme == .dark ? AppBackdrop.darkWash : AppBackdrop.lightWash).background(palette.paper)
+    }
+}
+
+/// The computer's hardware at a glance: thin rings with their percentages,
+/// and how many models the Model Server holds. Tap for the agent's details;
+/// hover over a gauge with a pointer for its reading in full.
+struct MiniMonitor: View {
+    let monitor: HardwareMonitorModel
+    var open: () -> Void
+    /// Each gauge a ring over its percentage, stacked, in the pill docked at a side.
+    var vertical = false
+    @Environment(\.palette) private var palette
+    /// The gauge whose tooltip is open: a row's label, or `models`.
+    @State private var tip: String?
+    /// Each gauge's frame, for the tooltip's arrow.
+    @State private var frames: [String: CGRect] = [:]
+
+    private static let models = "models"
+    private static let space = "miniMonitor"
+
+    var body: some View {
+        let rows = Array(HardwareDials.rows(monitor).prefix(3))
+        let count = monitor.engine?.resident.count ?? 0
+        let layout = vertical ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
+        layout {
+            if monitor.system == nil && monitor.gpu == nil {
+                Text(monitor.error == nil ? LocalizedStringKey("Reading…") : "No readings").font(.caption2).foregroundStyle(palette.inkFaint)
+            } else {
+                ForEach(rows, id: \.label) { row in tipped(row.label) { gauge(row) } }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(palette.surface, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(palette.line))
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            tipped(Self.models) {
+                (vertical ? AnyLayout(VStackLayout(spacing: 2)) : AnyLayout(HStackLayout(spacing: 3))) {
+                    Image(systemName: "cube").font(.caption2)
+                    Text("\(count)").font(.caption2.monospacedDigit())
+                }
+                .foregroundStyle(count > 0 ? palette.accent : palette.inkFaint)
+            }
         }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 12).padding(.vertical, 6)
+        .frame(minHeight: 32)
+        .contentShape(Rectangle())
+        .coordinateSpace(.named(Self.space))
+        .onTapGesture(perform: open)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Monitor")
-        .accessibilityValue(HardwareDials.rows(monitor).map { "\($0.label) \($0.value)" }.joined(separator: ", ")
-            + ", " + String(localized: "\(monitor.engine?.resident.count ?? 0) models loaded"))
-        .accessibilityHint("Shows the hardware and loaded models")
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { open() }
+        // Outside the one accessibility element above, or VoiceOver could not reach the tooltip.
+        .popover(isPresented: Binding(get: { tip != nil }, set: { if !$0 { tip = nil } }),
+                 attachmentAnchor: .rect(.rect(tip.flatMap { frames[$0] } ?? .zero)), arrowEdge: .top) {
+            if let tip {
+                GaugeTip(monitor: monitor, id: tip) {
+                    self.tip = nil
+                    open()
+                }
+                .presentationCompactAdaptation(.popover)
+            }
+        }
+        .accessibilityLabel("Monitor")
+        .accessibilityValue(Self.spoken(rows, count: count))
+        .accessibilityHint("Shows the hardware, loaded models and this chat’s details")
         .accessibilityIdentifier("chat.monitor")
-        .sheet(isPresented: $open) { MonitorSheet(monitor: monitor, chat: chat) }
     }
 
-    @ViewBuilder private var hardware: some View {
-        if monitor.system == nil && monitor.gpu == nil {
-            let reading = String(localized: "Reading \(store.active?.name ?? "your computer")…")
-            Label(monitor.error ?? reading, systemImage: "gauge.with.dots.needle.33percent")
-                .font(.footnote).foregroundStyle(palette.inkSoft)
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) { HardwareDials(monitor: monitor, size: 40) }
+    /// A gauge that opens its tooltip on hover (a pointer). Touch and hold moves the pill instead.
+    private func tipped(_ id: String, @ViewBuilder _ content: () -> some View) -> some View {
+        content()
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { tip = id } else if tip == id { tip = nil }
             }
-            .allowsHitTesting(false)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { frames[id] = $0 }
+    }
+
+    private func gauge(_ row: HardwareDials.Row) -> some View {
+        let tone: Color = palette.tone(MonitorTone.of(row.fraction))
+        return (vertical ? AnyLayout(VStackLayout(spacing: 2)) : AnyLayout(HStackLayout(spacing: 4))) {
+            ZStack {
+                Circle().stroke(palette.surface2, lineWidth: 2)
+                Circle().trim(from: 0, to: row.fraction ?? 0)
+                    .stroke(tone, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 14, height: 14)
+            Text(row.value).font(.caption2.monospacedDigit()).foregroundStyle(palette.inkSoft)
+        }
+    }
+
+    private static func spoken(_ rows: [HardwareDials.Row], count: Int) -> String {
+        let parts: [String] = rows.map { "\($0.label) \($0.value)" } + [String(localized: "\(count) models loaded")]
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// One gauge in full, in the tooltip over the minimal monitor: its reading,
+/// temperature and what it measures, or the loaded models; Details opens the
+/// agent's panel.
+struct GaugeTip: View {
+    let monitor: HardwareMonitorModel
+    /// A hardware row's label, or `models`.
+    let id: String
+    var details: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let row = HardwareDials.rows(monitor).first(where: { $0.label == id }) {
+                HStack(spacing: 12) {
+                    RingGauge(fraction: row.fraction, value: row.value, label: "", size: 44)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.label).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
+                        if let d = row.detail { Text(d).font(.caption).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true) }
+                        if let t = row.temp {
+                            let tone = MonitorTone.temperature(t)
+                            Label("\(Int(t.rounded()))°C", systemImage: "thermometer.medium").font(.caption.monospacedDigit())
+                                .foregroundStyle(tone == .ok ? palette.inkSoft : palette.tone(tone))
+                        }
+                    }
+                }
+            } else {
+                Text("Loaded models").font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
+                let resident = monitor.engine?.resident ?? []
+                if resident.isEmpty {
+                    Text("No local model is loaded.").font(.caption).foregroundStyle(palette.inkSoft)
+                }
+                ForEach(resident) { r in
+                    HStack {
+                        Text(monitor.name(r.id)).font(.caption.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        if let b = r.bytes { Text(MonitorFormat.bytes(b)).font(.caption.monospacedDigit()).foregroundStyle(palette.inkSoft) }
+                    }
+                }
+            }
+            Button(action: details) {
+                Label("Details", systemImage: "chevron.down").font(.footnote.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 36)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityIdentifier("monitor.tip.details")
+        }
+        .padding(14)
+        .frame(width: 240)
+        // A container, so its id doesn't replace the Details button's.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("monitor.tip")
+    }
+}
+
+/// Keeps `monitor` reading while the view is on screen: everything every few
+/// seconds while the hardware shows (or the agent's panel is open), only the
+/// Model Server every 10 s while Simple waits for a local model, and nothing
+/// when every item in `ids` is hidden.
+struct MonitorFollow: ViewModifier {
+    @Binding var monitor: HardwareMonitorModel?
+    /// The items that read the monitor; `hardware` decides the full reading.
+    var ids: [String] = ["hardware"]
+    var panelOpen = false
+    @Environment(Prefs.self) private var prefs
+    @Environment(ComputersStore.self) private var store
+
+    func body(content: Content) -> some View {
+        let wanted = panelOpen || ids.contains { SimpleMode.visibility($0, prefs.simpleChoices) != .hide }
+        let full = panelOpen || prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false)
+        let mode = !wanted ? 0 : full ? 2 : 1
+        content.task(id: "\(mode) \(store.activeId ?? "")") {
+            guard mode > 0 else { return }
+            let m = monitor ?? HardwareMonitorModel(store: store)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uiTestLocalModel") {
+                let json = #"{"installed":true,"running":true,"resident":[{"id":"qwen3-8b","contextLength":32768,"vramBytes":5100000000,"loadedOn":"gpu"}],"memory":{"budgetBytes":24000000000,"kind":"unified"}}"#
+                m.stubEngine = EngineStatus.from(try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)))
+            }
+            #endif
+            monitor = m
+            await m.follow(every: mode == 2 ? HardwareMonitorModel.interval : HardwareMonitorModel.engineInterval, engineOnly: mode == 1)
         }
     }
 }
 
-/// The whole monitor: hardware dials, the models the Model Server holds (with
-/// Unload, where they run, their context and memory), and this chat's context.
-struct MonitorSheet: View {
+/// The agent's details, in the card the pill expands into: the
+/// hardware with temperatures, the models the Model Server holds (with
+/// Unload), and this chat's model, effort and context.
+struct AgentPanel: View {
     let monitor: HardwareMonitorModel
     let chat: ChatModel?
+    var close: () -> Void
     @Environment(ComputersStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var notice: (text: String, ok: Bool)?
 
     var body: some View {
         let computer = store.active?.name ?? String(localized: "your computer")
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(chat?.title ?? computer).font(.headline).foregroundStyle(palette.ink).lineLimit(1)
+                    Text("Agent on \(computer)").font(.caption).foregroundStyle(palette.inkSoft)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button("Done", action: close).font(.body.weight(.semibold)).frame(minHeight: 44)
+            }
+            .padding(.horizontal, 20).padding(.top, 8)
             List {
                 Section {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 84), spacing: 12)], spacing: 16) {
-                        HardwareDials(monitor: monitor, size: 72)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 12)], spacing: 14) {
+                        HardwareDials(monitor: monitor, size: 60)
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 6)
                 } header: {
                     Text("Hardware")
                 } footer: {
@@ -533,24 +880,25 @@ struct MonitorSheet: View {
                 } footer: {
                     Text("Unloading frees the model’s memory on \(computer). The next reply that uses it loads it again.")
                 }
-                if let chat, chat.context != nil {
-                    Section("This chat") { ContextBreakdown(chat: chat).listRowInsets(EdgeInsets()) }
+                if let chat {
+                    Section("This chat") {
+                        LabeledContent("Model", value: chat.modelName ?? String(localized: "Not chosen yet"))
+                        LabeledContent("Effort", value: chat.effort.map(effortLabel) ?? String(localized: "Computer default"))
+                        if chat.context != nil { ContextBreakdown(chat: chat).listRowInsets(EdgeInsets()) }
+                    }
                 }
                 if let error = monitor.error {
                     Section { Label(error, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning) }
                 }
             }
-            .navigationTitle("Monitor")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .containerRelativeFrame(.vertical) { h, _ in h * 0.62 }
             .pawRefreshable { await monitor.refresh() }
-            .safeAreaInset(edge: .bottom) {
-                if let notice {
-                    Label(notice.text, systemImage: notice.ok ? "checkmark.circle" : "exclamationmark.triangle")
-                        .font(.footnote).foregroundStyle(notice.ok ? palette.ink : palette.danger)
-                        .padding(12).frame(maxWidth: .infinity)
-                        .background(.bar)
-                }
+            if let notice {
+                Label(notice.text, systemImage: notice.ok ? "checkmark.circle" : "exclamationmark.triangle")
+                    .font(.footnote).foregroundStyle(notice.ok ? palette.ink : palette.danger)
+                    .padding(.horizontal, 16).padding(.vertical, 6)
             }
         }
         .accessibilityIdentifier("monitor.sheet")

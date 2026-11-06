@@ -36,6 +36,8 @@ Nekko does not switch accounts on its own unless you ask it to: in a chat on **�
 - `Subscription · Claude Code 2.1.263 · ~/.claude-work · you@work.com · Team plan`: a Claude plan, through Claude Code on this computer.
 - `API · Anthropic API key`, or `API · Amazon Bedrock · us-east-1`: an API or cloud account Nekko calls directly.
 
+**Your first subscription account** takes one press: **Add provider → Claude → Subscription** shows three steps, *Install Claude Code*, *Sign in* and *Connect*, starting at the one your computer has reached. Press the button and each step starts when the last one finishes; you only need to sign in when your browser opens.
+
 **API accounts** (an Anthropic API key, or Bedrock, Vertex or Foundry) work like any other API provider: choose **Add provider → Claude → API → Connect** once per key or cloud account.
 
 **Subscription accounts** run the Claude Code you already have installed. Each one is a separate Claude Code login:
@@ -78,6 +80,22 @@ Anthropic's rules for Claude Code ([Legal and compliance](https://code.claude.co
 | Sign in to Claude inside a third-party app, or let it read your Claude Code credentials | No | Nekko removed its old Claude plan sign-in for this reason; see [Subscription sign-in](SUBSCRIPTIONS.md). |
 
 This page describes how Nekko works, not legal advice. If something matters to your business, ask Anthropic.
+
+## Where your keys are kept
+
+API keys, connector and MCP server tokens, and sign-ins (ChatGPT, OpenRouter, Google) are saved in your computer's own keystore: the Keychain on a Mac, the Credential Manager on Windows. Nekko's settings file keeps everything else. On Linux there is no keystore Nekko can rely on, so they stay in the settings files, readable only by you.
+
+**Settings > System > Backup & restore** exports your settings without any key or token. Importing a backup keeps the keys this computer already has; on a new computer, add your keys again. **Delete everything** deletes the saved keys too.
+
+### macOS Keychain access requests
+
+On a Mac, the app keeps its API keys, sign-ins, and encryption keys together in one Keychain item per app data profile. Its name is **Nekko Agent: API keys, sign-ins and encryption keys**, followed by a short profile identifier. macOS may identify the requesting engine as **nekkod**. This unlocks Nekko Agent's saved credentials; it is not a request to read unrelated passwords in your Keychain.
+
+The engine loads this item once and shares it across the app, rather than reading a separate Keychain item for each key. macOS decides whether approval is needed, especially after a signing identity changes. Saving a changed credential can also require authorization.
+
+**Upgrading from separate items:** the first use of an older saved key moves it into the shared item only after checking that the new copy reads back correctly. Apple may still ask you to approve each old item during this one-time move. Existing per-item permissions cannot be combined retroactively. Later read-only starts use the shared item.
+
+If you deny access, the app remembers that refusal instead of repeatedly asking through other startup callers. Your saved keys are retained, but the affected credentials are unavailable in that run. Unlock Keychain if necessary, then quit and reopen Nekko Agent when you want to retry. Changes made manually in Keychain also take effect after reopening the app. Older app versions do not understand the consolidated storage, so downgrading may require signing in again.
 
 ## Accounts on another computer
 

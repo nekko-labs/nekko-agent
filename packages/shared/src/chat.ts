@@ -10,8 +10,6 @@ export interface ToolCall {
   input: Record<string, unknown>;
   /** Set when Claude Code ran the call (a Claude Agent chat): shown, never run by Nekko. */
   executedBy?: 'claude-code';
-  /** A Claude Code sub-agent's call: the id of the call that started the sub-agent. */
-  parentToolCallId?: string;
 }
 
 export interface ToolResult {
@@ -24,8 +22,6 @@ export interface ToolResult {
   /** Claude Code denied the call itself (a Claude Agent chat), with its reason. */
   denied?: boolean;
   deniedReason?: string;
-  /** A Claude Code sub-agent's result: the id of the call that started the sub-agent. */
-  parentToolCallId?: string;
 }
 
 /**
@@ -45,6 +41,8 @@ export interface AgentWatchView {
   pending: boolean;
   failures: number;
   lastError?: string;
+  /** Armed by Nekko itself on a PR the chat opened (Settings > Pull requests), not by the agent. */
+  auto?: boolean;
 }
 
 export interface ChatMessage {
@@ -250,6 +248,13 @@ export interface Session {
    * final answer back to the parent's `spawn_agent` tool call.
    */
   parentSessionId?: string;
+  /** The `spawn_agent` call that started this sub-agent, in its parent's transcript. */
+  spawnCallId?: string;
+  /**
+   * This sub-agent ran inside its parent's Claude Code session, which keeps the
+   * real history. This chat is a copy to watch, so nothing can be sent to it.
+   */
+  claudeCodeSubagent?: boolean;
   /** When set, this chat is driven by an automation task (shown in the Tasks
    *  board, kept out of the regular chat boards/lanes). */
   taskId?: string;
@@ -386,6 +391,12 @@ export interface Session {
    */
   activeRun?: { startedAt: number };
   /**
+   * How the last turn failed, for a chat opened after the `error` event has gone.
+   * Cleared when the next turn starts, or by Dismiss (null). It only applies
+   * while `afterMessageId` is still the transcript's last message.
+   */
+  turnFailure?: { message: string; afterMessageId?: string } | null;
+  /**
    * The plan the agent itself wrote for this chat, via the `update_plan` tool:
    * what it decided to do after reading the request, kept live as it works.
    */
@@ -510,7 +521,13 @@ export type AgentEvent =
    * so anything showing it should re-read it. Emitted mid-turn, which is why it
    * is an event rather than something a listener polls for.
    */
-  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice };
+  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice }
+  /**
+   * A Claude Agent chat's Claude Code now runs `tasks` background tasks (shell
+   * commands, sub-agents). It keeps working after the turn's `done` and wakes
+   * on its own when one finishes, so the chat says so meanwhile.
+   */
+  | { type: 'claude_code_background'; sessionId: string; tasks: number };
 
 /**
  * What a session is waiting on a person for, right now.
@@ -571,10 +588,11 @@ export function formatRate(tokensPerSecond: number): string {
  */
 /**
  * Whether the transcript ends on a reply that was cut off: the last message of
- * the current turn is an assistant message marked `interrupted`, or a tool call
- * the model asked for that never got its result. A chat opened on such a
- * transcript (after a restart, say) shows the interruption and offers Continue
- * even though no `error` event is around to announce it.
+ * the current turn is an assistant message marked `interrupted`, a tool call the
+ * model asked for that never got its result, or a tool result the model never
+ * answered. A chat opened on such a transcript (after a restart, say) shows the
+ * interruption and offers Continue even though no `error` event is around to
+ * announce it. A run still going looks the same, so callers check for one first.
  */
 export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   const last = history[history.length - 1];
@@ -589,6 +607,8 @@ export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   // An explicit successful terminal event is stronger than missing historical
   // tool bookkeeping (for example, an earlier failed/retried tool step).
   if (lastAssistant?.turnStats?.stop === 'complete') return false;
+  // A finished reply ends with the model's word, never on a tool's output.
+  if (last.role === 'tool') return true;
   const results = new Set(turn.flatMap((m) => m.toolResult ? [m.toolResult.toolCallId] : []));
   return turn.some((m) => m.role === 'assistant' && m.toolCalls?.some((call) => !results.has(call.id)));
 }

@@ -31,13 +31,16 @@ public final class ChatModel {
         // Parsed once per read, not on every streamed token.
         didSet {
             savedBlocks = session.map { Transcript.fromMessages($0.messages) } ?? []
+            updateTurnDetails()
             // What the computer lists has arrived: it leaves the outbox.
             if let ids = session?.clientMessageIds, !ids.isEmpty { store.outbox.confirm(sessionId, ids) }
         }
     }
     private var savedBlocks: [Block] = [] { didSet { merge() } }
     /// Saved block id → the live id the view already shows it under (see `Transcript.carriedIds`).
-    private var shownIds: [String: String] = [:] { didSet { merge() } }
+    private var shownIds: [String: String] = [:] { didSet { merge(); updateTurnDetails() } }
+    /// Only the current outgoing prompt, until the computer returns its thumbnails.
+    private var outgoingPhotos: (id: String, images: [String])?
     public private(set) var turn = LiveTurn() {
         didSet {
             if running != turn.running { running = turn.running }
@@ -60,6 +63,14 @@ public final class ChatModel {
     /// Stored, not computed: a streamed token patches only the last block
     /// (`patchLastBlock`) instead of merging the whole transcript again.
     public private(set) var blocks: [Block] = []
+    /// Persisted turn footers under the same ids the transcript actually shows.
+    /// Rebuilt only on saved reads/id changes, never on streamed tokens.
+    public private(set) var turnDetails: [String: TurnDetails] = [:]
+
+    private func updateTurnDetails() {
+        let next = TurnDetails.footers(session?.messages ?? [], shownIds: shownIds)
+        if next != turnDetails { turnDetails = next }
+    }
     /// Bumped whenever `blocks` changes anywhere but its last block, so a view
     /// can keep what it derived from the earlier blocks across streamed tokens.
     public private(set) var blocksLayout = 0
@@ -241,6 +252,9 @@ public final class ChatModel {
             // Keep the ids of what was on screen when the saved transcript replaces the live one.
             let carried = Transcript.carriedIds(shown: shown, next: Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
             if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
+            if let outgoingPhotos, session.messages.contains(where: { (shownIds[$0.id] ?? $0.id) == outgoingPhotos.id }) {
+                self.outgoingPhotos = nil
+            }
             await refreshAgentState()
             _ = await (skillsRead, contextRead)
         } catch {
@@ -335,6 +349,7 @@ public final class ChatModel {
     /// URLs. Returns the prompt's `clientMessageId`.
     @discardableResult
     public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
+        try Task.checkCancellation()
         let outbox = store.outbox
         let id = outbox.newId()
         guard store.conn == .online, let r = try? store.remote() else {
@@ -373,6 +388,7 @@ public final class ChatModel {
         }
         let at = now()
         let shown = skill.map { "/\($0.name) \(text)".trimmingCharacters(in: .whitespaces) } ?? text
+        outgoingPhotos = images.isEmpty ? nil : ("pending-\(at)", images)
         turn = LiveTurn(running: true, blocks: [.user(id: "pending-\(at)", text: shown, at: at, images: images.count)], startedAt: at)
         sending = true
         // Resolves only when the whole turn ends; the events carry the progress.
@@ -393,7 +409,10 @@ public final class ChatModel {
             } catch {
                 var t = self.turn
                 let started = t.blocks.contains { $0.id != "pending-\(at)" }
-                if !started { t.blocks.removeAll { $0.id == "pending-\(at)" } }
+                if !started {
+                    t.blocks.removeAll { $0.id == "pending-\(at)" }
+                    self.outgoingPhotos = nil
+                }
                 t.running = false
                 if let e = error as? RelayError, e.fromComputer {
                     // The computer turned it down: the prompt goes back to the composer.
@@ -506,6 +525,15 @@ public final class ChatModel {
         await reload()
     }
 
+    public var runOptions: [String: JSONValue] { session?.runOptions ?? [:] }
+
+    /// Set one run setting on the computer running this chat. One that changes
+    /// what an agent may touch asks for Face ID: the computer says when.
+    public func setRunOption(_ key: String, _ value: JSONValue) async throws {
+        _ = try await store.call(raising: Channels.sessionSetOptions, [.string(sessionId), .object([key: value])])
+        await reload()
+    }
+
     // MARK: The queue, forks and pull requests
 
     /// Editing the computer's queue needs the computer: an edit made offline could land after the prompt ran.
@@ -523,6 +551,23 @@ public final class ChatModel {
             _ = try await store.remote().call(Channels.chatEditQueued, [.string(sessionId), .int(Int64(index)), edit])
         } catch {
             // Show the queue as it is now, whatever happened to this edit.
+            await reload()
+            throw store.readable(error)
+        }
+        await reload()
+    }
+
+    /// Stop the reply and start the queued prompt at `index` on this chat's model.
+    public func interruptQueued(_ index: Int) async throws {
+        guard store.conn == .online else { throw RelayError(Self.reconnectToEditQueue) }
+        var args: [JSONValue] = [.string(sessionId), .int(Int64(index))]
+        let (providerId, modelId) = Self.resolveModel(session, store.defaults)
+        if let providerId, let modelId { args.append(["providerId": .string(providerId), "modelId": .string(modelId)]) }
+        do {
+            _ = try await store.remote().call(Channels.chatInterruptQueued, args)
+        } catch let e as RelayError where !e.fromComputer {
+            // The call stays open for the whole new reply, so running out of time is not a failure.
+        } catch {
             await reload()
             throw store.readable(error)
         }
@@ -565,7 +610,25 @@ public final class ChatModel {
 
     /// A message's photos as the computer sent them (small JPEG data URLs; `""` for one it kept back).
     public func photos(_ messageId: String) -> [String] {
-        session?.messages.first { $0.id == messageId }?.images ?? []
+        let savedId = shownIds.first { $0.value == messageId }?.key ?? messageId
+        if let message = session?.messages.first(where: { $0.id == savedId }) { return message.images }
+        if let outgoingPhotos, outgoingPhotos.id == messageId, turn.blocks.contains(where: { $0.id == messageId }) {
+            return outgoingPhotos.images
+        }
+        return []
+    }
+
+    /// One of a message's photos at full size (`session:photo`), sharp on a phone screen: a data
+    /// URL, or nil when the computer has none to send (a photo it can't read, or an older computer).
+    public func fullPhoto(_ messageId: String, _ index: Int) async throws -> String? {
+        // A saved message can stay on screen under the id it first had (`shownIds`); the computer knows the saved one.
+        let savedId = shownIds.first { $0.value == messageId }?.key ?? messageId
+        if session?.messages.contains(where: { $0.id == savedId }) != true, let outgoingPhotos, outgoingPhotos.id == messageId,
+           outgoingPhotos.images.indices.contains(index) {
+            // Not saved on the computer yet: the phone still holds the photo it just sent.
+            return outgoingPhotos.images[index]
+        }
+        return try await store.remote().call(Channels.sessionPhoto, [.string(sessionId), .string(savedId), .int(Int64(index))]).string
     }
 
     // MARK: Projection
@@ -608,6 +671,14 @@ public final class ChatModel {
 
     /// The computer is out of reach: Send puts the prompt in the outbox ("Send when online").
     public var sendsLater: Bool { store.conn != .online }
+
+    /// `typed` is more work for this chat to place: here, or in a sub-agent. Never a slash command,
+    /// and only while the computer can say delegation will run.
+    public func offersSubagent(_ typed: String) -> Bool {
+        let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !text.isEmpty && !text.hasPrefix("/") && blocked == nil && !sendsLater
+            && session?.canOfferSubagent(strategy: store.pcSettings.orchestrationStrategy) == true
+    }
 
     /// What the composer says about the connection while it is down, or nil.
     public var offlineNote: String? {

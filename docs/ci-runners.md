@@ -4,6 +4,22 @@ Run your GitHub Actions jobs on this Mac. Each job gets its own throwaway macOS 
 deleted when the job ends, and your own work comes first: by default the runner only takes jobs
 while you are away and the Mac is plugged in.
 
+## Watch runners from Automations
+
+The **Automations** panel on the Agent board shows your connected CI runners even
+when no chat automations are scheduled. VM tiles show their names and state; **Live
+log** opens output from that VM, including while it is starting or ready for a job.
+The card's switch and settings apply to the whole runner, not just one VM.
+
+Jobs appear under **Queued**, **In progress**, and **Completed**. Use the existing
+Accept now/Decline, Cancel/Re-run, and log controls there. Cancel and restart still
+ask for confirmation because they affect the workflow run on GitHub.
+
+Choose **View CI runners** to open the full CI section in Scheduled Tasks, where you
+can also connect GitHub and set up this Mac. With no connected runners the panel
+shows a short setup hint. Runners are hidden when the connected service does not
+support them; a temporary service failure shows an error and retries.
+
 ## What it does
 
 Nekko Agent registers this Mac as a GitHub Actions **self-hosted runner** for one repo or one
@@ -16,19 +32,30 @@ This is not the [Local CI runner](git-runner.md) workflow template. That one run
 directly on the machine and reports a commit status; this one picks up real `runs-on:` jobs from
 the GitHub Actions queue, each in its own VM.
 
-You find it in **Workflows**, under the **Workflows | CI runners** switch at the top.
+You find it in **Scheduled Tasks**, as the **CI runners** section below your tasks.
 
-**What is not verified yet.** The pieces are built and tested, and a VM has been booted and
-checked on a real macOS 15 guest, but one real GitHub job has not yet run end to end, and the
-rule that keeps job traffic off a VPN has not yet been checked against a real tunnel. Both are
-part of the pilot (T214). The [image guide](ci-runners-image.md) and the job picker are in place;
-the image itself has not yet been booted in a VM. Connecting GitHub with clicks has been tested
-against a stand-in for GitHub, not GitHub itself, so if GitHub refuses the app, use
-[an app you already have](#use-an-app-you-already-have).
+## Why run jobs on your Mac
+
+- **Faster.** On an M5 Max MacBook Pro, our iOS CI job took a median 40 minutes in a VM against
+  59 minutes on GitHub's hosted Macs, with simulator tests 2x and app builds 4.6x faster. On a 2021
+  M1 Max it took 39 minutes against 65 the same day. Numbers, runs and caveats:
+  [CI runner performance](ci-runner-performance.md).
+- **No hosted macOS minutes.** Jobs on your own Mac don't use GitHub's hosted macOS minutes, the
+  most expensive kind.
+- **Your work comes first.** By default it takes jobs only while you are away and the Mac is plugged
+  in, and it waits on untrusted networks or under memory pressure (see
+  [why a runner is waiting](#why-a-runner-is-waiting)).
+- **Nothing reaches your Mac.** Each job runs in its own VM that is deleted afterward, with no way
+  onto your LAN.
+
+**What is not verified yet.** Connecting GitHub with clicks works on real GitHub, and real GitHub
+jobs have run end to end in a VM built by **Set up this Mac** (Native iOS on this repo, 2026-11-03,
+passing). The rule that keeps job traffic off a VPN has not yet been checked against a real tunnel,
+and no packaged release has the setup screens yet; both are part of the pilot (T214).
 
 ## Before you start
 
-- **An Apple silicon Mac.** Windows and Linux show "CI runners aren't available here", and a Mac
+- **An Apple silicon Mac.** Windows and Linux leave the CI runners section out, and a Mac
   that cannot run VMs shows "VM support unavailable" on the runner card.
 - **A VM image.** Jobs run in clones of a macOS image stored in Nekko's data folder. On macOS 27
   Nekko [builds it](#set-up-this-mac) from Apple's restore image; on macOS 26 you
@@ -43,10 +70,11 @@ The runner talks to GitHub as a GitHub App you own, so its access is limited to 
 you can revoke it at any time. Nekko creates the app for you with two clicks on GitHub. Nothing is
 copied or pasted.
 
-In **Workflows > CI runners**, choose **Connect GitHub**:
+In **Scheduled Tasks > CI runners**, choose **Connect GitHub**:
 
-1. **Where do your repos live?** Pick your account or an org. The list comes from `gh` when it is
-   signed in; without it, type the name and say whether it is an org.
+1. **Where do your repos live?** Nekko checks GitHub first. When `gh` is signed in, pick your
+   account or an org from the list. Without it, Nekko goes straight to GitHub for your own
+   account with nothing to type; for an org, choose **Cancel**, then **For an org, type its name**.
 2. **Create.** Your browser opens GitHub with everything filled in. Click **Create**. If GitHub
    asks you to sign in first, it may then show an empty form: close it and choose
    **Open GitHub again**.
@@ -87,7 +115,9 @@ link.
 ## Set up this Mac
 
 Jobs need a VM image. The second step builds one here, with no terminal and nothing to paste. It
-needs macOS 27 and 110 GB free. The sheet shows what it will download, what it copies from this
+needs macOS 27 and 110 GB free: most of it is the VM itself (about 55 GB with Xcode and the
+simulator inside), the 26 GB macOS image is deleted once it is installed, and 25 GB stays free for
+you. The sheet shows what it will download, what it copies from this
 Mac and how much space it needs. Pick a [mode](#how-this-mac-helps) and choose
 **Download and set up**. If this Mac already has an image, only the mode is asked.
 
@@ -95,14 +125,16 @@ The build takes about 30 minutes plus the download, and runs by itself:
 
 1. **Check this Mac.** If it cannot go on, it says why before anything is downloaded, for example
    "Update this Mac to macOS 27 to set it up here."
-2. **Download macOS** from Apple.
-3. **Install macOS** into a new VM.
-4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator and Homebrew are added.
+2. **Download the macOS image** from Apple.
+3. **Install the macOS VM**: macOS goes into a new VM, not onto this Mac.
+4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator, Homebrew, `node`, `gh`
+   and `jq` are added (workflows run these before any setup step of theirs, as on GitHub's
+   hosted Macs).
    With no Xcode on this Mac the sheet offers **macOS only**; install Xcode for iOS jobs.
 5. **Lock the VM down.**
 6. **Test a boot.** Then the image goes in and the runner turns on in the mode you chose.
 
-You can close the sheet: the runner card shows the same stage and bar, and **Details** opens the
+Choose **Continue in the background** to close the sheet: the runner card shows the same stage and bar, and **Details** opens the
 sheet again. Quitting Nekko pauses the build, and **Resume setup** picks up where it left off. The
 build holds the Mac awake while it works, and pauses with its reason on screen when there is no free
 VM slot, memory is critical, the Mac is hot, the disk is too full, or, from the install on, the Mac
@@ -117,6 +149,23 @@ runner you connected while the build was running gets its mode then.
 **Rebuild image** in the runner's settings runs the same build, which is how macOS, Xcode and runner
 updates arrive. The runner keeps working on the old image until the new one passes its test boot,
 and keeps its mode and its on or off state.
+
+Nekko keeps the downloaded macOS image, so a rebuild skips the download while Apple's newest macOS
+is still the one you have. A newer macOS replaces it, and it is deleted first if a build needs the
+space.
+
+**Update scripts**, beside **Rebuild image**, is for an update to Nekko's own scripts inside the
+image. It copies the image, writes the new scripts in and test-boots the copy, in a few minutes. A new
+macOS or Xcode still needs **Rebuild image**.
+
+### Missing tools
+
+An image set up by an older Nekko may lack `node`, `gh` or `jq`, and a job that runs one
+before its own setup fails in seconds with `command not found`. The runner card then says, for
+example, "node and gh are missing from this Mac's runner image. Jobs that need them will fail."
+Choose **Install them**: Nekko copies the image, starts the copy once to install them with
+Homebrew, checks its disk for them and test-boots it: minutes, not a rebuild's half hour. The image in use keeps
+taking jobs until then, and the sheet shows the stages and any failure like setup does.
 
 ## Use an app you already have
 
@@ -148,7 +197,7 @@ list workflow runs and re-run a job. See GitHub's
 
 ### Connect this Mac
 
-In **Workflows > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
+In **Scheduled Tasks > CI runners**, choose **Connect GitHub**, then **Use an app I already have**. The
 sheet has three steps:
 
 1. **Install app.** Paste the App ID, the installation ID and the whole private key file. The key
@@ -203,17 +252,60 @@ Every branch you list there is trusted: a branch that collects other people's un
 (such as a batch branch built from open pull requests) lets anyone with write access run code on
 your Mac. The VM is the second layer: a job that gets in still only reaches the public internet.
 
+## Linux jobs
+
+Apple allows two macOS VMs per Mac, but no such limit applies to Linux. Jobs that don't need
+macOS (lint, unit tests, server builds, Docker-based tests) can run in Linux VMs on the same Mac,
+beside the macOS ones.
+
+1. Open the runner's settings and set **Linux slots** (0 to 4).
+2. Choose **Set up Linux image**. Nekko downloads Ubuntu 24.04 from Canonical (about 600 MB,
+   each file checked against Canonical's published SHA-256), installs the runner and Docker, and
+   test-boots it. It takes a few minutes and needs no Xcode. **Rebuild Linux image** later picks
+   up a newer Ubuntu.
+3. Point Linux jobs at it:
+
+```yaml
+jobs:
+  test:
+    runs-on: [self-hosted, Linux, ARM64]
+```
+
+Or use your label with `-linux` on the end (`nekko-cloud-mac-linux` for the default label). On
+GitLab the tag is `<your label>-linux`.
+
+Each Linux VM is Ubuntu 24.04 on ARM64 with Docker (so `services:` and `container:` work), git,
+build-essential, Python and the usual command-line tools. The `runner` user has passwordless
+`sudo`, as on GitHub's hosted Ubuntu runners, so `sudo apt-get install` works in a step. Like a
+macOS VM, it runs one job, then is deleted, and it reaches only the public internet.
+
+Things to know:
+
+- **ARM64 only.** Jobs that need x86_64 (`X64`) binaries or images stay on hosted runners. Most
+  tools and Docker images publish ARM64 builds.
+- **Booted on demand.** A Linux VM starts when a Linux job is queued and reaches its runner in
+  seconds, so none is kept ready.
+- **Memory comes after macOS.** Linux VMs use the same memory per VM and share the runner memory
+  with the macOS slots, which keep theirs first. When the budget is used up, the extra Linux slot
+  is greyed and says so.
+- **Other apps' VMs.** A Linux VM another app runs (Docker Desktop, for example) still counts
+  toward Apple's two macOS places, because Nekko cannot tell its kind from outside.
+
 ## How this Mac helps
 
 The mode decides when the runner may take a job. You choose it when you
 [set up this Mac](#set-up-this-mac) and can change it any time in the runner's settings.
 
-- **Do not disturb: Only run when I'm idle** (default). Only when you're away and plugged in.
-  Steps aside the moment you need the Mac.
-- **Balanced: in the background**. Takes jobs while you work if there's headroom. Keeps one VM
-  ready.
-- **Runner first**. For a docked Mac that mostly runs CI. All slots ready, jobs finish even when
-  you're busy.
+- **Balanced: in the background** (default, recommended). Takes jobs while you work if there's
+  headroom.
+- **Do not disturb: Only run when I'm idle**. Only when you're away and plugged in. Steps aside
+  the moment you need the Mac.
+- **Runner first**. For a docked Mac that mostly runs CI. Jobs finish even when you're busy.
+
+**VMs kept ready** (0, 1 or 2; default 1) is how many VMs stay booted and waiting, so a job starts
+at once instead of after a boot. Each holds its memory while it waits. Apple allows 2 macOS VMs per
+Mac, so 2 is the most, and it needs **macOS slots** at 2 (choosing 2 when you connect sets that for
+you). A ready VM still waits for the mode: with Do not disturb it boots only while you're away.
 
 ## Keep awake
 
@@ -237,7 +329,16 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **macOS slots**: 0, 1 or 2 VMs at once. Apple allows 2 per Mac, so 3 is not offered. If
   another app is running a macOS VM, or memory allows only one, the card greys the extra slot and
   says why.
-- **Memory per VM**: 4 to 64 GB.
+- **Linux slots**: 0 to 4 Linux VMs, with no Apple limit (see [Linux jobs](#linux-jobs)).
+- **Suggested size**: what size VM your jobs need, from what they used. A VM holds all its
+  memory from boot whether a job needs it or not, so a smaller fit leaves more for you, and a job
+  that swapped or kept every vCPU busy gets more. After 3 jobs at the current size, the row says
+  either **Fits your last N jobs** or suggests a size with the reason, and **Apply** saves it at
+  once for the next VM. It never goes over what this Mac can give each slot, and never cuts
+  below GitHub's standard hosted Mac (3 vCPUs, 7 GB). Each job's VM samples its own CPU and memory
+  every 5 seconds; the samples stay on this Mac and only their summary is kept, on the job's line
+  in `runners/audit.jsonl`.
+- **Memory per VM**: 4 to 64 GB, for macOS and Linux VMs alike.
 - **Total runner memory**: **Use the recommendation** (the sheet shows
   `Recommended: N GB for this Mac`), or your own figure from 4 GB up to 75% of the Mac's memory.
 - **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2.
@@ -246,8 +347,11 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **Only when**: **On power**, **Trusted networks**, **Never on hotspots**, and
   **Let jobs use the internet directly while a VPN is on**. Job traffic never goes through a VPN
   tunnel; with that switch off, the runner waits while a VPN carries all of the Mac's traffic.
+  With **On power** off, Balanced still takes jobs on battery only above 80% charge, Runner first
+  above 50%, and Do not disturb never. A charge the Mac can't read counts as too low.
 - **Trusted networks**: up to 32, recognised by the router's hardware address and listed as
-  `gw:...` ids. **Trust this network** adds the one this Mac is on, shown with a
+  `gw:...` ids. The address comes from macOS's own network state (`scutil`), then `arp`, which
+  sees nothing without Local Network permission. **Trust this network** adds the one this Mac is on, shown with a
   **This network** badge.
 - **Safety**: **Re-run jobs lost to sleep**.
 - **Max job time**: 30 min, 1 h, 2 h or 6 h (the runner accepts 10 minutes to 24 hours).
@@ -258,6 +362,31 @@ runner card's VM size reads "Unavailable".
 
 Not in this version: Linux slots, a schedule, a switch for fork pull requests and a build cache
 switch. Their stored values are kept as they are.
+
+## Get more out of one Mac
+
+Apple allows 2 macOS VMs per Mac, and each VM runs one job and is then deleted. So when your jobs
+are CPU-bound test suites, one bigger VM usually beats two small ones: set **macOS slots** to 1 and
+give that VM more **CPU per VM** and **Memory per VM**, then let the job run its tests in parallel
+inside it. Two small VMs suit many short jobs that each use little CPU.
+
+For Xcode tests, have the job split its test classes across several simulator clones, sized from
+the VM it landed in:
+
+```sh
+WORKERS=$(( $(sysctl -n hw.ncpu) / 2 ))   # about one simulator per 2 vCPUs
+[ "$WORKERS" -gt 4 ] && WORKERS=4          # and leave each one some memory (about 4 GB)
+xcodebuild test-without-building ... \
+  -parallel-testing-enabled YES -parallel-testing-worker-count "$WORKERS"
+```
+
+Parallel tests suit tests that keep their state inside the simulator. Keep serial the ones that
+share something outside it: a server or port on the host, a fixed file the job reads afterwards,
+or settings changed on the simulator from the job's script (each clone starts from the original
+simulator, not from those changes). Nekko Agent's own `ios-native.yml` splits its first-run suite
+this way and keeps its live journeys serial.
+
+Linux jobs will get their own Linux slots, which Apple's limit does not cover.
 
 ## Why a runner is waiting
 
@@ -284,6 +413,67 @@ A waiting runner card lists every reason it is not taking jobs:
 
 A newer version of the runner may add a reason this app does not know yet; it shows as
 "A condition is not met."
+
+## Jobs
+
+Below the Mac's facts, the runner card lists its jobs in three groups. A group with nothing in
+it is left out.
+
+**Queued** lists jobs waiting on GitHub for a runner with this runner's label, with how long each
+has waited. Each one offers:
+
+- **Accept now** starts a VM for that job right away, as if the runner were in **Runner first**,
+  even when your mode would hold it (for example Do not disturb while you type). The job then runs
+  to the end under Runner first's rules. The hard limits still apply (low memory, heat, low disk,
+  Low Power Mode and Apple's limit of 2 macOS VMs), and so do your own conditions under **Only
+  when** (on power, trusted networks, hotspots, VPN). When one of those blocks it, the button is
+  off and says why. GitHub hands the new VM whichever matching job is first in line, which is usually
+  the oldest. For a Linux job (when you have Linux slots), it starts a Linux VM instead.
+- **Decline** keeps this Mac from starting a VM for that job, so another runner or a hosted Mac
+  can take it. A VM this Mac already has waiting may still pick it up, because GitHub decides
+  which ready runner gets which job.
+- **Undo** takes back either.
+
+**In progress** shows each running job: **Working on** and the job, linked to its page on GitHub,
+how long it has run, and how far it has got, "Step 8 of 12: Build and test iOS · 58%", with a bar
+for that percent. The percent counts the job's finished steps; GitHub reports no finer progress,
+and GitLab reports no steps, so a GitLab job shows no bar. Each running job has:
+
+- **Live log**: what the VM prints, read again every few seconds: the runner starting, then the
+  output of each step as it runs (with secrets masked, as on GitHub). The step output needs an
+  image with the current scripts (**Update scripts** in runner settings).
+- **Re-run**: cancels the run and starts the job again once GitHub has finished cancelling it.
+- **Cancel**: cancels the run. GitHub can only cancel a whole workflow run, not one job, so both
+  ask first.
+
+## Completed jobs
+
+The **Completed** group lists the last five jobs, one line each: when it ended, the workflow and job,
+how it ended and how long it ran. **Job** opens the job on GitHub, and **PR #N** opens the pull
+request it ran for (GitHub names no pull request for a run from a fork, so those show none).
+**Re-run** runs that job again on GitHub.
+
+Click a line to see the VM step by step (started, online, running the job, stopped, deleted,
+each with its time), the end of the job's log, read from GitHub when you open it, and the VM's
+own log: what the VM printed while it started the runner, took the job and shut down. That last
+one is where to look when a job never reached GitHub. The logs only load for jobs this runner ran.
+
+The two logs have different sources:
+
+- **Job log** comes from GitHub and needs a match between the VM runner and its job. If no match
+  was found, open the workflow run in GitHub Actions to read its log there. Nekko searches a
+  bounded recent history, including earlier attempts; a busy history or delayed GitHub result
+  can still leave an unidentified job. Old unidentified entries are not backfilled.
+- **VM log** comes from inside the VM. Updating Nekko does not update an existing image's
+  guest scripts. Open runner settings and choose **Update scripts**, then wait for its test
+  boot to finish before checking a job in a newly started VM. This updates future VMs, not a VM
+  already running or a log lost when its VM was deleted. Empty output or a collection failure
+  can also leave no saved log; the message alone does not prove the image is old. This Mac
+  keeps the last 20 nonempty VM logs, up to 1 MB each.
+
+Runner settings **Save** shows **Saving runner settings…**, prevents edits and dismissal while
+saving, and closes with a confirmation after the service accepts the change. On failure, the
+sheet stays open with your edits and the service's error beside **Save**, so you can retry.
 
 ## The menu bar dot
 

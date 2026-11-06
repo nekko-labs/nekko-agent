@@ -2,8 +2,9 @@
 //!
 //! Started by the desktop app with `--config-stdin` and a JSON config as the
 //! first line of its stdin (see `config.rs`). Prints one line,
-//! `NEKKOD_READY {"port":N,"pid":P}`, once it is listening; everything else
-//! goes to stderr. Shuts down when its stdin closes or on SIGTERM, SIGHUP or
+//! `NEKKOD_READY {"port":N,"pid":P}`, once it is listening, and before that
+//! `NEKKOD_WAITING {"on":"keychain"|null}` while the OS keystore holds its
+//! startup up (`report_keychain_waits`); everything else goes to stderr. Shuts down when its stdin closes or on SIGTERM, SIGHUP or
 //! Ctrl-C, ending everything it started (`procgroup.rs`). One daemon per data
 //! directory (`datalock.rs`): a second exits with code 3.
 
@@ -24,6 +25,7 @@ mod claude_plan;
 mod claude_policy;
 mod cli_install;
 mod compaction;
+mod computers;
 mod config;
 mod connections;
 mod connectivity;
@@ -35,6 +37,7 @@ mod decisions;
 mod desktop;
 mod downloads;
 mod engine;
+mod federation;
 mod feedback;
 mod gcp;
 mod harness;
@@ -42,6 +45,7 @@ mod hub;
 mod hypergate;
 mod image_turns;
 mod installs;
+mod keys;
 mod library;
 mod local_relay;
 mod logs;
@@ -50,8 +54,10 @@ mod mcp;
 mod mdns;
 mod messaging;
 mod model_server;
+mod model_tunnel;
 mod native;
 mod oauth;
+mod pr_autowatch;
 mod pr_checkouts;
 mod privacy;
 mod procgroup;
@@ -76,6 +82,7 @@ mod skill_sources;
 mod small_services;
 mod spawn;
 mod speeds;
+mod subagents;
 mod telemetry;
 mod tooling;
 mod turns;
@@ -127,6 +134,7 @@ fn main() -> std::process::ExitCode {
     // held until main returns so the last lines are copied out.
     let _daemon_log = logs::start_daemon_log(&std::path::Path::new(&cfg.data_dir).join("logs"));
     logs::note(&format!("nekkod {} starting, pid {}", env!("CARGO_PKG_VERSION"), std::process::id()));
+    report_keychain_waits();
     procgroup::init();
     // Each job VM's NAT holds a socket per guest flow; 256 runs out.
     #[cfg(unix)]
@@ -184,7 +192,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         });
     }
     let settings = settings::Settings::new(data_dir.clone(), hub.clone());
-    let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone()));
+    let accounts = Arc::new(accounts::Accounts::new(data_dir.clone(), hub.clone(), settings.store.clone()));
     // Older builds signed in to Claude plans; delete what they left (claude_plan.rs).
     match claude_plan::migrate(&data_dir, &settings.store, nekko_oauth::now_ms()) {
         Ok(done) if !done.is_empty() => eprintln!(
@@ -209,6 +217,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let catalog = catalog::new(&settings, cfg.hugging_face_url.clone());
     let automation = Arc::new(automation::Automation::new(sessions.clone(), settings.clone(), hub.clone()));
     let remote = Arc::new(remote::Remote::new(data_dir.clone(), hub.clone()));
+    let computers = computers::Computers::new(data_dir.clone(), hub.clone());
     // Nekko Cloud sign-in and end-to-end encrypted sync. A chat a turn is
     // running in is never overwritten from the cloud; the turns are known
     // once the context below is built.
@@ -218,7 +227,12 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         let publish_hub = hub.clone();
         let busy = running.clone();
         nekko_cloud::Cloud::new(nekko_cloud::Options {
-            vault: nekko_cloud::vault::default_vault(&dir),
+            // Tests: a test run writes nothing to the login keychain (as computers.rs).
+            vault: if cfg!(debug_assertions) && std::env::var("NEKKO_FILE_VAULT").as_deref() == Ok("1") {
+                Box::new(nekko_cloud::vault::FileVault::new(dir.join("secrets.json")))
+            } else {
+                nekko_cloud::vault::default_vault(&dir)
+            },
             dir,
             api_url: feedback::cloud_url(),
             device_label: gethostname::gethostname().to_string_lossy().chars().take(40).collect(),
@@ -348,6 +362,8 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         workspace: Arc::new(workspace::Workspace::new(data_dir.clone(), cfg.github_api_url.as_deref())),
         automation: automation.clone(),
         remote: remote.clone(),
+        tunnel: Arc::default(),
+        computers: computers.clone(),
         security: Arc::new(security::Security::new(Some(remote.security_store()), nekko_remote::system_clock())),
         sandboxes,
         compactions,
@@ -433,6 +449,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }));
     }
     remote.start();
+    computers.start(ctx.clone());
     {
         // A chat's turn, approvals and answers go through the router, as the UI's do.
         let ctx = ctx.clone();
@@ -468,6 +485,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
 
     {
         let mut out = std::io::stdout().lock();
+        READY.store(true, std::sync::atomic::Ordering::SeqCst);
         writeln!(out, "NEKKOD_READY {}", serde_json::json!({ "port": port, "pid": std::process::id() }))?;
         out.flush()?;
     }
@@ -506,6 +524,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     #[cfg(unix)]
     after.runners.shutdown().await;
     remote.stop();
+    computers.stop();
     messaging.stop();
     engine.shutdown();
     // The servers this daemon started (Ollama) go down with it.
@@ -515,6 +534,45 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     mcp.stop_all();
     processes.kill_all();
     Ok(())
+}
+
+/// Set, under the stdout lock, just before the `NEKKOD_READY` line goes out.
+static READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// A keystore call this slow is waiting on the user (a consent dialog, a
+/// locked keychain), not on the keystore itself.
+const KEYCHAIN_WAIT: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Until the daemon is ready, tell the app that started it whenever startup is
+/// held up by the OS keystore: `NEKKOD_WAITING {"on":"keychain"}` when a call
+/// has waited [`KEYCHAIN_WAIT`], `NEKKOD_WAITING {"on":null}` once none is
+/// waiting. The app holds its ready timeout meanwhile (engine-process.ts), so
+/// a user still reading a Keychain dialog is not answered with a restart and
+/// the same dialog again.
+fn report_keychain_waits() {
+    use std::sync::atomic::Ordering;
+    std::thread::spawn(|| {
+        let mut waiting = false;
+        while !READY.load(Ordering::SeqCst) {
+            let now = nekko_vault::waits::longest().is_some_and(|d| d >= KEYCHAIN_WAIT);
+            if now != waiting {
+                let mut out = std::io::stdout().lock();
+                if READY.load(Ordering::SeqCst) {
+                    break;
+                }
+                let on = if now { serde_json::json!("keychain") } else { serde_json::Value::Null };
+                let _ = writeln!(out, "NEKKOD_WAITING {}", serde_json::json!({ "on": on }));
+                let _ = out.flush();
+                drop(out);
+                logs::note(if now {
+                    "nekkod: waiting for the keychain (a consent dialog or a locked keychain)"
+                } else {
+                    "nekkod: the keychain answered"
+                });
+                waiting = now;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    });
 }
 
 /// The signals that stop the daemon: Ctrl-C everywhere, SIGTERM and SIGHUP on Unix.

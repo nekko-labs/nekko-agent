@@ -1,6 +1,6 @@
 # Architecture
 
-Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted Local Web UI, Docker and the phone. This page is a map of the code for contributors. The full technical plan, with every decision and task, is in [`TASKS.md`](../../TASKS.md); what the product does and why is in [`spec/`](../../spec/README.md), one file per feature.
+Nekko Agent is one engine and one React UI that run in several places: the desktop app, the self-hosted Local Web UI, Docker and the phone. This page is a map of the code for contributors. The full technical plan is in [`TASKS.md`](../../TASKS.md), and the task list is the GitHub issues; what the product does and why is in [`spec/`](../../spec/README.md), one file per feature.
 
 ## The big picture
 
@@ -25,6 +25,8 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
 
 ## Desktop lifetime and notifications
 
+On first launch, the desktop waits for the engine's full startup allowance before failing queued settings requests. A macOS Keychain consent dialog pauses that wait; answering it gives startup its full allowance again. A missing or unlaunchable service still reports its specific error immediately. If startup remains stuck, use **Restart Nekko service** in the tray menu.
+
 Closing the UI already hides it to the tray without stopping the engine. Explicit Quit shuts down the service and managed processes; Stop Nekko service stops the engine without quitting the UI. Neither arrangement promises continued work during OS sleep, shutdown or logout.
 
 The 2026-10-13 implementation moves Electron native notifications into main (`apps/desktop/src/main/notifications.ts`), with a direct authenticated engine WebSocket subscription, fresh settings reads per eligible notice, reconnect/backoff and disposal on Quit. Main creates native notices; click delivery uses an encoded session deep link to restore the window and select the chat. Renderer notifications remain for browser editions only, avoiding duplicate Electron delivery. Settings exposes the default-on toggle in its standalone Notifications section.
@@ -44,6 +46,7 @@ Status: implemented, unit and isolated fixture interaction tested; image/motion 
 | `apps/cli` | The `nekko-agent` CLI and MCP server. |
 | `apps/ios`, `apps/android` | Native SwiftUI iOS and Kotlin/Jetpack Compose Android phone apps. |
 | `apps/relay-server` | The relay that pairs a phone with a computer. It only ever sees encrypted frames. |
+| `apps/artifact-server` | Nekko Artifacts: publishes an artifact at a shareable URL, served from an origin isolated from the app. Self-hostable; Nekko Cloud will run the same server. |
 | `apps/nekko-agent-api` | Nekko Cloud's API: signups, accounts, encrypted sync. The only part of the project that needs a database. |
 | `apps/website` | nekkoagent.com, including these docs. |
 | `crates/nekkod` | The engine daemon. |
@@ -71,6 +74,7 @@ Nekko Agent is local-first. Everything you can run yourself works without a data
 | --- | --- | --- |
 | Desktop app, Local Web UI, Docker | Files in the local data directory (one JSON file per chat, written to a temp name and renamed into place) | No |
 | Relay (`apps/relay-server`) | None: it routes encrypted frames and keeps nothing | No |
+| Artifacts server (`apps/artifact-server`) | Published files and their metadata in a folder (`NEKKO_ARTIFACTS_DATA`) | No |
 | Nekko Cloud API (`apps/nekko-agent-api`) | Postgres via `DATABASE_URL` | Yes |
 
 ### The cloud database
@@ -90,4 +94,4 @@ Nekko Agent is local-first. Everything you can run yourself works without a data
 
 - Engine behaviour goes in a Rust crate under `crates/`, so it can be tested without Electron.
 - The desktop app only wires the engine to the window, the file system and the shell.
-- A change to what the product does also updates its file under `spec/` (and `node scripts/spec-index.mjs` for a new one); a change to how it is built updates `TASKS.md`.
+- A change to what the product does also updates its file under `spec/`; a change to the technical plan (stack, architecture, conventions, constraints) updates `TASKS.md`. Task notes go in the change's GitHub issue.

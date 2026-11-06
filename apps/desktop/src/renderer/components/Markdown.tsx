@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { verificationPairs, type EvidencePair } from '../verificationEvidence.js';
+import { VerificationEvidence } from './VerificationEvidence.js';
 import { LocalImageCard } from './LocalImageCard.js';
 import { localImagePath } from '../localImages.js';
 import { fileUrlPath } from '../chatArtifacts.js';
@@ -7,7 +9,10 @@ import { RemoteImageCard, RemoteImageGallery } from './RemoteImageCard.js';
 import { MermaidDiagram } from './ArtifactPreview.js';
 
 import { ContextAction, ContextMenu } from './ContextMenu.js';
+import { isPrUrl, PrLinkChip } from './PrLinkChip.js';
 import { useStore } from '../store.js';
+import { BranchIcon, CompassIcon, ListIcon, QuestionIcon, TerminalIcon } from '../icons.js';
+import { endsOnUnlabelledQuestion, topicLine, type Topic } from '../replyTopics.js';
 
 
 /**
@@ -40,9 +45,9 @@ export const MarkdownSession = React.createContext<string | undefined>(undefined
 
 export const MarkdownSandbox = React.createContext(false);
 
-export function Markdown({ text, doc = false, basePath }: MarkdownProps) {
+export function Markdown({ text, doc = false, basePath, topics, askTail }: MarkdownProps) {
   if (doc) return <DocMarkdown text={text} basePath={basePath} />;
-  return <ChatMarkdown text={text} basePath={basePath} />;
+  return <ChatMarkdown text={text} basePath={basePath} topics={topics} askTail={askTail} />;
 }
 
 /** A document is parsed whole: it is read, not streamed, and its HTML stripping works line by line. */
@@ -51,18 +56,39 @@ function DocMarkdown({ text, basePath }: { text: string; basePath?: string }) {
   return <div className="md-doc text-sm leading-[1.6]">{blocks}</div>;
 }
 
-function ChatMarkdown({ text, basePath }: { text: string; basePath?: string }) {
-  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath }), [basePath]);
+function ChatMarkdown({ text, basePath, topics, askTail }: { text: string; basePath?: string; topics?: boolean; askTail?: boolean }) {
+  const ctx = React.useMemo<Ctx>(() => ({ doc: false, basePath, topics, evidence: topics ? verificationPairs(text, basePath) : [] }), [basePath, topics, text]);
   const segments = markdownSegments(text);
+  // A closing question gets the header the model did not write.
+  const question = askTail && endsOnUnlabelledQuestion(text) ? segments.filter((s) => s.kind === 'text').at(-1) : undefined;
   return (
     <div className="space-y-1 text-sm leading-[1.6]">
       {segments.map((s) =>
         s.kind === 'code'
           ? <MemoCodeBlock key={s.key} lang={s.lang} code={s.code} />
-          : <TextSegment key={s.key} src={s.src} blockKey={s.key} ctx={ctx} />,
+          : (
+            <React.Fragment key={s.key}>
+              {s === question && <TopicHeader topic="question" label="Question" />}
+              <TextSegment src={s.src} blockKey={s.key} ctx={ctx} />
+            </React.Fragment>
+          ),
       )}
     </div>
   );
+}
+
+const TOPIC_ICONS: Record<Topic, (p: { className?: string }) => React.ReactElement> = {
+  question: QuestionIcon,
+  next: CompassIcon,
+  command: TerminalIcon,
+  decision: BranchIcon,
+  summary: ListIcon,
+};
+
+/** A named topic of an agent's message, drawn as a header (replyTopics.ts). */
+function TopicHeader({ topic, label }: { topic: Topic; label: string }) {
+  const Icon = TOPIC_ICONS[topic];
+  return <div className="md-topic" data-topic={topic} role="heading" aria-level={3} dir="auto"><Icon className="h-3.5 w-3.5 shrink-0" />{label}</div>;
 }
 
 /** One run of non-code blocks, re-parsed only when its own source changes. */
@@ -141,12 +167,18 @@ export interface MarkdownProps {
    * with the OS. Omitted for chat text, which has no home directory.
    */
   basePath?: string;
+  /** Draw the topics an agent's message names as headers (replyTopics.ts). */
+  topics?: boolean;
+  /** Give a closing question a header when the message did not. For settled text: a stream ends on one in passing. */
+  askTail?: boolean;
 }
 
 /** Rendering options threaded through the block/inline walk. */
 export interface Ctx {
   doc: boolean;
   basePath?: string;
+  topics?: boolean;
+  evidence?: EvidencePair[];
 }
 
 function CodeBlock({ lang, code }: { lang: string; code: string }) {
@@ -306,6 +338,16 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
 
     if (!line.trim()) { i += 1; continue; }
 
+    const topic = ctx.topics ? topicLine(line) : null;
+    if (topic) {
+      out.push(<TopicHeader key={`${key}-topic${i}`} topic={topic.topic} label={topic.label} />);
+      if (topic.topic === 'next' && ctx.evidence?.length) out.push(<VerificationEvidence key={`${key}-evidence${i}`} pairs={ctx.evidence} basePath={ctx.basePath} panel />);
+      // The words after a label are the section's first line.
+      if (topic.rest) lines[i] = topic.rest;
+      else i += 1;
+      continue;
+    }
+
     // Pipe table: a header row, a |---|---| divider, then body rows.
     if (line.trim().startsWith('|') && TABLE_DIVIDER_RE.test(lines[i + 1] ?? '')) {
       const header = tableCells(line);
@@ -409,6 +451,12 @@ function renderBlocks(src: string, key: string, ctx: Ctx): React.ReactNode[] {
     const para: string[] = [line];
     let j = i + 1;
     while (j < lines.length && !startsBlock(lines[j])) { para.push(lines[j]); j += 1; }
+    const paired = ctx.topics && para.every(l => IMAGE_ONLY_RE.test(l)) ? verificationPairs(para.join('\n'), ctx.basePath) : [];
+    if (paired.length && para.join('').match(/!\[/g)?.length === paired.length * 2) {
+      out.push(<VerificationEvidence key={key + '-comparison' + i} pairs={paired} basePath={ctx.basePath} />);
+      i = j;
+      continue;
+    }
     const gallery = remoteGallery(para);
     if (gallery) {
       out.push(<div key={`${key}-g${i}`}><RemoteImageGallery images={gallery} /></div>);
@@ -482,9 +530,9 @@ function inline(s: string, ctx: Ctx): React.ReactNode {
         </code>,
       );
     } else if (linkText !== undefined) {
-      nodes.push(<Ref key={key++} href={linkHref} basePath={ctx.basePath}>{linkText}</Ref>);
+      nodes.push(<Ref key={key++} href={linkHref} basePath={ctx.basePath} doc={ctx.doc}>{linkText}</Ref>);
     } else if (bareUrl !== undefined) {
-      nodes.push(<Link key={key++} href={bareUrl}>{bareUrl}</Link>);
+      nodes.push(<Link key={key++} href={bareUrl} doc={ctx.doc}>{bareUrl}</Link>);
     }
     last = m.index + m[0].length;
   }
@@ -512,20 +560,21 @@ function resolveRef(basePath: string, target: string): string {
  * `#section`) only becomes clickable when we know the document's folder,
  * otherwise it reads as plain emphasis instead of a dead link.
  */
-function Ref({ href: raw, basePath, children }: { href: string; basePath?: string; children: React.ReactNode }) {
+function Ref({ href: raw, basePath, doc, children }: { href: string; basePath?: string; doc?: boolean; children: React.ReactNode }) {
   const sessionId = React.useContext(MarkdownSession);
   // A `file://` URL names a local file like an absolute path does.
   const href = fileUrlPath(raw) ?? raw;
   const sandbox = React.useContext(MarkdownSandbox);
   if (sandbox && !/^https?:\/\//i.test(href)) return <span title="Host file previews are unavailable in Sandbox">{children} (preview unavailable)</span>;
-  if (/^https?:\/\//i.test(href)) return <Link href={href}>{children}</Link>;
+  if (/^https?:\/\//i.test(href)) return <Link href={href} doc={doc}>{children}</Link>;
   if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^[a-z]:[\\/]/i.test(href)) return <span>{children}</span>;
   if (href.startsWith('//') || href.startsWith('\\\\')) return <span>{children}</span>;
   if (href.startsWith('#') || (!basePath && !/^(?:[A-Za-z]:[\\/]|\/)/.test(href))) return <span className="text-ink-soft">{children}</span>;
   const target = basePath ? resolveRef(basePath, href) : href;
   return (
     <button
-      className="wrap-break-word underline"
+      type="button"
+      className="wrap-break-word cursor-pointer underline"
       style={{ color: 'var(--accent)' }}
       title={`Open ${target}`}
       onClick={() => { useStore.getState().openFilePane(target, sessionId); }}
@@ -596,22 +645,37 @@ export function linkContextActions(href: string): Array<{ label: string; run: ()
   return actions;
 }
 
-function Link({ href, children }: { href: string; children: React.ReactNode }) {
+function Link({ href, doc, children }: { href: string; doc?: boolean; children: React.ReactNode }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [preview, setPreview] = useState(false);
   const safe = safeHref(href);
   if (!safe) return <span className="wrap-break-word text-ink-soft" title={href}>{children}</span>;
+  const web = /^https?:\/\//i.test(safe);
+  const openMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+  const menuNode = menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+    {linkContextActions(safe).map((action) => <ContextAction key={action.label} onClick={() => { setMenu(null); action.run(); }}>{action.label}</ContextAction>)}
+  </ContextMenu>;
+  // A PR reads as its live state, so it needs no site preview.
+  if (web && !doc && isPrUrl(safe)) return <><PrLinkChip href={safe} label={children === href ? undefined : children} onContextMenu={openMenu} />{menuNode}</>;
   return (
     <>
-      <a href={safe} target="_blank" rel="noreferrer" className="wrap-break-word underline" style={{ color: 'var(--accent)' }} onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setMenu({ x: e.clientX, y: e.clientY });
-      }}>
+      <a href={safe} target="_blank" rel="noreferrer" className="wrap-break-word cursor-pointer underline" style={{ color: 'var(--accent)' }} onContextMenu={openMenu}>
         {children}
       </a>
-      {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-        {linkContextActions(safe).map((action) => <ContextAction key={action.label} onClick={() => { setMenu(null); action.run(); }}>{action.label}</ContextAction>)}
-      </ContextMenu>}
+      {web && !doc && <button type="button" className="ml-1 rounded border border-line px-1.5 py-0.5 text-2xs text-ink-soft hover:text-ink focus-visible:outline focus-visible:outline-accent" aria-expanded={preview} onClick={() => setPreview(!preview)}>{preview ? 'Close preview' : 'Preview'}</button>}
+      {web && !doc && preview && <span className="my-2 block overflow-hidden rounded-lg border border-line" style={{ background: 'var(--surface-2)' }}>
+        <span className="flex items-center justify-between gap-2 border-b border-line px-2 py-1 text-xs text-ink-soft">
+          <span className="min-w-0 truncate">Live site · {new URL(safe).host}</span>
+          <button type="button" className="shrink-0 underline hover:text-ink" onClick={() => useStore.getState().openBrowserPane(safe)}>Open in browser pane</button>
+        </span>
+        <iframe src={safe} title={`Preview of ${safe}`} className="block h-64 w-full bg-white" sandbox="allow-scripts allow-forms" referrerPolicy="no-referrer" />
+        <span className="block px-2 py-1 text-2xs text-ink-faint">Some sites block embedded previews. Open in browser pane if this stays blank.</span>
+      </span>}
+      {menuNode}
     </>
   );
 }

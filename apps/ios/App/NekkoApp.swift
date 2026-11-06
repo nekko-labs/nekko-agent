@@ -4,6 +4,7 @@ import UIKit
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        guard !NativeFixtureRoute.isolated else { return true }
         OutboxRefresh.register()
         // The folding-phone layout's hinge (none on today's iPhones; faked in the UI tests).
         Hinge.install()
@@ -11,6 +12,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        guard !NativeFixtureRoute.isolated else { return }
         MainActor.assumeIsolated { AppModel.shared.didRegister(deviceToken: deviceToken) }
     }
 
@@ -23,9 +25,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// elsewhere: remove that chat's needs-you notification (IO-30).
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async
         -> UIBackgroundFetchResult {
-        guard let tag = userInfo["dismiss"] as? String else { return .noData }
-        await Notifier.dismissNeedsYou(tag: tag)
-        return .newData
+        guard !NativeFixtureRoute.isolated else { return .noData }
+        let info = NativeNotificationInfo(userInfo)
+        await AppModel.shared.receivedRemoteNotification(info)
+        return info.dismiss == nil ? .noData : .newData
     }
 
     /// Only so the Home Screen quick action reaches the app (QuickActionScene).
@@ -52,7 +55,7 @@ enum QuickAction {
 
     @discardableResult
     static func perform(_ type: String) -> Bool {
-        guard let url = url(for: type) else { return false }
+        guard !NativeFixtureRoute.isolated, let url = url(for: type) else { return false }
         MainActor.assumeIsolated { AppModel.shared.handle(url: url) }
         return true
     }
@@ -69,6 +72,38 @@ final class QuickActionScene: NSObject, UIWindowSceneDelegate {
 @MainActor
 struct NekkoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+
+    var body: some Scene {
+        WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-uiTestSystemAttentionNotifications") {
+                SystemAttentionNotificationsFixture()
+            } else if ProcessInfo.processInfo.arguments.contains("-uiTestAttentionNotifications") {
+                AttentionNotificationsFixture()
+            } else { NativeAppContent() }
+            #else
+            NativeAppContent()
+            #endif
+        }
+    }
+}
+
+/// Debug routes which must not start real transports or lifecycle work.
+enum NativeFixtureRoute {
+    static var isolated: Bool {
+        #if DEBUG
+        let flags = ["-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
+                     "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
+                     "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications"]
+        return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
+        #else
+        return false
+        #endif
+    }
+}
+
+@MainActor
+private struct NativeAppContent: View {
     @Environment(\.scenePhase) private var phase
     @State private var app = AppModel.shared
     /// The opening animation: in full at launch (once past the app lock), its dissolve on every return to the app.
@@ -76,15 +111,22 @@ struct NekkoApp: App {
     /// Each showing of the animation, so a finished one never clears a newer one.
     @State private var splashRun = 0
     /// UI tests turn it off (`-splash NO`, or a `-uiTestReset` run).
-    private static let splashOn = UserDefaults.standard.object(forKey: "splash") as? Bool
-        ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset")
+    private static let splashOn = !NativeFixtureRoute.isolated && (UserDefaults.standard.object(forKey: "splash") as? Bool
+        ?? !ProcessInfo.processInfo.arguments.contains("-uiTestReset"))
 
     private var spooky: Bool { Prefs.preset(app.prefs.theme, computer: app.store.appearance)?.isSpooky == true }
 
     /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") { PhoneComposerFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") { PhoneParityFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {
+            PhotoPreviewFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
+            ChatRefreshFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
             NewChatFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestMarkdownLab") {
             MarkdownLab()
@@ -92,39 +134,49 @@ struct NekkoApp: App {
             ChatStatusFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") {
             PurposeGroupsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") {
+            ReplyVoicesFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") {
+            TurnDetailsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") {
+            ModelTabsFixture()
         } else { RootView() }
         #else
         RootView()
         #endif
     }
 
-    var body: some Scene {
-        WindowGroup {
-            root
-                .environment(app)
-                .environment(app.store)
-                .environment(app.cloud)
-                .environment(app.prefs)
-                .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
-                .onOpenURL { app.handle(url: $0) }
-                .task {
-                    #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") { return }
-                    #endif
-                    app.start()
-                }
-                .overlay {
-                    if let kind = splash {
-                        let run = splashRun
-                        SplashView(kind: kind, ready: phase == .active && !(app.prefs.appLock && app.lock.locked)) {
-                            if splashRun == run { splash = nil }
-                        }
-                        .id(run)
+    var body: some View {
+        root
+            .environment(app)
+            .environment(app.store)
+            .environment(app.cloud)
+            .environment(app.phone)
+            .environment(app.connectors)
+            .environment(app.prefs)
+            .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
+            .onOpenURL { app.handle(url: $0) }
+            .task {
+                guard !NativeFixtureRoute.isolated else { return }
+                #if DEBUG
+                // These fixtures skip the transports but keep the rest of the lifecycle, as on main.
+                if ["-uiTestVoiceConversation", "-uiTestPhoneParity", "-uiTestPhoneComposer", "-uiTestPhotoPreviews"]
+                    .contains(where: ProcessInfo.processInfo.arguments.contains) { return }
+                #endif
+                app.start()
+            }
+            .overlay {
+                if let kind = splash {
+                    let run = splashRun
+                    SplashView(kind: kind, ready: phase == .active && !(app.prefs.appLock && app.lock.locked)) {
+                        if splashRun == run { splash = nil }
                     }
+                    .id(run)
                 }
-                .task(id: spooky) { SpookyIcon.sync(spooky: spooky) }
-        }
+            }
+            .task(id: spooky) { if !NativeFixtureRoute.isolated { SpookyIcon.sync(spooky: spooky) } }
         .onChange(of: phase) { _, p in
+            guard !NativeFixtureRoute.isolated else { return }
             switch p {
             case .active:
                 app.didBecomeActive()

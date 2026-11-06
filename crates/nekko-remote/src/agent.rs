@@ -1,5 +1,8 @@
-//! The relay agent's protocol (`packages/host/src/relay.ts`), without any I/O:
-//! relay frames and host events in, the exact frames to send the relay out.
+//! The Rust relay agent's protocol, without any I/O: relay frames and daemon
+//! events in, the exact frames to send the relay out. Historical TS golden
+//! fixtures cover the legacy controls, including phase-based dismissals. The
+//! production socket holds those dismissals until a complete pending snapshot
+//! confirms no input remains. Core-only goldens do not model that I/O boundary.
 //!
 //! Relay v2 (see `packages/shared/src/remote.ts`):
 //!
@@ -8,8 +11,12 @@
 //! relay -> agent : { type:'c', cid, data }        (data = the client's raw frame)
 //! agent -> relay : { type:'d', cid, data }        (unicast to one client)
 //! agent -> relay : { type:'kick', cid }           (relay closes that client)
+//! agent -> relay : { type:'welcomed', cid, deviceId } (sent before the sealed welcome;
+//!                  only this may register for pushes, which the relay can't read)
 //! agent -> relay : { type:'notify', kind, tag?, deviceId?, title, body } (content-free push trigger)
 //! agent -> relay : { type:'dismiss', tag }        (a needs-you push was handled)
+//! agent -> relay : { type:'attention-snapshot', tags } (complete pending-chat set)
+//! agent -> relay : { type:'attention-unknown' }    (withdraw completeness)
 //! agent -> relay : { type:'push-remove', deviceId }
 //! agent -> relay : { type:'activity', tag, phase, callId?, severity? } (content-free Live Activity update)
 //! agent -> relay : { type:'card' | 'card-start', state } (the iPhone's one Live Activity card, `card.rs`)
@@ -17,23 +24,28 @@
 //!
 //! A client's `data` is `{"enc": seal(frame)}`. Nothing is dispatched for a
 //! connection until its sealed HELLO was welcomed; replies are unicast and
-//! events go only to welcomed connections, one seal per event.
+//! events go only to welcomed connections, sealed for each.
 //!
-//! Replay protection (phone protocol 4, `relay-handshake.json`): when the
-//! relay announces a connection the agent seals it a fresh random
-//! `{type:'challenge', challenge}`. A HELLO that declares protocol 4 or later
-//! must carry that challenge, which is used once: a wrong or missing one is
-//! dropped and the connection is challenged again. Every request on a
-//! connection welcomed that way carries the same challenge and a `seq` that
-//! only goes up; anything else is dropped and the connection is sent back to
-//! the handshake. A HELLO from an older phone (no or a lower `protocol`) is
-//! legacy: whether it is accepted is the verifier's decision (`acceptLegacyPhones`
-//! in remote.json, on by default for one release), and its requests carry no
-//! counter. Relay frames that announce connections are capped: at most
-//! `MAX_UNWELCOMED` connections wait for a HELLO, the oldest is forgotten first.
+//! The handshake (phone protocol 6, decision 0041, `relay-handshake.json`):
+//! when the relay announces a connection the agent makes a one-use P-256 key
+//! and sends `{type:'challenge', challenge, eph, sig}` under the room key,
+//! `sig` being its host key's signature ([`hello::host_text`]). A device checks
+//! that against the host key pinned from its pairing link, makes its own
+//! one-use key and answers `{eph, enc}`: its half of the exchange beside the
+//! HELLO sealed under the key the two derive. Only the two ends can derive it,
+//! so holding the room secret, as every device ever paired did, buys nothing.
+//! The HELLO answers the challenge once and is signed with the device key over
+//! both ephemeral keys. Every frame after it is sealed under that key.
+//!
+//! Every request on a welcomed connection carries the challenge and a `seq`
+//! that only goes up; anything else is dropped and the connection is sent back
+//! to the handshake. A HELLO under the room key is an older app: refused with
+//! `update-required`. Relay frames that announce connections are capped: at
+//! most `MAX_UNWELCOMED` connections wait for a HELLO, the oldest is forgotten
+//! first.
 
 use crate::card::{CARD_CHANNEL, Cards, REFERENCE_DATE};
-use crate::e2e::{self, Key};
+use crate::e2e::{self, Ephemeral, Key};
 use crate::phone_terminal::{Coalescer, PhoneTerminals, data_event};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -88,10 +100,6 @@ pub enum Out {
     },
 }
 
-/// The first phone protocol version whose HELLO must answer the agent's
-/// challenge and whose requests carry `seq` (relay replay protection).
-pub const CHALLENGE_PROTOCOL: u64 = 4;
-
 /// The most connections kept waiting for a HELLO; past it the oldest is forgotten.
 pub const MAX_UNWELCOMED: usize = 64;
 
@@ -107,15 +115,27 @@ struct Conn {
     device: Option<String>,
     /// The challenge sent and not yet answered (single use).
     challenge: Option<String>,
+    /// This connection's half of the key exchange, until a HELLO uses it.
+    ephemeral: Option<Ephemeral>,
+    /// The key this connection and its device derived, once welcomed.
+    session: Option<Key>,
     /// The challenge the welcomed HELLO answered: every request carries it.
-    /// `None` on a welcomed connection means a legacy phone.
     bound: Option<String>,
     /// The highest `seq` accepted on this connection.
     seq: u64,
+    /// The owner's Read switch: without it a connection gets no events.
+    reads: bool,
+}
+
+/// Who this agent is: the room it serves and the key its devices pinned.
+pub struct Host {
+    pub room: String,
+    pub key: crate::client::SigningKey,
 }
 
 pub struct AgentCore {
     key: Key,
+    host: Host,
     iv: IvSource,
     /// Where challenges come from: the OS in production, scripted in tests.
     random: crate::hello::Random,
@@ -141,9 +161,10 @@ fn frame(v: Value) -> String {
 }
 
 impl AgentCore {
-    pub fn new(key: Key, iv: IvSource) -> Self {
+    pub fn new(key: Key, host: Host, iv: IvSource) -> Self {
         Self {
             key,
+            host,
             iv,
             random: crate::hello::os_random(),
             conns: HashMap::new(),
@@ -207,14 +228,24 @@ impl AgentCore {
         }
     }
 
-    fn seal(&mut self, value: &Value) -> String {
+    /// `value` to `cid` under `key`.
+    fn sealed(&mut self, key: &Key, cid: &str, value: &Value) -> String {
         let iv = (self.iv)();
-        frame(json!({ "enc": e2e::seal_with_iv(&self.key, value, iv) }))
+        let data = frame(json!({ "enc": e2e::seal_with_iv(key, value, iv) }));
+        frame(json!({ "type": "d", "cid": cid, "data": data }))
     }
 
-    fn send_to(&mut self, cid: &str, value: &Value) -> String {
-        let data = self.seal(value);
-        frame(json!({ "type": "d", "cid": cid, "data": data }))
+    /// `value` to a connection under its own key. `None` without one: nothing
+    /// but a challenge or a refusal to update ever goes out under the room key.
+    fn send_to(&mut self, cid: &str, value: &Value) -> Option<String> {
+        let key = self.conns.get(cid)?.session.clone()?;
+        Some(self.sealed(&key, cid, value))
+    }
+
+    /// Under the room key: a challenge, or telling an older app to update.
+    fn send_room(&mut self, cid: &str, value: &Value) -> String {
+        let key = self.key.clone();
+        self.sealed(&key, cid, value)
     }
 
     /// The connection `cid`, made (unwelcomed) if the relay never announced it.
@@ -246,18 +277,24 @@ impl AgentCore {
         self.conns.insert(cid.to_string(), Conn { order, ..Conn::default() });
     }
 
-    /// Seal `cid` a fresh challenge, replacing any it had: the connection
-    /// goes back to the handshake (`device` and `seq` cleared).
+    /// Send `cid` a fresh challenge signed with the host key, replacing any it
+    /// had: the connection goes back to the handshake and loses its key.
     fn challenge(&mut self, cid: &str) -> String {
         let mut bytes = [0u8; CHALLENGE_BYTES];
         (self.random)(&mut bytes);
         let nonce = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes);
+        let ephemeral = Ephemeral::new(&self.random);
+        let text = crate::hello::host_text(&self.host.room, &nonce, &ephemeral.public);
+        let sig = crate::proof::sign(&self.host.key, &text);
+        let eph = ephemeral.public.clone();
         let conn = self.conn(cid);
         conn.device = None;
         conn.bound = None;
         conn.seq = 0;
+        conn.session = None;
+        conn.ephemeral = Some(ephemeral);
         conn.challenge = Some(nonce.clone());
-        self.send_to(cid, &json!({ "type": "challenge", "challenge": nonce }))
+        self.send_room(cid, &json!({ "type": "challenge", "challenge": nonce, "eph": eph, "sig": sig }))
     }
 
     /// Welcomed connections' cids, in the order the relay announced them.
@@ -265,6 +302,11 @@ impl AgentCore {
         let mut list: Vec<(&String, &Conn)> = self.conns.iter().filter(|(_, c)| c.device.is_some()).collect();
         list.sort_by_key(|(_, c)| c.order);
         list.into_iter().map(|(cid, _)| cid.clone()).collect()
+    }
+
+    /// Welcomed connections allowed to read, for events.
+    fn readers(&self) -> Vec<String> {
+        self.welcomed().into_iter().filter(|cid| self.conns[cid].reads).collect()
     }
 
     /// The relay socket closed: every connection is gone with it.
@@ -311,90 +353,121 @@ impl AgentCore {
         let Some(enc) = envelope.get("enc").filter(|e| nekko_js::truthy(Some(e))).and_then(Value::as_str) else {
             return Vec::new();
         };
-        let Some(Value::Object(f)) = e2e::open(&self.key, enc) else { return Vec::new() }; // wrong key / tampered
-        self.conn(cid);
-        match f.get("type").and_then(Value::as_str) {
-            Some("hello") => {
-                // The challenge is used once, whatever this HELLO says.
-                let issued = self.conn(cid).challenge.take();
-                let strict = hello_protocol(&f) >= CHALLENGE_PROTOCOL;
-                if strict {
-                    let answered = f.get("challenge").and_then(Value::as_str);
-                    if issued.is_none() || answered != issued.as_deref() {
-                        // A replayed or stale HELLO: never verified. A real
-                        // phone answers the new challenge.
-                        return vec![Out::Send(self.challenge(cid))];
-                    }
+        if let Some(theirs) = envelope.get("eph").and_then(Value::as_str) {
+            return self.on_hello(cid, theirs, enc, verify);
+        }
+        if let Some(key) = self.conns.get(cid).and_then(|c| c.session.clone()) {
+            return match e2e::open(&key, enc) {
+                Some(Value::Object(f)) if f.get("type").and_then(Value::as_str) == Some("req") => {
+                    self.on_request(cid, &f)
                 }
-                let mut reply = verify(&Value::Object(f));
-                let welcomed = reply.get("type").and_then(Value::as_str) == Some("welcome");
-                if welcomed {
-                    let conn = self.conn(cid);
-                    conn.device = reply.pointer("/device/id").map(nekko_js::display);
-                    conn.bound = if strict { issued } else { None };
-                    conn.seq = 0;
-                    // The phone compares this with its own and says which side to update.
-                    if let Some(o) = reply.as_object_mut() {
-                        o.insert("protocol".into(), json!(crate::hello::PROTOCOL_VERSION));
-                    }
-                }
-                let mut out = vec![Out::Send(self.send_to(cid, &reply))];
-                if !welcomed {
-                    out.push(Out::Send(frame(json!({ "type": "kick", "cid": cid }))));
-                }
-                out
-            }
-            Some("req") => {
-                let id = f.get("id").cloned();
-                if self.conn(cid).device.is_none() {
-                    // No completed handshake: never dispatch. Tell the client why.
-                    let res = res(id, Err("not paired (send hello first)".into()));
-                    return vec![Out::Send(self.send_to(cid, &res))];
-                }
-                if !self.in_order(cid, &f) {
-                    // Replayed, reordered or from another connection: dropped
-                    // unanswered, and the connection goes back to the handshake.
-                    return vec![Out::Send(self.challenge(cid))];
-                }
-                if f.get("channel").and_then(Value::as_str) == Some(CARD_CHANNEL) {
-                    // The phone's card level, focus or dismissal: answered here, never by the host.
-                    let device = self.conn(cid).device.clone().unwrap_or_default();
-                    let now = (self.clock)();
-                    let args = f.get("args").cloned().unwrap_or(Value::Null);
-                    let mut out: Vec<Out> =
-                        self.cards.set(&device, &args, now).into_iter().map(|v| Out::Send(frame(v))).collect();
-                    out.push(Out::Send(self.reply(cid, id, Ok(json!({ "ok": true })))));
-                    return out;
-                }
-                if f.get("channel").and_then(Value::as_str) == Some(PUSH_TEST_CHANNEL) {
-                    // *Send a test notification*: the relay pushes to this phone only.
-                    let device = self.conn(cid).device.clone();
-                    let notify = frame(notify_frame("test", None, device.as_deref(), None));
-                    return vec![Out::Send(notify), Out::Send(self.reply(cid, id, Ok(json!({ "ok": true }))))];
-                }
-                let channel = f.get("channel").map_or_else(|| "undefined".to_string(), nekko_js::display);
-                let args = match f.get("args") {
-                    None | Some(Value::Null) => json!([]),
-                    Some(a) => a.clone(),
-                };
-                // Welcomed above, so the connection has its device.
-                let device_id = self.conn(cid).device.clone().unwrap_or_default();
-                let proof = f.get("proof").filter(|p| !p.is_null()).cloned();
-                let step_up = f.get("stepUp").filter(|p| !p.is_null()).cloned();
-                self.cards.phone_call(&channel, &args, (self.clock)());
-                vec![Out::Dispatch { cid: cid.to_string(), id, device_id, channel, args, proof, step_up }]
-            }
+                _ => Vec::new(), // wrong key / tampered
+            };
+        }
+        match e2e::open(&self.key, enc) {
+            Some(Value::Object(f)) if f.get("type").and_then(Value::as_str) == Some("hello") => self.older_app(cid),
             _ => Vec::new(),
         }
     }
 
-    /// Whether a request on a welcomed connection is the next one: on a
-    /// connection that answered a challenge it carries that challenge and a
-    /// `seq` above every one before it (accepted and remembered). A legacy
-    /// connection's requests carry no counter.
+    /// A HELLO with the key exchange: answers the challenge, once, and is
+    /// signed for this exchange. Whatever it says, the reply goes under the key
+    /// only its sender can have derived.
+    fn on_hello(&mut self, cid: &str, theirs: &str, enc: &str, verify: &dyn Fn(&Value) -> Value) -> Vec<Out> {
+        let Some(conn) = self.conns.get(cid) else { return Vec::new() };
+        let (Some(ours), Some(issued)) = (conn.ephemeral.as_ref(), conn.challenge.as_deref()) else {
+            return vec![Out::Send(self.challenge(cid))];
+        };
+        let info = crate::hello::session_info(&self.host.room, issued, &ours.public, theirs);
+        let Some(key) = ours.session_key(theirs, &info) else { return Vec::new() };
+        // Not this connection's exchange: the challenge stands for the real one.
+        let Some(Value::Object(mut f)) = e2e::open(&key, enc) else { return Vec::new() };
+        let conn = self.conn(cid);
+        let (issued, ours) = (conn.challenge.take(), conn.ephemeral.take());
+        let answered = f.get("challenge").and_then(Value::as_str);
+        if f.get("type").and_then(Value::as_str) != Some("hello") || answered != issued.as_deref() {
+            return vec![Out::Send(self.challenge(cid))];
+        }
+        f.insert("hostEph".into(), json!(ours.map(|e| e.public)));
+        f.insert("clientEph".into(), json!(theirs));
+        let mut reply = verify(&Value::Object(f));
+        let welcomed = reply.get("type").and_then(Value::as_str) == Some("welcome");
+        let mut out = Vec::new();
+        if welcomed {
+            let device = reply.pointer("/device/id").map(nekko_js::display);
+            let reads = reply.pointer("/device/access/read") != Some(&Value::Bool(false));
+            let conn = self.conn(cid);
+            conn.device = device.clone();
+            conn.session = Some(key.clone());
+            conn.bound = issued;
+            conn.seq = 0;
+            conn.reads = reads;
+            // The phone compares this with its own and says which side to update.
+            if let Some(o) = reply.as_object_mut() {
+                o.insert("protocol".into(), json!(crate::hello::PROTOCOL_VERSION));
+            }
+            // First: a phone registers for pushes as soon as it hears the welcome.
+            out.push(Out::Send(frame(json!({ "type": "welcomed", "cid": cid, "deviceId": device }))));
+        }
+        out.push(Out::Send(self.sealed(&key, cid, &reply)));
+        if !welcomed {
+            out.push(Out::Send(frame(json!({ "type": "kick", "cid": cid }))));
+        }
+        out
+    }
+
+    /// A HELLO under the room key: an app from before this computer's protocol,
+    /// or someone holding the room secret. Neither is welcomed, whatever it
+    /// claims, and it reaches no registry or log: anyone ever paired can send one.
+    fn older_app(&mut self, cid: &str) -> Vec<Out> {
+        let reply = json!({ "type": "denied", "reason": "update-required" });
+        vec![Out::Send(self.send_room(cid, &reply)), Out::Send(frame(json!({ "type": "kick", "cid": cid })))]
+    }
+
+    /// A request on a welcomed connection.
+    fn on_request(&mut self, cid: &str, f: &serde_json::Map<String, Value>) -> Vec<Out> {
+        let id = f.get("id").cloned();
+        if !self.in_order(cid, f) {
+            // Replayed, reordered or from another connection: dropped
+            // unanswered, and the connection goes back to the handshake.
+            return vec![Out::Send(self.challenge(cid))];
+        }
+        if f.get("channel").and_then(Value::as_str) == Some(CARD_CHANNEL) {
+            // The phone's card level, focus or dismissal: answered here, never by the host.
+            let device = self.conn(cid).device.clone().unwrap_or_default();
+            let now = (self.clock)();
+            let args = f.get("args").cloned().unwrap_or(Value::Null);
+            let mut out: Vec<Out> =
+                self.cards.set(&device, &args, now).into_iter().map(|v| Out::Send(frame(v))).collect();
+            out.extend(self.reply(cid, id, Ok(json!({ "ok": true }))).map(Out::Send));
+            return out;
+        }
+        if f.get("channel").and_then(Value::as_str) == Some(PUSH_TEST_CHANNEL) {
+            // *Send a test notification*: the relay pushes to this phone only.
+            let device = self.conn(cid).device.clone();
+            let notify = frame(notify_frame("test", None, device.as_deref(), None));
+            let mut out = vec![Out::Send(notify)];
+            out.extend(self.reply(cid, id, Ok(json!({ "ok": true }))).map(Out::Send));
+            return out;
+        }
+        let channel = f.get("channel").map_or_else(|| "undefined".to_string(), nekko_js::display);
+        let args = match f.get("args") {
+            None | Some(Value::Null) => json!([]),
+            Some(a) => a.clone(),
+        };
+        // Welcomed above, so the connection has its device.
+        let device_id = self.conn(cid).device.clone().unwrap_or_default();
+        let proof = f.get("proof").filter(|p| !p.is_null()).cloned();
+        let step_up = f.get("stepUp").filter(|p| !p.is_null()).cloned();
+        self.cards.phone_call(&channel, &args, (self.clock)());
+        vec![Out::Dispatch { cid: cid.to_string(), id, device_id, channel, args, proof, step_up }]
+    }
+
+    /// Whether a request is the next one: it carries the connection's
+    /// challenge and a `seq` above every one before it (accepted and remembered).
     fn in_order(&mut self, cid: &str, f: &serde_json::Map<String, Value>) -> bool {
         let conn = self.conn(cid);
-        let Some(bound) = conn.bound.as_deref() else { return true };
+        let Some(bound) = conn.bound.as_deref() else { return false };
         let seq = f.get("seq").and_then(Value::as_u64);
         match seq {
             Some(seq) if seq > conn.seq && f.get("challenge").and_then(Value::as_str) == Some(bound) => {
@@ -408,12 +481,13 @@ impl AgentCore {
     /// The sealed reply to a dispatched request. The relay silently drops a
     /// frame over its limit, so a reply that seals larger than the phone limit
     /// goes out as an error the phone can show at once (`reply` in relay.ts).
-    pub fn reply(&mut self, cid: &str, id: Option<Value>, result: Result<Value, String>) -> String {
-        let data = self.seal(&res(id.clone(), result));
-        if data.len() <= crate::phone::policy().max_frame_bytes {
-            return frame(json!({ "type": "d", "cid": cid, "data": data }));
+    /// `None` when the connection lost its key meanwhile: its reply can't be sealed.
+    pub fn reply(&mut self, cid: &str, id: Option<Value>, result: Result<Value, String>) -> Option<String> {
+        let out = self.send_to(cid, &res(id.clone(), result))?;
+        if out.len() <= crate::phone::policy().max_frame_bytes {
+            return Some(out);
         }
-        let error = res(id, Err(crate::phone::frame_too_large(data.len())));
+        let error = res(id, Err(crate::phone::frame_too_large(out.len())));
         self.send_to(cid, &error)
     }
 
@@ -436,20 +510,16 @@ impl AgentCore {
             let now = (self.clock)();
             out.extend(self.cards.on_event(payload, now).into_iter().map(frame));
         }
-        let welcomed = self.welcomed();
-        if welcomed.is_empty() {
-            return out;
-        }
-        let data = self.seal(&json!({ "type": "event", "channel": channel, "payload": payload }));
-        for cid in welcomed {
-            out.push(frame(json!({ "type": "d", "cid": cid, "data": data })));
+        let event = json!({ "type": "event", "channel": channel, "payload": payload });
+        for cid in self.readers() {
+            out.extend(self.send_to(&cid, &event));
         }
         out
     }
 
     /// Welcomed connections whose device is attached to `terminal`.
     fn viewers_of(&self, terminal: &str) -> Vec<String> {
-        self.welcomed()
+        self.readers()
             .into_iter()
             .filter(|cid| self.conns[cid].device.as_deref().is_some_and(|d| self.terminals.attached(d, terminal)))
             .collect()
@@ -457,11 +527,8 @@ impl AgentCore {
 
     /// One sealed event to each of `cids`.
     fn send_event(&mut self, cids: &[String], channel: &str, payload: Value) -> Vec<String> {
-        if cids.is_empty() {
-            return Vec::new();
-        }
-        let data = self.seal(&json!({ "type": "event", "channel": channel, "payload": payload }));
-        cids.iter().map(|cid| frame(json!({ "type": "d", "cid": cid, "data": data }))).collect()
+        let event = json!({ "type": "event", "channel": channel, "payload": payload });
+        cids.iter().filter_map(|cid| self.send_to(cid, &event)).collect()
     }
 
     fn terminal_event(&mut self, payload: &Value, now: u64) -> Vec<String> {
@@ -514,15 +581,56 @@ impl AgentCore {
         out
     }
 
-    /// Every relay control frame one agent event causes, in order: a
-    /// `finished` or `failed` push request, the Live Activity update, a
-    /// `dismiss` when an approval or a question was answered or its run ended,
-    /// and a `needs-you` push request when one is waiting. Exactly
-    /// `relayFrames` in packages/host/src/relay.ts.
+    /// A complete, unclipped `chat:pending` map from the daemon, never the card
+    /// or a saved session list. One chat contributes once regardless of how many
+    /// approvals/questions it has. Invalid input withdraws authority, not zero.
+    pub fn attention_snapshot(&self, pending: &Value) -> String {
+        let Some(pending) = pending.as_object() else { return Self::attention_unknown() };
+        // The protocol caps supplied entries before deduplication. Never clip.
+        if pending.len() > 4096 {
+            return Self::attention_unknown();
+        }
+        let mut tags = Vec::new();
+        for (sid, entry) in pending {
+            if sid.is_empty() || !entry.is_object() {
+                return Self::attention_unknown();
+            }
+            let waits = |key| entry.get(key).is_some_and(Value::is_object);
+            if !waits("approval") && !waits("question") {
+                return Self::attention_unknown();
+            }
+            tags.push(activity_tag(sid));
+        }
+        tags.sort_unstable();
+        tags.dedup();
+        frame(json!({ "type": "attention-snapshot", "tags": tags }))
+    }
+
+    pub fn attention_unknown() -> String {
+        frame(json!({ "type": "attention-unknown" }))
+    }
+
+    /// Whether an event can change the full pending map. The socket reads again
+    /// after these events and rejects reads overtaken by a subsequent event.
+    pub fn attention_changed(channel: &str, e: &Value) -> bool {
+        channel == "agent:event"
+            && matches!(
+                e.get("type").and_then(Value::as_str),
+                Some("tool_approval_required" | "question" | "tool_result" | "question_resolved" | "done" | "error")
+            )
+    }
+
+    /// Legacy activity phases are not chat-wide pending state. Before any
+    /// removal control, withdraw authority until the socket completes a full
+    /// read. Resolving one request must never assert a known zero for its chat.
     fn relay_frames(&mut self, e: &Value) -> Vec<Value> {
         let sid = e.get("sessionId").and_then(Value::as_str).map(str::to_string);
         let prev = sid.as_ref().and_then(|s| self.phases.get(s).copied());
         let mut out = Vec::new();
+        if matches!(e.get("type").and_then(Value::as_str), Some("tool_result" | "question_resolved" | "done" | "error"))
+        {
+            out.push(json!({ "type": "attention-unknown" }));
+        }
         match e.get("type").and_then(Value::as_str) {
             Some("done") => out.push(notify_frame("finished", sid.as_deref(), None, None)),
             Some("error") if !stopped(e) => out.push(notify_frame("failed", sid.as_deref(), None, None)),
@@ -531,8 +639,15 @@ impl AgentCore {
         let Some(activity) = self.activity_frame(e) else { return out };
         let phase = activity.get("phase").and_then(Value::as_str).unwrap_or("").to_string();
         let tag = activity.get("tag").cloned().unwrap_or(Value::Null);
+        if !matches!(phase.as_str(), "approval" | "question")
+            && out.first().and_then(|f| f["type"].as_str()) != Some("attention-unknown")
+        {
+            // Even the first text after reconnect can say "running" while
+            // another request in this chat is still pending.
+            out.insert(0, json!({ "type": "attention-unknown" }));
+        }
         out.push(activity);
-        if matches!(prev, Some("approval" | "question")) && prev != Some(phase.as_str()) {
+        if matches!(prev, Some("approval" | "question")) && !matches!(phase.as_str(), "approval" | "question") {
             out.push(json!({ "type": "dismiss", "tag": tag }));
         }
         if phase == "approval" || phase == "question" {
@@ -614,13 +729,39 @@ impl AgentCore {
     /// Kick the device's live connections and keep its push token, so the
     /// phone is still told about chats when remote access comes back
     /// (`remote:stop`). Only an intentional disconnect (revoke, sign out)
-    /// drops push.
-    pub fn disconnect_device(&self, device_id: &str) -> Vec<String> {
-        self.welcomed()
-            .into_iter()
-            .filter(|cid| self.conns[cid].device.as_deref() == Some(device_id))
-            .map(|cid| frame(json!({ "type": "kick", "cid": cid })))
-            .collect()
+    /// drops push. The connections end here first: a kick is only a request to
+    /// the relay, and a relay that ignores it must get nothing more to pass on.
+    pub fn disconnect_device(&mut self, device_id: &str) -> Vec<String> {
+        let before = self.connected_devices();
+        let cids: Vec<String> =
+            self.welcomed().into_iter().filter(|cid| self.conns[cid].device.as_deref() == Some(device_id)).collect();
+        for cid in &cids {
+            self.conns.remove(cid);
+        }
+        self.forget_gone(before);
+        cids.into_iter().map(|cid| frame(json!({ "type": "kick", "cid": cid }))).collect()
+    }
+
+    /// The owner changed a device's Read switch.
+    pub fn set_reads(&mut self, device_id: &str, reads: bool) {
+        for conn in self.conns.values_mut().filter(|c| c.device.as_deref() == Some(device_id)) {
+            conn.reads = reads;
+        }
+    }
+
+    /// A device's end of the handshake on a new connection, for tests: opens
+    /// `cid`, answers its challenge with `hello` and hands back what the agent
+    /// said and the connection's key.
+    #[doc(hidden)]
+    pub fn say_hello(&mut self, cid: &str, hello: Value, verify: &dyn Fn(&Value) -> Value) -> (Vec<Out>, Key) {
+        let out = self.on_relay(&json!({ "type": "client-open", "cid": cid }).to_string(), verify);
+        let Some(Out::Send(text)) = out.into_iter().next() else { panic!("no challenge") };
+        let f: Value = serde_json::from_str(&text).expect("a frame");
+        let d: Value = serde_json::from_str(f["data"].as_str().expect("data")).expect("an envelope");
+        let challenge = e2e::open(&self.key, d["enc"].as_str().expect("sealed")).expect("under the room key");
+        let (data, key) = answer_challenge(&self.host.room, &challenge, hello);
+        let out = self.on_relay(&json!({ "type": "c", "cid": cid, "data": data }).to_string(), verify);
+        (out, key)
     }
 
     /// Device ids with a welcomed live connection, each once.
@@ -635,6 +776,30 @@ impl AgentCore {
         }
         out
     }
+}
+
+/// A device's answer to `challenge`, for tests: the `{eph, enc}` it sends and
+/// the key it derived. `hello` gets the challenge, the protocol when it names
+/// none, and a signature when it carries a `signWith` device key.
+#[doc(hidden)]
+pub fn answer_challenge(room: &str, challenge: &Value, mut hello: Value) -> (String, Key) {
+    let nonce = challenge["challenge"].as_str().expect("a challenge");
+    let host_eph = challenge["eph"].as_str().expect("the computer's half");
+    let ours = Ephemeral::new(&crate::hello::os_random());
+    let info = crate::hello::session_info(room, nonce, host_eph, &ours.public);
+    let key = ours.session_key(host_eph, &info).expect("a point on the curve");
+    hello["challenge"] = json!(nonce);
+    if hello.get("protocol").is_none() {
+        hello["protocol"] = json!(crate::hello::PROTOCOL_VERSION);
+    }
+    if let Some(device_key) = hello.as_object_mut().and_then(|o| o.remove("signWith")) {
+        let device_key = crate::proof::parse_key_text(device_key.as_str().expect("text")).expect("a key");
+        let id = hello["deviceId"].as_str().expect("a device");
+        let text = crate::hello::hello_text(id, room, nonce, host_eph, &ours.public);
+        hello["helloKey"] = json!(crate::proof::public_key(&device_key));
+        hello["sig"] = json!(crate::proof::sign(&device_key, &text));
+    }
+    (frame(json!({ "eph": ours.public, "enc": e2e::seal_with_iv(&key, &hello, e2e::random_iv()) })), key)
 }
 
 /// The protocol a HELLO declares: 1 when it says none (phones from before the field).
@@ -705,9 +870,15 @@ pub fn activity_tag(session_id: &str) -> String {
 mod tests {
     use super::*;
 
+    const ROOM: &str = "room-1";
+
+    fn host_key() -> crate::client::SigningKey {
+        crate::proof::new_key(&crate::hello::os_random())
+    }
+
     fn core() -> (AgentCore, Key) {
-        let key = e2e::derive_key("00112233445566778899aabbccddeeff", "room-1");
-        (AgentCore::new(key.clone(), Box::new(e2e::random_iv)), key)
+        let key = e2e::derive_key("00112233445566778899aabbccddeeff", ROOM);
+        (AgentCore::new(key.clone(), Host { room: ROOM.into(), key: host_key() }, Box::new(e2e::random_iv)), key)
     }
 
     fn client(key: &Key, cid: &str, v: Value) -> String {
@@ -719,14 +890,32 @@ mod tests {
         json!({ "type": "welcome", "device": { "id": h["deviceId"] } })
     }
 
+    /// Welcomes `device` on `cid`: the connection's key.
+    fn hello_on(core: &mut AgentCore, cid: &str, device: &str) -> Key {
+        core.say_hello(cid, json!({ "type": "hello", "deviceId": device }), &welcome_all).1
+    }
+
+    /// A request on a connection welcomed by `hello_on`, whose first seq is `seq`.
+    fn request(core: &mut AgentCore, cid: &str, key: &Key, seq: u64, mut r: Value) -> Vec<Out> {
+        r["seq"] = json!(seq);
+        r["challenge"] = json!(core.conns[cid].bound);
+        core.on_relay(&client(key, cid, r), &welcome_all)
+    }
+
+    fn open_frame(key: &Key, out: &Out) -> (String, Value) {
+        let Out::Send(text) = out else { panic!("{out:?}") };
+        let f: Value = serde_json::from_str(text).unwrap();
+        let d: Value = serde_json::from_str(f["data"].as_str().unwrap()).unwrap();
+        (f["cid"].as_str().unwrap().to_string(), e2e::open(key, d["enc"].as_str().unwrap()).unwrap())
+    }
+
     #[test]
     fn each_request_names_the_device_welcomed_on_its_connection() {
-        let (mut core, key) = core();
-        for (cid, device) in [("c1", "phone-1"), ("c2", "phone-2")] {
-            core.on_relay(&client(&key, cid, json!({ "type": "hello", "deviceId": device })), &welcome_all);
-        }
+        let (mut core, _) = core();
+        hello_on(&mut core, "c1", "phone-1");
+        let key = hello_on(&mut core, "c2", "phone-2");
         let req = json!({ "type": "req", "id": 7, "channel": "tasks:list", "args": [] });
-        let out = core.on_relay(&client(&key, "c2", req), &welcome_all);
+        let out = request(&mut core, "c2", &key, 1, req);
         assert_eq!(
             out,
             vec![Out::Dispatch {
@@ -743,13 +932,13 @@ mod tests {
 
     #[test]
     fn a_change_proof_travels_beside_the_args() {
-        let (mut core, key) = core();
-        core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
+        let (mut core, _) = core();
+        let key = hello_on(&mut core, "c1", "phone-1");
         let proof = json!({ "ts": 1, "sig": "c2ln" });
         let step = json!({ "totp": "123456" });
         let req =
             json!({ "type": "req", "id": 1, "channel": "file:write", "args": ["a"], "proof": proof, "stepUp": step });
-        match core.on_relay(&client(&key, "c1", req), &welcome_all).pop() {
+        match request(&mut core, "c1", &key, 1, req).pop() {
             Some(Out::Dispatch { device_id, args, proof: p, step_up, .. }) => {
                 assert_eq!(device_id, "phone-1");
                 assert_eq!(args, json!(["a"]), "the proof is not one of the args");
@@ -760,40 +949,41 @@ mod tests {
         }
         // `proof: null` is no proof.
         let req = json!({ "type": "req", "id": 2, "channel": "file:write", "args": [], "proof": null });
-        assert!(matches!(
-            core.on_relay(&client(&key, "c1", req), &welcome_all).pop(),
-            Some(Out::Dispatch { proof: None, .. })
-        ));
+        assert!(matches!(request(&mut core, "c1", &key, 2, req).pop(), Some(Out::Dispatch { proof: None, .. })));
     }
 
     #[test]
     fn a_reconnected_cid_is_nobody_until_it_says_hello_again() {
-        let (mut core, key) = core();
-        core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
+        let (mut core, _) = core();
+        let key = hello_on(&mut core, "c1", "phone-1");
+        let bound = core.conns["c1"].bound.clone();
         core.on_relay(&json!({ "type": "client-open", "cid": "c1" }).to_string(), &welcome_all);
-        let req = json!({ "type": "req", "id": 3, "channel": "tasks:list", "args": [] });
+        let req = json!({ "type": "req", "id": 3, "seq": 1, "challenge": bound, "channel": "tasks:list", "args": [] });
         let out = core.on_relay(&client(&key, "c1", req), &welcome_all);
-        assert!(matches!(out.as_slice(), [Out::Send(_)]), "refused, not dispatched as phone-1: {out:?}");
+        assert!(out.is_empty(), "its old key is worth nothing now: {out:?}");
     }
 
     /// The phone's Live Activity card (`card.rs`): `card:set` is answered here,
     /// and the agent's events then drive `card` frames for the relay to push.
     #[test]
     fn card_set_is_answered_here_and_events_drive_card_frames() {
-        let (core, key) = core();
+        let (core, _) = core();
         let mut core = core.with_clock(Box::new(|| 800_000_000.0));
-        core.on_relay(&client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1" })), &welcome_all);
+        let key = hello_on(&mut core, "c1", "phone-1");
         let tool = json!({ "type": "tool_call", "sessionId": "s1", "call": { "id": "t", "name": "bash", "input": { "command": "ls" } } });
         let plain = |frames: &[String]| -> Vec<Value> {
             frames.iter().map(|f| serde_json::from_str::<Value>(f).unwrap()).filter(|f| f["type"] != "d").collect()
         };
         // No phone asked: the old per-chat activity frame only.
         let first = plain(&core.on_event("agent:event", &tool));
-        assert_eq!(first.iter().map(|f| f["type"].as_str().unwrap()).collect::<Vec<_>>(), ["activity"]);
+        assert_eq!(
+            first.iter().map(|f| f["type"].as_str().unwrap()).collect::<Vec<_>>(),
+            ["attention-unknown", "activity"]
+        );
         assert!(!core.wants_summaries());
 
         let req = json!({ "type": "req", "id": 5, "channel": "card:set", "args": [{ "level": "standard" }] });
-        let out = core.on_relay(&client(&key, "c1", req), &welcome_all);
+        let out = request(&mut core, "c1", &key, 1, req);
         let sent: Vec<String> = out
             .iter()
             .map(|o| match o {
@@ -805,12 +995,8 @@ mod tests {
         assert_eq!(card.len(), 1);
         assert_eq!(card[0]["type"], "card");
         assert_eq!(card[0]["state"]["chats"][0]["step"], "Run ls");
-        let reply: Value = serde_json::from_str(sent.last().unwrap()).unwrap();
-        let reply: Value = serde_json::from_str(reply["data"].as_str().unwrap()).unwrap();
-        assert_eq!(
-            e2e::open(&key, reply["enc"].as_str().unwrap()).unwrap(),
-            json!({ "type": "res", "id": 5, "result": { "ok": true } })
-        );
+        let reply = open_frame(&key, out.last().unwrap()).1;
+        assert_eq!(reply, json!({ "type": "res", "id": 5, "result": { "ok": true } }));
 
         // The chat list fills in the title.
         assert!(core.wants_summaries());
@@ -820,7 +1006,7 @@ mod tests {
         // A prompt the phone sends makes that chat's next run start a card.
         let send =
             json!({ "type": "req", "id": 6, "channel": "chat:send", "args": [{ "sessionId": "s2", "text": "go" }] });
-        assert!(matches!(core.on_relay(&client(&key, "c1", send), &welcome_all).as_slice(), [Out::Dispatch { .. }]));
+        assert!(matches!(request(&mut core, "c1", &key, 2, send).as_slice(), [Out::Dispatch { .. }]));
         let run = json!({ "type": "text", "sessionId": "s2", "delta": "Hi" });
         let frames = plain(&core.on_event("agent:event", &run));
         assert_eq!(frames.last().unwrap()["type"], "card-start", "{frames:?}");
@@ -831,34 +1017,27 @@ mod tests {
         assert!(after.iter().all(|f| f["type"] != "card" && f["type"] != "card-start"), "{after:?}");
     }
 
-    mod replay {
+    mod handshake {
         use super::*;
 
-        fn open_frame(key: &Key, out: &Out) -> (String, Value) {
-            let Out::Send(text) = out else { panic!("{out:?}") };
-            let f: Value = serde_json::from_str(text).unwrap();
-            let d: Value = serde_json::from_str(f["data"].as_str().unwrap()).unwrap();
-            (f["cid"].as_str().unwrap().to_string(), e2e::open(key, d["enc"].as_str().unwrap()).unwrap())
-        }
-
-        /// Opens `cid` and returns the challenge the agent sealed it.
-        fn open(core: &mut AgentCore, key: &Key, cid: &str) -> String {
+        /// Opens `cid` and returns the challenge frame the agent sent it.
+        fn open(core: &mut AgentCore, key: &Key, cid: &str) -> Value {
             let out = core.on_relay(&json!({ "type": "client-open", "cid": cid }).to_string(), &welcome_all);
             assert_eq!(out.len(), 1, "{out:?}");
             let (to, f) = open_frame(key, &out[0]);
             assert_eq!(to, cid);
             assert_eq!(f["type"], "challenge");
-            let c = f["challenge"].as_str().unwrap().to_string();
-            assert_eq!(c.len(), 24, "18 random bytes, base64");
-            c
+            assert_eq!(f["challenge"].as_str().unwrap().len(), 24, "18 random bytes, base64");
+            f
         }
 
-        fn hello(challenge: Option<&str>) -> Value {
-            let mut h = json!({ "type": "hello", "deviceId": "phone-1", "protocol": 4 });
-            if let Some(c) = challenge {
-                h["challenge"] = json!(c);
-            }
-            h
+        fn hello() -> Value {
+            json!({ "type": "hello", "deviceId": "phone-1" })
+        }
+
+        fn answer(cid: &str, challenge: &Value, hello: Value) -> (String, Key) {
+            let (data, key) = answer_challenge(ROOM, challenge, hello);
+            (json!({ "type": "c", "cid": cid, "data": data }).to_string(), key)
         }
 
         fn req(id: u64, seq: Value, challenge: &str) -> Value {
@@ -869,90 +1048,198 @@ mod tests {
             matches!(out, [o @ Out::Send(_)] if open_frame(key, o).1["type"] == "challenge")
         }
 
-        fn welcomed(core: &mut AgentCore, key: &Key, cid: &str) -> String {
+        /// A welcomed connection: its challenge and its key.
+        fn welcomed(core: &mut AgentCore, key: &Key, cid: &str) -> (String, Key) {
             let c = open(core, key, cid);
-            let out = core.on_relay(&client(key, cid, hello(Some(&c))), &welcome_all);
-            let (_, reply) = open_frame(key, &out[0]);
+            let (frame, session) = answer(cid, &c, hello());
+            let out = core.on_relay(&frame, &welcome_all);
+            let (_, reply) = open_frame(&session, out.last().unwrap());
             assert_eq!(reply["type"], "welcome", "{reply}");
             assert_eq!(reply["protocol"], json!(crate::hello::PROTOCOL_VERSION));
-            c
+            (c["challenge"].as_str().unwrap().to_string(), session)
         }
 
         #[test]
-        fn a_new_hello_must_answer_the_challenge_once() {
+        fn the_challenge_is_signed_by_the_host_key_for_this_room() {
+            let (mut core, key) = core();
+            let public = crate::proof::parse_key(&crate::proof::public_key(&core.host.key)).unwrap();
+            let c = open(&mut core, &key, "c1");
+            let (nonce, eph) = (c["challenge"].as_str().unwrap(), c["eph"].as_str().unwrap());
+            let sig = crate::proof::b64(c["sig"].as_str().unwrap()).unwrap();
+            assert!(crate::proof::verify(&public, &crate::hello::host_text(ROOM, nonce, eph), &sig));
+            assert!(!crate::proof::verify(&public, &crate::hello::host_text("room-2", nonce, eph), &sig));
+        }
+
+        #[test]
+        fn a_hello_under_the_room_key_is_never_welcomed_whatever_it_claims() {
             let (mut core, key) = core();
             let c = open(&mut core, &key, "c1");
-            // Missing or wrong: never verified, the connection is challenged again.
+            let never = |_: &Value| -> Value { panic!("a registry check for a frame anyone ever paired can send") };
+            let claim = json!({ "type": "hello", "deviceId": "phone-1", "protocol": 99, "challenge": c["challenge"] });
+            let out = core.on_relay(&client(&key, "c1", claim), &never);
+            assert_eq!(open_frame(&key, &out[0]).1["reason"], "update-required");
+            let kick = json!({ "type": "kick", "cid": "c1" }).to_string();
+            assert_eq!(out[1], Out::Send(kick));
+            assert!(core.connected_devices().is_empty());
+        }
+
+        #[test]
+        fn a_kicked_connection_hears_nothing_more_whatever_the_relay_does() {
+            let (mut core, key) = core();
+            welcomed(&mut core, &key, "c1");
+            let frames = core.kick_device("phone-1");
+            assert!(frames[0].contains(r#""type":"kick""#), "{frames:?}");
+            assert!(core.connected_devices().is_empty());
+            // The relay never closed it: no event goes to it, and no request is taken from it.
+            assert!(core.on_event("tasks:updated", &json!({})).is_empty());
+            let (c, session) = welcomed(&mut core, &key, "c2");
+            core.kick_device("phone-1");
+            let out = core.on_relay(&client(&session, "c2", req(1, json!(1), &c)), &welcome_all);
+            assert!(out.is_empty(), "{out:?}");
+        }
+
+        #[test]
+        fn the_relay_hears_who_was_welcomed_before_the_phone_does() {
+            let (mut core, key) = core();
+            let c = open(&mut core, &key, "c1");
+            let (frame, _) = answer("c1", &c, hello());
+            let out = core.on_relay(&frame, &welcome_all);
+            let want = json!({ "type": "welcomed", "cid": "c1", "deviceId": "phone-1" }).to_string();
+            assert_eq!(out[0], Out::Send(want));
+            assert_eq!(out.len(), 2);
+        }
+
+        #[test]
+        fn a_device_with_read_off_gets_no_events() {
+            let (mut core, key) = core();
+            let off = |h: &Value| json!({ "type": "welcome", "device": { "id": h["deviceId"], "access": { "read": false, "change": true } } });
+            let c = open(&mut core, &key, "c1");
+            core.on_relay(&answer("c1", &c, hello()).0, &off);
+            assert_eq!(core.connected_devices(), vec!["phone-1"]);
+            assert!(core.on_event("tasks:updated", &json!({})).is_empty());
+            // The switch applies to the live connection, both ways.
+            core.set_reads("phone-1", true);
+            assert_eq!(core.on_event("tasks:updated", &json!({})).len(), 1);
+            core.set_reads("phone-1", false);
+            assert!(core.on_event("tasks:updated", &json!({})).is_empty());
+        }
+
+        #[test]
+        fn the_room_key_opens_nothing_on_a_welcomed_connection() {
+            let (mut core, key) = core();
+            let (c, session) = welcomed(&mut core, &key, "c1");
+            let forged = core.on_relay(&client(&key, "c1", req(1, json!(1), &c)), &welcome_all);
+            assert!(forged.is_empty(), "{forged:?}");
+            assert_eq!(core.connected_devices(), vec!["phone-1"]);
+            // Nor can it read what the connection is sent.
+            let out = core.on_event("tasks:updated", &json!({}));
+            let d: Value = serde_json::from_str(&out[0]).unwrap();
+            let d: Value = serde_json::from_str(d["data"].as_str().unwrap()).unwrap();
+            assert_eq!(e2e::open(&key, d["enc"].as_str().unwrap()), None);
+            assert!(e2e::open(&session, d["enc"].as_str().unwrap()).is_some());
+        }
+
+        #[test]
+        fn each_connection_has_its_own_key() {
+            let (mut core, key) = core();
+            let (_, one) = welcomed(&mut core, &key, "c1");
+            let (_, two) = welcomed(&mut core, &key, "c2");
+            assert_ne!(one.raw(), two.raw());
+            let out = core.on_event("tasks:updated", &json!({}));
+            assert_eq!(out.len(), 2, "sealed for each");
+            for (frame, (mine, other)) in out.iter().zip([(&one, &two), (&two, &one)]) {
+                let d: Value = serde_json::from_str(frame).unwrap();
+                let d: Value = serde_json::from_str(d["data"].as_str().unwrap()).unwrap();
+                assert!(e2e::open(mine, d["enc"].as_str().unwrap()).is_some());
+                assert_eq!(e2e::open(other, d["enc"].as_str().unwrap()), None);
+            }
+        }
+
+        #[test]
+        fn a_replayed_hello_opens_on_no_other_connection() {
+            let (mut core, key) = core();
+            let c = open(&mut core, &key, "c1");
+            let (frame, _) = answer("c1", &c, hello());
+            core.on_relay(&frame, &welcome_all);
+            open(&mut core, &key, "c2");
+            let never = |_: &Value| -> Value { panic!("verified a replayed HELLO") };
+            let out = core.on_relay(&frame.replace("\"cid\":\"c1\"", "\"cid\":\"c2\""), &never);
+            assert!(out.is_empty(), "{out:?}");
+            assert_eq!(core.connected_devices(), vec!["phone-1"]);
+        }
+
+        #[test]
+        fn a_hello_answers_the_challenge_once() {
+            let (mut core, key) = core();
             let never = |_: &Value| -> Value { panic!("verified a HELLO that did not answer the challenge") };
-            for h in [hello(None), hello(Some("AAAAAAAAAAAAAAAAAAAAAAAA"))] {
-                let out = core.on_relay(&client(&key, "c1", h), &never);
+            for wrong in [json!("AAAAAAAAAAAAAAAAAAAAAAAA"), Value::Null] {
+                let c = open(&mut core, &key, "c1");
+                let ours = Ephemeral::new(&crate::hello::os_random());
+                let (nonce, eph) = (c["challenge"].as_str().unwrap(), c["eph"].as_str().unwrap());
+                let session =
+                    ours.session_key(eph, &crate::hello::session_info(ROOM, nonce, eph, &ours.public)).unwrap();
+                let h = json!({ "type": "hello", "deviceId": "phone-1", "protocol": 6, "challenge": wrong });
+                let enc = e2e::seal_with_iv(&session, &h, e2e::random_iv());
+                let data = json!({ "eph": ours.public, "enc": enc }).to_string();
+                let out = core.on_relay(&json!({ "type": "c", "cid": "c1", "data": data }).to_string(), &never);
                 assert!(is_challenge(&key, &out), "{out:?}");
             }
-            // The first challenge was used up by the wrong answer: answering it now is a replay.
-            let out = core.on_relay(&client(&key, "c1", hello(Some(&c))), &never);
-            assert!(is_challenge(&key, &out));
             assert!(core.connected_devices().is_empty());
-            // A replayed HELLO on another connection is refused there too.
-            let c2 = welcomed(&mut core, &key, "c2");
-            let out = core.on_relay(&client(&key, "c3", hello(Some(&c2))), &never);
-            assert!(is_challenge(&key, &out));
-            assert_eq!(core.connected_devices(), vec!["phone-1"]);
+        }
+
+        #[test]
+        fn what_the_device_says_about_the_exchange_is_not_believed() {
+            let (mut core, key) = core();
+            let c = open(&mut core, &key, "c1");
+            let seen: std::sync::Mutex<Value> = Default::default();
+            let verify = |h: &Value| {
+                *seen.lock().unwrap() = h.clone();
+                welcome_all(h)
+            };
+            let liar = json!({ "type": "hello", "deviceId": "phone-1", "hostEph": "mine", "clientEph": "mine" });
+            let (frame, _) = answer("c1", &c, liar);
+            core.on_relay(&frame, &verify);
+            let h = seen.lock().unwrap().clone();
+            assert_eq!(h["hostEph"], c["eph"]);
+            assert_ne!(h["clientEph"], "mine");
         }
 
         #[test]
         fn requests_carry_the_challenge_and_a_rising_seq() {
             let (mut core, key) = core();
-            let c = welcomed(&mut core, &key, "c1");
-            let first = core.on_relay(&client(&key, "c1", req(1, json!(1), &c)), &welcome_all);
+            let (c, session) = welcomed(&mut core, &key, "c1");
+            let first = core.on_relay(&client(&session, "c1", req(1, json!(1), &c)), &welcome_all);
             assert!(matches!(first.as_slice(), [Out::Dispatch { .. }]), "{first:?}");
             // Gaps are fine (a phone may give up on one), going back is not.
-            let gap = core.on_relay(&client(&key, "c1", req(2, json!(5), &c)), &welcome_all);
+            let gap = core.on_relay(&client(&session, "c1", req(2, json!(5), &c)), &welcome_all);
             assert!(matches!(gap.as_slice(), [Out::Dispatch { .. }]));
-            let replay = core.on_relay(&client(&key, "c1", req(2, json!(5), &c)), &welcome_all);
+            let replay = core.on_relay(&client(&session, "c1", req(2, json!(5), &c)), &welcome_all);
             assert!(is_challenge(&key, &replay), "a replay is dropped and the phone must say hello again");
             assert!(core.connected_devices().is_empty());
             // Back to the handshake: nothing is dispatched until a new HELLO.
-            let out = core.on_relay(&client(&key, "c1", req(3, json!(6), &c)), &welcome_all);
+            let out = core.on_relay(&client(&session, "c1", req(3, json!(6), &c)), &welcome_all);
             assert!(!out.iter().any(|o| matches!(o, Out::Dispatch { .. })));
         }
 
         #[test]
         fn a_request_without_seq_or_from_another_connection_is_dropped() {
             let (mut core, key) = core();
-            let c1 = welcomed(&mut core, &key, "c1");
-            let c2 = welcomed(&mut core, &key, "c2");
-            for (cid, f) in [
-                ("c1", json!({ "type": "req", "id": 1, "challenge": c1, "channel": "tasks:list" })),
-                ("c2", req(1, json!(1), &c1)),
-                ("c2", req(1, json!("2"), &c2)),
-                ("c2", req(1, json!(0), &c2)),
-            ] {
-                // Re-welcome after each refusal, so each frame meets a fresh connection state.
-                let out = core.on_relay(&client(&key, cid, f.clone()), &welcome_all);
+            let (c1, _) = welcomed(&mut core, &key, "c1");
+            let (mut c2, mut session) = welcomed(&mut core, &key, "c2");
+            for case in 0..4 {
+                let f = match case {
+                    0 => json!({ "type": "req", "id": 1, "challenge": c2, "channel": "tasks:list" }),
+                    1 => req(1, json!(1), &c1),
+                    2 => req(1, json!("2"), &c2),
+                    _ => req(1, json!(0), &c2),
+                };
+                let out = core.on_relay(&client(&session, "c2", f.clone()), &welcome_all);
                 assert!(is_challenge(&key, &out), "{f}: {out:?}");
-                let (_, ch) = open_frame(&key, &out[0]);
-                let h = hello(Some(ch["challenge"].as_str().unwrap()));
-                core.on_relay(&client(&key, cid, h), &welcome_all);
-            }
-        }
-
-        #[test]
-        fn a_legacy_phone_is_left_to_the_verifier_and_sends_no_counter() {
-            let (mut core, key) = core();
-            open(&mut core, &key, "c1");
-            let seen: std::sync::Mutex<Vec<Value>> = Default::default();
-            let verify = |h: &Value| {
-                seen.lock().unwrap().push(h.clone());
-                welcome_all(h)
-            };
-            core.on_relay(
-                &client(&key, "c1", json!({ "type": "hello", "deviceId": "phone-1", "protocol": 3 })),
-                &verify,
-            );
-            assert_eq!(seen.lock().unwrap().len(), 1);
-            for id in [1, 2, 3] {
-                let r = json!({ "type": "req", "id": id, "channel": "tasks:list", "args": [] });
-                assert!(matches!(core.on_relay(&client(&key, "c1", r), &verify).as_slice(), [Out::Dispatch { .. }]));
+                // Welcomed again, so each frame meets a fresh connection.
+                let ch = open_frame(&key, &out[0]).1;
+                let (frame, next) = answer("c2", &ch, hello());
+                core.on_relay(&frame, &welcome_all);
+                (c2, session) = (ch["challenge"].as_str().unwrap().to_string(), next);
             }
         }
 

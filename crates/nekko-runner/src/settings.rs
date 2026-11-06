@@ -47,6 +47,9 @@ pub struct RunnerSettings {
     pub runner_memory_mb: Option<u32>,
     /// `None` means the mode's default share of the cores.
     pub cpus_per_vm: Option<u8>,
+    /// VMs kept booted while idle, 0 to 2. `None` means the mode's default
+    /// (see `slots::warm_slots`), which is what runners saved before it existed keep.
+    pub ready_vms: Option<u8>,
     pub disk_budget_gb: u32,
     pub disk_floor_gb: u32,
     pub max_job_minutes: u32,
@@ -68,13 +71,14 @@ impl Default for RunnerSettings {
     fn default() -> Self {
         Self {
             enabled: false,
-            priority: Priority::DoNotDisturb,
+            priority: Priority::Balanced,
             keep_awake: KeepAwake::WhileActive,
             macos_slots: 1,
             linux_slots: 0,
             memory_per_vm_mb: 8192,
             runner_memory_mb: None,
             cpus_per_vm: None,
+            ready_vms: None,
             disk_budget_gb: 150,
             disk_floor_gb: 25,
             max_job_minutes: 120,
@@ -94,11 +98,12 @@ impl RunnerSettings {
     /// Clamp a hand-edited or UI-supplied value into the ranges the spec allows.
     pub fn sanitized(mut self) -> Self {
         self.macos_slots = self.macos_slots.min(crate::slots::MAX_MACOS_VMS);
-        self.linux_slots = 0; // P1 has no Linux slots
+        self.linux_slots = self.linux_slots.min(crate::slots::MAX_LINUX_VMS);
         self.memory_per_vm_mb =
             if self.memory_per_vm_mb == 0 { 8192 } else { self.memory_per_vm_mb.clamp(4096, 65536) };
         self.runner_memory_mb = self.runner_memory_mb.filter(|m| *m >= 4096);
         self.cpus_per_vm = self.cpus_per_vm.map(|v| v.max(2));
+        self.ready_vms = self.ready_vms.map(|n| n.min(crate::slots::MAX_MACOS_VMS));
         self.disk_budget_gb = self.disk_budget_gb.clamp(50, 4000);
         self.disk_floor_gb = self.disk_floor_gb.clamp(10, 1000);
         self.max_job_minutes = self.max_job_minutes.clamp(10, 1440);

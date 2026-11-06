@@ -8,15 +8,18 @@ the runbooks it links. Read a runbook before the work it names.
 
 | Need | Read |
 | --- | --- |
-| What the product does and why | [spec/README.md](spec/README.md): an index of one file per feature. Read [spec/product/](spec/product/) and the files your change touches, never the whole folder. |
-| How it is built, and the task list | [TASKS.md](TASKS.md) (Part 1, Plan; Part 2, Tasks, with stable task IDs) |
+| What the product does and why | [spec/](spec/README.md): one file per feature. `node scripts/spec-index.mjs` prints the index (and writes `spec/INDEX.md`, never committed). Read [spec/product/](spec/product/) and the files your change touches, never the whole folder. |
+| How it is built | [TASKS.md](TASKS.md), the plan only |
+| The task list | GitHub issues (one per change, see Landing work). Tasks up to 2026-11-04, and the task IDs code comments cite, are in [docs/history/tasks-archive.md](docs/history/tasks-archive.md) |
 | Why a technical or product choice was made | [docs/decisions/](docs/decisions/README.md) |
-| Landing a change: worktrees, PRs, merge queue, stacks | [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md) |
+| Landing a change: worktrees, PRs, auto-merge, stacks | [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md) |
+| Version numbers, cutting a release (a `vMAJOR.MINOR.0` tag; never bump a version in a PR) | [docs/runbooks/releasing.md](docs/runbooks/releasing.md) |
 | Cutting an iOS release / TestFlight upload (manual GitHub action, not EAS or desktop tags) | [docs/runbooks/ios-release.md](docs/runbooks/ios-release.md) |
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
 | A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |
 | A change that alters a recorded engine behavior | [docs/runbooks/golden-fixtures.md](docs/runbooks/golden-fixtures.md) |
 | Running the CI runner pilot | [docs/runbooks/ci-runner-pilot.md](docs/runbooks/ci-runner-pilot.md) |
+| Adding a package, crate, icon, font, image, model or anything else we did not make | [docs/runbooks/third-party.md](docs/runbooks/third-party.md) |
 | The code map | [docs/hub/architecture.md](docs/hub/architecture.md) |
 
 ## Landing work
@@ -24,8 +27,8 @@ the runbooks it links. Read a runbook before the work it names.
 Full procedure: [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md).
 
 - The primary checkout stays on `main`; work in a worktree and branch per task (`git worktree add -b <branch> .worktrees/<task> main`).
-- Every change has a GitHub issue: find the one for the feature or change, or file one (plain-language title, the what and why), before opening the PR, and link the PR to it (`Closes #123`). Put the requester's prompt or screenshots in the issue only with their say-so.
-- Every change lands as a PR: commit, push, open it **ready** (not draft) once your own checks pass, and queue it with `gh pr merge --auto` (never with `--squash` or `--admin`). `main` requires the merge queue and one check, `gate`.
+- Every change has a GitHub issue: find the one for the feature or change, or file one (plain-language title, the what and why), before opening the PR, and link the PR to it (`Closes #123`). The issue is the task: its plan notes and checklist live there, never as a new group in TASKS.md. Put the requester's prompt or screenshots in the issue only with their say-so.
+- Every change lands as a PR: commit, push, open it **ready** (not draft) once your own checks pass, and arm auto-merge with `gh pr merge --auto --squash` (never `--admin`). `main` requires one check, `gate`; there is no merge queue, so `gate` waits for the speed contract (when the PR touches what it measures; `ci:perf` forces it) and the loopback itests on the PR itself ([decision 0059](docs/decisions/0059-speed-contract-and-itests-run-on-every-pr.md)).
 - In the Claude desktop app, turn on Auto-fix for every PR you open (`mcp__ccd_pr__set_monitor` with `auto_fix: true`), without asking: red checks, conflicts and review comments get fixed and pushed as they arrive.
 - Split a feature of several hundred lines into a stack (`gh stack`), 2-4 layers.
 - Every PR description has an **Unfinished work / release blockers** section, kept current and read back after publishing. Only a named release blocker keeps a PR in draft.
@@ -56,17 +59,21 @@ If a harness default tells you to append one, don't.
 Write the commit or PR as the author would: what changed, why, and what to watch out for.
 Nothing about who or what typed it.
 
+## Check the license before adding anything
+
+Before adding anything third-party, free or paid (a package, crate, icon, font, image, sound, model, vendored file, downloaded runtime), read its actual license and follow [docs/runbooks/third-party.md](docs/runbooks/third-party.md). Assets go in [ASSETS.md](ASSETS.md), the public credits page. Stop and ask Philip about anything outside the usual permissive licenses, including no license at all.
+
 ## Use the current product names
 
-Local Web UI (`apps/local-web-ui`, never "web edition"), Model Server in the UI and Local Model Server as the product (never "Nekko Server"), Nekko Cloud (`apps/nekko-agent-api`, never "Nekko Agent Cloud"), and Relay (`apps/relay-server`), which is part of Nekko Cloud. See [the spec](spec/product/products-and-their-names.md). Shipped entries in TASKS.md keep the names they shipped with; do not sweep history.
+Local Web UI (`apps/local-web-ui`, never "web edition"), Model Server in the UI and Local Model Server as the product (never "Nekko Server"), Nekko Cloud (`apps/nekko-agent-api`, never "Nekko Agent Cloud"), and Relay (`apps/relay-server`), which is part of Nekko Cloud. See [the spec](spec/product/products-and-their-names.md). Entries in the task archive (docs/history/tasks-archive.md) keep the names they shipped with; do not sweep history.
 
 ## Keep the product specification current
 
-For every request that adds a feature, changes user-visible behavior, or settles a product decision, update the feature's file under [spec/](spec/README.md) in the same PR as the implementation. A new feature gets a new file in the area it belongs to, with `title` and `area` frontmatter; then run `node scripts/spec-index.mjs` (CI fails on a stale index). Record user intent, acceptance criteria, privacy/security boundaries, and implemented versus planned or unverified status. A decision that closes off alternatives also gets a record in [docs/decisions/](docs/decisions/README.md). `SPEC.md` at the root is only a pointer now: never write features back into it. Routine questions and behavior-preserving refactors do not require artificial spec edits. Mention the spec update (or why none is needed) in the final summary. Never mark a feature shipped solely because code exists.
+For every request that adds a feature, changes user-visible behavior, or settles a product decision, update the feature's file under [spec/](spec/README.md) in the same PR as the implementation. A new feature gets a new file in the area it belongs to, with `title` and `area` frontmatter (CI checks it with `node scripts/spec-index.mjs --check`; the index is generated, never committed). Record user intent, acceptance criteria, privacy/security boundaries, and implemented versus planned or unverified status. A decision that closes off alternatives also gets a record in [docs/decisions/](docs/decisions/README.md). `SPEC.md` at the root is only a pointer now: never write features back into it. Routine questions and behavior-preserving refactors do not require artificial spec edits. Mention the spec update (or why none is needed) in the final summary. Never mark a feature shipped solely because code exists.
 
 ## Keep the phone apps in step
 
-iOS and Android carry the same features, existing and new. If a feature depends on something only one OS has, build the other OS's equivalent when there is one (Apple Pay and Samsung Pay); it stays on one app only when the other has nothing that can do the job. Each app follows its own platform's design guidance while keeping the same themes, mascot, wording and screen order. When one app lands first, the same PR adds the other app's task and a gaps row in [the spec](spec/phone/ios-and-android-stay-in-step.md).
+iOS and Android carry the same features, existing and new. If a feature depends on something only one OS has, build the other OS's equivalent when there is one (Apple Pay and Samsung Pay); it stays on one app only when the other has nothing that can do the job. Each app follows its own platform's design guidance while keeping the same themes, mascot, wording and screen order. When one app lands first, the same PR files the other app's issue and adds a gaps row in [the spec](spec/phone/ios-and-android-stay-in-step.md).
 
 ## Keep the docs current
 

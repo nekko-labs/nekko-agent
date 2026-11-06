@@ -1,5 +1,7 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.provider.Settings
@@ -45,7 +47,7 @@ import com.nekko.android.ui.theme.Nekko
  */
 @Composable
 fun SecuritySection(deps: SettingsDeps) {
-    SectionHeader("Security")
+    SectionHeader(stringResource(R.string.settings_security))
     // The lock belongs to the app, not to Settings; MainActivity provides it.
     LocalAppLock.current?.let { AppLockCard(it) }
     StepUpMethodsCard(deps)
@@ -62,12 +64,14 @@ private fun AppLockCard(lock: AppLock) {
     // The user may set a screen lock in system settings and come back.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { secure = auth?.deviceSecure() ?: true }
 
+    val offTitle = stringResource(R.string.settings_turn_off_lock)
+    val offSubtitle = stringResource(R.string.settings_confirm_its_you)
     val toggle: (Boolean) -> Unit = { want ->
         error = null
         when {
             want -> lock.setEnabled(true)
             auth == null || !auth.deviceSecure() -> lock.setEnabled(false)
-            else -> auth.authenticate(title = "Turn off app lock", subtitle = "Confirm it’s you") { r ->
+            else -> auth.authenticate(title = offTitle, subtitle = offSubtitle) { r ->
                 when (r) {
                     AuthResult.Success -> lock.setEnabled(false)
                     AuthResult.Cancelled -> Unit
@@ -89,9 +93,9 @@ private fun AppLockCard(lock: AppLock) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("App lock", style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                    Text(stringResource(R.string.settings_app_lock), style = MaterialTheme.typography.bodyLarge, color = p.ink)
                     Text(
-                        "Fingerprint, face or screen lock every time you open the app",
+                        stringResource(R.string.settings_app_lock_detail),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkFaint,
                     )
@@ -102,7 +106,7 @@ private fun AppLockCard(lock: AppLock) {
         }
         if (on && !secure) {
             Notice(
-                "This phone has no screen lock, so the app can’t be locked. Set a PIN, pattern or password in the phone’s settings.",
+                stringResource(R.string.settings_no_screen_lock),
                 Tone.WARNING,
                 Modifier.padding(top = 10.dp),
             )
@@ -113,11 +117,11 @@ private fun AppLockCard(lock: AppLock) {
                 } catch (_: ActivityNotFoundException) {
                     context.startActivity(Intent(Settings.ACTION_SETTINGS))
                 }
-            }) { Text("Open security settings") }
+            }) { Text(stringResource(R.string.settings_open_security)) }
         }
         error?.let { Notice(it, Tone.DANGER, Modifier.padding(top = 10.dp)) }
         Text(
-            "Saved on this phone. While locked nothing is shown and nothing can be approved. With the lock on, the recent-apps preview shows a plain cover instead of your chats; screenshots still work. After a restart the app doesn’t connect to your computer until you unlock.",
+            stringResource(R.string.settings_security_footer),
             style = MaterialTheme.typography.bodySmall,
             color = p.inkFaint,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 10.dp),

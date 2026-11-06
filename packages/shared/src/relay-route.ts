@@ -12,7 +12,7 @@ export type RelayRoute = 'tailscale' | 'lan' | 'loopback' | 'internet';
 
 export function relayRoute(relayUrl: string): RelayRoute {
   const h = relayHost(relayUrl);
-  if (h === 'localhost' || h === '::1' || h.startsWith('127.')) return 'loopback';
+  if (h === 'localhost' || h === '::1' || ipv4(h)?.[0] === 127) return 'loopback';
   if (h === 'ts.net' || h.endsWith('.ts.net') || isTailscaleIPv4(h) || h.startsWith('fd7a:115c:a1e0:')) return 'tailscale';
   if (h.endsWith('.local') || isPrivateIPv4(h) || isPrivateIPv6(h)) return 'lan';
   return 'internet';

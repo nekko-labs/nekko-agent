@@ -58,6 +58,7 @@ extension ChatMessage {
             o["toolResult"] = .object(t)
         }
         if interrupted { o["interrupted"] = .bool(true) }
+        if let turnStats { o["turnStats"] = turnStats.json }
         return .object(o)
     }
 }

@@ -15,6 +15,8 @@ struct NewChatView: View {
     @Environment(\.palette) private var palette
     @State private var model: (String, String)?
     @State private var folder: String?
+    @State private var choseFolder = false
+    @State private var cachedSupportingFolders: [String] = []
     @State private var mode: PcSettings.ChatMode?
     /// A concrete draft choice; otherwise resolve the last-used choice for this computer.
     @State private var effort: Effort?
@@ -23,20 +25,36 @@ struct NewChatView: View {
     @State private var text = ""
     @State private var photos: [PhotosPickerItem] = []
     @State private var pickingPhotos = false
-    @FocusState private var typing: Bool
+    @State private var typing = false
     @State private var images: [String] = []
     @State private var loadingPhotos = false
     @State private var busy = false
     @State private var error: String?
     @State private var showModels = false
+    @State private var foldersOpen = false
     @State private var restored = false
     /// Why the computer turned down a chat started offline (it came back here).
     @State private var refusal: String?
     @Environment(CloudSync.self) private var cloud
+    @Environment(PhoneChats.self) private var phone
+    /// The chat runs on this iPhone, on one of its own providers (decision 0050).
+    @State private var onPhone = false
+    @State private var phoneModel: (String, String)?
+    @State private var pickingPhoneModel = false
     @State private var cloudBusy = false
     @State private var cloudError: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
+    /// Auto (2026-11-05): a chat on a local model starts on a free computer.
+    /// Off once a computer is picked by hand, or when New chat opened from one computer's list.
+    @State private var autoOn = true
+    /// What Auto chose last, and why (the line under Run on).
+    @State private var autoPick: MachinePick?
+    @State private var autoFinding = false
+    /// Bumped to run Auto again: a local model picked, or Automatic chosen.
+    @State private var autoRun = 0
+    /// Auto set the model (a local one), on the computer it moved to.
+    @State private var autoChoseModel = false
 
     private var selectedEffort: Effort {
         let id = model?.1 ?? ""
@@ -68,25 +86,25 @@ struct NewChatView: View {
         app.prefs.lastTools[id] = selectedTools.rawValue
     }
 
-    private var offline: Bool { store.conn != .online }
+    private var offline: Bool { !onPhone && store.conn != .online }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
                 if offline {
-                    note(Label("\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then.",
+                    note(Label(supportingFolders.isEmpty ? "\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then." : "Reconnect to start with your starred supporting folders. They require confirmation on this iPhone; your draft stays here.",
                                systemImage: "tray.and.arrow.up"), color: palette.inkSoft)
                         .accessibilityIdentifier("newChat.offlineNote")
                 }
                 if let refusal { note(Label(refusal, systemImage: "exclamationmark.bubble"), color: palette.danger) }
+                // Above the box, as nothing goes below it (#1599).
+                if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
+                if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
                 // The desktop's clean start (2026-10-26): a peeking Nekko and a question over a glass message box.
                 NewChatGreeting(paused: !text.isEmpty || !images.isEmpty)
                     .padding(.top, 36)
                     .zIndex(1)
                 composer.padding(.top, -14)
-                options
-                if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
-                if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
             }
             .frame(maxWidth: 600)
             .padding(.horizontal, 16)
@@ -98,11 +116,25 @@ struct NewChatView: View {
         .navigationTitle("New chat")
         .navigationBarTitleDisplayMode(.inline)
         .keyboardDoneButton()
+        .sheet(isPresented: $pickingPhoneModel) {
+            PhoneModelPicker(selected: phoneModel) { p, m in
+                phoneModel = (p, m)
+                app.prefs.lastModel[PhoneProviders.computerId] = "\(p)::\(m)"
+            }
+        }
         .sheet(isPresented: $showModels) {
             ModelPicker(selected: (model?.0, model?.1)) { p, m in
                 model = (p, m)
+                autoChoseModel = false
                 if let e = effort { effort = Effort.effective(e, for: m) }
                 if let id = store.activeId { app.prefs.lastModel[id] = "\(p)::\(m)" }
+                autoPick = nil
+                autoRun += 1
+            }
+        }
+        .sheet(isPresented: $foldersOpen) {
+            NavigationStack {
+                FoldersView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { foldersOpen = false } } }
             }
         }
         .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
@@ -115,44 +147,49 @@ struct NewChatView: View {
         }
         .onAppear(perform: restoreDraft)
         .onAppear(perform: pickDefault)
+        .onAppear(perform: pickPlace)
         .onAppear(perform: takeShared)
+        .onAppear { autoOn = app.prefs.chatsFilter == nil }
+        .task(id: autoRun) { await runAuto() }
+        // The computer's providers may arrive after this screen opened.
+        .onChange(of: isLocal) { _, local in if local && autoPick == nil && !autoFinding { autoRun += 1 } }
         // Kept on the phone like a chat's composer: text, photos, model, folder and tool policy.
         .onChange(of: text) { _, _ in saveDraft() }
         .onChange(of: images) { _, _ in saveDraft() }
         .onChange(of: model?.0) { _, _ in saveDraft() }
         .onChange(of: model?.1) { _, _ in saveDraft() }
-        .onChange(of: folder) { _, _ in saveDraft() }
+        .onChange(of: folder) { _, _ in saveDraft(); autoRun += 1 }
+        .onChange(of: choseFolder) { _, _ in saveDraft() }
+        .onChange(of: cachedSupportingFolders) { _, _ in saveDraft() }
         .onChange(of: mode) { _, _ in saveDraft() }
         .onChange(of: effort) { _, _ in saveDraft() }
         // A chat started offline that the computer turned down comes back here.
         .onChange(of: store.drafts.drafts[DraftStore.newChat]) { _, d in adopt(d) }
         .onChange(of: app.sharedText) { _, _ in takeShared() }
         // The computer's defaults may arrive after this screen opened.
+        .onChange(of: store.pcSettings.defaultWorkspaceIds) { _, _ in pickDefaultFolder() }
+        .onChange(of: store.workspaces) { _, _ in pickDefaultFolder() }
         .onChange(of: store.defaults) { _, _ in pickDefault() }
     }
 
-    /// The message, its photos, Add and Start, on frosted glass.
+    /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextField("What should your computer do?", text: $text, axis: .vertical).lineLimit(3...10)
-                .foregroundStyle(palette.ink)
-                .focused($typing)
-                // The cat's paws rest on the box's top edge, above the first line.
+            MarkdownComposerField(text: $text, focused: $typing,
+                                  placeholder: onPhone ? "Ask anything" : "What should your computer do?",
+                                  identifier: "newChat.prompt", onPasteImages: pasteImages, boxed: false)
                 .padding(.top, 20)
-                // The whole box takes the keyboard, not only the first line's height.
-                .contentShape(Rectangle())
-                .onTapGesture { typing = true }
-                .accessibilityIdentifier("newChat.prompt")
             if loadingPhotos {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
                     Text("Adding photos…").font(.caption)
                 }.foregroundStyle(palette.inkSoft)
-            } else if !images.isEmpty {
-                HStack {
-                    Label(images.count == 1 ? "1 photo" : "\(images.count) photos", systemImage: "photo").font(.caption)
-                    Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
-                }.foregroundStyle(palette.inkSoft)
+            }
+            if !images.isEmpty {
+                ComposerPhotos(photos: images) { index in
+                    images.remove(at: index)
+                    photos = []
+                }
             }
             HStack(spacing: 6) {
                 Menu {
@@ -168,9 +205,19 @@ struct NewChatView: View {
                 }
                 .accessibilityLabel("Add")
                 .accessibilityIdentifier("newChat.add")
+                // Chats on this iPhone send text only.
+                .disabled(onPhone)
                 Spacer(minLength: 0)
+                VoiceConversationButton(makeTarget: makeVoiceTarget, finished: { target in
+                    switch target {
+                    case .computer(let chat, _): chat.stop(); opened(chat.sessionId)
+                    case .phone(let id): opened(id)
+                    }
+                })
                 startButton
             }
+            // The model, effort and where the chat runs: the box's bottom rows, never below it (#1599).
+            options
         }
         .padding(12)
         .background {
@@ -186,7 +233,7 @@ struct NewChatView: View {
     @ViewBuilder private var startButton: some View {
         if offline {
             Button(action: start) {
-                Text("Start when online").font(.footnote.weight(.semibold)).lineLimit(1)
+                Text(supportingFolders.isEmpty ? "Start when online" : "Connect to start").font(.footnote.weight(.semibold)).lineLimit(1)
                     .padding(.horizontal, 12).frame(minHeight: 36)
                     .background(canStart ? palette.accent : palette.surface2, in: Capsule())
                     .foregroundStyle(canStart ? palette.onAccent : palette.inkFaint)
@@ -214,12 +261,21 @@ struct NewChatView: View {
     private var options: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Button { showModels = true } label: {
-                    chip(model.map { modelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: model == nil)
+                if onPhone {
+                    Button { pickingPhoneModel = true } label: {
+                        chip(phoneModel.map { phoneModelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: phoneModel == nil)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("newChat.model")
+                } else if app.prefs.shows("model") || model == nil {
+                    // Simple mode may hide the model; with none chosen yet the picker stays.
+                    Button { showModels = true } label: {
+                        chip(model.map { modelName($0) } ?? String(localized: "Choose a model"), icon: "cpu", faint: model == nil)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("newChat.model")
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("newChat.model")
-                if let model {
+                if !onPhone, let model, app.prefs.shows("effort") {
                     Menu {
                         Picker("Effort", selection: effortChoice) {
                             ForEach(Effort.levels(for: model.1), id: \.self) { e in
@@ -227,52 +283,101 @@ struct NewChatView: View {
                             }
                         }
                     } label: {
-                        chip(effortName(selectedEffort), icon: "gauge.with.dots.needle.33percent")
+                        HStack(spacing: 6) {
+                            EffortGauge(level: Effort.levels(for: model.1).firstIndex(of: selectedEffort),
+                                        count: Effort.levels(for: model.1).count, size: 20)
+                            Text(effortName(selectedEffort)).font(.footnote.weight(.medium)).lineLimit(1)
+                        }
+                        .foregroundStyle(palette.ink).padding(.horizontal, 10).frame(minHeight: 44)
+                        .background(palette.surface, in: Capsule())
                     }
                     .accessibilityHint("How hard the model works on each reply. Higher takes longer.")
                     .accessibilityIdentifier("newChat.effort")
                 }
             }
             HStack(spacing: 6) {
-                if isLocal || pickedComputer {
+                // Where it runs, whenever there is a choice (2026-11-04): it starts on the
+                // computer the list was showing, or the one used last, and every paired
+                // computer is already connected, so picking another is instant.
+                if isLocal || pickedComputer || store.computers.count + (phone.isSetUp ? 1 : 0) > 1 {
                     Menu {
-                        Picker("Run on", selection: Binding(get: { store.activeId }, set: { if let id = $0 { switchComputer(id) } })) {
-                            ForEach(store.computers) { c in Text(c.name).tag(Optional(c.id)) }
+                        Picker("Run on", selection: Binding(get: { autoShown ? Self.autoTag : onPhone ? PhoneProviders.computerId : store.activeId }, set: { if let id = $0 { place(id) } })) {
+                            if autoOffered {
+                                Label {
+                                    Text("Automatic")
+                                    Text("A free computer")
+                                } icon: { Image(systemName: "sparkles") }
+                                .tag(Optional(Self.autoTag))
+                            }
+                            ForEach(store.computers) { c in
+                                Label {
+                                    Text(c.name)
+                                    Text(stateName(store.state(of: c.id)))
+                                } icon: {
+                                    if let icon = c.icon { Image("computer-\(icon)") } else { Image(systemName: cloud.machine(forComputer: c.id) == nil ? "desktopcomputer" : "cloud") }
+                                }
+                                .tag(Optional(c.id))
+                            }
+                            if phone.isSetUp {
+                                Label {
+                                    Text(ChatPlace.phoneName)
+                                    Text("Its own models, no tools")
+                                } icon: { Image(systemName: "iphone") }
+                                .tag(Optional(PhoneProviders.computerId))
+                            }
                         }
-                    } label: { chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer") }
-                    .accessibilityHint("A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.")
+                    } label: {
+                        if onPhone {
+                            chip(ChatPlace.phoneName, icon: "iphone")
+                        } else if autoShown {
+                            chip(String(localized: "Auto · \(store.active?.name ?? String(localized: "Computer"))"), icon: "sparkles")
+                        } else {
+                            chip(store.active?.name ?? String(localized: "Computer"), icon: "desktopcomputer", computerIcon: store.active?.icon)
+                        }
+                    }
+                    .accessibilityHint("Where the chat runs. Choosing another computer shows its models and folders; a local model runs on that computer’s own hardware.")
                     .accessibilityIdentifier("newChat.computer")
                 }
-                Menu {
-                    Picker("Folder", selection: Binding(get: { folder }, set: { value in
-                        folder = value
-                        if let id = store.activeId { app.prefs.lastFolder[id] = value }
-                    })) {
-                        Text("No folder").tag(String?.none)
-                        ForEach(store.workspaces) { w in
-                            VStack(alignment: .leading) {
-                                Text(w.name)
-                                if let path = w.path { Text(path) }
-                            }.tag(Optional(w.id))
+                if !onPhone {
+                    Menu {
+                        Picker("Folder", selection: Binding(get: { folder }, set: { value in
+                            choseFolder = true
+                            folder = value
+                            if let id = store.activeId { app.prefs.lastFolder[id] = value }
+                        })) {
+                            Text("No folder").tag(String?.none)
+                            ForEach(store.workspaces) { w in
+                                VStack(alignment: .leading) {
+                                    Text(w.name)
+                                    if let path = w.path { Text(path) }
+                                }.tag(Optional(w.id))
+                            }
                         }
+                        Divider()
+                        Button { foldersOpen = true } label: { Label("Manage folders", systemImage: "folder.badge.gearshape") }
+                    } label: {
+                        chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? (folder == nil ? String(localized: "No folder") : String(localized: "Saved folder")), icon: "folder")
                     }
-                } label: {
-                    chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? String(localized: "No folder"), icon: "folder")
-                }
-                .accessibilityIdentifier("newChat.folder")
-                Menu {
-                    Picker("Tools", selection: toolsChoice) {
-                        ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                            Text(m == .guardrails ? String(localized: "\(modeName(m)) (Recommended)") : modeName(m)).tag(m)
-                        }
+                    .accessibilityIdentifier("newChat.folder")
+                    if app.prefs.shows("asks") {
+                        ToolPolicyPicker(selection: toolsChoice)
+                        .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
+                        .accessibilityIdentifier("newChat.tools")
                     }
-                } label: {
-                    chip(modeName(selectedTools), icon: "checkmark.shield")
                 }
-                .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
-                .accessibilityIdentifier("newChat.tools")
             }
-            if cloud.account?.canSync == true {
+            if autoShown, let line = autoLine {
+                Label(line, systemImage: autoFinding ? "ellipsis" : "sparkles")
+                    .font(.caption).foregroundStyle(palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("newChat.auto")
+            }
+            if onPhone {
+                Text("Runs on \(ChatPlace.phoneName) with your own key. No tools: it can’t see your computers or files.")
+                    .font(.caption).foregroundStyle(palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("newChat.phoneNote")
+            } else if cloud.account?.canSync == true {
                 // A chat can run on a Nekko Cloud machine instead of a paired computer (decision 0017).
                 if let m = cloud.machines.first, let id = cloud.computerId(for: m), store.computers.contains(where: { $0.id == id }) {
                     Button { switchComputer(id) } label: {
@@ -296,10 +401,15 @@ struct NewChatView: View {
     }
 
     /// A solid, readable control over the decorative ground, as the desktop's clean-start controls.
-    private func chip(_ title: String, icon: String, faint: Bool = false) -> some View {
-        Label(title, systemImage: icon).font(.footnote.weight(.medium)).lineLimit(1)
+    private func chip(_ title: String, icon: String, computerIcon: String? = nil, faint: Bool = false) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            if let computerIcon { ComputerGlyph(icon: computerIcon, size: 15) } else { Image(systemName: icon) }
+        }
+        .font(.footnote.weight(.medium)).lineLimit(1)
             .foregroundStyle(faint ? palette.inkSoft : palette.ink)
-            .padding(.horizontal, 12).frame(minHeight: 34)
+            .padding(.horizontal, 10).frame(minHeight: 34)
             .background(palette.surface, in: Capsule())
             .overlay(Capsule().stroke(palette.line))
             .frame(minHeight: 44).contentShape(Rectangle())
@@ -313,8 +423,9 @@ struct NewChatView: View {
     }
 
     private var canStart: Bool {
+        if onPhone { return !busy && phoneModel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty
-        return !busy && !loadingPhotos && model != nil && !(offline && empty)
+        return !busy && !autoFinding && !loadingPhotos && model != nil && !(offline && (empty || !supportingFolders.isEmpty))
     }
 
     /// Images on the clipboard, scaled like picked photos (at most four in the message).
@@ -333,7 +444,8 @@ struct NewChatView: View {
 
     private var isLocal: Bool {
         guard let p = model?.0 else { return false }
-        return store.providers.first { $0.id == p }?.isLocal == true
+        // Auto set a local model on a computer whose providers are still being read.
+        return store.providers.first { $0.id == p }?.isLocal ?? autoChoseModel
     }
 
     private func effortName(_ e: Effort) -> String {
@@ -356,11 +468,131 @@ struct NewChatView: View {
         defer { cloudBusy = false }
         do {
             let made = try await cloud.createMachine(name: "Nekko Cloud", region: "nrt", scope: CloudSync.MachineScope())
-            let id = await store.pair(made.link)
+            let id = try await store.pair(made.link)
             store.rename(id, to: made.machine.name)
             cloud.link(made.machine, computer: id)
             switchComputer(id)
         } catch { cloudError = error.localizedDescription }
+    }
+
+    // MARK: Auto
+
+    static let autoTag = "nekko.auto"
+
+    /// Auto can choose here: a local model, more than one computer, and no folder (a folder decides the computer).
+    private var autoOffered: Bool { !onPhone && isLocal && folder == nil && store.computers.count > 1 }
+    private var autoShown: Bool { autoOn && autoOffered }
+
+    private var autoLine: String? {
+        if autoFinding { return String(localized: "Finding a free computer…") }
+        guard let pick = autoPick, let name = store.active?.name else { return nil }
+        switch pick.reason {
+        case .free:
+            if let busy = pick.skipped.first.flatMap({ id in store.computers.first { $0.id == id }?.name }) {
+                return String(localized: "Auto picked \(name): \(busy) is busy.")
+            }
+            return String(localized: "Auto picked \(name): it’s free.")
+        case .allBusy:
+            return String(localized: "Every computer is busy, so Auto kept \(name), the one used last.")
+        case .noneAvailable:
+            return String(localized: "No other computer can run a local model now, so Auto kept \(name).")
+        }
+    }
+
+    /// The Run on menu: Automatic, a computer, or this iPhone. Picking a place by hand turns Auto off.
+    private func place(_ id: String) {
+        if id == Self.autoTag {
+            autoOn = true
+            autoPick = nil
+            autoRun += 1
+            return
+        }
+        autoOn = false
+        autoPick = nil
+        autoRun += 1 // Cancel any probe still in flight, even if Auto is chosen again.
+        switchPlace(id)
+    }
+
+    /// Ask every computer whether it is in use and move the chat to a free
+    /// one, with a local model there: the one picked if it has it, else its
+    /// last one, else one already loaded.
+    private func runAuto() async {
+        let run = autoRun
+        let source = store.activeId
+        autoFinding = false
+        guard autoShown, !busy, let chosen = model else { return }
+        autoFinding = true
+        defer { if autoRun == run { autoFinding = false } }
+        let pick = await store.pickMachine(lastUsed: source)
+        guard !Task.isCancelled, autoRun == run, store.activeId == source, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        guard let target = pick.computerId, target != store.activeId else { autoPick = pick; return }
+        let last = app.prefs.lastModel[target].flatMap { s -> (String, String)? in
+            guard let r = s.range(of: "::") else { return nil }
+            return (String(s[..<r.lowerBound]), String(s[r.upperBound...]))
+        }
+        var prefer: [(String, String)] = [chosen]
+        if let last { prefer.append(last) }
+        guard let next = await store.localModel(on: target, prefer: prefer) else {
+            guard !Task.isCancelled, autoShown else { return }
+            // A model server may be enabled without any installed models.
+            autoPick = MachinePick(computerId: store.activeId, reason: .noneAvailable, skipped: [])
+            return
+        }
+        guard !Task.isCancelled, autoRun == run, store.activeId == source, autoShown, !busy, model?.0 == chosen.0, model?.1 == chosen.1 else { return }
+        // Moved by Auto: the words carry over, the folder stays unset, and nothing is remembered as picked by hand.
+        let words = text
+        store.connect(target)
+        model = next
+        autoChoseModel = true
+        effort = nil
+        mode = nil
+        // Supporting folders belong to the computer they were starred on (the target's defaults load with its folders).
+        cachedSupportingFolders = []
+        refusal = nil
+        text = words
+        store.drafts.set(DraftStore.newChat, current)
+        autoPick = pick
+    }
+
+    /// Run on a paired computer, or on this iPhone.
+    private func switchPlace(_ id: String) {
+        if id == PhoneProviders.computerId {
+            pickedComputer = true
+            onPhone = true
+            images = []
+            photos = []
+            Task { await pickPhoneDefault() }
+            return
+        }
+        let wasPhone = onPhone
+        onPhone = false
+        if wasPhone && id == store.activeId { pickDefault(); return }
+        switchComputer(id)
+    }
+
+    /// Start on this iPhone when the list shows only its chats, or when no computer is paired.
+    private func pickPlace() {
+        guard phone.isSetUp, app.prefs.chatsFilter == PhoneProviders.computerId || store.computers.isEmpty else { return }
+        onPhone = true
+        Task { await pickPhoneDefault() }
+    }
+
+    /// This iPhone's last model, else its first provider's first.
+    private func pickPhoneDefault() async {
+        guard phoneModel == nil else { return }
+        if let last = app.prefs.lastModel[PhoneProviders.computerId], let r = last.range(of: "::") {
+            let p = String(last[..<r.lowerBound])
+            if phone.provider(p)?.enabled == true { phoneModel = (p, String(last[r.upperBound...])); return }
+        }
+        guard let first = phone.providers.first(where: \.enabled) else { return }
+        var list = phone.models[first.id] ?? []
+        if list.isEmpty { list = await phone.loadModels(first.id) }
+        if phoneModel == nil, let m = list.first { phoneModel = (first.id, m.id) }
+    }
+
+    private func phoneModelName(_ m: (String, String)) -> String {
+        let name = phone.models[m.0]?.first { $0.id == m.1 }?.name ?? m.1
+        return "\(name) · \(phone.provider(m.0)?.label ?? m.0)"
     }
 
     private func switchComputer(_ id: String) {
@@ -369,9 +601,13 @@ struct NewChatView: View {
         let words = text
         store.connect(id)
         model = nil
+        autoChoseModel = false
         effort = nil
         mode = nil
+        choseFolder = false
+        cachedSupportingFolders = []
         folder = app.prefs.lastFolder[id]
+        pickDefaultFolder()
         refusal = nil
         text = words
         store.drafts.set(DraftStore.newChat, current)
@@ -398,8 +634,15 @@ struct NewChatView: View {
         if let p = store.defaults.defaultProviderId, let m = store.defaults.defaultModelId, m != autoModelId { model = (p, m) }
     }
 
+    private var supportingFolders: [String] {
+        guard !choseFolder, folder != nil else { return [] }
+        if store.conn != .online { return cachedSupportingFolders }
+        let valid = Set(store.workspaces.map(\.id))
+        return store.pcSettings.defaultWorkspaceIds.filter { $0 != folder && valid.contains($0) }
+    }
+
     private var current: Draft {
-        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal)
+        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal, useDefaultFolders: !choseFolder, supportingWorkspaceIds: supportingFolders)
     }
 
     private func restoreDraft() {
@@ -407,10 +650,26 @@ struct NewChatView: View {
         restored = true
         let draft = store.drafts.draft(DraftStore.newChat)
         folder = app.prefs.newChatFolder(computer: store.activeId, draft: draft)
+        choseFolder = draft.useDefaultFolders.map { !$0 } ?? (draft.workspaceId != nil)
+        cachedSupportingFolders = draft.supportingWorkspaceIds
         apply(draft)
+        pickDefaultFolder()
+    }
+
+    private func pickDefaultFolder() {
+        guard !choseFolder, store.conn == .online else { return }
+        let valid = Set(store.workspaces.map(\.id))
+        if let first = store.pcSettings.defaultWorkspaceIds.first(where: { valid.contains($0) }) {
+            folder = first
+            cachedSupportingFolders = store.pcSettings.defaultWorkspaceIds.filter { $0 != first && valid.contains($0) }
+        } else { cachedSupportingFolders = [] }
     }
 
     private func apply(_ d: Draft) {
+        if let defaults = d.useDefaultFolders {
+            choseFolder = !defaults
+            cachedSupportingFolders = d.supportingWorkspaceIds
+        }
         if !d.text.isEmpty { text = d.text }
         if !d.images.isEmpty { images = d.images }
         if let p = d.providerId, let m = d.modelId { model = (p, m) }
@@ -430,13 +689,46 @@ struct NewChatView: View {
         apply(d)
     }
 
+    private func makeVoiceTarget() async throws -> ConversationTarget {
+        if onPhone {
+            guard let picked = phoneModel else { throw RelayError("Choose a phone model before starting voice.") }
+            return .phone(phone.create(providerId: picked.0, modelId: picked.1, first: ""))
+        }
+        guard let model else { throw RelayError("Choose a model before starting voice.") }
+        guard let computer = store.activeId, store.conn == .online else { throw RelayError("Connect to your computer before starting voice.") }
+        let id = try await store.createChat(providerId: model.0, modelId: model.1, workspaceId: folder,
+                                            mode: selectedTools, effort: selectedEffort, supportingWorkspaceIds: supportingFolders)
+        guard store.activeId == computer else { throw RelayError("The selected computer changed. Start voice again on the intended computer.") }
+        let chat = ChatModel(sessionId: id, store: store)
+        await chat.start()?.value
+        if Task.isCancelled { chat.stop(); throw CancellationError() }
+        return .computer(chat, computerId: computer)
+    }
+
     private func start() {
+        guard !autoFinding else { return }
+        if onPhone {
+            guard let picked = phoneModel else { return }
+            let (p, m) = picked
+            let id = phone.create(providerId: p, modelId: m, first: text)
+            app.prefs.lastModel[PhoneProviders.computerId] = "\(p)::\(m)"
+            text = ""
+            store.drafts.clear(DraftStore.newChat)
+            opened(id)
+            return
+        }
         guard let model else { return }
         let (p, m) = model
         rememberChoices()
         let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let photos = images
+        let supporting = supportingFolders
+        let sourceComputer = store.activeId
         if offline {
+            guard supporting.isEmpty else {
+                error = "Reconnect to start with your starred supporting folders. Your draft has not been sent."
+                return
+            }
             startLater(p, m, first)
             return
         }
@@ -444,15 +736,18 @@ struct NewChatView: View {
         error = nil
         Task {
             do {
-                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools, effort: selectedEffort)
+                let id = try await store.createChat(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools, effort: selectedEffort, supportingWorkspaceIds: supporting)
                 store.drafts.clear(DraftStore.newChat)
                 // The chat's own model sends the first message, so a failure shows
                 // there and the text comes back in its composer.
                 if !first.isEmpty || !photos.isEmpty { app.firstMessages[id] = UnsentPrompt(text: first, skill: nil, images: photos) }
                 opened(id)
             } catch let e as RelayError where !e.fromComputer && !(first.isEmpty && photos.isEmpty) {
-                // No answer: the chat starts from the outbox when the computer is back.
-                startLater(p, m, first)
+                // Multi-folder starts need foreground authorization; never drop that context.
+                if store.activeId == sourceComputer {
+                    if supporting.isEmpty { startLater(p, m, first) }
+                    else { error = "Reconnect to start with your starred supporting folders. Your draft has not been sent." }
+                }
             } catch {
                 self.error = error.localizedDescription
             }
@@ -463,7 +758,7 @@ struct NewChatView: View {
     /// Offline: the chat and its first prompt wait in the outbox, listed under
     /// Waiting to send, and start when the computer is back.
     private func startLater(_ p: String, _ m: String, _ first: String) {
-        guard !first.isEmpty || !images.isEmpty else { return }
+        guard supportingFolders.isEmpty, !first.isEmpty || !images.isEmpty else { return }
         store.outbox.add(chatId: nil, text: first, images: images, newChat: NewChatSpec(providerId: p, modelId: m, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue))
         store.drafts.clear(DraftStore.newChat)
         text = ""
@@ -475,7 +770,36 @@ struct NewChatView: View {
     }
 }
 
+/// The All / Cloud / Local tabs pinned over a model list, after the desktop picker's
+/// Model source group. Every tab stays on offer; an empty one says so in the list.
+struct ModelScopeTabs: View {
+    @Binding var scope: ModelScope
+
+    var body: some View {
+        Picker("Model source", selection: $scope) {
+            ForEach(ModelScope.allCases) { s in Text(s.title).tag(s) }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityIdentifier("modelPicker.scope")
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+    }
+}
+
+extension ModelScope {
+    var title: LocalizedStringKey {
+        switch self {
+        case .all: "All"
+        case .cloud: "Cloud"
+        case .local: "Local"
+        }
+    }
+}
+
 /// Every enabled provider's models on the computer, listed in parallel; starred first.
+/// The tabs on top narrow it to the cloud APIs or the local model servers.
 struct ModelPicker: View {
     let selected: (String?, String?)
     var pick: (String, String) -> Void
@@ -483,6 +807,7 @@ struct ModelPicker: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var query = ""
+    @State private var scope = ModelScope.all
 
     var body: some View {
         NavigationStack {
@@ -495,7 +820,15 @@ struct ModelPicker: View {
                         }
                     }
                 }
-                ForEach(store.modelGroups) { g in
+                if groups.isEmpty && scope != .all {
+                    Group {
+                        if scope == .local { Text("No local model servers on this computer.") } else { Text("No cloud providers on this computer.") }
+                    }
+                        .font(.subheadline).foregroundStyle(palette.inkSoft)
+                        .listRowBackground(Color.clear)
+                        .accessibilityIdentifier("modelPicker.emptyScope")
+                }
+                ForEach(groups) { g in
                     Section(g.provider.label) {
                         if let e = g.error {
                             Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning)
@@ -509,6 +842,7 @@ struct ModelPicker: View {
                     }
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) { ModelScopeTabs(scope: $scope) }
             .searchable(text: $query)
             .pawRefreshable { await store.loadAllModels(force: true) }
             .navigationTitle("Model")
@@ -518,7 +852,8 @@ struct ModelPicker: View {
         }
     }
 
-    private var favorites: [String] { store.defaults.favoriteModels.filter { f in store.providers.contains { $0.enabled && f.hasPrefix($0.id + "::") } } }
+    private var favorites: [String] { scope.favorites(store.defaults.favoriteModels, providers: store.providers) }
+    private var groups: [ModelGroup] { scope.groups(store.modelGroups) }
 
     private func split(_ f: String) -> (String, String) {
         guard let r = f.range(of: "::") else { return (f, "") }

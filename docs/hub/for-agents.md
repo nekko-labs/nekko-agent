@@ -27,8 +27,8 @@ The tools, the other harnesses and the CLI commands are in [CLI and MCP](/docs/c
 An agent changing Nekko Agent should read these files in the repo first:
 
 1. [`AGENTS.md`](../../AGENTS.md): the rules for every change and a map of the runbooks (landing a PR, failing checks, visual evidence).
-2. [`spec/`](../../spec/README.md): what the product does and why, one file per feature with an index. Read the index and the files your change touches, and update them whenever a feature changes.
-3. [`TASKS.md`](../../TASKS.md): the technical plan and the task list, with stable task IDs.
+2. [`spec/`](../../spec/README.md): what the product does and why, one file per feature. `node scripts/spec-index.mjs` prints the index. Read it and the files your change touches, and update them whenever a feature changes.
+3. [`TASKS.md`](../../TASKS.md): the technical plan. Tasks are GitHub issues; the task history up to 2026-11-04 is in [docs/history/tasks-archive.md](../history/tasks-archive.md).
 4. [Contributing](/docs/contributing) and [Architecture](/docs/architecture) on this site.
 
 ## Editing these docs

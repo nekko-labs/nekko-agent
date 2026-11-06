@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ImageView, RunnerView } from '@nekko-agent/shared';
+import { useStore } from '../store.js';
 import { EmptyHint } from '../components/primitives/index.js';
 import { RunnerCard } from '../components/RunnerCard.js';
 import { ConnectRunnerSheet } from '../components/ConnectRunnerSheet.js';
@@ -8,7 +9,6 @@ import { MacSetupSheet } from '../components/MacSetupSheet.js';
 import { connectToWorkflow } from '../components/RunnerReady.js';
 import { GithubStepArt, MacStepArt } from '../components/RunnerStepArt.js';
 import { CheckIcon, PlugIcon } from '../icons.js';
-import { hasAppChrome } from '../chrome.js';
 
 export type RunnersState = { kind: 'loading' } | { kind: 'unavailable'; message: string } | { kind: 'ready'; views: RunnerView[] };
 
@@ -30,7 +30,7 @@ const StepPanel = ({ step, art, title, blurb, next, children }: { step: number; 
  */
 export function CiRunnersFirstVisit({ connected = false, canResume = false, onConnect, onSetup }: { connected?: boolean; canResume?: boolean; onConnect(): void; onSetup?(): void }) {
   return (
-    <div className="mx-auto mt-4 flex max-w-170 flex-col gap-2.5 rounded-[14px] border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
+    <div className="mt-2 flex max-w-170 flex-col gap-2.5 rounded-[14px] border p-4" style={{ borderColor: 'var(--line)', background: 'var(--surface)' }}>
       <h2 className="text-[15.5px] font-semibold">Use this Mac as a CI runner</h2>
       <p className="text-[13.5px] text-ink-soft">Run your GitHub Actions jobs here, each in a throwaway VM that is deleted afterward. Your own work comes first.</p>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(min(230px,100%),1fr))] gap-3.5">
@@ -52,7 +52,7 @@ export function CiRunnersFirstVisit({ connected = false, canResume = false, onCo
 /** The section body for each load state; pure so tests can render it without effects. */
 export function runnersBody(
   state: RunnersState,
-  { now, image = null, onConnect, onSettings, onSetup, beginReply }: { now: number; image?: ImageView | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; beginReply(): (v: RunnerView) => void },
+  { now, image = null, onConnect, onSettings, onSetup, onAddTools, beginReply }: { now: number; image?: ImageView | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; onAddTools?(v: RunnerView): Promise<void>; beginReply(): (v: RunnerView) => void },
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
   if (state.kind === 'unavailable') {
@@ -68,7 +68,7 @@ export function runnersBody(
     <>
       {image?.state === 'none' && <CiRunnersFirstVisit connected canResume={image.canResume} onConnect={onConnect} onSetup={() => onSetup?.(first)} />}
       {state.views.map((v) => (
-        <RunnerCard key={v.config.id} view={v} now={now} image={image} onSettings={() => onSettings(v.config.id)} onSetup={() => onSetup?.(v.config.id)} beginReply={beginReply} />
+        <RunnerCard key={v.config.id} view={v} now={now} image={image} onSettings={() => onSettings(v.config.id)} onSetup={() => onSetup?.(v.config.id)} onAddTools={onAddTools && (() => onAddTools(v))} beginReply={beginReply} />
       ))}
     </>
   );
@@ -96,8 +96,10 @@ export const retryDelay = (attempt: number) => Math.min(60_000, 2000 * 2 ** atte
 
 const nowSecs = () => Date.now() / 1000;
 
-/** The Workflows tab's CI runners section: this Mac's runners from nekkod. */
-export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.ReactNode; now?: () => number }) {
+/** The CI runners section at the foot of the Scheduled Tasks list: this Mac's runners from nekkod. */
+export function CiRunnersView({ now = nowSecs, panel = false }: { now?: () => number; panel?: boolean }) {
+  const focusRequested = useStore((s) => s.ciRunnersFocus);
+  const section = useRef<HTMLElement>(null);
   const [state, setState] = useState<RunnersState>({ kind: 'loading' });
   const [clock, setClock] = useState(now);
   const [connecting, setConnecting] = useState(false);
@@ -140,7 +142,15 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
     };
   }, []);
 
-  const running = state.kind === 'ready' && state.views.some((v) => v.slots.some((s) => s.state === 'running'));
+  // Wait for the cards, not just the section shell, before scrolling to it.
+  useEffect(() => {
+    if (panel || !focusRequested || state.kind === 'loading') return;
+    section.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    section.current?.focus({ preventScroll: true });
+    useStore.setState({ ciRunnersFocus: false });
+  }, [panel, focusRequested, state.kind]);
+
+  const running = state.kind === 'ready' && state.views.some((v) => (v.queue?.length ?? 0) > 0 || v.slots.some((s) => s.state === 'running' || s.state === 'draining'));
   useEffect(() => {
     if (!running) return;
     setClock(now());
@@ -158,20 +168,38 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
   const settingsView = state.kind === 'ready' ? state.views.find((v) => v.config.id === settingsFor) : undefined;
   const setupView = state.kind === 'ready' ? state.views.find((v) => v.config.id === setup?.id) : undefined;
 
+  // A daemon with no runner channel is not a Mac that can host one: leave the section out rather than explain it in every list.
+  if (state.kind === 'unavailable' && state.message.startsWith('unknown channel')) return null;
+
   return (
-    <div className="min-w-0 flex-1 overflow-y-auto p-4">
-      <div className="mx-auto max-w-5xl">
-        <div className="flex flex-wrap items-center gap-2">
-          {!hasAppChrome && <h1 className="view-title">CI runners</h1>}
-          {segment}
-          {hasRunners && (
-            <button className="btn btn-outline ml-auto py-1!" onClick={() => setConnecting(true)}>
-              <PlugIcon className="h-3.5 w-3.5" /> Connect GitHub
-            </button>
-          )}
-        </div>
-        {runnersBody(state, { now: clock, image, onConnect: () => setConnecting(true), onSettings: setSettingsFor, onSetup: (id) => setSetup({ id, rebuild: false }), beginReply })}
+    <section ref={section} tabIndex={-1} data-ci-runners className={panel ? 'mb-3 shrink-0' : undefined}>
+      <div className="flex flex-wrap items-baseline gap-2 py-1">
+        <h2 className="text-sm font-semibold">CI runners</h2>
+        {panel && <button className="btn btn-outline ml-auto py-1! text-xs" onClick={() => {
+          useStore.setState({ ciRunnersFocus: true });
+          useStore.getState().setView('workflows');
+        }}>View CI runners</button>}
+        {!panel && hasRunners && (
+          <button className="btn btn-outline ml-auto py-1!" onClick={() => setConnecting(true)}>
+            <PlugIcon className="h-3.5 w-3.5" /> Connect GitHub
+          </button>
+        )}
       </div>
+      {panel && state.kind === 'loading' ? <p role="status" className="py-2 text-xs text-ink-faint">Loading CI runners…</p>
+        : panel && state.kind === 'ready' && !hasRunners ? <p className="py-2 text-xs text-ink-faint">No CI runners connected. Open the full view to connect this Mac.</p>
+        : runnersBody(state, {
+        now: clock,
+        image,
+        onConnect: () => setConnecting(true),
+        onSettings: setSettingsFor,
+        onSetup: (id) => setSetup({ id, rebuild: false }),
+        // Like Update scripts: it starts at once, and the setup sheet follows it.
+        onAddTools: async (v) => {
+          await window.nekko.buildImage({ kind: 'tools', priority: v.config.settings.priority });
+          setSetup({ id: v.config.id, rebuild: true });
+        },
+        beginReply,
+      })}
       {connecting && (
         // shortcut: views do not carry the GitHub app id yet, so connect always asks for the key; pass a real lookup once they do.
         <ConnectRunnerSheet
@@ -193,6 +221,13 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
             setSettingsFor(null);
             setSetup({ id: settingsView.config.id, rebuild: true });
           }}
+          onRefresh={async () => {
+            // Nothing to choose first: it starts at once, and the setup sheet follows it.
+            const id = settingsView.config.id;
+            await window.nekko.buildImage({ kind: 'refresh', priority: settingsView.config.settings.priority });
+            setSettingsFor(null);
+            setSetup({ id, rebuild: true });
+          }}
           beginReply={beginReply}
         />
       )}
@@ -210,6 +245,6 @@ export function CiRunnersView({ segment, now = nowSecs }: { segment?: React.Reac
           beginReply={beginReply}
         />
       )}
-    </div>
+    </section>
   );
 }

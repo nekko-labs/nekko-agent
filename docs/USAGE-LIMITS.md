@@ -20,6 +20,12 @@ All of these are normalized into the same `SubscriptionLimits` shape in `package
 
 The numbers in the chat header chip and the Models card are live reads from the provider. They update after each subscription response and on a throttled poll. Nekko Agent does not extrapolate or predict your usage locally; if a provider does not return a window, that window is simply not shown.
 
+## Limits in the model picker
+
+The desktop and web model dropdown shows reported usage windows beneath the corresponding provider/account heading. Each meter names its window and percent used; Warning and Limited are labeled, and hovering reveals the reported reset time. A stale snapshot says so. While loading it says **Reading usage limits…**; if nothing is reported, it says **Usage limits not reported**, never 0% or unlimited. Local models and providers without a supported usage read have no quota meter.
+
+Provider groups have dividers and more breathing room. The dropdown has 12px inner padding and a 500px maximum height (up from 384px), still constrained to the space above or below the composer. Search, source filters, favorites and defaults work as before; pinning all of an account's models does not hide its usage.
+
 ## Utilization and Budget on the Agents wall
 
 Utilization lists every enabled cloud provider on its own row. A Claude plan card left over from an older build says the plan sign-in is no longer available and points to adding an API key in Models.
@@ -39,6 +45,10 @@ The ChatGPT usage endpoint used here is reverse-engineered from the Codex CLI's 
 `MODEL_PRICING` in `packages/shared/src/limits.ts` is a table of published list prices, matched by model id substring. The per-model labels (`$X/$Y per MTok`) and the session total in the chat header are estimates only.
 
 Your actual provider bill may differ because of taxes, discounts, cached-token pricing, batch pricing, enterprise agreements, image or tool-token costs, or mid-rate changes. Local models (Ollama, LM Studio, vLLM) and subscription providers are shown as `Free` or `Included in plan` because they are not metered through an API key in Nekko Agent.
+
+## On the iPhone
+
+The iPhone's **Usage and limits** reads every paired computer that is online (its usage summary, its providers and each enabled provider's limits) and adds the chats that run on the iPhone itself. Each computer's numbers come from that computer, so its prices are the estimates above. The iPhone's own chats use your API keys straight from the phone: it counts the tokens each provider reports at the end of a reply (Anthropic's `message_start` and `message_delta` usage, OpenAI's and OpenRouter's `stream_options.include_usage`) and keeps that count on the phone. It has no price table, so it shows tokens only. An OpenAI-compatible server is not asked for usage, because some turn down fields they don't know.
 
 ## Limits are provider-side
 

@@ -50,13 +50,28 @@ To use the microphone for dictation only, turn off **Enable "Nekko..." commands*
 
 ## On iPhone
 
-Tap the microphone in a chat's message box and it keeps listening through pauses until you tap stop, lock the phone, or leave the chat. The screen stays on while it listens. If listening stops on its own (a call, unplugging headphones, locking), you'll see "Stopped listening". With two chats side by side, only one listens at a time. AirPods work as the microphone, at call quality while listening. A command with nothing to do says so ("Nothing to send", "Nothing to erase", "Nothing to confirm"). With **Hold to talk**, answer a "Nekko, yes" question in your next hold. The first time you tap it (or the first time you hold it, with **Hold to talk**), a short video shows how voice works instead of listening. **Turn on** starts listening; **Not now** closes it without listening. Either way, or if you swipe it away, it won't show again. Watch it any time from **Settings > Dictation > Watch how voice works**. The video has captions, and VoiceOver reads a summary of it; with Reduce Motion on, it waits for the play button.
+The message box on iPhone has one microphone, and it starts a [hands-free conversation](#hands-free-conversation-on-iphone). To dictate words into a message without sending them, use the microphone on the iPhone keyboard. Watch how voice works any time from **Settings > Dictation > Watch how voice works**.
 
 Without Whisper on your computer, speech is turned into text on the iPhone only, never on a server.
 
 ### From the Lock Screen
 
 With **Settings > While a chat runs > Live Activities** set to **Detailed**, the card on the Lock Screen and in the Dynamic Island has a microphone. Tap it and the iPhone asks for Face ID (or your passcode) first. Then say one message: the card shows "Listening…" and stops at your first pause (or after 30 seconds without one). What you said goes to the chat the card shows, as if you had typed it there; while the chat is working it waits in that chat's queue. The card then shows "Sent: " and your words until the chat's reply line takes their place. If your computer doesn't answer within 10 seconds (it's offline, say), the card still says "Sent": the message waits on the iPhone and goes when the computer is back. If your computer turns it down, the card says "Not sent" and why, and your words wait in that chat's message box. **Send to** on the card sends what you have said so far without waiting for the pause, and **Cancel** sends nothing. Speech is turned into text the same way as in a chat: Whisper on your computer, or on the iPhone only, never on a server. If it couldn't be turned into text, the card says "Not sent" and why, for about a minute. On iOS 17 the microphone opens the chat with listening already on instead, once you have unlocked the app (with **Hold to talk**, it just opens the chat).
+
+### Hands-free conversation on iPhone
+
+The microphone in the message box is **Voice conversation**. It is available in New chat, a connected computer chat, and a chat running on this iPhone.
+
+1. Open **Voice conversation**, then tap **Start voice conversation**. Opening the controls alone does not start the microphone.
+2. Speak a turn. After a pause, the recognized words are sent automatically to that chat's selected model.
+3. Nekko speaks the reply on the iPhone, then listens again. The microphone is off while it thinks or speaks, so it cannot transcribe its own reply.
+4. Tap **End voice conversation** or **Done** to stop listening and playback. Leaving the screen, locking/backgrounding the phone, an audio interruption, or switching computers also stops voice. It never restarts without Start.
+
+An agent task already sent may continue after voice ends. If the agent needs approval or an answer, voice stops and asks you to answer in the chat—voice never approves a tool for you. For a computer chat, the original computer must remain connected. Phone-only chat recognition stays on the iPhone; connected chats use the existing configured on-device/computer speech path. Playback is iOS speech on this phone, without a new cloud speech service. The recognized text still goes to your selected model.
+
+To add speech to a draft without sending it, use the iPhone keyboard's own dictation.
+
+**Verification note:** simulator state/lifecycle checks do not prove physical microphone, speech quality or Bluetooth routing. These require an on-device check before claiming hardware support for the new hands-free flow.
 
 ## Privacy
 

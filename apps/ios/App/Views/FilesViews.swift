@@ -36,13 +36,27 @@ struct FoldersView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             ForEach(store.workspaces) { w in
-                NavigationLink { FilesScreen(root: .folder(w.id), title: w.name) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(w.name, systemImage: "folder")
-                        if let path = w.path { Text(path).font(.caption).foregroundStyle(palette.inkSoft) }
+                HStack {
+                    NavigationLink { FilesScreen(root: .folder(w.id), title: w.name) } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(w.name, systemImage: "folder")
+                            if let path = w.path { Text(path).font(.caption).foregroundStyle(palette.inkSoft) }
+                        }
                     }
+                    .accessibilityIdentifier("files.folder")
+                    let starred = store.pcSettings.defaultWorkspaceIds.contains(w.id)
+                    Button { act { try await store.setDefaultWorkspace(w.id, included: !starred) } } label: {
+                        Image(systemName: starred ? "star.fill" : "star")
+                            .foregroundStyle(starred ? palette.accent : palette.inkSoft).frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.borderless).disabled(unavailable)
+                    .accessibilityLabel(starred ? "Remove \(w.name) from default folders" : "Include \(w.name) by default")
+                    .accessibilityIdentifier("files.star.\(w.id)")
+                    Menu {
+                        Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
+                    } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                    .disabled(unavailable).accessibilityLabel("Manage \(w.name)")
                 }
-                .accessibilityIdentifier("files.folder")
                 .swipeActions(allowsFullSwipe: false) {
                     Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
                         .disabled(unavailable)
@@ -58,7 +72,7 @@ struct FoldersView: View {
                     .accessibilityIdentifier("files.addFolder")
                 if busy { ProgressView() }
             } footer: {
-                Text("Use an absolute path on the computer, not on this iPhone. Removing a saved folder never deletes files on disk.")
+                Text("Star folders to include them in new chats by default. Use an absolute path on the computer, not on this iPhone. Removing a saved folder never deletes files on disk.")
             }
         }
         .appBackground()
@@ -480,7 +494,9 @@ struct FileEditorView: View {
     }
 }
 
-/// The computer's logs, read only (IO-33 FA-5), from the computer menu.
+/// Logs, from the computer menu, grouped by where they are kept: this
+/// phone's connection log first, then each paired computer. The connected
+/// computer's logs are read only (IO-33 FA-5); another computer offers to connect.
 struct LogsView: View {
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -488,34 +504,72 @@ struct LogsView: View {
 
     var body: some View {
         List {
-            if let model {
-                if let error = model.error {
-                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(palette.danger)
-                        .accessibilityIdentifier("logs.error")
-                } else if model.loaded && model.logs.isEmpty {
-                    Text("No logs yet.").foregroundStyle(palette.inkSoft)
-                }
-                ForEach(model.logs) { log in
-                    NavigationLink { LogDetailView(model: model, log: log) } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(log.title, systemImage: icon(log.kind)).foregroundStyle(palette.ink).lineLimit(1)
-                            Text(detail(log)).font(.caption).foregroundStyle(palette.inkSoft)
-                        }
+            Section {
+                NavigationLink(value: Route.connection) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label("Connection log", systemImage: "iphone").foregroundStyle(palette.ink).lineLimit(1)
+                        Text(phoneDetail).font(.caption).foregroundStyle(palette.inkSoft)
                     }
-                    .accessibilityIdentifier("logs.row")
                 }
-            } else {
-                ProgressView().frame(maxWidth: .infinity)
+                .accessibilityIdentifier("logs.phone")
+            } header: {
+                GroupHeading(String(localized: "On this phone"))
+            }
+            .listRowBackground(Color.clear)
+            ForEach(store.computers) { c in
+                Section {
+                    if c.id == store.activeId { computerLogs } else {
+                        // Already connected: this makes it the active computer, whose logs are read.
+                        Button { store.connect(c.id) } label: {
+                            Label("Read its logs", systemImage: "doc.text.magnifyingglass").foregroundStyle(palette.accent)
+                        }
+                        .accessibilityIdentifier("logs.connect")
+                    }
+                } header: {
+                    GroupHeading(c.name)
+                }
+                .listRowBackground(Color.clear)
             }
         }
+        .listStyle(.plain)
         .appBackground()
         .navigationTitle("Logs")
         .accessibilityIdentifier("logs.list")
         .pawRefreshable { await model?.load() }
-        .task {
-            if model == nil { model = LogsModel(store: store) }
+        // Another computer connected from here: read its logs instead.
+        .task(id: store.activeId) {
+            model = LogsModel(store: store)
             await model?.load()
         }
+    }
+
+    @ViewBuilder private var computerLogs: some View {
+        if let model {
+            if let error = model.error {
+                Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(palette.danger)
+                    .accessibilityIdentifier("logs.error")
+            } else if model.loaded && model.logs.isEmpty {
+                Text("No logs yet.").foregroundStyle(palette.inkSoft)
+            }
+            ForEach(model.logs) { log in
+                NavigationLink { LogDetailView(model: model, log: log) } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Label(log.title, systemImage: icon(log.kind)).foregroundStyle(palette.ink).lineLimit(1)
+                        Text(detail(log)).font(.caption).foregroundStyle(palette.inkSoft)
+                    }
+                }
+                .accessibilityIdentifier("logs.row")
+            }
+        } else {
+            ProgressView().frame(maxWidth: .infinity)
+        }
+    }
+
+    /// "12 events since the app started".
+    private var phoneDetail: String {
+        let n = store.connectionLog.entries.count
+        return n == 0 ? String(localized: "Nothing yet since the app started")
+                      : String(localized: "\(n) events since the app started")
     }
 
     private func icon(_ k: LogInfo.Kind) -> String {

@@ -163,6 +163,84 @@ fn provider(config: &Value, transport: Arc<FakeTransport>) -> AnyProvider {
     }
 }
 
+#[tokio::test]
+async fn live_effort_metadata_survives_catalog_and_request_mapping() {
+    for (kind, response, pointer) in [
+        (
+            "chatgpt",
+            json!({"models":[{"slug":"future-model", "supported_reasoning_levels":[
+            {"effort":"high"}, {"effort":"xhigh"}, {"effort":"ultra", "description":"API description"},
+            {"effort":"future-level"}], "default_reasoning_level":"ultra"}]}),
+            "/reasoning/effort",
+        ),
+        (
+            "anthropic",
+            json!({"data":[{"id":"claude-opus-5-5", "capabilities":{"effort":{
+            "supported":true, "low":{"supported":true}, "high":{"supported":true},
+            "xhigh":{"supported":true}, "max":{"supported":false}}}}]}),
+            "/output_config/effort",
+        ),
+    ] {
+        let transport = FakeTransport::queue(vec![json!({"body":response.to_string()})]);
+        let provider = provider(
+            &json!({"id":"p", "kind":kind, "baseUrl":"https://example.invalid",
+            "apiKey":"test", "accountId":"account"}),
+            transport.clone(),
+        );
+        let models = provider.list_models().await.unwrap();
+        let metadata = models[0].effort.as_ref().unwrap();
+        assert!(!metadata.levels.iter().any(|l| l.effort == "normal"));
+        for level in &metadata.levels {
+            let req: ChatRequest =
+                serde_json::from_value(json!({"model":models[0].id, "effort":level.effort})).unwrap();
+            // The transport returns a network error after recording the request.
+            run_chat(&provider, req).await;
+            let sent = transport.sent();
+            let body = sent.last().unwrap().body.as_ref().unwrap();
+            assert_eq!(body.pointer(pointer), Some(&json!(level.effort)), "{kind}");
+        }
+        let roundtrip = serde_json::to_value(&models[0]).unwrap();
+        assert_eq!(roundtrip["effort"]["levels"][0]["effort"], metadata.levels[0].effort);
+    }
+}
+
+#[tokio::test]
+async fn openai_effort_keeps_native_rungs_and_legacy_normal_omits_the_field() {
+    for (kind, pointer) in
+        [("openai", "/reasoning_effort"), ("openrouter", "/reasoning/effort"), ("chatgpt", "/reasoning/effort")]
+    {
+        for level in [
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+            "ultra",
+            "persistent",
+            "future-level",
+            "normal",
+        ] {
+            let transport = FakeTransport::queue(vec![]);
+            let provider = provider(
+                &json!({"id":"p", "kind":kind, "baseUrl":"https://example.invalid",
+                "apiKey":"test", "accountId":"account"}),
+                transport.clone(),
+            );
+            let req = serde_json::from_value(json!({"model":"gpt-5", "effort":level})).unwrap();
+            run_chat(&provider, req).await;
+            let sent = transport.sent();
+            let body = sent.last().unwrap().body.as_ref().unwrap();
+            if level == "normal" {
+                assert!(body.pointer(pointer).is_none(), "{kind}");
+            } else {
+                assert_eq!(body.pointer(pointer), Some(&json!(level)), "{kind}");
+            }
+        }
+    }
+}
+
 // ----------------------------------------------------------------- compare
 
 fn is_uuid(s: &str) -> bool {
@@ -240,14 +318,23 @@ async fn every_request_is_built_exactly_as_the_ts_provider_builds_it() {
     for p in cases["providers"].as_array().unwrap() {
         let p = p.as_str().unwrap();
         for (name, req) in cases["requests"].as_object().unwrap() {
-            let transport = FakeTransport::queue(vec![json!({ "chunks": [] })]);
+            let mut answers = vec![json!({ "chunks": [] })];
+
+            // Ollama asks `/api/show` before it sends `think: true`: these pin
+            // the chat to a model that can think (stream-cases covers the rest).
+            if p == "ollama" && req.get("think") == Some(&json!(true)) {
+                answers.insert(0, json!({ "body": r#"{"capabilities":["thinking"]}"# }));
+            }
+
+            let requests = answers.len();
+            let transport = FakeTransport::queue(answers);
             let provider = provider(&providers[p], transport.clone());
             let req: ChatRequest = serde_json::from_value(req.clone()).unwrap();
             let chunks = run_chat(&provider, req).await;
             assert_eq!(chunks, vec![Ok(ProviderChunk::Done)], "{p}/{name}");
             let sent = transport.sent();
-            assert_eq!(sent.len(), 1, "{p}/{name}");
-            assert_eq!(recorded(&sent[0]), expected_request(&expected[p][name]), "{p}/{name}");
+            assert_eq!(sent.len(), requests, "{p}/{name}");
+            assert_eq!(recorded(&sent[requests - 1]), expected_request(&expected[p][name]), "{p}/{name}");
             count += 1;
         }
     }
@@ -344,12 +431,6 @@ async fn only_a_shipped_catalog_is_flagged_as_the_fallback() {
         "anthropic-401-falls-back",
         "anthropic-malformed-falls-back",
         "anthropic-empty-falls-back",
-        "chatgpt-catalog-404-falls-back",
-        "chatgpt-catalog-empty-falls-back",
-        "chatgpt-catalog-wrong-shape-falls-back",
-        "chatgpt-no-account",
-        "chatgpt-custom",
-        "chatgpt-custom-duplicate",
     ];
     for c in cases.as_array().unwrap() {
         let name = c["name"].as_str().unwrap();
@@ -398,5 +479,21 @@ fn the_golden_outputs_cover_every_input() {
         requests.as_object().unwrap().iter().map(|(k, v)| (k.as_str(), v.as_object().unwrap().len())).collect();
     for p in rc["providers"].as_array().unwrap() {
         assert_eq!(per[p.as_str().unwrap()], rc["requests"].as_object().unwrap().len());
+    }
+}
+
+// Cloud setup presets use the existing wire kind; listing must keep vendor paths and bearer auth.
+#[tokio::test]
+async fn cloud_presets_list_models_with_vendor_paths_and_auth() {
+    for base in ["https://generativelanguage.googleapis.com/v1beta/openai", "https://ollama.com/v1"] {
+        let transport =
+            FakeTransport::queue(vec![json!({ "status": 200, "body": "{\"data\":[{\"id\":\"fixture-model\"}]}" })]);
+        let config = serde_json::from_value(json!({ "id": "cloud", "kind": "openai-compat", "label": "Cloud", "baseUrl": base, "apiKey": "fixture-key", "enabled": true })).unwrap();
+        let provider = OpenAiCompatProvider::new(config, Io { transport: transport.clone(), ..Default::default() });
+        let models = provider.list_models().await.unwrap();
+        assert_eq!(models[0].id, "fixture-model");
+        let sent = transport.sent();
+        assert_eq!(sent[0].url, format!("{base}/models"));
+        assert!(sent[0].headers.contains(&("Authorization".into(), "Bearer fixture-key".into())));
     }
 }

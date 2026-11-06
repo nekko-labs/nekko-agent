@@ -5,14 +5,14 @@
 
 use super::github::{is_ours, plain_name};
 use super::keychain::token_key;
-use super::provider::{JobRef, Minted, Provider, ProviderError, RunnerStatus};
+use super::provider::{JobRef, Minted, Provider, ProviderError, QueuedJob, RunnerStatus};
 use super::store::{GitlabLink, Link, RunnerRecord};
 use super::vm::GITLAB_SEED;
 use nekko_cloud::vault::Vault;
 use nekko_connectors::connectors::gitlab_base;
 use nekko_connectors::js::{encode_uri_component as enc, parse_url};
 use nekko_connectors::{Http, Request};
-use nekko_runner::{HostNets, RunnerConfig, RunnerSettings, Scope, guest_may_connect};
+use nekko_runner::{Guest, HostNets, RunnerConfig, RunnerSettings, Scope, guest_may_connect};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -103,7 +103,15 @@ pub fn runner_toml(base_url: &str, glrt: &str) -> String {
 }
 
 pub fn tag_list(label: &str) -> String {
-    format!("{label},macos,arm64")
+    guest_tags(label, Guest::Macos)
+}
+
+/// A Linux VM's tags are `<label>-linux,linux,arm64`, so a job tagged for one never lands on the other.
+pub fn guest_tags(label: &str, guest: Guest) -> String {
+    match guest {
+        Guest::Macos => format!("{label},macos,arm64"),
+        Guest::Linux => format!("{label}-linux,linux,arm64"),
+    }
 }
 
 fn ok(status: u16) -> bool {
@@ -162,6 +170,19 @@ impl<H: Http> GitLab<H> {
         path: &str,
         body: Option<Value>,
     ) -> Result<(u16, Value), ProviderError> {
+        let (status, text) = self.send_text(base, token, method, path, body).await?;
+        Ok((status, serde_json::from_str(&text).unwrap_or(Value::Null)))
+    }
+
+    /// One API call; the body as text.
+    async fn send_text(
+        &self,
+        base: &str,
+        token: &str,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+    ) -> Result<(u16, String), ProviderError> {
         let url = format!("{base}/api/v4{path}");
         let mut h = vec![("PRIVATE-TOKEN", token), ("User-Agent", "nekko-agent")];
         let body = body.map(|b| b.to_string());
@@ -184,7 +205,20 @@ impl<H: Http> GitLab<H> {
                 "GitLab redirected the request to {host}. Use the instance's own address."
             )));
         }
-        Ok((res.status, serde_json::from_str(&res.body).unwrap_or(Value::Null)))
+        Ok((res.status, res.body))
+    }
+
+    /// A job's whole log (its trace) as plain text.
+    pub async fn job_log(&self, r: &RunnerRecord, project: &str, job_id: u64) -> Result<String, ProviderError> {
+        let base = link(r)?.base_url.trim_end_matches('/');
+        let token = self.vault.get(&token_key(&r.config.id)).ok_or_else(|| ProviderError::Auth(NO_TOKEN.into()))?;
+        match self
+            .send_text(base, &token, "GET", &format!("/projects/{}/jobs/{job_id}/trace", enc(project)), None)
+            .await?
+        {
+            (s, text) if ok(s) => Ok(text),
+            (s, _) => Err(refused(s)),
+        }
     }
 
     /// Like `call`, but anything not 2xx is an error.
@@ -437,7 +471,7 @@ impl<H: Http> GitLab<H> {
 }
 
 impl<H: Http + 'static> Provider for GitLab<H> {
-    async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+    async fn mint(&self, r: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
         let l = link(r)?;
         let mut body = match &r.config.scope {
             Scope::Repo { .. } => json!({ "runner_type": "project_type", "project_id": l.namespace_id }),
@@ -448,7 +482,7 @@ impl<H: Http + 'static> Provider for GitLab<H> {
             "paused": false,
             "locked": true,
             "run_untagged": false,
-            "tag_list": tag_list(&r.config.label),
+            "tag_list": guest_tags(&r.config.label, guest),
             "access_level": if l.protected_only { "ref_protected" } else { "not_protected" },
             "maximum_timeout": u64::from(r.config.settings.max_job_minutes) * 60,
         });
@@ -507,15 +541,20 @@ impl<H: Http + 'static> Provider for GitLab<H> {
                 job_id: j["id"].as_u64()?,
                 workflow: j["ref"].as_str().unwrap_or_default().to_string(),
                 job: j["name"].as_str().unwrap_or_default().to_string(),
+                url: j["web_url"].as_str().unwrap_or_default().to_string(),
+                // shortcut: GitLab's merge request is not looked up, so its jobs show none.
+                pr: None,
+                // shortcut: GitLab jobs have no steps to count; its running jobs show no progress.
+                steps: None,
             })
         }))
     }
 
-    async fn queued(&self, r: &RunnerRecord) -> Result<u32, ProviderError> {
+    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
         let l = link(r)?;
-        let tags = tag_list(&r.config.label);
+        let tags = guest_tags(&r.config.label, guest);
         let ours: Vec<&str> = tags.split(',').collect();
-        let mut n = 0u32;
+        let mut out = Vec::new();
         let group = matches!(r.config.scope, Scope::Org { .. });
         let list = projects(r, l);
         let mut unread = 0;
@@ -550,14 +589,26 @@ impl<H: Http + 'static> Provider for GitLab<H> {
                         continue;
                     }
                 }
-                n = n.saturating_add(1);
+                out.push(QueuedJob {
+                    job: JobRef {
+                        repo: project.to_string(),
+                        run_id: job["pipeline"]["id"].as_u64().unwrap_or_default(),
+                        job_id: job["id"].as_u64().unwrap_or_default(),
+                        workflow: job["ref"].as_str().unwrap_or_default().to_string(),
+                        job: job["name"].as_str().unwrap_or_default().to_string(),
+                        url: job["web_url"].as_str().unwrap_or_default().to_string(),
+                        ..Default::default()
+                    },
+                    created_at: job["created_at"].as_str().map(String::from),
+                    ..Default::default()
+                });
             }
         }
         // Not one project readable: an error, not an empty queue.
         if unread > 0 && unread == list.len() {
             return Err(refused(last));
         }
-        Ok(n)
+        Ok(out)
     }
 
     async fn remove(&self, r: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
@@ -604,6 +655,14 @@ impl<H: Http + 'static> Provider for GitLab<H> {
 
     async fn rerun(&self, r: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
         let path = format!("/projects/{}/jobs/{}/retry", enc(&job.repo), job.job_id);
+        match self.call(r, "POST", &path, None).await? {
+            (s, _) if ok(s) => Ok(()),
+            (s, _) => Err(refused(s)),
+        }
+    }
+
+    async fn cancel(&self, r: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
+        let path = format!("/projects/{}/jobs/{}/cancel", enc(&job.repo), job.job_id);
         match self.call(r, "POST", &path, None).await? {
             (s, _) if ok(s) => Ok(()),
             (s, _) => Err(refused(s)),

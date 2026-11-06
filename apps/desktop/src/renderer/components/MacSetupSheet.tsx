@@ -16,8 +16,8 @@ import { RunnerReady } from './RunnerReady.js';
 import { CheckIcon, MoonIcon, RocketIcon, YinYangIcon } from '../icons.js';
 
 const MODES: { priority: Priority; title: string; blurb: string; Icon(p: { className?: string }): React.JSX.Element }[] = [
+  { priority: 'balanced', title: 'Balanced', blurb: 'In the background. Recommended', Icon: YinYangIcon },
   { priority: 'doNotDisturb', title: 'Do not disturb', blurb: "Only run when I'm idle", Icon: MoonIcon },
-  { priority: 'balanced', title: 'Balanced', blurb: 'In the background', Icon: YinYangIcon },
   { priority: 'runnerFirst', title: 'Runner first', blurb: 'For a docked Mac', Icon: RocketIcon },
 ];
 
@@ -78,10 +78,14 @@ export function PlanStep({ plan, priority, rebuild, error, busy, onPriority, onB
   return (
     <Sheet>
       <Heading>{rebuild ? 'Rebuild image' : 'Set up this Mac'}</Heading>
-      <Kv label="macOS from Apple" value={MACOS_SIZE} />
+      <Kv label="macOS image from Apple" value={plan?.cachedMacos ? 'Downloaded earlier' : MACOS_SIZE} />
       {!noXcode && <Kv label="iOS simulator from Apple" value={SIMULATOR_SIZE} />}
       {!noXcode && <Kv label={['Xcode', plan?.xcode, 'from this Mac'].filter(Boolean).join(' ')} value="Copied in" />}
       <Kv label="Space needed" value={`${needs} GB${free}`} />
+      <Fine>
+        {noXcode ? 'Most of it is the VM itself.' : 'Most of it is the VM itself, about 55 GB with Xcode and the simulator inside.'}
+        {' '}The macOS image is deleted once it is installed, and 25 GB stays free for you.
+      </Fine>
       {noXcode && (
         <div className="runner-pick on">
           <i className="radio" />
@@ -114,11 +118,14 @@ export function ModeStep({ priority, error, busy, onPriority, onStart }: { prior
 }
 
 /** Frame 6, and the same list when a stopped build offers to resume. */
-export function ProgressStep({ image, error, busy, onCancel, onResume }: { image: ImageView; error: string | null; busy: boolean; onCancel(): void; onResume?(): void }) {
+export function ProgressStep({ image, error, busy, onCancel, onResume, onBackground }: { image: ImageView; error: string | null; busy: boolean; onCancel(): void; onResume?(): void; onBackground?(): void }) {
   const fraction = imageFraction(image);
+  // Both change a copy of the image in use, which keeps taking jobs meanwhile.
+  const update = image.kind === 'refresh' || image.kind === 'tools';
+  const heading = image.kind === 'tools' ? 'Installing the missing tools' : update ? 'Updating the image' : 'Setting up this Mac';
   return (
     <Sheet>
-      <Heading>{onResume ? 'Setup paused' : 'Setting up this Mac'}</Heading>
+      <Heading>{onResume ? 'Setup paused' : heading}</Heading>
       {imageStageRows(image).map((row) => (
         <React.Fragment key={row.stage}>
           <Stage row={row} />
@@ -127,14 +134,17 @@ export function ProgressStep({ image, error, busy, onCancel, onResume }: { image
       ))}
       {image.state === 'waiting' && <p role="status" className="runner-note warn">{image.detail}</p>}
       <Fine>
-        {onResume
+        {update
+          ? 'The image in use keeps taking jobs until the updated one passes its test boot.'
+          : onResume
           ? 'Finished stages are kept, and a stopped download picks up where it left off.'
-          : 'You can close this. Setup continues while Nekko runs, and a stopped download picks up where it left off.'}
+          : 'Setup continues while Nekko runs, and a stopped download picks up where it left off.'}
       </Fine>
       <Alert error={error} />
       <Buttons>
         <button type="button" className="btn btn-outline" disabled={busy} onClick={onCancel}>Cancel setup</button>
         {onResume && <button type="button" className="btn btn-primary" disabled={busy} onClick={onResume}>Resume setup</button>}
+        {!onResume && onBackground && <button type="button" className="btn btn-primary" onClick={onBackground}>Continue in the background</button>}
       </Buttons>
     </Sheet>
   );
@@ -201,7 +211,7 @@ export function MacSetupSheet({ runnerId, view, image, rebuild, onClose, onWorkf
   onWorkflow(): void;
   beginReply(): (v: RunnerView) => void;
 }) {
-  const current = view?.config.settings.priority ?? 'doNotDisturb';
+  const current = view?.config.settings.priority ?? 'balanced';
   const [priority, setPriority] = useState<Priority>(current);
   const [plan, setPlan] = useState<ImagePlan | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -257,7 +267,7 @@ export function MacSetupSheet({ runnerId, view, image, rebuild, onClose, onWorkf
         <PlanStep plan={plan} priority={priority} rebuild={rebuild} error={error} busy={busy} onPriority={setPriority} onBuild={() => void act(() => window.nekko.buildImage(buildRequest(plan, priority, runnerId, rebuild)))} />
       )}
       {screen === 'mode' && <ModeStep priority={priority} error={error} busy={busy} onPriority={setPriority} onStart={() => void start()} />}
-      {screen === 'progress' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} />}
+      {screen === 'progress' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onBackground={onClose} />}
       {screen === 'resume' && image && <ProgressStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onResume={() => void act(() => window.nekko.resumeImage())} />}
       {screen === 'failed' && image && <FailedStep image={image} error={error} busy={busy} onCancel={() => void cancel()} onRetry={() => void act(() => window.nekko.resumeImage())} />}
       {screen === 'ready' && <RunnerReady on={view?.config.settings.enabled ?? false} forkOpen={view?.forkApprovalOpen ?? false} onDone={onClose} onWorkflow={onWorkflow} />}

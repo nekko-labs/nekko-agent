@@ -7,6 +7,10 @@ use std::sync::atomic::Ordering;
 
 const PROOF: &str = r#"{"built":"2026-11-01T11:37:57Z","macos":"27.2","xcode":"Xcode 27.2","actionsRunner":"2.338.1","gitlabRunner":"19.5.1"}"#;
 
+fn all_tools() -> Vec<String> {
+    JOB_TOOLS.iter().map(|t| t.command.to_owned()).collect()
+}
+
 #[derive(Default)]
 struct MemVault(Mutex<HashMap<String, String>>);
 
@@ -36,6 +40,8 @@ struct Fake {
     free_gb: Mutex<f64>,
     /// The Xcode copy fills the disk.
     fills_disk: Mutex<bool>,
+    /// The job tools on the disk, at lockdown and after `add_tools`.
+    tools: Mutex<Vec<String>>,
 }
 
 impl Default for Fake {
@@ -47,6 +53,7 @@ impl Default for Fake {
             proof: Mutex::new(Some(PROOF.into())),
             free_gb: Mutex::new(200.0),
             fills_disk: Mutex::new(false),
+            tools: Mutex::new(all_tools()),
         }
     }
 }
@@ -131,7 +138,8 @@ impl BuildHost for Fake {
     }
     async fn read_proof(&self, _bundle: &Path) -> Result<Proof, String> {
         self.on("read_proof")?;
-        Ok(Proof { image: self.proof.lock().unwrap().clone(), log: "provision-rc=0".into() })
+        let tools = self.tools.lock().unwrap().clone();
+        Ok(Proof { image: self.proof.lock().unwrap().clone(), log: "provision-rc=0".into(), tools })
     }
     async fn test_boot(&self, _bundle: &Path) -> Result<(), String> {
         self.on("test_boot")
@@ -140,6 +148,16 @@ impl BuildHost for Fake {
         self.on("clone_bundle")?;
         std::fs::create_dir(to).map_err(|e| e.to_string())?;
         std::fs::copy(from.join("disk.img"), to.join("disk.img")).map_err(|e| e.to_string()).map(drop)
+    }
+    async fn write_scripts(&self, bundle: &Path) -> Result<(), String> {
+        self.on("write_scripts")?;
+        assert!(bundle.join("disk.img").is_file(), "scripts go into the copy");
+        Ok(())
+    }
+    async fn add_tools(&self, bundle: &Path) -> Result<Vec<String>, String> {
+        self.on("add_tools")?;
+        assert!(bundle.join("disk.img").is_file(), "the tools go into the copy");
+        Ok(self.tools.lock().unwrap().clone())
     }
     async fn swap(&self, bundle: &Path, default: &Path) -> Result<(), String> {
         self.log("swap");
@@ -280,6 +298,110 @@ async fn a_finished_restore_image_is_not_downloaded_again() {
 }
 
 #[tokio::test]
+async fn the_restore_image_is_kept_and_used_by_the_next_build() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    let kept = rig.images().join("cache/restore.ipsw");
+    assert_eq!(std::fs::read_to_string(&kept).unwrap(), "ipsw", "kept after the build's own copy went");
+
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    assert!(job.host.called("restore_image"), "it still asks Apple which image is newest");
+    assert!(!job.host.called("download"), "{:?}", job.host.calls());
+    assert!(job.host.called("install"));
+    assert!(kept.is_file(), "the kept image outlives a build that used it");
+    assert_eq!(job.status().state, ImageState::Ready);
+}
+
+#[tokio::test]
+async fn a_newer_restore_image_replaces_the_kept_one() {
+    let rig = Rig::new();
+    let cache = rig.images().join("cache");
+    std::fs::create_dir_all(&cache).unwrap();
+    std::fs::write(cache.join("UniversalMac_27.1_26A1_Restore.ipsw"), "old").unwrap();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    assert!(job.host.called("download"));
+    let names: Vec<_> = std::fs::read_dir(&cache).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(names, vec![std::ffi::OsString::from("restore.ipsw")]);
+}
+
+#[test]
+fn scripts_go_to_the_attached_disks_data_volume_only() {
+    // Trimmed from `diskutil apfs list -plist` on a guest disk, as JSON. The host's own Data
+    // volume (disk3s5) is in the same list and must never be picked.
+    let json = br#"{"Containers":[
+        {"Volumes":[{"DeviceIdentifier":"disk3s5","Name":"Data","Roles":["Data"]}]},
+        {"Volumes":[
+            {"DeviceIdentifier":"disk15s1","Name":"Macintosh HD","Roles":["System"]},
+            {"DeviceIdentifier":"disk15s5","Name":"Data","Roles":["Data"]}]}]}"#;
+    let attached = ["/dev/disk10", "/dev/disk15", "/dev/disk15s1", "/dev/disk15s5"];
+    assert_eq!(data_volume(json, &attached).as_deref(), Some("/dev/disk15s5"));
+    assert_eq!(data_volume(json, &["/dev/disk10"]), None, "no Data volume of this disk");
+    assert_eq!(data_volume(b"not json", &attached), None);
+}
+
+#[test]
+fn only_a_plain_restore_file_name_is_kept_by_name() {
+    assert_eq!(
+        restore_name("https://updates.cdn-apple.com/x/UniversalMac_27.2_26B123_Restore.ipsw"),
+        "UniversalMac_27.2_26B123_Restore.ipsw"
+    );
+    for odd in ["https://a/b/../x.ipsw?y", "https://a/b/.hidden.ipsw", "https://a/b/c.zip", "https://a/b/"] {
+        assert_eq!(restore_name(odd), IPSW, "{odd}");
+    }
+}
+
+#[tokio::test]
+async fn a_refresh_copies_the_image_writes_the_scripts_and_tests_it() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    let info = std::fs::read_to_string(rig.images().join("default/image.json")).unwrap();
+
+    let job = rig.job(Fake::default());
+    let view = job.build(BuildRequest { kind: Kind::Refresh, runner_id: None, priority: Priority::Balanced }).unwrap();
+    assert_eq!(view.kind, Some(Kind::Refresh));
+    finish(&job).await;
+    use Stage::*;
+    assert_eq!(
+        rig.stages_started(),
+        vec![Check, Download, Install, Xcode, Lockdown, Test, Finish, Check, Scripts, Test, Finish]
+    );
+    let calls = job.host.calls();
+    let order = ["preflight", "clone_bundle", "write_scripts", "test_boot", "swap"];
+    let at: Vec<usize> = order.iter().map(|o| calls.iter().position(|c| c == o).unwrap()).collect();
+    assert!(at.windows(2).all(|w| w[0] < w[1]), "{calls:?}");
+    for none in ["restore_image", "download", "install", "send_xcode", "lockdown"] {
+        assert!(!job.host.called(none), "{none}: {calls:?}");
+    }
+    assert!(!calls.iter().any(|c| c.starts_with("enable")), "a refresh keeps the runner as it is");
+    assert_eq!(
+        std::fs::read_to_string(rig.images().join("default/image.json")).unwrap(),
+        info,
+        "the proof carries over"
+    );
+    assert_eq!(job.status().state, ImageState::Ready);
+}
+
+#[tokio::test]
+async fn a_refresh_without_an_image_stops_at_once() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(BuildRequest { kind: Kind::Refresh, runner_id: None, priority: Priority::Balanced }).unwrap();
+    finish(&job).await;
+    let v = job.status();
+    assert_eq!((v.state, v.stage), (ImageState::Failed, Some(Stage::Scripts)));
+    assert_eq!(v.error.as_deref(), Some(NO_IMAGE_TO_UPDATE));
+    assert!(!job.host.called("clone_bundle"));
+}
+
+#[tokio::test]
 async fn macos_only_skips_xcode_and_the_simulator_but_not_homebrew() {
     let rig = Rig::new();
     let job = rig.job(Fake::default());
@@ -297,9 +419,192 @@ fn the_sudoers_file_for_homebrew_is_removed_after_it() {
     let steps = xcode_steps(Kind::MacosOnly);
     let add = steps.iter().position(|s| s.command.contains("/etc/sudoers.d/build") && s.command.contains("NOPASSWD"));
     let brew = steps.iter().position(|s| s.command.contains("NONINTERACTIVE=1"));
+    let tools = steps.iter().position(|s| s.command.contains("brew install zstd gnu-tar"));
+    let job_tools = steps.iter().position(|s| s.command.contains("brew install node gh jq"));
     let rm = steps.iter().position(|s| s.command.contains("rm -f /etc/sudoers.d/build"));
-    assert!(add < brew && brew < rm && add.is_some(), "{steps:?}");
+    assert!(add < brew && brew < tools && tools < job_tools && job_tools < rm && add.is_some(), "{steps:?}");
     assert!(!steps[brew.unwrap()].root, "Homebrew refuses to run as root");
+    assert!(!steps[tools.unwrap()].root, "Homebrew refuses to run as root");
+    assert!(!steps[job_tools.unwrap()].root, "Homebrew refuses to run as root");
+}
+
+#[test]
+fn every_image_gets_the_tools_jobs_run_before_their_setup() {
+    for kind in [Kind::Xcode, Kind::MacosOnly] {
+        let steps = xcode_steps(kind);
+        let step = steps.iter().find(|s| s.label == TOOLS_LABEL).expect("a job tools step");
+        for t in JOB_TOOLS {
+            assert!(step.command.split_whitespace().any(|w| w == t.formula), "{kind:?} installs {}", t.formula);
+            assert!(TOOLS_LABEL.contains(t.command), "the label names {}", t.command);
+        }
+        assert_eq!(step.limit, Duration::from_secs(15 * 60));
+    }
+    // What ios-native.yml runs on the runner before setup-node, and in its batch report (#1845).
+    let commands: Vec<_> = JOB_TOOLS.iter().map(|t| t.command).collect();
+    assert_eq!(commands, ["node", "gh", "jq"]);
+}
+
+fn info(macos: &str, tools: Option<&[&str]>) -> ImageInfo {
+    ImageInfo {
+        macos: macos.into(),
+        xcode: None,
+        actions_runner: "2.338.1".into(),
+        built: "2026-11-01T11:37:57Z".into(),
+        tools: tools.map(|t| t.iter().map(|s| (*s).to_owned()).collect()),
+        missing_tools: vec![],
+    }
+}
+
+#[test]
+fn an_image_built_before_the_check_lacks_every_tool_macos_does_not_ship() {
+    assert_eq!(missing_tools(&info("27.2", None)), ["node", "gh"], "macOS 15 and later ship jq");
+    assert_eq!(missing_tools(&info("14.6", None)), ["node", "gh", "jq"]);
+    assert_eq!(missing_tools(&info("", None)), ["node", "gh", "jq"], "an unreadable version ships nothing");
+}
+
+#[test]
+fn a_recorded_image_lacks_only_what_its_disk_lacked() {
+    assert!(missing_tools(&info("27.2", Some(&["node", "gh", "jq"]))).is_empty());
+    assert_eq!(
+        missing_tools(&info("27.2", Some(&["node"]))),
+        ["gh", "jq"],
+        "a record is believed over the macOS version"
+    );
+    assert_eq!(missing_tools(&info("27.2", Some(&[]))), ["node", "gh", "jq"]);
+}
+
+#[test]
+fn the_proof_keeps_its_fields_and_gains_the_tools() {
+    let merged = with_tools(PROOF, &all_tools()).unwrap();
+    let v: Value = serde_json::from_str(&merged).unwrap();
+    assert_eq!(v["gitlabRunner"], "19.5.1", "what provision.sh wrote stays");
+    assert_eq!(v["tools"], json!(["node", "gh", "jq"]));
+    let info: ImageInfo = serde_json::from_str(&merged).unwrap();
+    assert!(missing_tools(&info).is_empty());
+    assert!(with_tools("[]", &[]).is_err());
+}
+
+#[test]
+fn the_view_names_the_missing_tools_and_never_stores_them() {
+    let mut i: ImageInfo = serde_json::from_str(PROOF).unwrap();
+    assert_eq!(i.tools, None, "an image from before the check");
+    i.missing_tools = missing_tools(&i);
+    let v = serde_json::to_value(ImageView { info: Some(i), ..Default::default() }).unwrap();
+    assert_eq!(v["info"]["missingTools"], json!(["node", "gh"]));
+    let back: ImageInfo = serde_json::from_value(v["info"].clone()).unwrap();
+    assert!(back.missing_tools.is_empty(), "worked out on each read, never read back");
+}
+
+#[test]
+fn tools_are_found_where_a_jobs_path_looks_on_any_volume() {
+    let dir = tempfile::tempdir().unwrap();
+    assert!(tools_on(dir.path()).is_empty());
+    let (system, data) = (dir.path().join("dmg.system"), dir.path().join("dmg.data"));
+    std::fs::create_dir_all(system.join("usr/bin")).unwrap();
+    std::fs::write(system.join("usr/bin/jq"), "").unwrap();
+    std::fs::create_dir_all(data.join("opt/homebrew/bin")).unwrap();
+    // Homebrew's link into its Cellar, dangling here, still counts.
+    std::os::unix::fs::symlink("../Cellar/node/25.1.0/bin/node", data.join("opt/homebrew/bin/node")).unwrap();
+    assert_eq!(tools_on(dir.path()), ["node", "jq"]);
+    std::fs::write(data.join("opt/homebrew/bin/gh"), "").unwrap();
+    assert_eq!(tools_on(dir.path()), all_tools());
+    assert_eq!(proof_on(dir.path()).tools, all_tools());
+}
+
+#[test]
+fn the_tools_script_installs_as_runner_and_always_powers_off() {
+    let s = tools_script();
+    assert!(s.starts_with("#!/bin/bash\n"));
+    assert!(s.contains("trap 'echo \"add-tools: shutting down\"; shutdown -h now' EXIT"));
+    assert!(s.contains("sudo -u runner -H"), "Homebrew refuses root, and runner owns it after provision.sh");
+    assert!(s.contains(&format!("brew install {}", tool_formulas())));
+    assert!(s.contains(&format!("PATH={RUNNER_PATH}")));
+    assert!(s.contains(&format!(">>/{TOOLS_LOG}")));
+    let boot = include_str!("../../../../scripts/runner-image/nekko-runner-boot.sh");
+    assert!(boot.contains(&format!("RUNNER_PATH=\"{RUNNER_PATH}\"")), "the PATH jobs get");
+}
+
+#[tokio::test]
+async fn a_new_image_records_its_tools_and_needs_none() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::MacosOnly)).unwrap();
+    finish(&job).await;
+    let info = job.status().info.unwrap();
+    assert_eq!(info.tools, Some(all_tools()));
+    assert!(info.missing_tools.is_empty());
+}
+
+/// An image as one built before the tools check left it.
+fn old_image(rig: &Rig) {
+    let default = rig.images().join("default");
+    std::fs::create_dir_all(&default).unwrap();
+    std::fs::write(default.join("disk.img"), "pilot").unwrap();
+    std::fs::write(default.join("image.json"), PROOF).unwrap();
+}
+
+#[tokio::test]
+async fn an_old_image_shows_its_missing_tools_and_adding_them_clears_it() {
+    let rig = Rig::new();
+    old_image(&rig);
+    let job = rig.job(Fake::default());
+    assert_eq!(job.status().info.unwrap().missing_tools, ["node", "gh"]);
+
+    let view = job.build(BuildRequest { kind: Kind::Tools, runner_id: None, priority: Priority::Balanced }).unwrap();
+    assert_eq!(view.kind, Some(Kind::Tools));
+    finish(&job).await;
+    use Stage::*;
+    assert_eq!(rig.stages_started(), vec![Check, Tools, Test, Finish]);
+    let calls = job.host.calls();
+    let order = ["preflight", "clone_bundle", "add_tools", "test_boot", "swap"];
+    let at: Vec<usize> = order.iter().map(|o| calls.iter().position(|c| c == o).unwrap()).collect();
+    assert!(at.windows(2).all(|w| w[0] < w[1]), "{calls:?}");
+    for none in ["restore_image", "download", "install", "send_xcode", "lockdown"] {
+        assert!(!job.host.called(none), "{none}: {calls:?}");
+    }
+    assert!(!calls.iter().any(|c| c.starts_with("enable")), "the runner stays as it is");
+    let v = job.status();
+    assert_eq!(v.state, ImageState::Ready);
+    let info = v.info.unwrap();
+    assert!(info.missing_tools.is_empty());
+    assert_eq!((info.macos.as_str(), info.tools), ("27.2", Some(all_tools())), "the rest of the proof carries over");
+    assert!(!rig.images().join("default.new").exists(), "the build folder goes");
+}
+
+#[tokio::test]
+async fn an_install_that_leaves_a_tool_out_fails_and_keeps_the_image() {
+    let rig = Rig::new();
+    old_image(&rig);
+    let fake = Fake::default();
+    *fake.tools.lock().unwrap() = vec!["node".into(), "jq".into()];
+    let job = rig.job(fake);
+    job.build(BuildRequest { kind: Kind::Tools, runner_id: None, priority: Priority::Balanced }).unwrap();
+    finish(&job).await;
+    let v = job.status();
+    assert_eq!((v.state, v.stage), (ImageState::Failed, Some(Stage::Tools)));
+    assert_eq!(v.error.as_deref(), Some("Still missing after the install: gh. Show the log for why."));
+    assert!(v.can_resume);
+    assert!(!job.host.called("swap"));
+    assert_eq!(std::fs::read_to_string(rig.images().join("default/image.json")).unwrap(), PROOF);
+}
+
+#[tokio::test]
+async fn adding_tools_needs_an_image_with_a_record() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(BuildRequest { kind: Kind::Tools, runner_id: None, priority: Priority::Balanced }).unwrap();
+    finish(&job).await;
+    assert_eq!(job.status().error.as_deref(), Some(NO_IMAGE_TO_UPDATE));
+
+    let rig = Rig::new();
+    old_image(&rig);
+    std::fs::remove_file(rig.images().join("default/image.json")).unwrap();
+    let job = rig.job(Fake::default());
+    assert!(job.status().info.is_none(), "nothing to say about an image with no record");
+    job.build(BuildRequest { kind: Kind::Tools, runner_id: None, priority: Priority::Balanced }).unwrap();
+    finish(&job).await;
+    assert_eq!(job.status().error.as_deref(), Some(NO_RECORD_TO_UPDATE));
+    assert!(!job.host.called("clone_bundle"));
 }
 
 #[test]
@@ -310,6 +615,7 @@ fn every_guest_step_has_its_limit() {
     assert_eq!(limit("-runFirstLaunch"), Duration::from_secs(20 * 60));
     assert_eq!(limit("-downloadPlatform iOS"), Duration::from_secs(60 * 60));
     assert_eq!(limit("NONINTERACTIVE=1"), Duration::from_secs(20 * 60));
+    assert_eq!(limit("brew install zstd gnu-tar"), Duration::from_secs(10 * 60));
     let sim = steps.iter().find(|s| s.command.contains("-downloadPlatform iOS")).unwrap();
     assert!(sim.command.contains("launchctl asuser") && sim.command.contains("sudo -u nekko-build -H"));
 }
@@ -732,4 +1038,39 @@ fn the_lockdown_wrapper_is_a_real_daemon_and_stops_the_guest() {
     assert!(!c.contains("launchctl submit"), "submit silently does nothing");
     assert!(c.contains("provision.sh") && c.contains("shutdown -h now"));
     assert!(c.contains("/var/log/nekko-provision.log"));
+}
+
+#[test]
+fn a_test_boot_passes_only_if_the_runner_ran() {
+    let ran = "starting the GitHub Actions runner\nrunner exited with 0\nshutting down\n";
+    assert_eq!(test_boot_verdict(Some(&Stopped::Guest), ran), Ok(()));
+    // A guest also powers off when it cannot read its seed.
+    let bad_seed = "unexpected seed contents\nshutting down\n";
+    assert!(test_boot_verdict(Some(&Stopped::Guest), bad_seed).unwrap_err().contains("does not show the runner"));
+    assert!(test_boot_verdict(Some(&Stopped::Guest), "").unwrap_err().contains("does not show the runner"));
+    assert!(test_boot_verdict(Some(&Stopped::Signal), ran).unwrap_err().contains("did not end cleanly"));
+    assert!(test_boot_verdict(None, ran).unwrap_err().contains("did not power off"));
+}
+
+#[test]
+fn the_boot_script_logs_what_the_test_boot_looks_for() {
+    assert!(include_str!("../../../../scripts/runner-image/nekko-runner-boot.sh").contains(RUNNER_RAN));
+}
+
+/// The real disk path, against a copy of a built image (`cp -c` costs nothing on APFS):
+/// `NEKKO_TEST_BUNDLE=<folder holding disk.img> cargo test -p nekkod --bin nekkod real_disk -- --ignored`.
+#[cfg(target_os = "macos")]
+#[tokio::test]
+#[ignore = "needs a copy of a real runner image in NEKKO_TEST_BUNDLE"]
+async fn real_disk_takes_the_new_scripts_and_keeps_its_seal() {
+    let bundle = PathBuf::from(std::env::var("NEKKO_TEST_BUNDLE").unwrap());
+    let images = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(images.path().join("default.new")).unwrap();
+    let host = RealBuildHost::new(Err("no helper".into()), images.path().to_path_buf(), Arc::default(), Weak::new());
+    let probe = b"#!/bin/bash\n# written by real_disk_takes_the_new_scripts_and_keeps_its_seal\n";
+    let at = SCRIPTS[0].1;
+    host.with_data_volume(&bundle, |root| overwrite_in_place(&root.join(at), probe)).await.unwrap().unwrap();
+    // Read back through a read-only mount, as the test boot does.
+    let back = host.with_disk(&bundle, |m| read_on(m, at)).await.unwrap();
+    assert_eq!(back.as_deref(), Some(std::str::from_utf8(probe).unwrap()));
 }

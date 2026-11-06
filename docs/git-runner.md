@@ -7,8 +7,8 @@ on the PR when it fails. It saves hosted-runner minutes by burning your own hard
 
 ## What it is - and what it is not
 
-A "Local CI runner" is a **workflow template**, not a new subsystem. Create it from
-**Workflows → New workflow → Local CI runner** (under *Build your own*).
+A "Local CI runner" is a **scheduled task template**, not a new subsystem. Create it from
+**Scheduled Tasks → New scheduled task → Local CI runner** (under *Build your own*).
 Behind the scenes it is ordinary workflow pieces you already have:
 
 - a **trigger** that fires on repo events (see [Getting events in](#getting-events-in)),
@@ -166,7 +166,7 @@ content type `application/json`; GitLab: project → Settings → Webhooks).
   the git trigger below, if you want to restrict which deliveries start a run.
 
 **Desktop opt-in:** the desktop app can expose the same route on loopback ,
-Settings → Experimental → workflow loopback listener binds `127.0.0.1:1441` only. Useful for
+Settings → Experimental → scheduled task loopback listener binds `127.0.0.1:1441` only. Useful for
 local relays and tunnels, off by default.
 
 ### Dispatching git events directly - `workflow:event`

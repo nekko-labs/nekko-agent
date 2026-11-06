@@ -33,3 +33,43 @@ when their height changes. Hover over painted wings, keyboard focus, and pinning
 must all open the rail; mobile keeps its existing navigation. Renderer-only,
 with no new permissions, network requests, settings, or data access. This section
 supersedes the historical morph, fill, and label-motion details above.
+
+## Tapered ends and Send feedback under the destinations (2026-11-02)
+
+Implemented; 19 rail geometry and source tests and the desktop typecheck pass, with
+before/after rest captures of the full App fixture in a hidden off-screen renderer.
+The open state was checked by its path data only (the hidden Windows renderer does
+not animate the rail open, on `main` as well); packaged builds are unverified.
+User intent: cut off the outline's ends that ran on as hairlines to the top and
+bottom of the rail with rounded caps, and have the shape just taper out of the edge
+of the window and back into it. Send feedback looked out of place alone at the
+bottom of the rail, so it moves up under the last destination, set apart.
+
+- **Outline:** the shape starts at the wall up to 160px above the first destination
+  (less when there is not that much room), swells to the icon column 10px above it,
+  runs beside the destinations, and tapers back into the wall below the last row,
+  mirroring the upper taper (at least 120px where there is room). Nothing runs on
+  past either taper: no hairline, no rounded cap. Open, the same path widens with
+  the rail, as before.
+- **Send feedback** sits inside the shape directly below the last destination
+  (Settings by default), after a 1px divider with 16px of space above it and 12px
+  below, more than the 7px row gap, so it reads as separate from the destinations.
+  It is still a button that opens the Send feedback sheet, not a destination: it
+  never takes the active tile and is not part of the drag-to-reorder list.
+- Renderer-only. No host calls, settings, permissions or network use change.
+
+## Models brain-and-gear icon
+
+Implemented; focused icon tests, desktop typecheck, license checks and hidden
+macOS Electron navigation checks pass. Matching 1440px and 900px rest, hover and
+active screenshots inspected. Packaged Windows/Linux builds are unverified.
+The shared desktop/Local Web UI **Models**
+shortcut uses Gentleface 0.3.0 **brain-gear**, solid-round, instead of the CPU.
+Preserve the exact upstream geometry on its native 16px grid, rendered at 22px.
+The brain is violet (`#8b5cf6`) and the gear lavender (`#a78bfa`), matching the
+previous Models palette and the rail's colorful filled icons. The hub remains
+transparent, not a theme-specific patch. Keep the Models label, destination,
+keyboard focus, hover and active styling unchanged. The default phone tab bar
+still has no Models shortcut. No new runtime requests, dependencies, settings,
+permissions or data access. Acceptance: focused icon regression tests and matched
+rest/hover/active renderer captures at desktop and narrow widths.

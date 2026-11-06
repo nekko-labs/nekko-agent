@@ -16,7 +16,7 @@ User intent: the app is read for hours a day, so its small print has to be legib
 
 ## Reading, buttons and navigation
 
-- **Readable measure.** Chat replies, the user's own turns and documents stop prose at about 68 characters (`max-width: 68ch` on paragraphs, lists, quotes and headings) with a 1.6 line height. Code blocks, tables and diagrams keep the full width.
+- **Readable measure.** Documents stop prose at about 68 characters (`max-width: 68ch` on paragraphs, lists, quotes and headings) and the user's own chat turns at `min(85%, 68ch + padding)`, with a 1.6 line height in chat and documents. Code blocks, tables and diagrams keep the full width. Chat replies are not capped: their prose runs the full transcript width, so it ends where the tables and code blocks beside it do (see [Chat transcript width](../chat/chat-transcript-width.md)).
 - **Sentence-case labels.** The small uppercase, letter-spaced labels above groups and fields are 12px sentence case at weight 500 in `--ink-soft`. Badges that are a single word (`new`, a file extension) keep their caps.
 - **Flat primary, ink titles.** `.btn-primary` is one flat accent fill with no gradient, resting shadow or hover filter; its hover darkens the fill. View titles and the title bar heading are plain ink. The violet-to-cyan `--brand-grad` token is gone; `--accent-2` remains only as a data colour (charts, the code highlight, a celebration).
 - **Neutral menus and nav.** Context-menu and creation-menu rows, catalog rows and the nav rail use a neutral wash for hover and the active item (no accent fill, no gradient notch). The accent is kept for the primary action, focus rings and data.
@@ -25,6 +25,6 @@ User intent: the app is read for hours a day, so its small print has to be legib
 ## Status
 
 - Implemented: everything above.
-- The Agents panel's group labels (Needs input, Working, ...) keep their accent colour and 14px size, a recorded choice; they lose only the caps and tracking.
+- The Agents panel's group labels (Exploring, Building, ...) keep their accent colour and 14px size, a recorded choice; they lose only the caps and tracking.
 - Implemented on the iPhone too (#1478): the theme presets it draws from `packages/shared/src/themes.ts` carry the same `inkFaint` values as the desktop's `--ink-faint`, and `apps/ios/App/Platform/ThemePresets.swift` is regenerated from them. `themes.test.ts` fails if any preset's `inkFaint` drops below 4.5:1 on its paper, surface or surface-2. The iPhone's and Android's own light and dark palettes already passed (Android does not use the presets).
 - Later passes under the same issue: wall window motion on transforms, and the website.

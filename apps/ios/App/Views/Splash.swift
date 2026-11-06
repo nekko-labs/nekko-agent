@@ -1,31 +1,34 @@
 import SwiftUI
 
 /// The opening animation, the desktop's (apps/desktop/src/renderer/splash.ts) on
-/// the iPhone: the cat builds up from pixels on a 120 BPM beat, then zooms
-/// towards the viewer while the inside of the cat opens as a window onto the
-/// app, until the app fills the screen. Drawn from elapsed time in one Canvas,
-/// from the same generated layers (SplashCells.swift). Reduce Motion fades a
-/// solid ground instead. The launch screen is the same lavender, so nothing flashes.
+/// the iPhone, quicker (about a second in all): the cat builds up from pixels on
+/// the beat from the first frame, holds until the app is ready (past Face ID),
+/// then zooms towards the viewer while the inside of the cat opens as a window
+/// onto the app, until the app fills the screen. Drawn from elapsed time in one
+/// Canvas, from the same generated layers (SplashCells.swift). Reduce Motion fades
+/// a solid ground instead. The launch screen is the same plum, so nothing flashes.
 ///
 /// Coming back to the app plays only the end of it (`.resume`): the cat on the
-/// lavender dissolves and the app fades in, in under half a second.
+/// plum dissolves and the app fades in, in under half a second.
 struct SplashView: View {
     enum Kind { case launch, resume }
     var kind: Kind = .launch
     /// Both kinds wait for this: the app active and not behind the lock. Until then
-    /// the launch holds its first frame, the plain lavender of the launch screen.
+    /// the launch builds the cat and holds it; the resume holds the cat.
     var ready = true
     var onDone: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var start: Date?
+    /// Built and waiting: nothing changes, so no redraws.
+    @State private var held = false
     @State private var faded = false
 
-    static let ground = Color(red: 0x9d / 255, green: 0x8c / 255, blue: 0xe6 / 255)
+    /// The brand plum, the app icon's tile (spec/brand/colour-palette.md).
+    static let ground = Color(red: 0x19 / 255, green: 0x00 / 255, blue: 0x19 / 255)
     private static let ink = Color.white
-    /// One beat, in seconds.
-    private static let B = 0.5
-    private static let zoomAt = 2.5 * B
-    private static let zoomFor = 1.05 * B
+    /// One beat, in seconds: the desktop's beats, quicker, so build and zoom take about a second.
+    private static let B = 0.28
+    static let zoomAt = 2.5 * B
+    static let zoomFor = 1.05 * B
 
     private static let head = SVGPath.parse(SplashCells.brandHead)
     /// The window inside the cat: the head's second subpath.
@@ -51,17 +54,17 @@ struct SplashView: View {
                         onDone()
                     }
             } else {
-                TimelineView(.animation) { tl in
-                    Canvas { ctx, size in draw(&ctx, size, start.map { tl.date.timeIntervalSince($0) } ?? 0) }
+                // The build starts with the first drawn frame, under the Face ID sheet too.
+                TimelineView(.animation(paused: held)) { tl in
+                    Canvas { ctx, size in draw(&ctx, size, LaunchClock.shared.tick(tl.date)) }
                 }
                 .task(id: ready) {
-                    guard ready else { return }
-                    // Started once; a brief trip to inactive (a Face ID sheet) doesn't restart it.
-                    let begun = start ?? Date()
-                    start = begun
-                    try? await Task.sleep(for: .seconds(Self.zoomAt + Self.zoomFor + 0.05 - Date().timeIntervalSince(begun)))
+                    let clock = LaunchClock.shared
+                    if ready { clock.limit = Self.zoomAt + Self.zoomFor; held = false }
+                    // Built and still waiting (on Face ID): stop redrawing. Ready: done once the zoom has played.
+                    while !Task.isCancelled && clock.t < clock.limit { try? await Task.sleep(for: .milliseconds(16)) }
                     guard !Task.isCancelled else { return }
-                    onDone()
+                    if ready { onDone() } else { held = true }
                 }
             }
         }
@@ -162,6 +165,26 @@ struct SplashView: View {
         if p <= 0 { return 1 }
         if p < 0.25 { return 1 - 0.07 * Ease.windUp(p / 0.25) }
         return 0.93 * pow(reach / 0.93, pow(min(1, (p - 0.25) / 0.75), 1.35))
+    }
+}
+
+/// The launch animation's one clock, shared by the lock cover and the animation under
+/// it so both draw the same frame when the cover goes. It advances at most a frame's
+/// worth per drawn frame: a stalled start (the first frames reaching the screen, the
+/// Face ID sheet coming up) slows the build rather than skipping it.
+@MainActor
+final class LaunchClock {
+    static let shared = LaunchClock()
+    /// Seconds into the animation.
+    private(set) var t = 0.0
+    /// Where it holds: the finished cat until the app is ready, then the end of the zoom.
+    var limit = SplashView.zoomAt
+    private var last: Date?
+
+    func tick(_ now: Date) -> Double {
+        if let last { t = min(limit, t + min(max(0, now.timeIntervalSince(last)), 1.0 / 30)) }
+        last = now
+        return t
     }
 }
 

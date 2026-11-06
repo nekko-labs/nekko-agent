@@ -72,6 +72,8 @@ data class ChatEnv(
     val models: Map<String, List<ModelInfo>> = emptyMap(),
     /** Prompts sent while the computer is out of reach wait in the outbox instead of being refused. */
     val canQueue: Boolean = false,
+    /** How the computer's agents delegate ([PcSettings.orchestrationStrategy]). */
+    val strategy: String? = null,
 )
 
 /** Everything the chat screen renders. Pure projection of [ChatState] + [ChatEnv]. */
@@ -98,12 +100,16 @@ data class ChatUi(
     val modelName: String? = null,
     /** The chat's own effort; null follows the computer's setting. */
     val effort: Effort? = null,
+    /** The chat's run settings ([RunOption]). */
+    val runOptions: Map<String, JsonElement> = emptyMap(),
     /** The chat's own tool policy; null follows the computer's default. */
     val mode: PcSettings.ChatMode? = null,
     /** The transcript is the phone's saved copy, saved then: read-only until the computer answers (OF-5). */
     val savedAt: Long? = null,
     /** The computer is out of reach and what is sent waits on the phone: says so under the box, without blocking it. */
     val sendsLater: String? = null,
+    /** A typed follow-up can run here or in a sub-agent: only while the computer can say delegation will run. */
+    val offersSubagent: Boolean = false,
     val context: ContextUsage? = null,
     /** [context]'s count plus about one token per four characters streamed this turn; null until the computer answers. */
     val contextTokens: Long? = null,
@@ -392,6 +398,27 @@ class ChatController(
         }
     }
 
+    /** Stop the reply and start the queued prompt at [index] on this chat's model. */
+    suspend fun interruptQueued(index: Int) {
+        if (env().conn != RelayState.ONLINE) throw RelayException(RECONNECT_TO_EDIT_QUEUE)
+        val (providerId, modelId) = model()
+        val args = buildList {
+            add(JsonPrimitive(sessionId))
+            add(JsonPrimitive(index))
+            if (providerId != null && modelId != null) {
+                add(buildJsonObject { put("providerId", providerId); put("modelId", modelId) })
+            }
+        }
+        try {
+            caller.call(Channels.CHAT_INTERRUPT_QUEUED, *args.toTypedArray())
+        } catch (e: RelayException) {
+            // The call stays open for the whole new reply, so running out of time is not a failure.
+            if (e.fromComputer) throw e
+        } finally {
+            withContext(NonCancellable) { reload() }
+        }
+    }
+
     /** Where a fork from [block] cuts the chat, and what goes back in the new chat's message box. */
     data class ForkPoint(val before: String?, val seed: String?)
 
@@ -495,6 +522,7 @@ class ChatController(
                 error = state.loadError ?: turn.error ?: notSaved,
                 blocked = blocked,
                 sendsLater = sendsLater,
+                offersSubagent = blocked == null && sendsLater == null && state.session?.canOfferSubagent(env.strategy) == true,
                 savedAt = state.savedAt,
                 queued = state.session?.queue ?: emptyList(),
                 queuedPrompts = state.session?.queued ?: emptyList(),
@@ -505,6 +533,7 @@ class ChatController(
                 modelId = modelId,
                 modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
                 effort = Effort.parse(state.session?.effort),
+                runOptions = state.session?.runOptions ?: emptyMap(),
                 mode = state.session?.mode,
                 context = state.context,
                 contextTokens = liveTokens(state.context, turn),

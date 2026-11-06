@@ -1,5 +1,7 @@
 package com.nekko.android.ui.chat
 
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,8 +29,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import com.nekko.android.ui.settings.modeDetail
-import com.nekko.android.ui.settings.modeTitle
+import com.nekko.android.ui.settings.modeDetailRes
+import com.nekko.android.ui.settings.modeTitleRes
+import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PcSettings.ChatMode
 
@@ -39,19 +42,19 @@ fun RenameChatDialog(title: String, onDismiss: () -> Unit, onRename: (String) ->
     val ok = text.isNotBlank()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename chat") },
+        title = { Text(stringResource(R.string.chat_rename_chat)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = { Text("Title") },
+                label = { Text(stringResource(R.string.chat_title)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Done),
                 modifier = Modifier.fillMaxWidth().testTag("chat.rename.field"),
             )
         },
-        confirmButton = { TextButton(onClick = { onRename(text.trim()) }, enabled = ok) { Text("Rename") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = { onRename(text.trim()) }, enabled = ok) { Text(stringResource(R.string.chat_rename)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) } },
     )
 }
 
@@ -64,21 +67,25 @@ fun RenameChatDialog(title: String, onDismiss: () -> Unit, onRename: (String) ->
 @Composable
 fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDismiss: () -> Unit, onPick: (ChatMode) -> Unit) {
     val p = Nekko.palette
+    // Simple names the same values in plain words.
+    val expert = LocalSimple.current.expert
+    val title = { m: ChatMode -> if (expert) modeTitleRes(m) else asksTitleRes(m) }
+    val detail = { m: ChatMode -> if (expert) modeDetailRes(m) else asksDetailRes(m) }
     val shown = current ?: default
     var askYolo by rememberSaveable { mutableStateOf(false) }
     if (askYolo) {
         AlertDialog(
             onDismissRequest = { askYolo = false },
-            title = { Text("Use YOLO for this chat?") },
-            text = { Text("This chat will run commands and edit files on $computer without asking you first. Your deny rules still block.") },
-            confirmButton = { TextButton(onClick = { askYolo = false; onPick(ChatMode.YOLO) }) { Text("Use YOLO", color = p.danger) } },
-            dismissButton = { TextButton(onClick = { askYolo = false }) { Text("Cancel") } },
+            title = { Text(stringResource(R.string.chat_use_yolo_title)) },
+            text = { Text(stringResource(R.string.chat_use_yolo_body, computer)) },
+            confirmButton = { TextButton(onClick = { askYolo = false; onPick(ChatMode.YOLO) }) { Text(stringResource(R.string.chat_use_yolo), color = p.danger) } },
+            dismissButton = { TextButton(onClick = { askYolo = false }) { Text(stringResource(R.string.chat_cancel)) } },
         )
         return
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chat mode") },
+        title = { Text(stringResource(if (expert) R.string.chat_chat_mode else R.string.simple_asks_first)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Column(Modifier.selectableGroup()) {
@@ -101,21 +108,21 @@ fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDi
                         ) {
                             RadioButton(selected = shown == m, onClick = null)
                             Column(Modifier.weight(1f)) {
-                                Text(modeTitle(m), style = MaterialTheme.typography.bodyLarge, color = if (m == ChatMode.YOLO) p.danger else p.ink)
-                                Text(modeDetail(m), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                                Text(stringResource(title(m)), style = MaterialTheme.typography.bodyLarge, color = if (m == ChatMode.YOLO) p.danger else p.ink)
+                                Text(stringResource(detail(m)), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                             }
                         }
                     }
                 }
                 if (current == null) {
                     Text(
-                        "This chat follows $computer’s default, ${modeTitle(default)}.",
+                        stringResource(R.string.chat_follows_default, computer, stringResource(title(default))),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkFaint,
                     )
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.chat_cancel)) } },
     )
 }

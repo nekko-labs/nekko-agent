@@ -95,7 +95,7 @@ describe('workflow editor draft', () => {
     expect(html).toContain('Local models only');
     expect(html).toContain('is not local; this step will be refused.');
     expect(html).toContain('data-step-allowed-tools');
-    expect(html).toContain('Use workflow model');
+    expect(html).toContain('Use the task&#x27;s model');
     vi.unstubAllGlobals();
   });
 

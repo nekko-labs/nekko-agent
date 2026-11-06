@@ -80,6 +80,48 @@ fn str_at<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Value::as_str)
 }
 
+/// Claude's permission-prompt contract expects answers keyed by the original
+/// question text, not Nekko's question IDs. A skipped or stopped question must
+/// be denied rather than letting Claude choose on the user's behalf.
+fn claude_question_decision(input: &Value, request: &Value, answers: &Value) -> Value {
+    let Some(given) = answers.as_array().filter(|a| !a.is_empty()) else {
+        return json!({ "behavior": "deny", "message": "The user did not answer this question. Do not treat an option as selected." });
+    };
+    let mut by_text = Map::new();
+    for question in request.get("questions").and_then(Value::as_array).into_iter().flatten() {
+        let id = str_at(question, "id").unwrap_or_default();
+        let text = str_at(question, "question").unwrap_or_default();
+        let Some(answer) = given.iter().find(|a| str_at(a, "questionId") == Some(id)) else {
+            return json!({ "behavior": "deny", "message": "The user did not answer every question." });
+        };
+        let labels: Vec<String> = answer
+            .get("labels")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect();
+        let note = str_at(answer, "note").unwrap_or_default().trim();
+        let choice = if labels.is_empty() {
+            note.to_string()
+        } else if note.is_empty() {
+            labels.join(", ")
+        } else {
+            format!("{} — {}", labels.join(", "), note)
+        };
+        if choice.is_empty() {
+            return json!({ "behavior": "deny", "message": "The user did not answer every question." });
+        }
+        by_text.insert(text.into(), json!(choice));
+    }
+    let mut updated = input.clone();
+    if let Some(obj) = updated.as_object_mut() {
+        obj.insert("answers".into(), Value::Object(by_text));
+    }
+    json!({ "behavior": "allow", "updatedInput": updated })
+}
+
 /// What every session's running turn is waiting on a person for, and the
 /// turns parked on it. The board asks on mount (`chat:pending`), so the
 /// question lives here until it is answered, as `pendingBySession` did in TS.
@@ -92,8 +134,10 @@ pub struct Pending {
 struct PendingInner {
     /// `PendingInput` by session, in the order sessions started waiting.
     by_session: Map<String, Value>,
-    approvals: HashMap<String, (String, oneshot::Sender<bool>)>,
-    questions: HashMap<String, (String, oneshot::Sender<Value>)>,
+    /// Every waiter, including requests hidden by the single visible request
+    /// per kind. Its payload restores the visible map when a newer one resolves.
+    approvals: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
+    questions: HashMap<String, (String, oneshot::Sender<Value>, Value)>,
 }
 
 impl PendingInner {
@@ -128,9 +172,9 @@ impl Pending {
         let (tx, rx) = oneshot::channel();
         let mut p = lock(&self.inner);
         let id = str_at(call, "id").unwrap_or_default().to_string();
-        p.approvals.insert(id, (session_id.into(), tx));
         let approval =
             json!({ "call": call, "reason": reason, "severity": severity, "requestedAt": nekko_js::now_ms() });
+        p.approvals.insert(id, (session_id.into(), tx, approval.clone()));
         p.set(session_id, "approval", Some(approval));
         rx
     }
@@ -139,7 +183,7 @@ impl Pending {
         let (tx, rx) = oneshot::channel();
         let mut p = lock(&self.inner);
         let id = str_at(request, "callId").unwrap_or_default().to_string();
-        p.questions.insert(id, (session_id.into(), tx));
+        p.questions.insert(id, (session_id.into(), tx, request.clone()));
         p.set(session_id, "question", Some(request.clone()));
         rx
     }
@@ -147,11 +191,17 @@ impl Pending {
     /// `resolveApproval`: false when no turn here waits on that call.
     pub fn approve(&self, session_id: &str, call_id: &str, approved: bool) -> bool {
         let mut p = lock(&self.inner);
-        let Some((_, tx)) = p.approvals.remove(call_id) else { return false };
+        if p.approvals.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
+            return false;
+        }
+        let Some((_, tx, _)) = p.approvals.remove(call_id) else { return false };
         let _ = tx.send(approved);
         let current = p.by_session.get(session_id).and_then(|e| e.get("approval")).and_then(|a| a.get("call"));
         if current.and_then(|c| str_at(c, "id")) == Some(call_id) {
-            p.set(session_id, "approval", None);
+            // The newest displayed request may have hidden another waiter.
+            // Keep chat:pending complete until every request has resolved.
+            let remaining = p.approvals.values().find(|(sid, _, _)| sid == session_id).map(|(_, _, v)| v.clone());
+            p.set(session_id, "approval", remaining);
         }
         true
     }
@@ -159,10 +209,14 @@ impl Pending {
     /// `resolveQuestion`: false when no turn here waits on that question.
     pub fn answer(&self, session_id: &str, call_id: &str, answers: Value) -> bool {
         let mut p = lock(&self.inner);
-        let Some((_, tx)) = p.questions.remove(call_id) else { return false };
+        if p.questions.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
+            return false;
+        }
+        let Some((_, tx, _)) = p.questions.remove(call_id) else { return false };
         let current = p.by_session.get(session_id).and_then(|e| e.get("question"));
         if current.and_then(|q| str_at(q, "callId")) == Some(call_id) {
-            p.set(session_id, "question", None);
+            let remaining = p.questions.values().find(|(sid, _, _)| sid == session_id).map(|(_, _, v)| v.clone());
+            p.set(session_id, "question", remaining);
         }
         let _ = tx.send(answers);
         true
@@ -173,16 +227,16 @@ impl Pending {
     pub fn release(&self, session_id: &str) {
         let mut p = lock(&self.inner);
         let approvals: Vec<String> =
-            p.approvals.iter().filter(|(_, (s, _))| s == session_id).map(|(k, _)| k.clone()).collect();
+            p.approvals.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
         for id in approvals {
-            if let Some((_, tx)) = p.approvals.remove(&id) {
+            if let Some((_, tx, _)) = p.approvals.remove(&id) {
                 let _ = tx.send(false);
             }
         }
         let questions: Vec<String> =
-            p.questions.iter().filter(|(_, (s, _))| s == session_id).map(|(k, _)| k.clone()).collect();
+            p.questions.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
         for id in questions {
-            if let Some((_, tx)) = p.questions.remove(&id) {
+            if let Some((_, tx, _)) = p.questions.remove(&id) {
                 let _ = tx.send(json!([]));
             }
         }
@@ -478,6 +532,7 @@ impl Turns {
     pub fn running_sessions(&self) -> Vec<String> {
         let mut ids: Vec<String> = lock(&self.running).values().map(|s| s.session_id.clone()).collect();
         ids.dedup();
+        ids.extend(self.harness.running_subagents());
         ids
     }
 
@@ -577,6 +632,24 @@ impl Turns {
         };
         let tool = str_at(prompt, "tool_name").or_else(|| str_at(prompt, "toolName")).unwrap_or_default().to_string();
         let input = prompt.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        // Claude Code's AskUserQuestion is a request for an answer, not permission
+        // to perform a tool action. Keep the CLI's permission callback pending until
+        // the same question card used by native turns receives an answer.
+        if tool == "AskUserQuestion" {
+            let id = str_at(prompt, "tool_use_id")
+                .or_else(|| str_at(prompt, "toolUseID"))
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("claude_question_{}", crate::harness::new_token()));
+            let request = match turn::parse_ask_request(&id, &input, nekko_js::now_ms()) {
+                Ok(request) => request,
+                Err(message) => return Some(deny(&message)),
+            };
+            let rx = self.pending.park_question(&shared.session_id, &request);
+            shared.emit(json!({ "type": "question", "sessionId": shared.session_id, "request": request }));
+            let answers = rx.await.unwrap_or_else(|_| json!([]));
+            shared.emit(json!({ "type": "question_resolved", "sessionId": shared.session_id, "callId": id }));
+            return Some(claude_question_decision(&input, &request, &answers));
+        }
         let mode = self.live_mode(&shared).await;
         let rules: Vec<nekko_tools::GuardrailRule> = self
             .settings
@@ -745,6 +818,35 @@ impl Turns {
             let (sid, cwd) = (session_id.clone(), cwd.clone());
             tokio::spawn(async move {
                 nekko_tools::hooks::run_hook(&rule, "TurnEnd", &sid, None, &cwd, &payload).await;
+            });
+        }
+        // Every harness: the chat's open PRs are watched until merge-ready
+        // (pr_autowatch.rs). A turn the user stopped arms nothing.
+        if summary.get("aborted") != Some(&Value::Bool(true)) && crate::pr_autowatch::enabled(&settings) {
+            let (store, watches, id) = (store.clone(), self.watches.clone(), session_id.clone());
+            let dispatch = self.dispatch.get().cloned();
+            tokio::spawn(async move {
+                let read = id.clone();
+                let Some(session) = tokio::task::spawn_blocking(move || store.get(&read)).await.ok().flatten() else {
+                    return;
+                };
+                if !crate::pr_autowatch::eligible(&session) {
+                    return;
+                }
+                // A chat the host may not wake (Claude Code on a Claude plan) is not watched:
+                // its wake-up would only be refused (pr_autowatch::wakes_allowed).
+                if let (Some(d), Some(provider)) = (dispatch, session.get("providerId").and_then(Value::as_str)) {
+                    let args = vec![json!(provider), json!("unattended_runs")];
+                    let capability = d("claude:capability".into(), args).await.ok();
+                    if !crate::pr_autowatch::wakes_allowed(capability.as_ref()) {
+                        return;
+                    }
+                }
+                let messages = session.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default();
+                let urls = crate::pr_autowatch::opened_prs(messages);
+                if !urls.is_empty() {
+                    watches.watch_opened_prs(&id, &urls).await;
+                }
             });
         }
         let Some(d) = self.dispatch.get().cloned() else { return };
@@ -1012,6 +1114,7 @@ impl Turns {
         // On disk while the turn runs, so a restart knows it was cut off.
         if let Some(obj) = lock(&session).as_object_mut() {
             obj.insert("activeRun".into(), json!({ "startedAt": nekko_js::now_ms() }));
+            obj.remove("turnFailure");
         }
         persist(&store, &session, incognito).await;
 
@@ -1052,6 +1155,7 @@ impl Turns {
                 None => self.harness.take(&session_id).await,
             };
             self.claude_code_turn(
+                hub,
                 shared,
                 slot,
                 &store,
@@ -1061,6 +1165,7 @@ impl Turns {
                 opts,
                 &facts["provider"],
                 &mode,
+                str_at(facts, "effort"),
                 wake,
             )
             .await;
@@ -1282,6 +1387,7 @@ impl Turns {
     #[allow(clippy::too_many_arguments)]
     async fn claude_code_turn(
         self: &Arc<Self>,
+        hub: &Hub,
         shared: &Arc<Shared>,
         mut slot: tokio::sync::OwnedMutexGuard<crate::harness::Slot>,
         store: &Arc<SessionStore>,
@@ -1291,6 +1397,7 @@ impl Turns {
         opts: &Value,
         provider: &Value,
         mode: &str,
+        effort: Option<&str>,
         wake: bool,
     ) {
         use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
@@ -1328,6 +1435,8 @@ impl Turns {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
             model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            // `normal` means no choice was made: Claude Code's own setting stands.
+            effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
             config_dir,
         };
@@ -1375,13 +1484,50 @@ impl Turns {
                 persist(store, session, incognito).await;
             }
             match nekko_harness::Session::spawn(spec) {
-                Ok(child) => slot.session = Some(child),
+                Ok(mut child) => {
+                    // How many background tasks it runs, for the chat to show between turns.
+                    let harness = Arc::downgrade(&self.harness);
+                    let hub = lock(&self.wakes).get(&session_id).map(|(_, hub)| hub.clone());
+                    let id = session_id.clone();
+                    child.on_background_change(move |n, watchers| {
+                        if let Some(h) = harness.upgrade() {
+                            h.note_background(&id, n, watchers);
+                        }
+                        if let Some(hub) = &hub {
+                            let event = json!({ "type": "claude_code_background", "sessionId": id, "tasks": n });
+                            hub.publish("agent:event", event, false);
+                        }
+                    });
+                    slot.session = Some(child);
+                }
                 Err(e) => return fail(&format!("Could not start Claude Code: {e}"), &history),
             }
         }
         let Some(child) = slot.session.as_mut() else { return };
         let resumed = matches!(child.spec.session, SessionStart::Resume(_));
         let mut mapper = Mapper::new(session_id.clone());
+        let subagents =
+            crate::subagents::Sink { harness: self.harness.clone(), store: store.clone(), hub: hub.clone() };
+        if !reuse {
+            // The process those ran in is gone; no notification will come.
+            subagents.sweep(&session_id, true).await;
+        }
+        let (sub_tx, sub_rx) = mpsc::unbounded_channel();
+        let reader = (!incognito).then(|| {
+            let (ids, this) = (crate::spawn::workspace_ids(&lock(session)), subagents.clone());
+            let id = |v: &Value| v.as_str().map(str::to_string);
+            tokio::spawn(this.drive(
+                crate::subagents::Parent {
+                    id: session_id.clone(),
+                    workspace: ids.first().and_then(id),
+                    supporting: ids.iter().skip(1).cloned().collect(),
+                    provider_id: opts.get("providerId").cloned().unwrap_or(Value::Null),
+                    model_id: opts.get("modelId").cloned().unwrap_or(Value::Null),
+                    settings: self.settings.get(),
+                },
+                sub_rx,
+            ))
+        });
         let input = TurnInput {
             content: if wake { None } else { user.as_ref().map(nekko_harness::user_content) },
             cancel: &shared.cancel,
@@ -1412,10 +1558,19 @@ impl Turns {
                 // After the call's checkpoint, which saves the plan with it.
                 shared.emit(json!({ "type": "session_meta", "sessionId": session_id }));
             }
+            // An incognito chat leaves nothing on disk, its sub-agents included.
+            Mapped::Subagent(event) => {
+                let _ = sub_tx.send(event);
+            }
             Mapped::Unparsed(line) => eprintln!("nekkod: Claude Code printed a non-JSON line: {line}"),
             _ => {}
         })
         .await;
+        drop(sub_tx);
+        if let Some(reader) = reader {
+            let _ = reader.await;
+        }
+        subagents.sweep(&session_id, exit == TurnExit::Dead).await;
 
         let stored = str_at(&lock(session), "claudeCodeSessionId").map(str::to_string);
         let next = match (&seen, exit) {
@@ -1471,8 +1626,21 @@ impl Turns {
 
         // The turn is over: nothing it waited on can still be answered.
         self.pending.release(&session_id);
+        // The `error` event only reaches windows open now. Saved, a chat reopened
+        // later can still offer Retry. A Stop counts too: one that lands between
+        // steps leaves no partial reply to mark, so this is its only record.
+        let stopped = shared.cancel.is_cancelled();
+        let failure = lock(&shared.last_error)
+            .clone()
+            .filter(|_| last_stop.is_none())
+            .map(|message| if stopped { "Stopped".to_string() } else { message });
         if let Some(obj) = lock(session).as_object_mut() {
             obj.remove("activeRun");
+            if let Some(message) = failure {
+                let after =
+                    obj.get("messages").and_then(Value::as_array).and_then(|m| m.last()).map(|m| m["id"].clone());
+                obj.insert("turnFailure".into(), json!({ "message": message, "afterMessageId": after }));
+            }
         }
         persist(store, session, incognito).await;
 
@@ -1825,6 +1993,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     let mut deltas = Deltas::default();
     // A step's save still being written.
     let mut saving: Option<tokio::task::JoinHandle<()>> = None;
+    let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
     loop {
         let due = deltas.due();
         let out = tokio::select! {
@@ -1885,6 +2054,13 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 accounts.turn_end(opts, account, f.started_at, &event, finished.as_ref());
             }
         }
+        // The chat moved along the agent loop. Tool calls only reach the windows
+        // showing it, so the rest hear `session_meta` once the save has landed.
+        let next = snapshot.as_deref().and_then(nekko_store::loop_phase);
+        let moved = next.is_some() && next != phase;
+        if moved {
+            phase = next;
+        }
         if is_checkpoint(&event) {
             // Saves land in order.
             if let Some(save) = saving.take() {
@@ -1894,7 +2070,14 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 Some(messages) if str_at(&event, "type") == Some("step") => {
                     note_error(&f.last_error, &event);
                     f.hub.publish("agent:event", event, false);
-                    saving = Some(tokio::spawn(checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito)));
+                    let (hub, id) = (f.hub.clone(), f.session_id.clone());
+                    let save = checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito);
+                    saving = Some(tokio::spawn(async move {
+                        save.await;
+                        if moved {
+                            hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": id }), false);
+                        }
+                    }));
                     continue;
                 }
                 Some(messages) => checkpoint(f.store.clone(), f.session.clone(), messages, f.incognito).await,
@@ -1908,7 +2091,7 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
         let steered = str_at(&event, "type") == Some("steered");
         note_error(&f.last_error, &event);
         f.hub.publish("agent:event", event, false);
-        if steered {
+        if steered || moved {
             // The steering message is in the transcript now; panes re-read it.
             f.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": f.session_id }), false);
         }
@@ -1965,6 +2148,7 @@ fn native_context(
         }
     });
     let mut ctx = ToolContext::new(approver);
+    ctx.app_data_root = nekko_js::home_dir().map(|home| home.join(".nekko-agent").to_string_lossy().into_owned());
     let parse = |key: &str| settings.get(key).filter(|v| !v.is_null()).cloned();
     if let Some(v) = parse("sandboxMode") {
         ctx.sandbox_mode = serde_json::from_value(v).ok()?;
@@ -2058,6 +2242,16 @@ impl ToolRunner for TurnTools {
             }
         }
         self.guarded(call).await
+    }
+
+    /// What the user sent mid-turn stays in the queue, where they can still
+    /// interrupt with it, until this boundary reads it.
+    async fn before_step(&self) {
+        let id = str_at(&lock(&self.session), "id").unwrap_or_default().to_string();
+        let store = self.store.clone();
+        let taken = tokio::task::spawn_blocking(move || store.take_queued_text(&id)).await;
+        let texts = taken.ok().and_then(Result::ok).unwrap_or_default();
+        lock(&self.shared.steering).extend(texts.iter().map(|t| Turns::steering_message(t)));
     }
 }
 
@@ -2539,7 +2733,7 @@ impl TurnTools {
                     let mut parent = without_messages(&lock(&self.session));
                     parent["mode"] = json!(self.mode);
                     let req = json!({
-                        "parent": parent, "providerId": self.provider_id, "modelId": self.model_id,
+                        "parent": parent, "providerId": self.provider_id, "modelId": self.model_id, "callId": id,
                         "input": call.get("input").cloned().unwrap_or(Value::Null), "attempt": attempt, "childId": child,
                     });
                     d("turn:spawnPrepare".into(), vec![req]).await
@@ -2735,6 +2929,51 @@ impl TurnTools {
 mod tests {
     use super::*;
 
+    #[test]
+    fn claude_question_returns_original_input_with_answers_by_question_text() {
+        let input = json!({ "questions": [
+            { "question": "How?", "header": "Style", "multiSelect": false, "options": [
+                { "label": "Tooltip", "description": "Compact" }, { "label": "Inline", "description": "On row" }
+            ] },
+            { "question": "Which?", "header": "Area", "multiSelect": true, "options": [
+                { "label": "One" }, { "label": "Two" }
+            ] }
+        ] });
+        let request = turn::parse_ask_request("claude-1", &input, 1).unwrap();
+        let answer = claude_question_decision(
+            &input,
+            &request,
+            &json!([
+                { "questionId": "q1", "labels": ["Tooltip"], "note": "keep it small" },
+                { "questionId": "q2", "labels": ["One", "Two"] }
+            ]),
+        );
+        assert_eq!(answer["behavior"], "allow");
+        assert_eq!(answer["updatedInput"]["questions"], input["questions"]);
+        assert_eq!(answer["updatedInput"]["answers"]["How?"], "Tooltip — keep it small");
+        assert_eq!(answer["updatedInput"]["answers"]["Which?"], "One, Two");
+    }
+
+    #[test]
+    fn claude_question_skip_or_partial_answer_never_selects_for_user() {
+        let input = json!({ "questions": [
+            { "question": "How?", "options": ["A", "B"] },
+            { "question": "Where?", "options": ["Here", "There"] }
+        ] });
+        let request = turn::parse_ask_request("claude-2", &input, 1).unwrap();
+        assert_eq!(claude_question_decision(&input, &request, &json!([]))["behavior"], "deny");
+        assert_eq!(
+            claude_question_decision(
+                &input,
+                &request,
+                &json!([
+                    { "questionId": "q1", "labels": ["A"] }
+                ])
+            )["behavior"],
+            "deny"
+        );
+    }
+
     #[tokio::test]
     async fn a_run_of_deltas_goes_out_first_then_joined_per_window() {
         let hub = Hub::new();
@@ -2816,7 +3055,8 @@ mod tests {
             "messages": [{ "role": "user", "content": "Fix login" }] });
         std::fs::write(&path, session.to_string()).unwrap();
         let store = Arc::new(SessionStore::new(&dir));
-        let accounts = Arc::new(Accounts::new(dir.clone(), Hub::new()));
+        let accounts =
+            Arc::new(Accounts::new(dir.clone(), Hub::new(), Arc::new(nekko_settings::SettingsStore::new(&dir))));
         let flights = TitleFlights::default();
         let spec = json!({ "opts": { "sessionId": "s_title", "modelId": "synthetic" },
             "facts": { "provider": { "id": "p1", "kind": "openai-compat",
@@ -2909,6 +3149,51 @@ mod tests {
         assert!(snap["s1"].get("question").is_none() && snap["s1"].get("approval").is_some());
         p.release("s1");
         assert!(!approval.await.unwrap(), "a released approval is a no");
+        assert_eq!(p.snapshot(), json!({}));
+    }
+
+    #[tokio::test]
+    async fn pending_snapshot_preserves_older_requests_after_the_newest_is_answered() {
+        let p = Pending::default();
+        let a1 = p.park_approval("s", &call("a1"), "r", &json!("low"));
+        let a2 = p.park_approval("s", &call("a2"), "r", &json!("high"));
+        let q1 = p.park_question("s", &json!({ "callId": "q1" }));
+        let q2 = p.park_question("s", &json!({ "callId": "q2" }));
+        assert!(!p.approve("wrong-session", "a2", true));
+        assert!(!p.answer("wrong-session", "q2", json!([])));
+        assert!(p.approve("s", "a2", true));
+        assert!(a2.await.unwrap());
+        assert_eq!(p.snapshot()["s"]["approval"]["call"]["id"], "a1");
+        assert!(p.answer("s", "q2", json!([])));
+        assert_eq!(q2.await.unwrap(), json!([]));
+        assert_eq!(p.snapshot()["s"]["question"]["callId"], "q1");
+        assert!(p.approve("s", "a1", true));
+        assert!(a1.await.unwrap());
+        assert!(p.snapshot()["s"].get("approval").is_none());
+        assert!(p.snapshot()["s"].get("question").is_some());
+        assert!(p.answer("s", "q1", json!([])));
+        assert_eq!(q1.await.unwrap(), json!([]));
+        assert_eq!(p.snapshot(), json!({}));
+    }
+
+    #[tokio::test]
+    async fn pending_snapshot_keeps_newer_requests_and_deduplicates_the_same_request() {
+        let p = Pending::default();
+        let replaced = p.park_approval("s", &call("a1"), "r", &json!("low"));
+        let a1 = p.park_approval("s", &call("a1"), "r", &json!("low"));
+        assert!(replaced.await.is_err());
+        let a2 = p.park_approval("s", &call("a2"), "r", &json!("low"));
+        let q1 = p.park_question("s", &json!({ "callId": "q1" }));
+        let q2 = p.park_question("s", &json!({ "callId": "q2" }));
+        assert!(p.approve("s", "a1", true));
+        assert!(a1.await.unwrap());
+        assert!(p.answer("s", "q1", json!([])));
+        assert_eq!(q1.await.unwrap(), json!([]));
+        assert_eq!(p.snapshot()["s"]["approval"]["call"]["id"], "a2");
+        assert_eq!(p.snapshot()["s"]["question"]["callId"], "q2");
+        p.release("s");
+        assert!(!a2.await.unwrap());
+        assert_eq!(q2.await.unwrap(), json!([]));
         assert_eq!(p.snapshot(), json!({}));
     }
 

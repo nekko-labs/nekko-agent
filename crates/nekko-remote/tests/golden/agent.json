@@ -1,7 +1,7 @@
 {
  "secret": "00112233445566778899aabbccddeeff",
  "room": "a1b2c3d4e5f60718",
- "url": "ws://127.0.0.1:4400/relay?role=agent&room=a1b2c3d4e5f60718&key=7a8260aa4bed6b4bf417c3884bd3e3b7b3c4d4ad2003f1426f91c6f7707de35c&access=tok%20en%2F1",
+ "url": "ws://127.0.0.1:4400/relay?role=agent&room=a1b2c3d4e5f60718&key=7a8260aa4bed6b4bf417c3884bd3e3b7b3c4d4ad2003f1426f91c6f7707de35c&proto=6&access=tok%20en%2F1",
  "responses": {
   "sessions:summaries": {
    "result": [
@@ -321,6 +321,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ho2Um6KpsLe+xczTxehzXpowZTNDg1icQnqJoXrTSt1lxP8ECrJ+8JfVskiJ83jI8AKuNVzM9T1mLwczV1fuF1bMQzKobyFrMXXdmrteXRwq8kyWIVNrw4AtUaKkWLYxne/HVWi0E0BBYKV047brjrzOGOUF5ahS080QhzZXatsf\\\"}\"}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"ho2Um6KpsLe+xczTxehzXpowZTNDg1icQnqJoXrTSt1lxP8ECrJ+8JfVskiJ83jI8AKuNVzM9T1mLwczV1fuF1bMQzKobyFrMXXdmrteXRwq8kyWIVNrw4AtUaKkWLYxne/HVWi0E0BBYKV047brjrzOGOUF5ahS080QhzZXatsf\\\"}\"}"
@@ -401,6 +402,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
     "{\"type\":\"dismiss\",\"tag\":\"7536af24f84b356f893a72f0def58cce\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"4+rx+P8GDRQbIikwywAQY1Y6beZlherK7i/gT4EKzNS4R/KM3nUlnh2VyVlU2+rU9sgdMAyD2roA6nt7UJHDay2qvuf+F1XqLyS1QmMdK0VjvasMznmEA/C6+hrD0LBSXEC+zpu4Kbm6dwyac52tLOURfGU4Xv6afny6fC1CBZHDyCyakG6dfZfmPLqwIV2rxLaHFuf2nfn0pOtVhfWQwXUABKUDdw==\\\"}\"}",
@@ -448,6 +450,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
     "{\"type\":\"dismiss\",\"tag\":\"7536af24f84b356f893a72f0def58cce\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"ISgvNj1ES1JZYGduOh+H/VAhTHIg84LbEBDu8cWvITtGtp6XEb68mf2KnerV+JrxDQcdjEaOVZ3S1byypIjP8ol9Lgn/YacaAovTthH4IARdSHQks1bvWJCGRPM69MccrLXJ1fOl/OakoYXbkN0IJn+zWiXBQZBHJeQF2P6CUc+FNzPeVb6468ku\\\"}\"}",
@@ -473,6 +476,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"notify\",\"kind\":\"finished\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"done\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"QEdOVVxjanF4f4aN5IktE8100A5zZXHKUc43JNPWqhgVdyJ/XyCucMMjX6dKerHVdSw7WTj7RHQ5RaS0TZZex0ToTANcCoZCCEisByFA05IE21zdwctawRPJO0ySdeAskPIwOShxRgvf2tshUGJluI0YjYEPmR/VXGqaS2RhjHNXLgp7WfSecTbU6Bx1SIIpQZbsooanhKfTanBY\\\"}\"}",
@@ -495,6 +499,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"activity\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"phase\":\"running\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"X2ZtdHuCiZCXnqWsns0L+cQcF/2LMsPhvPvEuvMozKpaD76UFvpTecjwIG8Wl2CB87livHFb8TFzJQLLWh8nn5eAzU/PlgccmIij9ovmLNV3H7/bXkXTp4QCF0yinHt3QVi47XxKg9Cnqo6kxDA9BgsSrWpYnS72z47mKMqoUwEd\\\"}\"}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"X2ZtdHuCiZCXnqWsns0L+cQcF/2LMsPhvPvEuvMozKpaD76UFvpTecjwIG8Wl2CB87livHFb8TFzJQLLWh8nn5eAzU/PlgccmIij9ovmLNV3H7/bXkXTp4QCF0yinHt3QVi47XxKg9Cnqo6kxDA9BgsSrWpYnS72z47mKMqoUwEd\\\"}\"}"
@@ -543,6 +548,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"notify\",\"kind\":\"failed\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"title\":\"Nekko stopped\",\"body\":\"A task stopped with an error.\"}",
     "{\"type\":\"activity\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\",\"phase\":\"failed\"}",
     "{\"type\":\"dismiss\",\"tag\":\"c999df987ff9835d74f4acf7bae0b592\"}",
@@ -566,6 +572,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"activity\",\"tag\":\"77c4526fb2a900d79252fdf56e2ef5e6\",\"phase\":\"running\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"vMPK0djf5u30+wIJVo+gr+pkmQVpoX4r4G8xdy3olwq8pk3W+YMiOPxNNMUqgi75c9BsLacqlTMf6ywmaKKkTW79L4bLh7lZ7bRo4EnrtNS9LN9X7hRw90xuIkRZjW0EzYlts5O4WjG9OCJyjjgn45N0Grhrhj2xS13C\\\"}\"}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"vMPK0djf5u30+wIJVo+gr+pkmQVpoX4r4G8xdy3olwq8pk3W+YMiOPxNNMUqgi75c9BsLacqlTMf6ywmaKKkTW79L4bLh7lZ7bRo4EnrtNS9LN9X7hRw90xuIkRZjW0EzYlts5O4WjG9OCJyjjgn45N0Grhrhj2xS13C\\\"}\"}"
@@ -587,6 +594,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"activity\",\"tag\":\"77c4526fb2a900d79252fdf56e2ef5e6\",\"phase\":\"done\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"2+Lp8Pf+BQwTGiEoTYB2TC/y7dCbOz8JpEjJ+jstjcmpQKVaIsPArOPpRVod1Ody6sz1GCRzdtMTiZjeMAfStx7RAjrHRLedOMg2/uVI3wtFRqTF3exLRFZ2kdrvvyUv3euol2ZMCkhnEP6277+zrhyyJISrlfNRjlZX9q/HmgFRVXwN\\\"}\"}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"2+Lp8Pf+BQwTGiEoTYB2TC/y7dCbOz8JpEjJ+jstjcmpQKVaIsPArOPpRVod1Ody6sz1GCRzdtMTiZjeMAfStx7RAjrHRLedOMg2/uVI3wtFRqTF3exLRFZ2kdrvvyUv3euol2ZMCkhnEP6277+zrhyyJISrlfNRjlZX9q/HmgFRVXwN\\\"}\"}"
@@ -607,6 +615,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"notify\",\"kind\":\"finished\",\"tag\":\"d0a90ef79ede424f6c7018367e3c25e2\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"+gEIDxYdJCsyOUBHsMPFkKWUDyOehO8GUlTC+AXeVKDgMSar9I/SKoe3w6GS8I9SKk4VgBa34Q7KHpeQPliRZoqkcx5+Pt628rbjxKcOkhgl7K5fZBd6nes+fVYkITa6BdJUcufsb+UFsTQXP37W\\\"}\"}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"+gEIDxYdJCsyOUBHsMPFkKWUDyOehO8GUlTC+AXeVKDgMSar9I/SKoe3w6GS8I9SKk4VgBa34Q7KHpeQPliRZoqkcx5+Pt628rbjxKcOkhgl7K5fZBd6nes+fVYkITa6BdJUcufsb+UFsTQXP37W\\\"}\"}"
@@ -680,6 +689,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"notify\",\"kind\":\"finished\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"title\":\"Nekko finished\",\"body\":\"Your task is ready.\"}",
     "{\"type\":\"activity\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\",\"phase\":\"done\"}",
     "{\"type\":\"dismiss\",\"tag\":\"0e24444bbea09b9e4b53a0132cc01a56\"}",
@@ -702,6 +712,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"notify\",\"kind\":\"failed\",\"title\":\"Nekko stopped\",\"body\":\"A task stopped with an error.\"}",
     "{\"type\":\"d\",\"cid\":\"c2\",\"data\":\"{\\\"enc\\\":\\\"dn2Ei5KZoKeutbzD0vQG5LOIeX3nZCHNTpqtwY4z800vCMQjgivO7XwMuEXVcFpL2dnhNQ4nnoQCNdOleQ+fgw890E9NQ2PkE52lHIx1g8Ud5qe3YYp01NKzEb+jPjyFVcJ5xK/+san5d1kiTpta27ur/WrR7g==\\\"}\"}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"dn2Ei5KZoKeutbzD0vQG5LOIeX3nZCHNTpqtwY4z800vCMQjgivO7XwMuEXVcFpL2dnhNQ4nnoQCNdOleQ+fgw890E9NQ2PkE52lHIx1g8Ud5qe3YYp01NKzEb+jPjyFVcJ5xK/+san5d1kiTpta27ur/WrR7g==\\\"}\"}"
@@ -895,6 +906,7 @@
     }
    },
    "sent": [
+    "{\"type\":\"attention-unknown\"}",
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"running\"}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"jZSboqmwt77FzNPagHUXbb1FL4TNlFdtcaCj2MQec5a+8d0q2DpqCBF81HZSBRhpjZZm35sPKdmKO+efUWm01bYbKuZrttC6popNM6C2La3+wZc7bzDL6+gE5b+mwMaztbJ4/3aruPGhZfkI/fduw3R0H3dtVI2fuN2qbJpJ0S1XgUZdyg==\\\"}\"}"
    ],
@@ -929,7 +941,7 @@
     "relay": "{\"type\":\"c\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"C5FWu2jeqGXiG3Q3b0BRA9spbP1+5hBh1Q5Zn4Lm/V5Xmss1pVRkdD9zaEf3TT1/dx2DIi+/cSHa0ALoPXcQxNdCbNgRNEAyDz78rXcdNFw7R+FmgNpo9vN8Nkv95XCge8EQ7NM=\\\"}\"}"
    },
    "sent": [
-    "{\"type\":\"card\",\"state\":{\"chats\":[{\"id\":\"s1\",\"short\":\"Chat\",\"state\":\"working\",\"step\":\"Writing…\",\"reply\":\"\",\"closeWord\":\"Perfect\",\"startedAt\":800000000},{\"id\":\"s3\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Stopped\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s4\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s5\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Looks good\",\"finishedAt\":800000000},{\"id\":\"s2\",\"short\":\"Chat\",\"state\":\"failed\",\"step\":\"Stopped with an error\",\"reply\":\"\",\"closeWord\":\"Got it\",\"finishedAt\":800000000}],\"focusId\":\"s1\",\"more\":0,\"listening\":false,\"heard\":\"\"}}",
+    "{\"type\":\"card\",\"state\":{\"chats\":[{\"id\":\"s1\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"working\",\"step\":\"Writing…\",\"reply\":\"\",\"closeWord\":\"Perfect\",\"startedAt\":800000000},{\"id\":\"s3\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"done\",\"step\":\"Stopped\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s4\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s5\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Looks good\",\"finishedAt\":800000000},{\"id\":\"s2\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"failed\",\"step\":\"Stopped with an error\",\"reply\":\"\",\"closeWord\":\"Got it\",\"finishedAt\":800000000}],\"focusId\":\"s1\",\"more\":0,\"listening\":false,\"heard\":\"\"}}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"Uy6wEKfIzi4STFJbYwmmKyKY1dKaSitz0jB8Aya7CpKDSg9LcWF9rV7e+7/x/2IgAIn0fiF7186r3DokfiTH2M85CFCWDnQ=\\\"}\"}"
    ],
    "connected": [
@@ -982,7 +994,7 @@
    "sent": [
     "{\"type\":\"activity\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"phase\":\"approval\",\"callId\":\"tc9\",\"severity\":\"medium\"}",
     "{\"type\":\"notify\",\"kind\":\"needs-you\",\"tag\":\"7536af24f84b356f893a72f0def58cce\",\"title\":\"Nekko needs you\",\"body\":\"A tool needs your approval.\"}",
-    "{\"type\":\"card\",\"state\":{\"chats\":[{\"id\":\"s1\",\"short\":\"Chat\",\"state\":\"needsYou\",\"step\":\"Run npm test\",\"reply\":\"\",\"closeWord\":\"Perfect\",\"startedAt\":800000000,\"callId\":\"tc9\",\"severity\":\"medium\"},{\"id\":\"s3\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Stopped\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s4\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s5\",\"short\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Looks good\",\"finishedAt\":800000000},{\"id\":\"s2\",\"short\":\"Chat\",\"state\":\"failed\",\"step\":\"Stopped with an error\",\"reply\":\"\",\"closeWord\":\"Got it\",\"finishedAt\":800000000}],\"focusId\":\"s1\",\"more\":0,\"listening\":false,\"heard\":\"\"}}",
+    "{\"type\":\"card\",\"state\":{\"chats\":[{\"id\":\"s1\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"needsYou\",\"step\":\"Run npm test\",\"reply\":\"\",\"closeWord\":\"Perfect\",\"startedAt\":800000000,\"callId\":\"tc9\",\"severity\":\"medium\"},{\"id\":\"s3\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"done\",\"step\":\"Stopped\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s4\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Cool\",\"finishedAt\":800000000},{\"id\":\"s5\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"done\",\"step\":\"Finished\",\"reply\":\"\",\"closeWord\":\"Looks good\",\"finishedAt\":800000000},{\"id\":\"s2\",\"short\":\"Chat\",\"title\":\"Chat\",\"state\":\"failed\",\"step\":\"Stopped with an error\",\"reply\":\"\",\"closeWord\":\"Got it\",\"finishedAt\":800000000}],\"focusId\":\"s1\",\"more\":0,\"listening\":false,\"heard\":\"\"}}",
     "{\"type\":\"d\",\"cid\":\"c9\",\"data\":\"{\\\"enc\\\":\\\"2QabBWVJ/ZTPVqSldfJ6+ZCkDNw6WaKSZMU3nk8BSBiiWTJO9AMuQR1ra58VHIu0OMEdEhBMqU2R7HE4NM4Fw6Yj1G1XgNtUgpjoGUc0B3qJBN4hPHEHYVfm/2TdNT0YcBP4BTUV0dgFSVNIpkUjf/0YmFymLtiNtdUBj0lgIM2h8Oc1PJy6TW21RVdumN7iZqWs50Sbz1Wjiz2+NlWKZG6r5NWY0Ub3gdhk4lkpWqfztz7JS+D2AEvezEYFqlo2PW0SIJ5zFe8I3RHLtSfxrYzpiT6F/HHtntO9l8SRNceVOGSiN0zTzkZGqj7TPHQt\\\"}\"}"
    ],
    "connected": [

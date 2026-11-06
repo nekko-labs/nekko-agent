@@ -1,3 +1,5 @@
+import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckIcon, ChevronIcon } from '../icons.js';
@@ -26,6 +28,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
   onChange: (next: AgentPanelView) => void;
   onClose: () => void;
 }) {
+  const hasComputers = useShown('computers', { computers: useStore((s) => s.computers.length > 0) });
   const ref = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Partial<Record<Sub, HTMLButtonElement | null>>>({});
@@ -156,7 +159,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           }}
         >
           {sub === 'group' && <>
-            {(['status', 'project', 'date'] as AgentGroupBy[]).map((g) => (
+            {(hasComputers ? ['status', 'project', 'date', 'computer'] as AgentGroupBy[] : ['status', 'project', 'date'] as AgentGroupBy[]).map((g) => (
               <Choice key={g} checked={view.groupBy === g} onClick={() => set({ groupBy: g })}>{GROUP_BY_LABELS[g]}</Choice>
             ))}
             <Divider />
@@ -177,8 +180,10 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           {sub === 'show' && <>
             <Choice toggle checked={view.showMetadata} onClick={() => set({ showMetadata: !view.showMetadata })}
               title="The model, context, git and sub-agent lines under each card">Metadata</Choice>
-            <Choice toggle checked={view.showMetadata && view.showProvider} disabled={!view.showMetadata} onClick={() => set({ showProvider: !view.showProvider })}
-              title="Where each card's model comes from, under the model">Model provider</Choice>
+            {hasComputers && <Choice toggle checked={view.showComputer} onClick={() => set({ showComputer: !view.showComputer })}
+              title="Which computer a card's agent runs on">Computer</Choice>}
+            {hasComputers && <Choice toggle checked={view.showComputerIcons} onClick={() => set({ showComputerIcons: !view.showComputerIcons })}
+              title="A computer's icon, when it has one">Computer icons</Choice>}
             <Divider />
             <Choice toggle checked={view.showAutomations} onClick={() => set({ showAutomations: !view.showAutomations })}
               title="Chats an automation started">Automations</Choice>

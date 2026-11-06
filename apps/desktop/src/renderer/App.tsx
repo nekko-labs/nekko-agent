@@ -75,13 +75,14 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, settings, settingsLoaded, providers, providersLoaded, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
       settings: s.settings,
       settingsLoaded: s.settingsLoaded,
       providers: s.providers,
+      providersLoaded: s.providersLoaded,
       onboardingOpen: s.onboardingOpen,
       refreshSettings: s.refreshSettings,
       refreshProviders: s.refreshProviders,
@@ -119,6 +120,14 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  useEffect(() => {
+    const { refreshComputers, refreshSessions: refreshChats } = useStore.getState();
+    void refreshComputers();
+    return window.nekko.onComputersUpdated?.(() => {
+      void refreshComputers();
+      void refreshChats();
+    });
+  }, []);
   useEffect(() => startSessionSummaryRefresh(refreshSessions), [refreshSessions]);
   // Take only the streams of the chats this window shows (agentSubscription.ts);
   // every chat's start, waits and end still arrive for the sidebar and board.
@@ -313,20 +322,22 @@ export function App() {
               </button>
             ))}
             </div>
-            </div>
-            <div className="rail-space-after" aria-hidden="true" />
-            {/* Not a destination: it opens the Send feedback sheet over the current view. */}
+            {/* Not a destination: it opens the Send feedback sheet over the current view,
+                so a divider sets it apart below the last destination. */}
+            <div className="rail-divider" aria-hidden="true" />
             <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={openFeedback} data-testid="rail-feedback">
               <span className="grid h-10 w-10 shrink-0 place-items-center text-ink-faint"><FeedbackIcon className="h-[18px] w-[18px]" /></span>
               <span className="rail-label text-sm font-medium">{t('nav.feedback')}</span>
             </button>
+            </div>
+            <div className="rail-space-after" aria-hidden="true" />
           </div>
         </nav>
 
         {/* Main (bottom padding on phones so the tab bar never covers content,
             the home indicator's inset included) */}
         <main className="relative flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-          {providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
+          {providersLoaded && providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button
               className="flex items-center justify-center gap-2 border-b border-line py-2 text-sm"
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
@@ -335,7 +346,7 @@ export function App() {
               <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
-          <ErrorBoundary key={view} label={t(`nav.${view}`)}>
+          <ErrorBoundary key={view === 'modelserver' ? 'models' : view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
@@ -399,7 +410,7 @@ export function App() {
 /** Catalog pages remain reachable from the rail, with a clear route back to Settings. */
 function SettingsDestination({ children }: { children: React.ReactNode }) {
   return <div className="settings-destination">
-    <div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div>
+    <div className="settings-bar"><div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div></div>
     <div className="settings-destination-content">{children}</div>
   </div>;
 }

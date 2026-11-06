@@ -25,7 +25,7 @@ impl Route {
 
 pub fn relay_route(relay_url: &str) -> Route {
     let h = relay_host(relay_url);
-    if h == "localhost" || h == "::1" || h.starts_with("127.") {
+    if h == "localhost" || h == "::1" || ipv4(&h).is_some_and(|n| n[0] == 127) {
         return Route::Loopback;
     }
     if h == "ts.net" || h.ends_with(".ts.net") || is_tailscale_ipv4(&h) || h.starts_with("fd7a:115c:a1e0:") {

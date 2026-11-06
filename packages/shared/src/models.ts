@@ -34,6 +34,8 @@ export interface ProviderConfig {
   baseUrl: string;
   /** API key (cloud) or token (some local servers). Stored locally. */
   apiKey?: string;
+  /** A connected computer's Model Server: its address is loopback, its requests leave this machine. */
+  computerId?: string;
   /** Auth mode: 'apikey' is the default, 'subscription' pulls a fresh OAuth token. */
   auth?: 'apikey' | 'subscription';
   /** Vendor account id (decoded from ChatGPT id_token, or a stable account handle). */
@@ -60,6 +62,14 @@ export interface ProviderConfig {
   enabled: boolean;
 }
 
+/** Native effort options reported by this model's live provider catalog. */
+export interface ModelEffort {
+  /** API wire values, in provider order. Empty means explicitly unsupported. */
+  levels: { effort: string; description?: string }[];
+  /** Only present when the API publishes a default that is in levels. */
+  default?: string;
+}
+
 /** A model exposed by a provider. */
 export interface ModelInfo {
   id: string;
@@ -68,6 +78,8 @@ export interface ModelInfo {
   name: string;
   /** Context window in tokens, if known. */
   contextLength?: number;
+  /** API-derived native effort options. Absent means unknown, not unsupported. */
+  effort?: ModelEffort;
   /** Whether this model is currently loaded into memory (ollama/lmstudio/vllm). */
   loaded?: boolean;
   /** Approximate size on disk in bytes, if known. */
@@ -135,7 +147,9 @@ export function providerEndpoint(provider: Pick<ProviderConfig, 'kind' | 'baseUr
  * (or openai-compat, a dual-use kind allowed by name) on a loopback address.
  * Offline chats and local-only workflows run only on these.
  */
-export function offlineProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl'>): boolean {
+export function offlineProviderAllowed(provider: Pick<ProviderConfig, 'kind' | 'baseUrl' | 'computerId'>): boolean {
+  // Loopback here, but the requests go to another machine.
+  if (provider.computerId) return false;
   const url = providerEndpoint(provider);
   return !!url && (isLocalProvider(provider.kind) || provider.kind === 'openai-compat') && (
     url.hostname === 'localhost' || url.hostname === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(url.hostname)

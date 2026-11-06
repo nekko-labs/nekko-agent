@@ -4,9 +4,9 @@
 
 extension ThemePreset {
     static let all: [ThemePreset] = [
-        ThemePreset(id: "system", label: "System", mode: .system, accent: 0x6D5EFC, accent2: 0x06B6D4, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
-        ThemePreset(id: "light", label: "Light", mode: .light, accent: 0x6D5EFC, accent2: 0x06B6D4, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
-        ThemePreset(id: "dark", label: "Dark", mode: .dark, accent: 0x8B7DFF, accent2: 0x22D3EE, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "system", label: "System", mode: .system, accent: 0x5A2352, accent2: 0x8A4A7F, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "light", label: "Light", mode: .light, accent: 0x5A2352, accent2: 0x8A4A7F, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "dark", label: "Dark", mode: .dark, accent: 0xC084B5, accent2: 0xC99BB3, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
         ThemePreset(id: "nebula", label: "Nebula", mode: .dark, accent: 0x9D8CE6, accent2: 0xD98BB6, family: nil, paper: 0x0B0A12, surface: 0x15131F, surface2: 0x1E1B2B, ink: 0xECE9F5, inkSoft: 0xA7A1BB, inkFaint: 0x88839B, line: 0x262334),
         ThemePreset(id: "terminal", label: "Terminal", mode: .dark, accent: 0x3FB96A, accent2: 0x8FBF3A, family: nil, paper: 0x080A08, surface: 0x111711, surface2: 0x192019, ink: 0xE8F5E8, inkSoft: 0x8FAB8F, inkFaint: 0x7A8C7A, line: 0x1F281F),
         ThemePreset(id: "nord", label: "Nord", mode: .dark, accent: 0x88C0D0, accent2: 0x81A1C1, family: nil, paper: 0x1E222A, surface: 0x252A33, surface2: 0x2E3440, ink: 0xECEFF4, inkSoft: 0x9CA6B6, inkFaint: 0x969FAB, line: 0x3B4252),
@@ -41,6 +41,10 @@ extension ThemePreset {
         ThemePreset(id: "x-arctic-white", label: "White", mode: .light, accent: 0x377676, accent2: 0x4A9FA0, family: "Arctic Mist", paper: 0xF8FCFC, surface: 0xFFFFFF, surface2: 0xE5F8F8, ink: 0x17151F, inkSoft: 0x002E2E, inkFaint: 0x4F6969, line: 0xC8E5E4),
         ThemePreset(id: "x-arctic-colour", label: "Colourful", mode: .light, accent: 0x377676, accent2: 0x1E7A7C, family: "Arctic Mist", paper: 0xC1E5E5, surface: 0xECF7F7, surface2: 0xDDF1F1, ink: 0x17151F, inkSoft: 0x002929, inkFaint: 0x466667, line: 0xA1C4C4),
         ThemePreset(id: "x-arctic-dark", label: "Dark", mode: .dark, accent: 0xC1E5E5, accent2: 0xDDF6F6, family: "Arctic Mist", paper: 0x003D3E, surface: 0x0B1616, surface2: 0x152120, ink: 0xEEF5F5, inkSoft: 0xD0DAD9, inkFaint: 0xA3ADAD, line: 0x2A3535),
+        ThemePreset(id: "x-plum-white", label: "Light Nekko", mode: .light, accent: 0x5A2352, accent2: 0x8A4A7F, family: "Nekko", paper: 0xFBFBFD, surface: 0xFFFFFF, surface2: 0xF2F2F7, ink: 0x000000, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "x-plum-dark", label: "Dark Nekko", mode: .dark, accent: 0xC084B5, accent2: 0xC99BB3, family: "Nekko", paper: 0x0C0C11, surface: 0x16161C, surface2: 0x20202A, ink: 0xFFFFFF, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "x-indigo-white", label: "Light Indigo", mode: .light, accent: 0x4A2A7A, accent2: 0x6E4FA0, family: "Indigo", paper: 0xFBFBFD, surface: 0xFFFFFF, surface2: 0xF2F2F7, ink: 0x000000, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "x-indigo-dark", label: "Dark Indigo", mode: .dark, accent: 0xA68FD0, accent2: 0xC99BB3, family: "Indigo", paper: 0x0C0C11, surface: 0x16161C, surface2: 0x20202A, ink: 0xFFFFFF, inkSoft: nil, inkFaint: nil, line: nil),
         ThemePreset(id: "x-mulberry-white", label: "White", mode: .light, accent: 0x34151B, accent2: 0x265275, family: "Mulberry", paper: 0xFFFAFA, surface: 0xFFFFFF, surface2: 0xFFEEF0, ink: 0x17151F, inkSoft: 0x3B1B21, inkFaint: 0x735C5F, line: 0xF1D6DA),
         ThemePreset(id: "x-mulberry-colour", label: "Colourful", mode: .light, accent: 0x34151B, accent2: 0x265275, family: "Mulberry", paper: 0xF6D9D3, surface: 0xFCF4F2, surface2: 0xFAEAE7, ink: 0x17151F, inkSoft: 0x35161C, inkFaint: 0x755C57, line: 0xD5B9B3),
         ThemePreset(id: "x-mulberry-dark", label: "Dark", mode: .dark, accent: 0xDA5E5E, accent2: 0xD9817E, family: "Mulberry", paper: 0x34151B, surface: 0x362C2D, surface2: 0x423738, ink: 0xF9F1F2, inkSoft: 0xDED5D6, inkFaint: 0xB1A8A9, line: 0x594D4F),

@@ -16,6 +16,8 @@ public enum Channels {
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
     public static let sessionGet = "session:get"
+    /// One photo a user attached, sharp enough for the full-screen viewer: `(chatId, messageId, index)` → a data URL or null.
+    public static let sessionPhoto = "session:photo"
     /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
     public static let sessionWatches = "session:watches"
     /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
@@ -30,13 +32,18 @@ public enum Channels {
     public static let chatSend = "chat:send"
     public static let chatAbort = "chat:abort"
     public static let chatQueue = "chat:queue"
+    /// Stop the reply and start the queued prompt at an index.
+    public static let chatInterruptQueued = "chat:interruptQueued"
     public static let chatPending = "chat:pending"
     public static let chatAnswer = "chat:answer"
     public static let toolApprove = "tool:approve"
+    public static let sessionSetSupportingWorkspaces = "session:setSupportingWorkspaces"
     public static let workspaceList = "workspace:list"
     public static let workspaceAddByPath = "workspace:addByPath"
     public static let workspaceRemove = "workspace:remove"
     public static let appInfo = "app:info"
+    /// Whether someone is using the computer (`PHONE_ACTIVITY_VIEW`), for New chat's Auto (2026-11-05).
+    public static let activityState = "activity:state"
     /// SK-2: a single-use step-up challenge (read class).
     public static let securityChallenge = "security:challenge"
     /// SK-3 safety exits (agent class, never refused for Change off).
@@ -114,12 +121,12 @@ public enum Channels {
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove])
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
 
     public static let all = [
-        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
-        sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, skillsRunnable, changesList,
+        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
+        sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
+        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
@@ -130,6 +137,8 @@ public enum Channels {
         MonitorChannels.systemStats, MonitorChannels.gpuStats, MonitorChannels.engineStatus, MonitorChannels.contextPreview,
         MonitorChannels.modelUnload,
         artifactRead, previewFetch,
+        // Allowed for clients that aren't this app: a connected computer's plan changes and model settings.
+        "chat:steer", chatInterruptQueued, "engine:settings", "engine:saveModelPreset", "engine:unloadAll", "model:load",
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
@@ -323,12 +332,13 @@ public struct ChatMessage: Equatable, Sendable {
     public let toolCalls: [ToolCall]
     public let toolResult: ToolResult?
     public let interrupted: Bool
+    public var turnStats: TurnStats? = nil
 
     public static func == (a: ChatMessage, b: ChatMessage) -> Bool {
         a.id == b.id && a.role == b.role && a.content == b.content && a.reasoning == b.reasoning
             && a.createdAt == b.createdAt && a.imageCount == b.imageCount && a.skill?.name == b.skill?.name
             && a.skill?.input == b.skill?.input && a.toolCalls == b.toolCalls && a.toolResult == b.toolResult
-            && a.interrupted == b.interrupted && a.images == b.images
+            && a.interrupted == b.interrupted && a.images == b.images && a.turnStats == b.turnStats
     }
 
     public static func from(_ v: JSONValue?) -> ChatMessage? {
@@ -341,7 +351,8 @@ public struct ChatMessage: Equatable, Sendable {
             createdAt: v.long("createdAt"), imageCount: v["images"]?.array?.count ?? max(0, Int(v.long("imageCount") ?? 0)),
             images: v["images"]?.array?.map { $0.string ?? "" } ?? [], skill: skill,
             toolCalls: v["toolCalls"]?.array?.compactMap(ToolCall.from) ?? [],
-            toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"))
+            toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"),
+            turnStats: role == "assistant" ? TurnStats.from(v["turnStats"]) : nil)
     }
 }
 
@@ -369,6 +380,28 @@ public struct Session: Equatable, Sendable {
     public var effort: String?
     /// The plan the agent wrote for this chat (`update_plan`, or Claude Code's own plan calls).
     public var agentPlan: [PlanStep] = []
+    /// The chat's run settings (`RunOption`).
+    public var runOptions: [String: JSONValue] = [:]
+    /// The chat that delegated this one; nil for a chat of its own.
+    public var parentSessionId: String?
+    /// `image` for an image chat; nil for an ordinary one.
+    public var chatType: String?
+    public var executionMode: String?
+    public var disabledTools: [String] = []
+
+    /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
+    public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
+
+    /// Whether this chat can hand a follow-up to a sub-agent (`canOfferSubagent` in shared/orchestration.ts).
+    public func canOfferSubagent(strategy: String?) -> Bool {
+        strategy != "solo" && chatType != "image"
+            && messages.contains { $0.role == "assistant" }
+            && parentSessionId == nil
+            && runOptions["incognito"]?.bool != true
+            && runOptions["offline"]?.bool != true
+            && executionMode != "sandbox"
+            && !disabledTools.contains("spawn_agent")
+    }
 
     public static func from(_ v: JSONValue?) -> Session? {
         guard let v, let id = v.str("id") else { return nil }
@@ -384,7 +417,10 @@ public struct Session: Equatable, Sendable {
             clientMessageIds: v["clientMessageIds"]?.array?.compactMap(\.string) ?? [],
             running: v["activeRun"].map { !$0.isNull } ?? false,
             effort: v.str("effort"),
-            agentPlan: PlanStep.list(v["agentPlan"]))
+            agentPlan: PlanStep.list(v["agentPlan"]),
+            runOptions: RunOption.values(of: v),
+            parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), executionMode: v.str("executionMode"),
+            disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [])
     }
 }
 
@@ -412,6 +448,10 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var createdAt: Int64?
     /// A turn is running in it (`activeRun`).
     public var running = false
+    public var exchangeCount: Int64? = nil
+    public var phase: String? = nil
+    /// The pull requests its transcript names (`prUrls`): the rows look these up for their state.
+    public var prUrls: [String] = []
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -425,7 +465,9 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             parentSessionId: v.str("parentSessionId"), taskId: v.str("taskId"), trainingRunId: v.str("trainingRunId"),
             providerId: v.str("providerId"), workspaceId: v.str("workspaceId"), archivedAt: archivedAt,
             order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0,
-            createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false)
+            createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false,
+            exchangeCount: v.long("exchangeCount"), phase: v.str("phase"),
+            prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [])
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.
@@ -472,6 +514,34 @@ public struct ChatGroup: Equatable, Sendable, Identifiable {
         if !g.active.isEmpty || !g.completed.isEmpty { out.append(g) }
         out += folders.map { group($0.id, $0.name) }
         return out
+    }
+}
+
+/// Whether someone is using a computer (`activity:state`): yes/no answers
+/// only; the computer never tells a phone how long it has been idle, its
+/// battery level or its temperatures.
+public struct ComputerUse: Equatable, Sendable {
+    /// Someone is at the keyboard, or a chat they started is replying.
+    public var userActive: Bool
+    /// A chat a person started is replying there.
+    public var chatActive: Bool
+    /// No input to read (a server or Docker): nobody sits at it.
+    public var headless: Bool
+    /// On battery, low or hot: heavy work is better elsewhere.
+    public var strained: Bool
+
+    public init(userActive: Bool = false, chatActive: Bool = false, headless: Bool = false, strained: Bool = false) {
+        self.userActive = userActive
+        self.chatActive = chatActive
+        self.headless = headless
+        self.strained = strained
+    }
+
+    /// nil when the computer didn't answer with one (an older build).
+    public static func from(_ v: JSONValue?) -> ComputerUse? {
+        guard let v, v.object != nil, v["userActive"]?.bool != nil else { return nil }
+        return ComputerUse(userActive: v.flag("userActive"), chatActive: v.flag("chatActive"), headless: v.flag("headless"),
+                           strained: !(v["strain"]?.array ?? []).isEmpty)
     }
 }
 
@@ -531,10 +601,13 @@ public struct PcSettings: Equatable, Sendable {
     public var prompts: [SavedPrompt]
     /// The computer's automations are paused (set on the computer only).
     public var automationsPaused: Bool
+    /// How the computer's agents delegate (`solo`, `balanced`, `swarm`); nil from a computer that doesn't say.
+    public var defaultWorkspaceIds: [String] = []
+    public var orchestrationStrategy: String?
 
     public init(effort: Effort? = nil, defaultChatMode: ChatMode? = nil, chatPaneAction: ChatAction? = nil, skipDeleteConfirmation: Bool? = nil,
                 known: Bool = false, voiceEnabled: Bool = false, phoneChanges: Bool = false, prompts: [SavedPrompt] = [],
-                automationsPaused: Bool = false) {
+                automationsPaused: Bool = false, orchestrationStrategy: String? = nil, defaultWorkspaceIds: [String] = []) {
         self.effort = effort
         self.defaultChatMode = defaultChatMode
         self.chatPaneAction = chatPaneAction
@@ -544,6 +617,8 @@ public struct PcSettings: Equatable, Sendable {
         self.phoneChanges = phoneChanges
         self.prompts = prompts
         self.automationsPaused = automationsPaused
+        self.orchestrationStrategy = orchestrationStrategy
+        self.defaultWorkspaceIds = defaultWorkspaceIds
     }
 
     /// What the computer does when a key is unset (shared/settings.ts defaults).
@@ -558,15 +633,18 @@ public struct PcSettings: Equatable, Sendable {
                           chatPaneAction: v.str("chatPaneAction").flatMap(ChatAction.init(rawValue:)),
                           skipDeleteConfirmation: v["skipDeleteConfirmation"]?.bool, known: true,
                           voiceEnabled: v["voice"]?.flag("enabled") == true, phoneChanges: v.flag("phoneChanges"),
-                          prompts: SavedPrompt.list(v["prompts"]), automationsPaused: v.flag("automationsPaused"))
+                          prompts: SavedPrompt.list(v["prompts"]), automationsPaused: v.flag("automationsPaused"),
+                          orchestrationStrategy: v["orchestration"]?.str("strategy"),
+                          defaultWorkspaceIds: (v["defaultWorkspaceIds"]?.array ?? []).compactMap(\.string))
     }
 
     /// The `settings:update` patch for one change: never more than the phone-settable keys.
-    public static func patch(mode: ChatMode? = nil, action: ChatAction? = nil, skipConfirm: Bool? = nil) -> JSONValue {
+    public static func patch(mode: ChatMode? = nil, action: ChatAction? = nil, skipConfirm: Bool? = nil, icon: String? = nil) -> JSONValue {
         var o: [String: JSONValue] = [:]
         if let mode { o["defaultChatMode"] = .string(mode.rawValue) }
         if let action { o["chatPaneAction"] = .string(action.rawValue) }
         if let skipConfirm { o["skipDeleteConfirmation"] = .bool(skipConfirm) }
+        if let icon { o["machineIcon"] = .string(icon) }
         return .object(o)
     }
 }
@@ -724,11 +802,25 @@ public struct AppInfo: Equatable, Sendable {
     public let platform: String?
     /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
     public var quitFromPhone = false
+    /// The computer's icon, one of `computerIcons`; nil when it has none, or one this app doesn't draw.
+    public var hostname: String?
+    public var computerName: String?
+    public var machineIcon: String?
 
     public static func from(_ v: JSONValue?) -> AppInfo {
-        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false)
+        AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false,
+                hostname: v?.str("hostname"), computerName: v?.str("computerName"),
+                machineIcon: v?.str("machineIcon").flatMap { computerIcons.contains($0) ? $0 : nil })
     }
 }
+
+/// The icons a computer can have, as `COMPUTER_ICONS` in packages/shared/src/computers.ts.
+/// `scripts/computer-icons.test.mjs` fails when this or the app's assets drift from it.
+public let computerIcons = [
+    "laptop", "desktop", "tower", "mini", "server", "rack", "cloud", "gpu",
+    "chip", "home", "office", "lab", "bolt", "moon", "sun", "star",
+    "flame", "leaf", "globe", "cube", "rocket", "shield", "terminal", "cat",
+]
 
 public struct VoiceInstall: Equatable, Sendable {
     public let installed: Bool
@@ -884,7 +976,8 @@ public enum AgentEvent: Equatable, Sendable {
         case "retry": return .retry(sessionId: sid)
         case "done": return .done(sessionId: sid, messageId: v.str("messageId"))
         case "error": return .error(sessionId: sid, message: v.str("message") ?? "Something went wrong.")
-        case "session_meta": return .sessionMeta(sessionId: sid)
+        // A message taken at the next step joined the transcript.
+        case "session_meta", "steered": return .sessionMeta(sessionId: sid)
         default: return .other(sessionId: sid, type: type)
         }
     }

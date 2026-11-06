@@ -1,13 +1,13 @@
 use super::*;
 use crate::runner::egress::Egress;
-use crate::runner::provider::Minted;
+use crate::runner::provider::{JobSteps, Minted, PrRef};
 use crate::runner::signals::HostState;
 use crate::runner::store::{GithubLink, GitlabLink, Link};
 use crate::runner::vm::GITHUB_SEED;
 use crate::runner::vm::Halt;
 use nekko_cloud::vault::Vault;
 use nekko_machine::activity::Power;
-use nekko_runner::{KeepAwake, Pressure, Priority, RunnerSettings, Scope, Thermal};
+use nekko_runner::{KeepAwake, Pressure, Scope, Thermal};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -173,6 +173,7 @@ impl Vm for FakeVm {
 struct ProvState {
     status: RunnerStatus,
     queued: u32,
+    linux_queued: u32,
     mint: VecDeque<Result<Minted, ProviderError>>,
     rerun: VecDeque<Result<(), ProviderError>>,
     /// Scripted answers per runner id; any other remove works.
@@ -186,12 +187,20 @@ struct ProvState {
 struct FakeProvider(Arc<Mutex<ProvState>>, Log);
 
 fn job_ref() -> JobRef {
-    JobRef { repo: "acme/app".into(), run_id: 7, job_id: 70, workflow: "ci".into(), job: "build".into() }
+    JobRef {
+        repo: "acme/app".into(),
+        run_id: 7,
+        job_id: 70,
+        workflow: "ci".into(),
+        job: "build".into(),
+        ..Default::default()
+    }
 }
 
 impl Provider for FakeProvider {
-    async fn mint(&self, _: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
-        self.1.lock().unwrap().push(format!("mint {name}"));
+    async fn mint(&self, _: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
+        let what = if guest == Guest::Linux { "mint-linux" } else { "mint" };
+        self.1.lock().unwrap().push(format!("{what} {name}"));
         let mut st = self.0.lock().unwrap();
         st.next_id += 1;
         let id = st.next_id;
@@ -208,8 +217,16 @@ impl Provider for FakeProvider {
         st.job.clone().unwrap_or(Ok((st.status == RunnerStatus::Busy).then(job_ref)))
     }
 
-    async fn queued(&self, _: &RunnerRecord) -> Result<u32, ProviderError> {
-        Ok(self.0.lock().unwrap().queued)
+    /// `queued` jobs of acme/app (macOS) or acme/linux, ids 1 to n.
+    async fn queued(&self, _: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
+        let st = self.0.lock().unwrap();
+        let (repo, n) = if guest == Guest::Linux { ("acme/linux", st.linux_queued) } else { ("acme/app", st.queued) };
+        Ok((1..=u64::from(n))
+            .map(|job_id| QueuedJob {
+                job: JobRef { repo: repo.into(), job_id, ..Default::default() },
+                ..Default::default()
+            })
+            .collect())
     }
 
     async fn remove(&self, _: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
@@ -225,6 +242,11 @@ impl Provider for FakeProvider {
     async fn rerun(&self, _: &RunnerRecord, _: &JobRef) -> Result<(), ProviderError> {
         self.1.lock().unwrap().push("rerun".into());
         self.0.lock().unwrap().rerun.pop_front().unwrap_or(Ok(()))
+    }
+
+    async fn cancel(&self, _: &RunnerRecord, _: &JobRef) -> Result<(), ProviderError> {
+        self.1.lock().unwrap().push("cancel".into());
+        Ok(())
     }
 }
 
@@ -258,6 +280,7 @@ fn harness_with(records: Vec<RunnerRecord>, no_vm: Option<&str>) -> H {
         Arc::new(Mutex::new(ProvState {
             status: RunnerStatus::Idle,
             queued: 0,
+            linux_queued: 0,
             mint: VecDeque::new(),
             rerun: VecDeque::new(),
             remove: Default::default(),
@@ -383,6 +406,124 @@ async fn takes_a_job_when_gates_pass_and_deletes_vm_after() {
     assert_eq!(audit.len(), 1);
     assert_eq!((audit[0].result, audit[0].repo.as_deref()), (AuditResult::Finished, Some("acme/app")));
     assert_eq!(h.view().today.jobs, 1);
+}
+
+fn linux_record(macos: u8, linux: u8) -> RunnerRecord {
+    let mut r = record("r1", Priority::RunnerFirst, macos);
+    r.config.settings.linux_slots = linux;
+    r.config.settings.ready_vms = Some(0);
+    r
+}
+
+fn linux_image(h: &H) {
+    let image = h.dir.path().join("images").join(LINUX_IMAGE);
+    std::fs::create_dir_all(&image).unwrap();
+    std::fs::write(image.join("disk.img"), b"linux").unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_queued_linux_job_boots_a_linux_vm_outside_apples_cap() {
+    let mut h = harness(vec![linux_record(2, 1)]);
+    linux_image(&h);
+    // Other apps hold both of Apple's macOS places.
+    h.vm.0.lock().unwrap().other = 2;
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(h.count("mint"), 0, "nothing queued, no warm Linux VM: {:?}", h.log.lock().unwrap());
+    assert_eq!((h.view().available, h.view().linux_available), (0, 1));
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.tick_for(35).await;
+    let log = h.log.lock().unwrap().clone();
+    let name = log.iter().find_map(|l| l.strip_prefix("mint-linux ")).expect("a Linux registration").to_owned();
+    assert!(log.contains(&format!("clone_bundle images/{LINUX_IMAGE} vms/{name}/bundle")), "{log:?}");
+    assert_eq!(h.count("mint "), 0, "no macOS VM: {log:?}");
+    assert_eq!(h.view().slots[0].guest, Guest::Linux);
+    // The job takes it; a second Linux job finds the one slot full.
+    h.status(RunnerStatus::Busy);
+    h.tick_for(15).await;
+    h.prov.0.lock().unwrap().linux_queued = 2;
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint-linux"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn macos_slots_come_first_and_linux_takes_what_memory_is_left() {
+    // quiet(): 64 GB with 8 GB in use, a budget of six 8 GB VMs; RunnerFirst keeps both macOS slots warm.
+    let mut h = harness(vec![{
+        let mut r = linux_record(2, 4);
+        r.config.settings.ready_vms = None;
+        r
+    }]);
+    linux_image(&h);
+    h.prov.0.lock().unwrap().linux_queued = 5;
+    h.sup.start().await;
+    h.tick_for(120).await;
+    let v = h.view();
+    let kinds: Vec<Guest> = v.slots.iter().map(|s| s.guest).collect();
+    assert_eq!(kinds.iter().filter(|g| **g == Guest::Macos).count(), usize::from(v.available), "{kinds:?}");
+    assert_eq!(kinds.iter().filter(|g| **g == Guest::Linux).count(), usize::from(v.linux_available), "{kinds:?}");
+    assert_eq!((v.available, v.linux_available), (2, 4));
+    assert_eq!(kinds[..2], [Guest::Macos, Guest::Macos], "macOS starts first");
+}
+
+#[tokio::test(start_paused = true)]
+async fn linux_slots_without_a_linux_image_say_so_and_leave_macos_alone() {
+    let mut h = harness(vec![linux_record(1, 2)]);
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.queued(1);
+    h.sup.start().await;
+    h.tick_for(30).await;
+    let v = h.view();
+    assert_eq!(v.linux_error.as_deref(), Some("No Linux image yet."));
+    assert_eq!((v.linux_available, v.error.as_deref()), (0, None));
+    assert_eq!((h.count("mint "), h.count("mint-linux")), (1, 0));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_linux_only_runner_needs_no_macos_image() {
+    let mut h = harness(vec![linux_record(0, 1)]);
+    std::fs::remove_dir_all(h.dir.path().join("images").join("default")).unwrap();
+    linux_image(&h);
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(h.view().error, None);
+    assert_eq!(h.count("mint-linux"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_idle_linux_vm_stops_once_its_job_is_gone() {
+    let mut h = harness(vec![linux_record(0, 1)]);
+    linux_image(&h);
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(h.count("mint-linux"), 1);
+    // Another runner took the job: this VM is online and idle, and nothing is queued.
+    h.prov.0.lock().unwrap().linux_queued = 0;
+    h.tick_for(60 + IDLE_READY_SECS).await;
+    assert_eq!(h.count("kill"), 1, "{:?}", h.log.lock().unwrap());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_job_keeps_what_its_guest_used() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.sup.start().await;
+    h.running().await;
+    let name = h.vms().remove(0);
+    let stats = h.dir.path().join("vms").join(&name).join("stats.img");
+    let mut disk = std::fs::read(&stats).expect("the supervisor makes a stats disk per VM");
+    assert!(disk.starts_with(nekko_runner::usage::STATS_HEADER));
+    // Samples after the job started; the guest's clock is the Mac's.
+    let samples = b"1800000000 50 4000 0 0\n1800000005 0 6000 0 0\n";
+    disk[512..512 + samples.len()].copy_from_slice(samples);
+    std::fs::write(&stats, disk).unwrap();
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    let usage = h.audit()[0].usage.expect("a finished job carries its usage");
+    assert_eq!((usage.cpus, usage.memory_mb, usage.mem_peak_mb), (10, 8192, 6000));
+    let size = h.view().suggested_size.expect("the Mac has been read");
+    assert_eq!((size.jobs, size.cpus, size.memory_mb), (1, 10, 8192));
 }
 
 #[tokio::test(start_paused = true)]
@@ -757,6 +898,67 @@ async fn start_failures_stop_retrying_after_three() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_guest_that_stops_before_its_runner_connects_is_a_failed_start() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    h.tick_for(20).await;
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    let audit = h.audit();
+    assert_eq!(audit.len(), 1);
+    assert_eq!((audit[0].result, audit[0].repo.as_deref()), (AuditResult::FailedToStart, None));
+    assert_eq!(h.view().today.jobs, 0);
+    assert_eq!(h.count("remove "), 1);
+    assert!(h.vms().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn guests_that_keep_stopping_early_stop_retrying_after_three() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    for run in 0..3 {
+        h.tick_for(10).await;
+        h.vm.finish(run, Stopped::Guest);
+    }
+    h.tick_for(60).await;
+    assert_eq!(h.view().state, RunnerState::Error);
+    assert_eq!(h.count("clone_bundle"), 3);
+    assert!(h.view().error.unwrap().contains("powered off"));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_healthy_vm_clears_the_early_stops_before_it() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    for run in 0..2 {
+        h.tick_for(10).await;
+        h.vm.finish(run, Stopped::Guest);
+    }
+    h.tick_for(10).await;
+    h.status(RunnerStatus::Idle);
+    h.tick_for(20).await;
+    h.vm.finish(2, Stopped::Error("killed".into()));
+    h.status(RunnerStatus::Offline);
+    h.tick_for(10).await;
+    h.vm.finish(3, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_ne!(h.view().state, RunnerState::Error);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_job_no_poll_saw_still_counts() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.status(RunnerStatus::Offline);
+    h.tick_for(20).await;
+    // GitHub forgets a JIT runner once its job is done.
+    h.status(RunnerStatus::Missing);
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_eq!(h.audit()[0].result, AuditResult::Finished);
+    assert_eq!(h.view().today.jobs, 1);
+}
+
+#[tokio::test(start_paused = true)]
 async fn auth_error_marks_runner_error() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
     h.prov.0.lock().unwrap().mint.push_back(Err(ProviderError::Auth("revoked".into())));
@@ -874,6 +1076,12 @@ async fn views_carry_the_last_five_jobs() {
             result: AuditResult::Finished,
             seconds: 1,
             reason: vec![],
+            usage: None,
+            job_id: None,
+            url: None,
+            pr: None,
+            events: vec![],
+            vm: None,
         };
         h.sup.audit(&line);
     }
@@ -1280,6 +1488,46 @@ async fn job_taken_before_the_first_poll_is_audited() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn job_that_ended_between_polls_is_named_with_its_links_and_timeline() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    h.status(RunnerStatus::Idle);
+    h.tick_for(15).await;
+    assert_eq!(h.view().slots[0].state, SlotState::Ready);
+    // The job started and ended between two polls: no poll saw it busy.
+    let pr = PrRef { number: 42, url: "https://github.com/acme/app/pull/42".into() };
+    let job =
+        JobRef { url: "https://github.com/acme/app/actions/runs/7/job/70".into(), pr: Some(pr.clone()), ..job_ref() };
+    h.prov.0.lock().unwrap().job = Some(Ok(Some(job)));
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    let a = &h.audit()[0];
+    assert_eq!((a.result, a.job.as_deref(), a.job_id), (AuditResult::Finished, Some("build"), Some(70)));
+    assert_eq!(
+        (a.url.as_deref(), a.pr.as_ref()),
+        (Some("https://github.com/acme/app/actions/runs/7/job/70"), Some(&pr))
+    );
+    assert_eq!(a.events.iter().map(|e| e.state).collect::<Vec<_>>(), [SlotState::Starting, SlotState::Ready]);
+    assert!(a.events.iter().all(|e| e.ts <= a.ts));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_finished_vm_keeps_its_console_log() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.tick_for(5).await;
+    h.status(RunnerStatus::Busy);
+    h.tick_for(15).await;
+    let name = h.vms().pop().unwrap();
+    std::fs::write(h.dir.path().join("vms").join(&name).join("console.log"), "runner exited with 0\n").unwrap();
+    h.status(RunnerStatus::Idle);
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(5).await;
+    assert_eq!(h.audit()[0].vm.as_deref(), Some(name.as_str()));
+    assert_eq!(audit::vm_log(h.dir.path(), &name).unwrap(), "runner exited with 0\n");
+    assert!(!h.vms().contains(&name));
+}
+
+#[tokio::test(start_paused = true)]
 async fn runner_names_carry_this_installs_id() {
     let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
     h.sup.start().await;
@@ -1576,4 +1824,103 @@ async fn an_app_key_stays_while_a_queued_removal_needs_it() {
     sense.0.lock().unwrap().wall_secs += 60.0;
     wait_for("the key forgotten", || vault.get("github-app-1").is_none()).await;
     assert_eq!(log.lock().unwrap().iter().filter(|l| *l == "remove 100").count(), 3);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_declined_job_starts_no_vm_and_shows_in_the_queue() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.queued(1);
+    h.sup.ask("r1", Ask::Decline("acme/app".into(), 1));
+    h.tick_for(120).await;
+    assert_eq!(h.count("mint"), 0);
+    let q = h.view().queue;
+    assert_eq!((q.len(), q[0].declined, q[0].accepted), (1, true, false));
+    // Undone, it is taken like any other.
+    h.sup.ask("r1", Ask::Undo("acme/app".into(), 1));
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn accept_now_starts_a_vm_the_mode_would_hold() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.mac(|m| m.idle_seconds = Some(30.0));
+    h.queued(1);
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0, "Do not disturb holds while the owner types");
+    assert!(h.view().accept_why.is_empty(), "Runner first would take it");
+    h.sup.ask("r1", Ask::Accept("acme/app".into(), 1));
+    h.tick_for(5).await;
+    assert_eq!(h.count("mint"), 1);
+    assert!(h.view().slots[0].boosted);
+    // The job runs on though the owner gets busy, which drains Do not disturb within 120 s.
+    h.status(RunnerStatus::Busy);
+    h.queued(0);
+    h.mac(|m| m.user_cpu_pct = 80.0);
+    h.tick_for(300).await;
+    assert_eq!(h.count("request_stop") + h.count("kill"), 0);
+    assert_eq!(h.view().slots[0].state, SlotState::Running);
+}
+
+#[tokio::test(start_paused = true)]
+async fn accept_now_starts_a_linux_vm_for_a_linux_job() {
+    let mut h = harness(vec![{
+        let mut r = linux_record(0, 1);
+        r.config.settings.priority = Priority::DoNotDisturb;
+        r
+    }]);
+    linux_image(&h);
+    h.mac(|m| m.idle_seconds = Some(30.0));
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.sup.start().await;
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0, "Do not disturb holds while the owner types");
+    assert_eq!(h.view().queue[0].job.repo, "acme/linux");
+    h.sup.ask("r1", Ask::Accept("acme/linux".into(), 1));
+    h.tick_for(5).await;
+    assert_eq!(h.count("mint-linux"), 1, "{:?}", h.log.lock().unwrap());
+    assert_eq!((h.view().slots[0].guest, h.view().slots[0].boosted), (Guest::Linux, true));
+}
+
+#[tokio::test(start_paused = true)]
+async fn accept_now_keeps_the_hard_limits() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.mac(|m| m.host.as_mut().unwrap().thermal = Thermal::Critical);
+    h.queued(1);
+    h.sup.ask("r1", Ask::Accept("acme/app".into(), 1));
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0);
+    assert_eq!(h.view().accept_why, vec![Reason::ThermalCritical]);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_accept_ends_when_its_job_leaves_the_queue() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.mac(|m| m.idle_seconds = Some(30.0));
+    h.queued(2);
+    h.sup.ask("r1", Ask::Accept("acme/app".into(), 2));
+    h.queued(0);
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0);
+    assert!(h.view().queue.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_running_job_is_asked_again_for_its_steps() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    h.running().await;
+    h.status(RunnerStatus::Busy);
+    let steps = JobSteps { done: 3, total: 8, current: Some("Build".into()) };
+    h.prov.0.lock().unwrap().job = Some(Ok(Some(JobRef { steps: Some(steps.clone()), ..job_ref() })));
+    h.tick_for(20).await;
+    assert_eq!(h.view().slots[0].job.as_ref().and_then(|j| j.steps.clone()), Some(steps));
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_owners_rerun_is_sent_on_the_next_tick() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 1)]);
+    h.tick_for(5).await;
+    h.sup.ask("r1", Ask::Rerun(job_ref()));
+    h.tick_for(5).await;
+    assert_eq!(h.count("rerun"), 1);
 }

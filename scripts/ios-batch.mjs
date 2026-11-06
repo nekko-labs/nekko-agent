@@ -1,4 +1,4 @@
-// Native iOS in batches: one simulator run covers every open `ci:macos` iOS PR
+// Native iOS in batches: one simulator run covers every open `deploy:ios` iOS PR
 // that merges cleanly onto main, instead of one 30-minute run per PR per push
 // (60 runs on 18 branches in one day, 2026-10-24).
 //
@@ -11,7 +11,12 @@
 // to each head as the `Native iOS (batch)` commit status, which `gate`
 // (ci-label-gate.mjs) accepts in place of a run on the PR itself.
 //
-// A batch that matches the last one (same main, same heads) is not run again.
+// A batch with the same heads as the last one is not run again unless main has
+// since changed a file Native iOS tests (IOS_PATHS): a desktop-only merge leaves
+// the last batch's result standing. When main did change one, the new batch
+// cancels the last one's run, whose result nobody would read any more.
+// A head that already passed is left out: a new batch would run it again whenever main
+// moved, and its pending status would hold the PR's `gate`.
 // A red batch marks every PR in it red: dispatch Native iOS on one branch
 // (`gh workflow run ios-native.yml --ref <branch>`) to see whether it is yours.
 //
@@ -36,14 +41,17 @@ export const touchesIos = files => files.some(f => IOS_PATHS.some(p => p.test(f)
 
 const labelsOf = pr => (pr.labels ?? []).map(l => (typeof l === 'string' ? l : l.name));
 
-/** The PRs a batch may take, oldest first: ready, same-repo, into main, `ci:macos`, not `hold`, touching iOS. */
+/** The PRs a batch may take, oldest first: ready, same-repo, into main, `deploy:ios`, not `hold`, touching iOS. */
 export function batchCandidates(prs) {
   return prs
     .filter(pr => !pr.isDraft && !pr.isCrossRepository && pr.baseRefName === 'main')
-    .filter(pr => labelsOf(pr).includes('ci:macos') && !labelsOf(pr).includes('hold'))
+    .filter(pr => labelsOf(pr).includes('deploy:ios') && !labelsOf(pr).includes('hold'))
     .filter(pr => touchesIos((pr.files ?? []).map(f => f.path ?? f)))
     .sort((a, b) => a.number - b.number);
 }
+
+/** Whether a head's commit statuses already hold a green batch. */
+export const batchPassed = statuses => statuses.some(s => s.context === BATCH_CONTEXT && s.state === 'success');
 
 /** The batch commit's message; its trailers say which heads it holds. */
 export function batchMessage(included) {
@@ -70,7 +78,20 @@ export function largestCompatible(count, conflicts) {
   return best;
 }
 
-const sameBatch = (a, b) => a.length === b.length && a.every((pr, i) => pr.number === b[i].number && pr.headRefOid === b[i].headRefOid);
+export const sameBatch = (a, b) => a.length === b.length && a.every((pr, i) => pr.number === b[i].number && pr.headRefOid === b[i].headRefOid);
+
+/**
+ * Whether `included` needs a new batch, given the last one's heads and main and
+ * the files main changed since (`changed`, asked for only when main moved).
+ * Returns 'run' | 'same' (same main and heads) | 'main-not-ios' (same heads,
+ * main moved without touching iOS) | 'main-ios' (same heads, main touched iOS:
+ * run, and cancel the last batch's run).
+ */
+export function batchDecision({ lastHeads, lastBase, main, included, changed }) {
+  if (!sameBatch(lastHeads, included)) return 'run';
+  if (lastBase === main) return 'same';
+  return touchesIos(changed()) ? 'main-ios' : 'main-not-ios';
+}
 
 /**
  * Native iOS's verdict on a PR head, from the newest run of ios-native.yml on it
@@ -95,6 +116,8 @@ function sh(cmd, args, opts = {}) {
 const IDENTITY = { GIT_AUTHOR_NAME: 'nekko-ci', GIT_AUTHOR_EMAIL: 'ci@nekkolabs.dev', GIT_COMMITTER_NAME: 'nekko-ci', GIT_COMMITTER_EMAIL: 'ci@nekkolabs.dev' };
 const git = (...args) => sh('git', args, { env: { ...process.env, ...IDENTITY } });
 const tryGit = (...args) => { try { git(...args); return true; } catch { return false; } };
+// A run that finished in the meantime can't be cancelled; that's fine.
+const tryGh = (...args) => { try { sh('gh', args); return true; } catch { return false; } };
 
 function setStatus(repo, sha, state, description, url) {
   sh('gh', ['api', '-X', 'POST', `repos/${repo}/statuses/${sha}`, '-f', `state=${state}`, '-f', `context=${BATCH_CONTEXT}`,
@@ -106,7 +129,7 @@ function main({ dryRun }) {
   const runUrl = process.env.GITHUB_RUN_ID ? `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}` : undefined;
   const open = JSON.parse(sh('gh', ['pr', 'list', '-R', repo, '--state', 'open', '--limit', '100',
     '--json', 'number,headRefOid,isDraft,isCrossRepository,baseRefName,labels,files']));
-  const candidates = batchCandidates(open);
+  const candidates = batchCandidates(open).filter(pr => !batchPassed(JSON.parse(sh('gh', ['api', `repos/${repo}/commits/${pr.headRefOid}/status`])).statuses));
   console.log(`Candidates: ${candidates.map(pr => `#${pr.number}`).join(', ') || 'none'}`);
   if (!candidates.length) return;
 
@@ -153,15 +176,32 @@ function main({ dryRun }) {
   if (!included.length) return;
 
   const last = tryGit('fetch', '--quiet', 'origin', BATCH_BRANCH) ? git('log', '-1', '--format=%B', 'FETCH_HEAD') : '';
+  const lastSha = last ? git('rev-parse', 'FETCH_HEAD') : '';
   const lastBase = last ? git('rev-parse', 'FETCH_HEAD^') : '';
-  if (lastBase === main && sameBatch(parseBatch(last), included)) {
+  const decision = batchDecision({ lastHeads: parseBatch(last), lastBase, main, included,
+    changed: () => git('diff', '--name-only', lastBase, main).split('\n').filter(Boolean) });
+  if (decision === 'same') {
     console.log('Same main and heads as the last batch: nothing to run.');
+    return;
+  }
+  if (decision === 'main-not-ios') {
+    console.log(`Same heads as the last batch and main changed nothing Native iOS tests since ${lastBase.slice(0, 8)}: its result stands.`);
     return;
   }
   // One commit on main: HEAD^1..HEAD is every PR in the batch.
   git('reset', '--quiet', '--soft', main);
   git('commit', '--quiet', '--allow-empty', '-m', batchMessage(included));
   git('push', '--quiet', '--force', 'origin', `HEAD:refs/heads/${BATCH_BRANCH}`);
+  if (decision === 'main-ios') {
+    // The same heads on an older main: this batch supersedes that run. Pushed first, so
+    // the cancelled run sees the branch moved and leaves its heads' statuses alone.
+    const runs = JSON.parse(sh('gh', ['run', 'list', '-R', repo, '-w', 'ios-native.yml', '-b', BATCH_BRANCH, '--limit', '20',
+      '--json', 'databaseId,headSha,status']));
+    for (const run of runs.filter(r => r.headSha === lastSha && r.status !== 'completed')) {
+      console.log(`Cancelling Native iOS run ${run.databaseId}: the same heads on an older main.`);
+      tryGh('run', 'cancel', String(run.databaseId), '-R', repo);
+    }
+  }
   const batch = JSON.stringify(included.map(pr => ({ number: pr.number, sha: pr.headRefOid })));
   sh('gh', ['workflow', 'run', 'ios-native.yml', '-R', repo, '--ref', BATCH_BRANCH, '-f', `batch=${batch}`]);
   const others = pr => included.filter(p => p !== pr).map(p => `#${p.number}`).join(', ');

@@ -18,7 +18,7 @@ import { STATUS } from '../tokens.js';
 const KIND: Record<WorkflowStepKind | 'terminal', { color: string; glyph: string; label: string }> = {
   prompt: { color: 'var(--cat-conversation)', glyph: '✦', label: 'Prompt' },
   skill: { color: 'var(--cat-skill)', glyph: '◈', label: 'Skill' },
-  workflow: { color: 'var(--info)', glyph: '⇥', label: 'Workflow' },
+  workflow: { color: 'var(--info)', glyph: '⇥', label: 'Scheduled task' },
   shell: { color: 'var(--cat-index)', glyph: '$', label: 'Shell' },
   action: { color: 'var(--accent)', glyph: '↗', label: 'Action' },
   terminal: { color: 'var(--neutral)', glyph: '●', label: 'End' },

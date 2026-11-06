@@ -202,7 +202,53 @@ final class MarkdownTests: XCTestCase {
         let box = app.input("chat.message")
         box.tap()
         XCTAssertTrue(app.buttons["composer.bullet"].waitForExistence(timeout: 5))
+        let hide = app.buttons["composer.hideKeyboard"]
+        XCTAssertTrue(hide.isHittable)
+        XCTAssertGreaterThanOrEqual(hide.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(hide.frame.height, 44)
         attach(app, "composer-xl-toolbar")
+        hide.tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+        waitForExpectations(timeout: 10)
+    }
+
+    func testKeyboardDismissPreservesDraftWithFormattingExpandedAndCollapsed() {
+        let app = launchLab(theme: "light")
+        let box = app.input("chat.message")
+        XCTAssertTrue(box.waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["composer.hideKeyboard"].exists)
+        box.tap()
+        box.typeText("Keep this draft")
+        if app.buttons["composer.formatting"].label == "Show formatting" {
+            app.buttons["composer.formatting"].tap()
+        }
+        for expanded in [true, false] {
+            XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+            if !expanded { app.buttons["composer.formatting"].tap() }
+            XCTAssertEqual(app.buttons["composer.bold"].exists, expanded)
+            let hide = app.buttons["composer.hideKeyboard"]
+            XCTAssertTrue(hide.isHittable)
+            XCTAssertEqual(hide.label, "Hide keyboard")
+            XCTAssertGreaterThanOrEqual(hide.frame.width, 44)
+            XCTAssertGreaterThanOrEqual(hide.frame.height, 44)
+            attach(app, expanded ? "keyboard-expanded" : "keyboard-collapsed")
+            hide.tap()
+            expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+            waitForExpectations(timeout: 10)
+            XCTAssertFalse(hide.exists)
+            XCTAssertEqual(box.value as? String, "Keep this draft")
+            XCTAssertFalse(app.staticTexts["Keep this draft"].exists, "dismissing does not send")
+            attach(app, expanded ? "keyboard-dismissed-expanded" : "keyboard-dismissed-collapsed")
+            box.tap()
+        }
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10))
+        box.typeText(" safely")
+        // Tapping back into the field places the caret at the tapped position, not necessarily its end.
+        let resumed = box.value as? String ?? ""
+        XCTAssertTrue(resumed.contains(" safely"))
+        XCTAssertEqual(resumed.replacingOccurrences(of: " safely", with: ""), "Keep this draft")
+        app.buttons["composer.formatting"].tap() // Leave formatting expanded for the other lab tests.
+        app.terminate()
     }
 
     // MARK: Helpers
@@ -211,6 +257,7 @@ final class MarkdownTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
                                "-theme", theme, "-uiTestMarkdownLab"] + extra
+        app.terminate()
         app.launch()
         return app
     }

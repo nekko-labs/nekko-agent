@@ -9,7 +9,8 @@ use crate::agent::{AgentCore, Out};
 use crate::e2e;
 use crate::service::{LinkHandle, Verifier};
 use futures_util::{SinkExt, StreamExt};
-use serde_json::Value;
+use serde_json::{Value, json};
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,6 +43,27 @@ pub type PhoneDispatcher =
 /// Reads the chat list for the phone's Live Activity card (`sessions:summaries`
 /// through the router, not as any one phone).
 pub type Summaries = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> + Send + Sync>;
+
+/// Reads the daemon's entire `chat:pending` map, without phone/list clipping.
+/// Missing or failed reads must never establish an empty snapshot.
+pub type Pending = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Value, String>> + Send>> + Send + Sync>;
+
+/// Internal event-channel marker: the upstream hub lost events. Never forwarded
+/// to phones. Producers must report broadcast lag instead of silently continuing.
+pub const ATTENTION_GAP: &str = "attention:gap";
+const RECONCILE: Duration = Duration::from_secs(30);
+const PENDING_TIMEOUT: Duration = Duration::from_secs(5);
+type PendingRead = Pin<Box<dyn Future<Output = (u64, Result<Value, String>)> + Send>>;
+
+fn pending_read(read: &Option<Pending>, revision: u64) -> Option<PendingRead> {
+    let read = read.clone()?;
+    Some(Box::pin(async move {
+        let result = tokio::time::timeout(PENDING_TIMEOUT, async { read().await })
+            .await
+            .unwrap_or_else(|_| Err("pending read timed out".into()));
+        (revision, result)
+    }))
+}
 
 /// Host events to forward: `(channel, payload)`.
 pub type Events = mpsc::UnboundedReceiver<(String, Value)>;
@@ -86,8 +108,13 @@ pub struct RelayAgent {
 pub fn agent_url(relay_url: &str, room: &str, secret: &str, access: Option<&str>) -> String {
     let base = relay_url.strip_suffix('/').unwrap_or(relay_url);
     let key = e2e::relay_auth(secret, room);
-    let mut url =
-        format!("{base}/relay?role=agent&room={}&key={}", encode_uri_component(room), encode_uri_component(&key));
+    // `proto` tells the relay to take push registrations only from welcomed devices.
+    let mut url = format!(
+        "{base}/relay?role=agent&room={}&key={}&proto={}",
+        encode_uri_component(room),
+        encode_uri_component(&key),
+        crate::hello::PROTOCOL_VERSION
+    );
     if let Some(a) = access {
         url.push_str(&format!("&access={}", encode_uri_component(a)));
     }
@@ -109,9 +136,11 @@ pub fn encode_uri_component(s: &str) -> String {
 
 pub struct Spawn {
     pub url: String,
-    /// The pairing secret and room the E2E key is derived from.
+    /// The pairing secret and room the room key is derived from.
     pub secret: String,
     pub room: String,
+    /// The key this computer proves itself with, which its devices pinned.
+    pub host_key: crate::client::SigningKey,
     pub verify: Verifier,
     pub dispatch: PhoneDispatcher,
     pub events: Events,
@@ -120,6 +149,8 @@ pub struct Spawn {
     pub terminals: Arc<crate::phone_terminal::PhoneTerminals>,
     /// The chat list for the card; without it the card shows each chat as "Chat".
     pub summaries: Option<Summaries>,
+    /// Full attention source. Without it this connection remains unknown.
+    pub pending: Option<Pending>,
 }
 
 impl RelayAgent {
@@ -157,6 +188,12 @@ impl LinkHandle for RelayAgent {
         }
     }
 
+    fn set_reads(&self, device_id: &str, reads: bool) {
+        if let Some(core) = lock(&self.shared.core).as_mut() {
+            core.set_reads(device_id, reads);
+        }
+    }
+
     fn connected_devices(&self) -> Vec<String> {
         lock(&self.shared.core).as_ref().map(AgentCore::connected_devices).unwrap_or_default()
     }
@@ -171,14 +208,15 @@ impl LinkHandle for RelayAgent {
 }
 
 async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool>) {
-    let Spawn { url, secret, room, verify, dispatch, mut events, terminals, summaries } = spec;
+    let Spawn { url, secret, room, host_key, verify, dispatch, mut events, terminals, summaries, pending } = spec;
+    let host = crate::agent::Host { room: room.clone(), key: host_key };
     let derive = tokio::task::spawn_blocking(move || e2e::derive_key(&secret, &room));
     let key = tokio::select! {
         k = derive => match k { Ok(k) => k, Err(_) => return },
         _ = stopped.changed() => return,
     };
     let iv: crate::agent::IvSource = Box::new(e2e::random_iv);
-    *lock(&shared.core) = Some(AgentCore::new(key, iv).with_terminals(terminals));
+    *lock(&shared.core) = Some(AgentCore::new(key, host, iv).with_terminals(terminals));
     const ID: &str = "phone-relay";
     let host = url
         .parse::<tokio_tungstenite::tungstenite::http::Uri>()
@@ -207,7 +245,7 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
                 Ok((ws, _)) => {
                     nekko_net::record(ID, nekko_net::Event::new("connect").host(&host));
                     let (code, reason) =
-                        serve(&shared, ws, &verify, &dispatch, &summaries, &mut events, &mut stopped).await;
+                        serve(&shared, ws, &verify, &dispatch, (&summaries, &pending), &mut events, &mut stopped).await;
                     let mut ev = nekko_net::Event::new("close").host(&host);
                     if code != 1000 {
                         ev = ev.error(if reason.is_empty() { format!("code {code}") } else { reason.clone() });
@@ -253,10 +291,11 @@ async fn serve(
     ws: Ws,
     verify: &Verifier,
     dispatch: &PhoneDispatcher,
-    summaries: &Option<Summaries>,
+    sources: (&Option<Summaries>, &Option<Pending>),
     events: &mut Events,
     stopped: &mut watch::Receiver<bool>,
 ) -> (u16, String) {
+    let (summaries, pending) = sources;
     let (mut sink, mut stream) = ws.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
     *lock(&shared.out) = Some(tx);
@@ -270,11 +309,92 @@ async fn serve(
         }
         let _ = sink.close().await;
     });
+    // A fresh socket is always unknown, even if a previous connection read
+    // successfully. Snapshot futures belong to this serve call and are dropped
+    // on reconnect, so an old socket can never publish into its replacement.
+    shared.send_all(vec![AgentCore::attention_unknown()]);
+    let mut revision = 0u64;
+    // AgentCore retains its legacy phase-based controls (and goldens). On the
+    // production socket a phase transition cannot dismiss a whole chat: the
+    // complete source must first prove that every input in that chat is gone.
+    // Keep these across failed/canceled reads, but never across connections.
+    let mut known_tags = BTreeSet::<String>::new();
+    let mut awaiting_dismiss = BTreeSet::<String>::new();
+    let mut reading = pending_read(pending, revision);
+    let mut reconcile = tokio::time::interval_at(tokio::time::Instant::now() + RECONCILE, RECONCILE);
+    reconcile.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     // Paced terminal output to phones waits for its window (phone_terminal::Coalescer).
     let mut tick = tokio::time::interval(TICK);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let result = loop {
         tokio::select! {
+            // Drain queued events before accepting a read. Even a ready read
+            // must not overwrite a newer input whose event is already queued.
+            biased;
+            _ = stopped.changed() => break (u16::from(CloseCode::Normal), String::new()),
+            e = events.recv() => match e {
+                Some((channel, payload)) => {
+                    let gap = channel == ATTENTION_GAP;
+                    if let Some(core) = lock(&shared.core).as_mut() {
+                        let frames = if gap {
+                            vec![AgentCore::attention_unknown()]
+                        } else {
+                            core.on_event(&channel, &payload)
+                        };
+                        let changed = gap || AgentCore::attention_changed(&channel, &payload)
+                            || frames.contains(&AgentCore::attention_unknown());
+                        if changed {
+                            revision = revision.wrapping_add(1);
+                            reading = pending_read(pending, revision);
+                        }
+                        let frames = frames.into_iter().filter(|frame| {
+                            let Ok(control) = serde_json::from_str::<Value>(frame) else { return true };
+                            if control["type"] != "dismiss" { return true; }
+                            if let Some(tag) = control["tag"].as_str() {
+                                awaiting_dismiss.insert(tag.to_owned());
+                            }
+                            false
+                        }).collect();
+                        shared.send_all(frames);
+                        read_summaries(shared, core, summaries);
+                    }
+                }
+                None => {
+                    shared.send_all(vec![AgentCore::attention_unknown()]);
+                    break (1000, String::new());
+                }
+            },
+            result = async { reading.as_mut().expect("guarded read").await }, if reading.is_some() => {
+                reading = None;
+                let (read_revision, result) = result;
+                if read_revision == revision
+                    && let Some(core) = lock(&shared.core).as_ref()
+                {
+                    let frame = match result {
+                        Ok(pending) => core.attention_snapshot(&pending),
+                        Err(_) => AgentCore::attention_unknown(),
+                    };
+                    let control: Value = serde_json::from_str(&frame).expect("attention control");
+                    let mut frames = vec![frame];
+                    if let Some(tags) = control["tags"].as_array() {
+                        let tags: BTreeSet<String> = tags.iter().filter_map(Value::as_str).map(str::to_owned).collect();
+                        awaiting_dismiss.extend(known_tags.difference(&tags).cloned());
+                        for tag in awaiting_dismiss.difference(&tags) {
+                            frames.push(json!({ "type": "dismiss", "tag": tag }).to_string());
+                        }
+                        awaiting_dismiss.retain(|tag| tags.contains(tag));
+                        known_tags = tags;
+                    }
+                    shared.send_all(frames);
+                }
+            },
+            _ = reconcile.tick() => {
+                // Archive/deletion or lost upstream frames may have no delta.
+                // Withdraw first; failure or timeout cannot leave a stale total.
+                shared.send_all(vec![AgentCore::attention_unknown()]);
+                revision = revision.wrapping_add(1);
+                reading = pending_read(pending, revision);
+            },
             msg = stream.next() => match msg {
                 Some(Ok(Message::Text(text))) => on_text(shared, text.as_str(), verify, dispatch, summaries),
                 Some(Ok(Message::Binary(b))) => {
@@ -286,16 +406,6 @@ async fn serve(
                 Some(Ok(_)) => {}
                 Some(Err(_)) | None => break (1006, String::new()),
             },
-            e = events.recv() => match e {
-                Some((channel, payload)) => {
-                    if let Some(core) = lock(&shared.core).as_mut() {
-                        let frames = core.on_event(&channel, &payload);
-                        shared.send_all(frames);
-                        read_summaries(shared, core, summaries);
-                    }
-                }
-                None => break (1000, String::new()),
-            },
             _ = tick.tick() => {
                 if let Some(core) = lock(&shared.core).as_mut() {
                     let frames = core.tick();
@@ -304,12 +414,15 @@ async fn serve(
                     read_summaries(shared, core, summaries);
                 }
             }
-            _ = stopped.changed() => break (u16::from(CloseCode::Normal), String::new()),
         }
     };
     // Dropping the queue lets the writer flush what is queued and close.
     *lock(&shared.out) = None;
-    let _ = tokio::time::timeout(Duration::from_secs(2), writer).await;
+    let mut writer = writer;
+    if tokio::time::timeout(Duration::from_secs(2), &mut writer).await.is_err() {
+        writer.abort();
+        let _ = writer.await;
+    }
     result
 }
 
@@ -350,8 +463,9 @@ fn on_text(
                 let (shared, dispatch) = (shared.clone(), dispatch.clone());
                 tokio::spawn(async move {
                     let result = dispatch(PhoneCall { device_id, proof, step_up }, channel, args).await;
-                    if let Some(core) = lock(&shared.core).as_mut() {
-                        let frame = core.reply(&cid, id, result);
+                    if let Some(core) = lock(&shared.core).as_mut()
+                        && let Some(frame) = core.reply(&cid, id, result)
+                    {
                         shared.send_all(vec![frame]);
                     }
                 });

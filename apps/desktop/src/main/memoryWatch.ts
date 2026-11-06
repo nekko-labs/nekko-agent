@@ -68,11 +68,11 @@ export function leftLine(state: MemoryState): string {
   const physical = state.availableBytes / state.totalBytes;
   const commit = state.commitLimitBytes && state.commitAvailableBytes != null ? state.commitAvailableBytes / state.commitLimitBytes : 1;
   return commit < physical
-    ? `${gb(state.commitAvailableBytes ?? 0)} of ${gb(state.commitLimitBytes ?? 0)} left to allocate`
+    ? `${gb(state.commitAvailableBytes ?? 0)} of ${gb(state.commitLimitBytes ?? 0)} virtual memory left`
     : `${gb(state.availableBytes)} of ${gb(state.totalBytes)} free`;
 }
 
-const STYLE = `*{box-sizing:border-box}html,body{height:100%;overflow:hidden}body{position:relative;margin:0;padding:14px 16px;background:#101714;color:#f2f1e9;font:13px system-ui;border:2px solid #e2b36b;border-radius:14px}header{display:flex;gap:8px;align-items:center;margin:0 22px 6px 0}header svg{flex:none;width:32px;height:37px;margin:-9px 0 -2px}h1{font-size:15px;margin:0}p{margin:0 0 10px;line-height:1.45;color:#cad6cb}form{display:flex;flex-direction:column;gap:6px}button{font:inherit;text-align:left;padding:6px 10px;border:1px solid #a7c8ac;border-radius:7px;background:transparent;color:#f2f1e9;cursor:pointer}button:hover{background:#ffffff14}button.primary{background:#a7c8ac;color:#101714;border-color:#a7c8ac}button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid white;outline-offset:2px}small{color:#9fb0a2}button small{display:block;margin-top:1px;font-size:12px}.primary small{color:#2f4a36}input{accent-color:#a7c8ac}label{display:flex;gap:6px;align-items:center;margin-top:4px;color:#cad6cb;font-size:12px}.x{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#cad6cb;font-size:16px;text-decoration:none}.x:hover{background:#ffffff1a}`;
+const STYLE = `*{box-sizing:border-box}html,body{height:100%;overflow:hidden}body{position:relative;margin:0;padding:14px 16px;background:#16161c;color:#ece9f5;font:13px system-ui;border:2px solid #e2b36b;border-radius:14px}header{display:flex;gap:8px;align-items:center;margin:0 22px 6px 0}header svg{flex:none;width:32px;height:37px;margin:-9px 0 -2px}h1{font-size:15px;margin:0}p{margin:0 0 10px;line-height:1.45;color:#c9c3dc}form{display:flex;flex-direction:column;gap:6px}button{font:inherit;text-align:left;padding:6px 10px;border:1px solid #c99bb3;border-radius:7px;background:transparent;color:#ece9f5;cursor:pointer}button:hover{background:#ffffff14}button.primary{background:#190019;color:#fff;border-color:#854f6c}button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid white;outline-offset:2px}small{color:#a7a1bb}button small{display:block;margin-top:1px;font-size:12px}.primary small{color:#e6d0dc}input{accent-color:#c99bb3}label{display:flex;gap:6px;align-items:center;margin-top:4px;color:#c9c3dc;font-size:12px}.x{position:absolute;top:6px;right:6px;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;color:#c9c3dc;font-size:16px;text-decoration:none}.x:hover{background:#ffffff1a}`;
 const page = (title: string, body: string) => `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; form-action https://nekko.invalid"><title>${title}</title><style>${STYLE}</style></head><body>${body}</body></html>`;
 
 /**
@@ -81,9 +81,9 @@ const page = (title: string, body: string) => `<!doctype html><html><head><meta 
  * grid, with room above for the mark.
  */
 export const ALERT_MASCOT = '<svg viewBox="0 -7 34 39" shape-rendering="crispEdges" aria-hidden="true">'
-  + '<path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#101714" stroke="#f2f1e9" stroke-width="2"/>'
-  + '<path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="#f2f1e9"/>'
-  + '<path d="M15 20H17V21H15Z" fill="#a7c8ac"/>'
+  + '<path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="#16161c" stroke="#ece9f5" stroke-width="2"/>'
+  + '<path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="#ece9f5"/>'
+  + '<path d="M15 20H17V21H15Z" fill="#c084b5"/>'
   + '<path d="M29 -7H32V-2H29Z M29 -1H32V2H29Z" fill="#e2b36b"/></svg>';
 
 /** What shutting the local models down costs: how many replies stop. */
@@ -155,7 +155,7 @@ export function createMemoryWatch(options: { tray: Tray; engine: EngineProcess; 
     dismiss();
     const anchor = options.tray.getBounds();
     const work = screen.getDisplayMatching(anchor).workArea;
-    const win = new BrowserWindow({ ...companionBounds(anchor, work, 360, 320), title: 'Nekko memory check', show: false, frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true, backgroundColor: '#101714', webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+    const win = new BrowserWindow({ ...companionBounds(anchor, work, 360, 320), title: 'Nekko memory check', show: false, frame: false, resizable: false, skipTaskbar: true, alwaysOnTop: true, backgroundColor: '#16161c', webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
     popup = win;
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event, url) => {

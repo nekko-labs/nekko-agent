@@ -1,15 +1,19 @@
+import { terminalPresentation } from '../components/terminalActivity.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { CreateMenuRows } from '../components/CreateMenu.js';
 import { confirmDeletion } from '../components/DeleteConfirmation.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { AgentEvent, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID } from '@nekko-agent/shared';
+import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
+import { ComputerGlyph } from '../components/ComputerChip.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { StatusIcon, WorkspaceCard, agentStatusOfLane, type AgentStatus } from '../components/WorkspaceCard.js';
+import { localAgentStarts, onLocalAgentWorking } from '../workingAgents.js';
+import { StatusIcon, WorkspaceCard, agentStatusOfLane, chatRenameTitle, type AgentStatus } from '../components/WorkspaceCard.js';
+import { GroupActivity } from '../components/GroupActivity.js';
 import { ChatFinder } from '../components/ChatFinder.js';
 import { CheckIcon, TerminalIcon, PlusIcon, SearchIcon, SlidersIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
@@ -17,15 +21,16 @@ import { COMPLETION_ROW_ATTR, completeWithExit, findCompletionRow } from '../com
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { ModelPicker } from '../components/agent-console/ModelPicker.js';
 import { selectWorkspaceRows } from './workspaceSelection.js';
-import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, unopenedChats, subagentRows } from './unopenedChats.js';
 import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
+import { useShown } from '../simpleMode.js';
 import {
-  DATE_GROUPS, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, readAgentPanelView, saveAgentPanelView, statusGroupOf,
+  DATE_GROUPS, DRAFT_GROUP, NEEDS_INPUT_GROUP, STATUS_GROUPS, canReorder, compareCards, dateGroupOf, groupActivityOf, readAgentPanelView, saveAgentPanelView, statusGroupOf, wakeSourcesOf,
   type AgentPanelView, type SortableCard,
 } from './agentPanelView.js';
 
@@ -45,15 +50,25 @@ const COMPLETED_GROUP = '__completed';
 /** What a card sorts by: its chat, or its shell when it is a terminal. */
 function sortable(e: Entry): SortableCard {
   const at = e.s?.updatedAt ?? e.t?.createdAt ?? 0;
-  return { title: e.s?.title ?? e.t?.title ?? '', updatedAt: at, createdAt: e.s?.createdAt ?? e.t?.createdAt ?? at, order: e.s?.order ?? e.t?.order };
+  return { title: e.s?.title ?? (e.t ? terminalPresentation(e.t).title : ''), updatedAt: at, createdAt: e.s?.createdAt ?? e.t?.createdAt ?? at, order: e.s?.order ?? e.t?.order };
 }
 
 /** One group the panel shows: a project, a status, a date range, or all of it. */
+/** Beside a computer's group heading, which already names it. */
+const COMPUTER_STATE_WORD: Record<ComputerStatus['state'], string> = { online: '', connecting: 'connecting', offline: 'offline', denied: 'removed', stale: 'needs pairing again', update: 'needs an update' };
+
+/** The group heading for agents on this computer. */
+function thisComputerName(): string {
+  return navigator.platform.startsWith('Mac') ? 'This Mac' : navigator.platform.startsWith('Win') ? 'This PC' : 'This computer';
+}
+
 type PanelGroup = {
   key: string;
   name: string;
   /** The project folder, when grouped by project. */
   ws?: WorkspaceFolder;
+  /** The computer, when grouped by computer. */
+  computer?: ComputerStatus;
   items: Entry[];
   /** Completed chats folded under the group. */
   done: SessionSummary[];
@@ -114,7 +129,11 @@ function projectOfWorkspace(w: Workspace, sessions: SessionSummary[], terminals:
  */
 export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): AgentStatus | null | undefined {
   switch (type) {
-    case 'session_meta': return undefined;
+    // News about the chat, not a turn: it can come after `done`, and nothing
+    // would then clear a "working" it set (hub.rs files these as Kind::Meta).
+    case 'session_meta':
+    case 'compaction':
+    case 'claude_code_background': return undefined;
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
@@ -206,6 +225,20 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const anchor = useRef<string | null>(null);
   const [menu, setMenu] = useState<{x: number; y: number; ids: string[]; model?: boolean} | null>(null);
   const [doneMenu, setDoneMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  // The chat whose card title is a text field, from the pencil or the menu's Rename.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const renameChat = async (id: string, typed: string | null) => {
+    setRenamingId(null);
+    const title = chatRenameTitle(typed, sessions.find((s) => s.id === id)?.title);
+    if (!title) return;
+    try {
+      const saved = await window.nekko.setSessionOptions(id, { title });
+      if (!saved) throw new Error('Chat no longer exists');
+      // An open pane's header shows its own copy of the chat.
+      window.dispatchEvent(new CustomEvent('nekko-session-brain', { detail: { id, session: saved } }));
+      await refreshSessions();
+    } catch (e) { useStore.getState().pushToast('error', `Could not rename the chat: ${e instanceof Error ? e.message : String(e)}`); }
+  };
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
@@ -232,7 +265,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // Seeded from the app-wide fold of agent events, so a chat already working
   // is marked so on the first frame; the host confirms on mount for runs that
   // began before this window did.
-  const [statuses, setStatuses] = useState<Map<string, AgentStatus>>(() => new Map(runningSessionIds().map((id) => [id, 'working' as AgentStatus])));
+  // A send from a chat pane counts too: the engine says nothing until the
+  // model's first token, which for Claude Code can be many seconds, and a sent
+  // chat with no status would sit in Done meanwhile.
+  const [statuses, setStatuses] = useState<Map<string, AgentStatus>>(() => new Map([...runningSessionIds(), ...localAgentStarts()].map((id) => [id, 'working' as AgentStatus])));
+  useEffect(() => onLocalAgentWorking((id, working) => setStatuses((prev) => {
+    if (working ? prev.has(id) : prev.get(id) !== 'working') return prev;
+    const m = new Map(prev);
+    if (working) m.set(id, 'working'); else m.delete(id);
+    return m;
+  })), []);
   useEffect(() => {
     window.nekko.runningSessions().then((ids) => setStatuses((prev) => {
       const missing = ids.filter((id) => !prev.has(id));
@@ -259,6 +301,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   /** Groups whose completed chats are expanded under their active ones. */
   const completionTipSessionId = useStore((s) => s.completionTipSessionId);
+  const computers = useStore((s) => s.computers);
+  const computersShown = useShown('computers', { computers: computers.length > 0 });
+  const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
   /** Completed rows rendered per group past the first page ("Show more"). */
@@ -409,13 +454,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
 
   const childrenOf = useMemo(() => {
     const m = new Map<string, SessionSummary[]>();
-    for (const s of sessions) if (s.parentSessionId && (statuses.has(s.id) || !s.lastReplyText)) {
+    for (const s of sessions) if (s.parentSessionId && !s.archivedAt) {
       const arr = m.get(s.parentSessionId) ?? [];
       arr.push(s);
       m.set(s.parentSessionId, arr);
     }
+    for (const kids of m.values()) kids.sort((a, b) => a.createdAt - b.createdAt);
     return m;
-  }, [sessions, statuses]);
+  }, [sessions]);
 
   // Closing a workspace only closes its windows, not the saved conversation.
   // Keep those chats reachable without reopening every transcript at startup.
@@ -437,13 +483,16 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
 
   // Project buckets: a "General" bucket for project-less work (kept at the top,
   // hidden when empty), then one bucket per project folder.
+  const remoteFolders = useMemo(() => computers.flatMap((c) => computerCatalogs[c.id]?.workspaces ?? []), [computers, computerCatalogs]);
   const buckets: Array<{ ws?: WorkspaceFolder; key: string; name: string }> = [
     { key: '__none', name: 'General' },
     ...(settings?.workspaces ?? []).map((w) => ({ ws: w, key: w.id, name: w.name })),
+    // Same-named projects on two computers are two checkouts: two groups.
+    ...remoteFolders.map((w) => ({ ws: w, key: w.id, name: `${w.name} · ${computers.find((c) => c.id === computerIdOf(w.id))?.name ?? ''}` })),
   ];
 
   const chatGroupOf = (s: SessionSummary): string =>
-    settings?.workspaces.some((p) => p.id === s.workspaceId) ? (s.workspaceId as string) : '__none';
+    settings?.workspaces.some((p) => p.id === s.workspaceId) || remoteFolders.some((p) => p.id === s.workspaceId) ? (s.workspaceId as string) : '__none';
 
   /**
    * Every active agent in a bucket: open workspaces and chats that are not
@@ -453,7 +502,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    */
   const bucketEntries = (key: string): Entry[] =>
     [
-      ...listedWorkspaces.filter((w) => projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
+      ...listedWorkspaces.filter((w) => w.anchor.kind !== 'terminal' && projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
+      ...terminals.filter((t) => !t.id.startsWith('agent_') && !t.agentSessionId && (buckets.some((b) => b.key === t.workspaceId) ? t.workspaceId : '__none') === key).map((t): Entry => ({ key: 'terminal:' + t.id, w: null, s: null, t })),
       ...savedChats.filter((s) => chatGroupOf(s) === key).map((s): Entry => ({ key: CHAT_KEY + s.id, w: null, s, t: null })),
     ]
       .map((e) => ({ e, order: e.s?.order ?? e.t?.order, at: e.s ? -e.s.updatedAt : e.t?.createdAt ?? 0 }))
@@ -467,7 +517,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    * in manual order this is exactly the bucket list drag-and-drop writes to;
    * every other arrangement is a read-only view of the same cards.
    */
-  const utilityKind = (e: Entry) => e.w?.anchor.kind === 'terminal' ? 'terminal' : e.s?.chatType === 'image' ? 'media' : null;
+  const utilityKind = (e: Entry) => e.t ? 'terminal' : e.s?.chatType === 'image' ? 'media' : null;
   const shown = (e: Entry) => !utilityKind(e) && (view.showAutomations || !e.s?.taskId);
   const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
   const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
@@ -490,20 +540,30 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     const done = completedInGroup(sessions, '*', () => '*').filter(shownDone);
     const completed: PanelGroup[] = done.length > 0 ? [{ key: COMPLETED_GROUP, name: 'Completed', items: [], done }] : [];
     if (view.groupBy === 'none') return [{ key: 'all', name: 'All agents', items: all, done: [], bare: true }, ...completed];
+    if (view.groupBy === 'computer' && computersShown) {
+      const here = (e: Entry) => !computerIdOf(e.s?.id);
+      return [
+        { key: 'computer:here', name: thisComputerName(), items: all.filter(here), done: [] },
+        ...computers.map((c): PanelGroup => ({ key: 'computer:' + c.id, name: c.name, computer: c, items: all.filter((e) => computerIdOf(e.s?.id) === c.id), done: [] })),
+        ...completed,
+      ];
+    }
+    // A sub-agent has no card of its own, so its question lifts the parent's.
+    const kidIsWaiting = (e: Entry) => !!e.s && !!childrenOf.get(e.s.id)?.some((k) => statuses.get(k.id) === 'input');
     const groupOf = view.groupBy === 'status'
-      ? (e: Entry) => statusGroupOf(e.s ? statuses.get(e.s.id) : undefined)
+      ? (e: Entry) => statusGroupOf(e.s, kidIsWaiting(e) ? 'input' : e.s ? statuses.get(e.s.id) : undefined)
       : (e: Entry) => { const c = sortable(e); return dateGroupOf(view.sortBy === 'created' ? c.createdAt : c.updatedAt, now); };
     const defs = view.groupBy === 'status' ? STATUS_GROUPS : DATE_GROUPS;
     return [
       ...defs.flatMap((d): PanelGroup[] => {
         const items = all.filter((e) => groupOf(e) === d.key);
-        return items.length > 0 || view.showEmptyGroups ? [{ key: d.key, name: d.name, items, done: [] }] : [];
+        return items.length > 0 || (view.showEmptyGroups && d.key !== DRAFT_GROUP && d.key !== NEEDS_INPUT_GROUP) ? [{ key: d.key, name: d.name, items, done: [] }] : [];
       }),
       ...completed,
     ];
   })()];
 
-  // When a card changes group (Working to Done), note where every card was
+  // When a card changes group (Building to Verifying), note where every card was
   // before this render commits, then fly the movers from there. Not when the
   // grouping itself changed: then every card moves and none of them is news.
   const listRef = useRef<HTMLDivElement>(null);
@@ -518,7 +578,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   useLayoutEffect(() => {
     if (cardsBefore.current) flyMovedCards(listRef.current, cardsBefore.current);
     cardsBefore.current = null;
-  }, [layoutSig]);
+  }, [layoutSig, computersShown]);
 
   const activeRowRef = useRef<HTMLDivElement>(null);
   const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
@@ -681,6 +741,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const completedGroup = b.key === COMPLETED_GROUP;
           const isCollapsed = completedGroup ? !showCompleted.has(b.key) : collapsed.has(b.key);
           const completedOpen = completedGroup || showCompleted.has(b.key);
+          const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? statuses.get(e.s.id) : undefined))) : null;
           const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
           // A page of completed rows at a time; the selected or just-completed
           // chat is always in it.
@@ -724,9 +785,15 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                     className={`h-3 w-3 shrink-0 text-accent transition-transform duration-200 ${isCollapsed ? '' : 'rotate-90'}`}
                     viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
                   ><path d="M9 6l6 6-6 6" /></svg>
+                  {b.computer && <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: b.computer.state === 'online' ? 'var(--success)' : 'var(--ink-faint)' }} />}
+                  {view.groupBy === 'computer' && view.showComputerIcons && <ComputerGlyph icon={b.computer ? b.computer.icon : b.key === 'computer:here' ? settings?.machineIcon : undefined} />}
                   <span className="agent-panel-group-label truncate font-medium" title={b.name} dir="auto">{b.name}</span>
-                  {isCollapsed && (items.length > 0 || completedGroup) && (
-                    <span className="ml-1 shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
+                  {b.computer && b.computer.state !== 'online' && <span className="shrink-0 text-2xs text-ink-faint">{COMPUTER_STATE_WORD[b.computer.state]}</span>}
+                  {activity && <GroupActivity kind={activity} animated={settings?.agentActivityAnimation !== false} />}
+                  {activity ? (
+                    <span className="group-activity-count ms-auto shrink-0 rounded-full bg-success-soft px-2 text-2xs font-semibold tabular-nums">{items.length}</span>
+                  ) : isCollapsed && (items.length > 0 || completedGroup) && (
+                    <span className="ms-auto shrink-0 rounded-full bg-surface-2 px-2 text-2xs tabular-nums text-ink-faint">
                       {completedGroup ? done.length : items.length}
                     </span>
                   )}
@@ -749,7 +816,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
               <div className={`collapse-wrap ${isCollapsed ? 'collapsed' : ''}`} data-group-cards data-collapsed={isCollapsed || undefined} inert={isCollapsed || undefined} aria-hidden={isCollapsed || undefined}>
                 <div className="min-h-0 space-y-1 overflow-hidden pb-1">
                   {items.length === 0 && !completedGroup && (
-                    <p className="px-4 py-1 text-2xs text-ink-faint">No active agents</p>
+                    <p className="px-4 py-1 text-2xs text-ink-faint"><span aria-hidden="true">–</span><span className="sr-only">No active agents</span></p>
                   )}
                   {items.map((entry) => {
                     const { w, s } = entry;
@@ -762,7 +829,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         onContextMenu={s ? (e) => contextRow(e, s.id) : undefined}
                         onClickCapture={s ? (e) => { if (selectRow(e, s.id)) e.stopPropagation(); } : undefined}
                         style={s && selected.includes(s.id) ? {background:'var(--accent-soft)', borderRadius:8, boxShadow:'inset 0 0 0 1px var(--accent)'} : undefined}
-                        draggable={reorderable || !!s || !!entry.t}
+                        draggable={(reorderable || !!s || !!entry.t) && !(s && s.id === renamingId)}
                         {...{ [CARD_ATTR]: entry.key }}
                         onDragStart={(e) => {
                           if (reorderable) startDrag(e, { kind: 'workspace', id: entry.key, ws: b.ws?.id });
@@ -789,21 +856,33 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
-                          showProvider={view.showProvider}
+                          showComputer={view.showComputer}
+                          showComputerIcons={view.showComputerIcons}
                           zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}
                           onOpen={() => {
                             if (s) onOpenChat(s.id);
                             else if (entry.t) onOpenTerminal(entry.t.id);
                             setMobileNav(false);
                           }}
-                          onClose={() => (w ? archiveWorkspace(w.id) : s ? archiveChat(s.id) : undefined)}
+                          onClose={async () => {
+                            if (entry.t) {
+                              if (entry.t.running && !await confirmDeletion('Close this terminal and stop its running processes?')) return;
+                              try { await window.nekko.closeTerminal(entry.t.id); await refreshTerminals(); }
+                              catch (error) { useStore.getState().pushToast('error', `Could not close terminal: ${String(error)}`); }
+                            } else if (w) await archiveWorkspace(w.id);
+                            else if (s) await archiveChat(s.id);
+                          }}
+                          renaming={!!s && s.id === renamingId}
+                          onRenameStart={s ? () => setRenamingId(s.id) : undefined}
+                          onRename={s ? (title) => void renameChat(s.id, title) : undefined}
                         />
                         {/* Sub-agents this chat spawned, one line each. */}
-                        {kids.map((kid) => (
+                        {s && subagentRows(kids).map((kid, i, rows) => (
                           <div key={kid.id} ref={kid.id === selectedId ? activeRowRef : undefined}><SubAgentRow
                             session={kid}
                             status={statuses.get(kid.id)}
                             isActive={kid.id === selectedId}
+                            last={i === rows.length - 1}
                             onOpen={() => onOpenChat(kid.id)}
                           /></div>
                         ))}
@@ -880,6 +959,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
         <div className="select-text break-all px-3 py-2 font-mono text-2xs text-ink-faint">{menu.ids.length === 1 ? <><span className="select-none">Chat ID: </span><span className="select-all">{menu.ids[0]}</span></> : menu.ids.length + ' sessions selected'}</div>
         {menu.model ? <div className="h-72"><ModelPicker expanded open providers={useStore.getState().providers} providerId={null} modelId={null} models={[]} onOpenChange={() => {}} onProvider={() => {}} onModel={(pid, mid) => { const ids = menu.ids; setMenu(null); void Promise.allSettled(ids.map(async id => { const s = await window.nekko.setSessionOptions(id,{providerId:pid,modelId:mid,autoModel:mid===AUTO_MODEL_ID}); if (!s) throw new Error('Chat no longer exists'); window.dispatchEvent(new CustomEvent('nekko-session-brain', {detail:{id,session:s}})); })).then(results => { results.forEach((r,i) => { if(r.status==='rejected') useStore.getState().pushToast('error',ids[i]+': '+String(r.reason)); }); void refreshSessions(); }); }} /></div> : <>
           <ContextAction onClick={() => { menu.ids.forEach(id => onOpenChat(id)); setMenu(null); }}>Open{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
+          <ContextAction disabled={menu.ids.length !== 1} onClick={() => { setRenamingId(menu.ids[0]); setMenu(null); }}>Rename</ContextAction>
           <ContextAction onClick={() => void runAction('complete',menu.ids)}>Mark as completed</ContextAction>
           <ContextAction onClick={() => setMenu({...menu, model:true})}>Change model</ContextAction>
           <ContextAction disabled={!menu.ids.some(id => statuses.has(id))} onClick={() => void runAction('stop',menu.ids)}>Stop{menu.ids.length > 1 ? ' all' : ''}</ContextAction>
@@ -997,25 +1077,27 @@ function CompletedRow({
   );
 }
 
-/** One sub-agent under its parent's card: a single line, no details of its own. */
+/**
+ * One sub-agent under its parent's card: a single line, no details of its own.
+ * A tree elbow ties it to the card above (a tee for every row but the last),
+ * and its status icon (rocket, check, question) sits where a bullet would.
+ */
 function SubAgentRow({
-  session, status, isActive, onOpen,
+  session, status, isActive, last, onOpen,
 }: {
-  session: SessionSummary; status: AgentStatus | undefined; isActive: boolean; onOpen: () => void;
+  session: SessionSummary; status: AgentStatus | undefined; isActive: boolean; last: boolean; onOpen: () => void;
 }) {
   return (
     <button
       onClick={onOpen}
-      className={`flex w-full items-center gap-2 rounded-lg py-1 pl-6 pr-2 text-left text-xs transition-colors duration-150 ${
+      data-subagent-row={session.id}
+      className={`relative flex w-full items-center gap-1.5 rounded-lg py-1 pl-7 pr-2 text-left text-xs transition-colors duration-150 ${
         isActive ? 'bg-accent-soft text-ink' : 'text-ink-soft hover:bg-surface-2'
       }`}
     >
-      <span
-        aria-hidden
-        className={`h-[5px] w-[5px] shrink-0 rounded-full bg-transparent ring-1 ${isActive ? 'ring-accent' : 'ring-ink-faint'}`}
-      />
+      <span aria-hidden data-subagent-tree={last ? 'last' : 'tee'} className="subagent-tree" />
+      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, wakeSourcesOf(session))} />
       <span className="min-w-0 flex-1 truncate" title={session.title} dir="auto">{session.title || 'Untitled chat'}</span>
-      <StatusIcon status={status ?? agentStatusOfLane('idle', undefined, session.activeWatchCount)} />
     </button>
   );
 }

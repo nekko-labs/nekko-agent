@@ -82,7 +82,7 @@ object SealedBox {
         java.security.KeyFactory.getInstance("EC").generatePrivate(ECPrivateKeySpec(BigInteger(1, scalar), P256.params)) as ECPrivateKey
 
     /** The raw ECDH secret: the shared point's x coordinate, 32 bytes. */
-    private fun agree(private: ECPrivateKey, peer: ECPublicKey): ByteArray =
+    internal fun agree(private: ECPrivateKey, peer: ECPublicKey): ByteArray =
         KeyAgreement.getInstance("ECDH").run {
             init(private)
             doPhase(peer, true)
@@ -91,11 +91,17 @@ object SealedBox {
 
     /** HKDF-SHA256 to 44 bytes: an AES-256 key, then a 12-byte nonce. */
     private fun keyAndNonce(ikm: ByteArray, salt: ByteArray, info: ByteArray): Pair<ByteArray, ByteArray> {
+        val okm = hkdf(ikm, salt, info, 44)
+        return okm.copyOfRange(0, 32) to okm.copyOfRange(32, 44)
+    }
+
+    /** HKDF-SHA256 to [size] bytes. */
+    internal fun hkdf(ikm: ByteArray, salt: ByteArray, info: ByteArray, size: Int): ByteArray {
         val prk = Mac.getInstance("HmacSHA256").run {
             init(SecretKeySpec(salt, "HmacSHA256"))
             doFinal(ikm)
         }
-        val okm = ByteArray(44)
+        val okm = ByteArray(size)
         var t = ByteArray(0)
         var filled = 0
         var counter = 1
@@ -113,7 +119,7 @@ object SealedBox {
             counter++
         }
         prk.fill(0)
-        return okm.copyOfRange(0, 32) to okm.copyOfRange(32, 44)
+        return okm
     }
 
     fun base64url(b: ByteArray): String = Base64.getUrlEncoder().withoutPadding().encodeToString(b)

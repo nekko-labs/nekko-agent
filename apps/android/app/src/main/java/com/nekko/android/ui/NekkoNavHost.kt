@@ -1,5 +1,7 @@
 package com.nekko.android.ui
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -18,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.nekko.android.data.ModelPick
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,6 +38,7 @@ import com.nekko.android.data.NewChatDefaults
 import com.nekko.android.voice.AndroidMic
 import com.nekko.android.voice.Dictation
 import com.nekko.android.data.PhonePrefs
+import com.nekko.android.ui.settings.SimpleModeScreen
 import com.nekko.android.haptics.AndroidHaptics
 import com.nekko.android.data.ThemePrefs
 import com.nekko.android.ui.files.FilesScreen
@@ -101,6 +105,7 @@ object Routes {
     const val FILES = "settings/files"
     const val LOGS = "settings/logs"
     const val PROVIDERS = "settings/providers"
+    const val SIMPLE_MODE = "settings/simple"
 
     fun chat(id: String) = "chat/${Uri.encode(id)}"
     fun pair(link: String? = null) = if (link == null) "pair" else "pair?link=${Uri.encode(link)}"
@@ -153,6 +158,10 @@ fun NekkoNavHost(
         onLinkHandled()
     }
 
+    // Start fresh from Simple's "chat getting long" line: New chat opens on that chat's model.
+    var freshPick by remember { mutableStateOf<ModelPick?>(null) }
+    val startFresh: (ModelPick?) -> Unit = { freshPick = it; nav.navigate(Routes.NEW) }
+
     // A phone paired before the first run existed never sees it.
     LaunchedEffect(repo) { FirstRun.atLaunch(phonePrefs, repo.state.first { it.ready }.computers.isNotEmpty()) }
 
@@ -161,7 +170,7 @@ fun NekkoNavHost(
             // First run (IO-31): step 1 before pairing, step 3 right after the first pairing.
             if (firstRunStep(repo, phonePrefs)) return@composable
             if (mode != PaneMode.ONE) {
-                Panes(window, panes, repo, phonePrefs, shareInbox, nav)
+                Panes(window, panes, repo, phonePrefs, shareInbox, nav, startFresh)
                 return@composable
             }
             ChatsScreen(
@@ -214,6 +223,7 @@ fun NekkoNavHost(
                     nav.navigate(Routes.chat(newId))
                 },
                 onNewChat = { nav.navigate(Routes.NEW) },
+                onStartFresh = startFresh,
             )
         }
         composable(Routes.NEW) {
@@ -224,9 +234,12 @@ fun NekkoNavHost(
             val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
             // Text shared from another app (Share to Nekko), editable here, never sent by itself.
             val shared by shareInbox.shared.collectAsStateWithLifecycle()
+            // Taken once, so a later New chat opens on the usual default.
+            val startPick = remember { freshPick.also { freshPick = null } }
             NewChatScreen(
                 repo = repo,
                 phonePick = phonePick,
+                startPick = startPick,
                 shared = shared,
                 onEditShared = shareInbox::edit,
                 onBack = {
@@ -263,6 +276,9 @@ fun NekkoNavHost(
                 SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
             }
             SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.SIMPLE_MODE) {
+            SimpleModeScreen(prefs = phonePrefs, onBack = { nav.popBackStack() })
         }
         composable(Routes.LICENSES) {
             LicensesScreen(onBack = { nav.popBackStack() })
@@ -315,6 +331,7 @@ private fun Panes(
     phonePrefs: PhonePrefs,
     shareInbox: ShareInbox,
     nav: NavHostController,
+    startFresh: (ModelPick?) -> Unit,
 ) {
     val layout by panes.layout.collectAsStateWithLifecycle()
     val tip by panes.tip.collectAsStateWithLifecycle()
@@ -324,16 +341,20 @@ private fun Panes(
     val context = LocalContext.current
     val running = s.activity.keys
     val waiting = remember(s.activity) { s.activity.filterValues { it == Activity.NEEDS_YOU }.keys }
-    val titles = remember(s.summaries) { s.summaries.associate { it.id to plainText(it.title).ifEmpty { "New chat" } } }
+    val newChat = stringResource(R.string.chats_new_chat)
+    val chatsLabel = stringResource(R.string.chats_title)
+    val monitorsLabel = stringResource(R.string.chats_monitors)
+    val chatLabel = stringResource(R.string.chats_chat)
+    val titles = remember(s.summaries, newChat) { s.summaries.associate { it.id to plainText(it.title).ifEmpty { newChat } } }
     val chats = remember(s.summaries) {
         s.summaries.filter { it.archivedAt == null }.sortedByDescending { it.updatedAt }.map { PaneChatChoice(it.id, titles.getValue(it.id)) }
     }
-    val labels = remember(titles) {
+    val labels = remember(titles, chatsLabel, monitorsLabel, chatLabel) {
         PaneLabels { c ->
             when (c) {
-                PaneContent.Chats -> "Chats"
-                PaneContent.Monitors -> "Monitors"
-                is PaneContent.Chat -> c.id?.let(titles::get) ?: "Chat"
+                PaneContent.Chats -> chatsLabel
+                PaneContent.Monitors -> monitorsLabel
+                is PaneContent.Chat -> c.id?.let(titles::get) ?: chatLabel
             }
         }
     }
@@ -383,6 +404,7 @@ private fun Panes(
                             slot.open(newId)
                         },
                         onNewChat = { nav.navigate(Routes.NEW) },
+                        onStartFresh = startFresh,
                     )
                 }
             }
@@ -399,7 +421,7 @@ private fun EmptyChatPane(slot: PaneSlot, onNewChat: () -> Unit) {
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("Chat", style = MaterialTheme.typography.titleMedium) },
+                title = { Text(stringResource(R.string.chats_chat), style = MaterialTheme.typography.titleMedium) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 actions = slot.actions,
             )
@@ -411,12 +433,12 @@ private fun EmptyChatPane(slot: PaneSlot, onNewChat: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "Open a chat from the list, or pick one with Replace with… above.",
+                stringResource(R.string.chats_empty_pane),
                 style = MaterialTheme.typography.bodyLarge,
                 color = p.inkSoft,
                 textAlign = TextAlign.Center,
             )
-            OutlinedButton(onClick = onNewChat) { Text("New chat") }
+            OutlinedButton(onClick = onNewChat) { Text(stringResource(R.string.chats_new_chat)) }
         }
     }
 }
@@ -445,7 +467,7 @@ private fun firstRunStep(repo: ComputersRepository, prefs: PhonePrefs): Boolean 
     if (!c.ready) return false
     if (notifyStep && c.computers.isNotEmpty()) {
         FirstRunNotifications(
-            computer = c.active?.name ?: "Your computer",
+            computer = c.active?.name ?: stringResource(R.string.chats_your_computer_cap),
             asking = asking,
             onAllow = {
                 if (Build.VERSION.SDK_INT >= 33) {

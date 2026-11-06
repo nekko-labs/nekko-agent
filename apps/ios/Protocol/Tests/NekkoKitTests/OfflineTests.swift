@@ -470,7 +470,7 @@ final class OfflineStoreTests: XCTestCase {
         }, deviceName: { "iPhone" }, deriveKey: { _, _ in Data(repeating: 1, count: 32) },
            offlineFiles: files, draftDebounce: 0, outboxPoll: 0.01, outboxConfirmTimeout: 0.5)
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff"))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff", hostKey: testHostKey))
         conns[0].online()
         await settleOffline()
         return (s, conns[0])

@@ -55,6 +55,9 @@ export const BUDGETS = [
  * - Leaks: 0.2-0.5 MB of heap and no DOM nodes or listeners kept per lap.
  */
 export const MEMORY_BUDGETS = [
+  // Not a cost but a precondition: the GPU rows below mean nothing for a board
+  // with fewer working windows than the phase set working.
+  { id: 'gpu_board', label: 'Board windows not working when the GPU figures were read (of the six set working)', unit: 'windows', budget: 0, measure: (m) => m.gpu.wanted - m.gpu.working },
   { id: 'gpu_overdraw', label: 'Worst animated compositor layer against the box that clips it, Grid wall of streaming agents', unit: 'x', budget: 2, measure: (m) => m.gpu.overdraw },
   { id: 'gpu_tiles', label: 'Compositor tile memory, Grid wall of streaming agents at 2x', unit: 'MB', budget: 320, measure: (m) => m.gpu.tileMb },
   { id: 'heap_per_lap', label: 'JS heap kept per lap of chat switches, after warm-up', unit: 'MB', budget: 2, measure: (m) => m.leak.heapMbPerLap },

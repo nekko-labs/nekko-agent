@@ -3,7 +3,9 @@ import { type CloudStatus, type SyncDevice, cloudError } from '@nekko-agent/shar
 import { Toggle } from '../primitives/Toggle.js';
 import { CloudSignIn } from './CloudSignIn.js';
 import { RecoveryKeyDialog } from './RecoveryKeyDialog.js';
+import { DeleteAccountDialog } from './DeleteAccountDialog.js';
 import { SyncVisual } from './SyncVisual.js';
+import { LogOutIcon } from '../../gentleface-icons.js';
 import './cloud.css';
 
 const PLANS_URL = 'https://nekkoagent.com/pricing';
@@ -15,6 +17,7 @@ export function SyncSettings() {
   const [recovery, setRecovery] = useState<{ key: string | null } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -74,7 +77,10 @@ export function SyncSettings() {
             <div className="truncate text-ink">{status.account?.email}</div>
             <div className="text-xs text-ink-faint">{planLabel(status.account?.plan)}</div>
           </div>
-          <button className="btn btn-ghost py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}>Sign out</button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button className="btn btn-ghost py-1! text-xs!" disabled={!!busy} onClick={() => void act('out', () => window.nekko.cloudSignOut())}><LogOutIcon className="mr-1 h-3.5 w-3.5" />Sign out</button>
+            <button className="btn btn-ghost py-1! text-xs! text-(--danger)!" disabled={!!busy} data-cloud-delete-account onClick={() => setDeleting(true)}>Delete account</button>
+          </div>
         </div>
       )}
 
@@ -149,6 +155,7 @@ export function SyncSettings() {
 
       {(error || status?.sync.error) && <p role="alert" className="mt-3 text-xs text-(--danger)">{error || status?.sync.error}</p>}
       {signIn && <CloudSignIn status={status} onClose={() => setSignIn(false)} />}
+      {deleting && <DeleteAccountDialog email={status?.account?.email ?? ''} onClose={() => setDeleting(false)} onDeleted={(s) => { setStatus(s); setDeleting(false); }} />}
       {recovery && <RecoveryKeyDialog recoveryKey={recovery.key} email={status?.account?.email ?? ''} onDone={() => setRecovery(null)} />}
     </section>
   );

@@ -5,14 +5,14 @@ area: phone
 
 # iOS and Android stay in step (2026-11-02)
 
-Philip asked (2026-11-02) that the two phone apps do the same things, for what exists today and for everything new, and look like the same product while each feels at home on its own phone. Why this and not iOS first, Android later: [decision 0040](../../docs/decisions/0040-ios-and-android-stay-in-step.md).
+Philip asked (2026-11-02) that the two phone apps do the same things, for what exists today and for everything new, and look like the same product while each feels at home on its own phone. Why this and not iOS first, Android later: [decision 0061](../../docs/decisions/0061-ios-and-android-stay-in-step.md).
 
 ## The rule
 
 1. **Same features.** A feature on one app belongs on the other, existing or new. Someone who changes phones should lose nothing.
 2. **Only a true OS exclusive stays on one app.** If the other OS has an equivalent, build that, the way Apple Pay on iPhone maps to Samsung Pay or Google Pay on Android. A feature stays one-sided only when the other OS has nothing that can do the job, and this file says so.
 3. **Native manners, one look.** Each app follows its own platform's design guidance (Apple's Human Interface Guidelines, Material on Android) for navigation, controls, sheets, type and motion. The Nekko themes, mascot, wording and the order of what a screen shows stay the same, so the two read as one product.
-4. **A gap is written down.** When one app gets a feature first, the same PR adds the other app's task to [TASKS.md](../../TASKS.md) and a row to the gaps table below. Removing the row is part of closing the gap.
+4. **A gap is written down.** When one app gets a feature first, the same PR files a GitHub issue for the other app and adds a row to the gaps table below. Removing the row is part of closing the gap.
 
 ## Acceptance
 
@@ -38,15 +38,17 @@ Philip asked (2026-11-02) that the two phone apps do the same things, for what e
 
 Found by comparing the two codebases on 2026-11-02, not a full audit: a gap missing here may still exist.
 
-| Feature | Android side | Task |
+| Feature | Android side | Tracked by |
 | --- | --- | --- |
-| Apple Watch glance | No Wear OS app | PP-1 |
+| Apple Watch glance | No Wear OS app | needs an issue |
 | Push notifications | No push; the keep-alive service covers an open connection | AN-6 |
-| Nekko Cloud machines | No Cloud screens | PP-2 |
-| Plan sheet on the composer | Missing | PP-3 |
-| Voice mode | Dictation only | PP-4 |
-| Spooky seasonal icon | Missing; Android can swap launcher icons with an activity alias | PP-5 |
+| Nekko Cloud machines | No Cloud screens (the iPhone's `CloudViews.swift`) | needs an issue |
+| Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | needs an issue |
+| Voice mode | Dictation only (the iPhone's `VoiceRunner.swift` does more) | needs an issue |
+| Spooky seasonal icon | Missing; Android can swap launcher icons with an activity alias | needs an issue |
 | Languages and theme presets | In progress | T201a |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
+
+A full feature-by-feature audit, including anything Android has that the iPhone lacks, also needs an issue.
 
 Nothing is recorded as a true OS exclusive yet.

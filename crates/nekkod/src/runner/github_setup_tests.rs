@@ -24,6 +24,7 @@ fn name_is_capped_at_34_and_never_split_mid_character() {
     let wide = app_name(&"\u{732b}".repeat(40), "3fa9");
     assert_eq!(wide.chars().count(), 34);
     assert!(wide.ends_with("\u{732b} 3fa9"), "{wide}");
+    assert_eq!(app_name("", "3fa9"), "Nekko Runner 3fa9");
 }
 
 #[test]
@@ -87,8 +88,12 @@ fn form_page_escapes_the_manifest() {
 #[test]
 fn conversion_reads_the_new_app() {
     let c = parse_conversion(&json!({ "id": 7, "slug": "nekko-runner", "pem": PEM, "client_secret": "s" })).unwrap();
-    assert_eq!((c.app_id, c.slug.as_str(), c.pem.as_str()), (7, "nekko-runner", PEM));
+    assert_eq!((c.app_id, c.slug.as_str(), c.pem.as_str(), c.owner.as_deref()), (7, "nekko-runner", PEM, None));
     assert!(!format!("{c:?}").contains("MIIBOgIBAAJB"));
+    let owned = json!({ "id": 7, "slug": "s", "pem": PEM, "owner": { "login": "ermish" } });
+    assert_eq!(parse_conversion(&owned).unwrap().owner.as_deref(), Some("ermish"));
+    let odd = json!({ "id": 7, "slug": "s", "pem": PEM, "owner": { "login": "../x" } });
+    assert_eq!(parse_conversion(&odd).unwrap().owner, None);
 }
 
 #[test]
@@ -397,6 +402,57 @@ async fn a_second_app_for_the_same_owner_is_not_created() {
     t.setup.cancel();
 }
 
+fn own_account() -> StartRequest {
+    StartRequest { owner: String::new(), kind: Kind::User, repo_admin: false }
+}
+
+#[tokio::test]
+async fn a_start_with_no_name_makes_the_app_on_the_users_own_account() {
+    let owned = json!({ "id": 7, "slug": "nekko-runner-3fa9", "pem": PEM, "owner": { "login": "ermish" } });
+    let t = rig(vec![(201, owned), (200, json!([]))]);
+    let started = t.setup.start(own_account(), &[]).await.unwrap();
+    let path = url_of(&started);
+    let (_, _, page) = t.get(&path[path.find("/start").unwrap()..]).await;
+    assert!(page.contains("https://github.com/settings/apps/new?state="), "{page}");
+    assert!(page.contains("Nekko Runner ") && page.contains("administration"), "{page}");
+
+    t.created().await;
+    assert_eq!(t.setup.view().owner.as_deref(), Some("ermish"));
+    assert_eq!(t.pending()["owner"], "ermish");
+    assert_eq!(t.pending()["kind"], "user");
+    // Pressed again, with no name still: the same app, at Install.
+    let again = t.setup.start(own_account(), &[]).await.unwrap();
+    assert_eq!(url_of(&again), "https://github.com/apps/nekko-runner-3fa9/installations/new");
+    assert_eq!(t.http.urls().iter().filter(|u| u.contains("/app-manifests/")).count(), 1);
+    t.setup.cancel();
+
+    // After a restart, a nameless start finds that pending app too.
+    let restarted = setup_at(t.dir.path(), &Scripted::new(vec![(200, json!([]))]));
+    let resumed = restarted.start(own_account(), &[]).await.unwrap();
+    assert_eq!(url_of(&resumed), "https://github.com/apps/nekko-runner-3fa9/installations/new");
+    restarted.cancel();
+}
+
+#[tokio::test]
+async fn a_nameless_start_stops_when_github_names_no_owner() {
+    let t = rig(vec![conversion()]);
+    t.setup.start(own_account(), &[]).await.unwrap();
+    let (status, _, _) = t.created().await;
+    assert_eq!(status, StatusCode::BAD_GATEWAY);
+    assert_eq!(t.setup.view().step, Step::Failed);
+    assert!(!t.dir.path().join("pending-app.json").exists());
+}
+
+#[tokio::test]
+async fn only_the_users_own_account_may_be_nameless() {
+    let t = rig(vec![]);
+    let req = StartRequest { owner: String::new(), kind: Kind::Org, repo_admin: false };
+    assert!(t.setup.start(req, &[]).await.is_err());
+    // A nameless start never picks up an org's pending app.
+    t.seed_pending("acme");
+    assert!(url_of(&t.setup.start(own_account(), &[]).await.unwrap()).contains("/start?t="));
+}
+
 #[tokio::test]
 async fn the_poll_finds_the_installation_with_no_installed_hit() {
     let t = rig(vec![conversion(), (200, json!([])), installed(), inst_token(), repos()]);
@@ -660,7 +716,8 @@ async fn every_change_is_pushed() {
 #[tokio::test]
 async fn start_refuses_a_name_that_is_not_an_account() {
     let t = rig(vec![]);
-    for owner in ["", "a/b", "a b", ".."] {
+    // An empty name is the user's own account (a_start_with_no_name_...), so it is not here.
+    for owner in ["a/b", "a b", ".."] {
         let req = StartRequest { owner: owner.into(), kind: Kind::User, repo_admin: false };
         assert!(t.setup.start(req, &[]).await.is_err(), "{owner}");
     }

@@ -75,17 +75,24 @@ CI have been removed. Remaining native feature gaps below stay tracked separatel
   transcript above the hinge and the message box below it. Remembered per
   computer on the phone. A message dragged to the other pane lands in its
   message box, unsent.
-- **Monitors:** the computer's hardware load and temperatures, running chats,
-  what needs you (Allow / Deny / answer) and the next automations, from
-  `monitor:summary` every 10 s while on screen; a pane when open, the last row
-  of the chat list on any phone.
-- **Simple and Expert:** a switch right of Back in every chat (the dial icon alone in a
-  folding phone's pane). Both modes: model and effort (an effort dial and the model's name,
-  opening a sheet with the model list and a large dial) and the context ring (`12.3k / 128k`,
-  tap for the breakdown) under the message box. Expert adds the computer's CPU, memory, GPU
-  and VRAM dials and the loaded-model count under the header, re-read every 3 s while shown,
-  and a Monitor sheet with Unload (`system:stats`, `gpu:stats`, `engine:status`,
-  `context:preview`, `model:unload`).
+- **Monitors:** the computer's hardware load and temperatures, running chats and
+  what needs you (Allow / Deny / answer; each group only while it holds something)
+  and the next automations, from `monitor:summary` every 10 s while on screen; a
+  pane when open, the last row of the chat list on any phone. Flat rows with
+  hairline dividers under accented headings, as in the chat list.
+- **The computer menu:** the pill at the top left of Chats (its dot, its name, and
+  *N paired* under it once several are paired) switches computers and holds
+  *Search chats* (a field in place of the slim row), *Computers* (pairing lives
+  there) and *Sign out or disconnect* (the safety exits).
+- **Simple and Expert:** a two-segment switch in the slim row under the header, which
+  slides down from behind it. Model, effort and the context ring (`12.3k / 128k`, tap for
+  the breakdown) sit under the message box; model and effort open a short sheet with the
+  model list and an effort slider that snaps to the model's levels. The minimal gauges (CPU,
+  memory, GPU, loaded models) show in Expert, and in Simple while a local model is loaded;
+  tap for the agent panel, long-press or hover for a reading in full (`system:stats`,
+  `gpu:stats`, `engine:status`, `context:preview`, `model:unload`).
+- **Logs:** *On this phone* (the connection log), then each paired computer: the
+  connected one's logs, or *Connect to read its logs* for the others.
 - **Send feedback:** *Settings → Feedback* copies a prompt for your own coding
   agent to file a GitHub issue, sends a quick note to Nekko Labs through Nekko
   Cloud (app, version, OS and CPU type only when *Include app info* is on), or
@@ -134,6 +141,9 @@ apps/android/
   dial a loopback relay, for `adb reverse`.
 - The one-time pairing code is dropped from storage once the computer welcomes
   the phone, and is never sent again.
+- The computer proves itself on every connection: its challenge is signed with
+  the host key pinned from the pairing link, and each connection has its own
+  key (decision 0041). A link with no host key can't pair.
 
 ## Build and test
 
@@ -179,4 +189,4 @@ cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegra
 2. Install the debug APK: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 3. For a local relay on a USB phone run `adb reverse tcp:4400 tcp:4400` and pair
    with `ws://localhost:4400`; on the emulator use `ws://10.0.2.2:4400`. Paste the
-   pairing link (`nekko-agent-pair:?relay=…&room=…&key=…&pair=…`) on the Pair screen.
+   pairing link (`nekko-agent-pair:?relay=…&room=…&key=…&host=…&pair=…`) on the Pair screen.

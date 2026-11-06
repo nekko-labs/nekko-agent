@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '../tests/browserGlobals.js';
 import { cssRule, cssUtility, cssValue, hasSelector, stylesheet } from '../tests/css.js';
 import { liveStore } from '../tests/liveStore.js';
-import { withProvider } from '../tests/renderChatPane.js';
+import { chatSession, composerBox, renderChatPane, withProvider } from '../tests/renderChatPane.js';
 import { renderWallComposer } from '../tests/renderWallComposer.js';
 
 vi.mock('../store.js', (original) => liveStore(original as never));
@@ -24,7 +24,7 @@ describe('wall edge stability and composer handles', () => {
   it('grows the composer panel by its attachment rows instead of shrinking the editor', () => {
     // The shell stays natural-height with exactly one vertical scroll owner: the editor.
     expect(cssRule(styles, '.wall-composer > .wall-composer-body')).toMatchObject({ display: 'flex', flex: '0 0 auto', 'min-height': '0', overflow: 'visible' });
-    expect(cssRule(styles, '.wall-composer .composer-editor-wrap > [contenteditable]')).toMatchObject({ flex: '0 0 auto', 'min-height': '52px', 'overflow-y': 'auto', 'overflow-x': 'hidden', 'overflow-wrap': 'anywhere' });
+    expect(cssRule(styles, '.wall-composer .composer-editor-wrap > [contenteditable]')).toMatchObject({ flex: '0 0 auto', 'min-height': '64px', 'overflow-y': 'auto', 'overflow-x': 'hidden', 'overflow-wrap': 'anywhere' });
     // No fixed height on the panel from the dragged size: the observer sizes the editor instead.
     const panel = renderWallComposer().match(/^<div[^>]*class="panel wall-composer [^>]*>/)?.[0];
     expect(panel).toBeDefined();
@@ -48,6 +48,12 @@ describe('wall edge stability and composer handles', () => {
     expect(panel.match(/class="wall-composer-side" data-edge="(left|right)" role="separator" tabindex="0"/g)).toHaveLength(2);
     expect(panel).toContain('aria-label="Resize composer from left side"');
     expect(panel).toContain('aria-label="Resize composer from right side"');
+  });
+
+  it('keeps the chat pane height grip on the message box, as one pill with no line across the pane', () => {
+    const html = renderChatPane(chatSession());
+    expect(html.match(/aria-label="Resize the message box"/g)).toHaveLength(1);
+    expect(composerBox(html)).toMatch(/aria-label="Resize the message box"[^>]*><span[^>]*><\/span><\/div>/);
   });
 
   // Source pin, pending the composer e2e journey: dragging, pointer capture,

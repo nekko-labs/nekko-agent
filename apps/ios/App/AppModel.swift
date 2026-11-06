@@ -21,6 +21,11 @@ final class AppModel {
     let previews: PreviewLoader
     /// Nekko Cloud sign-in and end-to-end encrypted sync (its own Keychain service).
     let cloud: CloudSync
+    /// This iPhone as a place chats run, on its own cloud providers (decision 0050).
+    let phone: PhoneChats
+    /// GitHub, Linear, Jira and the rest, connected on this iPhone itself (decision 0058).
+    let connectors: ConnectorsModel
+    private let connectorKeychain: KeychainStore
     private let cloudKeychain: KeychainStore
     private let cloudKey: CloudDeviceKey
     let lock: AppLock
@@ -54,6 +59,10 @@ final class AppModel {
     var newChatRequested = false
     /// "Nekko, open settings" from a chat's dictation: show Settings once.
     var openSettings = false
+    /// A tap on the banner's *Pair again* when the pairing key no longer
+    /// matches: push PairView once so the user can rescan the code without
+    /// digging through Settings.
+    var openPair = false
     /// First run, step 3 (IO-31): shown right after the first pairing, where
     /// notification permission is asked.
     var showNotificationStep = false
@@ -70,7 +79,7 @@ final class AppModel {
         let keychain = KeychainStore()
         #if DEBUG
         // UI tests start from a fresh install; the Keychain outlives uninstalling the app.
-        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { keychain.wipe() }
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset"), !NativeFixtureRoute.isolated { keychain.wipe() }
         #endif
         let prefs = Prefs()
         let deviceName = UIDevice.current.name
@@ -91,7 +100,9 @@ final class AppModel {
             makeConnection: { RelayClient(config: $0, transport: URLSessionTransport(), prober: HealthProber()) },
             deviceName: { deviceName },
             app: Bundle.main.bundleIdentifier,
-            offlineFiles: offlineFiles)
+            offlineFiles: offlineFiles,
+            // Every paired computer stays connected, for the chat list across all of them (2026-11-04).
+            stayConnected: true)
         // Change actions (IO-33) are signed in the Secure Enclave behind Face ID or the passcode.
         computers.changeSigner = SecureEnclaveChangeSigner(store: keychain)
         // Every relay HELLO is signed with this iPhone's device key (decision 0036), without asking.
@@ -106,6 +117,30 @@ final class AppModel {
         self.cloudKeychain = cloudKeychain
         cloudKey = key
         cloud = CloudSync(api: Self.cloudURL, secrets: cloudKeychain, files: offlineFiles, deviceLabel: deviceName, key: { try key.get() })
+        // Its keys have a Keychain service of their own, apart from the pairing keys.
+        let phoneKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.phone-providers")
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { phoneKeychain.wipe() }
+        #endif
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneProvider") {
+            // A provider that answers inside the simulator, with no network or real key.
+            let fixture = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: FixturePhoneHTTP())
+            if fixture.providers.isEmpty { _ = try? fixture.add(kind: "anthropic", label: "Fixture Claude", baseUrl: nil, key: "fixture-key") }
+            phone = fixture
+        } else {
+            phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
+        }
+        #else
+        phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
+        #endif
+        // Connector tokens have a Keychain service of their own too (decision 0058).
+        let connectorKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.phone-connectors")
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { connectorKeychain.wipe() }
+        #endif
+        self.connectorKeychain = connectorKeychain
+        connectors = ConnectorsModel(secrets: connectorKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
         lock = AppLock(enabled: prefs.appLock)
         #if DEBUG
         // What the share extension leaves behind, without driving another app's share sheet.
@@ -114,6 +149,7 @@ final class AppModel {
         // First run's step 3 without pairing a computer first.
         if args.contains("-uiTestNotificationStep") { showNotificationStep = true }
         #endif
+        if NativeFixtureRoute.isolated { return }
         // Here, not in `start()`: a tap on the card can launch the app in the
         // background, locked, and the card needs no connection to answer it.
         activities.level = { [weak self] in self?.prefs.liveActivityLevel ?? .none }
@@ -123,7 +159,6 @@ final class AppModel {
         }
         // The computer builds the same card for the relay to push: it hears these too.
         IntentRouter.focus = { [weak self] sid in await self?.focusCard(sid) }
-        IntentRouter.nextPage = { [weak self] sid in await self?.focusCard(sid) }
         IntentRouter.dismiss = { [weak self] sid in
             self?.activities.dismiss(sid)
             await self?.tellCard(dismiss: sid)
@@ -149,6 +184,7 @@ final class AppModel {
     /// on), or when the user acted on a system surface (notification action,
     /// Live Activity button): `force`.
     func start(force: Bool = false) {
+        guard !NativeFixtureRoute.isolated else { return }
         guard !started, force || !(prefs.appLock && lock.locked) else { return }
         started = true
         notifier.install()
@@ -156,10 +192,27 @@ final class AppModel {
         notifier.onOpen = { [weak self] sid in self?.openChat = sid }
         IntentRouter.approve = { [weak self] sid, callId, allow in await self?.answerApproval(sid, callId, allow) }
         IntentRouter.stop = { [weak self] sid in await self?.stopChat(sid) }
-        _ = store.subscribe { [weak self] e in self?.onEvent(e) }
+        store.onComputerEvent = { [weak self] id, e in self?.onEvent(e, computerId: id) }
+        notifier.onFocusComputer = { [weak self] id in
+            guard let self, id != self.store.activeId, self.store.computers.contains(where: { $0.id == id }) else { return }
+            self.store.connect(id)
+        }
+        notifier.onOpenTag = { [weak self] tag in
+            guard let self, let chat = self.store.chats(on: nil).first(where: { E2E.activityTag($0.id) == tag }) else { return }
+            self.store.focus(chat: chat.id)
+            self.openChat = chat.id
+        }
+        notifier.onRemote = { [weak self] info in self?.receivedRemoteNotification(info) }
+        notifier.wants = { [weak self] kind in kind == .test || self?.prefs.wants(kind) == true }
+        notifier.badgeCount = { [weak self] in
+            guard let self else { return nil }
+            return self.prefs.notifyNeedsYou ? self.store.attentionCount : 0
+        }
+        watchBadge()
+        Task { await refreshNotificationPermission() }
         // A mode raise the computer wants a security key or a code for (SK-6).
         store.stepUpPrompt = { [weak self] request in await self?.askStepUp(request) }
-        store.pushKinds = prefs.pushKinds
+        store.pushKinds = [] // Permission is reconciled asynchronously before enrollment.
         store.onDismiss = { tag in Task { await Notifier.dismissNeedsYou(tag: tag) } }
         WatchBridge.shared.start()
         watchWidget()
@@ -185,10 +238,14 @@ final class AppModel {
     // MARK: Lifecycle
 
     func didBecomeActive() {
+        guard !NativeFixtureRoute.isolated else { return }
         foreground = true
         endBackgroundTask()
         OutboxRefresh.cancel()
-        if started { store.nudge() }
+        if started {
+            store.nudge()
+            Task { await refreshNotificationPermission() }
+        }
         takeShare()
     }
 
@@ -200,6 +257,7 @@ final class AppModel {
     }
 
     func didEnterBackground() {
+        guard !NativeFixtureRoute.isolated else { return }
         foreground = false
         // A `?listen=1` not taken by now is stale: listening never starts later by itself.
         listenIn = nil
@@ -356,10 +414,10 @@ final class AppModel {
 
     // MARK: Events → haptics, notifications, Live Activities
 
-    private func onEvent(_ e: AgentEvent) {
-        let chat = store.summaries.first { $0.id == e.sessionId }
-        let computer = store.active
-        activities.onEvent(e)
+    private func onEvent(_ e: AgentEvent, computerId: String) {
+        let chat = store.chats(on: computerId).first { $0.id == e.sessionId }
+        let computer = store.computers.first { $0.id == computerId }
+        if computerId == store.activeId { activities.onEvent(e) }
         switch e {
         case .approvalRequired, .question:
             if foreground, prefs.hapticNeedsYou { Haptics.needsYou() }
@@ -368,10 +426,10 @@ final class AppModel {
         default:
             break
         }
-        // Only the chats the phone lists, only when out of sight, and only the kinds switched on.
-        guard !foreground, let kind = PushKind.of(e), prefs.wants(kind), let chat else { return }
+        // Only currently listed chats and enabled kinds. Attention also reaches an unrelated foreground chat.
+        guard let kind = PushKind.of(e), (!foreground || kind == .needsYou), prefs.wants(kind), let chat else { return }
         notifier.post(e, chatTitle: chat.title.isEmpty ? "Chat" : chat.title, computer: computer?.name ?? "Your computer",
-                      hideContent: prefs.appLock)
+                      hideContent: prefs.appLock, computerId: computerId)
     }
 
     /// From a notification action or a Live Activity button: wait for the
@@ -391,6 +449,7 @@ final class AppModel {
         let time = BackgroundTime("nekko.approval")
         defer { time.end() }
         start(force: true)
+        store.focus(chat: sessionId)
         store.resume()
         guard await waitOnline(seconds: 10), let r = try? store.remote() else {
             Log.approval.error("Answer not sent: no connection within 10 s (\(String(describing: self.store.conn), privacy: .public))")
@@ -406,6 +465,7 @@ final class AppModel {
         }
         Log.approval.info("Answer delivered")
         notifier.clear(sessionId: sessionId)
+        await store.refreshAttention()
     }
 
     func stopChat(_ sessionId: String) async {
@@ -439,7 +499,7 @@ final class AppModel {
             newChatRequested = true
             return
         }
-        // The card's "+N" when it holds more chats than it shows: opening the app is the point.
+        // The card's count line ("3 Working · 5 Done"): opening the app is the point.
         if url.scheme == "nekko-agent", url.host == "chats" { return }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
     }
@@ -455,7 +515,8 @@ final class AppModel {
             return RelayRoute.message(p, computer: "Your computer")
         }
         start()
-        let id = await store.pair(link)
+        let id: String
+        do { id = try await store.pair(link) } catch { return error.localizedDescription }
         if prefs.defaultComputer == nil { prefs.defaultComputer = id }
         if prefs.onboarded {
             if await notifier.requestPermission() { registerForPush() }
@@ -481,7 +542,8 @@ final class AppModel {
         case .failed: prefs.notifyFailed = on
         case .test: return
         }
-        store.pushKinds = prefs.pushKinds
+        Task { await refreshNotificationPermission() }
+        notifier.reconcileBadge()
     }
 
     /// *Send a test notification* (IO-30): through the computer and its relay,
@@ -505,9 +567,34 @@ final class AppModel {
         UIApplication.shared.registerForRemoteNotifications()
     }
 
+    private func watchBadge() {
+        withObservationTracking {
+            _ = store.attentionCount
+            _ = prefs.notifyNeedsYou
+            notifier.reconcileBadge()
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.watchBadge() }
+        }
+    }
+
+    private func refreshNotificationPermission() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        let allowed = [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus)
+        store.pushKinds = allowed ? prefs.pushKinds : []
+        notifier.reconcileBadge()
+    }
+
+    func receivedRemoteNotification(_ info: NativeNotificationInfo) {
+        // Invalidate synchronously before any queued local badge write resumes.
+        store.withdrawAttentionAuthority()
+        if let tag = info.dismiss { Task { await Notifier.dismissNeedsYou(tag: tag) } }
+        if started { Task { await store.reconcileAttention() } }
+    }
+
     func didRegister(deviceToken: Data) {
         Log.push.info("Registered for push")
         store.setPushToken(deviceToken.map { String(format: "%02x", $0) }.joined())
+        Task { await refreshNotificationPermission() }
     }
 
     // MARK: Step-up and safety exits (SK-6, SK-8)
@@ -566,6 +653,7 @@ final class AppModel {
     /// The app's own state for a computer that is gone from the list.
     private func forgotten(_ id: String) {
         if prefs.defaultComputer == id { prefs.defaultComputer = store.activeId }
+        if prefs.chatsFilter == id { prefs.chatsFilter = nil }
         prefs.lastModel[id] = nil
         prefs.lastEffort[id] = nil
         prefs.lastTools[id] = nil
@@ -593,6 +681,9 @@ final class AppModel {
         cloud.forgetAll()
         cloudKey.forget()
         cloudKeychain.wipe()
+        phone.forgetAll()
+        connectors.forgetAll()
+        connectorKeychain.wipe()
         chatLists.removeAll()
         transcriptFiles.removeAll()
         offlineFiles.removeAll()
@@ -600,6 +691,7 @@ final class AppModel {
         keychain.wipe()
         activities.endAll()
         prefs.defaultComputer = nil
+        prefs.chatsFilter = nil
         prefs.lastModel = [:]
         prefs.lastEffort = [:]
         prefs.lastTools = [:]

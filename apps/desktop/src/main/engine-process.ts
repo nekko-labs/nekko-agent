@@ -36,6 +36,12 @@ export interface EngineEndpoint {
   token: string;
 }
 
+interface EndpointWaiter {
+  resolve: (e: EngineEndpoint) => void;
+  reject: (e: Error) => void;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
 export interface EngineOptions {
   browserBridge?: { url: string; token: string };
   dataDir: string;
@@ -54,6 +60,13 @@ export interface EngineOptions {
 }
 
 const DAEMON_READY = 'NEKKOD_READY ';
+/**
+ * `NEKKOD_WAITING {"on":"keychain"}` while a macOS Keychain dialog (or a
+ * locked keychain) holds nekkod's startup up, `{"on":null}` once it answered
+ * (crates/nekkod/src/main.rs). The ready timeout is held meanwhile: killing
+ * the daemon only shows the user the same dialog again.
+ */
+const DAEMON_WAITING = 'NEKKOD_WAITING ';
 const MAX_BACKOFF_MS = 5000;
 const READY_TIMEOUT_MS = 30_000;
 /** After SIGTERM (which also cuts nekkod's own shutdown short), how long before SIGKILL. */
@@ -122,7 +135,7 @@ export function nativeConfig(app: EngineOptions['app'], env: NodeJS.ProcessEnv =
 export class EngineProcess {
   private child: ChildProcess | null = null;
   private current: EngineEndpoint | null = null;
-  private waiters: { resolve: (e: EngineEndpoint) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }[] = [];
+  private waiters: EndpointWaiter[] = [];
   private stopping = false;
   private requested = false;
   private restartTimer: ReturnType<typeof setTimeout> | undefined;
@@ -132,6 +145,8 @@ export class EngineProcess {
   private backoff = 500;
   /** Why the engine cannot run, once it has failed in a way a restart will not fix. */
   private failure: string | null = null;
+  /** What the starting daemon says it is waiting on (`NEKKOD_WAITING`), if anything. */
+  private waitingOn: string | null = null;
   private readonly token = randomBytes(24).toString('base64url');
 
   constructor(private readonly opts: EngineOptions) {}
@@ -142,12 +157,25 @@ export class EngineProcess {
     if (this.current) return Promise.resolve(this.current);
     if (this.failure) return Promise.reject(new Error(this.failure));
     return new Promise((resolve, reject) => {
-      const waiter = { resolve, reject, timer: setTimeout(() => {
-        this.waiters = this.waiters.filter(w => w !== waiter);
-        reject(new Error('Nekko service did not become ready. Try restarting it from the tray.'));
-      }, 15000) };
+      const waiter: EndpointWaiter = { resolve, reject };
       this.waiters.push(waiter);
+      this.armEndpointWaiter(waiter);
     });
+  }
+
+  private armEndpointWaiter(waiter: EndpointWaiter): void {
+    clearTimeout(waiter.timer);
+    // Consent can take as long as the user needs. Resume with a full budget,
+    // not the remainder of a timer that began before the dialog was answered.
+    if (this.waitingOn) return;
+    // A first-load call must outlast the daemon's own startup allowance, with
+    // bounded room for termination and restart backoff, rather than failing
+    // while the supervisor still considers the daemon healthy.
+    const waitMs = (this.opts.readyTimeoutMs ?? READY_TIMEOUT_MS) + KILL_AFTER_TERM_MS + MAX_BACKOFF_MS;
+    waiter.timer = setTimeout(() => {
+      this.waiters = this.waiters.filter(w => w !== waiter);
+      waiter.reject(new Error('Nekko service did not become ready. Try restarting it from the tray.'));
+    }, waitMs);
   }
 
   start(): void {
@@ -184,17 +212,42 @@ export class EngineProcess {
     child.stdin?.on('error', () => {});
     child.stdin?.write(`${JSON.stringify(config)}\n`);
     const startedAt = Date.now();
+    this.waitingOn = null;
     // A daemon that starts but never says it is listening (wedged before
     // its ready line) is killed; the exit below restarts it with backoff.
-    const readyTimer = setTimeout(() => {
-      if (this.child !== child || this.stopping || this.current) return;
-      console.error(`engine: nekkod did not become ready in ${this.opts.readyTimeoutMs ?? READY_TIMEOUT_MS}ms; restarting it`);
-      this.terminate(child);
-    }, this.opts.readyTimeoutMs ?? READY_TIMEOUT_MS);
+    // The clock stops while it waits on the user (NEKKOD_WAITING) and starts
+    // over once they answer.
+    const readyMs = this.opts.readyTimeoutMs ?? READY_TIMEOUT_MS;
+    let readyTimer: ReturnType<typeof setTimeout> | undefined;
+    const armReady = () => {
+      clearTimeout(readyTimer);
+      readyTimer = setTimeout(() => {
+        if (this.child !== child || this.stopping || this.current || this.waitingOn) return;
+        console.error(`engine: nekkod did not become ready in ${readyMs}ms; restarting it`);
+        this.terminate(child);
+      }, readyMs);
+    };
+    armReady();
 
     const lines = createInterface({ input: child.stdout! });
     lines.on('line', (line) => {
       if (this.stopping || this.child !== child) return;
+      const waitAt = line.indexOf(DAEMON_WAITING);
+      if (waitAt >= 0 && !this.current) {
+        let on: unknown = null;
+        try { on = (JSON.parse(line.slice(waitAt + DAEMON_WAITING.length)) as { on?: unknown }).on ?? null; } catch {}
+        if (typeof on === 'string') {
+          this.waitingOn = on;
+          clearTimeout(readyTimer);
+          console.error(`engine: nekkod is waiting on the ${on} (a macOS consent dialog?); holding the ready timeout`);
+        } else {
+          this.waitingOn = null;
+          armReady();
+          console.error('engine: nekkod is no longer waiting; ready timeout restarted');
+        }
+        this.waiters.forEach(w => this.armEndpointWaiter(w));
+        return;
+      }
       const at = line.indexOf(marker);
       if (at < 0) {
         console.log(line);
@@ -203,6 +256,7 @@ export class EngineProcess {
       try {
         const { port } = JSON.parse(line.slice(at + marker.length)) as { port: number };
         clearTimeout(readyTimer);
+        this.waitingOn = null;
         this.current = { url: `http://127.0.0.1:${port}`, token: this.token };
         const waiting = this.waiters;
         this.waiters = [];
@@ -226,6 +280,9 @@ export class EngineProcess {
     child.on('exit', (code, signal) => {
       clearTimeout(readyTimer);
       if (this.child !== child) return;
+      const wasWaiting = this.waitingOn !== null;
+      this.waitingOn = null;
+      if (wasWaiting) this.waiters.forEach(w => this.armEndpointWaiter(w));
       this.current = null;
       this.child = null;
       if (this.stopping) return;

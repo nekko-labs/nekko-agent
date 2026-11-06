@@ -10,7 +10,6 @@ vi.mock('../components/primitives/index.js', async (original) => ({
 
 import { CiRunnersFirstVisit, afterList, afterReply, retryDelay, runnersBody } from './CiRunnersView.js';
 import { DEFAULT_RUNNER_SETTINGS, type ImageView, type RunnerView } from '@nekko-agent/shared';
-import { SectionSegment } from './WorkflowsView.js';
 
 (globalThis as unknown as { window: unknown }).window = {
   nekko: {
@@ -40,7 +39,7 @@ describe('CI runners section', () => {
 
   it('the_two_steps_stay_above_the_card_until_there_is_an_image', () => {
     const view = { config: { id: 'r1', scope: { kind: 'repo', owner: 'o', repo: 'r' }, label: 'l', settings: DEFAULT_RUNNER_SETTINGS }, state: 'off', slots: [], reasons: [], available: 0, limit: null, awake: false, error: null, today: { jobs: 0, seconds: 0 }, host: { ramMb: 0, onBattery: null, networkId: null }, repos: [], forkApprovalOpen: false, recent: [] } as unknown as RunnerView;
-    const at = (state: ImageView['state']) => renderToStaticMarkup(<>{runnersBody({ kind: 'ready', views: [view] }, { now: 0, image: { state, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false }, onConnect() {}, onSettings() {}, beginReply: () => () => {} })}</>);
+    const at = (state: ImageView['state']) => renderToStaticMarkup(<>{runnersBody({ kind: 'ready', views: [view] }, { now: 0, image: { state, kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false }, onConnect() {}, onSettings() {}, beginReply: () => () => {} })}</>);
     expect(at('none')).toContain('STEP 2');
     expect(at('none')).toContain('data-runner-card="r1"');
     expect(at('ready')).not.toContain('STEP 2');
@@ -63,15 +62,6 @@ describe('CI runners section', () => {
     expect(afterList(pushed, { kind: 'unavailable', message: 'x' })).toBe(pushed);
     expect(afterList(pushed, { kind: 'ready', views: [] })).toBe(pushed);
     expect(afterList({ kind: 'unavailable', message: 'x' }, pushed)).toBe(pushed); // a retry recovers
-  });
-
-  it('segment_switches_sections', () => {
-    // Plain toggle buttons: a tablist would promise arrow keys and a tabpanel.
-    const html = renderToStaticMarkup(<SectionSegment value="ciRunners" onChange={() => {}} />);
-    expect(html).toContain('role="group" aria-label="Section"');
-    expect(html).not.toContain('role="tab');
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-pressed="true"[^>]*>CI runners</);
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*aria-pressed="false"[^>]*>Workflows</);
   });
 
   it('a reply loses to a push that arrived after its request started', () => {

@@ -1,6 +1,7 @@
 import { AUTO_COMPLETE_CHOICES, autoCompleteDays, promptCachingEnabled, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
 import { LANGUAGES } from './i18n.js';
 import { textScaleOf, useStore } from './store.js';
+import { TEXT_SCALES } from './textScale.js';
 
 /** Save a settings patch the way the Settings page does: store, theme, a toast on failure. */
 export async function saveSettings(patch: Partial<AppSettings>) {
@@ -17,7 +18,7 @@ export const EXPERIMENTAL_FLAGS = [
   { key: 'training', label: 'Model training', desc: 'Show the Training tab: launch and watch data-scientist agent runs.' },
   { key: 'design', label: 'Design board', desc: 'Show the Design tab: sketch or describe a UI and generate live prototypes.' },
   { key: 'memory', label: 'Memory', desc: 'Show the Memory tab: browse and edit global and per-project memory.' },
-  { key: 'workflowLoopbackListener', label: 'Workflow loopback listener', desc: 'Listen on 127.0.0.1:1441 for inbound workflow webhooks (desktop only).' },
+  { key: 'workflowLoopbackListener', label: 'Scheduled task loopback listener', desc: 'Listen on 127.0.0.1:1441 for inbound scheduled task webhooks (desktop only).' },
 ] as const;
 
 export type SettingControl =
@@ -28,7 +29,7 @@ export interface SettingEntry {
   id: string;
   label: string;
   /** The Settings group (`settings-<group>` on the page) it lives in. */
-  group: 'general' | 'style' | 'agents' | 'tools' | 'system';
+  group: 'general' | 'style' | 'accessibility' | 'agents' | 'tools' | 'system';
   /** Extra words people search for that the label does not say. */
   keywords?: string;
   control: SettingControl;
@@ -54,10 +55,11 @@ export const SETTINGS_INDEX: SettingEntry[] = [
   { id: 'confirm-deletions', label: 'Confirm deletions', group: 'general', keywords: 'delete prompt', control: toggle((s) => s.skipDeleteConfirmation !== true, (v) => ({ skipDeleteConfirmation: !v })) },
   { id: 'close-behavior', label: 'When I close the window', group: 'general', keywords: 'tray quit shut down desktop behavior', control: { kind: 'select', options: [{ value: 'tray', label: 'Keep running in tray' }, { value: 'shutdown', label: 'Shut down Nekko' }], get: (s) => s.desktopCloseBehavior ?? 'tray', set: (v) => ({ desktopCloseBehavior: v === 'shutdown' ? 'shutdown' : 'tray' }) } },
   { id: 'low-memory', label: 'When memory runs low', group: 'general', keywords: 'ram memory tray close app free unload shut down local models', control: { kind: 'select', options: [{ value: 'ask', label: 'Ask me' }, { value: 'release', label: 'Shut down local models' }, { value: 'ignore', label: 'Do nothing' }], get: (s) => s.lowMemoryAction ?? 'ask', set: (v) => ({ lowMemoryAction: v === 'release' || v === 'ignore' ? v : undefined }) } },
+  { id: 'agent-activity-animation', label: 'Agent activity animation', group: 'accessibility', keywords: 'accessibility motion reduce nekko moving panel', control: toggle((s) => s.agentActivityAnimation !== false, (v) => ({ agentActivityAnimation: v })) },
   { id: 'mascot', label: 'Show Nekko mascot', group: 'general', keywords: 'fun cat', control: toggle((s) => s.mascotEnabled === true, (v) => ({ mascotEnabled: v })) },
   { id: 'tray-farewell', label: 'Tray farewell', group: 'general', keywords: 'fun goodbye', control: toggle((s) => s.trayFarewellEnabled !== false, (v) => ({ trayFarewellEnabled: v })) },
   { id: 'desktop-notifications', label: 'Desktop notifications', group: 'general', keywords: 'alerts system', control: toggle((s) => s.desktopNotifications !== false, (v) => ({ desktopNotifications: v })) },
-  { id: 'text-size', label: 'Text size', group: 'style', keywords: 'font scale zoom', control: { kind: 'select', options: [80, 90, 100, 110, 125, 150].map((n) => ({ value: String(n), label: `${n}%` })), get: (s) => String(textScaleOf(s.textScale)), set: (v) => ({ textScale: Number(v) }) } },
+  { id: 'text-size', label: 'Text size', group: 'style', keywords: 'font scale zoom accessibility bigger larger smaller', control: { kind: 'select', options: TEXT_SCALES.map((n) => ({ value: String(n), label: `${n}%` })), get: (s) => String(textScaleOf(s.textScale)), set: (v) => ({ textScale: Number(v) }) } },
   { id: 'internet-recovery', label: 'Automatically resume after internet restoration', group: 'agents', keywords: 'offline reconnect retry', control: toggle((s) => s.autoResumeOnInternetRestore === true, (v) => ({ autoResumeOnInternetRestore: v })) },
   { id: 'prompt-caching', label: 'Prompt caching', group: 'agents', keywords: 'cache kv', control: toggle((s) => promptCachingEnabled(s), (v) => ({ promptCaching: v })) },
   { id: 'git-mode', label: 'New chat checkout', group: 'tools', keywords: 'git worktree branch', control: { kind: 'select', options: [{ value: 'worktree', label: 'Isolated worktree' }, { value: 'shared', label: 'Shared project checkout' }], get: (s) => s.gitManagement?.mode ?? 'worktree', set: (v, s) => ({ gitManagement: { ...s.gitManagement, mode: v === 'shared' ? 'shared' : 'worktree' } }) } },
@@ -74,6 +76,8 @@ export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: str
   { group: 'general', label: 'General', keywords: 'usage reports view appearance theme agents wall customization voice notifications chat history desktop behavior fun' },
   { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
   { group: 'style', label: 'Style', keywords: 'fonts text size' },
+  { group: 'accessibility', label: 'Accessibility', keywords: 'text font size bigger larger smaller motion animation reduce' },
+  { group: 'simple', label: 'Simple mode', keywords: 'expert controls hide show developer' },
   { group: 'agents', label: 'Agents', keywords: 'chat modes agent loop hooks spec-driven development orchestration delegation routes automations' },
   { group: 'safety', label: 'Safety', keywords: 'security sandbox guardrails permissions' },
   { group: 'connections', label: 'Connections', keywords: 'network activity log' },

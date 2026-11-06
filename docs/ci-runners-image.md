@@ -76,15 +76,32 @@ never harms the image you have.
 | Check | macOS 27, VM support, 110 GB free, security updates, Xcode found. No Xcode offers macOS only | Names the fix |
 | Download | Apple's restore image, 25.6 GB for macOS 27.2 | Resumes from the partial file |
 | Install | A 140 GB sparse disk, then a first boot that creates the `nekko-build` admin, with no window. Saved as a checkpoint, and the restore image is deleted | Restarts this stage |
-| Xcode | Over SSH: Xcode as a `tar` stream, first launch, the iOS simulator, Homebrew. macOS only skips Xcode and the simulator | Back to the checkpoint |
-| Lockdown | `provision.sh` as a one-off LaunchDaemon, because it turns SSH off partway. The guest stops, and Nekko reads the proof file from its disk, read-only | Back to the checkpoint: it runs once per image |
-| Test | A clone must boot, reject a `not-a-config` seed and power off within 10 minutes | Keeps the build and shows the log |
-| Finish | Swaps the image in, writes `image.json`, applies the chosen mode, turns the runner on, deletes the build folder | Safe to run again |
+| Xcode | Over SSH: Xcode as a `tar` stream, first launch, the iOS simulator, Homebrew with `zstd` and `gnu-tar`, then `node`, `gh` and `jq`. macOS only skips Xcode and the simulator | Back to the checkpoint |
+| Lockdown | `provision.sh` as a one-off LaunchDaemon, because it turns SSH off partway. The guest stops, and Nekko reads the proof file from its disk, read-only, and which job tools a job's PATH finds there | Back to the checkpoint: it runs once per image |
+| Test | A clone must boot, reject a `not-a-config` seed and power off within 10 minutes, and its boot log must show the runner ran: a guest also powers off on a seed it could not read | Keeps the build and shows the log |
+| Finish | Swaps the image in, writes `image.json` (the proof plus `tools`), applies the chosen mode, turns the runner on, deletes the build folder | Safe to run again |
 
 Between stages it waits, with the reason on screen, for a free VM slot, critical memory, heat,
 the disk floor, and, from Install on, for power. It uses 8 GB and leaves 2 cores free. Quitting
 Nekko pauses it, and the next launch offers to resume. A hung command fails its stage: each has a
-limit (license 3 min, first launch 20, simulator 60, Homebrew 20, lockdown 15, test boot 10).
+limit (license 3 min, first launch 20, simulator 60, Homebrew 20, `zstd` and `gnu-tar` 10, `node`,
+`gh` and `jq` 15, lockdown 15, test boot 10).
+
+### Job tools
+
+`JOB_TOOLS` in `crates/nekkod/src/runner/image.rs` is the one list of commands a job runs before
+any setup step of its own could install them: `node` (`ios-native.yml` picks its appearances
+before `actions/setup-node`), and `gh` and `jq` (its batch report). Every build installs them,
+and nekkod records the ones it finds in `/opt/homebrew/bin`, `/usr/local/bin` or `/usr/bin` on
+the guest's disk as `tools` in `image.json`. An `image.json` without `tools` is from before
+this check, so every tool macOS does not ship counts as missing (macOS 15 and later ship `jq`).
+The runner card names what is missing, and **Install them** runs a build of kind `tools`:
+
+| Stage | What happens | If it stops |
+| --- | --- | --- |
+| Check | The image and Nekko's scripts are there | Names the fix |
+| Tools | A copy of the image, with its boot script overwritten in place by a one-boot installer (SSH and the build admin are gone after lockdown, and a new LaunchDaemon written from the host would not be root's). It boots on the job network, runs `brew install` as `runner` (who owns Homebrew after `provision.sh`), logs to `/var/log/nekko-add-tools.log` and powers off within 30 minutes. Nekko writes the real boot script back, then checks the disk for every tool | Shows the installer's log; the image in use is untouched |
+| Test, Finish | As above, with `image.json` gaining `tools` | As above |
 
 ## What provision.sh does
 
@@ -136,7 +153,9 @@ release pages: the `osx-arm64` SHA in the
 
 Xcode, iOS simulator runtimes, Homebrew and the tools your jobs use. They come from the base
 image: the Cirrus `-xcode` images carry them, and Nekko's own build adds them before the
-lockdown. Add anything else before running `provision.sh`, while the admin account still works.
+lockdown, with the [job tools](#job-tools) and with `zstd` and `gnu-tar` so `actions/cache` compresses with zstd as on hosted Macs
+(without them it falls back to `/usr/bin/tar` and gzip, and its caches are bigger and slower to
+save). Add anything else before running `provision.sh`, while the admin account still works.
 
 ## GitLab
 
@@ -186,6 +205,17 @@ error: The resource cannot be found.. Retrying until reconnected."), so that VM 
 the max job time.
 
 ## Verified on
+
+2026-11-02, the same Mac, a macOS-only build (16 minutes, restore image download included), guest
+macOS 27.2: 20 boots of clones with a `not-a-config` seed, 2 s apart, alternating the boot script.
+The script that waited only for the mount point powered off early in 6 of 10 boots, at 16 to 25 s,
+with `unexpected seed contents`: macOS makes the mount point (empty, mode 0111) seconds before it
+mounts the volume, and a boot from a warm disk cache gets there first. The script that waits for a
+file ran the runner in 10 of 10. An image built before this change keeps the old script until it is
+rebuilt; its early stops now show as failed starts. The Test stage then ran both ways on one build:
+it failed, in about 10 s, on a boot script that powers off at the seed check, which the earlier check
+passed, and it passed in about 50 s once the real script was back on the disk. Treat the Test time
+in the 2026-11-01 entry below with care: 16 s is short enough to be this same early stop.
 
 2026-11-01, on an M1 Max running macOS 27.0.1, Nekko's own build from the daemon's channels with
 the dev helper, guest macOS 27.2, Xcode 27.2 (an App Store Xcode). The whole build took 26 minutes

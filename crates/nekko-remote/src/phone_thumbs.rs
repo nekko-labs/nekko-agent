@@ -67,6 +67,45 @@ fn make(data_url: &str) -> Option<String> {
     (url.len() <= policy().thumb_chars).then_some(url)
 }
 
+/// JPEG quality of a photo opened full size on a phone.
+const PHOTO_QUALITY: u8 = 85;
+
+/// `session:photo`: one photo a phone opened, sharp on its screen. The stored
+/// data URL when its long side and length are within `photoSide` and
+/// `photoChars`; else a JPEG copy with its long side at most `photoSide` px;
+/// `Null` when it is not an image this can read or the copy is still too large.
+/// Decoding runs off the async runtime.
+pub async fn full_photo(stored: Value) -> Value {
+    let Value::String(url) = stored else { return Value::Null };
+    tokio::task::spawn_blocking(move || full_size(&url).map_or(Value::Null, Value::String)).await.unwrap_or(Value::Null)
+}
+
+fn full_size(data_url: &str) -> Option<String> {
+    let rest = data_url.strip_prefix("data:")?;
+    let (media, data) = rest.split_once(";base64,")?;
+    if !matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp") || data.is_empty() {
+        return None;
+    }
+    let bytes = STANDARD.decode(data).ok()?;
+    let reader = image::ImageReader::new(Cursor::new(&bytes)).with_guessed_format().ok()?;
+    let side = policy().photo_side;
+    let (w, h) = reader.into_dimensions().ok()?;
+    if w.max(h) <= side && data_url.len() <= policy().photo_chars {
+        return Some(data_url.to_string());
+    }
+    // ImageReader applies its default allocation limits to untrusted input.
+    let image = image::ImageReader::new(Cursor::new(&bytes)).with_guessed_format().ok()?.decode().ok()?;
+    let image = if image.width().max(image.height()) > side {
+        image.resize(side, side, image::imageops::FilterType::Lanczos3)
+    } else {
+        image
+    };
+    let mut out = Cursor::new(Vec::new());
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, PHOTO_QUALITY).encode_image(&image.to_rgb8()).ok()?;
+    let url = format!("data:image/jpeg;base64,{}", STANDARD.encode(out.into_inner()));
+    (url.len() <= policy().photo_chars).then_some(url)
+}
+
 /// `thumbnailPhoneImages`: the newest photos among the messages a phone will
 /// receive, as thumbnails; every other photo `""`. Decoding runs off the
 /// async runtime.
@@ -138,6 +177,19 @@ mod tests {
         assert!(t.starts_with("data:image/jpeg;base64,"));
         assert_eq!(size(&t), (policy().thumb_side, 216));
         assert_eq!(size(&thumbnail(&photo(40, 30))), (40, 30));
+    }
+
+    #[tokio::test]
+    async fn a_full_photo_is_the_original_when_it_fits_else_a_large_jpeg() {
+        let small = photo(1200, 800);
+        assert_eq!(full_photo(json!(small.clone())).await, json!(small), "kept as stored, PNG and all");
+        let big = full_photo(json!(photo(4000, 3000))).await;
+        let big = big.as_str().unwrap();
+        assert!(big.starts_with("data:image/jpeg;base64,"));
+        assert_eq!(size(big), (policy().photo_side, 1536));
+        assert_eq!(full_photo(json!("data:image/png;base64,bm90IGFuIGltYWdl")).await, Value::Null);
+        assert_eq!(full_photo(json!("data:text/plain;base64,aGk=")).await, Value::Null);
+        assert_eq!(full_photo(Value::Null).await, Value::Null);
     }
 
     #[test]

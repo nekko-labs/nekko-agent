@@ -1,6 +1,7 @@
 import React, { forwardRef, useLayoutEffect, useRef } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { composerMarkdownNodes } from './ComposerHighlight.js';
+import { composerFenceAt } from './composerCode.js';
 import { revealEditorCaret } from './editorCaret.js';
 import { ComposerEditingTools } from './ComposerEditingTools.js';
 
@@ -56,7 +57,7 @@ export function markdownEdit(text: string, start: number, end: number, key: stri
   }
   const lineStart = text.lastIndexOf('\n', start - 1) + 1;
   const line = text.slice(lineStart, start);
-  const fenced = (text.slice(0, lineStart).match(/^\s*```/gm)?.length ?? 0) % 2 === 1;
+  const fenced = lineStart > 0 && composerFenceAt(text.slice(0, lineStart - 1)) !== null;
   if (key === 'Enter' && shift) {
     if (fenced) return replace(start, end, '\n' + (line.match(/^\s*/)?.[0] ?? ''));
     const list = line.match(/^(\s*)([-+*]|(\d+)([.)]))\s+(?:\[([ xX])\]\s+)?(.*)$/);
@@ -99,7 +100,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorElement, {
     redo.current = [];
   };
   const paint = (el: MarkdownEditorElement, text: string) => {
-    const html = text ? renderToStaticMarkup(<>{composerMarkdownNodes(text)}</>) + (text.endsWith('\n') ? '<br>' : '') : '<br>';
+    // Keep an empty editor truly empty, so its `:empty::before` placeholder
+    // (and ghost suggestions written into it) can show. A `<br>` child counts
+    // as a child element and defeats `:empty`.
+    const html = text ? renderToStaticMarkup(<>{composerMarkdownNodes(text)}</>) + (text.endsWith('\n') ? '<br>' : '') : '';
     // Most keys leave the highlighting as it was: the browser's own edit
     // already reads the same, caret included. Rewriting it anyway and putting
     // the caret back forced a layout of the whole page on every key.

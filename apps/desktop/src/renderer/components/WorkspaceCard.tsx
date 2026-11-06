@@ -1,17 +1,21 @@
-import React, { memo } from 'react';
+import { terminalPresentation, terminalPrUrl } from './terminalActivity.js';
+import { ComputerChip, useComputerOf } from './ComputerChip.js';
+import React, { memo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
+import { getSessionWorkspaceIds, guessContextWindow, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import { allPanes } from '../layout.js';
 import { useGitStatus } from '../useGitStatus.js';
 import {
-  BranchIcon, CheckIcon, CloseIcon, CompactIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
+  BranchIcon, CheckIcon, CloseIcon, CompactIcon, PencilIcon, QuestionIcon, RobotIcon, RocketIcon, SleepIcon, TerminalIcon,
   WarningIcon, WorktreeIcon,
 } from '../icons.js';
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
 import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
-import { SessionPrLinks } from './SessionPrLinks.js';
+import { SessionPrChip } from './SessionPrChip.js';
+import { wakeSourcesOf } from '../views/agentPanelView.js';
 
 /**
  * One workspace, as a card in the left sidebar.
@@ -28,11 +32,15 @@ import { SessionPrLinks } from './SessionPrLinks.js';
  * 2. **What is running it.** Which model it is ("Opus 5.5") and how full its
  *    context window is, with where the model comes from ("Claude") as subtext
  *    on the line under it, which the view menu can hide.
- * 3. **What it has shipped from where.** The branch (with the worktree glyph
- *    when it is a linked worktree), then each PR the chat made as its own
- *    link (`SessionPrLinks`). The project is not repeated: the card already
- *    sits under its project's heading.
+ * 3. **Where it works.** The branch (with the worktree glyph when it is a
+ *    linked worktree). The project is not repeated: the card already sits
+ *    under its project's heading.
  * 4. **What it has spun up.** Sub-agents and windows.
+ *
+ * What it has shipped sits apart, at the card's bottom right: a chip for its
+ * PR, with GitHub's state glyph and hue and `+N` for any others
+ * (`SessionPrChip`). It rides the end of whichever line is last, so it never
+ * adds a line of its own, and a card cut down to its title still shows it.
  *
  * Colour is load-bearing rather than decorative. Every fact carries the hue of
  * what it *is* (a branch is always the same colour, a limit is the colour of
@@ -163,10 +171,14 @@ function WorkspaceCardImpl({
   projects,
   subAgentCount = 0,
   showMetadata = true,
-  showProvider = true,
+  showComputer = true,
+  showComputerIcons = true,
   zoneTint,
+  renaming = false,
   onOpen,
   onClose,
+  onRenameStart,
+  onRename,
 }: {
   /** The open workspace, or null for an active chat with no window open. */
   workspace: Workspace | null;
@@ -182,19 +194,30 @@ function WorkspaceCardImpl({
   subAgentCount?: number;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
-  /** The provider subtext under the model; off, the model line stands alone. */
-  showProvider?: boolean;
+  /** The computer a remote agent runs on, on a line under the model. */
+  showComputer?: boolean;
+  /** That computer's icon, when it has one. */
+  showComputerIcons?: boolean;
   /** The colour of the zone showing this agent on the board; absent when it is not on the board. */
   zoneTint?: number;
+  /** The chat's title is a text field, being renamed. */
+  renaming?: boolean;
   onOpen: () => void;
   onClose: () => void | Promise<void>;
+  /** Turn the title into a text field (the pencil); absent, the card has no pencil. */
+  onRenameStart?: () => void;
+  /** The typed title, or null when the rename was cancelled. */
+  onRename?: (title: string | null) => void;
 }) {
   const providers = useStore((s) => s.providers);
   const knownModels = useStore((s) => s.models);
   const mentionedPrs = useStore((s) => (session ? s.prsBySession[session.id] : undefined));
   const liveCtxEstimate = useStore((s) => (session ? s.sessionCtxEstimate[session.id] : undefined));
   const compacting = useCompactionStore((s) => (session ? s.bySession[session.id]?.state === 'running' : false));
-  const provider = providers.find((p) => p.id === session?.providerId);
+  const computer = useComputerOf(session?.id);
+  const computersShown = useShown('computers', { computers: !!computer });
+  const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
+  const provider = (remoteProviders ?? providers).find((p) => p.id === session?.providerId);
 
   const folders = (session ? getSessionWorkspaceIds(session) : terminal?.workspaceId ? [terminal.workspaceId] : [])
     .map((id) => projects.find((w) => w.id === id))
@@ -222,7 +245,8 @@ function WorkspaceCardImpl({
 
   const windows = workspace ? allPanes(workspace.root).length : 0;
   const lastReply = session?.lastReplyAt;
-  const title = session?.title ?? terminal?.title ?? 'Agent';
+  const terminalView = terminal ? terminalPresentation(terminal) : null;
+  const title = session?.title ?? terminalView?.title ?? 'Agent';
   const isChat = !!session;
   // Claude Code picks the version from the plan: when its `system/init` reports
   // a specific id for the alias we sent ("claude-opus-4-7" against our "opus"),
@@ -245,6 +269,15 @@ function WorkspaceCardImpl({
       ? terminal.shell.split(/[\\/]/).pop() || terminal.shell
       : 'Shell';
 
+  const computerLine = showComputer && computersShown && !!computer;
+  const spawnLine = subAgentCount > 0 || windows > 1;
+  // The PR chip rides the end of the card's last line: its bottom right.
+  const prLine: 'title' | 'model' | 'computer' | 'git' | 'spawn' = !showMetadata
+    ? 'title'
+    : spawnLine ? 'spawn' : git ? 'git' : computerLine ? 'computer' : 'model';
+  const prChip = (line: typeof prLine) =>
+    prs.length > 0 && prLine === line ? <span className="ml-auto inline-flex shrink-0 pl-1 text-2xs leading-[15px]"><SessionPrChip prs={prs} /></span> : null;
+
   return (
     <div
       role="button"
@@ -256,36 +289,37 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* A chiplet: each card is its own small raised tile, so a column of them
-         reads as separate agents rather than one list. A chat's edge takes the
-         accent when it is the active one, so the thing this app is about is
-         findable without reading a word; a terminal's stays neutral. */
-      /* A card waiting on you (a question, or stopped on an error) takes the
-         active card's highlight too, so it is findable at a glance. */
-      className={`agent-chip group relative w-full cursor-pointer rounded-xl border px-3 py-1 text-left transition-colors duration-150 ${
-        isActive || status === 'input' || status === 'error' ? 'bg-accent-soft' : 'bg-surface hover:bg-surface-2'
-      }`}
-      style={{
-        borderColor: isChat && isActive
-          ? 'color-mix(in srgb, var(--accent) 70%, transparent)'
-          : isChat && (status === 'input' || status === 'error')
-            ? 'color-mix(in srgb, var(--accent) 35%, transparent)'
-            : 'var(--line)',
-      }}
+      /* Selection persists; hover/focus adds a soft glow. Status keeps its icon. */
+      className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : isActive ? 'border border-accent/40 bg-accent-soft' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
+      data-terminal-row={terminal?.id}
       title={title}
       data-zone-tint={zoneTint}
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
       <div className="flex items-center gap-2">
-        <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, session.activeWatchCount) : 'idle')} />
-        <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
-          {title}
-        </span>
-        {lastReply && (!status || status === 'done' || status === 'idle') && (
+        {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
+        {renaming && onRename
+          ? <RenameField title={title} onDone={onRename} />
+          : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
+            {title}
+          </span>}
+        {/* A title-only card has no room for both: its PR says more than the time. */}
+        {lastReply && (!status || status === 'done' || status === 'idle') && !(prLine === 'title' && prs.length > 0) && (
           <time className="shrink-0 text-2xs tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
+        )}
+        {prChip('title')}
+        {isChat && onRenameStart && !renaming && (
+          <button
+            className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
+            title="Rename this chat"
+            aria-label={`Rename ${title}`}
+            onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
+          >
+            <PencilIcon className="h-3 w-3" />
+          </button>
         )}
         {/* A chat card archives rather than closes: closing used to look like
             deleting and then the chat was nowhere to be found. Archived chats
@@ -308,8 +342,10 @@ function WorkspaceCardImpl({
         </button>
       </div>
 
+      {terminalView && <div className="mt-0.5 truncate pl-3 text-2xs leading-[15px]" style={{ color: terminalView.tone }} title={terminalView.detail || terminalView.status}>{terminalView.status}{showMetadata && terminalView.detail ? ` · ${terminalView.detail}` : ''}</div>}
+
       {/* Line 2: what is running it: the model, then how full the context
-          window is. Where the model comes from is subtext on the next line. */}
+          window is. Where it comes from is in the tooltip, not a line of its own. */}
       {showMetadata && <>
       <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
         <Fact
@@ -320,9 +356,7 @@ function WorkspaceCardImpl({
         >
           {model}
         </Fact>
-        {terminal && !terminal.running && (
-          <Fact tone="var(--danger)" title="This shell has exited">exited</Fact>
-        )}
+        {terminal && terminalPrUrl(terminal) && <Fact title="PR link observed in terminal output; open the terminal to check its status">PR #{terminalPrUrl(terminal)!.split('/').pop()}</Fact>}
         {compacting && (
           <span
             className="status-compacting inline-grid shrink-0 place-items-center"
@@ -342,56 +376,45 @@ function WorkspaceCardImpl({
             {compactTokens(ctxUsed)}/{compactTokens(ctxWindow)}
           </Fact>
         )}
+        {prChip('model')}
       </div>
 
-      {showProvider && provider && (
-        <div className="truncate pl-3 text-2xs leading-[13px] text-ink-faint" data-card-provider>
-          {isLocalProvider(provider.kind) ? 'Local' : provider.label}
+      {showComputer && computersShown && computer && (
+        <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
+          <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />
+          {prChip('computer')}
         </div>
       )}
 
-      {/* Line 3: its git position, then the PRs it made. The project is the
-          group heading the card sits under, so the card does not repeat it. */}
-      {(git || prs.length > 0) && (
+      {/* Line 3: its git position. The project is the group heading the card
+          sits under, so the card does not repeat it. */}
+      {git && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-          {git ? (
-            <Fact
-              shrink
-              tone="var(--accent)"
-              icon={
-                git.worktree ? (
-                  <WorktreeIcon className="h-2.5 w-2.5 shrink-0" />
-                ) : (
-                  <BranchIcon className="h-2.5 w-2.5 shrink-0" />
-                )
-              }
-              title={[
-                git.branch ? `On branch ${git.branch}` : `Detached at ${git.head}`,
-                git.ahead || git.behind ? `${git.ahead} ahead, ${git.behind} behind upstream` : '',
-                git.worktree ? `Linked git worktree: ${git.worktree.path}` : '',
-              ].filter(Boolean).join('\n')}
-            >
-              {git.branch ?? git.head ?? 'detached'}
+          <Fact
+            shrink
+            tone="var(--accent)"
+            icon={git.worktree ? <WorktreeIcon className="h-2.5 w-2.5 shrink-0" /> : <BranchIcon className="h-2.5 w-2.5 shrink-0" />}
+            title={[
+              git.branch ? `On branch ${git.branch}` : `Detached at ${git.head}`,
+              git.ahead || git.behind ? `${git.ahead} ahead, ${git.behind} behind upstream` : '',
+              git.worktree ? `Linked git worktree: ${git.worktree.path}` : '',
+            ].filter(Boolean).join('\n')}
+          >
+            {git.branch ?? git.head ?? 'detached'}
+          </Fact>
+          {git.ahead > 0 || git.behind > 0 ? (
+            <Fact tone="var(--info)" title={`${git.ahead} ahead of, ${git.behind} behind, the upstream branch`}>
+              {git.ahead > 0 ? `↑${git.ahead}` : ''}
+              {git.behind > 0 ? `↓${git.behind}` : ''}
             </Fact>
           ) : null}
-          {(git?.ahead ?? 0) > 0 || (git?.behind ?? 0) > 0 ? (
-            <Fact tone="var(--info)" title={`${git!.ahead} ahead of, ${git!.behind} behind, the upstream branch`}>
-              {git!.ahead > 0 ? `↑${git!.ahead}` : ''}
-              {git!.behind > 0 ? `↓${git!.behind}` : ''}
-            </Fact>
-          ) : null}
-          {prs.length > 0 && (
-            <>
-              {git && <span aria-hidden className="mx-0.5 h-2.5 w-px shrink-0 bg-line" />}
-              <SessionPrLinks prs={prs} />
-            </>
-          )}
+          {prChip('git')}
         </div>
       )}
 
       {/* Line 4: what it has spun up. Only when there is something to say: a
           card for a plain one-window chat should not carry an empty row. */}
-      {(subAgentCount > 0 || windows > 1) && (
+      {spawnLine && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           {subAgentCount > 0 && (
             <Fact
@@ -403,10 +426,53 @@ function WorkspaceCardImpl({
             </Fact>
           )}
           {windows > 1 && <span className="shrink-0">{windows} windows</span>}
+          {prChip('spawn')}
         </div>
       )}
       </>}
     </div>
+  );
+}
+
+/**
+ * The title a rename saves, or null when there is nothing to save: Escape, an
+ * empty field and the same title all keep the chat as it was.
+ */
+export function chatRenameTitle(typed: string | null, current: string | undefined): string | null {
+  const title = typed?.trim();
+  return title && title !== current ? title : null;
+}
+
+/**
+ * The title as a text field: Enter or clicking away keeps what was typed,
+ * Escape gives it up. Keys and clicks stay in the field, so they never open
+ * the card.
+ */
+function RenameField({ title, onDone }: { title: string; onDone: (title: string | null) => void }) {
+  const [value, setValue] = useState(title);
+  const done = useRef(false);
+  const finish = (next: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(next);
+  };
+  return (
+    <input
+      className="min-w-0 flex-1 rounded-sm border border-accent bg-surface px-1 text-sm text-ink outline-none"
+      aria-label="Chat title"
+      value={value}
+      autoFocus
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') { e.preventDefault(); finish(value); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(null); }
+      }}
+      onBlur={() => finish(value)}
+    />
   );
 }
 
@@ -420,7 +486,7 @@ type CardProps = React.ComponentProps<typeof WorkspaceCardImpl>;
  */
 export const WorkspaceCard = memo(WorkspaceCardImpl, (a: CardProps, b: CardProps) => {
   for (const key of Object.keys(b) as Array<keyof CardProps>) {
-    if (key === 'onOpen' || key === 'onClose') continue;
+    if (key === 'onOpen' || key === 'onClose' || key === 'onRenameStart' || key === 'onRename') continue;
     if (a[key] !== b[key]) return false;
   }
   return Object.keys(a).length === Object.keys(b).length;

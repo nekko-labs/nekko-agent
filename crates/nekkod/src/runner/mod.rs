@@ -13,6 +13,7 @@ pub mod hostnets;
 pub mod image;
 pub mod keychain;
 pub mod lan;
+pub mod linux_image;
 pub mod net;
 pub mod provider;
 pub mod signals;
@@ -40,14 +41,28 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 use std::time::Duration;
 use store::{Link, RunnerRecord, Store, same_scope, same_target};
-use supervisor::{RunnerState, RunnerView, Supervisor, TICK};
+use supervisor::{Ask, RunnerState, RunnerView, Supervisor, TICK};
 use vm::HelperVm;
 use vm::Vm;
 
-pub const CHANNELS: &[&str] = &["runner:list", "runner:connect", "runner:update", "runner:remove", "runner:setEnabled"];
+pub const CHANNELS: &[&str] = &[
+    "runner:list",
+    "runner:connect",
+    "runner:update",
+    "runner:remove",
+    "runner:setEnabled",
+    "runner:jobLog",
+    "runner:vmLog",
+    "runner:liveLog",
+    "runner:job",
+];
 /// Pushed with `RunnerView[]` whenever the views change.
 pub const EVENT: &str = "runner:changed";
 const NO_RUNNER: &str = "No runner with that id.";
+/// The most of a job's log `runner:jobLog` returns: its end, where a failure is.
+const JOB_LOG_TAIL: usize = 256 * 1024;
+/// The most of a running VM's console `runner:liveLog` returns.
+const LIVE_LOG_TAIL: usize = 64 * 1024;
 const FORK_APPROVAL_OPEN: &str = "This public repo doesn't hold outside contributors for approval yet. Turn that on in its Actions settings on GitHub, then choose Connect GitHub to finish.";
 /// How often the router is asked for its public address, and how often the gateway is checked for a change.
 const WAN_EVERY: Duration = Duration::from_secs(300);
@@ -70,6 +85,8 @@ fn secret_key(r: &RunnerRecord) -> String {
 }
 
 pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<GitHub<Net>, GitLab<Net>>> {
+    /// `<data>/runners`.
+    dir: PathBuf,
     store: Store,
     /// Connects new runners; `None` in tests.
     connectors: Option<Connectors>,
@@ -84,6 +101,8 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     /// True once the tick loop runs (VM support is there).
     looping: AtomicBool,
     pending: std::sync::Mutex<Option<Pending>>,
+    /// What the owner asked of a runner's jobs, by runner id; the next step applies it.
+    asks: std::sync::Mutex<Vec<(String, Ask)>>,
     /// The views last published; `runner:list` answers from here.
     views: std::sync::Mutex<Vec<RunnerView>>,
     /// Vault items a connect is storing, with how many connects are in flight.
@@ -97,8 +116,19 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     vm_error: Option<String>,
     /// The image builder; unset in tests.
     image: OnceLock<Arc<image::ImageJob<image::RealBuildHost>>>,
+    linux_image: OnceLock<Arc<linux_image::LinuxImageJob>>,
     /// The Mac as of the last tick, for the image builder's gates.
     mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
+}
+
+/// The last `max` bytes of `text`, from the start of a line.
+fn tail(text: &str, max: usize) -> &str {
+    if text.len() <= max {
+        return text;
+    }
+    let cut = (text.len() - max..text.len()).find(|&i| text.is_char_boundary(i)).unwrap_or(text.len());
+    let rest = &text[cut..];
+    rest.find('\n').map_or(rest, |n| &rest[n + 1..])
 }
 
 fn now_secs() -> u64 {
@@ -187,6 +217,7 @@ impl Runners {
             Err(_) => Arc::new(RwLock::new(None)),
         };
         let vm = helper.clone().map(|h| HelperVm::new(h, host.clone(), egress.clone()));
+        let linux_vm = helper.clone().map(|h| HelperVm::new(h, host.clone(), egress.clone()));
         let build_vm = helper.clone().map(|h| HelperVm::new(h, host, egress.clone()));
         let sense = HostSense::new(
             machine,
@@ -218,8 +249,16 @@ impl Runners {
         let connectors = Connectors { github, gitlab: gitlab(), setup };
         let job_vault = vault.clone();
         let job_hub = hub.clone();
+        let linux_hub = hub.clone();
         let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
         let images = dir.join("images");
+        let linux = linux_image::LinuxImageJob::new(
+            images.clone(),
+            linux_vm,
+            building.clone(),
+            Box::new(move |v| linux_hub.publish(linux_image::EVENT, json!(v), false)),
+        );
+        let _ = me.linux_image.set(Arc::new(linux));
         let job = image::ImageJob::new(
             images.clone(),
             image::RealBuildHost::new(build_vm, images, me.mac.clone(), Arc::downgrade(&me)),
@@ -256,6 +295,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         sup.set_records(store.load());
         let views = sup.views();
         Arc::new(Runners {
+            dir: runners_dir.to_path_buf(),
             store,
             connectors,
             prefix: sup.prefix(),
@@ -263,6 +303,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             sup: tokio::sync::Mutex::new(sup),
             looping: AtomicBool::new(false),
             pending: std::sync::Mutex::new(None),
+            asks: std::sync::Mutex::default(),
             views: std::sync::Mutex::new(views),
             connecting: std::sync::Mutex::new(HashMap::new()),
             queued_keys: std::sync::Mutex::default(),
@@ -273,6 +314,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             running_vm_mb,
             vm_error,
             image: OnceLock::new(),
+            linux_image: OnceLock::new(),
             mac: Arc::default(),
         })
     }
@@ -330,6 +372,9 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             for id in p.reset {
                 s.reset(&id);
             }
+        }
+        for (id, ask) in self.asks.lock().map(|mut a| std::mem::take(&mut *a)).unwrap_or_default() {
+            s.ask(&id, ask);
         }
         if tick {
             s.tick().await;
@@ -397,6 +442,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     reasons: Vec::new(),
                     available: 0,
                     limit: None,
+                    linux_available: 0,
+                    linux_error: None,
                     awake: false,
                     error: None,
                     today: Default::default(),
@@ -404,7 +451,15 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     repos: Vec::new(),
                     fork_approval_open: false,
                     recent: Vec::new(),
+                    queue: Vec::new(),
+                    accept_why: Vec::new(),
+                    suggested_size: None,
                 });
+                let (was, now) = (&v.config.settings, &r.config.settings);
+                // A new size has no jobs behind it yet; the next tick says so.
+                if (was.cpus_per_vm, was.memory_per_vm_mb) != (now.cpus_per_vm, now.memory_per_vm_mb) {
+                    v.suggested_size = None;
+                }
                 v.config = r.config.clone();
                 v.repos = r.repos().to_vec();
                 v.fork_approval_open = r.fork_approval_open();
@@ -460,6 +515,26 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
         if channel == "runner:connect" {
             return self.connect(arg(0)).await;
         }
+        if channel == "runner:jobLog" {
+            return self.job_log(&id, arg(1).as_u64()).await;
+        }
+        if channel == "runner:vmLog" {
+            return self.vm_log(&id, arg(1).as_str().unwrap_or_default());
+        }
+        if channel == "runner:liveLog" {
+            return self.live_log(&id, arg(1).as_str().unwrap_or_default());
+        }
+        if channel == "runner:job" {
+            let (action, repo, job_id) = (arg(1), arg(2), arg(3));
+            return self
+                .job_action(
+                    &id,
+                    action.as_str().unwrap_or_default(),
+                    repo.as_str().unwrap_or_default(),
+                    job_id.as_u64(),
+                )
+                .await;
+        }
         if github_setup::CHANNELS.contains(&channel) {
             return self.github_setup(channel, arg(0)).await;
         }
@@ -493,6 +568,126 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             }
             _ => Err(format!("unknown channel {channel}")),
         }
+    }
+
+    /// The end of the log of a job in the runner's recent list; no other job's, so the
+    /// channel never reads the log of a job this Mac did not run.
+    async fn job_log(&self, id: &str, job_id: Option<u64>) -> Result<Value, String> {
+        const UNKNOWN: &str = "That job is not one of this runner's recent jobs.";
+        let job_id = job_id.ok_or(UNKNOWN)?;
+        let repo = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.recent)
+            .find(|l| l.job_id == Some(job_id))
+            .and_then(|l| l.repo.clone())
+            .ok_or(UNKNOWN)?;
+        let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+        let c = self.connectors.as_ref().ok_or("Job logs are not available here.")?;
+        let text = match rec.link {
+            Link::Github(_) => c.github.job_log(&rec, &repo, job_id).await,
+            Link::Gitlab(_) => c.gitlab.job_log(&rec, &repo, job_id).await,
+        }
+        .map_err(|e| e.to_string())?;
+        Ok(json!(tail(&text, JOB_LOG_TAIL)))
+    }
+
+    /// The end of a running VM's console: the guest's boot log, then the job's output as it runs.
+    fn live_log(&self, id: &str, name: &str) -> Result<Value, String> {
+        let live = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.slots)
+            .any(|s| s.vm == name);
+        // The name comes from our own view, so it is a plain folder name under `vms/`.
+        if !live || name.is_empty() {
+            return Err("That VM is not running for this runner.".into());
+        }
+        let path = self.dir.join("vms").join(name).join(vm::CONSOLE_LOG);
+        match std::fs::read(&path) {
+            Ok(b) => Ok(json!(tail(&String::from_utf8_lossy(&b), LIVE_LOG_TAIL))),
+            // Not written yet: the guest has not booted far enough.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!("")),
+            Err(e) => Err(format!("Couldn't read the live log: {e}")),
+        }
+    }
+
+    /// Acts on one of runner `id`'s jobs: `decline`, `accept` or `undo` a queued one,
+    /// `cancel` or `restart` a running one, `rerun` a recent one. Only jobs the runner's
+    /// view lists, so the channel never touches a job this Mac has nothing to do with.
+    async fn job_action(&self, id: &str, action: &str, repo: &str, job_id: Option<u64>) -> Result<Value, String> {
+        let job_id = job_id.ok_or("Which job?")?;
+        let (queued, running, recent) = {
+            let views = self.views.lock().map_err(|_| "The runner views are unavailable.")?;
+            let v = views.iter().find(|v| v.config.id == id).ok_or(NO_RUNNER)?;
+            let queued = v.queue.iter().any(|q| q.job.repo == repo && q.job.job_id == job_id);
+            let running = v.slots.iter().filter_map(|s| s.job.clone()).find(|j| j.repo == repo && j.job_id == job_id);
+            let recent =
+                v.recent.iter().find(|l| l.repo.as_deref() == Some(repo) && l.job_id == Some(job_id)).map(|l| {
+                    provider::JobRef {
+                        repo: repo.to_string(),
+                        job_id,
+                        workflow: l.workflow.clone().unwrap_or_default(),
+                        job: l.job.clone().unwrap_or_default(),
+                        url: l.url.clone().unwrap_or_default(),
+                        pr: l.pr.clone(),
+                        ..Default::default()
+                    }
+                });
+            (queued, running, recent)
+        };
+        if !self.looping.load(Ordering::SeqCst) {
+            return Err("The runner isn't running on this Mac.".into());
+        }
+        let ask = match action {
+            "decline" | "accept" | "undo" if !queued => return Err("That job is no longer waiting.".into()),
+            "decline" => Ask::Decline(repo.into(), job_id),
+            "accept" => Ask::Accept(repo.into(), job_id),
+            "undo" => Ask::Undo(repo.into(), job_id),
+            "cancel" | "restart" => {
+                let job = running.ok_or("That job is no longer running here.")?;
+                let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+                let c = self.connectors.as_ref().ok_or("Jobs can't be cancelled here.")?;
+                match rec.link {
+                    Link::Github(_) => c.github.cancel(&rec, &job).await,
+                    Link::Gitlab(_) => c.gitlab.cancel(&rec, &job).await,
+                }
+                .map_err(|e| e.to_string())?;
+                if action == "cancel" {
+                    return Ok(Value::Null);
+                }
+                Ask::Rerun(job)
+            }
+            "rerun" => Ask::Rerun(recent.ok_or("That job is not one of this runner's recent jobs.")?),
+            _ => return Err(format!("unknown job action {action}")),
+        };
+        if let Ok(mut a) = self.asks.lock() {
+            a.push((id.to_string(), ask));
+        }
+        self.wake.notify_one();
+        Ok(Value::Null)
+    }
+
+    /// The console log of a VM in the runner's recent list, as the guest wrote it.
+    fn vm_log(&self, id: &str, name: &str) -> Result<Value, String> {
+        let known = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.recent)
+            .any(|l| l.vm.as_deref() == Some(name));
+        if !known {
+            return Err("That VM is not one of this runner's recent jobs.".into());
+        }
+        audit::vm_log(&self.dir, name).map(|t| json!(t)).map_err(|e| format!("Couldn't read the VM log: {e}"))
     }
 
     /// A finished image build turns its runner on, with the mode chosen for it.
@@ -715,5 +910,18 @@ impl Drop for ConnectGuard<'_> {
                 c.remove(&self.key);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tail;
+
+    #[test]
+    fn tail_keeps_whole_lines_from_the_end() {
+        assert_eq!(tail("a\nb\n", 10), "a\nb\n");
+        assert_eq!(tail("first\nsecond\nthird\n", 9), "third\n");
+        // A cut inside a multi-byte character moves to the next boundary.
+        assert_eq!(tail("ééé\nok\n", 5), "ok\n");
     }
 }

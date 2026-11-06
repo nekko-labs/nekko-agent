@@ -2,9 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_RUNNER_LABEL,
   IDLE_GITHUB_SETUP,
+  DEFAULT_READY_VMS,
   MAX_RUNNER_REPOS,
+  PRIORITIES,
   PRIORITY_DESCRIPTIONS,
   PRIORITY_LABELS,
+  READY_VM_CHOICES,
   defaultRepoPicks,
   githubActionsSettingsUrl,
   githubAppSettingsUrl,
@@ -25,16 +28,16 @@ import {
   type SetupPicks,
 } from '@nekko-agent/shared';
 import { Modal } from './primitives/index.js';
+import { Spinner } from './UpdateBanner.js';
 import { CheckIcon, ExternalIcon } from '../icons.js';
 import { useStore } from '../store.js';
 
 export type ConnectStep = 1 | 2 | 3;
 const CREATE_APP_DOCS = 'https://nekkoagent.com/docs/ci-runners#create-the-github-app';
 const STEPS = ['Install app', 'Org or repo', 'How this Mac helps'];
-const PRIORITIES: Priority[] = ['doNotDisturb', 'balanced', 'runnerFirst'];
 
 export const emptyConnectForm = (): ConnectForm => ({
-  appId: '', installationId: '', privateKeyPem: '', kind: 'repo', target: '', repos: '', allowPublic: false, label: '', priority: 'doNotDisturb',
+  appId: '', installationId: '', privateKeyPem: '', kind: 'repo', target: '', repos: '', allowPublic: false, label: '', priority: 'balanced', readyVms: DEFAULT_READY_VMS,
 });
 
 export interface ConnectDeps {
@@ -71,9 +74,11 @@ export async function submitConnect(
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e), step: 3 };
   }
-  if (form.priority !== 'doNotDisturb') {
+  // A new runner is Balanced with one VM ready; send only what differs. Two ready VMs need two slots.
+  if (form.priority !== 'balanced' || form.readyVms !== DEFAULT_READY_VMS) {
+    const slots = form.readyVms > 1 ? { macosSlots: form.readyVms } : {};
     try {
-      view = await deps.updateRunner(view.config.id, { priority: form.priority });
+      view = await deps.updateRunner(view.config.id, { priority: form.priority, readyVms: form.readyVms, ...slots });
     } catch (e) {
       deps.pushToast('error', `Connected, but could not set the mode: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -89,31 +94,50 @@ const Field = ({ label, hint, children }: { label: string; hint?: React.ReactNod
   </label>
 );
 
-const Choice = ({ name, checked, onChange, title, description }: { name: string; checked: boolean; onChange(): void; title: string; description?: string }) => (
+const Choice = ({ name, checked, onChange, title, badge, description }: { name: string; checked: boolean; onChange(): void; title: string; badge?: string; description?: string }) => (
   <label
-    className="flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2"
+    className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5"
     style={{ borderColor: checked ? 'var(--accent)' : 'var(--line)', background: checked ? 'var(--accent-soft)' : 'var(--surface)' }}
   >
-    <input type="radio" name={name} className="mt-0.5" checked={checked} onChange={onChange} />
-    <span>
-      <span className="block text-sm font-semibold text-ink">{title}</span>
+    <input type="radio" name={name} checked={checked} onChange={onChange} />
+    <span className="min-w-0 leading-tight">
+      <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+        {title}
+        {badge && <span className="rounded-md px-1.5 text-2xs font-medium" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>{badge}</span>}
+      </span>
       {description && <span className="block text-xs text-ink-soft">{description}</span>}
     </span>
   </label>
 );
 
-const ModeChoices = ({ priority, onPriority }: { priority: Priority; onPriority(p: Priority): void }) => (
-  <>
-    <div>
+/** Mode, then how many VMs wait booted. 8px inside a group, 20px between groups. */
+export const ModeChoices = ({ priority, readyVms, onPriority, onReadyVms }: { priority: Priority; readyVms: number; onPriority(p: Priority): void; onReadyVms(n: number): void }) => (
+  <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-2">
       <h3 className="text-base font-semibold text-ink">How should this Mac help?</h3>
-      <p className="text-sm text-ink-soft">You can change this any time.</p>
+      <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-2">
+        {PRIORITIES.map((p) => (
+          <Choice key={p} name="connect-priority" checked={priority === p} onChange={() => onPriority(p)} title={PRIORITY_LABELS[p]} badge={p === 'balanced' ? 'Recommended' : undefined} description={PRIORITY_DESCRIPTIONS[p]} />
+        ))}
+      </div>
     </div>
-    <div role="radiogroup" aria-label="Priority" className="flex flex-col gap-2">
-      {PRIORITIES.map((p) => (
-        <Choice key={p} name="connect-priority" checked={priority === p} onChange={() => onPriority(p)} title={PRIORITY_LABELS[p]} description={PRIORITY_DESCRIPTIONS[p]} />
-      ))}
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold text-ink">VMs kept ready</h3>
+      <div role="radiogroup" aria-label="VMs kept ready" className="flex gap-2">
+        {READY_VM_CHOICES.map((n) => (
+          <label
+            key={n}
+            className="cursor-pointer rounded-lg border px-3 py-1 text-sm tabular-nums"
+            style={readyVms === n ? { borderColor: 'transparent', background: 'var(--accent-soft)', color: 'var(--accent)' } : { borderColor: 'var(--line)' }}
+          >
+            <input type="radio" className="sr-only" name="connect-ready-vms" checked={readyVms === n} onChange={() => onReadyVms(n)} />
+            {n}
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-ink-faint">Booted and waiting, so a job starts at once. Each uses its memory while it waits. Apple allows 2 macOS VMs per Mac.</p>
     </div>
-  </>
+  </div>
 );
 
 /** The sheet's body for one step (mockup 2); pure so tests render it statically. */
@@ -208,7 +232,7 @@ export function ConnectBody({
 
       {step === 3 && (
         <>
-          <ModeChoices priority={form.priority} onPriority={(p) => onField('priority', p)} />
+          <ModeChoices priority={form.priority} readyVms={form.readyVms} onPriority={(p) => onField('priority', p)} onReadyVms={(n) => onField('readyVms', n)} />
           {form.allowPublic && (
             <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
               {`${scope} may be public. Keep "Require approval for all external contributors" on in the repo's Actions settings so fork pull requests wait for you.`}
@@ -220,10 +244,10 @@ export function ConnectBody({
       {error && <p role="alert" className="text-xs text-[var(--danger)]">{error}</p>}
 
       <div className="flex justify-end gap-2">
-        {step > 1 && <button type="button" className="btn btn-outline" disabled={busy} onClick={() => onStep((step - 1) as ConnectStep)}>Back</button>}
+        {step > 1 && <button type="button" className="btn btn-outline py-1.5!" disabled={busy} onClick={() => onStep((step - 1) as ConnectStep)}>Back</button>}
         {step < 3
-          ? <button type="button" className="btn btn-primary" disabled={busy} onClick={() => onStep((step + 1) as ConnectStep)}>Next</button>
-          : <button type="button" className="btn btn-primary" disabled={busy} onClick={onSubmit}>{busy ? 'Starting…' : 'Start runner'}</button>}
+          ? <button type="button" className="btn btn-primary py-1.5!" disabled={busy} onClick={() => onStep((step + 1) as ConnectStep)}>Next</button>
+          : <button type="button" className="btn btn-primary py-1.5!" disabled={busy} onClick={onSubmit}>{busy ? 'Starting…' : 'Start runner'}</button>}
       </div>
     </div>
   );
@@ -238,11 +262,16 @@ const Alert = ({ error }: { error: string | null }) => (error ? <p role="alert" 
 /** The account the sheet will set up. `typed` means its name came from the text box. */
 export interface AccountChoice { login: string; kind: 'user' | 'org'; canGroup: boolean | null; typed?: boolean }
 
-/** Frame 2: where the repos live. From `gh` when it is signed in, otherwise one text box. */
+/** The signed-in user's own account, with no name: the daemon reads it from GitHub's answer. */
+export const OWN_ACCOUNT: AccountChoice = { login: '', kind: 'user', canGroup: null };
+const TYPED_ORG: AccountChoice = { login: '', kind: 'org', canGroup: null, typed: true };
+
+/** Frame 2: where the repos live. From `gh` when it is signed in; otherwise straight to GitHub for
+ *  the user's own account, or one box for an org. `accounts` is undefined while `gh` is asked. */
 export function AccountStep({
   accounts, choice, error, busy, onChoice, onContinue, onManual,
 }: {
-  accounts: GithubAccounts;
+  accounts: GithubAccounts | undefined;
   choice: AccountChoice;
   error: string | null;
   busy: boolean;
@@ -250,11 +279,23 @@ export function AccountStep({
   onContinue(repoAdmin: boolean): void;
   onManual(): void;
 }) {
+  if (!accounts) {
+    return (
+      <div className="flex flex-col gap-3 p-5">
+        <Heading>Where do your repos live?</Heading>
+        <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm text-ink-soft"><Spinner /> Checking GitHub…</p>
+      </div>
+    );
+  }
   const known = accounts.accounts.length > 0;
   const free = choice.canGroup === false;
+  const own = !choice.typed && choice.kind === 'user' && !choice.login;
   return (
     <div className="flex flex-col gap-3 p-5">
       <Heading>Where do your repos live?</Heading>
+      {!known && !choice.typed && (
+        <p className="text-sm text-ink-soft">Nekko makes the runner's app on your GitHub account. On GitHub you only click Create, then Install.</p>
+      )}
       {known && (
         <div role="radiogroup" aria-label="GitHub account" className="flex flex-col gap-2">
           {accounts.accounts.map((a) => (
@@ -263,7 +304,7 @@ export function AccountStep({
           <Choice name="github-account" checked={!!choice.typed} onChange={() => onChoice({ login: '', kind: 'org', canGroup: null, typed: true })} title="Another account" description="Type its name" />
         </div>
       )}
-      {choice.typed && (
+      {choice.typed && known && (
         <>
           <Field label="GitHub account or org">
             <input className="input w-full" autoComplete="off" spellCheck={false} value={choice.login} onChange={(e) => onChoice({ ...choice, login: e.target.value.trim() })} />
@@ -274,6 +315,12 @@ export function AccountStep({
           </div>
         </>
       )}
+      {choice.typed && !known && (
+        // GitHub needs an org's name in the page's address; the user's own account needs none.
+        <Field label="Org name">
+          <input className="input w-full" autoComplete="off" spellCheck={false} value={choice.login} onChange={(e) => onChoice({ ...choice, login: e.target.value.trim() })} />
+        </Field>
+      )}
       {free && (
         <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}>
           <b>{choice.login}</b> is on GitHub's Free plan, which has no runner groups, so a runner can't be limited to some of its repos. Nekko can connect one repo instead. That app gets the repo's Administration permission.
@@ -281,13 +328,16 @@ export function AccountStep({
       )}
       <Alert error={error} />
       <div className="flex justify-end">
-        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || !choice.login} onClick={() => onContinue(free)}>
+        <button type="button" className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-45" disabled={busy || (!choice.login && !own)} onClick={() => onContinue(free)}>
           {free ? 'Connect one repo on GitHub' : 'Continue on GitHub'}
         </button>
       </div>
       {choice.kind === 'org' && choice.canGroup === null && choice.login && (
         <TextLink onClick={() => onContinue(true)}>On the Free plan? Connect one repo instead</TextLink>
       )}
+      {!known && (choice.typed
+        ? <TextLink onClick={() => onChoice(OWN_ACCOUNT)}>Use my own account instead</TextLink>
+        : <TextLink onClick={() => onChoice(TYPED_ORG)}>For an org, type its name</TextLink>)}
       <TextLink onClick={onManual}>Use an app I already have</TextLink>
     </div>
   );
@@ -462,7 +512,6 @@ export function sheetScreen({ status, manual, submitting, approval }: { status: 
 }
 
 const NO_ACCOUNTS: GithubAccounts = { login: null, accounts: [] };
-const TYPED: AccountChoice = { login: '', kind: 'org', canGroup: null, typed: true };
 
 /** The Connect GitHub sheet. The pasted key lives only in this sheet's form, and only until it closes or connects. */
 /** `onConnected` gets the new runner's id when it goes on to Mac setup; the manual path starts its runner itself. */
@@ -474,8 +523,8 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   const [busy, setBusy] = useState(false);
   const [manual, setManual] = useState(false);
   const [status, setStatus] = useState<GithubSetupView>(IDLE_GITHUB_SETUP);
-  const [accounts, setAccounts] = useState<GithubAccounts>(NO_ACCOUNTS);
-  const [choice, setChoice] = useState<AccountChoice>(TYPED);
+  const [accounts, setAccounts] = useState<GithubAccounts | undefined>(undefined);
+  const [choice, setChoice] = useState<AccountChoice>(OWN_ACCOUNT);
   const [picks, setPicks] = useState<SetupPicks>({ repos: [], allowPublic: false, label: '' });
   const [submitting, setSubmitting] = useState(false);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
@@ -483,12 +532,16 @@ export function ConnectRunnerSheet({ onClose, onConnected, beginReply, keyStored
   // Rejects on a daemon that predates this: the sheet then stays on the account step, and the manual path still works.
   useEffect(() => {
     let live = true;
-    void window.nekko.githubAccounts().then((a) => {
+    const current = window.nekko.githubStatus().then((v) => { if (live) setStatus(v); return v; }, () => null);
+    void window.nekko.githubAccounts().then(async (a) => {
+      if (!live) return;
+      // Without `gh` there is nothing to choose, so go straight to GitHub for the user's own account.
+      // The sheet keeps "Checking GitHub…" meanwhile; Cancel on the next screen offers an org or an existing app.
+      if (!a.accounts.length && (await current)?.step === 'idle' && live) await start({ owner: '', kind: 'user', repoAdmin: false });
       if (!live) return;
       setAccounts(a);
       if (a.accounts.length) setChoice((c) => (c.login ? c : a.accounts[0]));
-    }, () => {});
-    void window.nekko.githubStatus().then((v) => { if (live) setStatus(v); }, () => {});
+    }, () => { if (live) setAccounts(NO_ACCOUNTS); });
     const off = window.nekko.onGithubSetupChanged(setStatus);
     return () => {
       live = false;

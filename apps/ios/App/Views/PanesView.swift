@@ -513,7 +513,7 @@ struct PaneColumn: View {
         case .chats:
             ChatsView(path: pathBinding, highlighted: host.layout.other(id).content.chatId)
         case .chat(let chatId):
-            ChatView(sessionId: chatId)
+            ChatScreen(sessionId: chatId)
         case .newChat:
             NewChatView(path: pathBinding, opened: { chatId in openChat(chatId) })
         case .monitors:
@@ -642,6 +642,7 @@ struct PaneStatusDot: View {
         switch content.chatId.flatMap({ store.activity[$0] }) {
         case .needsYou?: return String(localized: ", needs you")
         case .running?: return String(localized: ", working")
+        case .failed?: return String(localized: ", stopped on an error")
         default: return ""
         }
     }

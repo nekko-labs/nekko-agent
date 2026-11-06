@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { PendingInput, SessionSummary, TerminalInfo } from '@nekko-agent/shared';
 import { allPanes, extent, findPane, isSplit, removePane, type WbPane } from './layout.js';
 import {
-  minimizeFinishedReply,
   DEFAULT_AGENT_PANEL,
   readAgentPanel,
   DEFAULT_WALL_STATE,
@@ -22,6 +21,7 @@ import {
   nextZoneName,
   nextZoneTint,
   agentZoneTints,
+  renameZone,
   setZoneTint,
   zoneTints,
   openWallPane,
@@ -286,6 +286,10 @@ describe('zones', () => {
     // The colour belongs to the zone, not the agent in it.
     const swapped = fillZone(root, z1.id, 'chat', 'b');
     expect(agentZoneTints(swapped)).toEqual(new Map([['b', 0], ['a', 1]]));
+    const renamed = renameZone(root, z2.id, '  Backend ');
+    expect(allPanes(renamed).map((p) => p.zone)).toEqual(['Zone 1', 'Backend']);
+    expect(renameZone(root, z2.id, '   ')).toBe(root);
+    expect(nextZoneName(renamed)).toBe('Zone 2');
     const recoloured = setZoneTint(root, z2.id, 4);
     expect(agentZoneTints(recoloured).get('b')).toBe(4);
     expect(nextZoneTint(recoloured)).toBe(1);
@@ -385,7 +389,7 @@ describe('wall preferences and panel migration', () => {
   it('exports the dock descriptors and fresh defaults without tree panels', () => {
     expect(WALL_KINDS).toEqual(['chat', 'terminal']);
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
-    expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true,
+    expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true, simpleShow: false,
       monitorOrder: MONITORS.map(p => p.key),
       minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false },
       monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true, localModels: true } });
@@ -502,38 +506,3 @@ describe('agent panel preferences', () => {
 });
 
 
-describe('automatic reply minimization', () => {
-  const done = { type: 'done' as const, sessionId: 'a', messageId: 'reply', stop: 'complete' as const };
-  const state = () => ({ ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const }, watermark: 1234, root: tileTree([wallPane('chat', 'a'), wallPane('chat', 'b'), wallPane('terminal', 'a')]) });
-  it.each([false, true])('minimizes only the finished chat (fixed grid: %s)', (fixedGrid) => {
-    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const, fixedGrid } };
-    const after = minimizeFinishedReply(before, done, {});
-    // The chat leaves; its zone stays, empty.
-    expect(allPanes(after.root).map(p => [p.kind, p.refId])).toEqual([['zone', ''], ['chat', 'b'], ['terminal', 'a']]);
-    expect(after).toEqual({ ...before, root: after.root });
-    expect(allPanes(before.root).map(p => p.kind)).toEqual(['chat', 'chat', 'terminal']);
-  });
-  it('keeps Focused windows visible', () => {
-    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'focus' as const } };
-    expect(minimizeFinishedReply(before, done, {})).toBe(before);
-  });
-  it('keeps errors, loop and runaway stops visible', () => {
-    const before = state();
-    expect(minimizeFinishedReply(before, { type: 'error', sessionId: 'a', message: 'failed' }, {})).toBe(before);
-    for (const stop of ['loop', 'runaway'] as const) expect(minimizeFinishedReply(before, { ...done, stop }, {})).toBe(before);
-  });
-  it('keeps pending input visible but does not block on another chat', () => {
-    const before = state();
-    const input = {} as PendingInput;
-    expect(minimizeFinishedReply(before, done, { a: input })).toBe(before);
-    expect(minimizeFinishedReply(before, done, { b: input })).not.toBe(before);
-  });
-  it('accepts older successful events without stop metadata', () => {
-    expect(refs(minimizeFinishedReply(state(), { ...done, stop: undefined }, {}).root)).toEqual(['', 'b', 'a']);
-  });
-  it('is a no-op for absent panes and leaves a lone zone in place', () => {
-    const before = state();
-    expect(minimizeFinishedReply(before, { ...done, sessionId: 'missing' }, {})).toBe(before);
-    expect(minimizeFinishedReply({ ...before, root: wallPane('chat', 'a') }, done, {}).root).toMatchObject({ kind: 'zone', refId: '' });
-  });
-});

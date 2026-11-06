@@ -6,7 +6,7 @@
 //!   tasks (a reap would end them). The chat stores Claude Code's session id
 //!   (`claudeCodeSessionId`), so the next turn after a reap, a crash or an app
 //!   restart continues the conversation with `--resume`.
-//! - A change of model, permission mode or folders relaunches the child
+//! - A change of model, effort, permission mode or folders relaunches the child
 //!   (with `--resume`): those are launch flags. A change of Claude Code
 //!   account relaunches it too, as a new Claude Code session, since the old
 //!   one lives in the other account's folder (turns.rs).
@@ -18,7 +18,11 @@
 //! - Between turns the child is watched ([`Harness::idle`]): Claude Code
 //!   wakes on its own when a background command or sub-agent finishes, and
 //!   that work becomes a Nekko turn (turns.rs `wake`), so its permission
-//!   prompts have a turn to wait in and the chat shows it working.
+//!   prompts have a turn to wait in and the chat shows it working. A wake-up
+//!   reads the child that woke whatever flags it was launched with.
+//! - The number of background tasks each child runs is published as it
+//!   changes (`claude_code_background`) and kept for `claude:backgroundTasks`,
+//!   so the chat can say Claude Code is still working after a turn's Done.
 //!
 //! The turn itself (events, transcript, Stop and Steer) runs in turns.rs
 //! (`claude_code_turn`) over [`nekko_harness::run_turn`].
@@ -104,6 +108,15 @@ pub struct Harness {
     /// own stream (`rate_limit_event`, `/usage`), by provider id. Shown only
     /// where the `usage_limits` policy row allows (`claude:planUsage`).
     plan_usage: Mutex<HashMap<String, serde_json::Value>>,
+    /// Background tasks each chat's Claude Code still runs, by chat id
+    /// (`claude:backgroundTasks`); a chat with none is not listed.
+    background: Mutex<HashMap<String, usize>>,
+    /// How many of those tasks are watchers, by chat id, for the chat summaries;
+    /// a chat with none is not listed.
+    watchers: Mutex<HashMap<String, usize>>,
+    /// Sub-agents still running, by parent chat and delegating call. They
+    /// outlive a turn when they run in the background (subagents.rs).
+    subagents: Mutex<HashMap<String, HashMap<String, crate::subagents::Run>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +149,7 @@ pub struct Wanted {
     pub cwd: PathBuf,
     pub add_dirs: Vec<PathBuf>,
     pub model: Option<String>,
+    pub effort: Option<String>,
     pub permission_mode: PermissionMode,
     /// The provider's Claude Code account folder; `None` for the default login.
     pub config_dir: Option<PathBuf>,
@@ -153,6 +167,7 @@ impl Wanted {
         spec.cwd == self.cwd
             && spec.add_dirs == self.add_dirs
             && spec.model == self.model
+            && spec.effort == self.effort
             && spec.permission_mode == self.permission_mode
             && spec.config_dir == self.config_dir
     }
@@ -168,6 +183,7 @@ impl Wanted {
             cwd: self.cwd.clone(),
             session,
             model: self.model.clone(),
+            effort: self.effort.clone(),
             permission_mode: self.permission_mode,
             mcp_config: None,
             permission_prompt_tool: None,
@@ -197,6 +213,65 @@ impl Harness {
     /// What a provider's Claude Code last reported about plan usage, if anything.
     pub fn plan_usage(&self, provider_id: &str) -> Option<serde_json::Value> {
         lock(&self.plan_usage).get(provider_id).cloned()
+    }
+
+    /// A chat's Claude Code now runs `n` background tasks, `watchers` of them watchers.
+    pub fn note_background(&self, session_id: &str, n: usize, watchers: usize) {
+        for (all, count) in [(&self.background, n), (&self.watchers, watchers)] {
+            let mut all = lock(all);
+            if count == 0 {
+                all.remove(session_id);
+            } else {
+                all.insert(session_id.to_string(), count);
+            }
+        }
+    }
+
+    pub fn add_subagent(&self, parent: &str, call_id: &str, run: crate::subagents::Run) {
+        lock(&self.subagents).entry(parent.to_string()).or_default().insert(call_id.to_string(), run);
+    }
+
+    pub fn with_subagent<T>(
+        &self,
+        parent: &str,
+        call_id: &str,
+        f: impl FnOnce(&mut crate::subagents::Run) -> T,
+    ) -> Option<T> {
+        lock(&self.subagents).get_mut(parent)?.get_mut(call_id).map(f)
+    }
+
+    pub fn remove_subagent(&self, parent: &str, call_id: &str) -> Option<crate::subagents::Run> {
+        let mut all = lock(&self.subagents);
+        let runs = all.get_mut(parent)?;
+        let run = runs.remove(call_id);
+        if runs.is_empty() {
+            all.remove(parent);
+        }
+        run
+    }
+
+    /// The calls of a chat's running sub-agents, those that run in the background only if asked.
+    pub fn open_subagents(&self, parent: &str, background_too: bool) -> Vec<String> {
+        let all = lock(&self.subagents);
+        let runs = all.get(parent).into_iter().flatten();
+        runs.filter(|(_, run)| background_too || !run.background).map(|(id, _)| id.clone()).collect()
+    }
+
+    /// The child chats of every running sub-agent, for `chat:running`.
+    pub fn running_subagents(&self) -> Vec<String> {
+        lock(&self.subagents).values().flatten().map(|(_, run)| run.chat_id()).collect()
+    }
+
+    /// `claude:backgroundTasks`: how many background tasks each chat's Claude
+    /// Code runs, for the chats that run any.
+    pub fn background_tasks(&self) -> serde_json::Value {
+        serde_json::json!(*lock(&self.background))
+    }
+
+    /// How many background watchers each chat's Claude Code runs, for the
+    /// chats that run any.
+    pub fn background_watchers(&self) -> HashMap<String, usize> {
+        lock(&self.watchers).clone()
     }
 
     /// The chat's slot (made on first use).
@@ -580,6 +655,7 @@ mod tests {
             cwd: "C:/w".into(),
             add_dirs: vec![],
             model: Some("opus".into()),
+            effort: None,
             permission_mode: PermissionMode::Default,
             config_dir: None,
         }
@@ -811,6 +887,9 @@ mod tests {
         assert!(w.matches(&resumed));
         let mut other = w.clone();
         other.model = Some("sonnet".into());
+        assert!(!other.matches(&resumed));
+        other = w.clone();
+        other.effort = Some("high".into());
         assert!(!other.matches(&resumed));
         other = w.clone();
         other.permission_mode = PermissionMode::AcceptEdits;

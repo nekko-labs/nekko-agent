@@ -4,7 +4,7 @@ import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNot
 import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, shell, systemPreferences } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
@@ -62,6 +62,18 @@ function showWindow(): void {
   raise(win);
 }
 
+/**
+ * Show the window in answer to a notification click. Windows can refuse a
+ * background app the foreground and only flash its taskbar button; a moment
+ * always-on-top puts the window in front either way.
+ */
+function showWindowOverOthers(): void {
+  const win = process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  win?.setAlwaysOnTop(true);
+  showWindow();
+  win?.setAlwaysOnTop(false);
+}
+
 /** The engine (nekkod); set once the app is ready. */
 let engine: EngineProcess | null = null;
 /** Settings > Connections, for the pages Chromium loads itself (connectionsGuard.ts). */
@@ -70,12 +82,15 @@ const webviewGuests = new Set<number>();
 // Opt-in crash reports (telemetry.rs drops them while reports are off). A
 // monitor only: Node still crashes the way it did.
 process.on('uncaughtExceptionMonitor', (err) => {
-  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: String(err?.message ?? err), stack: String(err?.stack ?? '') }).catch(() => {});
+  // The class and message; nekkod keeps only the first line and the frames' names.
+  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: `${err?.name || 'Error'}: ${String(err?.message ?? err)}`, stack: String(err?.stack ?? '') }).catch(() => {});
 });
 let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
 import {
+  PAGE_RELOADING_EVENT,
+  RELOAD_FADE_MS,
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
@@ -193,6 +208,17 @@ function resolveWindowIcon(): string | undefined {
   return candidates.find((path) => existsSync(path));
 }
 
+/** A Windows toast loads its image itself, so a packaged icon has to leave app.asar. */
+function toastIconFile(): string | undefined {
+  const icon = resolveWindowIcon();
+  if (!icon) return undefined;
+  try {
+    const file = join(app.getPath('userData'), 'notification-icon.png');
+    writeFileSync(file, readFileSync(icon));
+    return file;
+  } catch { return undefined; }
+}
+
 /**
  * An app window: the whole UI, with the app's own title strip. The main window
  * and every multi-monitor screen window are made here, so they share the
@@ -238,6 +264,7 @@ function wireAppWindow(win: BrowserWindow): void {
   // shortcuts people reach for shouldn't be, so bind the two that were worth
   // keeping directly. Everything else in that menu duplicated a shortcut the
   // app already owns (see `shortcuts.ts`) or a gesture Chromium handles itself.
+  let reloading = false;
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const mod = input.control || input.meta;
@@ -247,7 +274,14 @@ function wireAppWindow(win: BrowserWindow): void {
       win.webContents.toggleDevTools();
     } else if (mod && key === 'r') {
       event.preventDefault();
-      win.webContents.reload();
+      if (reloading || input.isAutoRepeat) return;
+      reloading = true;
+      // The page fades its cover in first. The timer is here, not there, so a stuck page still reloads.
+      win.webContents.send(PAGE_RELOADING_EVENT, RELOAD_FADE_MS);
+      setTimeout(() => {
+        reloading = false;
+        if (!win.isDestroyed()) win.webContents.reload();
+      }, RELOAD_FADE_MS);
     }
   });
 
@@ -645,7 +679,8 @@ app.whenReady().then(async () => {
   nativeNotifications = createNativeNotificationPoster({
     isSupported: () => Notification.isSupported(),
     create: options => new Notification(options),
-  }, url => { showWindow(); deliverLink(url); }, resolveWindowIcon());
+    ...(process.platform === 'win32' ? { windowsToast: { icon: toastIconFile() } } : {}),
+  }, url => { showWindowOverOthers(); deliverLink(url); }, resolveWindowIcon());
   stopNotifications = startMainNotifications(engine, holdNotices(foreground, nativeNotifications.post), undefined, () => {
     const focused = BrowserWindow.getFocusedWindow();
     const owned = focused && applicationWindows.has(focused.webContents.id) ? focused : null;
@@ -665,6 +700,8 @@ app.whenReady().then(async () => {
   // (Windows/Linux); park it so the first load replays it.
   pendingLink = linkFromArgv(process.argv);
   createWindow();
+  // After the window: a click that launched the app is replayed here at once.
+  if (process.platform === 'win32') Notification.handleActivation(details => nativeNotifications?.activated(details.arguments));
   registerDisplayWindows(dataDir);
   // Always-on dictation never keeps listening behind a locked screen or through sleep.
   const stopVoice = () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IpcEvents.voiceLockStop); };

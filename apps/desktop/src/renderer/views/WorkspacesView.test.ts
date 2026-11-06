@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionSummary } from '@nekko-agent/shared';
 import type { Workspace } from '../store.js';
-import { sidebarWorkspaces, unopenedChats } from './unopenedChats.js';
+import { sidebarWorkspaces, subagentRows, unopenedChats } from './unopenedChats.js';
 
 const chat = (id: string, extra: Partial<SessionSummary> = {}) => ({
   id, title: id, createdAt: 1, updatedAt: 1, ...extra,
@@ -65,5 +65,13 @@ describe('sidebarWorkspaces', () => {
     const nested = new Set(['child']);
     expect(sidebarWorkspaces([workspace('child')], nested)).toEqual([]);
     expect(unopenedChats(sessions, [workspace('child')], nested).map((s) => s.id)).toEqual(['parent']);
+  });
+});
+
+describe('subagentRows', () => {
+  it('keeps all children listed regardless of focus or activity', () => {
+    const kids = [chat('working'), chat('finished')];
+    expect(subagentRows(kids)).toEqual(kids);
+    expect(subagentRows([])).toEqual([]);
   });
 });

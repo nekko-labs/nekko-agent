@@ -121,8 +121,14 @@ describe('Agent group hierarchy', () => {
     const layout = stylesheet('components/commandWallLayouts.css');
     expect(renderSidebar()).toContain('agent-panel-group-label');
     expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-sm)', color: 'var(--accent)' });
-    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('16px');
+    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('20px');
     expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('4px');
+    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group::before')).toMatchObject({ content: '""', top: '-10px', height: '1px', 'pointer-events': 'none', background: 'color-mix(in srgb,var(--line)65%,transparent)' });
+    expect(cssRule(layout, '.agent-panel-row')['column-gap']).toBe('24px');
+    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group::before')).toMatchObject({ 'inset-inline-start': '-12px', width: '1px', height: 'auto' });
+    // Reordering still opens its original drop gap, independent of the divider.
+    expect(cssRule(layout, '.agent-panel-group[data-group-gap]')['padding-top']).toBe('36px');
+    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group[data-group-gap]')['padding-left']).toBe('48px');
     expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group')['margin-top']).toBe('0');
   });
 });

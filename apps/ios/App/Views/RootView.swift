@@ -24,11 +24,20 @@ enum Route: Hashable {
     case security
     /// Settings → Live Activities: the card's level, with a preview.
     case liveActivities
+    /// Settings → Simple mode: what Simple and Expert show, with a preview.
+    case simpleMode
+    /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
+    case phoneModels
+    /// Connectors: a git provider and project tools, connected on this iPhone itself (decision 0058).
+    case connectors
+    /// The selected git provider's pull requests, with one-tap prompts (decision 0058).
+    case pullRequests
 }
 
 struct RootView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
+    @Environment(PhoneChats.self) private var phone
     @Environment(\.scenePhase) private var phase
     @Environment(\.palette) private var palette
     @State private var path: [Route] = []
@@ -53,10 +62,20 @@ struct RootView: View {
             .onChange(of: phase) { _, _ in syncCover() }
             .onChange(of: app.prefs.theme) { _, _ in syncCover() }
             .onChange(of: app.lock.locked) { _, locked in if !locked { app.start() } }
-            // Another computer drops this one's chat; its own panes come back.
+            // Another computer became active. Every computer stays connected now
+            // (2026-11-04), so what is open stays, except a chat on another computer
+            // (its screen talks to the active one). The panes come back as that
+            // computer left them, with the chat that made it active in focus.
             .onChange(of: store.activeId) { _, id in
-                path = []
+                if let cut = path.firstIndex(where: { r in
+                    if case .chat(let chat) = r, let on = store.computerId(ofChat: chat) { return on != id }
+                    return false
+                }) { path.removeSubrange(cut...) }
+                let focused = panes.layout.focusedChatId
                 panes.sync(computer: id, prefs: app.prefs)
+                if let focused, store.computerId(ofChat: focused) == id, panes.layout.focusedChatId != focused {
+                    panes.open(.chat(focused))
+                }
             }
             // Closing a folding phone: one column, on the chat that was focused.
             // Opening it again restores the panes as they were.
@@ -79,6 +98,11 @@ struct RootView: View {
                 guard on else { return }
                 app.openSettings = false
                 open(.settings)
+            }
+            .onChange(of: app.openPair) { _, on in
+                guard on else { return }
+                app.openPair = false
+                open(.pair)
             }
             .onChange(of: app.openChat) { _, id in
                 guard let id else { return }
@@ -104,14 +128,17 @@ struct RootView: View {
     private func takeNewChat() {
         guard app.newChatRequested, store.ready else { return }
         app.newChatRequested = false
-        if !store.computers.isEmpty { open(.newChat) }
+        if !store.computers.isEmpty || phoneRuns { open(.newChat) }
     }
+
+    /// This iPhone runs chats of its own, so the chat list shows with no computer paired.
+    private var phoneRuns: Bool { phone.isSetUp || !phone.chats.isEmpty }
 
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
     private func syncCover() {
-        // Before the first unlock the cover is the launch screen's plain lavender, so
-        // the full opening animation underneath starts on it; after that it is the cat.
+        // Before the first unlock the cover is the launch animation, building and holding, so
+        // the animation underneath takes over without a seam; after that it is the dissolving cat.
         let lock = LockView(phase: phase, cat: app.lock.everUnlocked, opening: !covered) { cover.opened() }
             .environment(app)
             .modifier(Themed(choice: app.prefs.theme, appearance: store.appearance))
@@ -121,7 +148,7 @@ struct RootView: View {
     @ViewBuilder private var content: some View {
         if !store.ready && !(app.prefs.appLock && app.lock.locked) {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity).background { AppBackdrop() }
-        } else if store.computers.isEmpty {
+        } else if store.computers.isEmpty && !phoneRuns {
             NavigationStack {
                 if app.prefs.onboarded || introDone { WelcomeView() } else { FirstRunIntroView { introDone = true } }
             }
@@ -166,7 +193,7 @@ struct RouteView: View {
 
     var body: some View {
         switch route {
-        case .chat(let id): ChatView(sessionId: id)
+        case .chat(let id): ChatScreen(sessionId: id)
         case .newChat: NewChatView(path: $path, opened: openChat)
         case .computers: ComputersView()
         case .computer(let id): ComputerDetailView(computerId: id)
@@ -183,7 +210,20 @@ struct RouteView: View {
         case .monitors: MonitorsView(open: { id in path.append(.chat(id)) })
         case .security: SecuritySettingsView()
         case .liveActivities: LiveActivitySettingsView()
+        case .simpleMode: SimpleModeSettingsView()
+        case .phoneModels: PhoneModelsView()
+        case .connectors: ConnectorsView()
+        case .pullRequests: PullRequestsView(path: $path)
         }
+    }
+}
+
+/// A chat's screen: one on a computer, or one that runs on this iPhone.
+struct ChatScreen: View {
+    let sessionId: String
+
+    var body: some View {
+        if PhoneProviders.isPhoneChat(sessionId) { PhoneChatView(chatId: sessionId) } else { ChatView(sessionId: sessionId) }
     }
 }
 
@@ -271,7 +311,7 @@ struct SceneReader: UIViewRepresentable {
 }
 
 /// Shown over everything while the app lock is on: the opening animation's
-/// lavender and cat, so the return is one dissolve with Face ID in the middle.
+/// plum and cat, so the return is one dissolve with Face ID in the middle.
 /// Unlock appears only if Face ID was cancelled or failed.
 struct LockView: View {
     /// RootView's: the cover's window is not part of the SwiftUI scene, so it
@@ -297,7 +337,9 @@ struct LockView: View {
             if cat {
                 SplashView(kind: .resume, ready: opening, onDone: opened)
             } else {
-                SplashView.ground.ignoresSafeArea()
+                // The launch animation itself, building the cat and holding it: unlocked, the cover
+                // goes at once and the same frame underneath (same clock) carries on into the zoom.
+                SplashView(ready: false) {}
             }
             if app.lock.locked && phase == .active && prompted && !app.lock.authenticating {
                 VStack(spacing: 12) {
@@ -346,14 +388,14 @@ struct CatMark: View {
     }
 }
 
-/// The brand mark on its own: the head in the brand lavender, with no tile
+/// The brand mark on its own: the head in the brand plum secondary, with no tile
 /// behind it, as the desktop, Android and the opening animation show it. The
 /// tiled square is only the Home Screen icon.
 struct BrandMark: View {
-    static let lavender = Color(red: 0x9d / 255, green: 0x8c / 255, blue: 0xe6 / 255)
+    static let ink = Color(red: 0x85 / 255, green: 0x4f / 255, blue: 0x6c / 255)
 
     var body: some View {
-        CatMark().foregroundStyle(Self.lavender).accessibilityHidden(true)
+        CatMark().foregroundStyle(Self.ink).accessibilityHidden(true)
     }
 }
 
@@ -378,6 +420,61 @@ struct ProtocolBanner: View {
     }
 }
 
+/// The other paired computers in view that can't be reached now (2026-11-04),
+/// a line each with Reconnect. Each link keeps trying on its own; the button
+/// dials at once. A computer that is only connecting says nothing until it fails.
+struct FleetBanner: View {
+    /// The computers in view: every paired one (nil), or one.
+    let computer: String?
+    @Environment(AppModel.self) private var app
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ForEach(down, id: \.0.id) { item in row(item.0, item.1) }
+    }
+
+    private func row(_ c: Computer, _ peer: Peer) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: peer.conn == .denied ? "lock.slash" : "moon.zzz")
+                .foregroundStyle(peer.conn == .denied ? palette.danger : palette.warning)
+                .accessibilityHidden(true)
+            Text(line(c.name, peer)).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            if peer.conn == .denied {
+                Button("Pair again") { app.openPair = true }.font(.footnote.weight(.semibold))
+            } else {
+                Button("Reconnect") { store.reconnect(computer: c.id) }.font(.footnote.weight(.semibold))
+                    .accessibilityIdentifier("fleet.reconnect")
+            }
+        }
+        .padding(12)
+        .background((peer.conn == .denied ? palette.danger : palette.warning).opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .contain)
+    }
+
+    private var down: [(Computer, Peer)] {
+        store.computers.compactMap { c in
+            guard computer == nil || computer == c.id, let peer = store.peers[c.id] else { return nil }
+            let failing = peer.conn == .offline || peer.conn == .denied || (peer.conn == .connecting && peer.detail != nil)
+            return failing ? (c, peer) : nil
+        }
+    }
+
+    private func line(_ name: String, _ peer: Peer) -> String {
+        switch peer.conn {
+        case .denied:
+            return peer.denied == .badKey || peer.denied == .badCode
+                ? String(localized: "The pairing key no longer matches \(name).")
+                : String(localized: "\(name) doesn’t know this iPhone any more.")
+        case .offline:
+            return String(localized: "\(name) is offline. This phone keeps trying.")
+        default:
+            return String(localized: "Can’t reach \(name) right now. This phone keeps trying.")
+        }
+    }
+}
+
 /// Connection state for the active computer, with the reason when it isn't online.
 struct ConnectionBanner: View {
     @Environment(AppModel.self) private var app
@@ -397,9 +494,20 @@ struct ConnectionBanner: View {
                             .accessibilityIdentifier("open-tailscale")
                             .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
                     }
+                    // When the pairing key no longer matches, the only fix is
+                    // to scan a fresh code from the computer; push PairView
+                    // direct instead of just pointing the user at Settings.
+                    if offersPairAgain {
+                        Button("Pair again") { app.openPair = true }
+                            .font(.footnote.weight(.semibold))
+                            .accessibilityIdentifier("banner.pair-again")
+                            .accessibilityHint("Opens the pairing screen so you can scan a fresh code from your computer.")
+                    }
                 }
                 Spacer(minLength: 0)
-                if store.conn == .connecting || store.conn == .offline {
+                // Retry won't help when the pair key is bad: hide it so the
+                // Pair again button is the obvious next step.
+                if (store.conn == .connecting || store.conn == .offline), !offersPairAgain {
                     Button("Retry") { store.reconnect() }.font(.footnote.weight(.semibold))
                 } else if store.conn == .denied, store.safetyExit?.computerId == store.activeId, let id = store.activeId {
                     // Remote access turned back on at the computer: dial again.
@@ -428,6 +536,15 @@ struct ConnectionBanner: View {
         return n == 1 ? " 1 prompt waits on this iPhone and goes when it’s back." : " \(n) prompts wait on this iPhone and go when it’s back."
     }
 
+    /// The pairing key no longer matches, or the computer refused the key
+    /// outright: pair again is the only fix, so put the button right in the
+    /// banner.
+    private var offersPairAgain: Bool {
+        if store.connDetail == RelayStatus.badPairingKey { return true }
+        if store.conn == .denied, store.denied == .badKey { return true }
+        return false
+    }
+
     private var line: (text: String, color: Color, icon: String)? {
         let name = store.active?.name ?? "Your computer"
         // This iPhone ended the connection itself (SK-8): say so, not "removed this iPhone".
@@ -441,6 +558,10 @@ struct ConnectionBanner: View {
                 return ("You quit Nekko Agent on \(name) from this iPhone at \(time). Open it again at the computer; this phone keeps trying.",
                         palette.warning, "power")
             }
+        }
+        if store.connDetail == RelayStatus.badPairingKey {
+            return ("The pairing key no longer matches \(name). Pair again from Settings → Remote access on the computer." + waitingNote,
+                    palette.danger, "lock.slash")
         }
         switch store.conn {
         case .online, .idle:

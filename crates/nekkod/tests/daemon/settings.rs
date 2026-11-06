@@ -63,8 +63,11 @@ async fn tokens_are_the_daemons_to_read_renew_and_forget() {
     let (status_code, missing) = post(d.port, "oauth:fresh", json!(["claude:none", false]), Some(TOKEN)).await;
     assert_ne!(status_code, 200, "{missing}");
     post(d.port, "oauth:signout", json!(["or"]), Some(TOKEN)).await;
-    let tokens: Value = serde_json::from_str(&std::fs::read_to_string(data.join("tokens.json")).unwrap()).unwrap();
-    assert_eq!(tokens, json!({}));
+    // Kept in the keystore (here its file stand-in), tokens.json moved there.
+    assert!(!data.join("tokens.json").exists());
+    let kept: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("tokens-keystore.json")).unwrap()).unwrap();
+    assert_eq!(kept, json!({ "tokens": "{}" }));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -291,6 +294,39 @@ async fn the_daemon_keeps_and_reads_connectors() {
     assert_eq!(list, json!([]));
     let (_, list) = post(d.port, "connectors:list", json!([]), Some(TOKEN)).await;
     assert_eq!(list, json!([]));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn api_keys_and_sign_ins_move_to_the_keystore_and_a_wipe_deletes_them() {
+    let data = std::env::temp_dir().join(format!("nekkod-keystore-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    // An older build's files, keys in plain JSON.
+    let provider = json!({ "id": "p1", "kind": "openai", "label": "OpenAI", "apiKey": "sk-old-key", "enabled": true });
+    std::fs::write(data.join("settings.json"), json!({ "providers": [provider], "hfToken": "hf_old" }).to_string())
+        .unwrap();
+    std::fs::write(data.join("tokens.json"), r#"{"chatgpt:a":{"provider":"chatgpt","accessToken":"at-old"}}"#).unwrap();
+    // NEKKO_CLOUD_URL: ending a Cloud session goes to a closed port.
+    let d = start_with_env(&data, json!({}), &[("NEKKO_CLOUD_URL", Some("http://127.0.0.1:9"))]);
+
+    let (_, got) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    assert_eq!((got["providers"][0]["apiKey"].clone(), got["hfToken"].clone()), (json!("sk-old-key"), json!("hf_old")));
+    let file = std::fs::read_to_string(data.join("settings.json")).unwrap();
+    assert!(!file.contains("sk-old-key") && !file.contains("hf_old"), "{file}");
+    let keystore = std::fs::read_to_string(data.join("settings-keystore.json")).unwrap();
+    assert!(keystore.contains("sk-old-key"), "{keystore}");
+    // Read at startup (the Claude sign-in cleanup), so moved already.
+    assert!(!data.join("tokens.json").exists());
+    assert!(std::fs::read_to_string(data.join("tokens-keystore.json")).unwrap().contains("at-old"));
+
+    let (status, _) = post(d.port, "data:wipe", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    for f in ["settings-keystore.json", "tokens-keystore.json"] {
+        let left = std::fs::read_to_string(data.join(f)).unwrap_or_default();
+        assert!(!left.contains("sk-old-key") && !left.contains("hf_old") && !left.contains("at-old"), "{f}: {left}");
+    }
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }

@@ -1,9 +1,9 @@
 ---
-title: "Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android planned)"
+title: "Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android 2026-10-30)"
 area: phone
 ---
 
-# Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android planned)
+# Mermaid diagrams on the phone (iPhone implemented 2026-10-25; Android 2026-10-30)
 
 **User intent:** Philip asked (2026-10-25) for Mermaid diagrams to render on the phone. Tasks MM-1 to MM-4 in [TASKS.md](../../TASKS.md).
 
@@ -31,7 +31,7 @@ The isolated stack run at `59570f8f` also passed the light/dark diagram tests (X
 - Diagram source never leaves the phone, and the renderer cannot reach the network. Clicks and links inside a diagram are ignored (strict mode, no navigation).
 - A diagram whose source exceeds 50,000 characters, or whose render takes over 5 seconds, falls back to source with *Too large to draw on the phone*.
 - VoiceOver reads *Diagram, flowchart* (or the diagram type) and offers *Show source*.
-- Android (MM-4) follows the same design with the same bundled script in a locked `WebView` ([native-android-app.md](native-android-app.md)). Android's `evaluateJavascript` doesn't await a promise, so the page stores each result and the app polls for it, rather than adding a JavaScript bridge.
+- Android (MM-4) follows the same design with the same bundled script in a locked `WebView` ([native-android-app.md](native-android-app.md)). Android's `evaluateJavascript` doesn't await a promise, so the page stores each result and the app polls for it, rather than adding a JavaScript bridge. `.mmd` and `.mermaid` files opened from *Files* draw as their diagram too `[implemented 2026-11-04; verified on an API 37 emulator by MermaidFileDeviceTest, light and dark]`; the *Formatted* switch shows their source, and a file cut short by the read cap shows as source.
 
 ## Acceptance
 

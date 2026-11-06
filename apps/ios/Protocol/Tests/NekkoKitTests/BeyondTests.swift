@@ -10,6 +10,7 @@ final class BeyondTests: XCTestCase {
     let room = "a1b2c3d4e5f60718"
     let key = "00112233445566778899aabbccddeeff"
     var connections: [FakeConnection] = []
+    var interruptTimesOut = false
     var queue: [JSONValue] = ["first", ["text": "with a photo", "images": [""]], ["text": "Review.\n\nnow", "skill": ["name": "review", "input": "now"]]]
 
     func session() -> JSONValue {
@@ -41,7 +42,7 @@ final class BeyondTests: XCTestCase {
             now: { 1_000 },
             summariesDebounce: 0.01)
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()
@@ -72,7 +73,16 @@ final class BeyondTests: XCTestCase {
                 if let text = args[2].str("text") { self.queue[0] = .string(text) } else { self.queue.removeFirst() }
                 return ["id": "s1", "queue": .array(self.queue)]
             },
+            Channels.chatQueue: { args in
+                self.queue.append(args[1])
+                return self.session()
+            },
+            Channels.chatInterruptQueued: { args in
+                if self.interruptTimesOut { throw RelayError("The computer didn't answer in time.") }
+                return .null
+            },
             Channels.sessionFork: { _ in ["id": "s_fork", "title": "New chat"] },
+            Channels.sessionPhoto: { args in args.last?.int64 == 0 ? "data:image/jpeg;base64,AAAA" : .null },
             Channels.tasksList: { _ in [["id": "t1", "title": "Nightly tests", "kind": "recurring", "intervalMs": 86_400_000, "status": "active",
                                          "runCount": 3, "lastResult": "All 40 passed.", "lastRunAt": 5]] },
             Channels.workflowsList: { _ in [["id": "w1", "name": "Review PRs", "category": "Code", "enabled": true, "stepCount": 2, "lastStatus": "failure"]] },
@@ -128,6 +138,33 @@ final class BeyondTests: XCTestCase {
             XCTAssertEqual(error.localizedDescription, ChatModel.reconnectToEditQueue)
         }
         XCTAssertEqual(c.callsTo(Channels.chatEditQueued).count, before)
+    }
+
+    func testInterruptNamesThePromptAndTheChatsModel() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        try await chat.interruptQueued(1)
+        let args = try XCTUnwrap(c.callsTo(Channels.chatInterruptQueued).last)
+        XCTAssertEqual(Array(args.prefix(2)), [.string("s1"), .int(1)])
+        XCTAssertNotNil(args[2].str("modelId"))
+    }
+
+    func testAnInterruptThatOutlastsTheRequestIsNotAnError() async throws {
+        let (s, _) = try await makeStore()
+        interruptTimesOut = true
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        try await chat.interruptQueued(0)
+    }
+
+    func testARunSettingGoesToTheComputerAndReadsBack() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        await chat.reload()
+        try await chat.setRunOption("workMode", "design")
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, [.string("s1"), ["workMode": "design"]])
+        XCTAssertEqual(RunOption.values(of: ["autoModel": true, "title": "x", "offline": .null]), ["autoModel": true], "only run settings, and only set ones")
     }
 
     func testForksBeforeAPromptWithItsTextOrAfterAReply() async throws {
@@ -214,6 +251,31 @@ final class BeyondTests: XCTestCase {
         let sent = try XCTUnwrap(c.callsTo(Channels.chatSend).last?.first)
         XCTAssertEqual(sent.str("text"), GitPrompt.commit.text)
         XCTAssertFalse(c.calls.contains { $0.0.hasPrefix("pr:action") || $0.0.hasPrefix("workspace:git") })
+    }
+
+    func testAPhotoOpensFullSizeFromTheComputer() async throws {
+        let (s, c) = try await makeStore()
+        let chat = ChatModel(sessionId: "s1", store: s)
+        let full = try await chat.fullPhoto("u1", 0)
+        XCTAssertEqual(full, "data:image/jpeg;base64,AAAA")
+        XCTAssertEqual(c.callsTo(Channels.sessionPhoto).last, [.string("s1"), .string("u1"), .int(0)])
+        // None to send (a photo it can't read): the viewer keeps the small copy.
+        let none = try await chat.fullPhoto("u1", 1)
+        XCTAssertNil(none)
+    }
+
+    func testRowsLookUpTheirPullRequestsOnce() async throws {
+        let (s, c) = try await makeStore()
+        let named = try XCTUnwrap(SessionSummary.from(["id": "s1", "title": "A", "updatedAt": 5, "prUrls": ["https://github.com/o/r/pull/12"]]))
+        let none = try XCTUnwrap(SessionSummary.from(["id": "s2", "title": "B", "updatedAt": 5]))
+        await s.loadRowPrs([named, none])
+        XCTAssertEqual(s.rowPrs["s1"]?.map(\.number), [12])
+        XCTAssertNil(s.rowPrs["s2"], "a chat that names no PR is never asked about")
+        XCTAssertEqual(c.callsTo(Channels.prSessionList), [[.string("s1"), .bool(false)]])
+        // Asked lately with the same links: not again, until the chat moves on.
+        XCTAssertTrue(s.rowPrsDue([named]).isEmpty)
+        let movedOn = try XCTUnwrap(SessionSummary.from(["id": "s1", "title": "A", "updatedAt": .int(Int64.max / 2), "prUrls": ["https://github.com/o/r/pull/12"]]))
+        XCTAssertEqual(s.rowPrsDue([movedOn]).map(\.id), ["s1"])
     }
 
     func testUsageAndLimitsByProviderId() async throws {

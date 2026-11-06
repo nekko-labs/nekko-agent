@@ -8,14 +8,14 @@ import type { ConnectorConfig } from './connectors.js';
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 /**
- * Brand accent. The default is an indigo-violet (paired in the UI with a cyan
- * secondary into a violet→cyan brand gradient, the modern developer-tool look).
+ * Brand accent. The default is the plum palette's light-mode accent
+ * (spec/brand/colour-palette.md); the old indigo-violet default is now legacy.
  * `LEGACY_ACCENTS` are prior defaults we migrate off on load so users who never
  * customized the accent get the refreshed color, while anyone who picked their
  * own keeps it.
  */
-export const DEFAULT_ACCENT = '#6d5efc';
-export const LEGACY_ACCENTS = ['#ff7a59'];
+export const DEFAULT_ACCENT = '#5a2352';
+export const LEGACY_ACCENTS = ['#ff7a59', '#6d5efc'];
 
 /** A reusable prompt, invokable from the composer as `/name`. */
 export interface PromptTemplate {
@@ -29,12 +29,12 @@ export interface PromptTemplate {
  * own knob: a sampling temperature on models that still take one, and
  * `output_config.effort` on the Claude models that dropped sampling.
  *
- * `low`/`medium`/`high`/`xhigh`/`max` are Anthropic's own rungs, sent as-is.
- * `normal` means "the model's default" (`high` on most Claude models, `medium`
- * on Opus 5.5, the balanced temperature elsewhere). Which rungs a model offers
- * is `modelEffortLevels` in model-capabilities.ts.
+ * Native API values are sent as-is, but only a model's live catalog can tell
+ * callers which values it supports. The type is open-ended for newly advertised
+ * levels. `normal` is a legacy compatibility sentinel, never an API option:
+ * OpenAI/ChatGPT omit the field; Claude retains its historical default mapping.
  */
-export type EffortLevel = 'low' | 'medium' | 'normal' | 'high' | 'xhigh' | 'max';
+export type EffortLevel = 'low' | 'medium' | 'normal' | 'high' | 'xhigh' | 'max' | (string & {});
 
 /**
  * Opt-in experimental surfaces. Each flag reveals a nav destination that stays
@@ -76,7 +76,15 @@ export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
 export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware' | 'localModels';
 export interface MonitorsDock {
   side: MonitorsSide;
+  /** Whether the panel is open in Detailed. */
   show: boolean;
+  /**
+   * Whether the panel is open in Simple; absent reads as closed. Simple and
+   * Detailed only open or close the panel: which monitors it holds is
+   * `monitors` in both modes.
+   */
+  simpleShow?: boolean;
+  /** The monitors checked in Configure: exactly the ones the panel shows. */
   monitors: Record<MonitorKey, boolean>;
   /** Saved reading order; older settings omit it (or call it panelOrder) and use the default order. */
   monitorOrder?: MonitorKey[];
@@ -85,7 +93,7 @@ export interface MonitorsDock {
 }
 export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
-  side: 'right', show: true,
+  side: 'right', show: true, simpleShow: false,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
   // (sanitizeMonitorsDock drops it from saved docks). Local models sits under
   // Hardware: which model holds the GPU explains what the meters above report.
@@ -223,8 +231,13 @@ export interface AppSettings {
    * agent asks the first time.
    */
   projectManagement?: { createIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean; includeContext?: boolean };
-  /** Settings > Pull requests. `linkIssue` is on unless false; includes as above. */
-  pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean };
+  /**
+   * Settings > Pull requests. `linkIssue` is on unless false; includes as above.
+   * `watchUntilMergeReady` (on unless false): when a turn ends, the host arms a
+   * PR watch on each open PR the chat opened, waking the chat to get it
+   * merge-ready (nekkod pr_autowatch.rs).
+   */
+  pullRequests?: { linkIssue?: boolean; includePrompt?: boolean; includeScreenshots?: boolean; watchUntilMergeReady?: boolean };
   theme: ThemeMode;
   navOrder?: string[];
   /** Optional sidebar shortcuts. Both remain available from Settings. */
@@ -253,6 +266,8 @@ export interface AppSettings {
   mascotEnabled: boolean;
   /** Draw the moving pixel-dot wave behind themes that have one (Lilac, Lavender, Experimental). On unless set to false. */
   backgroundAnimation?: boolean;
+  /** Move Nekko beside the Agent panel's live groups. On unless set to false; this setting decides, not the system's reduced-motion preference. */
+  agentActivityAnimation?: boolean;
   /** Desktop close button defaults to keeping work alive in the tray. */
   desktopCloseBehavior?: 'tray' | 'shutdown';
   trayCloseHintSeen?: boolean;
@@ -293,6 +308,8 @@ export interface AppSettings {
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;
+  /** The "Send your first prompt" intro has been shown (or skipped) on the first ever new chat. */
+  firstPromptIntroSeen?: boolean;
   /**
    * One-time notices the engine daemon leaves for the UI (for example
    * `claude-sign-in-changed`, written by crates/nekkod/src/claude_plan.rs).
@@ -311,6 +328,10 @@ export interface AppSettings {
    * Settings → Remote access; never settable from a phone.
    */
   quitFromPhone?: boolean;
+  /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
+  machineIcon?: string;
+  /** Display name shared with paired devices; blank uses the system hostname. */
+  machineName?: string;
   phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
@@ -445,6 +466,60 @@ export function clampMaxOutputTokens(n: number | undefined): number {
 /** Older settings omit the switch and keep reuse enabled. */
 export function promptCachingEnabled(settings: Pick<AppSettings, 'promptCaching'>): boolean {
   return settings.promptCaching !== false;
+}
+
+/**
+ * Where the settings hold secrets, as [list, id field, secret field] (`SECRETS`
+ * in crates/nekko-settings): a list's entries are told apart by their id (a
+ * connector by its kind); an empty list is the top level, an empty id field an
+ * object. The daemon keeps these in the OS keystore, and a backup leaves them out.
+ */
+export const SECRET_FIELDS: ReadonlyArray<readonly [string, string, string]> = [
+  ['providers', 'id', 'apiKey'],
+  ['connectors', 'kind', 'token'],
+  ['mcpServers', 'id', 'token'],
+  ['', '', 'hfToken'],
+  ['', '', 'typesafeApiKey'],
+  ['engine', '', 'apiKey'],
+  ['apiServer', '', 'token'],
+];
+
+type Holder = Record<string, unknown>;
+const isHolder = (v: unknown): v is Holder => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Every place a secret can sit in `s`: [name, the object holding it, its field]. */
+function secretPlaces(s: Holder): Array<[string, Holder, string]> {
+  const out: Array<[string, Holder, string]> = [];
+  for (const [list, id, field] of SECRET_FIELDS) {
+    const at = list ? s[list] : s;
+    if (!list || !id) {
+      if (isHolder(at)) out.push([list ? `${list}.${field}` : field, at, field]);
+      continue;
+    }
+    for (const e of Array.isArray(at) ? at : []) {
+      if (isHolder(e) && typeof e[id] === 'string' && e[id]) out.push([`${list}.${e[id]}.${field}`, e, field]);
+    }
+  }
+  return out;
+}
+
+/** The settings a backup carries: every API key and token left out. */
+export function withoutSecrets<T extends object>(settings: T): T {
+  const copy = structuredClone(settings) as Holder;
+  for (const [, o, field] of secretPlaces(copy)) delete o[field];
+  return copy as T;
+}
+
+/**
+ * Imported settings with this computer's own keys kept: a provider, connector or
+ * server the backup leaves without one keeps the key it has here.
+ */
+export function keepSecrets<T extends object>(imported: T, current: object): T {
+  const mine = new Map<string, unknown>();
+  for (const [name, o, field] of secretPlaces(current as Holder)) if (o[field]) mine.set(name, o[field]);
+  const copy = structuredClone(imported) as Holder;
+  for (const [name, o, field] of secretPlaces(copy)) if (o[field] === undefined && mine.has(name)) o[field] = mine.get(name);
+  return copy as T;
 }
 
 /** What the reply log says about how replies end. */

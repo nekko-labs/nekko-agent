@@ -2,6 +2,7 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 import UIKit
+import ImageIO
 
 /// The prompts waiting in the computer's queue for this chat, each with Edit
 /// and Remove. An edit is checked on the computer against the text shown here,
@@ -42,6 +43,12 @@ struct QueueList: View {
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Queued: \(q.shown)")
+                if chat.running {
+                    textButton("Interrupt and send now", hint: "Stops the reply and sends this now", id: "chat.queue.interrupt") {
+                        try await chat.interruptQueued(i)
+                    }
+                    .padding(.leading, 20)
+                }
             }
             if let failed {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.danger)
@@ -57,6 +64,21 @@ struct QueueList: View {
                 try await chat.editQueued(e.index, expect: e.prompt.text, text: text)
             }
         }
+    }
+
+    private func textButton(_ label: LocalizedStringKey, hint: LocalizedStringKey, id: String, _ run: @escaping () async throws -> Void) -> some View {
+        Button {
+            failed = nil
+            Task {
+                do { try await run() } catch { failed = error.localizedDescription }
+            }
+        } label: {
+            Text(label).font(.footnote.weight(.semibold)).foregroundStyle(palette.accent)
+                .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(hint)
+        .accessibilityIdentifier(id)
     }
 
     private func iconButton(_ label: String, _ icon: String, _ color: Color, _ run: @escaping () -> Void) -> some View {
@@ -148,7 +170,7 @@ struct PhotoStrip: View {
     var body: some View {
         HStack(spacing: 6) {
             ForEach(Array(photos.enumerated()), id: \.offset) { i, p in
-                if let image = DataURLImage.decode(p) {
+                if let image = DataURLImage.thumbnail(p) {
                     Button { open(i) } label: {
                         Image(uiImage: image).resizable().scaledToFill().frame(width: 64, height: 64)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -164,58 +186,183 @@ struct PhotoStrip: View {
 }
 
 /// Full-screen photos: swipe between them, pinch or double-tap to zoom where
-/// you pinch or tap, and pan a zoomed photo (UIScrollView: it follows the
-/// fingers and bounces at the edges and at the zoom limits). Each photo is
-/// decoded once, when its page is made, not on every render.
+/// you pinch or tap, pan a zoomed photo (UIScrollView: it follows the fingers
+/// and bounces at the edges and at the zoom limits), and swipe up or down to
+/// close. The transcript only holds small copies, so each photo opens on its
+/// small copy under a spinner while the computer sends it full size
+/// (`session:photo`); Save to Photos, Copy and Share use the full one.
 struct ImageViewer: View {
     let photos: [String]
     @State var index: Int
+    /// Photo `i` at full size, as a data URL (nil: the computer has none to send).
+    /// Without it the viewer shows only the small copies.
+    var load: ((Int) async throws -> String?)? = nil
     @Environment(\.dismiss) private var dismiss
+    @State private var full: [Int: UIImage] = [:]
+    @State private var loading: Set<Int> = []
+    /// Asked for and none came: the small copy is all there is.
+    @State private var unavailable: Set<Int> = []
+    /// How far a swipe to close has gone, 0 to 1: the backdrop and controls fade with it.
+    @State private var drag: CGFloat = 0
+    @State private var note: String?
 
     var body: some View {
         // Pages keep the photos' own indices; a photo the computer kept back ("") has none.
         let pages = photos.indices.filter { !photos[$0].isEmpty }
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+        ZStack {
+            Color.black.opacity(1 - drag * 0.85).ignoresSafeArea()
             TabView(selection: $index) {
                 ForEach(Array(pages.enumerated()), id: \.element) { n, i in
-                    ZoomingPhoto(source: photos[i]).tag(i)
+                    ZoomingPhoto(source: photos[i], full: full[i], onDrag: dragged, onClose: swipeClose).tag(i)
                         .ignoresSafeArea()
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Photo \(n + 1) of \(pages.count)")
                         .accessibilityAddTraits(.isImage)
+                        .accessibilityAction(named: "Close") { dismiss() }
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: pages.count > 1 ? .automatic : .never))
-            Button { dismiss() } label: {
-                Image(systemName: "xmark").font(.body.weight(.bold)).foregroundStyle(.white)
-                    .frame(width: 44, height: 44).background(.black.opacity(0.5), in: Circle())
+            .tabViewStyle(.page(indexDisplayMode: pages.count > 1 && drag == 0 ? .automatic : .never))
+            if loading.contains(index) {
+                ProgressView().controlSize(.large).tint(.white)
+                    .padding(18).background(.black.opacity(0.45), in: Circle())
+                    .opacity(1 - drag)
+                    .accessibilityLabel("Loading the full-size photo")
+                    .accessibilityIdentifier("viewer.loading")
+                    .transition(.opacity)
             }
-            .accessibilityLabel("Close")
-            .accessibilityIdentifier("viewer.close")
-            .padding(16)
         }
+        .animation(.easeOut(duration: 0.2), value: loading.contains(index))
+        .overlay(alignment: .top) { controls.opacity(1 - drag) }
+        .overlay(alignment: .bottom) {
+            if let note {
+                Text(note).font(.footnote).padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(.regularMaterial, in: Capsule()).padding(.bottom, 32)
+                    .transition(.opacity)
+            }
+        }
+        .task(id: index) { await fetch(index) }
+        .presentationBackground(.clear)
         .statusBarHidden()
+    }
+
+    private var controls: some View {
+        HStack {
+            let image = shareable(index)
+            Menu {
+                Button { if let image { save(image) } } label: { Label("Save to Photos", systemImage: "photo.badge.arrow.down") }
+                    .accessibilityIdentifier("viewer.save")
+                Button { if let image { copy(image) } } label: { Label("Copy", systemImage: "doc.on.doc") }
+                    .accessibilityIdentifier("viewer.copy")
+                if let image {
+                    ShareLink(item: Image(uiImage: image), preview: SharePreview("Photo", image: Image(uiImage: image))) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                }
+            } label: {
+                circle("ellipsis")
+            }
+            .disabled(image == nil)
+            .accessibilityLabel("Photo actions")
+            .accessibilityHint(image == nil ? "Available once the full-size photo loads" : "Save, copy or share it")
+            .accessibilityIdentifier("viewer.actions")
+            Spacer()
+            Button { dismiss() } label: { circle("xmark") }
+                .accessibilityLabel("Close")
+                .accessibilityIdentifier("viewer.close")
+        }
+        .padding(16)
+    }
+
+    private func circle(_ symbol: String) -> some View {
+        Image(systemName: symbol).font(.body.weight(.bold)).foregroundStyle(.white)
+            .frame(width: 44, height: 44).background(.black.opacity(0.5), in: Circle())
+    }
+
+    /// What Save, Copy and Share use: the full photo, or the small copy once
+    /// there is no full one coming. Nil while it loads.
+    private func shareable(_ i: Int) -> UIImage? {
+        if let image = full[i] { return image }
+        guard load == nil || unavailable.contains(i), photos.indices.contains(i) else { return nil }
+        return DataURLImage.decode(photos[i])
+    }
+
+    private func fetch(_ i: Int) async {
+        guard let load, full[i] == nil, !loading.contains(i), !unavailable.contains(i) else { return }
+        loading.insert(i)
+        defer { loading.remove(i) }
+        let url = try? await load(i)
+        // Decoding a photo of several megabytes stays off the main thread.
+        let image = await Task.detached(priority: .userInitiated) { url.flatMap(DataURLImage.decode) }.value
+        // Kept even if the page was swiped away meanwhile: it shows at once on the way back.
+        if let image { full[i] = image } else { unavailable.insert(i) }
+    }
+
+    private func dragged(_ progress: CGFloat, animated: Bool) {
+        withAnimation(animated ? .easeOut(duration: 0.25) : nil) { drag = progress }
+    }
+
+    /// The photo has already flown off: close without the cover sliding down after it.
+    private func swipeClose() {
+        var t = Transaction()
+        t.disablesAnimations = true
+        withTransaction(t) { dismiss() }
+    }
+
+    private func save(_ image: UIImage) {
+        UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+        show("Saved to Photos")
+    }
+
+    private func copy(_ image: UIImage) {
+        UIPasteboard.general.image = image
+        show("Copied")
+    }
+
+    private func show(_ s: String) {
+        Haptics.tap()
+        withAnimation { note = s }
+        AccessibilityNotification.Announcement(s).post()
+        Task { try? await Task.sleep(nanoseconds: 1_500_000_000); withAnimation { note = nil } }
     }
 }
 
-/// One photo in a zooming scroll view. The data URL is decoded in
-/// `makeUIView`, once per page.
+/// One photo in a zooming scroll view. The small copy is decoded in
+/// `makeUIView`, once per page; the full one replaces it when it arrives.
 private struct ZoomingPhoto: UIViewRepresentable {
     let source: String
+    var full: UIImage?
+    var onDrag: (CGFloat, Bool) -> Void
+    var onClose: () -> Void
 
-    func makeUIView(context: Context) -> PhotoScrollView { PhotoScrollView(image: DataURLImage.decode(source)) }
+    func makeUIView(context: Context) -> PhotoScrollView {
+        let view = PhotoScrollView(image: full ?? DataURLImage.decode(source))
+        view.onDrag = onDrag
+        view.onClose = onClose
+        return view
+    }
 
-    func updateUIView(_ view: PhotoScrollView, context: Context) {}
+    func updateUIView(_ view: PhotoScrollView, context: Context) {
+        view.onDrag = onDrag
+        view.onClose = onClose
+        if let full { view.show(full) }
+    }
 }
 
 /// The photo fitted to the screen at zoom 1, centred while it is smaller than
 /// the screen, zoomable to 5x around the pinch and pannable once zoomed.
-/// Double-tap zooms to 2.5x at the tapped point, or back out.
+/// Double-tap zooms to 2.5x at the tapped point, or back out. At zoom 1 a
+/// mostly vertical drag carries the photo with the finger and closes the
+/// viewer past a distance or a flick; short of that it springs back.
 final class PhotoScrollView: UIScrollView, UIScrollViewDelegate {
     private let imageView = UIImageView()
     /// The size the image was last fitted to, so a resize or rotation fits it again.
     private var fitted: CGSize = .zero
+    /// How far a swipe to close has gone (0 to 1), and whether to animate to it.
+    var onDrag: ((CGFloat, Bool) -> Void)?
+    var onClose: (() -> Void)?
+    private let closePan = UIPanGestureRecognizer()
+    /// Lets the swipe to close run alongside the pager's own swipe.
+    private let closePanRules = SimultaneousGestures()
 
     init(image: UIImage?) {
         super.init(frame: .zero)
@@ -232,6 +379,69 @@ final class PhotoScrollView: UIScrollView, UIScrollViewDelegate {
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
         doubleTap.numberOfTapsRequired = 2
         addGestureRecognizer(doubleTap)
+        closePan.addTarget(self, action: #selector(panned(_:)))
+        closePan.delegate = closePanRules
+        addGestureRecognizer(closePan)
+    }
+
+    /// The full photo in place of the small copy, at the same zoom and place
+    /// (it has the same shape; refitted if not).
+    func show(_ image: UIImage) {
+        guard imageView.image !== image else { return }
+        let old = imageView.image?.size ?? .zero
+        imageView.image = image
+        let same = old.width > 0 && old.height > 0
+            && abs(old.width / old.height - image.size.width / image.size.height) < 0.01
+        if !same {
+            fitted = .zero
+            setNeedsLayout()
+        }
+    }
+
+    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        guard g === closePan else { return super.gestureRecognizerShouldBegin(g) }
+        // A zoomed photo pans instead; sideways is the pager's.
+        guard zoomScale <= minimumZoomScale + 0.01 else { return false }
+        let v = closePan.velocity(in: self)
+        return abs(v.y) > abs(v.x) * 1.2
+    }
+
+    @objc private func panned(_ pan: UIPanGestureRecognizer) {
+        let t = pan.translation(in: self)
+        let height = max(bounds.height, 1)
+        let progress = min(abs(t.y) / (height * 0.4), 1)
+        switch pan.state {
+        case .changed:
+            let scale = 1 - progress * 0.2
+            transform = CGAffineTransform(translationX: t.x * 0.5, y: t.y).scaledBy(x: scale, y: scale)
+            onDrag?(progress, false)
+        case .ended:
+            let v = pan.velocity(in: self).y
+            // Past a quarter of the screen, or flicked the same way it was dragged.
+            let close = abs(t.y) > height * 0.25 || (abs(v) > 900 && (v > 0) == (t.y > 0))
+            if close {
+                let away = (t.y == 0 ? v : t.y) >= 0 ? height : -height
+                onDrag?(1, true)
+                UIView.animate(withDuration: 0.22, delay: 0, options: [.curveEaseOut]) {
+                    self.transform = self.transform.translatedBy(x: 0, y: away)
+                } completion: { _ in
+                    self.onClose?()
+                }
+            } else {
+                springBack()
+            }
+        case .cancelled, .failed:
+            springBack()
+        default:
+            break
+        }
+    }
+
+    private func springBack() {
+        onDrag?(0, true)
+        UIView.animate(withDuration: 0.35, delay: 0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0) {
+            self.transform = .identity
+        }
     }
 
     @available(*, unavailable)
@@ -274,7 +484,26 @@ final class PhotoScrollView: UIScrollView, UIScrollViewDelegate {
     }
 }
 
+/// Lets a pan run alongside the gestures around it (the pager's swipe).
+private final class SimultaneousGestures: NSObject, UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+}
+
 enum DataURLImage {
+    /// Decode only a small preview for a selected full-size photo. ImageIO
+    /// honours EXIF orientation without rasterising the entire attachment.
+    static func thumbnail(_ url: String) -> UIImage? {
+        guard url.hasPrefix("data:image/"), let comma = url.firstIndex(of: ","),
+              let data = Data(base64Encoded: String(url[url.index(after: comma)...])),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 240,
+              ] as CFDictionary) else { return nil }
+        return UIImage(cgImage: image)
+    }
+
     /// A `data:image/…;base64,` URL's image, or nil (`""` is a photo the computer kept back).
     static func decode(_ url: String) -> UIImage? {
         guard url.hasPrefix("data:image/"), let comma = url.firstIndex(of: ","),
@@ -445,5 +674,7 @@ extension Block {
 struct PhotoSet: Identifiable {
     let photos: [String]
     let index: Int
-    var id: String { "\(index)-\(photos.count)" }
+    /// The message they belong to, so the viewer can ask the computer for each at full size.
+    var messageId: String?
+    var id: String { "\(messageId ?? "")-\(index)-\(photos.count)" }
 }

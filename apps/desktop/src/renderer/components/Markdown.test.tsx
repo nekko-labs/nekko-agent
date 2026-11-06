@@ -8,6 +8,38 @@ vi.mock('../store.js', () => ({ useStore: { getState: () => ({ openBrowserPane: 
 
 const html = (text: string) => renderToStaticMarkup(<Markdown text={text} />);
 
+describe('topics', () => {
+  const topics = (text: string, askTail = false) => renderToStaticMarkup(<Markdown text={text} topics askTail={askTail} />);
+
+  it('draws a named topic as a header, with the words after the label under it', () => {
+    const out = topics('**Next step**: merge it\nonce CI is green.');
+    expect(out).toContain('data-topic="next"');
+    expect(out).toContain('role="heading"');
+    expect(out).not.toContain('<strong>');
+    expect(out).toMatch(/Next step<\/div><p[^>]*>merge it<br\/>once CI is green\.<\/p>/);
+  });
+
+  it('reads headings and keeps the block after them', () => {
+    const out = topics('## Open questions\n\n- Which one?');
+    expect(out).toContain('data-topic="question"');
+    expect(out).toContain('<li');
+  });
+
+  it('leaves other text, code and untagged Markdown as they were', () => {
+    expect(topics('## Installation\n\n**Important**: read this.')).not.toContain('data-topic');
+    expect(topics('```md\n**Next step**: in a fence\n```')).not.toContain('data-topic');
+    expect(html('**Next step**: a user typed this')).not.toContain('data-topic');
+  });
+
+  it('gives a closing question its header only when asked, and only once', () => {
+    expect(topics('All green.\n\nOpen the PR?')).not.toContain('data-topic');
+    const out = topics('All green.\n\nOpen the PR?', true);
+    expect(out.match(/data-topic="question"/g)).toHaveLength(1);
+    expect(out.indexOf('All green.')).toBeLessThan(out.indexOf('data-topic'));
+    expect(topics('**Question**\n\nOpen the PR?', true).match(/data-topic=/g)).toHaveLength(1);
+  });
+});
+
 describe('file:// links', () => {
   it('open the decoded local path in the file pane, and network shares stay inert', () => {
     expect(html('[Report](file:///C:/My%20Docs/report.md)')).toContain('title="Open C:/My Docs/report.md"');
@@ -68,10 +100,37 @@ describe('Markdown', () => {
       expect(linkContextActions('mailto:test@example.com').map((a) => a.label)).not.toContain('Open in in-app browser');
     } finally { vi.unstubAllGlobals(); }
   });
+  it('offers a live web preview without loading any remote frame before a click', () => {
+    const out = html('[Spinner](https://css-loaders.com/spinner/) and [mail](mailto:hi@example.com)');
+    expect(out).toContain('href="https://css-loaders.com/spinner/"');
+    expect(out).toContain('aria-expanded="false">Preview</button>');
+    expect(out).not.toContain('<iframe');
+    expect(out.match(/>Preview<\/button>/g)).toHaveLength(1);
+    expect(html('[bad](javascript:alert(1))')).not.toContain('>Preview</button>');
+  });
+  it('keeps document links free of chat-only preview controls', () => {
+    const out = renderToStaticMarkup(<Markdown text="[Guide](https://example.com)" doc />);
+    expect(out).not.toContain('>Preview</button>');
+  });
   it('renders the reported GitHub PR reply as a labeled link', () => {
     const out = html('Yes—the GitHub integration is in [PR #309](https://github.com/nekko-labs/nekko-agent/pull/309). It’s an open draft with passing checks, not merged or verified against a live GitHub installation.');
     expect(out).toContain('href="https://github.com/nekko-labs/nekko-agent/pull/309"');
     expect(out).not.toContain('[PR #309]');
+  });
+  it('draws PR links as status chips, without a site preview', () => {
+    const out = html('Merged in [#1663](https://github.com/nekko-labs/nekko-agent/pull/1663) and https://github.com/nekko-labs/nekko-agent/pull/1662');
+    expect(out.match(/class="pr-link-chip /g)).toHaveLength(2);
+    expect(out).toContain('data-pr-status="unknown"');
+    expect(out).toContain('>#1663</span>');
+    expect(out).toContain('>nekko-agent#1662</span>');
+    expect(out).not.toContain('>Preview</button>');
+    expect(html('[issue](https://github.com/nekko-labs/nekko-agent/issues/12)')).toContain('>Preview</button>');
+  });
+  it('shows a pointer over every chat link, file links included', () => {
+    const out = html('[site](https://example.com) and [#1](https://github.com/a/b/pull/1)');
+    expect(out.match(/cursor-pointer/g)).toHaveLength(2);
+    const file = renderToStaticMarkup(<Markdown text="[completionExit.ts](C:\\repo\\completionExit.ts)" />);
+    expect(file).toMatch(/<button type="button" class="[^"]*cursor-pointer/);
   });
   it('renders links nested inside emphasis without losing surrounding links', () => {
     const out = html('**[PR #309](https://github.com/nekko-labs/nekko-agent/pull/309)** and *[docs](https://example.com/docs)* then [next](https://example.com/next)');

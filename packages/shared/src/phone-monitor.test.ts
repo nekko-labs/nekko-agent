@@ -15,8 +15,9 @@ describe('phone monitor channels', () => {
   it('classes the reads as Read and unloading as Change without a proof', () => {
     for (const c of ['system:stats', 'gpu:stats', 'engine:status', 'context:preview']) expect(phoneChannelClass(c), c).toBe('read');
     expect(phoneChannelClass('model:unload')).toBe('agent');
-    // Loading, settings and the rest of the Model Server stay on the computer.
-    for (const c of ['engine:settings', 'engine:install', 'engine:deleteModel', 'engine:downloadModel']) expect(phoneChannelClass(c), c).toBeNull();
+    // What a client may set is screened key by key; installing and the library stay on the computer.
+    expect(phoneChannelClass('engine:settings')).toBe('agent');
+    for (const c of ['engine:install', 'engine:deleteModel', 'engine:downloadModel']) expect(phoneChannelClass(c), c).toBeNull();
   });
 
   it('sends hardware as numbers only, without CPU or GPU model names', async () => {

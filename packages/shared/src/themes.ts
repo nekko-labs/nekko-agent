@@ -45,26 +45,26 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'system',
     mode: 'system',
-    accent: '#6d5efc',
-    accent2: '#06b6d4',
-    // Follows the computer: Nekko Dark in dark mode, Lilac in light (resolveThemePreset).
-    swatch: ['#0d0b18', '#c4b9ff', '#fbfaff', '#5b4ea7'],
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
+    // Follows the computer: Dark Nekko in dark mode, Light Nekko in light (resolveThemePreset).
+    swatch: ['#0c0c11', '#c084b5', '#fbfbfd', '#5a2352'],
     label: 'System',
   },
   {
     id: 'light',
     mode: 'light',
-    accent: '#6d5efc',
-    accent2: '#06b6d4',
-    swatch: ['#6d5efc', '#06b6d4', '#f2f2f7'],
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
+    swatch: ['#5a2352', '#8a4a7f', '#f2f2f7'],
     label: 'Light',
   },
   {
     id: 'dark',
     mode: 'dark',
-    accent: '#8b7dff',
-    accent2: '#22d3ee',
-    swatch: ['#8b7dff', '#22d3ee', '#16161c'],
+    accent: '#c084b5',
+    accent2: '#c99bb3',
+    swatch: ['#c084b5', '#c99bb3', '#16161c'],
     label: 'Dark',
   },
   {
@@ -682,6 +682,76 @@ export const THEME_PRESETS: ThemePreset[] = [
     wave: { from: '#c1e5e5', to: '#daefef', peak: 0.3 },
   },
   {
+    // Plum on the stock Light surfaces: plum fills, #854f6c as the secondary, black text.
+    id: 'x-plum-white',
+    mode: 'light',
+    // #190019 reads as black on thin strokes, so small accents use lighter
+    // plums; the deep plum stays on the main buttons (styles.css).
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
+    swatch: ['#190019', '#854f6c', '#f2f2f7'],
+    label: 'Light Nekko',
+    group: 'experimental',
+    family: 'plum',
+    familyLabel: 'Nekko',
+    ink: '#000000',
+    paper: '#fbfbfd',
+    surface: '#ffffff',
+    surface2: '#f2f2f7',
+    wave: { from: '#190019', to: '#854f6c', peak: 0.26 },
+  },
+  {
+    // Plum on the stock Dark surfaces. #190019 is too dark to read as text on
+    // the dark paper, so a lighter plum carries the accent and plum fills behind it.
+    id: 'x-plum-dark',
+    mode: 'dark',
+    accent: '#c084b5',
+    accent2: '#c99bb3', // #854f6c lightened: it is also small text on the dark surfaces
+    swatch: ['#190019', '#854f6c', '#16161c'],
+    label: 'Dark Nekko',
+    group: 'experimental',
+    family: 'plum',
+    familyLabel: 'Nekko',
+    ink: '#ffffff',
+    paper: '#0c0c11',
+    surface: '#16161c',
+    surface2: '#20202a',
+    wave: { from: '#c084b5', to: '#854f6c', peak: 0.3 },
+  },
+  {
+    // The Nekko pair with indigo (#2b124c) as the main colour in place of plum.
+    id: 'x-indigo-white',
+    mode: 'light',
+    accent: '#4a2a7a',
+    accent2: '#6e4fa0',
+    swatch: ['#2b124c', '#854f6c', '#f2f2f7'],
+    label: 'Light Indigo',
+    group: 'experimental',
+    family: 'indigo',
+    familyLabel: 'Indigo',
+    ink: '#000000',
+    paper: '#fbfbfd',
+    surface: '#ffffff',
+    surface2: '#f2f2f7',
+    wave: { from: '#2b124c', to: '#854f6c', peak: 0.26 },
+  },
+  {
+    id: 'x-indigo-dark',
+    mode: 'dark',
+    accent: '#a68fd0',
+    accent2: '#c99bb3',
+    swatch: ['#2b124c', '#854f6c', '#16161c'],
+    label: 'Dark Indigo',
+    group: 'experimental',
+    family: 'indigo',
+    familyLabel: 'Indigo',
+    ink: '#ffffff',
+    paper: '#0c0c11',
+    surface: '#16161c',
+    surface2: '#20202a',
+    wave: { from: '#a68fd0', to: '#854f6c', peak: 0.3 },
+  },
+  {
     id: 'x-mulberry-white',
     mode: 'light',
     accent: '#34151b',
@@ -985,6 +1055,10 @@ export const THEME_PRESETS: ThemePreset[] = [
 const RETIRED_PRESET_ACCENTS: Record<string, Record<string, string>> = {
   nebula: { '#a78bfa': '#9d8ce6', '#f472b6': '#d98bb6' },
   terminal: { '#22c55e': '#3fb96a', '#84cc16': '#8fbf3a' },
+  // The base looks shipped the old violet and cyan before the plum palette (spec/brand/colour-palette.md).
+  system: { '#6d5efc': '#5a2352', '#06b6d4': '#8a4a7f' },
+  light: { '#6d5efc': '#5a2352', '#06b6d4': '#8a4a7f' },
+  dark: { '#8b7dff': '#c084b5', '#22d3ee': '#c99bb3' },
 };
 
 /** A saved accent, upgraded if it is a color the preset no longer ships. */
@@ -1009,12 +1083,12 @@ export function experimentalFamilies(): Array<{ id: string; label: string; prese
 
 /**
  * The preset whose colours actually apply. System follows the computer's
- * light/dark mode with the branded looks, Nekko Dark or Lilac; every other id
+ * light/dark mode with the plum looks, Dark Nekko or Light Nekko; every other id
  * is itself.
  */
 export function resolveThemePreset(presetId: string | undefined, prefersDark: boolean): string | undefined {
   if (presetId !== 'system') return presetId;
-  return prefersDark ? 'nekko-dark' : 'lilac';
+  return prefersDark ? 'x-plum-dark' : 'x-plum-white';
 }
 
 /**

@@ -22,6 +22,8 @@ import com.nekko.android.data.ComputersRepository
 import com.nekko.android.data.ComputersState
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.monitors.EXPERT_MODE
+import com.nekko.android.data.PillPlace
+import com.nekko.android.data.SimpleMode
 import com.nekko.android.monitors.HardwareMonitorController
 import com.nekko.android.voice.Dictation
 import com.nekko.android.voice.DictationController
@@ -85,6 +87,13 @@ class ChatViewModel(
     val expert: StateFlow<Boolean> = phonePrefs?.flow(EXPERT_MODE) ?: MutableStateFlow(false)
     fun setExpert(on: Boolean) { phonePrefs?.set(EXPERT_MODE, on) }
 
+    /** Where the mode pill rests (the phone's choice, shared with the chats list). */
+    val pillPlace: StateFlow<PillPlace> = phonePrefs?.flow(PillPlace.KEY) ?: MutableStateFlow(PillPlace.DEFAULT)
+    fun setPillPlace(place: PillPlace) { phonePrefs?.set(PillPlace.KEY, place) }
+
+    /** Which controls each mode shows (Settings > Simple mode), as saved JSON. */
+    val simpleChoices: StateFlow<String> = phonePrefs?.flow(SimpleMode.CHOICES) ?: MutableStateFlow("")
+
     /** Expert mode's hardware and loaded models; the screen polls it only while Expert is on and the chat is visible. */
     val hardware = HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" }
 
@@ -122,6 +131,7 @@ class ChatViewModel(
 
     /** Change or remove a queued prompt before it runs (AN-29); the computer checks it still reads [expect]. */
     suspend fun editQueued(index: Int, expect: String, text: String?) = controller.editQueued(index, expect, text)
+    suspend fun interruptQueued(index: Int) = controller.interruptQueued(index)
 
     /** Whether [block] is saved, so the chat can be forked from it. */
     fun canFork(block: Block): Boolean = controller.isSaved(block)
@@ -278,6 +288,11 @@ class ChatViewModel(
     suspend fun complete() = repo.completeChat(sessionId)
 
     /** Raising the mode is signed; a step-up refusal is thrown for the sheet, which passes its [stepUp]. */
+    suspend fun setRunOption(key: String, value: kotlinx.serialization.json.JsonElement) {
+        repo.setRunOption(sessionId, key, value)
+        controller.reload()
+    }
+
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)
         controller.reload()
@@ -437,5 +452,6 @@ class ChatViewModel(
         computerName = s.active?.name ?: "your computer",
         models = s.models,
         canQueue = true,
+        strategy = s.pcSettings.orchestrationStrategy,
     )
 }

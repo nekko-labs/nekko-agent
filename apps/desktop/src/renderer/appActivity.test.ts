@@ -49,11 +49,9 @@ describe('looping decorations stay cheap to composite', () => {
   it('pauses every animation while the app is inactive', () => {
     expect(css).toContain('html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inactive] *::after { animation-play-state: paused !important; }');
   });
-  it('removes working beams and bounds empty-agent motion to a translated texture', () => {
+  it('removes working beams and leaves the empty-agent wave to its paused-when-idle timer', () => {
     expect(css).not.toContain('composer-beam');
-    expect(css).toContain('animation: empty-agent-wave 22.5s steps(36, end) infinite alternate paused;');
-    expect(css).toContain('.pixel-wave-background[data-wave-paused] .pixel-wave-texture { animation-play-state: paused; }');
-    expect(css).toContain('.pixel-wave-texture { animation: none; }');
+    expect(css).not.toContain('empty-agent-wave');
     expect(css).toContain('animation: wall-needs-you-pulse 2.4s steps(12, end) infinite;');
     expect(css).not.toMatch(/\.status-rocket[^{]*\{[^}]*(ease-in-out|linear) infinite/);
   });

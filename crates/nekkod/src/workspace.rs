@@ -49,6 +49,7 @@ pub const CHANNELS: &[&str] = &[
     "git:mergeAbort",
     "pr:create",
     "pr:checks",
+    "pr:info",
 ];
 
 /// Channels that keep their files in the data directory.
@@ -369,6 +370,10 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 Some(e) => Err(e.to_string()),
                 None => Ok(out),
             }
+        }
+        "pr:info" => {
+            let token = github_token(&settings(ctx).await);
+            Ok(ws.prs.cached_info(&text(&args, 0), token.as_deref(), false).await)
         }
         "pr:checks" => {
             let token = github_token(&settings(ctx).await);

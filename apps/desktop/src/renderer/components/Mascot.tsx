@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 export type MascotMood = 'idle' | 'waving' | 'thinking';
 
 /** The app icon's wide cat head, drawn on a 32px grid. No shared SVG IDs. */
-function PixelHead({ eyes = true, pupilOffset }: { eyes?: boolean; pupilOffset?: { x: number; y: number } }) {
+export function PixelHead({ eyes = true, mouth = true, pupilOffset }: { eyes?: boolean; mouth?: boolean; pupilOffset?: { x: number; y: number } }) {
   // The eye group gets a per-render translate so the pupils can watch something
   // outside the SVG (e.g. the chat composer's caret); the opacity keyframes on
   // the child <path>s continue to blink and smile over it.
@@ -16,7 +16,7 @@ function PixelHead({ eyes = true, pupilOffset }: { eyes?: boolean; pupilOffset?:
         <path className="pixel-eyes-happy" d="M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z" />
         <path className="pixel-eyes-closed" d="M10 17H14V18H10Z M19 17H23V18H19Z" />
       </g>}
-      <path className="pixel-mouth" d="M15 20H17V21H15Z" fill="#a7c8ac" />
+      {mouth && <path className="pixel-mouth" d="M15 20H17V21H15Z" fill="#a7c8ac" />}
     </g>
   );
 }

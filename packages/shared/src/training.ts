@@ -62,9 +62,19 @@ export interface RunArtifact {
 /** Status of one step in a goal run's execution plan. */
 export type PlanStepStatus = 'pending' | 'active' | 'done' | 'skipped';
 
-/** Where a step sits in the work loop: look, make, check, hand over. Verify failing sends work back to Build. */
-export type PlanStepKind = 'explore' | 'build' | 'verify' | 'ship';
-export const PLAN_STEP_KINDS: readonly PlanStepKind[] = ['explore', 'build', 'verify', 'ship'];
+/**
+ * Where a step sits in the work loop: work it out and make it, check, hand over.
+ * Verify failing sends work back to Build. Looking and making are one kind,
+ * `build`, since 2026-11-04.
+ */
+export type PlanStepKind = 'build' | 'verify' | 'ship';
+export const PLAN_STEP_KINDS: readonly PlanStepKind[] = ['build', 'verify', 'ship'];
+
+/** A step's kind as saved or sent; `explore`, from older plans and models, is `build` now. */
+export function planStepKind(raw: unknown): PlanStepKind | undefined {
+  if (raw === 'explore') return 'build';
+  return typeof raw === 'string' && PLAN_STEP_KINDS.includes(raw as PlanStepKind) ? (raw as PlanStepKind) : undefined;
+}
 
 export type PlanVerificationStatus = 'pending' | 'active' | 'passed' | 'failed' | 'blocked' | 'unknown';
 
@@ -343,7 +353,7 @@ export function applyPlanUpdate(
       ? (r.status as PlanStepStatus)
       : undefined;
     const note = typeof r.note === 'string' && r.note.trim() ? r.note.trim().slice(0, 240) : undefined;
-    const kind = typeof r.kind === 'string' && PLAN_STEP_KINDS.includes(r.kind as PlanStepKind) ? (r.kind as PlanStepKind) : undefined;
+    const kind = planStepKind(r.kind);
     const verification = sanitizeVerification(r.verification);
     let step = id ? next.find((s) => s.id === id) : undefined;
     // A fresh plan often starts numbering at step_1 again. Do not rename history.

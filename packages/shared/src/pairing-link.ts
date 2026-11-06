@@ -2,7 +2,7 @@ import { relayUrlProblem } from './relay-route.js';
 
 /**
  * Pairing links (TASKS.md IO-20). Settings → Remote access shows a QR carrying
- * `nekko-agent-pair:?relay=&room=&key=&pair=` (or, from the Local Web UI,
+ * `nekko-agent-pair:?relay=&room=&key=&host=&pair=` (or, from the Local Web UI,
  * `https://host/?relay=…`), plus one `alt=` per extra route to the same relay:
  * the relay on this computer listens on its LAN addresses next to the tailnet
  * one, so a phone on the same Wi-Fi can skip the tailnet.
@@ -18,6 +18,12 @@ export interface PairingLink {
   relayUrl: string;
   room: string;
   key: string;
+  /**
+   * The computer's public key (X9.63 P-256, base64), which the device pins and
+   * every challenge must verify against (decision 0041). Absent from a link
+   * made by a computer too old to prove itself: a device refuses to pair with it.
+   */
+  hostKey?: string;
   /** One-time enrollment code; absent when re-using an existing pairing. */
   pair?: string;
   /** Other addresses of the same relay, in the link's order. */
@@ -47,7 +53,9 @@ export function parsePairingLink(input: string): PairingLink | null {
   if (!/^[0-9a-f]{8,128}$/i.test(room) || !/^[0-9a-f]{16,256}$/i.test(key)) return null;
   const pair = params.get('pair')?.trim().toUpperCase() || undefined;
   const relayUrl = trimSlashes(relay);
-  return { relayUrl, room, key, pair, alts: pairingAlts(params.getAll('alt'), relayUrl) };
+  const host = params.get('host')?.trim();
+  const hostKey = host && /^[A-Za-z0-9+/]{87}=$/.test(host) ? host : undefined;
+  return { relayUrl, room, key, hostKey, pair, alts: pairingAlts(params.getAll('alt'), relayUrl) };
 }
 
 /** The usable `alt` values: PH1-clean, without trailing slashes, no repeats of the relay or each other. */
@@ -68,9 +76,10 @@ export function pairingAlts(values: string[], relayUrl: string): string[] {
  */
 export function pairingLink(
   base: string,
-  p: { relayUrl: string; room: string; key: string; pair?: string; alts?: string[] },
+  p: { relayUrl: string; room: string; key: string; hostKey?: string; pair?: string; alts?: string[] },
 ): string {
   let link = `${base}?relay=${encodeURIComponent(p.relayUrl)}&room=${p.room}&key=${p.key}`;
+  if (p.hostKey) link += `&host=${encodeURIComponent(p.hostKey)}`;
   if (p.pair) link += `&pair=${p.pair}`;
   for (const alt of pairingAlts(p.alts ?? [], trimSlashes(p.relayUrl))) link += `&alt=${encodeURIComponent(alt)}`;
   return link;

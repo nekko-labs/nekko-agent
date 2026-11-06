@@ -325,3 +325,28 @@ async fn echo_latency_floor() {
         reg.close(&info.id);
     }
 }
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn metadata_is_observed_without_a_viewer_and_output_is_unchanged() {
+    let reg = Registry::new();
+    let shell = ShellOption { id: "sh".into(), label: "Shell".into(), path: "/bin/sh".into(), args: Some(vec!["-c".into(),
+        "printf '\x1b]2;Fix login\x07\x1b]777;nekko;attention;Claude Code needs permission\x07https://github.com/example/repo/pull/42\n'; printf '%s\n' \"$NEKKO_TERMINAL_ID\"".into()]) };
+    let info = reg.create(spec(shell));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let terminal = reg.list().into_iter().find(|t| t.id == info.id).unwrap();
+        if !terminal.running {
+            assert_eq!(terminal.activity.title.as_deref(), Some("Fix login"));
+            assert_eq!(terminal.activity.state.as_deref(), Some("attention"));
+            assert_eq!(terminal.activity.pull_request_url.as_deref(), Some("https://github.com/example/repo/pull/42"));
+            let sub = reg.subscribe(&info.id).unwrap();
+            let output = String::from_utf8_lossy(&sub.snapshot);
+            assert!(output.contains("\x1b]2;Fix login\x07"));
+            assert!(output.contains(&info.id));
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}

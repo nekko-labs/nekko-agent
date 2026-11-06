@@ -15,7 +15,7 @@ The *Read* and *Change* switches under *Remote access → What phones can do* me
 
 - **Every phone channel has a class, and a channel with none is refused.** Before, about 30 channels (sending prompts, approving tools, answering questions, running automations, changing settings and chat options, reading chats) were in no class, so neither switch applied to them. Now:
   - **Read** (`read-off` when off): the chat list and a chat (`sessions:summaries`, `session:get`, `chat:pending`), changes, settings, providers, models, skills, tasks, workflows, usage, limits, PR status, voice status and saved folders, plus the git, files, logs and terminal reads that already were.
-  - **Change, no proof per call** (`change-off` when off; `PHONE_AGENT_CHANNELS`): `chat:send`, `chat:queue`, `chat:editQueued`, `chat:abort`, `chat:answer`, `tool:approve`, `session:create`, `session:delete`, `session:fork`, `session:setOptions`, `settings:update`, `task:runNow`, `workflow:run`, `voice:transcribe`. Each call is written to the phone's activity, allowed or refused, like the proof-checked changes.
+  - **Change, no proof per call** (`change-off` when off; `PHONE_AGENT_CHANNELS`): `chat:send`, `chat:queue`, `chat:steer`, `chat:interruptQueued`, `chat:editQueued`, `chat:abort`, `chat:answer`, `tool:approve`, `session:create`, `session:delete`, `session:fork`, `session:setOptions`, `settings:update`, `task:runNow`, `workflow:run`, `voice:transcribe`. Each call is written to the phone's activity, allowed or refused, like the proof-checked changes.
   - **Change with a proof** (unchanged): file saves, git and PR actions, opening terminals and SSH.
   - **Open to any paired phone:** `app:info` only.
   - A channel on the allowlist in no class is refused with `channel-denied` (fail closed), so a future channel added without a class never reaches the computer unchecked.
@@ -36,7 +36,7 @@ The relay only ever sees ciphertext, but before this a sealed HELLO was welcomed
 
 Not done: the agent's own replies and events carry no counter the phone checks. Events are sealed once for every connected phone, so binding them to one connection means sealing per connection; the requests, where a replay makes the computer act, are covered.
 
-**Compatibility, for one release.** A HELLO with no `protocol` or one below 4 is a legacy phone: it has no challenge and its requests no counter. The computer still welcomes it unless the owner set `"acceptLegacyPhones": false` in `remote.json` (no UI switch yet), logs it to `nekkod.log`, marks the device `legacyProtocol: true` (the desktop shows *Older app: update it on the phone*) and writes one `relay:hello` entry with reason `legacy-protocol` to its activity when the mark is first set. With the setting off a legacy HELLO is refused `update-required`, which the new apps word as "update this app". A new phone talking to a computer from before this waits 3 seconds for a challenge, then sends the legacy HELLO (`protocol: 3`); once it has seen a challenge from a computer it never falls back again in that session, and redials instead. The plan to drop legacy acceptance is TASKS.md IO-35.
+**Compatibility.** Since protocol 6 (decision [0041](../../docs/decisions/0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md)) there are no legacy phones: a HELLO that isn't sealed under the connection's own key is refused with `update-required`, whatever it claims. `acceptLegacyPhones` in `remote.json` no longer does anything.
 
 ## Acceptance criteria
 
@@ -46,7 +46,7 @@ Not done: the agent's own replies and events carry no counter the phone checks. 
 - Raising a mode without a proof is refused `proof-required` and runs nothing; with a valid proof it runs; the same proof again is `proof-replayed`; lowering needs no proof.
 - A HELLO that declares protocol 4 is welcomed only with the connection's outstanding challenge, once; a replayed request is dropped and re-challenged; the daemon's end-to-end test replays a request byte for byte and sees the challenge.
 - At most 64 connections wait for a HELLO; the oldest waiting one is forgotten first, a welcomed one never.
-- Legacy phones are welcomed and marked by default and refused `update-required` when `acceptLegacyPhones` is false.
+- A HELLO from an app below protocol 6 is refused `update-required`.
 
 ## Security boundaries
 

@@ -5,6 +5,7 @@ vi.mock('../Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => <p>
 vi.mock('./rowState.js', () => ({ useRowState: (_key: string, value: unknown) => [value, vi.fn()] }));
 vi.mock('./ToolCard.js', () => ({ ToolCard: () => <div>Tool</div> }));
 import { MessageBubble } from './MessageBubble.js';
+import { cssRule, cssValue, stylesheet } from '../../tests/css.js';
 
 describe('message actions and completion', () => {
   const message = { id: 'saved', role: 'assistant' as const, content: 'Finished reply', createdAt: 1 };
@@ -22,6 +23,41 @@ describe('message actions and completion', () => {
     { ...message, role: 'user' as const },
   ])('does not claim an unfinished or user message is done', (message) => {
     expect(renderToStaticMarkup(<MessageBubble message={message} />)).not.toContain('Done.');
+  });
+});
+
+describe('voices', () => {
+  it('keeps only the colored left rule on summaries without moving their text', () => {
+    const css = stylesheet('styles.css');
+    const shared = cssRule(css, ".msg-ai:is([data-voice='reply'], [data-voice='attention'])");
+    expect(shared).toMatchObject({
+      width: 'calc(100%+14px)', 'margin-inline': '-14px 0', padding: '10px 14px 2px 12px',
+      border: '0', 'border-inline-start': '2px solid var(--accent)',
+      'border-radius': '0', background: 'transparent',
+    });
+    // Attention messages keep their existing card treatment, unlike closing replies.
+    expect(cssRule(css, ".msg-ai[data-voice='attention']")).toMatchObject({
+      'border-inline-start-color': 'var(--attention)', 'border-radius': '12px',
+      background: cssValue('color-mix(in srgb, var(--attention) 8%, transparent)'),
+    });
+  });
+  const message = { id: 'a1_said_1', role: 'assistant' as const, content: 'Reading the test.', createdAt: 1 };
+  it('a note is quiet, carries the thought icon and claims nothing is done', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={message} voice="working" chronological />);
+    expect(html).toContain('data-voice="working"');
+    expect(html).toContain('msg-voice-icon');
+    expect(html).not.toContain('Done.');
+  });
+  it('something left for the reader mid-turn is raised and is not done either', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={message} voice="attention" chronological />);
+    expect(html).toContain('data-voice="attention"');
+    expect(html).not.toContain('msg-voice-icon');
+    expect(html).not.toContain('Done.');
+  });
+  it('a reply stands out and finishes the turn', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={message} voice="reply" chronological />);
+    expect(html).toContain('data-voice="reply"');
+    expect(html).toContain('Done.');
   });
 });
 

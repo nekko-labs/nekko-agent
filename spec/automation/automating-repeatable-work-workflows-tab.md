@@ -1,12 +1,12 @@
 ---
-title: "Automating repeatable work (Workflows tab)"
+title: "Automating repeatable work (Scheduled Tasks tab)"
 area: automation
 split-from: SPEC.md (2026-10-22)
 ---
 
-# Automating repeatable work (Workflows tab)
+# Automating repeatable work (Scheduled Tasks tab)
 
-Some work isn't a conversation, it's a **procedure that should run the same way every time**, often without anyone watching. The **Workflows** tab is that surface, modelled on GitHub Actions but with the steps a coding agent actually needs: a step is an **agent prompt**, an installed **skill**, another **workflow**, or a **shell command**.
+Some work isn't a conversation, it's a **procedure that should run the same way every time**, often without anyone watching. The **Scheduled Tasks** tab (called Workflows until 2026-11-03) is that surface, modelled on GitHub Actions but with the steps a coding agent actually needs: a step is an **agent prompt**, an installed **skill**, another **workflow**, or a **shell command**.
 
 The part that makes it more than a script runner is that steps are **routed rather than merely sequenced**. Every step declares where the run goes when it succeeds and when it fails, and a route can point **back at an earlier step**, so the natural shape of real work is expressible: build, then verify, and when verify finds problems, go back to build and try again. Loops are bounded (a step can be re-entered a fixed number of times) so a workflow that never converges still stops and says so, rather than running forever. Steps also carry **retries**, a **timeout**, and a **continue-on-error** flag. Agent steps report their own outcome with a PASS/FAIL token, which is what lets an agent step be routed the way a shell step's exit code is; a run's agent steps all share one chat session, so a verify step sees what the build step actually did.
 

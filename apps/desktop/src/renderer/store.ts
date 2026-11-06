@@ -1,11 +1,12 @@
+import { resolveThemeAppearance } from './themeMode.js';
 import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import { rememberSplashColours } from './splash.js';
-import type { AppSettings, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent, findThemePreset, resolveThemePreset, themePresetOf } from '@nekko-agent/shared';
+import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
-import { syncTitleBarOverlay } from './chrome.js';
+import { setPageZoom, syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
 import { putCachedSession } from './sessionCache.js';
 import { autoDismisses, overflowToasts, TOAST_EXIT_MS, TOAST_MS } from './toastQueue.js';
@@ -176,6 +177,7 @@ let toastSeq = 0;
 interface UiState {
   completionTipSessionId: string | null;
   /** A workflow run to show when the Workflows view opens (a notification click). */
+  ciRunnersFocus: boolean;
   workflowFocus: { workflowId: string; runId: string } | null;
   /** A memory note's title to open when the Memory view shows (a chat's memory card). */
   memoryFocus: string | null;
@@ -202,6 +204,8 @@ interface UiState {
   onboardingOpen: boolean;
   /** True after the first settings load has finished. */
   settingsLoaded: boolean;
+  /** True once the first load can say whether a provider is set up. Until then an empty `providers` means unknown, not none. */
+  providersLoaded: boolean;
   settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
@@ -299,6 +303,10 @@ interface UiState {
   setOnboardingOpen: (open: boolean) => void;
   refreshSettings: (autoOpenOnboarding?: boolean) => Promise<void>;
   refreshSessions: () => Promise<void>;
+  /** Computers this one is connected to. Empty for almost everyone: nothing below reads it then. */
+  computers: ComputerStatus[];
+  computerCatalogs: Record<string, ComputerCatalog>;
+  refreshComputers: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   refreshProviders: () => Promise<void>;
   selectProvider: (id: string) => Promise<void>;
@@ -307,7 +315,7 @@ interface UiState {
   selectModel: (id: string) => void;
   rememberModel: (providerId: string, modelId: string) => void;
   toggleContextPanel: () => void;
-  togglePlanRail: (sessionId: string) => void;
+  setPlanRail: (sessionId: string, open: boolean) => void;
   applyTheme: () => void;
   /** The preset whose colours `applyTheme` applied: System resolves to Nekko Dark or Lilac. */
   resolvedPreset: string | undefined;
@@ -601,6 +609,7 @@ export const textScaleOf = (v: number | undefined): number =>
 
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
+  ciRunnersFocus: false,
   workflowFocus: null,
   memoryFocus: null,
   settings: null,
@@ -620,6 +629,8 @@ export const useStore = create<UiState>((set, get) => ({
   }),
   activeSessionId: null,
   providers: [],
+  computers: [],
+  computerCatalogs: {},
   models: [],
   activeProviderId: null,
   activeModelId: null,
@@ -629,6 +640,7 @@ export const useStore = create<UiState>((set, get) => ({
   planRailOpenBySession: readPlanRailSessions(),
   onboardingOpen: false,
   settingsLoaded: false,
+  providersLoaded: false,
   settingsError: null,
   mascotMood: 'waving',
   toasts: [],
@@ -745,6 +757,17 @@ export const useStore = create<UiState>((set, get) => ({
     }
   },
 
+  refreshComputers: async () => {
+    const computers = (await window.nekko.listComputers()) ?? [];
+    set({ computers });
+    // shortcut: read once per run, so a provider added over there shows after a restart; refresh from Settings if that bites.
+    for (const c of computers) {
+      if (get().computerCatalogs[c.id]) continue;
+      const catalog = await window.nekko.computerCatalog(c.id);
+      if (catalog) set((s) => ({ computerCatalogs: { ...s.computerCatalogs, [c.id]: catalog } }));
+    }
+  },
+
   refreshSessions: async () => {
     const asked = ++sessionListSeq;
     const listed = await window.nekko.listSessionSummaries();
@@ -808,15 +831,22 @@ export const useStore = create<UiState>((set, get) => ({
   setActiveSession: (id) => set({ activeSessionId: id }),
 
   refreshProviders: async () => {
-    const providers = await window.nekko.listProviders();
-    set({ providers });
-    const active = get().activeProviderId ?? providers[0]?.id ?? null;
-    if (active) {
-      set({ activeProviderId: active });
-      // Always populate models for the active provider on startup, guards a
-      // race where a saved default provider is already active and would
-      // otherwise never have its model list fetched.
-      if (get().models.length === 0) await get().selectProvider(active);
+    try {
+      const providers = await window.nekko.listProviders();
+      set({ providers });
+      // Known as soon as the list is, because the model list below can be a
+      // network call to the provider. Only a local setup needs it to tell.
+      if (!needsProviderSetup(providers, get().activeModelId)) set({ providersLoaded: true });
+      const active = get().activeProviderId ?? providers[0]?.id ?? null;
+      if (active) {
+        set({ activeProviderId: active });
+        // Always populate models for the active provider on startup, guards a
+        // race where a saved default provider is already active and would
+        // otherwise never have its model list fetched.
+        if (get().models.length === 0) await get().selectProvider(active);
+      }
+    } finally {
+      set({ providersLoaded: true });
     }
   },
 
@@ -864,9 +894,9 @@ export const useStore = create<UiState>((set, get) => ({
 
   toggleContextPanel: () => set((s) => ({ contextPanelOpen: !s.contextPanelOpen })),
 
-  togglePlanRail: (sessionId) =>
+  setPlanRail: (sessionId, open) =>
     set((s) => {
-      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: !(s.planRailOpenBySession[sessionId] ?? s.planRailOpen) };
+      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: open };
       try { localStorage.setItem(PLAN_RAIL_SESSIONS_KEY, JSON.stringify(planRailOpenBySession)); } catch { /* private mode */ }
       return { planRailOpenBySession };
     }),
@@ -874,13 +904,8 @@ export const useStore = create<UiState>((set, get) => ({
   resolvedPreset: undefined,
   applyTheme: () => {
     const settings = get().settings;
-    const theme = settings?.theme ?? 'system';
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    // System follows the computer with the branded looks: Nekko Dark or Lilac.
-    const picked = themePresetOf(settings);
-    const presetId = resolveThemePreset(picked, prefersDark);
-    const preset = presetId ? THEME_PRESETS.find((p) => p.id === presetId) : undefined;
-    const resolved = picked === 'system' && preset ? preset.mode : theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme;
+    const { mode: resolved, presetId, preset, accent, accent2 } = resolveThemeAppearance(settings, prefersDark);
     const root = document.documentElement;
     root.setAttribute('data-theme', resolved);
 
@@ -895,20 +920,8 @@ export const useStore = create<UiState>((set, get) => ({
     }
     if (get().resolvedPreset !== presetId) set({ resolvedPreset: presetId });
 
-    // Picking System saved its own old accents; only colours the user changed
-    // from those override the branded look.
-    const systemPreset = picked === 'system' ? findThemePreset('system') : undefined;
-    const own = (saved: string | undefined, shipped: string | undefined) =>
-      systemPreset && saved?.toLowerCase() === shipped ? undefined : saved;
-    const accent = currentPresetAccent(presetId, own(settings?.accent, systemPreset?.accent));
-    const accent2 = currentPresetAccent(presetId, own(settings?.accent2, systemPreset?.accent2));
-    if (accent) root.style.setProperty('--accent', accent);
-    else if (preset) root.style.setProperty('--accent', preset.accent);
-    else root.style.removeProperty('--accent');
-
-    if (accent2) root.style.setProperty('--accent-2', accent2);
-    else if (preset?.accent2) root.style.setProperty('--accent-2', preset.accent2);
-    else root.style.removeProperty('--accent-2');
+    root.style.setProperty('--accent', accent);
+    root.style.setProperty('--accent-2', accent2);
 
     // Settings > Style. A chosen family falls back to the bundled one.
     const family = (name: string | undefined, fallback: string) =>
@@ -920,7 +933,8 @@ export const useStore = create<UiState>((set, get) => ({
     if (mono) root.style.setProperty('--font-mono', mono);
     else root.style.removeProperty('--font-mono');
     const scale = textScaleOf(settings?.textScale);
-    root.style.zoom = scale === 100 ? '' : `${scale}%`;
+    // A browser tab has no page zoom to set, so it falls back to CSS zoom.
+    root.style.zoom = setPageZoom(scale / 100) || scale === 100 ? '' : `${scale}%`;
 
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
@@ -956,7 +970,7 @@ export const useStore = create<UiState>((set, get) => ({
   refreshTerminals: async () => {
     try {
       const terminals = await window.nekko.listTerminals();
-      set({ terminals });
+      if (JSON.stringify(get().terminals) !== JSON.stringify(terminals)) set({ terminals });
       // Shells do not outlive the app's backend, so a restored terminal window
       // usually points at nothing; drop it instead of showing a dead pane.
       const ids = new Set(terminals.map((t) => t.id));

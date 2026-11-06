@@ -8,7 +8,7 @@ import { type WbPane, type WbSplit } from '../layout.js';
 import type { Workspace } from '../store.js';
 
 const fixture = vi.hoisted(() => ({ workspaces: [] as Workspace[] }));
-vi.mock('../store.js', () => ({ useStore: (select: (s: { workspaces: Workspace[] }) => unknown) => select(fixture) }));
+vi.mock('../store.js', () => ({ useStore: (select: (s: never) => unknown) => select({ computers: [], ...fixture } as never) }));
 vi.mock('./ChatPane.js', () => ({ ChatPane: ({ sessionId, surface }: { sessionId: string; surface: string }) => <textarea data-surface={surface} defaultValue={`draft:${sessionId}`} /> }));
 vi.mock('./TerminalPane.js', () => ({ TerminalPane: ({ terminalId }: { terminalId: string }) => <div data-terminal={terminalId} /> }));
 vi.mock('./FilePane.js', () => ({ FilePane: ({ path }: { path: string }) => <div data-file={path} /> }));
@@ -245,9 +245,11 @@ describe('workspace companions and stable bodies', () => {
       const html = renderToStaticMarkup(wall(state({ folded: { 'chat-a': true }, filter: 'chat' })));
       expect(html).not.toContain('Expand companions');
     expect(html).toContain('title="Zen: focus this window (Ctrl+Shift+1)"');
-      // The focus action wears the target ring: outer ring, inner ring, centre dot.
+      // The actual wall action must use the animated Gentleface focus export.
       const focus = html.slice(html.indexOf('agent-zen-action'));
-      expect(focus.slice(0, focus.indexOf('</button>'))).toMatch(/<circle cx="12" cy="12" r="9"><\/circle><circle cx="12" cy="12" r="5"><\/circle><circle cx="12" cy="12" r="1.5" fill="currentColor"><\/circle>/);
+      const action = focus.slice(0, focus.indexOf('</button>'));
+      expect(action).toContain('data-gf-icon="focus"');
+      expect(action).toContain('gf-icon-motion');
       expect(html).not.toContain('Collapse Chat');
       expect(html).not.toContain('command-wall-folded');
       expect(html).toContain('draft:chat-a');

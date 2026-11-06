@@ -25,6 +25,13 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!(missing, Value::Null);
     let (_, images) = post(d.port, "session:images", json!(["s_one", 4]), Some(TOKEN)).await;
     assert_eq!(images, json!([{ "messageId": "a", "src": "data:x" }]));
+    // One photo as stored, for a phone opening it full size; anything else is null.
+    let (_, photo) = post(d.port, "session:photo", json!(["s_one", "a", 0]), Some(TOKEN)).await;
+    assert_eq!(photo, json!("data:x"));
+    for args in [json!(["s_one", "a", 1]), json!(["s_one", "u", 0]), json!(["s_one", "nope", 0]), json!(["s_one"])] {
+        let (_, none) = post(d.port, "session:photo", args.clone(), Some(TOKEN)).await;
+        assert_eq!(none, Value::Null, "{args}");
+    }
     // The UI's own writes are the daemon's too, chat creation included: a
     // folder that is not one of the user's is refused, as the host refused it.
     let (status, refused) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
@@ -456,6 +463,19 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         ("usage.jsonl", "{}\n".into()),
         ("replies.jsonl", "{}\n".into()),
         ("tokens.json", "{}".into()),
+        ("tasks.json", "[]".into()),
+        ("remote.json", json!({ "enabled": false, "devices": [{ "id": "phone-1" }] }).to_string()),
+        ("computers.json", "[]".into()),
+        ("cloud/state.json", json!({ "account": { "id": "u1", "email": "a@example.com" } }).to_string()),
+        ("cloud/secrets.json", json!({ "token": "nk_x", "device-key": "k" }).to_string()),
+        ("backups/settings.json", "{}".into()),
+        ("logs/app.log", "personal\n".into()),
+        ("logs/app.log.1", "older\n".into()),
+        ("models/m.gguf", "weights".into()),
+        ("runners/runners.json", "[]".into()),
+        // Not ours: the data folder can be one the user chose (NEKKO_DATA_DIR, a volume).
+        ("notes.txt", "mine".into()),
+        ("my-project/a.txt", "mine".into()),
         (
             "agent-watches.json",
             json!([{ "id": "w1", "sessionId": "s_a", "kind": "timer", "prompt": "secret", "nextPollAt": 4102444800000_u64, "intervalMs": 60000,
@@ -466,7 +486,12 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         std::fs::create_dir_all(data.join(p).parent().unwrap()).unwrap();
         std::fs::write(data.join(p), text).unwrap();
     }
-    let d = start_with_config(&data, json!({ "appVersion": "9.8.7", "edition": "desktop" }));
+    let d = start_with_env(
+        &data,
+        json!({ "appVersion": "9.8.7", "edition": "desktop" }),
+        &[("NEKKO_FILE_VAULT", Some("1")), ("NEKKO_CLOUD_URL", Some("http://127.0.0.1:9"))],
+    );
+    // Ending the Cloud session goes to a closed port: the wipe carries on without it.
     post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
 
     // session:watches: what the transcript shows, never the prompt.
@@ -491,7 +516,33 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
     assert!(!data.join("sessions/s_a.json").exists());
     assert!(!data.join("memory/m.md").exists() && data.join("memory").is_dir());
     assert!(!data.join("usage.jsonl").exists() && !data.join("replies.jsonl").exists());
-    assert!(data.join("tokens.json").exists(), "sign-ins are not part of a wipe");
+    for gone in [
+        "tokens.json",
+        "tasks.json",
+        "remote.json",
+        "computers.json",
+        "agent-watches.json",
+        "backups",
+        "logs/app.log.1",
+    ] {
+        assert!(!data.join(gone).exists(), "{gone} is deleted");
+    }
+    assert!(!data.join("cloud/state.json").exists(), "Nekko Cloud is forgotten");
+    let secrets: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("cloud/secrets.json")).unwrap_or("{}".into())).unwrap();
+    assert_eq!(secrets, json!({}), "the Cloud token and keys are gone");
+    assert_eq!(std::fs::read(data.join("logs/app.log")).unwrap().len(), 0, "a live log is emptied in place");
+    assert!(data.join("models/m.gguf").exists(), "downloads stay unless asked");
+    assert!(data.join("runners/runners.json").exists(), "CI runners stay");
+    let (status, _) = post(d.port, "data:wipe", json!([{ "models": true }]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert!(!data.join("models").exists(), "downloads go when asked");
+    assert_eq!(std::fs::read_to_string(data.join("notes.txt")).unwrap(), "mine", "a file that is not ours stays");
+    assert_eq!(
+        std::fs::read_to_string(data.join("my-project/a.txt")).unwrap(),
+        "mine",
+        "a folder that is not ours stays"
+    );
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(saved["theme"], json!("system"));
     drop(d);

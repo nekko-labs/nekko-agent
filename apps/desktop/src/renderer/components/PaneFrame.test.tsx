@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { PaneFrame, targetAt } from './PaneFrame.js';
+import { SplitCompass } from './SplitCompass.js';
 import { ContextAction, ContextMenu } from './ContextMenu.js';
 import { confirmDeletion } from './DeleteConfirmation.js';
 import { CloseIcon, TrashIcon } from '../icons.js';
+import { WINDOW_HOTKEYS } from '../window-shortcuts.js';
 
 const state = vi.hoisted(() => ({
   settings: null as { chatPaneAction?: 'complete' | 'delete' } | null,
@@ -44,6 +46,10 @@ function frame(kind: 'chat' | 'terminal' = 'chat', menu = false, refId = 'sessio
 }
 
 describe('pane lifecycle controls', () => {
+  it('removes the add/split control and its popover from agent chats only', () => {
+    expect(frame('chat').elements.some(e => e.type === SplitCompass)).toBe(false);
+    expect(frame('terminal').elements.some(e => e.type === SplitCompass)).toBe(true);
+  });
   it('keeps Focus immediately beside Minimize', () => {
     const { elements } = frame('chat', false, 'session-1', vi.fn(), <button aria-label="Focus My chat" />);
     expect(elements.filter(e => e.type === 'button').map(e => e.props['aria-label'])).toEqual(['Focus My chat', 'Minimize My chat', 'Complete My chat']);
@@ -83,7 +89,8 @@ describe('pane lifecycle controls', () => {
   it('defaults chats to Complete using existing archive semantics, not Close', () => {
     const { button, onClose } = frame();
     expect(button.props['aria-label']).toBe('Complete My chat');
-    expect(button.props.title).toBe('Complete this chat (Ctrl+Shift+E)');
+    // The label follows the platform (Cmd on a Mac, Ctrl elsewhere); window-shortcuts.test.ts covers both.
+    expect(button.props.title).toBe(`Complete this chat (${WINDOW_HOTKEYS.complete})`);
     // The completion control wears an X now (#533); it still archives, never deletes.
     expect(React.Children.toArray(button.props.children).some((c) => React.isValidElement(c) && c.type === CloseIcon)).toBe(true);
     button.props.onClick();

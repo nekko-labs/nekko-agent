@@ -1,7 +1,9 @@
 import type { TurnStats } from '@nekko-agent/shared';
 import { formatRate, turnTokensPerSecond } from '@nekko-agent/shared';
 import { fmtTok } from './transcript.js';
+import { useShown } from '../../simpleMode.js';
 import { CheckIcon } from '../../icons.js';
+
 
 const EFFORT_LABEL: Record<NonNullable<TurnStats['effort']>, string> = {
   low: 'Low', medium: 'Medium', normal: 'Normal', high: 'High', xhigh: 'Extra high', max: 'Max',
@@ -19,7 +21,7 @@ export function turnStatsParts(stats: TurnStats, names: TurnStatsNames = {}): st
   const provider = names.provider?.(stats.providerId);
   const tps = turnTokensPerSecond(stats);
   const parts = [provider ? `${model} · ${provider}` : model];
-  if (stats.effort) parts.push(`${EFFORT_LABEL[stats.effort]} effort`);
+  if (stats.effort) parts.push(`${EFFORT_LABEL[stats.effort] ?? stats.effort} effort`);
   parts.push(`${fmtTok(stats.inputTokens + (stats.cacheReadTokens ?? 0) + (stats.cacheWriteTokens ?? 0))} in`);
   parts.push(`${fmtTok(stats.outputTokens)} out`);
   if (tps > 0) parts.push(`${formatRate(tps)} tok/s`);
@@ -68,13 +70,20 @@ export function turnStatsTitle(stats: TurnStats): string {
  * right-aligned). Without a Done the stats keep their own line.
  */
 export function DoneRow({ done, stats, names }: { done: boolean; stats?: TurnStats; names?: TurnStatsNames }) {
-  if (!done) return stats ? <TurnStatsLine stats={stats} names={names} /> : null;
+  if (!done) return stats ? <ReplyStatsRow stats={stats} names={names} /> : null;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-8 gap-y-0.5 text-2xs text-ink-faint" data-done-row>
-      <span className="flex shrink-0 items-center gap-1"><CheckIcon className="h-3 w-3" />Done.</span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span className="flex items-center gap-1"><CheckIcon className="h-3 w-3" />Done.</span>
+      </span>
       {stats && <TurnStatsLine stats={stats} names={names} inline />}
     </div>
   );
+}
+
+/** Measurements only: speaker identity belongs above the reply, never in its footer. */
+export function ReplyStatsRow({ stats, names }: { stats: TurnStats; names?: TurnStatsNames }) {
+  return <TurnStatsLine stats={stats} names={names} />;
 }
 
 /**
@@ -83,6 +92,7 @@ export function DoneRow({ done, stats, names }: { done: boolean; stats?: TurnSta
  * long chat show where the tokens went, and which stretch ran on which model.
  */
 export function TurnStatsLine({ stats, names, inline = false }: { stats: TurnStats; names?: TurnStatsNames; inline?: boolean }) {
+  if (!useShown('stats')) return null;
   return (
     // `inline`: sits right-aligned in the reply's Done row (see DoneRow).
     <div className={`${inline ? 'ml-auto justify-end' : 'mt-1'} flex min-w-0 flex-wrap items-center gap-x-2 text-2xs text-ink-faint`} data-turn-stats title={turnStatsTitle(stats)}>
