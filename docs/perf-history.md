@@ -1511,3 +1511,29 @@ Candidate-only five-lap memory check: heap12.4→12.8MB (0.10MB/lap), DOM2401→
 Resting/reduced-motion native PNGs are byte-identical. Inspected baseline/candidate resting artwork,8 sampled native motion frames each, and matching dark wide/narrow full-chat screenshots. Both narrow screenshots share the existing absence of a visibly accessible composer at this fixture size; the fit check verifies horizontal bounds only. Native keyboard focus, light theme, real-device motion and native GPU remain unverified. Review browser/server closed; no further screenshot replays needed to decide this candidate.
 
 Matched Linux base/head/head/base plus CPU profiles: [run42243393085](https://github.com/nekko-labs/nekko-agent/actions/runs/42243393085), only the candidate icon file applied to exact bdd59fa source. Pending actual results inspection. The33ms gate and full harness are unchanged.
+
+
+## 2026-11-06 — Linux SVG candidate evidence-upload failure (#1998)
+
+Area: renderer / diagnostic workflow. Result: promising log-only comparison, not gate clearance; artifact retention failure.
+Conditions: exact base `bdd59fa3870f52e5dff3884308a782b14e372db6`, only `gentleface-icons.tsx` from candidate `806629f807b9006f6ca16f966c70fc83cdbecd7c`, single Linux runner, same release daemon, official Chrome156.0.8078.4, full six-zone latency workload, 33 cold samples per phase, one attempt, no GPU. Job-log values only:
+
+| Cold frame | base-1 | head-1 | head-2 | base-2 |
+|---|---|---|---|---|
+| p50 | 27.2 ms | 25.3 ms | 25.6 ms | 27.9 ms |
+| p95 | 36.9 ms | 33.7 ms | 32.9 ms | 36.1 ms |
+
+Separate profiled base/head p95: 43.9/40.8 ms, not interchangeable with plain runs. Head-1 still fails the original 33 ms acceptance budget. [Run 42243393085](https://github.com/nekko-labs/nekko-agent/actions/runs/42243393085) was report-only green, but upload-artifact excluded its hidden output folder and retained **zero artifacts** (confirmed by API). Raw percentile recomputation and Linux CPU attribution are therefore unavailable for this run. Diagnostic commit `fd869553b` fixes retention and makes missing evidence fail; [recovery 42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142) repeats the exact comparison once to recover raw data, not to select a green timing. No app/budget/harness changes; do not merge the diagnostic workflow. Source: [investigation](../reports/cold-chat-paint-investigation.md).
+
+
+### #1998 Full local candidate contract checkpoint (2026-11-06)
+Area: renderer. Result: all measured local rows pass; no Linux repair or before/after speedup claim.
+Conditions: M1 Max, macOS, Chrome156.0.8078.4, reused debug nekkod, candidate `a3a7df7bd`, full workload (not quick), one attempt, no GPU. Cold33 samples, warm40, composer150, streaming359 frames over6s.
+
+| Metric | Candidate p95 |
+|---|---|
+| Cold frame / history | 22.9 / 35.1 ms |
+| Warm / composer | 10.6 / 4.1 ms |
+| Streaming main-thread frame work | 3.44 ms |
+
+Five-lap retention: heap12.5056→12.9589MB (0.11334MB/lap), DOM2579→2579, listeners2275→2275; all six windows working, software tile memory184.359375MB. Missing clip-layer attribution is unavailable, not zero overdraw. Terminal keypress skipped (no pane opened). Exit zero and raw samples inspected, but this does not prove Linux release-daemon or native GPU performance. Source: `.shots/cold-mount/candidate-full-contract/`, [investigation](../reports/cold-chat-paint-investigation.md).
