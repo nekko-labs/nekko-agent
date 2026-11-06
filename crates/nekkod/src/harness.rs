@@ -6,7 +6,7 @@
 //!   tasks (a reap would end them). The chat stores Claude Code's session id
 //!   (`claudeCodeSessionId`), so the next turn after a reap, a crash or an app
 //!   restart continues the conversation with `--resume`.
-//! - A change of model, permission mode or folders relaunches the child
+//! - A change of model, effort, permission mode or folders relaunches the child
 //!   (with `--resume`): those are launch flags. A change of Claude Code
 //!   account relaunches it too, as a new Claude Code session, since the old
 //!   one lives in the other account's folder (turns.rs).
@@ -168,6 +168,7 @@ pub struct Wanted {
     pub cwd: PathBuf,
     pub add_dirs: Vec<PathBuf>,
     pub model: Option<String>,
+    pub effort: Option<String>,
     pub permission_mode: PermissionMode,
     /// The provider's Claude Code account folder; `None` for the default login.
     pub config_dir: Option<PathBuf>,
@@ -185,6 +186,7 @@ impl Wanted {
         spec.cwd == self.cwd
             && spec.add_dirs == self.add_dirs
             && spec.model == self.model
+            && spec.effort == self.effort
             && spec.permission_mode == self.permission_mode
             && spec.config_dir == self.config_dir
     }
@@ -200,6 +202,7 @@ impl Wanted {
             cwd: self.cwd.clone(),
             session,
             model: self.model.clone(),
+            effort: self.effort.clone(),
             permission_mode: self.permission_mode,
             mcp_config: None,
             permission_prompt_tool: None,
@@ -705,6 +708,7 @@ mod tests {
             cwd: "C:/w".into(),
             add_dirs: vec![],
             model: Some("opus".into()),
+            effort: None,
             permission_mode: PermissionMode::Default,
             config_dir: None,
         }
@@ -985,6 +989,9 @@ mod tests {
         assert!(w.matches(&resumed));
         let mut other = w.clone();
         other.model = Some("sonnet".into());
+        assert!(!other.matches(&resumed));
+        other = w.clone();
+        other.effort = Some("high".into());
         assert!(!other.matches(&resumed));
         other = w.clone();
         other.permission_mode = PermissionMode::AcceptEdits;

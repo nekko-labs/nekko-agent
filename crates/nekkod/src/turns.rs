@@ -1212,6 +1212,7 @@ impl Turns {
                 opts,
                 &facts["provider"],
                 &mode,
+                str_at(facts, "effort"),
                 wake,
             )
             .await;
@@ -1443,6 +1444,7 @@ impl Turns {
         opts: &Value,
         provider: &Value,
         mode: &str,
+        effort: Option<&str>,
         wake: bool,
     ) {
         use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
@@ -1480,6 +1482,8 @@ impl Turns {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
             model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            // `normal` means no choice was made: Claude Code's own setting stands.
+            effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
             config_dir,
         };
