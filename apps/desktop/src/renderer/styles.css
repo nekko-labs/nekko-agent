@@ -1801,27 +1801,37 @@
     --merged-chip: rgba(193, 229, 229, 0.16);
   }
 
-  /* Nekko (plum) and Indigo keep the stock Light/Dark surfaces; only text and
-     accents change. --nekko-main is the deep main colour as RGB channels. */
+  /* Nekko (plum) and Indigo use pale family-tinted Light surfaces and stock
+     Dark surfaces. --nekko-main is the deep main colour as RGB channels. */
   [data-preset^='x-plum'] { --nekko-main: 25 0 25; }
   [data-preset^='x-indigo'] { --nekko-main: 43 18 76; }
   [data-theme='light'][data-preset='x-plum-white'] {
-    --paper: #fbfbfd;
-    --win: #fcfcfe;
+    --paper: #fbf6f9;
+    --win: #fcf8fb;
+    --surface: #fffbfd;
+    --surface-2: #f2e7ef;
+    --line: #e3d3df;
+    --ink-soft: #40313f;
+    --ink-faint: #493648;
     --ink: #000000;
     --on-accent: #ffffff;
-    --accent-soft: color-mix(in srgb, #8a4a7f 16%, transparent);
+    --accent-soft: color-mix(in srgb, #5a2352 16%, var(--surface));
     --merged-ink: #190019;
     --merged-wash: rgba(25, 0, 25, 0.08);
     --merged-wash-soft: rgba(25, 0, 25, 0.04);
     --merged-chip: rgba(25, 0, 25, 0.1);
   }
   [data-theme='light'][data-preset='x-indigo-white'] {
-    --paper: #fbfbfd;
-    --win: #fcfcfe;
+    --paper: #f7f5fc;
+    --win: #faf8fe;
+    --surface: #fdfbff;
+    --surface-2: #ede8f6;
+    --line: #ddd4eb;
+    --ink-soft: #3c314a;
+    --ink-faint: #43384f;
     --ink: #000000;
     --on-accent: #ffffff;
-    --accent-soft: color-mix(in srgb, #6e4fa0 16%, transparent);
+    --accent-soft: color-mix(in srgb, #4a2a7a 16%, var(--surface));
     --merged-ink: #2b124c;
     --merged-wash: rgba(43, 18, 76, 0.08);
     --merged-wash-soft: rgba(43, 18, 76, 0.04);
@@ -3758,7 +3768,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    inactive Dynamic panes stay neutral, even when they are working. */
 @property --nekko-glow { syntax: '<number>'; inherits: false; initial-value: 0; }
 :root:is([data-preset^='x-plum'], [data-preset^='x-indigo']) { --nekko-glow-rgb: 133 79 108; --nekko-glow-alpha: .3; }
-:root[data-theme='light']:is([data-preset^='x-plum'], [data-preset^='x-indigo']) { --nekko-glow-rgb: var(--nekko-main); --nekko-glow-alpha: .1; }
+:root[data-theme='light']:is([data-preset^='x-plum'], [data-preset^='x-indigo']) { --nekko-glow-alpha: .22; }
 :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .clean-start-tint { display: none; }
 :is([data-preset^='x-plum'], [data-preset^='x-indigo']) [data-clean-start] .clean-start::before { background: none; }
 :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window > .panel {
