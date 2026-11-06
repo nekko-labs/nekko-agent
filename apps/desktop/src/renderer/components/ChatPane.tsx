@@ -805,7 +805,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // user dismissed the menu with Escape (typing re-opens it).
   const [menuSel, setMenuSel] = useState(0);
   const [menuClosed, setMenuClosed] = useState(false);
-  // "Jump to latest" pill: shown when new content streams in while the reader
+  // "Scroll to latest" pill: shown whenever the reader
   // has scrolled up.
   const [showJump, setShowJump] = useState(false);
   const showHardware = useShown('hardware');
@@ -1290,7 +1290,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // (VirtualTranscript owns that); scrolled up, new content offers the jump
   // pill instead of yanking them down on every token.
   const onPinnedChange = useCallback((pinned: boolean) => {
-    if (pinned) setShowJump(false);
+    setShowJump(!pinned);
   }, []);
   const onGrowWhileUnpinned = useCallback(() => setShowJump(true), []);
 
@@ -2822,7 +2822,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               style={{ background: 'var(--surface)' }}
               onClick={jumpToLatest}
             >
-              ↓ Jump to latest
+              ↓ Scroll to latest
             </button>
           )}
         </div>
