@@ -906,8 +906,8 @@ export function CommandWall({
         <PaneFrame
           pane={pane}
           title={title}
-          // The window's number, then Nekko (the agent's own icon) wearing its status badge; a terminal shows its prompt icon first.
-          icon={pane.kind === 'chat' ? <><WallNumber n={n} /><span data-agent-status><WallMascot status={agentStatus} /></span></>
+          // The window's number (it tells tiled windows apart, so not in Focus), then Nekko (the agent's own icon) wearing its status badge; a terminal shows its prompt icon first.
+          icon={pane.kind === 'chat' ? <>{tiled && <WallNumber n={n} />}<span data-agent-status><WallMascot status={agentStatus} /></span></>
             : terminal ? <>{iconOf(pane.kind)}<span data-agent-status><WallMascot status={terminalStatus(terminal)} label={status?.label} /></span></> : iconOf(pane.kind)}
           badge={
             <>
@@ -922,12 +922,14 @@ export function CommandWall({
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
           closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
+          // Focus shows one window, so there is nowhere to move it to.
+          locked={!tiled}
           onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}
           canSplit={(dir) => wallArrangement(state.layout) === 'grid' && !inDeck && canSplit(state.root, pane.id, dir)}
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
           onClose={() => { void closeWallAgent(pane, () => live.current.update((root) => clearZone(root, pane.id))); }}
-          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><FocusIcon className="h-5 w-5" /></button>}
+          focusAction={tiled && openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><FocusIcon className="h-5 w-5" /></button>}
           onMinimize={() => live.current.update((root) => clearZone(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
         >

@@ -6,11 +6,23 @@ split-from: SPEC.md (2026-10-22)
 
 # Models & providers
 
+## Google and Ollama cloud setup (#1955)
+
+Implemented in the shared desktop/web renderer:
+
+- **Google Gemini** uses a [Google AI Studio API key](https://aistudio.google.com/apikey) and `https://generativelanguage.googleapis.com/v1beta/openai`. It is API billing, not a Google AI subscription login.
+- **Claude on Vertex AI** is a separate choice, opening directly on Google Cloud project ID, location and Application Default Credentials instructions (`gcloud auth application-default login`, or `GOOGLE_APPLICATION_CREDENTIALS` on the host). It never opens Claude Code subscription setup. The form generates a global or regional endpoint; existing daemon credential refresh remains authoritative.
+- **Ollama Cloud** uses an [Ollama Cloud API key](https://ollama.com/settings/keys) and `https://ollama.com/v1`, without the desktop app. Local **Ollama** keeps `http://localhost:11434` and its native local adapter unchanged.
+- The cloud chooser excludes local Ollama, LM Studio and vLLM. First-provider setup offers both local and cloud choices. The Google quick shortcut opens Gemini; the full chooser also offers Vertex.
+- Gemini and Ollama Cloud save as `openai-compat` configurations with vendor labels, hosted endpoints and API-key auth. No new wire kind or migration is needed. Model discovery uses the vendor `/models` route. These hosts do not receive local `chat_template_kwargs`; existing generic model-server connections retain their behavior.
+
+Verification: preset/markup tests, adapter request and model-list fixtures, and isolated hidden Electron form interactions/captures at 1100px and 390px. Real key validation, Google ADC exchange and paid inference remain unverified without user credentials. This is compatible-API support, not native Gemini-specific features or subscription OAuth.
+
 ## Provider-reported effort and grouped picker (#1687)
 
 Implemented in the working change, with shared/provider/daemon regression tests and hidden Electron interaction checks. Published captures were inspected (composer, picker, effort popover); authenticated provider inference and packaged builds remain unverified.
 
-This supersedes the historical inferred effort ladders below. ChatGPT reads `supported_reasoning_levels` and `default_reasoning_level` from its live catalog; Anthropic reads individual support flags under `capabilities.effort`. Exact strings and descriptions are preserved, including new advertised levels without a client release. `normal` remains only a compatibility sentinel and is not a slider stop. Unknown metadata does not imply support: the desktop disables the control rather than guessing. API support is not universal; OpenAI/OpenRouter/local fallback catalogs and Claude Code currently provide no verified effort metadata here. Claude Code's harness does not forward an effort option.
+This supersedes the historical inferred effort ladders below. ChatGPT reads `supported_reasoning_levels` and `default_reasoning_level` from its live catalog; Anthropic reads individual support flags under `capabilities.effort`. Exact strings and descriptions are preserved, including new advertised levels without a client release. `normal` remains only a compatibility sentinel and is not a slider stop. Unknown metadata does not imply support: the desktop disables the control rather than guessing. API support is not universal; OpenAI/OpenRouter/local fallback catalogs currently provide no verified effort metadata here. `[updated 2026-11-06]` Claude subscription chats offer the levels `claude --effort` takes (Low, Medium, High, Extra high, Max) on every model, because Claude Code owns that ladder and steps down by itself on a model without a level (checked live against Haiku 4.5 with `max`). With no choice made, or a saved value it has no name for, no flag is passed and the user's own Claude Code setting stands. A change applies at the next message by relaunching with `--resume`, like a change of model. Claude Code older than 2.1.111 does not get the flag, since it may refuse `xhigh`; the dial still shows there and has no effect until Claude Code updates.
 
 The desktop and daemon resolve a saved unsupported effort to the catalog's published default, or omit native effort when no default is published. A supported choice is sent unchanged, and reply stats use the same resolved value. Saved preferences are not rewritten. Admission uses the latest live catalog snapshot for the exact provider configuration/model without extra network calls. Catalog listing TTL still governs refreshes; the last capability evidence survives expiry/outages but is not shared across credential or endpoint changes. With no matching metadata, legacy compatibility behavior remains; an explicit future value may still be rejected upstream.
 

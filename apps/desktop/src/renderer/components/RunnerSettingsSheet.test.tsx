@@ -153,11 +153,29 @@ describe('RunnerSettingsSheet', () => {
     expect(res?.view).toBe(kept);
   });
 
-  it('save_failure_is_a_toast', async () => {
+  it('save_failure_reports_the_service_error', async () => {
     const pushToast = vi.fn();
     const res = await saveSettings(view(), view().config.settings, view().config.settings, { updateRunner: () => Promise.reject(new Error('The daemon said no.')), pushToast });
     expect(res).toBeNull();
     expect(pushToast).toHaveBeenCalledWith('error', 'Could not save runner settings: The daemon said no.');
+  });
+
+  it('saving_is_announced_and_locks_the_form_and_cancel', () => {
+    const html = renderToStaticMarkup(<SettingsBody view={view()} draft={view().config.settings} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} saving />);
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('<fieldset disabled=""');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Saving runner settings…');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Cancel<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Saving…<\/button>/);
+  });
+
+  it('a_save_error_stays_inside_the_sheet_beside_retry', () => {
+    const html = renderToStaticMarkup(<SettingsBody view={view()} draft={view().config.settings} onDraft={() => {}} onEnabled={() => {}} onSave={() => {}} onRemove={() => {}} saving={false} saveError="Could not save runner settings: Service unavailable." />);
+    expect(html).toMatch(/role="alert"[^>]*>Could not save runner settings: Service unavailable./);
+    expect(html).toContain('>Save</button>');
+    expect(html).not.toContain('Saving…');
+    expect(html).not.toContain('<fieldset disabled');
   });
 
   it('max_job_time_shows_an_odd_value', () => {

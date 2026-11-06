@@ -6,6 +6,7 @@ import { TrashIcon } from '../icons.js';
 import { PaneMetadata } from './PaneFrame.js';
 import { AutomationsEmptyArt, EmptyArea } from './EmptyIllustrations.js';
 import { useStore } from '../store.js';
+import { CiRunnersView } from '../views/CiRunnersView.js';
 import { setAutomationsPaused } from '../automationsPause.js';
 
 function relTime(ms: number): string {
@@ -92,6 +93,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
           <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => void setAutomationsPaused(false).catch(() => {})}>Resume</button>
         </div>
       )}
+      <CiRunnersView panel />
       {sorted.length === 0 ? (
         <EmptyArea className="my-auto" art={<AutomationsEmptyArt />} title="Nothing scheduled">
           Open a chat and use its <span className="font-medium text-ink-soft">⚡ Automate</span> menu to run a prompt at a time, repeat it on a schedule, or keep an agent working in the background. They line up here.

@@ -30,7 +30,7 @@ The quickest way to start is the installer.
    - **macOS (Apple silicon):** the `.dmg`
    - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
 2. Run it. On macOS, drag Nekko Agent into Applications.
-3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab. Click a model's name there to make it the default for new chats.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab (the violet brain-and-gear icon in the left navigation). Click a model's name there to make it the default for new chats.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
@@ -165,9 +165,11 @@ For an identified subagent, **Open ↗** beside its activity row opens the child
 
 The composer shows the model title without a subscription suffix. Open its menu for provider and account details. Cloud providers appear first under **Cloud**, followed by **Local**; when both exist they occupy independently scrolling columns. Your default model is marked inside its provider group instead of repeated at the top.
 
-**Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog.
+**Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog. On a Claude subscription, the choices are the ones Claude Code takes, and it applies the closest level a model has.
 
-Prompt-writing **Suggestions** appear in their own bottom composer row in Expert only.
+In a new chat, prompt-writing **Suggestions** appear on a separate row below the composer controls in Expert only. Ongoing chats keep Suggestions beside the microphone. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
+
+Local chats can read and write `~/.nekko-agent` without adding it as a project folder. This is the app data directory and may contain sensitive local state; normal write approvals still apply. This does not grant the rest of your home folder, change the project directory, or expose the host folder to Sandbox containers.
 
 ### Quickly filter the model picker
 
@@ -181,7 +183,7 @@ The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
 
 ### How the Agents panel groups your agents
 
-The selected agent has a tinted background across its row, so you can spot the chat you are viewing without hovering. Other rows stay flat; their status icons still show whether they are working, waiting or finished.
+The selected agent has a tinted background across its row, so you can spot the chat you are viewing without hovering. Hovering a chat row adds a soft tinted glow with a quick fade, without switching chats. Keyboard focus gets the same glow and a visible outline; reduced motion removes the fade. Other rows stay flat at rest; their status icons still show whether they are working, waiting or finished.
 
 By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
 

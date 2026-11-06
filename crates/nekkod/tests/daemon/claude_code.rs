@@ -25,6 +25,11 @@ pub fn fake_claude() {
         let mut log =
             std::fs::OpenOptions::new().create(true).append(true).open(dir.join("fake-launches.log")).unwrap();
         let _ = writeln!(log, "{how} {session}");
+        if !session.is_empty() {
+            let mut efforts =
+                std::fs::OpenOptions::new().create(true).append(true).open(dir.join("fake-efforts.log")).unwrap();
+            let _ = writeln!(efforts, "{}", flag("--effort").unwrap_or_else(|| "none".into()));
+        }
     }
     let (token, url) = flag("--mcp-config")
         .and_then(|p| std::fs::read_to_string(p).ok())
@@ -642,6 +647,7 @@ async fn stopping_the_chat_stops_its_sub_agent() {
     })
     .await;
     assert_eq!(stopped["message"], "Stopped");
+    assert_eq!(saved(&rig)["turnFailure"]["message"], "Stopped", "a reopened chat still offers Retry");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -814,6 +820,39 @@ async fn a_second_account_runs_in_its_own_folder_and_a_switch_starts_afresh() {
     assert!(log.lines().all(|l| l.starts_with("new ")), "{log}");
     drop(rig);
     let _ = std::fs::remove_dir_all(&home);
+}
+
+/// The effort the chat resolves to is what Claude Code launches with: nothing
+/// until one is chosen, a relaunch when it changes, and no flag for a level
+/// Claude Code has no name for (a value saved on another provider).
+#[tokio::test]
+async fn the_chats_effort_reaches_claude_code() {
+    let rig = rig("effort", "guardrails", true);
+    let provider =
+        json!({ "id": "cc", "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true });
+    let workspace = json!({ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() });
+    write_settings(
+        &rig,
+        json!({ "providers": [provider], "workspaces": [workspace], "defaultChatMode": "guardrails" }),
+    )
+    .await;
+    let chat = json!({ "id": "s_cc", "title": "cc", "workspaceId": "w1", "messages": [], "mode": "guardrails", "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(rig.data.join("sessions/s_cc.json"), chat.to_string()).unwrap();
+    let log = rig.data.join("claude-config/fake-efforts.log");
+    for (choice, expected) in
+        [(None, vec!["none"]), (Some("xhigh"), vec!["none", "xhigh"]), (Some("ultra"), vec!["none", "xhigh", "none"])]
+    {
+        if let Some(choice) = choice {
+            let (status, body) =
+                post(rig.d.port, "session:setOptions", json!(["s_cc", { "effort": choice }]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+        }
+        let opts = json!({ "sessionId": "s_cc", "providerId": "cc", "modelId": "opus", "text": "hello" });
+        let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let launches = std::fs::read_to_string(&log).unwrap_or_else(|_| panic!("no launch: {}", saved(&rig)));
+        assert_eq!(launches.lines().collect::<Vec<_>>(), expected);
+    }
 }
 
 /// After a turn's Done the chat can tell Claude Code still runs background
