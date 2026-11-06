@@ -25,19 +25,23 @@ public struct Draft: Equatable, Sendable {
     public var providerId: String?
     public var modelId: String?
     public var workspaceId: String?
+    public var useDefaultFolders: Bool? = nil
+    public var supportingWorkspaceIds: [String] = []
     public var mode: String?
     public var effort: String?
     /// Why the computer turned this prompt down, when it came back from the outbox.
     public var refusal: String?
 
     public init(text: String = "", skill: SkillSummary? = nil, images: [String] = [], providerId: String? = nil,
-                modelId: String? = nil, workspaceId: String? = nil, mode: String? = nil, effort: String? = nil, refusal: String? = nil) {
+                modelId: String? = nil, workspaceId: String? = nil, mode: String? = nil, effort: String? = nil, refusal: String? = nil, useDefaultFolders: Bool? = nil, supportingWorkspaceIds: [String] = []) {
         self.text = text
         self.skill = skill
         self.images = images
         self.providerId = providerId
         self.modelId = modelId
         self.workspaceId = workspaceId
+        self.useDefaultFolders = useDefaultFolders
+        self.supportingWorkspaceIds = supportingWorkspaceIds
         self.mode = mode
         self.effort = effort
         self.refusal = refusal
@@ -47,6 +51,7 @@ public struct Draft: Equatable, Sendable {
     public var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && skill == nil && images.isEmpty
             && providerId == nil && modelId == nil && workspaceId == nil && mode == nil && effort == nil && refusal == nil
+            && useDefaultFolders != false && supportingWorkspaceIds.isEmpty
     }
 
     /// Something to send: words, a skill or a photo.
@@ -63,7 +68,9 @@ public struct Draft: Equatable, Sendable {
         out.images = Array((back.images + images).prefix(Draft.maxImages))
         out.providerId = providerId ?? back.providerId
         out.modelId = modelId ?? back.modelId
-        out.workspaceId = workspaceId ?? back.workspaceId
+        out.workspaceId = useDefaultFolders == false ? workspaceId : (workspaceId ?? back.workspaceId)
+        out.useDefaultFolders = useDefaultFolders ?? back.useDefaultFolders
+        out.supportingWorkspaceIds = useDefaultFolders == nil ? back.supportingWorkspaceIds : supportingWorkspaceIds
         out.mode = mode ?? back.mode
         out.effort = effort ?? back.effort
         out.refusal = back.refusal ?? refusal
@@ -79,6 +86,8 @@ public struct Draft: Equatable, Sendable {
         if !images.isEmpty { o["images"] = .array(images.map { .string($0) }) }
         if let providerId { o["providerId"] = .string(providerId) }
         if let modelId { o["modelId"] = .string(modelId) }
+        if !supportingWorkspaceIds.isEmpty { o["supportingWorkspaceIds"] = .array(supportingWorkspaceIds.map(JSONValue.string)) }
+        if let useDefaultFolders { o["useDefaultFolders"] = .bool(useDefaultFolders) }
         if let workspaceId { o["workspaceId"] = .string(workspaceId) }
         if let mode { o["mode"] = .string(mode) }
         if let effort { o["effort"] = .string(effort) }
@@ -91,7 +100,8 @@ public struct Draft: Equatable, Sendable {
         return Draft(text: v.str("text") ?? "", skill: SkillSummary.from(v["skill"]),
                      images: v["images"]?.array?.compactMap(\.string) ?? [], providerId: v.str("providerId"),
                      modelId: v.str("modelId"), workspaceId: v.str("workspaceId"), mode: v.str("mode"),
-                     effort: v.str("effort"), refusal: v.str("refusal"))
+                     effort: v.str("effort"), refusal: v.str("refusal"), useDefaultFolders: v["useDefaultFolders"]?.bool,
+                     supportingWorkspaceIds: (v["supportingWorkspaceIds"]?.array ?? []).compactMap(\.string))
     }
 }
 

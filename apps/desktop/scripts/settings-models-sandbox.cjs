@@ -39,7 +39,7 @@ app.whenReady().then(async () => {
         await run(`layoutFixture.store.getState().setView(${js(view)})`);
         await sleep(800);
         await shot(`${view}-${width}`);
-        report.metrics[`${view}-${width}`] = await run(`(() => { const p=document.querySelector('.settings-page'); const n=document.querySelector('.settings-nav,.models-subnav'); return {pageWidth:p?.getBoundingClientRect().width,mainWidth:document.querySelector('main').clientWidth,navX:n?.getBoundingClientRect().x,overflow:document.documentElement.scrollWidth>innerWidth}; })()`);
+        report.metrics[`${view}-${width}`] = await run(`(() => { const p=document.querySelector('.settings-page'); const r=document.querySelector('.settings-rail'); return {pageWidth:p?.getBoundingClientRect().width,mainWidth:document.querySelector('main').clientWidth,railWidth:r?.getBoundingClientRect().width,overflow:document.documentElement.scrollWidth>innerWidth}; })()`);
         if (view === 'skills' || view === 'connectors') {
           const back = await run(`(() => {const b=[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Back to Settings')); if(!b)return false;b.click();return true})()`);
           report.metrics[`${view}-back-${width}`]=back && await run("layoutFixture.store.getState().view==='settings'");
@@ -61,7 +61,7 @@ app.whenReady().then(async () => {
     await shot('more-providers-reopened');
     await run("document.querySelector('[data-provider-setup]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))");
     report.metrics.menu.insideStaysOpen = await isOpen();
-    await run("document.querySelector('.models-section-title').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))"); await sleep(200);
+    await run("document.querySelector('.models-section-heading').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))"); await sleep(200);
     report.metrics.menu.outsideClosed = !(await isOpen());
     await shot('more-providers-outside');
     await run("document.querySelector('[aria-label=\"More providers\"]').click()"); await sleep(200);
@@ -75,9 +75,9 @@ app.whenReady().then(async () => {
         for (const view of ['skills', 'connectors']) assert.equal(report.metrics[`${view}-back-${width}`], true);
         for (const view of ['settings', 'models', 'skills', 'connectors']) assert.equal(report.metrics[`${view}-${width}`].overflow, false);
       }
-      const settings = report.metrics['settings-1440'], models = report.metrics['models-1440'];
-      assert.ok(Math.abs(settings.pageWidth / settings.mainWidth - .8) < .02);
-      assert.ok(Math.abs(settings.navX - models.navX) <= 2);
+      const settings = report.metrics['settings-1440'];
+      assert.equal(settings.railWidth, 240);
+      assert.ok(settings.pageWidth <= 1024);
       for (const [check, passed] of Object.entries(report.metrics.menu)) assert.equal(passed, true, check);
       report.passed = true;
     }

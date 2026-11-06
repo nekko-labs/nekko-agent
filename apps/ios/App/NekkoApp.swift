@@ -119,7 +119,12 @@ private struct NativeAppContent: View {
     /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") { PhoneComposerFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") { PhoneParityFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {
+            PhotoPreviewFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
             ChatRefreshFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
             NewChatFixture()
@@ -147,11 +152,17 @@ private struct NativeAppContent: View {
             .environment(app.store)
             .environment(app.cloud)
             .environment(app.phone)
+            .environment(app.connectors)
             .environment(app.prefs)
             .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
             .onOpenURL { app.handle(url: $0) }
             .task {
                 guard !NativeFixtureRoute.isolated else { return }
+                #if DEBUG
+                // These fixtures skip the transports but keep the rest of the lifecycle, as on main.
+                if ["-uiTestVoiceConversation", "-uiTestPhoneParity", "-uiTestPhoneComposer", "-uiTestPhotoPreviews"]
+                    .contains(where: ProcessInfo.processInfo.arguments.contains) { return }
+                #endif
                 app.start()
             }
             .overlay {

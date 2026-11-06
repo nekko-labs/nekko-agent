@@ -283,7 +283,7 @@ extension ComputersStore {
         replaceAttention(r.2, on: id, ticket: ticket)
         if r.3 != nil {
             let appInfo = AppInfo.from(r.3)
-            learnPlatform(appInfo.platform, for: id)
+            learnPlatform(appInfo.platform, for: id, name: appInfo.computerName ?? appInfo.hostname)
             learnIcon(appInfo.machineIcon, for: id)
         }
         savePeerList(id)

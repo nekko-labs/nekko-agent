@@ -39,6 +39,7 @@ const SETTINGS = {
   defaultModelId: 'm1',
   favoriteModels: ['p1::m1'], machineIcon: 'tower',
   defaultChatMode: 'ask',
+  defaultWorkspaceIds: ['w'],
   effort: 'high',
   chatPaneAction: 'complete',
   skipDeleteConfirmation: false,
@@ -88,6 +89,15 @@ describe('phone channel allowlist', () => {
 });
 
 describe('saved folders from a phone', () => {
+  it('sets only bounded supporting folder ids through the signed change gate', async () => {
+    expect(phoneChannelClass('session:setSupportingWorkspaces')).toBe('change');
+    const dispatch = vi.fn(() => ({ id: 'chat' }));
+    await callFromPhone(dispatch, 'session:setSupportingWorkspaces', ['chat', ['docs']]);
+    expect(dispatch).toHaveBeenCalledWith('session:setSupportingWorkspaces', ['chat', ['docs']]);
+    for (const args of [[], ['', []], ['chat', ['/private']], ['chat', [], 'extra']]) {
+      expect(code(() => screenPhoneCall('session:setSupportingWorkspaces', args))).toBe('value-invalid');
+    }
+  });
   for (const [channel, value] of [['workspace:addByPath', '/Users/me/project'], ['workspace:remove', 'ws_123']]) {
     it(`screens and forwards ${channel} with its existing positional payload and list result`, async () => {
       expect(phoneChannelAllowed(channel)).toBe(true);
@@ -107,6 +117,14 @@ describe('saved folders from a phone', () => {
 });
 
 describe('settings from a phone', () => {
+  it('allows only bounded opaque default folder ids, never paths', () => {
+    for (const ids of [[], ['ws_123', 'folder-2']]) {
+      expect(code(() => screenPhoneCall('settings:update', [{ defaultWorkspaceIds: ids }]))).toBe('ok');
+    }
+    for (const ids of [null, 'ws_123', ['/Users/me'], [''], [3], ['a'.repeat(257)], Array(101).fill('id')]) {
+      expect(code(() => screenPhoneCall('settings:update', [{ defaultWorkspaceIds: ids }]))).toBe('value-invalid');
+    }
+  });
   it('accepts only the listed keys with valid values', () => {
     expect(code(() => screenPhoneCall('settings:update', [{ defaultChatMode: 'guardrails', chatPaneAction: 'delete' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('settings:update', [{ voice: { enabled: false, language: 'es' } }]))).toBe('ok');

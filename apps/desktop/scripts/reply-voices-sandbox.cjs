@@ -21,6 +21,12 @@ const measure = `(() => {
     pane: box(s),
     blocks: [...s.querySelectorAll('.msg-ai p')].map(p => ({ voice: voice(p.closest('.msg-ai')), text: box(p), start: p.textContent.slice(0, 32) })),
     topics: [...s.querySelectorAll('[data-topic]')].map(t => t.dataset.topic + ': ' + t.textContent),
+    surfaces: [...s.querySelectorAll('.msg-ai[data-voice]')].map(el => {
+      const css = getComputedStyle(el);
+      return { voice: voice(el), background: css.backgroundColor, radius: css.borderRadius,
+        borders: [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth],
+        leftColor: css.borderLeftColor, box: box(el) };
+    }),
   };
 })()`;
 
@@ -41,8 +47,8 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     await sleep(1500);
-    for (const [width, theme] of [[1500, 'dark'], [1500, 'light'], [700, 'dark']]) {
-      win.setContentSize(width, 1500);
+    for (const [width, theme] of [[1500, 'dark'], [1500, 'light'], [700, 'dark'], [390, 'dark']]) {
+      win.setContentSize(width, width === 390 ? 2300 : 1500);
       await run(`document.documentElement.dataset.theme='${theme}'`);
       await run('integration.reset()'); await sleep(1500);
       await run("document.querySelector('[data-transcript-scroll]').scrollTop = 0"); await sleep(300);

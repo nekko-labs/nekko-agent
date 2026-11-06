@@ -16,6 +16,8 @@ struct ThemePreset: Identifiable {
     static func find(_ id: String?) -> ThemePreset? { all.first { $0.id == id } }
     /// System, Light and Dark keep the phone's own palette (its accents are tuned for contrast).
     var isBasic: Bool { ["system", "light", "dark"].contains(id) }
+    /// The violet System, Light and Dark shipped before the plum palette; desktops still save them.
+    static let retiredBasicAccents: Set<Int> = [0x6D5EFC, 0x8B7DFF]
     var isSpooky: Bool { id == "autumn" }
 }
 
@@ -26,8 +28,10 @@ struct Palette {
     var success, danger, warning, running, userBubble, userInk, code: Color
 
     static func make(dark: Bool, accent: UInt32?, preset: ThemePreset? = nil) -> Palette {
-        let base = dark ? 0x8B7DFF : 0x5A4AE8
-        let tinted = accent.map { Int($0) } ?? preset.flatMap { $0.isBasic ? nil : $0.accent }
+        let base = dark ? 0xC084B5 : 0x5A2352
+        // A basic preset's old shipped violet (a computer from before the plum palette) reads as none.
+        let sent = accent.map { Int($0) }.flatMap { preset?.isBasic != false && ThemePreset.retiredBasicAccents.contains($0) ? nil : $0 }
+        let tinted = sent ?? preset.flatMap { $0.isBasic ? nil : $0.accent }
         let a = tinted ?? base
         // Whichever of white or near-black reads better on the accent (WCAG contrast).
         let onAccent = contrast(a, 0xFFFFFF) >= contrast(a, 0x0C0C11) ? Color.white : Color(hex: 0x0C0C11)
@@ -37,7 +41,7 @@ struct Palette {
                         line: Color(hex: 0x26262F), ink: Color(hex: 0xECEAF3), inkSoft: Color(hex: 0xA3A1B0),
                         inkFaint: Color(hex: 0x8E8E9B), accent: Color(hex: a), onAccent: onAccent,
                         success: Color(hex: 0x4CC38A), danger: Color(hex: 0xEF6A5B), warning: Color(hex: 0xE3A446),
-                        running: Color(hex: 0x60A5FA), userBubble: tinted == nil ? Color(hex: 0x2A2550) : Color(hex: a).opacity(0.28),
+                        running: Color(hex: 0x60A5FA), userBubble: tinted == nil ? Color(hex: 0x3A1438) : Color(hex: a).opacity(0.28),
                         userInk: Color(hex: 0xECEAF3), code: Color(hex: 0x101016))
         } else {
             p = Palette(paper: Color(hex: 0xFBFBFD), surface: .white, surface2: Color(hex: 0xF2F2F7),
@@ -82,7 +86,7 @@ extension Color {
 }
 
 /// The app's ground: the theme's paper washed with its accent, strongest at the top, so
-/// every theme has its own colour (the default is Nekko purple). Lists and forms sit on it
+/// every theme has its own colour (the default is Nekko plum). Lists and forms sit on it
 /// as the desktop's panels sit on its paper.
 struct AppBackdrop: View {
     /// The accent's share at the top: faint ink and coloured text keep 4.5:1 on it (`PaletteTests`).

@@ -6,7 +6,7 @@ import { migrate } from "./migrate.js";
 import { FlyDriver } from "./fly.js";
 import { sweepMachineHours } from "./machines.js";
 import { resendMailer } from "./confirmations.js";
-import { purgeSignups } from "./retention.js";
+import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
 import { supabaseAdminDeleter, supabaseVerifier } from "./supabase.js";
 
@@ -43,6 +43,13 @@ const purge = () => purgeSignups(db)
   .catch(failed("purging signups"));
 await purge();
 setInterval(purge, 6 * 60 * 60 * 1000).unref();
+
+// Send feedback screenshots are deleted 90 days after their note arrived.
+const purgeScreenshots = () => purgeFeedbackScreenshots(db)
+  .then((n) => { if (n) console.log(`feedback screenshots purged: ${n}`); })
+  .catch(failed("purging feedback screenshots"));
+await purgeScreenshots();
+setInterval(purgeScreenshots, 6 * 60 * 60 * 1000).unref();
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean)

@@ -27,8 +27,35 @@ concurrency:
   group: android-native-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # The nightly's version, MAJOR.MINOR.BUILD (docs/decisions/0055): the next
+  # Android BUILD since the newest release tag, kept as the counter tag
+  # nightly/android/v<version> on the commit. A night with no new commit (or a
+  # cancelled run's replacement) reuses the version the commit already has. A
+  # PR, or a dispatch off main, builds with the checked-in version and counts
+  # nothing.
+  version:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: nightly-version-android
+      cancel-in-progress: false
+    outputs:
+      version: ${{ steps.reserve.outputs.version }}
+      code: ${{ steps.reserve.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: reserve
+        run: node scripts/nightly-version.mjs --platform android --reserve --reuse-same-commit
+
   build-and-test:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:android')
+    needs: version
+    if: >-
+      !cancelled() && needs.version.result != 'failure' &&
+      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:android'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -69,7 +96,16 @@ jobs:
         run: node apps/android/scripts/e2e-vector.mjs open "$RUNNER_TEMP/kotlin-frames.json"
       - name: Lint and build
         working-directory: apps/android
-        run: ./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease --console=plain
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          CODE: ${{ needs.version.outputs.code }}
+        run: |
+          stamp=()
+          if [ -n "$VERSION" ]; then
+            stamp=("-PnekkoVersionName=$VERSION" "-PnekkoVersionCode=$CODE")
+            echo "### Android nightly $VERSION (versionCode $CODE)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          ./gradlew :app:lintDebug :app:assembleDebug :app:assembleRelease ${stamp[@]+"${stamp[@]}"} --console=plain
       - uses: actions/upload-artifact@v7
         if: always()
         with:

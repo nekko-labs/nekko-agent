@@ -137,6 +137,7 @@ import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
  * phone-artifacts.ts and chat-links.ts.
  */
 export const PHONE_CHANNELS = [
+  'activity:state',
   'app:info',
   'app:quit',
   'artifact:read',
@@ -196,7 +197,9 @@ export const PHONE_CHANNELS = [
   'session:delete',
   'session:fork',
   'session:get',
+  'session:photo',
   'session:setOptions',
+  'session:setSupportingWorkspaces',
   'session:watches',
   'sessions:summaries',
   'settings:get',
@@ -375,6 +378,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'providers:list',
   'providers:sealKey',
   'session:get',
+  'session:photo',
   'session:watches',
   'sessions:summaries',
   'settings:get',
@@ -390,9 +394,17 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
  * Server's state and a chat's context totals, each a narrow projection.
  */
 export const PHONE_MONITOR_READ_CHANNELS: readonly string[] = ['context:preview', 'engine:status', 'gpu:stats', 'system:stats'];
+/**
+ * Whether someone is using a computer (2026-11-05), so New chat can start a
+ * local-model chat on a free one: only yes/no answers, never how long it has
+ * been idle, its battery or its temperatures.
+ */
+export const PHONE_ACTIVITY_READ_CHANNELS: readonly string[] = ['activity:state'];
+export const PHONE_ACTIVITY_VIEW = ['chatActive', 'headless', 'strain', 'userActive'] as const;
 export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_CHAT_READ_CHANNELS,
   ...PHONE_MONITOR_READ_CHANNELS,
+  ...PHONE_ACTIVITY_READ_CHANNELS,
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
@@ -457,6 +469,7 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
   // Saved-folder access changes need a signed proof, including revocation.
+  'session:setSupportingWorkspaces',
   'workspace:addByPath',
   'workspace:remove',
   ...PHONE_PROVIDER_CHANGE_CHANNELS,
@@ -572,6 +585,7 @@ export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): vo
 export const PHONE_SETTINGS_KEYS = [
   'chatPaneAction',
   'defaultChatMode',
+  'defaultWorkspaceIds',
   'machineIcon',
   'skipDeleteConfirmation',
   'voice.enabled',
@@ -591,6 +605,7 @@ export const PHONE_SETTINGS_VIEW = [
   'automationsPaused',
   'chatPaneAction',
   'defaultChatMode',
+  'defaultWorkspaceIds',
   'defaultModelId',
   'defaultProviderId',
   'machineIcon',
@@ -795,9 +810,21 @@ export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
  *   side, `thumbnailPhoneImages`), then only the newest `images` of them, each
  *   at most `thumbChars` long, are kept. Any other photo becomes `''`, so the
  *   phone still knows how many there were.
+ * - one photo at a time at full size when the phone opens it (`session:photo`):
+ *   the stored photo when it fits `photoSide` and `photoChars`, else a JPEG
+ *   copy with its long side at most `photoSide` px, so a phone screen shows it
+ *   sharp and it still fits one relay frame.
  * The computer keeps the whole chat; the desktop is where the full detail lives.
  */
-export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, thumbSide: 384, thumbChars: 96 * 1024 } as const;
+export const PHONE_SESSION_VIEW = {
+  messages: 300,
+  textChars: 4000,
+  images: 40,
+  thumbSide: 384,
+  thumbChars: 96 * 1024,
+  photoSide: 2048,
+  photoChars: 6 * 1024 * 1024,
+} as const;
 
 /**
  * The largest sealed reply frame the agent sends a phone. The relay drops
@@ -889,6 +916,9 @@ function chatMode(value: unknown, what: string): void {
 /** One phone-settable setting's value, or why not. */
 function settingValue(path: string, value: unknown): void {
   switch (path) {
+    case 'defaultWorkspaceIds':
+      if (Array.isArray(value) && value.length <= 100 && value.every((id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(id))) return;
+      break;
     case 'machineIcon':
       if (value === '' || (COMPUTER_ICONS as readonly unknown[]).includes(value)) return;
       break;
@@ -969,6 +999,10 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'session:setSupportingWorkspaces':
+      if (args.length !== 2 || typeof args[0] !== 'string' || !args[0]) throw new PhoneAccessError('value-invalid', 'session id');
+      settingValue('defaultWorkspaceIds', args[1]);
+      return {};
     case 'workspace:addByPath':
     case 'workspace:remove':
       if (typeof args[0] !== 'string' || args[0].trim() === '' || args[0].includes('\0')) {
@@ -989,6 +1023,12 @@ export function screenPhoneCall(
     case 'session:watches':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
+      return {};
+    case 'session:photo':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'message id');
+      if (!Number.isInteger(args[2]) || (args[2] as number) < 0) throw new PhoneAccessError('value-invalid', 'photo index');
+      if (args.length > 3) throw new PhoneAccessError('option-denied', 'extra argument');
       return {};
     case 'session:fork':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
@@ -1172,6 +1212,9 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'session:get':
     case 'chat:steer':
       return phoneSessionView(result);
+    case 'session:photo':
+      // One photo's data URL, nothing else.
+      return typeof result === 'string' && result.startsWith('data:image/') ? result : null;
     case 'changes:list':
       return phoneChangesView(result);
     case 'chat:editQueued':
@@ -1180,6 +1223,8 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return isObj(result) ? pick(result, ['id', 'title']) : null;
     case 'engine:settings':
       return pick(result, PHONE_MODEL_SERVER_VIEW);
+    case 'activity:state':
+      return pick(result, PHONE_ACTIVITY_VIEW);
     case 'tasks:list':
       return phoneTasksView(result);
     case 'workflows:list':
@@ -1367,12 +1412,15 @@ export async function callFromPhone(
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
   if (channel === 'system:stats' || channel === 'gpu:stats' || channel === 'engine:status') callArgs = [];
+  // The computer's own idle threshold: the phone never sets it.
+  if (channel === 'activity:state') callArgs = [];
   // A chat's own context only: the phone never attaches a path.
   if (channel === 'context:preview') callArgs = [args[0], []];
   if (channel === 'model:unload') callArgs = [args[0], args[1]];
   if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
+  if (channel === 'session:photo') callArgs = [args[0], args[1], args[2]];
   if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
   if (channel === 'terminal:create') {
     // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.
@@ -1435,6 +1483,7 @@ export function phoneAccessPolicy() {
     optionSwitches: [...PHONE_OPTION_SWITCHES],
     engineKeys: [...PHONE_ENGINE_KEYS],
     modelServerView: [...PHONE_MODEL_SERVER_VIEW],
+    activityView: [...PHONE_ACTIVITY_VIEW],
     modelSettingChannels: [...PHONE_MODEL_SETTING_CHANNELS],
     presetPathKeys: [...PHONE_PRESET_PATH_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],

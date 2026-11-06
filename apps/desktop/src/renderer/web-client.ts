@@ -55,6 +55,7 @@ function makeWebClient(): NekkoApi {
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
   const imageCbs = new Set<(view: import('@nekko-agent/shared').ImageView) => void>();
+  const linuxImageCbs = new Set<(view: import('@nekko-agent/shared').LinuxImageView) => void>();
   const runnerCbs = new Set<(views: import('@nekko-agent/shared').RunnerView[]) => void>();
   const githubSetupCbs = new Set<(view: import('@nekko-agent/shared').GithubSetupView) => void>();
   const oauthStatusCbs = new Set<(s: OAuthStatus) => void>();
@@ -79,6 +80,7 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerImageChanged) imageCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerLinuxImageChanged) linuxImageCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerChanged) runnerCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.runnerGithubChanged) githubSetupCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
@@ -419,7 +421,7 @@ function makeWebClient(): NekkoApi {
     telemetryCapture: (event, props) => call(IpcChannels.telemetryCapture, event, props),
     telemetryStatus: () => call(IpcChannels.telemetryStatus),
     feedbackInfo: () => call(IpcChannels.feedbackInfo),
-    feedbackSend: (message, includeAppInfo) => call(IpcChannels.feedbackSend, message, includeAppInfo),
+    feedbackSend: (message, includeAppInfo, screenshots) => call(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
     syncTurnOn: () => call(IpcChannels.syncTurnOn),
     syncConfirmRecoveryKey: (text) => call(IpcChannels.syncConfirmRecoveryKey, text),
     syncRestore: (text) => call(IpcChannels.syncRestore, text),
@@ -686,12 +688,17 @@ function makeWebClient(): NekkoApi {
     buildImage: (req) => call(IpcChannels.runnerImageBuild, req),
     resumeImage: () => call(IpcChannels.runnerImageResume),
     cancelImage: () => call(IpcChannels.runnerImageCancel),
+    linuxImageStatus: () => call(IpcChannels.runnerLinuxImageStatus),
+    buildLinuxImage: () => call(IpcChannels.runnerLinuxImageBuild),
+    cancelLinuxImage: () => call(IpcChannels.runnerLinuxImageCancel),
     listRunners: () => call(IpcChannels.runnerList),
     connectRunner: (req) => call(IpcChannels.runnerConnect, req),
     updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
     removeRunner: (id) => call(IpcChannels.runnerRemove, id),
     setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
     runnerJobLog: (id, jobId) => call(IpcChannels.runnerJobLog, id, jobId),
+    runnerLiveLog: (id, vm) => call(IpcChannels.runnerLiveLog, id, vm),
+    runnerJob: (id, action, repo, jobId) => call(IpcChannels.runnerJob, id, action, repo, jobId),
     runnerVmLog: (id, vm) => call(IpcChannels.runnerVmLog, id, vm),
     githubAccounts: () => call(IpcChannels.runnerGithubAccounts),
     githubStart: (req) => call(IpcChannels.runnerGithubStart, req),
@@ -861,6 +868,10 @@ function makeWebClient(): NekkoApi {
     onImageChanged: (cb) => {
       imageCbs.add(cb);
       return () => imageCbs.delete(cb);
+    },
+    onLinuxImageChanged: (cb) => {
+      linuxImageCbs.add(cb);
+      return () => linuxImageCbs.delete(cb);
     },
     onRunnersChanged: (cb) => {
       runnerCbs.add(cb);

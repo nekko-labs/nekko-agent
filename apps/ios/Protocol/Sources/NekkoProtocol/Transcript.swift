@@ -302,7 +302,7 @@ public enum Transcript {
 }
 
 /// What the chat list shows next to a computer's chat.
-public enum Activity: Sendable, Equatable { case running, needsYou }
+public enum Activity: Sendable, Equatable { case running, needsYou, failed }
 
 public enum ActivityTracker {
     /// Track which chats are mid-run or waiting on the user, from the event stream.
@@ -311,7 +311,8 @@ public enum ActivityTracker {
         switch e {
         case .approvalRequired, .question: next = .needsYou
         case .text, .reasoning, .toolCall, .toolResult, .questionResolved: next = .running
-        case .done, .error: next = nil
+        case .error: next = .failed
+        case .done: next = activity[e.sessionId] == .failed ? .failed : nil
         default: return activity
         }
         var out = activity

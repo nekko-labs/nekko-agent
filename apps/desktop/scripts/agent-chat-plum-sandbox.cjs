@@ -25,13 +25,15 @@ app.whenReady().then(async () => {
   const theme = () => run("integration.theme({theme:'dark',themePreset:'x-plum-dark',defaultProviderId:'fixture',defaultModelId:'fixture-model'}); document.querySelector('[aria-label=\"Detailed: every control\"]')?.click(); document.documentElement.dataset.theme='dark'; document.documentElement.dataset.preset='x-plum-dark'; integration.records().forEach(s=>integration.state().setPlanRail(s.id,false))");
   const facts = () => run(`(() => {
     const windows = [...document.querySelectorAll('.command-wall-window')].filter(w => { const r=w.getBoundingClientRect(); return !w.hasAttribute('data-wall-parked') && r.width>0 && r.height>0 && r.left>=0 && r.top>=0 && r.left<innerWidth; });
-    return windows.map(w => { const p=w.querySelector(':scope > .panel'), row=w.querySelector('[data-composer-suggestions-row]'), bar=w.querySelector('.composer-bar'), effort=w.querySelector('[data-effort-index]'); return {id:w.dataset.wallPane,selected:w.hasAttribute('data-wall-selected'),glow:p && +getComputedStyle(p).getPropertyValue('--nekko-glow'),animation:p && getComputedStyle(p,'::before').animationName,effortBorder:effort && getComputedStyle(effort).borderTopWidth,row:!!row,below:!!row && !!bar && row.getBoundingClientRect().top>=bar.getBoundingClientRect().bottom-1}; });
+    return windows.map(w => { const p=w.querySelector(':scope > .panel'), chip=w.querySelector('.composer-bar [data-prompt-suggestions]'), mic=w.querySelector('.composer-bar [aria-label$=" listening"]'), effort=w.querySelector('[data-effort-index]'); return {id:w.dataset.wallPane,selected:w.hasAttribute('data-wall-selected'),glow:p && +getComputedStyle(p).getPropertyValue('--nekko-glow'),animation:p && getComputedStyle(p,'::before').animationName,effortBorder:effort && getComputedStyle(effort).borderTopWidth,beside:!!chip && !!mic && chip.getBoundingClientRect().right<=mic.getBoundingClientRect().left+1 && Math.abs((chip.getBoundingClientRect().top+chip.getBoundingClientRect().bottom)/2-(mic.getBoundingClientRect().top+mic.getBoundingClientRect().bottom)/2)<12}; });
   })()`);
   try {
     await win.loadFile(path.join(out, 'index.html'), { query: { multi: '1' } });
     for(let i=0;i<150 && !await run('!!window.integration && !!document.querySelector(".command-wall-window")');i++) await sleep(100);
     await theme(); await wall('focus'); await sleep(800);
     await run("[...document.querySelectorAll('[data-agent-panel] .agent-chip')].find(c=>c.title==='Existing conversation').click()");
+    const boxHeight = () => run("document.querySelector('.command-wall-window[data-wall-selected] .composer').getBoundingClientRect().height");
+    const emptyHeight = await boxHeight();
     await run(`(() => { const ed=document.querySelector('.command-wall-window[data-wall-selected] .composer [contenteditable], .command-wall-window[data-wall-selected] .composer textarea'); if(!ed) throw Error('Missing composer'); ed.focus(); if(ed.tagName==='TEXTAREA'){Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(ed,'Please improve this feature and explain the changes.');ed.dispatchEvent(new Event('input',{bubbles:true}));}else{document.execCommand('insertText',false,'Please improve this feature and explain the changes.');} })()`);
     for(let i=0;i<8;i++){await shot();await sleep(200);}
     await capture('full-chat-1400');
@@ -39,9 +41,10 @@ app.whenReady().then(async () => {
     check('flat sidebar chats',cards.length>0 && cards.every(c=>c.bg==='rgba(0, 0, 0, 0)' && c.border==='0px'),cards);
     let f=await facts(); check('full chat keeps selected glow',f.some(w=>w.selected && w.glow>.99),f);
     check('effort gauge is borderless',f.some(w=>w.effortBorder==='0px'),f);
-    check('suggestions have next row',f.some(w=>w.row && w.below),f);
+    check('suggestions sit beside the microphone',f.some(w=>w.beside),f);
+    const typedHeight = await boxHeight(); check('suggestions leave the box height alone',typedHeight===emptyHeight,{emptyHeight,typedHeight});
     win.setContentSize(460,900); await sleep(900); await capture('full-chat-460');
-    f=await facts();check('narrow suggestions keep their own row',f.some(w=>w.selected && w.below),f);
+    f=await facts();check('narrow suggestions stay beside the microphone',f.some(w=>w.selected && w.beside),f);
     await run("document.querySelector('[data-prompt-suggestions]')?.click()");
     check('suggestions still open',await run("!!document.querySelector('[role=dialog][aria-label=\"Prompt suggestions\"]')"),{});
     await run("document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");

@@ -4,6 +4,7 @@ import XCTest
 @testable import NekkoProtocol
 
 /// A computer's public key as a pairing link carries it.
+let otherTestHostKey = String(repeating: "A", count: 87) + "="
 let testHostKey = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
 
 final class MemoryStore: SecureStore, @unchecked Sendable {
@@ -129,7 +130,7 @@ final class StoreTests: XCTestCase {
             Channels.providersList: { _ in [["id": "p", "kind": "openai", "label": "P", "enabled": true, "apiKey": "sk-x"], ["id": "off", "label": "Off", "enabled": false]] },
             Channels.settingsGet: { _ in ["defaultProviderId": "p", "defaultModelId": "m", "theme": "dark", "defaultChatMode": "ask"] },
             Channels.workspaceList: { _ in [["id": "w", "name": "App"]] },
-            Channels.appInfo: { _ in ["version": "0.9.0", "platform": "darwin"] },
+            Channels.appInfo: { _ in ["version": "0.9.0", "platform": "darwin", "hostname": "Studio Mac"] },
             Channels.chatPending: { _ in ["s1": ["question": ["callId": "q", "questions": []]]] },
             Channels.modelsList: { args in args.first == "p" ? [["id": "m", "providerId": "p", "name": "Model M"]] : [] },
         ]
@@ -171,7 +172,7 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.pcSettings.effectiveMode, .ask)
         XCTAssertEqual(s.workspaces.map(\.name), ["App"])
         XCTAssertEqual(s.activity["s1"], .needsYou)
-        XCTAssertEqual(s.active?.name, "Mac", "named after its OS on first contact")
+        XCTAssertEqual(s.active?.name, "Studio Mac", "named after the actual computer on first contact")
         XCTAssertEqual(s.hostVersion, "0.9.0")
         XCTAssertEqual(s.active?.route, .tailscale)
 
@@ -251,6 +252,47 @@ final class StoreTests: XCTestCase {
         let again = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey, pair: "BBBB3333"))
         XCTAssertEqual(again, id)
         XCTAssertEqual(s.computers.map(\.name), ["Studio"])
+    }
+
+    func testRepairAcrossRelayAndRoomChangesKeepsIdentityAndRoutes() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://old", room: room, key: key, hostKey: testHostKey))
+        s.rename(id, to: "Studio")
+        let pairedAt = s.active?.pairedAt
+        let again = try await s.pair(PairingLink(relayUrl: "wss://new", room: "new-room", key: key, hostKey: testHostKey, pair: "NEW", alts: ["ws://192.168.1.2:4400"]))
+        XCTAssertEqual(again, id)
+        XCTAssertEqual(s.computers.count, 1)
+        XCTAssertEqual(s.active?.name, "Studio")
+        XCTAssertEqual(s.active?.pairedAt, pairedAt)
+        XCTAssertEqual(s.active?.relayUrl, "wss://new")
+        XCTAssertEqual(connections.last?.config.room, "new-room")
+        XCTAssertEqual(connections.last?.config.pairCode, "NEW")
+        XCTAssertEqual(s.active?.alts, ["ws://192.168.1.2:4400"])
+    }
+
+    func testNamesLearnTheHostNameAndKeepPhoneNicknames() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        s.learnPlatform("darwin", for: id)
+        XCTAssertEqual(s.active?.name, "Mac")
+        s.learnPlatform("darwin", for: id, name: "Philip’s MacBook Pro")
+        XCTAssertEqual(s.active?.name, "Philip’s MacBook Pro")
+        s.learnPlatform("darwin", for: id, name: "Studio Mac")
+        XCTAssertEqual(s.active?.name, "Studio Mac")
+        s.learnPlatform(nil, for: id)
+        XCTAssertEqual(s.active?.name, "Studio Mac", "a failed info read keeps the learned name")
+        s.rename(id, to: "Mac") // Even an explicitly chosen generic name is a nickname.
+        s.learnPlatform("darwin", for: id, name: "Work Mac")
+        XCTAssertEqual(s.active?.name, "Mac")
+        let reloaded = makeStore()
+        reloaded.load()
+        reloaded.learnPlatform("darwin", for: id, name: "New name")
+        XCTAssertEqual(reloaded.active?.name, "Mac")
+        let info = AppInfo.from(["hostname": "system", "computerName": "custom"])
+        XCTAssertEqual(info.hostname, "system")
+        XCTAssertEqual(info.computerName, "custom")
     }
 
     func testEventsTrackActivityAppearanceAndRefreshTheList() async throws {
@@ -443,7 +485,7 @@ final class StoreTests: XCTestCase {
         let s = makeStore()
         s.load()
         let a = try await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key, hostKey: testHostKey))
-        let b = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: testHostKey))
+        let b = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: otherTestHostKey))
         XCTAssertEqual(s.activeId, b)
         connections.last!.status(RelayStatus(.denied, detail: "revoked", denied: .revoked))
         await settle()
@@ -468,7 +510,7 @@ final class StoreTests: XCTestCase {
         s.cardLevel = .standard
         await settle()
         XCTAssertEqual(first.cards.last?.str("level"), "standard")
-        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: testHostKey))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: otherTestHostKey))
         XCTAssertFalse(connections.last === first, "the switch did not wait")
         await settle()
         XCTAssertEqual(first.cards.last?.str("level"), "none")
@@ -488,7 +530,7 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.connectionLog.entries[1].repeats, 2)
         s.connect(a)
         XCTAssertEqual(s.connectionLog.entries.count, 4, "reconnecting the same computer keeps its history")
-        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: testHostKey))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: otherTestHostKey))
         XCTAssertEqual(s.connectionLog.entries.map(\.state), [.connecting], "another computer starts its own")
         XCTAssertFalse(s.connectionLog.text(relayHost: "b", route: .internet).contains(room))
     }

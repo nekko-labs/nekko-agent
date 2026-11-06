@@ -642,6 +642,7 @@ struct PaneStatusDot: View {
         switch content.chatId.flatMap({ store.activity[$0] }) {
         case .needsYou?: return String(localized: ", needs you")
         case .running?: return String(localized: ", working")
+        case .failed?: return String(localized: ", stopped on an error")
         default: return ""
         }
     }

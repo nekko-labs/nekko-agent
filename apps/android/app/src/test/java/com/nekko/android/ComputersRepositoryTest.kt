@@ -175,7 +175,7 @@ class ComputersRepositoryTest {
         repo.connect(a)
         runCurrent()
         assertTrue("reconnecting the same computer keeps its history", repo.connectionLog.value.size > states.size)
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals("another computer starts its own", listOf(RelayState.CONNECTING), repo.connectionLog.value.map { it.state }.distinct())
     }
@@ -368,7 +368,7 @@ class ComputersRepositoryTest {
         assertEquals(com.nekko.protocol.PhoneProtocol.VERSION - 1, repo.state.value.hostProtocol)
         assertEquals(com.nekko.protocol.ProtocolCheck.UPDATE_COMPUTER, repo.state.value.protocolCheck)
 
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         assertNull("another computer hasn't said yet", repo.state.value.hostProtocol)
         remotes.last.sayWelcome()
         runCurrent()
@@ -412,12 +412,31 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `re-pairing after route and room changes updates one computer`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        repo.rename(id, "Studio")
+        val pairedAt = repo.state.value.active?.pairedAt
+        val next = link.copy(relayUrl = "wss://new.example", room = "new-room", pair = "NEW999", alts = listOf("ws://192.168.1.2:4400"))
+        assertEquals(id, repo.pair(next))
+        assertEquals(1, repo.state.value.computers.size)
+        assertEquals("Studio", repo.state.value.active?.name)
+        assertEquals(pairedAt, repo.state.value.active?.pairedAt)
+        assertEquals(next.relayUrl, repo.state.value.active?.relayUrl)
+        assertEquals(next.alts, repo.state.value.active?.alts)
+        assertEquals("new-room", remotes.last.config.room)
+        assertEquals("NEW999", remotes.last.config.pairCode)
+    }
+
+    @Test
     fun `forget removes the secret and switches to the next computer`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()
         val repo = repo(store, remotes)
         val first = repo.pair(link)
-        val second = repo.pair(link.copy(room = "ffeeddccbbaa9988"))
+        val second = repo.pair(link.copy(room = "ffeeddccbbaa9988", hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals(second, repo.state.value.activeId)
         val secondRemote = remotes.last
@@ -446,7 +465,7 @@ class ComputersRepositoryTest {
         val store = FakeStore()
         val remotes = FakeRemotes { c ->
             when (c.channel) {
-                Channels.APP_INFO -> buildJsonObject { put("platform", "darwin"); put("version", "1.2.3") }
+                Channels.APP_INFO -> buildJsonObject { put("platform", "darwin"); put("version", "1.2.3"); put("hostname", "Studio Mac") }
                 Channels.PROVIDERS_LIST -> buildJsonArray {
                     add(buildJsonObject {
                         put("id", "openai"); put("kind", "openai"); put("label", "OpenAI"); put("enabled", true)
@@ -477,9 +496,9 @@ class ComputersRepositoryTest {
         runCurrent()
 
         val s = repo.state.value
-        assertEquals("Mac", s.active?.name)
+        assertEquals("Studio Mac", s.active?.name)
         assertEquals("darwin", s.active?.platform)
-        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"Mac\""))
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"Studio Mac\""))
         assertEquals(listOf("s1"), s.summaries.map { it.id })
         assertEquals("OpenAI", s.providers.single().label)
         assertEquals("gpt", s.defaults.defaultModelId)
@@ -605,6 +624,32 @@ class ComputersRepositoryTest {
         refresh.join()
         assertTrue(repo.state.value.attention.known)
         assertTrue(repo.state.value.attention.pending.isEmpty())
+    }
+
+    @Test
+    fun `shared computer name updates but phone nickname persists`() = runTest {
+        var name = "Studio Mac"
+        val store = FakeStore()
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.APP_INFO) buildJsonObject {
+                put("platform", "darwin"); put("hostname", "system-name"); put("computerName", name)
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals("Studio Mac", repo.state.value.active?.name)
+        name = "Work Mac"
+        repo.refresh()
+        runCurrent()
+        assertEquals("Work Mac", repo.state.value.active?.name)
+        repo.rename(id, "Mac")
+        name = "New name"
+        repo.refresh()
+        runCurrent()
+        assertEquals("Mac", repo.state.value.active?.name)
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"nameIsCustom\":true"))
     }
 
     @Test
@@ -825,7 +870,7 @@ class ComputersRepositoryTest {
         val remotes = FakeRemotes()
         val first = repo(store, remotes)
         val a = first.pair(link)
-        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev"))
+        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev", hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals(b, first.state.value.activeId) // the last one paired is the last used
         val second = repo(store, remotes)
@@ -1037,7 +1082,7 @@ class ComputersRepositoryTest {
         }
         val repo = repo(signer = signer)
         repo.pair(link)
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         repo.forget(repo.state.value.computers.first().id)
         assertEquals("another computer still knows the key", 0, forgot)
         repo.forget(repo.state.value.computers.single().id)
@@ -1148,7 +1193,7 @@ class ComputersRepositoryTest {
         val first = repo.pair(link)
         repo.drafts.set("s1", com.nekko.protocol.Draft("half a thought"))
         runCurrent()
-        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         assertTrue("the other computer starts with none", repo.drafts.drafts.value.isEmpty())
         repo.connect(first)
         assertEquals("half a thought", repo.drafts.draft("s1").text)

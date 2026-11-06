@@ -1,6 +1,6 @@
 # One Models workspace with local and cloud sections
 
-- Status: accepted
+- Status: accepted; navigation amended by 0057
 - Scope: [Models and providers](../../spec/models/models-providers.md)
 
 ## Context

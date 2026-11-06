@@ -75,13 +75,14 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, settings, settingsLoaded, providers, providersLoaded, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
       settings: s.settings,
       settingsLoaded: s.settingsLoaded,
       providers: s.providers,
+      providersLoaded: s.providersLoaded,
       onboardingOpen: s.onboardingOpen,
       refreshSettings: s.refreshSettings,
       refreshProviders: s.refreshProviders,
@@ -336,7 +337,7 @@ export function App() {
         {/* Main (bottom padding on phones so the tab bar never covers content,
             the home indicator's inset included) */}
         <main className="relative flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-          {providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
+          {providersLoaded && providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button
               className="flex items-center justify-center gap-2 border-b border-line py-2 text-sm"
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
@@ -345,7 +346,7 @@ export function App() {
               <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
-          <ErrorBoundary key={view} label={t(`nav.${view}`)}>
+          <ErrorBoundary key={view === 'modelserver' ? 'models' : view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
@@ -409,7 +410,7 @@ export function App() {
 /** Catalog pages remain reachable from the rail, with a clear route back to Settings. */
 function SettingsDestination({ children }: { children: React.ReactNode }) {
   return <div className="settings-destination">
-    <div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div>
+    <div className="settings-bar"><div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div></div>
     <div className="settings-destination-content">{children}</div>
   </div>;
 }

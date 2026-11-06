@@ -10,6 +10,7 @@ struct ChatView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var displayScale
     @State private var chat: ChatModel?
     @State private var showModels = false
     @State private var showChanges = false
@@ -59,7 +60,7 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         // No keyboard toolbar here: on iOS 26 its Done floats over the
         // composer's send button. Scrolling or tapping the transcript puts
-        // the keyboard away, and the message box has a VoiceOver action for it.
+        // the keyboard away; the in-card toolbar has a hide-keyboard button too.
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
@@ -102,6 +103,11 @@ struct ChatView: View {
           // a short transcript then moves up when an approval or question card
           // grows the bar, instead of staying pinned where the card now covers it.
           GeometryReader { geo in
+            // Round inward in window coordinates: a fractional viewport origin
+            // must not let Text's pixel rounding consume the 16pt gutters.
+            let bounds = geo.frame(in: .global)
+            let left = ceil((bounds.minX + 16) * displayScale) / displayScale
+            let right = floor((bounds.maxX - 16) * displayScale) / displayScale
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let n = chat.session?.omittedMessages, n > 0 {
@@ -128,7 +134,7 @@ struct ChatView: View {
                         switch row {
                         case .block(let b):
                             BlockView(block: b, chat: chat, voice: rowCache.voices[b.id], photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: reasoning) { i in
-                                viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                                viewing = PhotoSet(photos: chat.photos(b.id), index: i, messageId: b.id)
                             }
                             .id(b.id)
                             // Drag a message to the other pane's composer (FD-4); it lands as text, never sent.
@@ -179,7 +185,13 @@ struct ChatView: View {
                         .onAppear { atBottom = true }
                         .onDisappear { atBottom = false }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
+                // A vertical ScrollView must propose the viewport's exact column
+                // width. Text's pixel-rounded ideal width can otherwise grow it
+                // by a fraction of a point at accessibility sizes.
+                .frame(width: max(0, right - left), alignment: .leading)
+                .padding(.leading, left - bounds.minX)
+                .padding(.trailing, bounds.maxX - right)
+                .padding(.vertical, 12)
                 .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
             }
             .accessibilityIdentifier("chat.transcript")
@@ -334,7 +346,9 @@ struct ChatView: View {
         .sheet(isPresented: $showGitScreen) { GitView(chatId: sessionId) }
         .sheet(isPresented: $showTerminals) { TerminalsView(chatId: sessionId) }
         .sheet(isPresented: $showFiles) { FilesView(root: .chat(sessionId), title: chat.title) }
-        .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
+        .fullScreenCover(item: $viewing) { set in
+            ImageViewer(photos: set.photos, index: set.index, load: set.messageId.map { id -> (Int) async throws -> String? in { i in try await chat.fullPhoto(id, i) } })
+        }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}
@@ -929,52 +943,6 @@ struct FlowOptions: View {
     }
 }
 
-/// The microphone in hold-to-talk mode (IO-28): records while pressed, stops
-/// on release. VoiceOver can't hold, so its double-tap starts and the next one stops.
-struct HoldToTalkButton: View {
-    let dictation: Dictation
-    let gate: VoiceIntroGate
-    @Environment(ComputersStore.self) private var store
-    @Environment(Prefs.self) private var prefs
-    @Environment(\.palette) private var palette
-    /// Resets when the gesture is cancelled too (the video's sheet coming up mid-press), so no press is swallowed.
-    @GestureState private var down = false
-    /// This press showed the video instead of listening, so its release has nothing to stop.
-    @State private var introduced = false
-
-    var body: some View {
-        Image(systemName: dictation.recording ? "waveform.circle.fill" : "mic.fill")
-            .font(dictation.recording ? .title2 : .title3)
-            .foregroundStyle(dictation.recording ? palette.danger : palette.inkSoft)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-            .scaleEffect(down ? 1.15 : 1)
-            // A critically damped spring: a fast press and release reverses from where it is.
-            .animation(.spring(response: 0.25, dampingFraction: 1), value: down)
-            .gesture(DragGesture(minimumDistance: 0).updating($down) { _, pressed, _ in pressed = true })
-            // Down, and up whether released or cancelled.
-            .onChange(of: down) { _, pressed in
-                if pressed {
-                    introduced = gate.intercept(prefs)
-                    if !introduced { Task { await dictation.press(store: store) } }
-                } else {
-                    if !introduced { Task { await dictation.letGo(store: store) } }
-                    introduced = false
-                }
-            }
-            .accessibilityElement()
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(dictation.recording ? "Stop dictation" : "Dictate")
-            .accessibilityHint(dictation.recording ? "" : "Hold to talk, let go to stop")
-            .accessibilityIdentifier("composer.holdToTalk")
-            .accessibilityAction {
-                Task {
-                    if dictation.recording { dictation.stopListening() } else if !gate.intercept(prefs) { await dictation.start(store: store, holding: true) }
-                }
-            }
-    }
-}
-
 /// Text, the computer's skills (`/`), photos, dictation, Send / Stop, with + and Send inside the box.
 struct Composer: View {
     let chat: ChatModel
@@ -1051,11 +1019,12 @@ struct Composer: View {
                     ProgressView().controlSize(.small)
                     Text("Adding photos…").font(.caption)
                 }.foregroundStyle(palette.inkSoft)
-            } else if !images.isEmpty {
-                HStack {
-                    Label(images.count == 1 ? "1 photo" : "\(images.count) photos", systemImage: "photo").font(.caption)
-                    Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
-                }.foregroundStyle(palette.inkSoft)
+            }
+            if !images.isEmpty {
+                ComposerPhotos(photos: images) { index in
+                    images.remove(at: index)
+                    photos = []
+                }
             }
             if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -1157,16 +1126,13 @@ struct Composer: View {
                             .accessibilityIdentifier("composer.dictationStarting")
                     } else if dictation.transcribing {
                         ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
-                    } else if prefs.dictationHold && dictation.available {
-                        HoldToTalkButton(dictation: dictation, gate: intro)
-                    } else if dictation.available {
-                        Button { if !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } } } label: {
-                            Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
-                                .frame(width: 44, height: 44).contentShape(Rectangle())
-                        }
-                        .accessibilityLabel("Dictate")
-                        .accessibilityHint("Keeps listening until you tap stop. Start with Nekko for a command, like Nekko, send it.")
-                        .accessibilityIdentifier("composer.dictate")
+                    } else {
+                        // One mic: the voice conversation. Dictation into the box is the keyboard's own mic.
+                        VoiceConversationButton(makeTarget: {
+                            guard let id = store.activeId else { throw RelayError("Choose a computer first.") }
+                            return .computer(chat, computerId: id)
+                        })
+                        .disabled(chat.savedAt != nil || chat.sendsLater)
                     }
                     // Stop while running with nothing to queue; a photo or skill alone can be queued.
                     if chat.running && !hasContent {
@@ -1454,6 +1420,7 @@ struct Composer: View {
                 let lane = switch store.activity[chat.sessionId] {
                 case .needsYou: "Needs you"
                 case .running: "Working"
+                case .failed: "Error"
                 case nil: chat.running ? "Working" : "Idle"
                 }
                 let watching = chat.watches.contains { $0.kind == .pr && $0.status == .active }

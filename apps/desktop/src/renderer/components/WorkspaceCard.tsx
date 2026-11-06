@@ -1,7 +1,7 @@
 import { ComputerChip, useComputerOf } from './ComputerChip.js';
 import React, { memo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
+import { getSessionWorkspaceIds, guessContextWindow, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
 import { useShown } from '../simpleMode.js';
 import { allPanes } from '../layout.js';
@@ -13,7 +13,7 @@ import {
 import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
 import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
-import { SessionPrLinks } from './SessionPrLinks.js';
+import { SessionPrChip } from './SessionPrChip.js';
 import { wakeSourcesOf } from '../views/agentPanelView.js';
 
 /**
@@ -31,11 +31,15 @@ import { wakeSourcesOf } from '../views/agentPanelView.js';
  * 2. **What is running it.** Which model it is ("Opus 5.5") and how full its
  *    context window is, with where the model comes from ("Claude") as subtext
  *    on the line under it, which the view menu can hide.
- * 3. **What it has shipped from where.** The branch (with the worktree glyph
- *    when it is a linked worktree), then each PR the chat made as its own
- *    link (`SessionPrLinks`). The project is not repeated: the card already
- *    sits under its project's heading.
+ * 3. **Where it works.** The branch (with the worktree glyph when it is a
+ *    linked worktree). The project is not repeated: the card already sits
+ *    under its project's heading.
  * 4. **What it has spun up.** Sub-agents and windows.
+ *
+ * What it has shipped sits apart, at the card's bottom right: a chip for its
+ * PR, with GitHub's state glyph and hue and `+N` for any others
+ * (`SessionPrChip`). It rides the end of whichever line is last, so it never
+ * adds a line of its own, and a card cut down to its title still shows it.
  *
  * Colour is load-bearing rather than decorative. Every fact carries the hue of
  * what it *is* (a branch is always the same colour, a limit is the colour of
@@ -166,7 +170,6 @@ function WorkspaceCardImpl({
   projects,
   subAgentCount = 0,
   showMetadata = true,
-  showProvider = true,
   showComputer = true,
   showComputerIcons = true,
   zoneTint,
@@ -190,9 +193,7 @@ function WorkspaceCardImpl({
   subAgentCount?: number;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
-  /** The provider subtext under the model; off, the model line stands alone. */
-  showProvider?: boolean;
-  /** The computer a remote agent runs on; off, the provider line stands alone. */
+  /** The computer a remote agent runs on, on a line under the model. */
   showComputer?: boolean;
   /** That computer's icon, when it has one. */
   showComputerIcons?: boolean;
@@ -266,6 +267,15 @@ function WorkspaceCardImpl({
       ? terminal.shell.split(/[\\/]/).pop() || terminal.shell
       : 'Shell';
 
+  const computerLine = showComputer && computersShown && !!computer;
+  const spawnLine = subAgentCount > 0 || windows > 1;
+  // The PR chip rides the end of the card's last line: its bottom right.
+  const prLine: 'title' | 'model' | 'computer' | 'git' | 'spawn' = !showMetadata
+    ? 'title'
+    : spawnLine ? 'spawn' : git ? 'git' : computerLine ? 'computer' : 'model';
+  const prChip = (line: typeof prLine) =>
+    prs.length > 0 && prLine === line ? <span className="ml-auto inline-flex shrink-0 pl-1 text-2xs leading-[15px]"><SessionPrChip prs={prs} /></span> : null;
+
   return (
     <div
       role="button"
@@ -277,7 +287,7 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* Chat rows stay flat; selection is carried by their title and status. */
+      /* Only the selected chat gets a background; status keeps its own icon. */
       className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
       title={title}
@@ -291,11 +301,13 @@ function WorkspaceCardImpl({
           : <span className={`min-w-0 flex-1 truncate text-sm ${isActive ? 'font-medium text-ink' : 'text-ink-soft'}`}>
             {title}
           </span>}
-        {lastReply && (!status || status === 'done' || status === 'idle') && (
+        {/* A title-only card has no room for both: its PR says more than the time. */}
+        {lastReply && (!status || status === 'done' || status === 'idle') && !(prLine === 'title' && prs.length > 0) && (
           <time className="shrink-0 text-2xs tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
         )}
+        {prChip('title')}
         {isChat && onRenameStart && !renaming && (
           <button
             className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
@@ -328,7 +340,7 @@ function WorkspaceCardImpl({
       </div>
 
       {/* Line 2: what is running it: the model, then how full the context
-          window is. Where the model comes from is subtext on the next line. */}
+          window is. Where it comes from is in the tooltip, not a line of its own. */}
       {showMetadata && <>
       <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
         <Fact
@@ -361,58 +373,45 @@ function WorkspaceCardImpl({
             {compactTokens(ctxUsed)}/{compactTokens(ctxWindow)}
           </Fact>
         )}
+        {prChip('model')}
       </div>
 
-      {((showProvider && provider) || (showComputer && computersShown && computer)) && (
+      {showComputer && computersShown && computer && (
         <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
-          {showComputer && computersShown && computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />}
-          {showComputer && computersShown && computer && showProvider && provider && <span aria-hidden>·</span>}
-          {showProvider && provider && <span className="truncate" data-card-provider>{isLocalProvider(provider.kind) ? 'Local' : provider.label}</span>}
+          <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />
+          {prChip('computer')}
         </div>
       )}
 
-      {/* Line 3: its git position, then the PRs it made. The project is the
-          group heading the card sits under, so the card does not repeat it. */}
-      {(git || prs.length > 0) && (
+      {/* Line 3: its git position. The project is the group heading the card
+          sits under, so the card does not repeat it. */}
+      {git && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-          {git ? (
-            <Fact
-              shrink
-              tone="var(--accent)"
-              icon={
-                git.worktree ? (
-                  <WorktreeIcon className="h-2.5 w-2.5 shrink-0" />
-                ) : (
-                  <BranchIcon className="h-2.5 w-2.5 shrink-0" />
-                )
-              }
-              title={[
-                git.branch ? `On branch ${git.branch}` : `Detached at ${git.head}`,
-                git.ahead || git.behind ? `${git.ahead} ahead, ${git.behind} behind upstream` : '',
-                git.worktree ? `Linked git worktree: ${git.worktree.path}` : '',
-              ].filter(Boolean).join('\n')}
-            >
-              {git.branch ?? git.head ?? 'detached'}
+          <Fact
+            shrink
+            tone="var(--accent)"
+            icon={git.worktree ? <WorktreeIcon className="h-2.5 w-2.5 shrink-0" /> : <BranchIcon className="h-2.5 w-2.5 shrink-0" />}
+            title={[
+              git.branch ? `On branch ${git.branch}` : `Detached at ${git.head}`,
+              git.ahead || git.behind ? `${git.ahead} ahead, ${git.behind} behind upstream` : '',
+              git.worktree ? `Linked git worktree: ${git.worktree.path}` : '',
+            ].filter(Boolean).join('\n')}
+          >
+            {git.branch ?? git.head ?? 'detached'}
+          </Fact>
+          {git.ahead > 0 || git.behind > 0 ? (
+            <Fact tone="var(--info)" title={`${git.ahead} ahead of, ${git.behind} behind, the upstream branch`}>
+              {git.ahead > 0 ? `↑${git.ahead}` : ''}
+              {git.behind > 0 ? `↓${git.behind}` : ''}
             </Fact>
           ) : null}
-          {(git?.ahead ?? 0) > 0 || (git?.behind ?? 0) > 0 ? (
-            <Fact tone="var(--info)" title={`${git!.ahead} ahead of, ${git!.behind} behind, the upstream branch`}>
-              {git!.ahead > 0 ? `↑${git!.ahead}` : ''}
-              {git!.behind > 0 ? `↓${git!.behind}` : ''}
-            </Fact>
-          ) : null}
-          {prs.length > 0 && (
-            <>
-              {git && <span aria-hidden className="mx-0.5 h-2.5 w-px shrink-0 bg-line" />}
-              <SessionPrLinks prs={prs} />
-            </>
-          )}
+          {prChip('git')}
         </div>
       )}
 
       {/* Line 4: what it has spun up. Only when there is something to say: a
           card for a plain one-window chat should not carry an empty row. */}
-      {(subAgentCount > 0 || windows > 1) && (
+      {spawnLine && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           {subAgentCount > 0 && (
             <Fact
@@ -424,6 +423,7 @@ function WorkspaceCardImpl({
             </Fact>
           )}
           {windows > 1 && <span className="shrink-0">{windows} windows</span>}
+          {prChip('spawn')}
         </div>
       )}
       </>}

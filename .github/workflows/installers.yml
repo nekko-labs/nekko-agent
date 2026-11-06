@@ -29,8 +29,33 @@ permissions:
   contents: read
 
 jobs:
+  # The nightly's version, MAJOR.MINOR.BUILD (docs/decisions/0055): the next
+  # desktop BUILD since the newest release tag, kept as the counter tag
+  # nightly/desktop/v<version> on the commit. A night with no new commit reuses
+  # the version it already has. A PR, or a dispatch off main, builds with the
+  # checked-in version and counts nothing.
+  version:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: nightly-version-desktop
+      cancel-in-progress: false
+    outputs:
+      version: ${{ steps.reserve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: reserve
+        run: node scripts/nightly-version.mjs --platform desktop --reserve --reuse-same-commit
+
   installer:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:windows') || contains(github.event.pull_request.labels.*.name, 'deploy:macos')
+    needs: version
+    if: >-
+      !cancelled() && needs.version.result != 'failure' &&
+      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:windows') || contains(github.event.pull_request.labels.*.name, 'deploy:macos'))
     strategy:
       fail-fast: false
       # On a PR, only the labelled OS. (Each `cond && x || y` branch is non-empty.)
@@ -48,6 +73,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
+      # After `npm ci` so the lockfile installs untouched (release.yml does the same).
+      - name: Stamp the nightly version
+        if: needs.version.outputs.version != ''
+        shell: bash
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          npm pkg set "version=$VERSION"
+          npm pkg set "version=$VERSION" -w @nekko-agent/desktop -w @nekko-agent/local-web-ui
+          echo "### Desktop nightly $VERSION (${RUNNER_OS})" >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
       - name: Package (unsigned, not published)
         shell: bash
@@ -119,3 +154,17 @@ jobs:
           # HiDPI: the tiff must carry both the 1x and the 2x image.
           tiffutil -info "$mnt/.background.tiff" | tee /dev/stderr | grep -c 'Image Width' | grep -q 2
           ls -d "$mnt"/*.app
+
+      # A nightly's installers stay workflow artifacts, never a GitHub release:
+      # they are unsigned, and the desktop updater reads releases
+      # (docs/decisions/0055). Uploaded only once the checks above passed.
+      - name: Keep the nightly installers
+        if: needs.version.outputs.version != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ needs.version.outputs.version }}-${{ runner.os }}
+          path: |
+            apps/desktop/release/NekkoAgent-*.exe
+            apps/desktop/release/NekkoAgent-*.dmg
+          retention-days: 14
+          if-no-files-found: error

@@ -45,6 +45,27 @@ const VM_LOG = [
   '2026-11-03T07:19:52Z runner exited with 0',
   '2026-11-03T07:19:52Z shutting down',
 ].join('\n');
+// The running VM's console: the runner's own lines, then the step output the boot script follows.
+const LIVE_LOG = [
+  '2026-11-06T06:11:02Z starting the GitHub Actions runner',
+  '√ Connected to GitHub',
+  '2026-11-06 06:11:05Z: Listening for Jobs',
+  '2026-11-06 06:11:07Z: Running job: protocol-and-build',
+  ...Array.from({ length: 24 }, (_, i) => `2026-11-06T06:${String(40 + Math.floor(i / 3)).padStart(2, '0')}:${String((i * 13) % 60).padStart(2, '0')}.5512345Z CompileSwift normal arm64 /Users/runner/work/nekko-agent/apps/ios/Sources/Protocol/Frame${i}.swift`),
+  '2026-11-06T06:48:51.1234567Z ** BUILD SUCCEEDED **',
+  '2026-11-06T06:48:52.0011223Z Testing started on iPhone 17 Pro',
+].join('\n');
+const PR = (number: number) => ({ number, url: `https://github.com/nekko-labs/nekko-agent/pull/${number}` });
+const RUNNING_JOB = {
+  repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'Native iOS', job: 'protocol-and-build',
+  url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/904/job/9041', pr: PR(904),
+  steps: { done: 7, total: 12, current: 'Build and test iOS' },
+};
+const QUEUE = [
+  { repo: 'nekko-labs/nekko-agent', runId: 907, jobId: 9071, workflow: 'Native iOS', job: 'protocol-and-build', url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/907/job/9071', pr: PR(907), createdAt: new Date((NOW - 4 * 60) * 1000).toISOString(), declined: false, accepted: false },
+  { repo: 'nekko-labs/nekko-agent', runId: 906, jobId: 9061, workflow: 'Desktop', job: 'macOS notarize', url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/906/job/9061', pr: null, createdAt: new Date((NOW - 9 * 60) * 1000).toISOString(), declined: true, accepted: false },
+];
+
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['config']['settings']> = {}): RunnerView => ({
   config: {
     id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac',
@@ -62,11 +83,14 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'first-visit': async () => [],
   running: async () => [view({
     state: 'running', awake: true, reasons: ['userActive'],
-    slots: [{ state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'ios-native', job: 'PR #904' }, since: NOW - 11 * 60, drainEndsAt: null }],
+    slots: [{ state: 'running', vm: 'nekko-macbookpro-77cce2cf-1-1', job: RUNNING_JOB, since: NOW - 49 * 60, drainEndsAt: null }],
+    queue: QUEUE, acceptWhy: [],
     today: { jobs: 14, seconds: 2 * 3600 + 38 * 60 },
     recent: [audit(25 * 60, 'iOS build', 'finished', 14 * 60, [], 903), audit(70 * 60, 'iOS build', 'finished', 17 * 60), audit(3 * 3600, 'iOS build', 'lost', 6 * 60, ['slept'], 899)],
   }, { priority: 'balanced' })],
   'recent-job-open': async () => scenes.running(),
+  'jobs-live-log': async () => scenes.running(),
+  'jobs-cancel-confirm': async () => scenes.running(),
   waiting: async () => [view({
     state: 'waiting', reasons: ['onBattery', 'network', 'userActive'], available: 1, limit: 'memory',
     host: { ...host, onBattery: true, batteryPct: 62, networkId: 'gw:10:0c:6e:5b:01:aa', networkTrusted: false },
@@ -106,6 +130,9 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'setup-resume': async () => noImageYet(),
   'setup-rebuild': async () => [view({})],
   ready: async () => [view({})],
+  // An image built before Nekko installed the job tools (#1845).
+  'missing-tools': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
+  'missing-tools-install': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
   'ready-left-off': async () => [off({ forkApprovalOpen: true })],
   'ready-second-runner': async () => [off()],
   'rebuild-cancelled': async () => [view({})],
@@ -113,6 +140,15 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'image-retry': async () => [offNoImage()],
   'card-ready': async () => [view({ today: { jobs: 3, seconds: 41 * 60 } })],
   settings: async () => [view({ limit: 'memory', available: 1 })],
+  'linux-slots': async () => [view({
+    state: 'running', available: 2, linuxAvailable: 2,
+    slots: [
+      { guest: 'macos', state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'ios-native', job: 'PR #904' }, since: NOW - 11 * 60, drainEndsAt: null },
+      { guest: 'linux', state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 905, jobId: 9051, workflow: 'ci', job: 'server tests' }, since: NOW - 3 * 60, drainEndsAt: null },
+    ],
+  }, { macosSlots: 2, linuxSlots: 3 })],
+  'settings-linux': async () => [view({ available: 2, linuxAvailable: 2 }, { linuxSlots: 2 })],
+  'settings-linux-building': async () => [view({ available: 2, linuxAvailable: 0, linuxError: 'No Linux image yet.' }, { linuxSlots: 2 })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
   'settings-suggested': async () => [view(
     { suggestedSize: { jobs: 6, cpus: 4, memoryMb: 8 * GB, reasons: ['The biggest job used 5.4 GB at most and never swapped.'] } },
@@ -126,6 +162,8 @@ const image = (over: Partial<ImageView> = {}): ImageView => ({
 });
 const READY = image({ state: 'ready', info: { macos: '27.2', xcode: '27.2', actionsRunner: '2.330.0', built: '2026-11-01' } });
 const NONE = image();
+const NO_TOOLS = image({ state: 'ready', info: { ...READY.info!, missingTools: ['node', 'gh'] } });
+const ADDING_TOOLS = image({ kind: 'tools', state: 'building', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh and jq', info: NO_TOOLS.info });
 const toXcode: ImageView['doneStages'] = ['check', 'download', 'install'];
 const download = image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] });
 const images: Record<string, ImageView | null> = {
@@ -144,7 +182,8 @@ const images: Record<string, ImageView | null> = {
   'setup-refused-helper': image({ state: 'failed', stage: 'check', error: 'This copy of Nekko cannot build a VM on its own. Update Nekko, or bring your own image.', canResume: true }),
   'setup-resume': image({ stage: 'xcode', doneStages: toXcode, canResume: true }),
   'setup-rebuild': READY, ready: download, 'ready-left-off': download, 'ready-second-runner': download, 'card-ready': READY,
-  'rebuild-cancelled': image({ ...download, info: READY.info }), 'connect-busy': NONE, 'image-retry': NONE,
+  'rebuild-cancelled': image({ ...download, info: READY.info }),
+  'missing-tools': NO_TOOLS, 'missing-tools-install': NO_TOOLS, 'connect-busy': NONE, 'image-retry': NONE,
 };
 const plans: Record<string, ImagePlan> = { 'setup-no-xcode': { xcode: null, freeGb: 369.4, needsGb: 110, cachedMacos: false } };
 const PLAN: ImagePlan = { xcode: '27.2', freeGb: 369.4, needsGb: 110, cachedMacos: false };
@@ -198,6 +237,8 @@ const bridge: any = {
   setRunnerEnabled: async () => view({}),
   runnerJobLog: async () => JOB_LOG,
   runnerVmLog: async () => VM_LOG,
+  runnerLiveLog: async () => LIVE_LOG,
+  runnerJob: async () => null,
   openPath: async () => {},
   imageStatus: async () => {
     // A daemon that is not ready for the first call, as at launch.
@@ -205,7 +246,12 @@ const bridge: any = {
     return scene in images ? images[scene] : READY;
   },
   cancelImage: async () => { imageChanged(READY); return READY; },
+  // Installing the job tools starts at once, as the daemon does.
+  buildImage: async (req: { kind: string }) => { if (req.kind !== 'tools') return null; imageChanged(ADDING_TOOLS); return ADDING_TOOLS; },
   imagePlan: async () => plans[scene] ?? PLAN,
+  linuxImageStatus: async () => (scene === 'settings-linux-building'
+    ? { state: 'building', stage: 'download', progress: 0.42, message: 'Downloading Ubuntu 24.04 (1 of 3)', proof: null }
+    : { state: 'ready', stage: null, progress: null, message: null, proof: { distro: 'ubuntu-24.04', runner: '2.338.1', docker: '29.1.3-0ubuntu3~24.04.2' } }),
   onImageChanged: (cb: (v: ImageView) => void) => { imageChanged = cb; return () => {}; },
   onRunnersChanged: (cb: (v: RunnerView[]) => void) => { runnersChanged = cb; return () => {}; },
   setForkApproval: async () => ({ done: false, url: 'https://github.com/nekko-labs/nekko-agent/settings/actions' }),

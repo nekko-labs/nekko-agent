@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelInfo, ProviderConfig } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import {
   filteredModelGroups,
   isModelPickerEscape,
   matchesModelQuery,
   modelRowLabel,
   nextFavoriteModels,
+  reconcileModelAfterList,
   shouldDismissModelPickerPointer,
 } from './modelPickerInteractions.js';
 
@@ -72,3 +74,27 @@ describe('model picker focused interactions', () => {
   });
 });
 
+
+describe('reconcileModelAfterList', () => {
+  const listed = [{ id: 'a/b:free', providerId: 'or', name: 'B' }] as ModelInfo[];
+
+  it('keeps a pick the list cannot confirm: the list failed or came back empty', () => {
+    expect(reconcileModelAfterList('x/y', null, 'x/y')).toEqual({ modelId: 'x/y', unavailable: null });
+    expect(reconcileModelAfterList('x/y', [], 'x/y')).toEqual({ modelId: 'x/y', unavailable: null });
+  });
+
+  it('marks a saved model unavailable when nobody just picked it and the list cannot confirm it', () => {
+    expect(reconcileModelAfterList('x/y', null, null)).toEqual({ modelId: null, unavailable: 'x/y' });
+    expect(reconcileModelAfterList('x/y', [], 'other')).toEqual({ modelId: null, unavailable: 'x/y' });
+  });
+
+  it('drops even a fresh pick when the provider answered without it', () => {
+    expect(reconcileModelAfterList('x/y', listed, 'x/y')).toEqual({ modelId: null, unavailable: 'x/y' });
+  });
+
+  it('keeps a listed model, Auto and no model without marking anything', () => {
+    expect(reconcileModelAfterList('a/b:free', listed, null)).toEqual({ modelId: 'a/b:free', unavailable: null });
+    expect(reconcileModelAfterList(AUTO_MODEL_ID, null, null)).toEqual({ modelId: AUTO_MODEL_ID, unavailable: null });
+    expect(reconcileModelAfterList(null, null, null)).toEqual({ modelId: null, unavailable: null });
+  });
+});
