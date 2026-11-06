@@ -94,10 +94,18 @@ impl OpenAiCompatProvider {
     fn body(&self, req: &ChatRequest) -> Map<String, Value> {
         // `chat_template_kwargs.enable_thinking` (Qwen3 and friends) only goes
         // to local kinds: cloud endpoints reject unknown body fields.
-        let local = matches!(
-            self.config.kind,
-            ProviderKind::Lmstudio | ProviderKind::Vllm | ProviderKind::Llamacpp | ProviderKind::OpenaiCompat
-        );
+        // Generic compatible connections can also be remote local-model servers.
+        // Keep their existing knobs, but never send the local-only extension to
+        // these hosted services, which use the same wire kind.
+        let compatible_cloud = self.config.kind == ProviderKind::OpenaiCompat
+            && reqwest::Url::parse(&self.config.base_url)
+                .ok()
+                .is_some_and(|url| matches!(url.host_str(), Some("generativelanguage.googleapis.com" | "ollama.com")));
+        let local = !compatible_cloud
+            && matches!(
+                self.config.kind,
+                ProviderKind::Lmstudio | ProviderKind::Vllm | ProviderKind::Llamacpp | ProviderKind::OpenaiCompat
+            );
         // OpenAI's reasoning families (o-series, gpt-5 and newer, codex,
         // gpt-oss) refuse `temperature` and `max_tokens` outright, so the
         // request leaves without them rather than retrying after a 400.
@@ -781,6 +789,29 @@ impl ChatParser {
 #[cfg(test)]
 mod cache_policy_tests {
     use super::*;
+
+    #[test]
+    fn cloud_presets_keep_paths_and_auth_without_local_thinking_fields() {
+        let fixtures: Value = serde_json::from_str(include_str!("../../tests/golden/request-cases.json")).unwrap();
+        for base in [
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+            "https://ollama.com/v1",
+            "http://localhost:8080/v1",
+        ] {
+            let config = json!({ "id": "p", "kind": "openai-compat", "label": "Cloud", "baseUrl": base, "apiKey": "fixture-key", "enabled": true });
+            let provider = OpenAiCompatProvider::new(serde_json::from_value(config).unwrap(), Io::default());
+            let mut req: ChatRequest = serde_json::from_value(fixtures["requests"]["cache-default"].clone()).unwrap();
+            req.model = "gemini-fixture".into();
+            req.think = Some(true);
+            let http = provider.chat_request(&req);
+            assert_eq!(http.url, format!("{base}/chat/completions"));
+            assert!(http.headers.contains(&("Authorization".into(), "Bearer fixture-key".into())));
+            let body = http.body.unwrap();
+            assert_eq!(body["stream"], true);
+            assert_eq!(body.get("chat_template_kwargs").is_some(), base.starts_with("http://localhost"));
+            assert!(!body["messages"].as_array().unwrap().is_empty());
+        }
+    }
 
     #[test]
     fn routed_claude_cache_directive_is_gated_and_preserves_context() {

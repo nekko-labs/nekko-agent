@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { Badge, Toggle } from '../components/primitives/index.js';
 import { SubscriptionSignIn } from '../components/SubscriptionSignIn.js';
+import { type ProviderSetupKind } from '../components/providers/providerPresets.js';
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
 import { ClaudeWhyLink, useClaudeCodeStatus } from '../components/claude/ClaudeAgent.js';
 import { claudeSourceLine, isClaudeKind } from '../components/claude/ClaudeSetup.js';
@@ -74,7 +75,7 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [adding]);
   // A notice action ("Use my subscription", "Add API key") opens the form on a kind.
-  const [addKind, setAddKind] = useState<ProviderKind | undefined>();
+  const [addKind, setAddKind] = useState<ProviderSetupKind | undefined>();
   const requestedKind = useStore((s) => s.addProviderKind);
   // The local and cloud sections share one page, so the form may open below the fold.
   const reveal = useRef(false);
@@ -109,7 +110,7 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   };
 
   const visible = providers.filter((p) => p.kind !== 'llamacpp' && isLocal(p.kind) === localOnly);
-  const openAdd = (kind?: ProviderKind) => { setAddKind(kind); setAdding((open) => !(open && kind === addKind)); };
+  const openAdd = (kind?: ProviderSetupKind) => { setAddKind(kind); setAdding((open) => !(open && kind === addKind)); };
 
   if (firstSetup && !localOnly) return <div className="h-full overflow-y-auto"><FirstProviderSetup /></div>;
 
@@ -130,7 +131,7 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
       </button>}
       {adding && <div ref={setupRef} className="mb-5" data-provider-setup={addKind ?? 'any'}>
         <button type="button" className="btn btn-ghost float-right" aria-label="Close provider setup" onClick={() => setAdding(false)}>×</button>
-        <AddProvider key={addKind ?? 'any'} fixedKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />
+        <AddProvider scope={localOnly ? 'local' : 'cloud'} key={addKind ?? 'any'} fixedKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />
       </div>}
       <div className="models-provider-grid">
         {visible.map((p) => <div key={p.id} id={`provider-${p.id}`}><ProviderCard provider={p} onChanged={refreshProviders} /></div>)}
@@ -139,16 +140,16 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   );
 }
 
-const PROVIDER_MARKS: Partial<Record<ProviderKind, string>> = {
+const PROVIDER_MARKS: Partial<Record<ProviderSetupKind, string>> = {
   chatgpt: 'openai', openai: 'openai', anthropic: 'anthropic', 'claude-code': 'anthropic',
-  vertex: 'google', openrouter: 'openrouter', ollama: 'ollama', lmstudio: 'lmstudio', vllm: 'vllm',
+  gemini: 'google', 'ollama-cloud': 'ollama', vertex: 'google', openrouter: 'openrouter', ollama: 'ollama', lmstudio: 'lmstudio', vllm: 'vllm',
 };
-const CLOUD_SHORTCUTS: { kind: ProviderKind; label: string; color: string }[] = [
+const CLOUD_SHORTCUTS: { kind: ProviderSetupKind; label: string; color: string }[] = [
   { kind: 'chatgpt', label: 'ChatGPT', color: '#167d65' },
   { kind: 'anthropic', label: 'Claude', color: '#bc694d' },
   { kind: 'openai', label: 'OpenAI API', color: '#354759' },
   { kind: 'openrouter', label: 'OpenRouter', color: '#5555a6' },
-  { kind: 'vertex', label: 'Claude via Google Vertex AI', color: '#315db0' },
+  { kind: 'gemini', label: 'Google Gemini', color: '#315db0' },
 ];
 const LOCAL_SHORTCUTS = [
   { kind: 'ollama' as const, label: 'Ollama', color: '#42424c' },
@@ -156,13 +157,13 @@ const LOCAL_SHORTCUTS = [
   { kind: 'vllm' as const, label: 'vLLM', color: '#246676' },
 ];
 
-function ProviderMark({ kind }: { kind: ProviderKind }) {
+function ProviderMark({ kind }: { kind: ProviderSetupKind }) {
   const icon = PROVIDER_MARKS[kind];
   return icon ? <img src={`./providers/${icon}.svg`} alt="" width="22" height="22" />
     : <span aria-hidden="true">{kind === 'vertex' ? 'G' : '↗'}</span>;
 }
 
-export function ProviderShortcuts({ localOnly = false, onAdd, moreExpanded = false }: { localOnly?: boolean; moreExpanded?: boolean; onAdd: (kind?: ProviderKind) => void }) {
+export function ProviderShortcuts({ localOnly = false, onAdd, moreExpanded = false }: { localOnly?: boolean; moreExpanded?: boolean; onAdd: (kind?: ProviderSetupKind) => void }) {
   return <div className="models-add-strip" role="group" aria-label="Add provider">
     {(localOnly ? LOCAL_SHORTCUTS : CLOUD_SHORTCUTS).map(({ kind, label, color }) =>
       <button key={kind} type="button" className="models-add-provider" style={{ background: color }} title={`Add ${label}`} aria-label={`Add ${label}`} onClick={() => onAdd(kind)}>

@@ -6,6 +6,18 @@ split-from: SPEC.md (2026-10-22)
 
 # Models & providers
 
+## Google and Ollama cloud setup (#1955)
+
+Implemented in the shared desktop/web renderer:
+
+- **Google Gemini** uses a [Google AI Studio API key](https://aistudio.google.com/apikey) and `https://generativelanguage.googleapis.com/v1beta/openai`. It is API billing, not a Google AI subscription login.
+- **Claude on Vertex AI** is a separate choice, opening directly on Google Cloud project ID, location and Application Default Credentials instructions (`gcloud auth application-default login`, or `GOOGLE_APPLICATION_CREDENTIALS` on the host). It never opens Claude Code subscription setup. The form generates a global or regional endpoint; existing daemon credential refresh remains authoritative.
+- **Ollama Cloud** uses an [Ollama Cloud API key](https://ollama.com/settings/keys) and `https://ollama.com/v1`, without the desktop app. Local **Ollama** keeps `http://localhost:11434` and its native local adapter unchanged.
+- The cloud chooser excludes local Ollama, LM Studio and vLLM. First-provider setup offers both local and cloud choices. The Google quick shortcut opens Gemini; the full chooser also offers Vertex.
+- Gemini and Ollama Cloud save as `openai-compat` configurations with vendor labels, hosted endpoints and API-key auth. No new wire kind or migration is needed. Model discovery uses the vendor `/models` route. These hosts do not receive local `chat_template_kwargs`; existing generic model-server connections retain their behavior.
+
+Verification: preset/markup tests, adapter request and model-list fixtures, and isolated hidden Electron form interactions/captures at 1100px and 390px. Real key validation, Google ADC exchange and paid inference remain unverified without user credentials. This is compatible-API support, not native Gemini-specific features or subscription OAuth.
+
 ## Provider-reported effort and grouped picker (#1687)
 
 Implemented in the working change, with shared/provider/daemon regression tests and hidden Electron interaction checks. Published captures were inspected (composer, picker, effort popover); authenticated provider inference and packaged builds remain unverified.
