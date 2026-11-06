@@ -173,6 +173,7 @@ impl Vm for FakeVm {
 struct ProvState {
     status: RunnerStatus,
     queued: u32,
+    linux_queued: u32,
     mint: VecDeque<Result<Minted, ProviderError>>,
     rerun: VecDeque<Result<(), ProviderError>>,
     /// Scripted answers per runner id; any other remove works.
@@ -197,8 +198,9 @@ fn job_ref() -> JobRef {
 }
 
 impl Provider for FakeProvider {
-    async fn mint(&self, _: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
-        self.1.lock().unwrap().push(format!("mint {name}"));
+    async fn mint(&self, _: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
+        let what = if guest == Guest::Linux { "mint-linux" } else { "mint" };
+        self.1.lock().unwrap().push(format!("{what} {name}"));
         let mut st = self.0.lock().unwrap();
         st.next_id += 1;
         let id = st.next_id;
@@ -215,12 +217,13 @@ impl Provider for FakeProvider {
         st.job.clone().unwrap_or(Ok((st.status == RunnerStatus::Busy).then(job_ref)))
     }
 
-    /// `queued` jobs of acme/app, ids 1 to n.
-    async fn queued(&self, _: &RunnerRecord) -> Result<Vec<QueuedJob>, ProviderError> {
-        let n = self.0.lock().unwrap().queued;
+    /// `queued` jobs of acme/app (macOS) or acme/linux, ids 1 to n.
+    async fn queued(&self, _: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
+        let st = self.0.lock().unwrap();
+        let (repo, n) = if guest == Guest::Linux { ("acme/linux", st.linux_queued) } else { ("acme/app", st.queued) };
         Ok((1..=u64::from(n))
             .map(|job_id| QueuedJob {
-                job: JobRef { repo: "acme/app".into(), job_id, ..Default::default() },
+                job: JobRef { repo: repo.into(), job_id, ..Default::default() },
                 ..Default::default()
             })
             .collect())
@@ -277,6 +280,7 @@ fn harness_with(records: Vec<RunnerRecord>, no_vm: Option<&str>) -> H {
         Arc::new(Mutex::new(ProvState {
             status: RunnerStatus::Idle,
             queued: 0,
+            linux_queued: 0,
             mint: VecDeque::new(),
             rerun: VecDeque::new(),
             remove: Default::default(),
@@ -402,6 +406,103 @@ async fn takes_a_job_when_gates_pass_and_deletes_vm_after() {
     assert_eq!(audit.len(), 1);
     assert_eq!((audit[0].result, audit[0].repo.as_deref()), (AuditResult::Finished, Some("acme/app")));
     assert_eq!(h.view().today.jobs, 1);
+}
+
+fn linux_record(macos: u8, linux: u8) -> RunnerRecord {
+    let mut r = record("r1", Priority::RunnerFirst, macos);
+    r.config.settings.linux_slots = linux;
+    r.config.settings.ready_vms = Some(0);
+    r
+}
+
+fn linux_image(h: &H) {
+    let image = h.dir.path().join("images").join(LINUX_IMAGE);
+    std::fs::create_dir_all(&image).unwrap();
+    std::fs::write(image.join("disk.img"), b"linux").unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_queued_linux_job_boots_a_linux_vm_outside_apples_cap() {
+    let mut h = harness(vec![linux_record(2, 1)]);
+    linux_image(&h);
+    // Other apps hold both of Apple's macOS places.
+    h.vm.0.lock().unwrap().other = 2;
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(h.count("mint"), 0, "nothing queued, no warm Linux VM: {:?}", h.log.lock().unwrap());
+    assert_eq!((h.view().available, h.view().linux_available), (0, 1));
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.tick_for(35).await;
+    let log = h.log.lock().unwrap().clone();
+    let name = log.iter().find_map(|l| l.strip_prefix("mint-linux ")).expect("a Linux registration").to_owned();
+    assert!(log.contains(&format!("clone_bundle images/{LINUX_IMAGE} vms/{name}/bundle")), "{log:?}");
+    assert_eq!(h.count("mint "), 0, "no macOS VM: {log:?}");
+    assert_eq!(h.view().slots[0].guest, Guest::Linux);
+    // The job takes it; a second Linux job finds the one slot full.
+    h.status(RunnerStatus::Busy);
+    h.tick_for(15).await;
+    h.prov.0.lock().unwrap().linux_queued = 2;
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint-linux"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn macos_slots_come_first_and_linux_takes_what_memory_is_left() {
+    // quiet(): 64 GB with 8 GB in use, a budget of six 8 GB VMs; RunnerFirst keeps both macOS slots warm.
+    let mut h = harness(vec![{
+        let mut r = linux_record(2, 4);
+        r.config.settings.ready_vms = None;
+        r
+    }]);
+    linux_image(&h);
+    h.prov.0.lock().unwrap().linux_queued = 5;
+    h.sup.start().await;
+    h.tick_for(120).await;
+    let v = h.view();
+    let kinds: Vec<Guest> = v.slots.iter().map(|s| s.guest).collect();
+    assert_eq!(kinds.iter().filter(|g| **g == Guest::Macos).count(), usize::from(v.available), "{kinds:?}");
+    assert_eq!(kinds.iter().filter(|g| **g == Guest::Linux).count(), usize::from(v.linux_available), "{kinds:?}");
+    assert_eq!((v.available, v.linux_available), (2, 4));
+    assert_eq!(kinds[..2], [Guest::Macos, Guest::Macos], "macOS starts first");
+}
+
+#[tokio::test(start_paused = true)]
+async fn linux_slots_without_a_linux_image_say_so_and_leave_macos_alone() {
+    let mut h = harness(vec![linux_record(1, 2)]);
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.queued(1);
+    h.sup.start().await;
+    h.tick_for(30).await;
+    let v = h.view();
+    assert_eq!(v.linux_error.as_deref(), Some("No Linux image yet."));
+    assert_eq!((v.linux_available, v.error.as_deref()), (0, None));
+    assert_eq!((h.count("mint "), h.count("mint-linux")), (1, 0));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_linux_only_runner_needs_no_macos_image() {
+    let mut h = harness(vec![linux_record(0, 1)]);
+    std::fs::remove_dir_all(h.dir.path().join("images").join("default")).unwrap();
+    linux_image(&h);
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(h.view().error, None);
+    assert_eq!(h.count("mint-linux"), 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_idle_linux_vm_stops_once_its_job_is_gone() {
+    let mut h = harness(vec![linux_record(0, 1)]);
+    linux_image(&h);
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(h.count("mint-linux"), 1);
+    // Another runner took the job: this VM is online and idle, and nothing is queued.
+    h.prov.0.lock().unwrap().linux_queued = 0;
+    h.tick_for(60 + IDLE_READY_SECS).await;
+    assert_eq!(h.count("kill"), 1, "{:?}", h.log.lock().unwrap());
 }
 
 #[tokio::test(start_paused = true)]
@@ -1759,6 +1860,26 @@ async fn accept_now_starts_a_vm_the_mode_would_hold() {
     h.tick_for(300).await;
     assert_eq!(h.count("request_stop") + h.count("kill"), 0);
     assert_eq!(h.view().slots[0].state, SlotState::Running);
+}
+
+#[tokio::test(start_paused = true)]
+async fn accept_now_starts_a_linux_vm_for_a_linux_job() {
+    let mut h = harness(vec![{
+        let mut r = linux_record(0, 1);
+        r.config.settings.priority = Priority::DoNotDisturb;
+        r
+    }]);
+    linux_image(&h);
+    h.mac(|m| m.idle_seconds = Some(30.0));
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.sup.start().await;
+    h.tick_for(60).await;
+    assert_eq!(h.count("mint"), 0, "Do not disturb holds while the owner types");
+    assert_eq!(h.view().queue[0].job.repo, "acme/linux");
+    h.sup.ask("r1", Ask::Accept("acme/linux".into(), 1));
+    h.tick_for(5).await;
+    assert_eq!(h.count("mint-linux"), 1, "{:?}", h.log.lock().unwrap());
+    assert_eq!((h.view().slots[0].guest, h.view().slots[0].boosted), (Guest::Linux, true));
 }
 
 #[tokio::test(start_paused = true)]

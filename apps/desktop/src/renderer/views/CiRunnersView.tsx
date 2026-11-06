@@ -51,7 +51,7 @@ export function CiRunnersFirstVisit({ connected = false, canResume = false, onCo
 /** The section body for each load state; pure so tests can render it without effects. */
 export function runnersBody(
   state: RunnersState,
-  { now, image = null, onConnect, onSettings, onSetup, beginReply }: { now: number; image?: ImageView | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; beginReply(): (v: RunnerView) => void },
+  { now, image = null, onConnect, onSettings, onSetup, onAddTools, beginReply }: { now: number; image?: ImageView | null; onConnect(): void; onSettings(id: string): void; onSetup?(id: string): void; onAddTools?(v: RunnerView): Promise<void>; beginReply(): (v: RunnerView) => void },
 ): React.ReactNode {
   if (state.kind === 'loading') return null;
   if (state.kind === 'unavailable') {
@@ -67,7 +67,7 @@ export function runnersBody(
     <>
       {image?.state === 'none' && <CiRunnersFirstVisit connected canResume={image.canResume} onConnect={onConnect} onSetup={() => onSetup?.(first)} />}
       {state.views.map((v) => (
-        <RunnerCard key={v.config.id} view={v} now={now} image={image} onSettings={() => onSettings(v.config.id)} onSetup={() => onSetup?.(v.config.id)} beginReply={beginReply} />
+        <RunnerCard key={v.config.id} view={v} now={now} image={image} onSettings={() => onSettings(v.config.id)} onSetup={() => onSetup?.(v.config.id)} onAddTools={onAddTools && (() => onAddTools(v))} beginReply={beginReply} />
       ))}
     </>
   );
@@ -170,7 +170,19 @@ export function CiRunnersView({ now = nowSecs }: { now?: () => number }) {
           </button>
         )}
       </div>
-      {runnersBody(state, { now: clock, image, onConnect: () => setConnecting(true), onSettings: setSettingsFor, onSetup: (id) => setSetup({ id, rebuild: false }), beginReply })}
+      {runnersBody(state, {
+        now: clock,
+        image,
+        onConnect: () => setConnecting(true),
+        onSettings: setSettingsFor,
+        onSetup: (id) => setSetup({ id, rebuild: false }),
+        // Like Update scripts: it starts at once, and the setup sheet follows it.
+        onAddTools: async (v) => {
+          await window.nekko.buildImage({ kind: 'tools', priority: v.config.settings.priority });
+          setSetup({ id: v.config.id, rebuild: true });
+        },
+        beginReply,
+      })}
       {connecting && (
         // shortcut: views do not carry the GitHub app id yet, so connect always asks for the key; pass a real lookup once they do.
         <ConnectRunnerSheet

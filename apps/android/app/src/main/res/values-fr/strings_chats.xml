@@ -185,6 +185,14 @@
     <string name="chats_start_on">Lancer sur %1$s</string>
     <string name="chats_run_on">Exécuter sur</string>
     <string name="chats_run_on_note">Un modèle local s’exécute sur le matériel de l’ordinateur. Choisir un autre ordinateur affiche ses modèles et ses dossiers.</string>
+    <string name="chats_run_on_state">%1$s · %2$s</string>
+    <string name="chats_auto">Automatique</string>
+    <string name="chats_auto_note">Un ordinateur libre</string>
+    <string name="chats_auto_finding">Recherche d’un ordinateur libre…</string>
+    <string name="chats_auto_free_busy">Auto a choisi %1$s : %2$s est occupé.</string>
+    <string name="chats_auto_free">Auto a choisi %1$s : il est libre.</string>
+    <string name="chats_auto_all_busy">Tous les ordinateurs sont occupés : Auto garde %1$s, le dernier utilisé.</string>
+    <string name="chats_auto_none">Aucun autre ordinateur ne peut exécuter de modèle local pour l’instant : Auto garde %1$s.</string>
     <string name="chats_shared_with">Partagé avec Nekko</string>
     <string name="chats_shared_note">Va dans la zone de message de la discussion. C’est vous qui l’envoyez.</string>
     <string name="chats_remove_shared">Retirer le texte partagé</string>

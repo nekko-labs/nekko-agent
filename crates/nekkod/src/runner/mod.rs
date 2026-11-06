@@ -13,6 +13,7 @@ pub mod hostnets;
 pub mod image;
 pub mod keychain;
 pub mod lan;
+pub mod linux_image;
 pub mod net;
 pub mod provider;
 pub mod signals;
@@ -115,6 +116,7 @@ pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<
     vm_error: Option<String>,
     /// The image builder; unset in tests.
     image: OnceLock<Arc<image::ImageJob<image::RealBuildHost>>>,
+    linux_image: OnceLock<Arc<linux_image::LinuxImageJob>>,
     /// The Mac as of the last tick, for the image builder's gates.
     mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
 }
@@ -215,6 +217,7 @@ impl Runners {
             Err(_) => Arc::new(RwLock::new(None)),
         };
         let vm = helper.clone().map(|h| HelperVm::new(h, host.clone(), egress.clone()));
+        let linux_vm = helper.clone().map(|h| HelperVm::new(h, host.clone(), egress.clone()));
         let build_vm = helper.clone().map(|h| HelperVm::new(h, host, egress.clone()));
         let sense = HostSense::new(
             machine,
@@ -246,8 +249,16 @@ impl Runners {
         let connectors = Connectors { github, gitlab: gitlab(), setup };
         let job_vault = vault.clone();
         let job_hub = hub.clone();
+        let linux_hub = hub.clone();
         let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
         let images = dir.join("images");
+        let linux = linux_image::LinuxImageJob::new(
+            images.clone(),
+            linux_vm,
+            building.clone(),
+            Box::new(move |v| linux_hub.publish(linux_image::EVENT, json!(v), false)),
+        );
+        let _ = me.linux_image.set(Arc::new(linux));
         let job = image::ImageJob::new(
             images.clone(),
             image::RealBuildHost::new(build_vm, images, me.mac.clone(), Arc::downgrade(&me)),
@@ -303,6 +314,7 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
             running_vm_mb,
             vm_error,
             image: OnceLock::new(),
+            linux_image: OnceLock::new(),
             mac: Arc::default(),
         })
     }
@@ -430,6 +442,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     reasons: Vec::new(),
                     available: 0,
                     limit: None,
+                    linux_available: 0,
+                    linux_error: None,
                     awake: false,
                     error: None,
                     today: Default::default(),

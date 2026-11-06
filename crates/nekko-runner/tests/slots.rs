@@ -1,8 +1,8 @@
 //! Slot, CPU and warm-VM budgets for a host.
 
 use nekko_runner::{
-    HostFacts, Priority, RunnerSettings, SlotLimit, cpus_per_vm, macos_slots_available, macos_slots_explained,
-    recommended_runner_memory_mb, runner_memory_mb, usual_memory_mb, vms_wanted, warm_slots,
+    HostFacts, Priority, RunnerSettings, SlotLimit, cpus_per_vm, linux_slots_available, macos_slots_available,
+    macos_slots_explained, recommended_runner_memory_mb, runner_memory_mb, usual_memory_mb, vms_wanted, warm_slots,
 };
 
 #[test]
@@ -23,6 +23,23 @@ fn never_more_than_two_macos_vms() {
         ),
         0
     );
+}
+
+#[test]
+fn linux_slots_take_the_memory_macos_leaves_and_ignore_apples_cap() {
+    // 64 GB Mac, owner uses 16 GB: a 40 GB budget, five 8 GB VMs.
+    let host = HostFacts { ram_mb: 65536, cores: 12, other_macos_vms: 2, user_memory_mb: Some(16384) };
+    let s = RunnerSettings { macos_slots: 2, linux_slots: 6, ..Default::default() };
+    // Other apps hold both macOS places, which does not touch Linux.
+    assert_eq!(macos_slots_available(&s, &host), 0);
+    assert_eq!(linux_slots_available(&s, &host, 0), 5);
+    // Two macOS slots keep their memory first.
+    assert_eq!(linux_slots_available(&s, &host, 2), 3);
+    assert_eq!(linux_slots_available(&RunnerSettings { linux_slots: 2, ..s.clone() }, &host, 2), 2);
+    assert_eq!(linux_slots_available(&RunnerSettings { linux_slots: 0, ..s }, &host, 0), 0);
+    // No memory left after macOS: none.
+    let small = HostFacts { ram_mb: 16384, cores: 10, other_macos_vms: 0, user_memory_mb: None };
+    assert_eq!(linux_slots_available(&RunnerSettings { linux_slots: 4, ..Default::default() }, &small, 1), 0);
 }
 
 #[test]

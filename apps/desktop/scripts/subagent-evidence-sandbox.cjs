@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 200)); });
   const run = s => win.webContents.executeJavaScript(s, true);
   const shot = async (name, rect) => { const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(rect, { stayHidden: true, stayAwake: false })).toPNG()); report.captures.push(f); };
-  const rows = () => run(`[...document.querySelectorAll('[data-agent-panel] button.pl-6')].map(b => b.textContent.trim())`);
+  const rows = () => run(`[...document.querySelectorAll('[data-agent-panel] [data-subagent-row]')].map(b => b.textContent.trim())`);
   const clickSubagent = () => run(`(() => { const b = [...document.querySelectorAll('[data-work-place] button')].find(x => x.textContent.trim() === 'In a subagent'); if (b) b.click(); return !!b; })()`);
   const panel = { x: 0, y: 0, width: 420, height: 640 };
   try {
@@ -46,7 +46,7 @@ app.whenReady().then(async () => {
     await sleep(700);
     await run(working);
     await sleep(500);
-    report.facts.workingIcons = await run(`[...document.querySelectorAll('[data-agent-panel] button.pl-6')].map(b => b.lastElementChild?.outerHTML.slice(0, 120))`);
+    report.facts.workingIcons = await run(`[...document.querySelectorAll('[data-agent-panel] [data-subagent-row]')].map(b => b.querySelector('[role=img]')?.outerHTML.slice(0, 120))`);
     report.facts.parentWorking = await rows();
     await shot('panel-parent-working', panel);
     await run(`layoutFixture.emitAgent({ type: 'done', sessionId: 'a', messageId: 'a0' })`);

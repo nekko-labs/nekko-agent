@@ -145,7 +145,7 @@ fn jwt_is_rs256_with_app_issuer() {
 #[tokio::test]
 async fn missing_key_is_auth_error() {
     let t = rig(vec![token()], false);
-    assert!(matches!(t.gh.mint(&repo_record(), "n").await, Err(ProviderError::Auth(_))));
+    assert!(matches!(t.gh.mint(&repo_record(), "n", Guest::Macos).await, Err(ProviderError::Auth(_))));
     assert!(t.http.urls().is_empty());
 }
 
@@ -153,7 +153,7 @@ async fn missing_key_is_auth_error() {
 async fn jit_config_request_has_labels_and_group() {
     let jit = (201, json!({ "runner": { "id": 23 }, "encoded_jit_config": "abc" }));
     let t = rig(vec![token(), (200, json!({ "id": 5, "private": true })), jit.clone()], true);
-    let minted = t.gh.mint(&repo_record(), "nekko-mac1-1-1").await.unwrap();
+    let minted = t.gh.mint(&repo_record(), "nekko-mac1-1-1", Guest::Macos).await.unwrap();
     assert_eq!(minted, Minted { runner_id: 23, seed_file: GITHUB_SEED, jit_config: "abc".into() });
     assert_eq!(t.http.urls()[0], "POST https://api.github.com/app/installations/9/access_tokens");
     let last = t.http.last();
@@ -174,7 +174,7 @@ async fn jit_config_request_has_labels_and_group() {
 
     // Org scope: the org's endpoint and the record's group; the token is cached.
     t.http.push(jit.0, jit.1);
-    t.gh.mint(&org_record(), "n2").await.unwrap();
+    t.gh.mint(&org_record(), "n2", Guest::Macos).await.unwrap();
     let last = t.http.last();
     assert_eq!(last.url, "https://api.github.com/orgs/acme/actions/runners/generate-jitconfig");
     assert_eq!(t.http.body(3)["runner_group_id"], 7);
@@ -306,7 +306,7 @@ async fn revoked_key_marks_runner_error() {
     assert_eq!(t.vault().get(&key_name(123)), None);
 
     let t = rig(vec![(401, json!({ "message": "Bad credentials" }))], true);
-    assert!(matches!(t.gh.mint(&repo_record(), "n").await, Err(ProviderError::Auth(_))));
+    assert!(matches!(t.gh.mint(&repo_record(), "n", Guest::Macos).await, Err(ProviderError::Auth(_))));
 }
 
 #[tokio::test]
@@ -465,6 +465,23 @@ async fn remove_tolerates_404_and_stale_removes_only_ours() {
 }
 
 #[tokio::test]
+async fn linux_jobs_count_only_for_linux_vms() {
+    let jobs = json!({ "jobs": [
+        { "id": 1, "status": "queued", "labels": ["self-hosted", "macOS", "nekko-cloud-mac"] },
+        { "id": 2, "status": "queued", "labels": ["self-hosted", "Linux", "ARM64"] },
+        { "id": 3, "status": "queued", "labels": ["nekko-cloud-mac-linux"] },
+        { "id": 4, "status": "queued", "labels": ["self-hosted", "Linux", "X64"] },
+    ] });
+    let runs = json!({ "workflow_runs": [{ "id": 100, "name": "CI" }] });
+    let t = rig(vec![token(), (200, runs.clone()), (200, jobs.clone()), (200, runs), (200, jobs)], true);
+    assert_eq!(t.gh.queued(&repo_record(), Guest::Linux).await.unwrap().len(), 2, "amd64 jobs never come here");
+    assert_eq!(t.gh.queued(&repo_record(), Guest::Macos).await.unwrap().len(), 1);
+    let label = repo_record().config.label;
+    assert_eq!(labels(&repo_record(), Guest::Linux), ["self-hosted", "Linux", "ARM64", &format!("{label}-linux")]);
+    assert_eq!(labels(&repo_record(), Guest::Macos)[1], "macOS");
+}
+
+#[tokio::test]
 async fn queued_lists_jobs_with_our_labels() {
     let t = rig(
         vec![
@@ -483,7 +500,7 @@ async fn queued_lists_jobs_with_our_labels() {
         ],
         true,
     );
-    let q = t.gh.queued(&repo_record()).await.unwrap();
+    let q = t.gh.queued(&repo_record(), Guest::Macos).await.unwrap();
     assert_eq!(q.len(), 1);
     assert_eq!((q[0].job.job_id, q[0].job.run_id, q[0].job.job.as_str()), (1, 100, "build"));
     assert_eq!(q[0].created_at.as_deref(), Some("2026-11-06T01:02:03Z"));
@@ -709,16 +726,16 @@ async fn rate_limits_are_not_a_revoked_key() {
         "API rate limit exceeded for installation ID 9.",
     ] {
         let t = rig(vec![(403, json!({ "message": msg }))], true);
-        assert!(matches!(t.gh.mint(&org_record(), "n").await, Err(ProviderError::Other(_))), "{msg}");
+        assert!(matches!(t.gh.mint(&org_record(), "n", Guest::Macos).await, Err(ProviderError::Other(_))), "{msg}");
     }
     let t = rig(vec![(403, json!({ "message": "Resource not accessible by integration" }))], true);
-    assert!(matches!(t.gh.mint(&org_record(), "n").await, Err(ProviderError::Auth(_))));
+    assert!(matches!(t.gh.mint(&org_record(), "n", Guest::Macos).await, Err(ProviderError::Auth(_))));
 }
 
 #[tokio::test]
 async fn a_repo_that_went_public_is_refused_at_mint() {
     let t = rig(vec![token(), (200, json!({ "id": 5, "private": false }))], true);
-    match t.gh.mint(&repo_record(), "n").await {
+    match t.gh.mint(&repo_record(), "n", Guest::Macos).await {
         Err(ProviderError::Auth(m)) => assert!(m.contains("o/r is public"), "{m}"),
         other => panic!("{other:?}"),
     }
@@ -729,6 +746,6 @@ async fn a_repo_that_went_public_is_refused_at_mint() {
     gh_mut(&mut allowed).allow_public = true;
     let jit = (201, json!({ "runner": { "id": 23 }, "encoded_jit_config": "abc" }));
     let t = rig(vec![token(), jit], true);
-    assert!(t.gh.mint(&allowed, "n").await.is_ok());
+    assert!(t.gh.mint(&allowed, "n", Guest::Macos).await.is_ok());
     assert!(!t.http.urls().iter().any(|u| u.ends_with("/repos/o/r")), "allowed: no extra check");
 }

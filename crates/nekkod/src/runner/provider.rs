@@ -3,6 +3,7 @@
 //! [`ByLink`] sends each call to the provider the record is linked to.
 
 use super::store::{Link, RunnerRecord};
+use nekko_runner::Guest;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 
@@ -99,7 +100,13 @@ impl std::fmt::Display for ProviderError {
 }
 
 pub trait Provider: Send + Sync + 'static {
-    fn mint(&self, r: &RunnerRecord, name: &str) -> impl Future<Output = Result<Minted, ProviderError>> + Send;
+    /// A registration for one VM of `guest`, with that guest's labels.
+    fn mint(
+        &self,
+        r: &RunnerRecord,
+        name: &str,
+        guest: Guest,
+    ) -> impl Future<Output = Result<Minted, ProviderError>> + Send;
     fn status(
         &self,
         r: &RunnerRecord,
@@ -112,8 +119,12 @@ pub trait Provider: Send + Sync + 'static {
         runner_id: u64,
         runner_name: &str,
     ) -> impl Future<Output = Result<Option<JobRef>, ProviderError>> + Send;
-    /// Jobs waiting for a runner with this record's labels.
-    fn queued(&self, r: &RunnerRecord) -> impl Future<Output = Result<Vec<QueuedJob>, ProviderError>> + Send;
+    /// Jobs waiting for a runner with this record's labels for `guest`.
+    fn queued(
+        &self,
+        r: &RunnerRecord,
+        guest: Guest,
+    ) -> impl Future<Output = Result<Vec<QueuedJob>, ProviderError>> + Send;
     /// Removes a registration; one that is already gone is `Ok`.
     fn remove(&self, r: &RunnerRecord, runner_id: u64) -> impl Future<Output = Result<(), ProviderError>> + Send;
     /// Removes every offline registration named exactly `<name_prefix><unix secs>-<n>`; returns how many.
@@ -134,10 +145,10 @@ pub struct ByLink<G: Provider, L: Provider> {
 }
 
 impl<G: Provider, L: Provider> Provider for ByLink<G, L> {
-    async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+    async fn mint(&self, r: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
         match r.link {
-            Link::Github(_) => self.github.mint(r, name).await,
-            Link::Gitlab(_) => self.gitlab.mint(r, name).await,
+            Link::Github(_) => self.github.mint(r, name, guest).await,
+            Link::Gitlab(_) => self.gitlab.mint(r, name, guest).await,
         }
     }
 
@@ -155,10 +166,10 @@ impl<G: Provider, L: Provider> Provider for ByLink<G, L> {
         }
     }
 
-    async fn queued(&self, r: &RunnerRecord) -> Result<Vec<QueuedJob>, ProviderError> {
+    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
         match r.link {
-            Link::Github(_) => self.github.queued(r).await,
-            Link::Gitlab(_) => self.gitlab.queued(r).await,
+            Link::Github(_) => self.github.queued(r, guest).await,
+            Link::Gitlab(_) => self.gitlab.queued(r, guest).await,
         }
     }
 
@@ -210,7 +221,7 @@ mod tests {
     }
 
     impl Provider for Tagged {
-        async fn mint(&self, _: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+        async fn mint(&self, _: &RunnerRecord, name: &str, _: Guest) -> Result<Minted, ProviderError> {
             self.log(format!("mint {name}"));
             Ok(Minted { runner_id: 1, seed_file: self.0, jit_config: "c".into() })
         }
@@ -222,7 +233,7 @@ mod tests {
             self.log(format!("job {id} {name}"));
             Ok(None)
         }
-        async fn queued(&self, _: &RunnerRecord) -> Result<Vec<QueuedJob>, ProviderError> {
+        async fn queued(&self, _: &RunnerRecord, _: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
             self.log("queued".into());
             Ok(Vec::new())
         }
@@ -287,10 +298,10 @@ mod tests {
         };
         for (r, tag) in [(&gh, "gh"), (&gl, "gl")] {
             log.lock().unwrap().clear();
-            assert_eq!(p.mint(r, "n").await.unwrap().seed_file, tag);
+            assert_eq!(p.mint(r, "n", Guest::Macos).await.unwrap().seed_file, tag);
             p.status(r, 5).await.unwrap();
             p.job(r, 5, "n").await.unwrap();
-            p.queued(r).await.unwrap();
+            p.queued(r, Guest::Macos).await.unwrap();
             p.remove(r, 5).await.unwrap();
             p.remove_stale(r, "nekko-h-").await.unwrap();
             p.rerun(r, &job).await.unwrap();

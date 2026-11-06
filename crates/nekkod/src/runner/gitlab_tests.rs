@@ -94,7 +94,7 @@ fn job_tags(tags: &[&str]) -> Value {
 #[tokio::test]
 async fn mint_creates_a_locked_tagged_project_runner() {
     let t = rig(vec![created()]);
-    let m = t.gl.mint(&project_rec(), "nekko-mac1-100-0").await.unwrap();
+    let m = t.gl.mint(&project_rec(), "nekko-mac1-100-0", Guest::Macos).await.unwrap();
     let req = t.http.last();
     assert_eq!((req.method, req.url.as_str()), ("POST", "https://gitlab.com/api/v4/user/runners"));
     assert!(req.headers.contains(&("PRIVATE-TOKEN".into(), "glpat-x".into())));
@@ -113,7 +113,7 @@ async fn mint_creates_a_locked_tagged_project_runner() {
 #[tokio::test]
 async fn group_scope_creates_a_group_runner() {
     let t = rig(vec![created()]);
-    t.gl.mint(&group_rec(&["g/a"]), "n").await.unwrap();
+    t.gl.mint(&group_rec(&["g/a"]), "n", Guest::Macos).await.unwrap();
     let b = t.http.body(0);
     assert_eq!((b["runner_type"].as_str(), b["group_id"].as_u64()), (Some("group_type"), Some(9)));
     assert!(b.get("project_id").is_none());
@@ -122,7 +122,7 @@ async fn group_scope_creates_a_group_runner() {
 #[tokio::test]
 async fn protected_only_off_sends_not_protected() {
     let t = rig(vec![created()]);
-    t.gl.mint(&unprotected_rec(), "n").await.unwrap();
+    t.gl.mint(&unprotected_rec(), "n", Guest::Macos).await.unwrap();
     assert_eq!(t.http.body(0)["access_level"], "not_protected");
 }
 
@@ -133,7 +133,7 @@ async fn self_managed_base_is_used() {
         Scope::Repo { owner: "a/b".into(), repo: "c".into() },
         GitlabLink { base_url: "https://gitlab.example.com".into(), ..link() },
     );
-    let m = t.gl.mint(&r, "n").await.unwrap();
+    let m = t.gl.mint(&r, "n", Guest::Macos).await.unwrap();
     assert!(t.http.last().url.starts_with("https://gitlab.example.com/api/v4/"));
     assert!(m.jit_config.contains("url = \"https://gitlab.example.com\"\n"));
 }
@@ -154,7 +154,7 @@ fn runner_toml_is_exact() {
 #[tokio::test]
 async fn non_glrt_token_is_refused_and_deleted() {
     let t = rig(vec![(201, json!({"id": 77, "token": "abc"})), (204, Value::Null)]);
-    let e = t.gl.mint(&project_rec(), "n").await.unwrap_err();
+    let e = t.gl.mint(&project_rec(), "n", Guest::Macos).await.unwrap_err();
     assert!(matches!(e, ProviderError::Other(_)));
     assert!(!e.to_string().contains("abc"));
     assert_eq!(t.http.urls()[1], "DELETE https://gitlab.com/api/v4/runners/77");
@@ -163,7 +163,7 @@ async fn non_glrt_token_is_refused_and_deleted() {
 #[tokio::test]
 async fn missing_token_is_auth_error() {
     let t = rig_with(vec![], false);
-    let e = t.gl.mint(&project_rec(), "n").await.unwrap_err();
+    let e = t.gl.mint(&project_rec(), "n", Guest::Macos).await.unwrap_err();
     assert_eq!(e, ProviderError::Auth("The GitLab access token is missing; connect again.".into()));
     assert!(t.http.urls().is_empty());
 }
@@ -171,13 +171,16 @@ async fn missing_token_is_auth_error() {
 #[tokio::test]
 async fn expired_token_is_auth_error() {
     let t = rig(vec![(401, json!({"message": "401 Unauthorized"}))]);
-    assert_eq!(t.gl.mint(&project_rec(), "n").await.unwrap_err(), ProviderError::Auth(UNAUTHORIZED.into()));
+    assert_eq!(
+        t.gl.mint(&project_rec(), "n", Guest::Macos).await.unwrap_err(),
+        ProviderError::Auth(UNAUTHORIZED.into())
+    );
 }
 
 #[tokio::test]
 async fn forbidden_create_names_scopes_and_owner() {
     let t = rig(vec![(403, json!({"message": "403 Forbidden"}))]);
-    assert_eq!(t.gl.mint(&project_rec(), "n").await.unwrap_err(), ProviderError::Auth(FORBIDDEN.into()));
+    assert_eq!(t.gl.mint(&project_rec(), "n", Guest::Macos).await.unwrap_err(), ProviderError::Auth(FORBIDDEN.into()));
 }
 
 #[tokio::test]
@@ -288,7 +291,7 @@ async fn queued_counts_jobs_our_tags_cover() {
         job_tags(&["nekko-cloud-mac", "gpu"]),
     ]);
     let t = rig(vec![(200, jobs)]);
-    assert_eq!(t.gl.queued(&unprotected_rec()).await.unwrap().len(), 2);
+    assert_eq!(t.gl.queued(&unprotected_rec(), Guest::Macos).await.unwrap().len(), 2);
     assert_eq!(
         t.http.urls(),
         vec!["GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/jobs?scope[]=pending&per_page=100"]
@@ -315,14 +318,14 @@ async fn queued_skips_unprotected_refs_when_protected_only() {
         (200, jobs),
     ]);
     let r = project_rec();
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 2, "main and the protected tag");
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 2, "main and the protected tag");
     let urls = t.http.urls();
     assert_eq!(urls[1], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/branches/main");
     assert_eq!(urls[2], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/branches/feature");
     assert_eq!(urls[3], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/tags/v1.0");
     assert_eq!(urls[4], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/tags/v2%2Frc");
     assert_eq!(urls.len(), 6);
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 2);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 2);
     assert_eq!(t.http.urls().len(), 7, "the ref answers are cached");
 }
 
@@ -340,15 +343,15 @@ async fn protected_answers_expire_after_ten_minutes() {
         (200, json!({"protected": true})),
     ]);
     let r = project_rec();
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
     advance(599);
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
     assert_eq!(t.http.urls().len(), 3, "still cached at 599 s");
     advance(1);
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 0, "asked again at 600 s");
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 0, "asked again at 600 s");
     assert!(t.http.urls()[4].ends_with("/repository/branches/main"));
     advance(600);
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
     assert_eq!(t.gl.refs_cached(), 1, "the expired main entry was dropped");
 }
 
@@ -362,7 +365,7 @@ async fn group_queue_polls_each_listed_project() {
     if let Link::Gitlab(l) = &mut r.link {
         l.protected_only = false;
     }
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 3);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 3);
     assert_eq!(
         t.http.urls(),
         vec![
@@ -383,7 +386,7 @@ async fn group_queue_skips_a_project_it_cannot_read() {
     if let Link::Gitlab(l) = &mut r.link {
         l.protected_only = false;
     }
-    assert_eq!(t.gl.queued(&r).await.unwrap().len(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
 }
 
 #[tokio::test]
@@ -393,7 +396,7 @@ async fn group_queue_fails_when_no_project_can_be_read() {
     if let Link::Gitlab(l) = &mut r.link {
         l.protected_only = false;
     }
-    assert_eq!(t.gl.queued(&r).await.unwrap_err(), ProviderError::Other("GitLab answered 403".into()));
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap_err(), ProviderError::Other("GitLab answered 403".into()));
 }
 
 #[tokio::test]
@@ -868,4 +871,11 @@ async fn a_token_without_read_api_is_refused_by_name() {
     let e = c.connect(req_project("a/b", "c", "glpat-x")).await.unwrap_err();
     assert!(e.contains("read_api"), "{e}");
     assert!(c.stored_nothing() && !c.posted());
+}
+
+#[test]
+fn linux_vms_get_their_own_tags() {
+    assert_eq!(guest_tags("nekko", Guest::Macos), "nekko,macos,arm64");
+    assert_eq!(guest_tags("nekko", Guest::Linux), "nekko-linux,linux,arm64");
+    assert_eq!(tag_list("nekko"), guest_tags("nekko", Guest::Macos));
 }
