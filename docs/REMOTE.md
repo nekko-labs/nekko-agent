@@ -90,7 +90,7 @@ cannot connect to an older computer.
 > computer. Choosing another computer shows its models and folders at once, since every paired
 > computer is already connected; what you typed stays.
 >
-> **Automatic** (iPhone): with a **local model** (Ollama, LM Studio, llama.cpp, vLLM) and more
+> **Automatic** (iPhone and Android): with a **local model** (Ollama, LM Studio, llama.cpp, vLLM) and more
 > than one paired computer, **Run on** starts on **Automatic**. The phone asks each online
 > computer whether it is in use (a chat replying there, or someone at its keyboard) and starts the
 > chat on a free one, with the same model if that computer has it, else the last one used there,

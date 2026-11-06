@@ -258,6 +258,12 @@ pub fn turn_rig(name: &str, session: Value) -> TurnRig {
 }
 
 pub fn turn_rig_with(name: &str, session: Value, extra: Value) -> TurnRig {
+    turn_rig_env(name, session, extra, &[])
+}
+
+/// [`turn_rig_with`], with the daemon's own environment changed as
+/// [`start_with_env`] does.
+pub fn turn_rig_env(name: &str, session: Value, extra: Value, env: &[(&str, Option<&str>)]) -> TurnRig {
     let data = std::env::temp_dir().join(format!("nekkod-turn-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     let workspace = data.join("project");
@@ -268,7 +274,7 @@ pub fn turn_rig_with(name: &str, session: Value, extra: Value) -> TurnRig {
     let id = session["id"].as_str().unwrap().to_string();
     std::fs::write(data.join("sessions").join(format!("{id}.json")), serde_json::to_string_pretty(&session).unwrap())
         .unwrap();
-    let d = start_with_config(&data, extra);
+    let d = start_with_env(&data, extra, env);
     let events = record_events(d.port);
     boot_settled(&data);
     TurnRig { data, workspace, d, events }

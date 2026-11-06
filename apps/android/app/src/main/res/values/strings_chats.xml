@@ -200,6 +200,13 @@
     <string name="chats_run_on">Run on</string>
     <string name="chats_run_on_note">A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.</string>
     <string name="chats_run_on_state">%1$s · %2$s</string>
+    <string name="chats_auto">Automatic</string>
+    <string name="chats_auto_note">A free computer</string>
+    <string name="chats_auto_finding">Finding a free computer…</string>
+    <string name="chats_auto_free_busy">Auto picked %1$s: %2$s is busy.</string>
+    <string name="chats_auto_free">Auto picked %1$s: it’s free.</string>
+    <string name="chats_auto_all_busy">Every computer is busy, so Auto kept %1$s, the one used last.</string>
+    <string name="chats_auto_none">No other computer can run a local model now, so Auto kept %1$s.</string>
     <string name="chats_shared_with">Shared with Nekko</string>
     <string name="chats_shared_note">Goes into the chat’s message box. You send it.</string>
     <string name="chats_remove_shared">Remove shared text</string>

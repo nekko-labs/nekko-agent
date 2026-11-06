@@ -28,6 +28,7 @@
     "khroma": "MIT: the license file says so, package.json just omits the field.",
     "caniuse-lite": "CC-BY-4.0. Build-time browser data, not shipped.",
     "exif-parser": "MIT: the license file says so, package.json just omits the field. Build tool, not shipped.",
-    "truncate-utf8-bytes": "WTFPL. Build tool (electron-builder), not shipped."
+    "truncate-utf8-bytes": "WTFPL. Build tool (electron-builder), not shipped.",
+    "Ubuntu 24.04 cloud image": "Mixed free licenses, GPL-2.0 among them. Downloaded from Canonical onto the owner's Mac at their request and never bundled or redistributed by Nekko, like the macOS restore image. Philip approved shipping it this way (2026-11-05)."
   }
 }

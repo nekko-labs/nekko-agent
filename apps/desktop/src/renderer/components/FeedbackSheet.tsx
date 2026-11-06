@@ -4,6 +4,7 @@ import {
   agentPrompt, appInfoLine, feedbackNote, feedbackNoteLength, type FeedbackAppInfo, type FeedbackKind,
 } from '@nekko-agent/shared';
 import { CheckIcon, CloseIcon, WrenchIcon } from '../icons.js';
+import { FeedbackScreenshots, useFeedbackScreenshots } from './FeedbackScreenshots.js';
 import { StarryNekko } from './StarryNekko.js';
 import { Modal, Toggle } from './primitives/index.js';
 
@@ -89,6 +90,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   const [sent, setSent] = useState<FeedbackKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
+  const screenshots = useFeedbackScreenshots();
 
   const firstChoice = useRef<HTMLInputElement>(null);
   const summaryField = useRef<HTMLInputElement>(null);
@@ -130,8 +132,9 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     setSending(true);
     setError(null);
     try {
-      // Only Needs improvement offers app info; a switch left on before changing to Good sends nothing.
-      await window.nekko.feedbackSend(feedbackNote(kind, summary, description), kind === 'improve' && includeInfo);
+      // Only Needs improvement offers app info and screenshots; anything set before changing to Good stays behind.
+      const improving = kind === 'improve';
+      await window.nekko.feedbackSend(feedbackNote(kind, summary, description), improving && includeInfo, improving ? await screenshots.forUpload() : []);
       setDiscarding(false);
       setSent(kind);
     } catch (e) {
@@ -146,7 +149,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     if (discarding) {
       setDiscarding(false);
       requestAnimationFrame(() => sendButton.current?.focus());
-    } else if (!sent && (summary.trim() || description.trim())) {
+    } else if (!sent && (summary.trim() || description.trim() || screenshots.shots.length)) {
       setDiscarding(true);
     } else {
       onClose();
@@ -166,6 +169,19 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     } else if (target instanceof HTMLInputElement && target.type === 'radio') {
       e.preventDefault();
     }
+  };
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const files = [...e.clipboardData.files];
+    if (kind !== 'improve' || !files.length) return;
+    e.preventDefault();
+    void screenshots.add(files);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    if (kind !== 'improve') return;
+    e.preventDefault();
+    void screenshots.add([...e.dataTransfer.files]);
   };
 
   const status = sent ? `Your feedback was sent successfully. ${PROMPTS[sent].sent}`
@@ -205,7 +221,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
             <div className="mt-3"><ContributeNote /></div>
           </div>
         ) : (
-          <form className="flex min-h-0 flex-col" noValidate onKeyDown={onKeyDown} onSubmit={e => { e.preventDefault(); void send(); }}>
+          <form className="flex min-h-0 flex-col" noValidate onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={e => { if (kind === 'improve') e.preventDefault(); }} onDrop={onDrop} onSubmit={e => { e.preventDefault(); void send(); }}>
             <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 pb-5 pt-1">
               <fieldset>
                 <legend className="mb-1 block text-xs font-medium text-ink-soft">What kind of feedback is this?</legend>
@@ -262,6 +278,8 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                     {showDescriptionProblem && <p id="feedback-description-error" className="mt-1 text-xs text-danger">{descriptionProblem}</p>}
                   </div>
 
+                  {kind === 'improve' && <FeedbackScreenshots {...screenshots} />}
+
                   {kind === 'improve' && (
                     <label className="flex items-start gap-2">
                       <Toggle value={includeInfo} onChange={setIncludeInfo} label="Include app info" />
@@ -305,7 +323,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
               {error && <p className="rounded-xl border border-danger px-3 py-2 text-xs text-ink" style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)' }} role="alert">{error} Your feedback is still here.</p>}
               {discarding ? (
                 <div className="flex items-center gap-3 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }} data-testid="feedback-discard">
-                  <span className="min-w-0 flex-1"><strong className="font-semibold">Discard this feedback?</strong> What you've written will be lost.</span>
+                  <span className="min-w-0 flex-1"><strong className="font-semibold">Discard this feedback?</strong> What you've written and added will be lost.</span>
                   <button ref={keepEditing} type="button" className="btn btn-outline shrink-0 px-2! py-1! text-xs" onClick={requestClose}>Keep editing</button>
                   <button type="button" className="btn btn-ghost shrink-0 px-2! py-1! text-xs" onClick={onClose}>Discard</button>
                 </div>

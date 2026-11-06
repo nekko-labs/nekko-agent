@@ -225,6 +225,45 @@ Every branch you list there is trusted: a branch that collects other people's un
 (such as a batch branch built from open pull requests) lets anyone with write access run code on
 your Mac. The VM is the second layer: a job that gets in still only reaches the public internet.
 
+## Linux jobs
+
+Apple allows two macOS VMs per Mac, but no such limit applies to Linux. Jobs that don't need
+macOS (lint, unit tests, server builds, Docker-based tests) can run in Linux VMs on the same Mac,
+beside the macOS ones.
+
+1. Open the runner's settings and set **Linux slots** (0 to 4).
+2. Choose **Set up Linux image**. Nekko downloads Ubuntu 24.04 from Canonical (about 600 MB,
+   each file checked against Canonical's published SHA-256), installs the runner and Docker, and
+   test-boots it. It takes a few minutes and needs no Xcode. **Rebuild Linux image** later picks
+   up a newer Ubuntu.
+3. Point Linux jobs at it:
+
+```yaml
+jobs:
+  test:
+    runs-on: [self-hosted, Linux, ARM64]
+```
+
+Or use your label with `-linux` on the end (`nekko-cloud-mac-linux` for the default label). On
+GitLab the tag is `<your label>-linux`.
+
+Each Linux VM is Ubuntu 24.04 on ARM64 with Docker (so `services:` and `container:` work), git,
+build-essential, Python and the usual command-line tools. The `runner` user has passwordless
+`sudo`, as on GitHub's hosted Ubuntu runners, so `sudo apt-get install` works in a step. Like a
+macOS VM, it runs one job, then is deleted, and it reaches only the public internet.
+
+Things to know:
+
+- **ARM64 only.** Jobs that need x86_64 (`X64`) binaries or images stay on hosted runners. Most
+  tools and Docker images publish ARM64 builds.
+- **Booted on demand.** A Linux VM starts when a Linux job is queued and reaches its runner in
+  seconds, so none is kept ready.
+- **Memory comes after macOS.** Linux VMs use the same memory per VM and share the runner memory
+  with the macOS slots, which keep theirs first. When the budget is used up, the extra Linux slot
+  is greyed and says so.
+- **Other apps' VMs.** A Linux VM another app runs (Docker Desktop, for example) still counts
+  toward Apple's two macOS places, because Nekko cannot tell its kind from outside.
+
 ## How this Mac helps
 
 The mode decides when the runner may take a job. You choose it when you
@@ -263,6 +302,7 @@ kept: if you save a value outside its range, the saved value is the nearest allo
 - **macOS slots**: 0, 1 or 2 VMs at once. Apple allows 2 per Mac, so 3 is not offered. If
   another app is running a macOS VM, or memory allows only one, the card greys the extra slot and
   says why.
+- **Linux slots**: 0 to 4 Linux VMs, with no Apple limit (see [Linux jobs](#linux-jobs)).
 - **Suggested size**: what size VM your jobs need, from what they used. A VM holds all its
   memory from boot whether a job needs it or not, so a smaller fit leaves more for you, and a job
   that swapped or kept every vCPU busy gets more. After 3 jobs at the current size, the row says
@@ -271,7 +311,7 @@ kept: if you save a value outside its range, the saved value is the nearest allo
   below GitHub's standard hosted Mac (3 vCPUs, 7 GB). Each job's VM samples its own CPU and memory
   every 5 seconds; the samples stay on this Mac and only their summary is kept, on the job's line
   in `runners/audit.jsonl`.
-- **Memory per VM**: 4 to 64 GB.
+- **Memory per VM**: 4 to 64 GB, for macOS and Linux VMs alike.
 - **Total runner memory**: **Use the recommendation** (the sheet shows
   `Recommended: N GB for this Mac`), or your own figure from 4 GB up to 75% of the Mac's memory.
 - **CPU per VM**: **Mode default**, or 2 up to the Mac's cores minus 2.

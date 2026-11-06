@@ -180,8 +180,6 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           {sub === 'show' && <>
             <Choice toggle checked={view.showMetadata} onClick={() => set({ showMetadata: !view.showMetadata })}
               title="The model, context, git and sub-agent lines under each card">Metadata</Choice>
-            <Choice toggle checked={view.showMetadata && view.showProvider} disabled={!view.showMetadata} onClick={() => set({ showProvider: !view.showProvider })}
-              title="Where each card's model comes from, under the model">Model provider</Choice>
             {hasComputers && <Choice toggle checked={view.showComputer} onClick={() => set({ showComputer: !view.showComputer })}
               title="Which computer a card's agent runs on">Computer</Choice>}
             {hasComputers && <Choice toggle checked={view.showComputerIcons} onClick={() => set({ showComputerIcons: !view.showComputerIcons })}

@@ -741,6 +741,62 @@ class ComputersRepository(
         }
     }
 
+    // ---- New chat's Automatic (2026-11-05, decision 0052) ----
+
+    /** The live connection to a computer: the active one's, or its fleet link. */
+    private fun connectionTo(id: String): Remote? = if (id == _state.value.activeId) client else links[id]?.client
+
+    /**
+     * Ask every online computer whether it is in use and whether it has a
+     * local model, in parallel, and pick one. A computer that doesn't answer
+     * in [timeoutMs] counts as not saying.
+     */
+    suspend fun pickMachine(lastUsed: String?, timeoutMs: Long = 4_000): com.nekko.protocol.MachinePick = coroutineScope {
+        val s = _state.value
+        val candidates = s.computers.map { pc ->
+            async {
+                val conn = s.connOf(pc.id)
+                val c = connectionTo(pc.id)?.takeIf { conn == RelayState.ONLINE }
+                val use = c?.let { orNull { com.nekko.protocol.ComputerUse.from(it.callWithTimeout(timeoutMs, Channels.ACTIVITY_STATE)) } }
+                val providers = c?.let { orNull { PublicProvider.list(it.callWithTimeout(timeoutMs, Channels.PROVIDERS_LIST)) } }
+                    ?: s.providers.takeIf { pc.id == s.activeId }
+                val activity = if (pc.id == s.activeId) s.activity else s.peers[pc.id]?.activity.orEmpty()
+                com.nekko.protocol.MachineCandidate(
+                    id = pc.id,
+                    conn = conn,
+                    running = activity.values.count { it == Activity.RUNNING },
+                    use = use,
+                    // Not read in time: assume it has one, as the iPhone does.
+                    hasLocalModel = providers?.any { it.enabled && com.nekko.protocol.LocalProviders.isLocal(it.kind) } ?: true,
+                )
+            }
+        }.awaitAll()
+        com.nekko.protocol.MachinePicker.pick(candidates, lastUsed)
+    }
+
+    /**
+     * A local model to start with on [id], read over its link before it
+     * becomes active: the first of [prefer] it has, else a model already
+     * loaded on one of its model servers, else the first one listed.
+     */
+    suspend fun localModel(id: String, prefer: List<Pair<String, String>>, timeoutMs: Long = modelListTimeoutMs): Pair<String, String>? {
+        val c = connectionTo(id) ?: return null
+        val providers = orNull { PublicProvider.list(c.callWithTimeout(timeoutMs, Channels.PROVIDERS_LIST)) }.orEmpty()
+            .filter { it.enabled && com.nekko.protocol.LocalProviders.isLocal(it.kind) }
+        val lists = mutableMapOf<String, List<ModelInfo>>()
+        suspend fun models(p: String) = lists.getOrPut(p) {
+            orNull { ModelInfo.list(c.callWithTimeout(timeoutMs, Channels.MODELS_LIST, JsonPrimitive(p))) }.orEmpty()
+        }
+        for ((p, m) in prefer) if (providers.any { it.id == p } && models(p).any { it.id == m }) return p to m
+        var first: Pair<String, String>? = null
+        for (p in providers) {
+            val list = models(p.id)
+            list.firstOrNull { it.loaded }?.let { return p.id to it.id }
+            if (first == null) list.firstOrNull()?.let { first = p.id to it.id }
+        }
+        return first
+    }
+
     /** A fleet computer's live list, as the phone's saved copy (only when the user keeps one). */
     private fun savePeerList(id: String) {
         val cache = chatListCache ?: return

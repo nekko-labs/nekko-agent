@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   KEEP_AWAKE_LABELS,
+  LINUX_SLOT_CHOICES,
   MAX_JOB_CHOICES,
   PRIORITIES,
   PRIORITY_LABELS,
@@ -15,6 +16,7 @@ import {
   type HostView,
   type ImageView,
   type KeepAwake,
+  type LinuxImageView,
   type RunnerSettings,
   type RunnerView,
 } from '@nekko-agent/shared';
@@ -105,10 +107,45 @@ const Val = ({ children }: { children: React.ReactNode }) => <span className="ml
 
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
 
+const LINUX_STAGES: Record<NonNullable<LinuxImageView['stage']>, string> = {
+  download: 'Downloading', assemble: 'Unpacking', provision: 'Installing', test: 'Test boot', finish: 'Finishing',
+};
+
+/** The Linux image: set it up, watch it build, rebuild it. About 10 minutes, no Xcode. */
+export function LinuxImageRow({ image, onAction }: { image: LinuxImageView; onAction?(action: 'build' | 'cancel'): void }) {
+  const about = image.proof ? [image.proof.distro, image.proof.runner && `runner ${image.proof.runner}`, image.proof.docker && `Docker ${image.proof.docker}`].filter(Boolean).join(' · ') : null;
+  return (
+    <Row label="Linux image" hint="Ubuntu 24.04, built on this Mac">
+      {image.state === 'building' ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-ink-soft">
+            {`${image.stage ? LINUX_STAGES[image.stage] : 'Working'}: ${image.message ?? ''}${image.progress !== null ? ` ${Math.round(image.progress * 100)}%` : ''}`}
+          </span>
+          {onAction && <button type="button" className="btn btn-outline py-1! text-xs" onClick={() => onAction('cancel')}>Cancel</button>}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          {onAction && (
+            <button type="button" className="btn btn-outline py-1! text-xs" onClick={() => onAction('build')}>
+              {image.state === 'ready' ? 'Rebuild Linux image' : 'Set up Linux image'}
+            </button>
+          )}
+          {image.state === 'ready' && about && <span className="text-xs text-ink-faint">{about}</span>}
+          {image.state === 'none' && <span className="text-xs text-ink-faint">Downloads about 600 MB and takes about 10 minutes.</span>}
+        </div>
+      )}
+      {image.state === 'failed' && image.message && <p className="mt-1 text-xs text-danger">{image.message}</p>}
+    </Row>
+  );
+}
+
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, toggling = false }: {
+export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, toggling = false }: {
   view: RunnerView;
   image?: ImageView | null;
+  /** `null` while unknown, or where the daemon builds no Linux image. */
+  linuxImage?: LinuxImageView | null;
+  onLinuxImage?(action: 'build' | 'cancel'): void;
   draft: RunnerSettings;
   onDraft(d: RunnerSettings): void;
   onEnabled(v: boolean): void;
@@ -165,6 +202,20 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
         />
         {view.limit && <p className="mt-1 text-xs text-ink-faint">{slotLimitText(view.limit)}</p>}
       </Row>
+      <Row label="Linux slots" hint="ARM64 Ubuntu with Docker; no Apple limit">
+        <Seg
+          label="Linux slots"
+          value={Math.min(draft.linuxSlots, LINUX_SLOT_CHOICES[LINUX_SLOT_CHOICES.length - 1])}
+          options={LINUX_SLOT_CHOICES.map((n) => ({ value: n, label: String(n) }))}
+          onChange={(v) => set('linuxSlots', v)}
+        />
+        <p className="mt-1 text-xs text-ink-faint">
+          {`Jobs with runs-on [self-hosted, Linux, ARM64] or ${view.config.label}-linux boot one when queued. They share the runner memory, after the macOS slots.`}
+        </p>
+      </Row>
+      {(draft.linuxSlots > 0 || (linuxImage && linuxImage.state !== 'none')) && linuxImage && (
+        <LinuxImageRow image={linuxImage} onAction={onLinuxImage} />
+      )}
       {suggested && (
         <Row label="Suggested size" hint="from what your jobs used">
           <div className="flex flex-wrap items-center gap-3">
@@ -320,6 +371,22 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
   const draft = shownSettings(view, edits?.draft ?? null);
   const [saving, setSaving] = useState(false);
 
+  const [linuxImage, setLinuxImage] = useState<LinuxImageView | null>(null);
+  useEffect(() => {
+    let live = true;
+    // An older daemon has no Linux image channels: the row stays hidden.
+    window.nekko.linuxImageStatus().then((v) => { if (live) setLinuxImage(v); }, () => {});
+    const off = window.nekko.onLinuxImageChanged((v) => setLinuxImage(v));
+    return () => { live = false; off(); };
+  }, []);
+  const linuxAction = async (action: 'build' | 'cancel') => {
+    try {
+      setLinuxImage(await (action === 'build' ? window.nekko.buildLinuxImage() : window.nekko.cancelLinuxImage()));
+    } catch (e) {
+      pushToast('error', `Couldn't ${action === 'build' ? 'set up' : 'cancel'} the Linux image: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
   const [toggling, setToggling] = useState(false);
   const setEnabled = async (enabled: boolean) => {
     if (toggling) return;
@@ -377,6 +444,8 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
       <SettingsBody
         view={view}
         image={image}
+        linuxImage={linuxImage}
+        onLinuxImage={(a) => void linuxAction(a)}
         draft={draft}
         onDraft={(d) => setEdits((e) => editDraft(e, view, d))}
         onEnabled={(v) => void setEnabled(v)}

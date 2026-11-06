@@ -98,7 +98,7 @@ impl RunnerSettings {
     /// Clamp a hand-edited or UI-supplied value into the ranges the spec allows.
     pub fn sanitized(mut self) -> Self {
         self.macos_slots = self.macos_slots.min(crate::slots::MAX_MACOS_VMS);
-        self.linux_slots = 0; // P1 has no Linux slots
+        self.linux_slots = self.linux_slots.min(crate::slots::MAX_LINUX_VMS);
         self.memory_per_vm_mb =
             if self.memory_per_vm_mb == 0 { 8192 } else { self.memory_per_vm_mb.clamp(4096, 65536) };
         self.runner_memory_mb = self.runner_memory_mb.filter(|m| *m >= 4096);
