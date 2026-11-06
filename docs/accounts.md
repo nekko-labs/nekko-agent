@@ -36,6 +36,8 @@ Nekko does not switch accounts on its own unless you ask it to: in a chat on **�
 - `Subscription · Claude Code 2.1.263 · ~/.claude-work · you@work.com · Team plan`: a Claude plan, through Claude Code on this computer.
 - `API · Anthropic API key`, or `API · Amazon Bedrock · us-east-1`: an API or cloud account Nekko calls directly.
 
+**Your first subscription account** takes one press: **Add provider → Claude → Subscription** shows three steps, *Install Claude Code*, *Sign in* and *Connect*, starting at the one your computer has reached. Press the button and each step starts when the last one finishes; you only need to sign in when your browser opens.
+
 **API accounts** (an Anthropic API key, or Bedrock, Vertex or Foundry) work like any other API provider: choose **Add provider → Claude → API → Connect** once per key or cloud account.
 
 **Subscription accounts** run the Claude Code you already have installed. Each one is a separate Claude Code login:
