@@ -39,6 +39,23 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Flat agent plan (#2013, 2026-11-06)
+
+Area: renderer. Result: an older cold-frame differential did not reproduce in two additional matched pairs; no speedup or zero-effect claim.
+Conditions: all comparisons use Linux 4-thread runners, Chrome/156.0.8078.79, 1440x1000, the full latency workload (1000 + 12x400-message chats), 33 cold switches per phase, one unprofiled attempt in base/head/head/base order. Do not compare different CPUs as a speedup time series.
+
+| Comparison | Runner | Base first / last p95 | Head first / second p95 |
+|---|---|---|---|
+| Original CI attempt 1 | AMD EPYC 7763 | 35.6 / 38.8 ms | 41.5 / 38.1 ms |
+| Original CI attempt 2 | AMD EPYC 9V74 | 33.9 / 32.9 ms | 35.8 / 37.2 ms |
+| Additional exact-current pairs | AMD EPYC 7763 | 38.9 / 40.2 ms | 38.3 / 39.9 ms |
+
+Original [CI 42223817760](https://github.com/nekko-labs/nekko-agent/actions/runs/42223817760) measured unchanged base `b05c1d5567af38cd9c76b690b5cc7c7d5560eb11` against synthetic merge `e37af938958756a2b1fc769705227b17c5efd690`, containing feature head `5ffd683ae48cf238c9d7e3c104f5349355326b25`. Attempt 1 reproduced the former 33 ms baseline failure. The single permitted retry showed both head controls slower than both base controls, requiring further matched measurements rather than another blind retry. Original attempt-1 full-contract cold-frame p95 samples were 42.6 / 40.7 / 42.4 ms, n=33 each; other measured timing/memory rows passed and terminal latency was skipped.
+
+[Additional diagnostic 42232720879](https://github.com/nekko-labs/nekko-agent/actions/runs/42232720879) measured exact base `0c80faed99a2978e0f30bbb30ddc0f3b6db52b8c` and refreshed feature head `28701069386a3cdabff25fd2372c54cf45e22082`. Harness and daemon sources were identical, and every phase used one release daemon (SHA256 `1dac40c3ffce48c39233c4c92f4949683b234a6918562ad9ab814234372b6b1a`), Node 22.23.4, no GPU. Raw nearest-rank p95s and revisions were checked. The head slowdown does not reproduce in either additional pair. Separate timeline-instrumented base/head cold-frame p95 was 43.3 / 41.6 ms; both cold-switch traces were parsed with Layout/Paint events. Trace overhead means those values are not equivalent to the unprofiled controls, and event counts do not establish per-click causality. Artifact 13510119925 ZIP SHA256 was verified as `fec19f422b25ac48ddd940d85d35345558381de97117af3598d95d9435878da8`.
+
+Why: #2013 removes presentation-only plan phase/group wrappers while retaining per-step details. Its refreshed feature patch has the same stable patch ID as the tested original; normal current-head [CI 42232970013](https://github.com/nekko-labs/nekko-agent/actions/runs/42232970013) passed build, perf, integration tests and gate. The differential hold was cleared after inspecting the additional pairs, not merely because the separately approved #1999 recalibrated the gate to 48 ms. Neither the 8.3 ms product target nor the actual remount cost improved here; optimization remains #1998. The original runner-specific differential is not causally explained. Source: [original baseline evidence](https://github.com/nekko-labs/nekko-agent/issues/712#issuecomment-6686247689), [additional measurements](https://github.com/nekko-labs/nekko-agent/issues/712#issuecomment-6687599109), [landed PR #2013](https://github.com/nekko-labs/nekko-agent/pull/2013). This entry was added in the documentation-only #2028 follow-up because it was omitted before feature landing. Temporary diagnostic refs must never merge.
+
 ## Cold-switch frame gate recalibrated on the six-zone board, 33 to 48 ms (#712, 2026-11-06)
 
 Area: perf harness. Result: measurement fix (gate recalibration); product target unchanged.
