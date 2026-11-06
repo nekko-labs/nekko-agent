@@ -178,7 +178,6 @@ jobs:
           path: apps/ios/evidence/**
           if-no-files-found: error
   android:
-    if: ${{ false }} # This owned-branch dispatch captures iOS only.
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
