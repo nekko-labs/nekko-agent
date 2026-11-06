@@ -105,4 +105,28 @@ public final class HardwareMonitorModel {
     }
 
     public func name(_ id: String) -> String { names[id] ?? id }
+
+    /// The models the Model Server has and doesn't hold now, from the computer's model list.
+    public var loadable: [ModelInfo] {
+        let held = Set((engine?.resident ?? []).map(\.id) + (engine?.loading ?? []).map(\.id))
+        return (store.models[engineProviderId] ?? []).filter { !held.contains($0.id) }
+    }
+
+    /// Load a model now. Like every model setting, it needs the change proof, and the computer
+    /// refuses it while its Model Server keeps its own settings.
+    public func load(_ id: String) async throws {
+        _ = try await store.call(raising: MonitorChannels.modelLoad, [.string(engineProviderId), .string(id)], timeout: 300)
+        await refresh()
+    }
+
+    public func unloadAll() async throws {
+        _ = try await store.call(raising: MonitorChannels.unloadAll, [])
+        await refresh()
+    }
+
+    /// Change how the Model Server keeps models (`maxLoaded`, `idleTtlSeconds`, `jitLoad`).
+    public func setServer(_ patch: [String: JSONValue]) async throws {
+        _ = try await store.call(raising: MonitorChannels.engineSettings, [.object(patch)])
+        await refresh()
+    }
 }

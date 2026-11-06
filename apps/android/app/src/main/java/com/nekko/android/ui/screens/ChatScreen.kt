@@ -679,7 +679,7 @@ private fun ChatScreenContent(
         ModePill(
             pill, barBottom, floor,
             gauges = if (showHardware) { vertical, open -> MiniMonitor(hardware, onOpen = open, compact = pane != null, vertical = vertical, modelName = vm::modelName) } else null,
-            details = { AgentDetails(hardware, chat, computerName, vm::modelName, vm.hardware::unload) },
+            details = { AgentDetails(hardware, chat, computerName, vm::modelName, vm.hardware::unload, vm.hardware.actions) },
         )
     }
 }

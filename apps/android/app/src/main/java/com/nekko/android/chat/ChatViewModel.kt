@@ -95,7 +95,7 @@ class ChatViewModel(
     val simpleChoices: StateFlow<String> = phonePrefs?.flow(SimpleMode.CHOICES) ?: MutableStateFlow("")
 
     /** Expert mode's hardware and loaded models; the screen polls it only while Expert is on and the chat is visible. */
-    val hardware = HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" }
+    val hardware = HardwareMonitorController(repo.caller, repo::callRaising) { repo.state.value.active?.name ?: "your computer" }
 
     /** The model and effort sheet: change the chat's model or effort on the computer. Throws so the sheet can say why. */
     suspend fun setOptions(providerId: String? = null, modelId: String? = null, effort: Effort? = null) =

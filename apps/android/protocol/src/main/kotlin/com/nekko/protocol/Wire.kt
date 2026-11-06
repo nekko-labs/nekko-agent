@@ -95,6 +95,9 @@ object Channels {
     const val SESSION_WATCHES = "session:watches"
     /** Agent class without a proof: unloading frees memory, and the next reply loads the model again. */
     const val MODEL_UNLOAD = "model:unload"
+    const val MODEL_LOAD = "model:load"
+    const val ENGINE_UNLOAD_ALL = "engine:unloadAll"
+    const val ENGINE_SETTINGS = "engine:settings"
     /** SK-7: a single-use step-up challenge and the kinds of method registered ([StepUpChallenge]). Read class. */
     const val SECURITY_CHALLENGE = StepUp.CHALLENGE_CHANNEL
     /**

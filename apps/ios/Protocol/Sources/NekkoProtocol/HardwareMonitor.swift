@@ -12,6 +12,31 @@ public enum MonitorChannels {
     public static let contextPreview = "context:preview"
     /// Change level without a proof: unloading frees memory and the next reply loads the model again.
     public static let modelUnload = "model:unload"
+    /// How the Model Server loads and keeps models, while it lets devices choose (change proof each).
+    public static let modelLoad = "model:load"
+    public static let unloadAll = "engine:unloadAll"
+    public static let engineSettings = "engine:settings"
+}
+
+/// What a device may set of how the Model Server loads and keeps models (`PHONE_ENGINE_KEYS`).
+public struct ModelServerSettings: Equatable, Sendable {
+    /// How many models may stay loaded at once.
+    public let maxLoaded: Int?
+    /// Unload a model after this many idle seconds; 0 keeps it.
+    public let idleTtlSeconds: Int?
+    /// Load a model when a chat asks for it.
+    public let jitLoad: Bool?
+    /// Off, the Model Server's own saved settings decide and devices can't change them.
+    public let devicesChoose: Bool
+
+    /// The idle times offered, in seconds: 5 minutes, 15 minutes, an hour, never.
+    public static let idleChoices = [300, 900, 3600, 0]
+
+    public static func from(_ v: JSONValue?) -> ModelServerSettings? {
+        guard let v, v.object != nil else { return nil }
+        return ModelServerSettings(maxLoaded: v.long("maxLoaded").map(Int.init), idleTtlSeconds: v.long("idleTtlSeconds").map(Int.init),
+                                   jitLoad: v["jitLoad"]?.bool, devicesChoose: v["clientModelSettings"]?.bool ?? true)
+    }
 }
 
 /// The built-in Model Server's provider id (`PROVIDER_ID` in the desktop's ModelDock).
@@ -127,6 +152,8 @@ public struct EngineStatus: Equatable, Sendable {
     /// What this computer can load models into (`EngineMemory`): `vram`, `unified` or `ram`.
     public let budgetBytes: Int64?
     public let memoryKind: String?
+    /// Nil from a computer too old to send them.
+    public var server: ModelServerSettings? = nil
 
     /// Memory the resident models take, of the budget, 0...1.
     public var memFraction: Double? {
@@ -148,7 +175,8 @@ public struct EngineStatus: Equatable, Sendable {
             return Loading(id: id, phase: l.str("phase") ?? "queued", progress: l.dbl("progress"))
         }
         return EngineStatus(installed: v.flag("installed"), running: v.flag("running"), resident: resident, loading: loading,
-                            budgetBytes: v["memory"]?.long("budgetBytes"), memoryKind: v["memory"]?.str("kind"))
+                            budgetBytes: v["memory"]?.long("budgetBytes"), memoryKind: v["memory"]?.str("kind"),
+                            server: ModelServerSettings.from(v["settings"]))
     }
 }
 

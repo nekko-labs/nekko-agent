@@ -1252,8 +1252,12 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneSystemView(result);
     case 'gpu:stats':
       return phoneGpuView(result);
-    case 'engine:status':
-      return phoneEngineView(result);
+    case 'engine:status': {
+      // With what a device may set, so reading the Model Server's choices needs no change proof.
+      const view = phoneEngineView(result);
+      if (view && isObj(result) && isObj(result.settings)) view.settings = pick(result.settings, PHONE_MODEL_SERVER_VIEW);
+      return view;
+    }
     case 'context:preview':
       return phoneContextView(result);
     case 'model:unload':

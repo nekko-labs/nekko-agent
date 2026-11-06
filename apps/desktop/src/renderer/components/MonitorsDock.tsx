@@ -627,6 +627,9 @@ export function hardwareRows(monitors: Record<MonitorKind, boolean>, system: Sys
 
 const TEMP_COLOR = { ok: 'var(--ink-faint)', warn: 'var(--warning)', hot: 'var(--danger)' } as const;
 
+/** The built-in Model Server's provider id (`PROVIDER_ID` in EngineSection). */
+const ENGINE_PROVIDER_ID = 'nekko-engine';
+
 /** How often the Local models monitor re-reads the engine, matching the chat's model dock. */
 const LOCAL_MODELS_POLL_MS = 6000;
 
@@ -641,9 +644,11 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
   const [status, setStatus] = useState<EngineStatus | null>(initial?.status ?? null);
   const [models, setModels] = useState<LocalModel[]>(initial?.models ?? []);
   const [read, setRead] = useState(Boolean(initial));
+  // Bumped after a change on a watched computer, to read it again at once.
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
-    if (!initial) setRead(false);
+    if (!initial && tick === 0) setRead(false);
     const refresh = async () => {
       // A connected computer answers with its phone view: `installed` instead of the path, and no names.
       const [s, m] = computer
@@ -659,9 +664,17 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
     const t = setInterval(refresh, LOCAL_MODELS_POLL_MS);
     return () => { live = false; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computer]);
+  }, [computer, tick]);
+  useEffect(() => setTick(0), [computer]);
   const store = useStore.getState;
   const names = new Map(models.map((m) => [m.id, m.name]));
+  const server = computer ? (status as { settings?: ComputerModelServerSettings } | null)?.settings : undefined;
+  const change = (channel: Parameters<typeof window.nekko.computerModelServer>[1], args: unknown[] = []) => {
+    if (!computer) return;
+    void window.nekko.computerModelServer(computer, channel, args)
+      .catch((e) => store().pushToast('error', `That computer didn't take it: ${e instanceof Error ? e.message : String(e)}`))
+      .finally(() => setTick((n) => n + 1));
+  };
   const resident = status?.resident ?? [];
   const installed = Boolean((status as { installed?: boolean } | null)?.installed ?? status?.install?.binPath);
   const openServer = () => store().setView('modelserver');
@@ -679,6 +692,7 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
           <div className="monitors-dock__metric-row">
             <strong className="monitors-dock__provider-name" title={name}>{name}</strong>
             {!computer && <button type="button" className="monitors-dock__text-button" data-local-model-settings={r.id} title={`Open ${name}'s GPU offload, context and memory settings`} aria-label={`Open ${name} settings`} onClick={() => store().openLocalModelSettings(r.id)}>Settings</button>}
+            {computer && <button type="button" className="monitors-dock__text-button" data-local-model-unload={r.id} aria-label={`Unload ${name}`} onClick={() => change('model:unload', [ENGINE_PROVIDER_ID, r.id])}>Unload</button>}
           </div>
           <p className="monitors-dock__note">
             {r.loadedOn && <span title={placementTitle(r)} style={split ? { color: 'var(--warning)' } : undefined}>{placementLabel(r)}</span>}
@@ -687,8 +701,50 @@ export function LocalModels({ initial }: { initial?: { status: EngineStatus | nu
           </p>
         </div>;
       })}
+    {computer && installed && status?.running && server && <ComputerModelServer id={computer} server={server} resident={resident.map((r) => r.id)} change={change} />}
     {/* The Model Server page and a model's settings are this computer's. */}
     {!computer && <button type="button" className="monitors-dock__text-button" onClick={openServer}>{installed ? 'Open Model Server' : 'Set up a local model'}</button>}
+  </div>;
+}
+
+/** What a connected computer's `engine:status` carries of its Model Server settings (`PHONE_MODEL_SERVER_VIEW`). */
+interface ComputerModelServerSettings { maxLoaded?: number; idleTtlSeconds?: number; jitLoad?: boolean; clientModelSettings?: boolean }
+
+const IDLE_CHOICES: Array<[number, string]> = [[300, '5 minutes'], [900, '15 minutes'], [3600, '1 hour'], [0, 'Never']];
+
+/**
+ * Load a model, unload them all, and how a connected computer's Model Server
+ * keeps models, while it lets devices choose. Off there, the controls show
+ * that computer's choices and say where to change them.
+ */
+export function ComputerModelServer({ id, server, resident, change }: { id: string; server: ComputerModelServerSettings; resident: string[]; change: (channel: 'model:load' | 'engine:unloadAll' | 'engine:settings', args?: unknown[]) => void }) {
+  const [library, setLibrary] = useState<Array<{ id: string; name?: string }>>([]);
+  useEffect(() => {
+    let live = true;
+    void window.nekko.computerRead(id, 'models:list', [ENGINE_PROVIDER_ID]).then((m) => { if (live && Array.isArray(m)) setLibrary(m as Array<{ id: string; name?: string }>); }).catch(() => {});
+    return () => { live = false; };
+  }, [id]);
+  const locked = server.clientModelSettings === false;
+  const loadable = library.filter((m) => !resident.includes(m.id));
+  return <div className="monitors-dock__model-server" data-computer-model-server>
+    <div className="monitors-dock__metric-row">
+      <select className="input py-0.5 text-2xs" aria-label="Load a model" disabled={locked || loadable.length === 0} value="" onChange={(e) => { if (e.target.value) change('model:load', [ENGINE_PROVIDER_ID, e.target.value]); }}>
+        <option value="">Load a model…</option>
+        {loadable.map((m) => <option key={m.id} value={m.id}>{m.name || m.id}</option>)}
+      </select>
+      {resident.length > 0 && <button type="button" className="monitors-dock__text-button whitespace-nowrap" disabled={locked} onClick={() => change('engine:unloadAll')}>Unload all</button>}
+    </div>
+    <label className="monitors-dock__metric-row"><span>Models kept loaded</span>
+      <select className="input w-auto py-0.5 text-2xs" disabled={locked} value={server.maxLoaded ?? 1} onChange={(e) => change('engine:settings', [{ maxLoaded: Number(e.target.value) }])}>
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n}</option>)}
+      </select></label>
+    <label className="monitors-dock__metric-row"><span>Unload when idle</span>
+      <select className="input w-auto py-0.5 text-2xs" disabled={locked} value={server.idleTtlSeconds ?? 900} onChange={(e) => change('engine:settings', [{ idleTtlSeconds: Number(e.target.value) }])}>
+        {IDLE_CHOICES.map(([s, label]) => <option key={s} value={s}>{label}</option>)}
+      </select></label>
+    <label className="monitors-dock__metric-row"><span>Load when a chat asks</span>
+      <input type="checkbox" disabled={locked} checked={server.jitLoad !== false} onChange={(e) => change('engine:settings', [{ jitLoad: e.target.checked }])} /></label>
+    {locked && <p className="monitors-dock__note">That computer's Model Server keeps its own model settings. Change them there, or turn on Connected devices choose model settings.</p>}
   </div>;
 }
 

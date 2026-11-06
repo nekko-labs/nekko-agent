@@ -880,6 +880,18 @@ struct AgentPanel: View {
                 } footer: {
                     Text("Unloading frees the model’s memory on \(computer). The next reply that uses it loads it again.")
                 }
+                if let e = monitor.engine, e.installed, e.running, let server = e.server {
+                    Section {
+                        ModelServerControls(server: server, loadable: monitor.loadable, holdsModels: !e.resident.isEmpty,
+                                            load: { try await monitor.load($0) }, unloadAll: { try await monitor.unloadAll() },
+                                            set: { try await monitor.setServer($0) }) { notice = $0 }
+                            .task { await store.loadAllModels() }
+                    } header: {
+                        Text("Model Server")
+                    } footer: {
+                        Text(server.devicesChoose ? "Each change asks for Face ID." : "\(computer)’s Model Server keeps its own model settings. Change them there, or turn on Connected devices choose model settings.")
+                    }
+                }
                 if let chat {
                     Section("This chat") {
                         LabeledContent("Model", value: chat.modelName ?? String(localized: "Not chosen yet"))
@@ -962,6 +974,63 @@ struct AgentPanel: View {
             } catch {
                 notice = (store.readable(error).localizedDescription, false)
             }
+        }
+    }
+}
+
+/// Load a model, unload them all, and how the Model Server keeps models, while it lets devices choose.
+struct ModelServerControls: View {
+    let server: ModelServerSettings
+    let loadable: [ModelInfo]
+    let holdsModels: Bool
+    let load: (String) async throws -> Void
+    let unloadAll: () async throws -> Void
+    let set: ([String: JSONValue]) async throws -> Void
+    var report: ((text: String, ok: Bool)?) -> Void
+    @State private var busy = false
+
+    var body: some View {
+        Group {
+            Menu {
+                ForEach(loadable) { m in Button(m.name) { run { try await load(m.id) } } }
+            } label: {
+                Label("Load a model", systemImage: "arrow.down.circle")
+            }
+            .disabled(loadable.isEmpty)
+            .accessibilityIdentifier("monitor.load")
+            if holdsModels {
+                Button("Unload all", role: .destructive) { run { try await unloadAll() } }
+                    .accessibilityIdentifier("monitor.unloadAll")
+            }
+            Stepper(value: Binding(get: { server.maxLoaded ?? 1 }, set: { n in run { try await set(["maxLoaded": .int(Int64(n))]) } }), in: 1...8) {
+                LabeledContent("Models kept loaded", value: "\(server.maxLoaded ?? 1)")
+            }
+            .accessibilityIdentifier("monitor.maxLoaded")
+            Picker("Unload when idle", selection: Binding(get: { server.idleTtlSeconds ?? 900 }, set: { t in run { try await set(["idleTtlSeconds": .int(Int64(t))]) } })) {
+                ForEach(ModelServerSettings.idleChoices, id: \.self) { t in Text(Self.idle(t)).tag(t) }
+            }
+            .accessibilityIdentifier("monitor.idleTtl")
+            Toggle("Load when a chat asks", isOn: Binding(get: { server.jitLoad ?? true }, set: { on in run { try await set(["jitLoad": .bool(on)]) } }))
+                .accessibilityIdentifier("monitor.jitLoad")
+        }
+        .disabled(busy || !server.devicesChoose)
+    }
+
+    static func idle(_ seconds: Int) -> String {
+        switch seconds {
+        case 0: String(localized: "Never")
+        case 300: String(localized: "5 minutes")
+        case 3600: String(localized: "1 hour")
+        default: String(localized: "15 minutes")
+        }
+    }
+
+    private func run(_ work: @escaping () async throws -> Void) {
+        busy = true
+        report(nil)
+        Task {
+            do { try await work() } catch { report((error.localizedDescription, false)) }
+            busy = false
         }
     }
 }
