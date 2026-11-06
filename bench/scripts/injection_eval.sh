@@ -46,7 +46,7 @@ json.dump({
   "started": datetime.datetime.now().astimezone().isoformat(),
   "name": "$name", "model": "$model", "modelFile": os.path.expanduser("$model_file").replace(os.path.expanduser("~"), "~", 1),
   "modelSha256": run("shasum", "-a", "256", os.path.expanduser("$model_file")).split(" ")[0],
-  "server": {"baseUrl": "$base_url", "command": """$server_cmd""", "version": run(*"""$server_cmd""".split()[:1], "--version")},
+  "server": {"baseUrl": "$base_url", "command": """$server_cmd""".replace(os.path.expanduser("~") + "/", "~/"), "version": run(*"""$server_cmd""".split()[:1], "--version")},
   "injection": "$injection",
   "runs": int("$runs"), "modes": "$modes".split(","), "turnSeconds": int("$turn_seconds"),
   "repo": {"commit": run("git", "-C", "$root", "rev-parse", "HEAD"), "dirty": bool(run("git", "-C", "$root", "status", "--porcelain"))},
