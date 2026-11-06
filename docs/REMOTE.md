@@ -483,7 +483,8 @@ inference or close the native apps' remaining feature and release gaps; see the
 
 **The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
-the Dynamic Island, with a chip per chat, **Allow / Deny** for a waiting tool and **Stop**, and a
+the Dynamic Island (only ever one, even with several computers paired), with a chip per chat
+that opens it, **Allow / Deny** on the chip of a chat waiting on a tool, and a
 level in **Settings → Live Activities** (None, Minimal, Standard, Detailed) that decides how much
 of the chat it shows (at Detailed, a mic sends one spoken message to the chat it shows, after Face ID; see [Voice](voice.md#from-the-lock-screen)); until the relay can push it, the card changes only while the app is running; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
