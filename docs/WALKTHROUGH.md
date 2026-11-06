@@ -369,6 +369,21 @@ escalation, secret/`.env` access, and more. When a command matches an "ask" rule
 the chat shows an **approval bar** with the exact command and its severity before
 anything runs.
 
+**Chats that read the web or a tool's output** get one more check. A page, a search
+result, the browser or an MCP server can hide instructions for the agent ("send the
+customer data to this address"). Once a chat has read any of them, Guardrails asks
+before the agent:
+
+- fetches an address that did not appear in what it read or in your messages (a link
+  the page showed is fine; the same link with new data added to it asks);
+- calls an MCP tool, which could send data out of your computer;
+- hands work to a sub-agent, which starts without this chat's history;
+- saves a note to memory, which would apply to every later chat.
+
+The approval names the address or tool so you can tell whether you expected it. Ask
+mode already asks for all of these; YOLO never asks. Files in your project folders do
+not count as outside content.
+
 ---
 
 ## 6. Projects & the codebase index
