@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { issueToken } from "./auth.js";
 import type { Db } from "./db.js";
 import { FlyDriver, MemoryDriver } from "./fly.js";
-import { DEFAULT_SCOPE, MACHINE_LIMIT, egressHosts, parseScope, sweepMachineHours } from "./machines.js";
+import { DEFAULT_SCOPE, MACHINE_LIMIT, UNUSED_DAYS, deleteUnusedMachines, egressHosts, parseScope, sweepMachineHours } from "./machines.js";
 import { migrate } from "./migrate.js";
 import { buildServer } from "./server.js";
 import { pgliteDb } from "./test-db.js";
@@ -187,6 +187,56 @@ describe("machines", () => {
       await sweepMachineHours(db, driver);
       expect(await month(light.id)).toBeCloseTo(2, 1);
     });
+
+    it("the sweep catches a machine that stopped itself and counts its time only up to the stop", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 3);
+      // It went idle and stopped itself an hour ago; nobody has looked since.
+      Object.assign([...driver.machines.values()][0], { state: "stopped", stoppedAt: new Date(Date.now() - 3600_000) });
+      expect(await sweepMachineHours(db, driver)).toBe(0);
+      expect(await month(pro.id)).toBeCloseTo(2, 1);
+      const machine = (await call(a, pro.token, "GET", `/v1/machines/${id}`)).json().machine;
+      expect(machine.state).toBe("stopped");
+      expect(Date.now() - new Date(machine.lastUsedAt).getTime()).toBeGreaterThan(3500_000);
+      // Stopped machines are not counted again.
+      await sweepMachineHours(db, driver);
+      expect(await month(pro.id)).toBeCloseTo(2, 1);
+    });
+  });
+
+  describe("deleting machines nobody uses", () => {
+    const idleFor = (id: string, days: number) =>
+      db.query("update cloud_machines set last_used_at = now() - make_interval(days => $2) where id = $1", [id, days]);
+
+    it(`deletes a stopped machine unused for ${UNUSED_DAYS} days, and keeps the rest`, async () => {
+      const a = app();
+      const pro = await user("pro");
+      const old = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      const recent = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      const busy = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await call(a, pro.token, "POST", `/v1/machines/${old}/stop`);
+      await call(a, pro.token, "POST", `/v1/machines/${recent}/stop`);
+      await idleFor(old, UNUSED_DAYS + 1);
+      await idleFor(recent, UNUSED_DAYS - 1);
+      // Running counts as in use, however long ago it last enrolled.
+      await idleFor(busy, UNUSED_DAYS + 1);
+      expect(await deleteUnusedMachines(db, driver)).toBe(1);
+      expect((await call(a, pro.token, "GET", "/v1/machines")).json().machines.map((m: { id: string }) => m.id)).toEqual([recent, busy]);
+      expect([...driver.machines.values()].map((m) => m.state)).toEqual(["gone", "stopped", "running"]);
+    });
+
+    it("keeps a machine the host would not destroy, to try again", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await call(a, pro.token, "POST", `/v1/machines/${id}/stop`);
+      await idleFor(id, UNUSED_DAYS + 1);
+      driver.destroy = async () => { throw new Error("Fly DELETE: 500"); };
+      expect(await deleteUnusedMachines(db, driver)).toBe(0);
+      expect((await call(a, pro.token, "GET", "/v1/machines")).json().machines).toHaveLength(1);
+    });
   });
 
   it("lets the relay admit only a live machine's access token", async () => {
@@ -209,6 +259,8 @@ describe("the Fly driver", () => {
     const fetchImpl = (async (url: string, init: RequestInit) => {
       calls.push({ url, init });
       if (init.method === "POST" && url.endsWith("/machines")) return new Response(JSON.stringify({ id: "m-1" }), { status: 200 });
+      if (init.method === "GET" && url.endsWith("/m-idle"))
+        return new Response(JSON.stringify({ state: "stopped", events: [{ type: "start", timestamp: 3000 }, { type: "exit", timestamp: 2000 }, { type: "stop", timestamp: 1000 }] }), { status: 200 });
       if (init.method === "GET") return new Response(JSON.stringify({ state: "started" }), { status: 200 });
       if (init.method === "DELETE") return new Response(null, { status: url.includes("/m-gone") ? 404 : 500 });
       return new Response("{}", { status: 200 });
@@ -223,7 +275,9 @@ describe("the Fly driver", () => {
     expect(sent.config.auto_destroy).toBe(false);
     expect((calls[0].init.headers as Record<string, string>).authorization).toBe("Bearer fo1_secret");
     expect(calls.every((c) => !c.url.includes("fo1_secret"))).toBe(true);
-    expect(await fly.state("m-1")).toBe("running");
+    expect(await fly.state("m-1")).toEqual({ state: "running" });
+    // A stopped machine says when: its newest exit or stop event.
+    expect(await fly.state("m-idle")).toEqual({ state: "stopped", stoppedAt: new Date(2000) });
     // Already gone counts as destroyed (account deletion relies on it); any other failure surfaces.
     await expect(fly.destroy("m-gone")).resolves.toBeUndefined();
     await expect(fly.destroy("m-1")).rejects.toThrow("500");
