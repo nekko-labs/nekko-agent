@@ -319,12 +319,26 @@ final class RunActivities {
     }
 }
 
+/// Mirrors ActivityKit content even when no local update is needed. Ordinary pushes
+/// must not be echoed back: only restoring an active microphone needs a write.
+@MainActor
+struct CardContent {
+    var state: LiveCardState
+
+    mutating func receive(_ pushed: LiveCardState) -> LiveCardState? {
+        let kept = SystemCard.keepingVoice(pushed: pushed, local: state)
+        state = kept ?? pushed
+        return kept
+    }
+}
+
 /// The card in ActivityKit. Its two observers (push tokens, pushed content)
 /// end with it: in `end()`, and in `deinit` for a card replaced without one.
 @MainActor
 final class SystemCard: CardActivity {
     private let activity: ActivityKit.Activity<NekkoCardAttributes>
-    private(set) var state: LiveCardState
+    private var content: CardContent
+    var state: LiveCardState { content.state }
     var attributes: NekkoCardAttributes { activity.attributes }
     var isLive: Bool { activity.activityState == .active || activity.activityState == .stale }
     var id: String { activity.id }
@@ -343,12 +357,12 @@ final class SystemCard: CardActivity {
 
     private init(_ activity: ActivityKit.Activity<NekkoCardAttributes>, state: LiveCardState) {
         self.activity = activity
-        self.state = state
+        self.content = CardContent(state: state)
         let a = activity
         observers.set("pushes", Task { [weak self] in
             for await content in a.contentUpdates {
-                guard let self, let kept = Self.keepingVoice(pushed: content.state, local: self.state) else { continue }
-                self.update(kept)
+                guard let self else { return }
+                if let kept = self.content.receive(content.state) { self.update(kept) }
             }
         })
     }
@@ -366,7 +380,7 @@ final class SystemCard: CardActivity {
     }
 
     func update(_ state: LiveCardState) {
-        self.state = state
+        self.content.state = state
         let content = ActivityContent(state: state, staleDate: Self.staleDate)
         send { await $0.update(content) }
     }
