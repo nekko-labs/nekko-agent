@@ -203,6 +203,8 @@ interface UiState {
   onboardingOpen: boolean;
   /** True after the first settings load has finished. */
   settingsLoaded: boolean;
+  /** True once the first load can say whether a provider is set up. Until then an empty `providers` means unknown, not none. */
+  providersLoaded: boolean;
   settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
@@ -636,6 +638,7 @@ export const useStore = create<UiState>((set, get) => ({
   planRailOpenBySession: readPlanRailSessions(),
   onboardingOpen: false,
   settingsLoaded: false,
+  providersLoaded: false,
   settingsError: null,
   mascotMood: 'waving',
   toasts: [],
@@ -826,15 +829,22 @@ export const useStore = create<UiState>((set, get) => ({
   setActiveSession: (id) => set({ activeSessionId: id }),
 
   refreshProviders: async () => {
-    const providers = await window.nekko.listProviders();
-    set({ providers });
-    const active = get().activeProviderId ?? providers[0]?.id ?? null;
-    if (active) {
-      set({ activeProviderId: active });
-      // Always populate models for the active provider on startup, guards a
-      // race where a saved default provider is already active and would
-      // otherwise never have its model list fetched.
-      if (get().models.length === 0) await get().selectProvider(active);
+    try {
+      const providers = await window.nekko.listProviders();
+      set({ providers });
+      // Known as soon as the list is, because the model list below can be a
+      // network call to the provider. Only a local setup needs it to tell.
+      if (!needsProviderSetup(providers, get().activeModelId)) set({ providersLoaded: true });
+      const active = get().activeProviderId ?? providers[0]?.id ?? null;
+      if (active) {
+        set({ activeProviderId: active });
+        // Always populate models for the active provider on startup, guards a
+        // race where a saved default provider is already active and would
+        // otherwise never have its model list fetched.
+        if (get().models.length === 0) await get().selectProvider(active);
+      }
+    } finally {
+      set({ providersLoaded: true });
     }
   },
 

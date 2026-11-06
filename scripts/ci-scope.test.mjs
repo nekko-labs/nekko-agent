@@ -4,33 +4,28 @@ import { test } from 'node:test';
 import { ciScope, codeqlLanguages, FILE_LIST_CAP } from './ci-scope.mjs';
 
 const pr = (files, labels = []) => ciScope({ event: 'pull_request', files, labels });
-const queue = (files) => ciScope({ event: 'merge_group', files });
 const full = { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true, licenses: false };
-// PR and transitional queue runs share pre-merge coverage, except deploy-label OS opt-ins.
-const p = (scope) => ({ build: true, licenses: false, itests: scope.build !== false, ...scope });
-const q = (scope) => ({ build: true, licenses: false, ...scope, itests: true });
+// Every PR result carries itests: false and builds, unless a test says not.
+const p = (scope) => ({ build: true, licenses: false, ...scope, itests: false });
 const none = { daemon_os: [], capture_os: [], perf: false };
 
 test('the schedule, main pushes and manual dispatches run every job on every OS', () => {
   for (const event of ['schedule', 'push', 'workflow_dispatch']) assert.deepEqual(ciScope({ event, files: ['README.md'] }), full, event);
 });
 
-test('a docs-only change runs build and integration tests, not performance', () => {
+test('a docs-only change waits for build alone', () => {
   const docs = ['spec/chat/find-in-this-chat.md', 'docs/guide.md', 'apps/website/index.html'];
   assert.deepEqual(pr(docs), p(none));
-  assert.deepEqual(queue(docs), q(none));
 });
 
-test('a Rust change: no per-OS daemon on the PR or in the queue without a label; performance on both pre-merge events', () => {
-  assert.deepEqual(pr(['crates/nekkod/src/main.rs']), p({ ...none, perf: true }));
-  assert.deepEqual(queue(['crates/nekkod/src/main.rs']), q({ daemon_os: [], capture_os: [], perf: true }));
-  assert.deepEqual(pr(['crates/nekkod/src/main.rs'], ['deploy:linux', 'deploy:windows']), p({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: [], perf: true }));
+test('a Rust change: no per-OS daemon on the PR without a label, and no perf: that runs nightly', () => {
+  assert.deepEqual(pr(['crates/nekkod/src/main.rs']), p(none));
+  assert.deepEqual(pr(['crates/nekkod/src/main.rs'], ['deploy:linux', 'deploy:windows']), p({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: [], perf: false }));
 });
 
-test('a renderer change: capture only with deploy:windows on the PR; perf in the queue', () => {
-  assert.deepEqual(pr(['apps/desktop/src/renderer/App.tsx']), p({ ...none, perf: true }));
-  assert.deepEqual(pr(['apps/desktop/src/renderer/App.tsx'], ['deploy:windows']), p({ daemon_os: [], capture_os: ['windows-latest'], perf: true }));
-  assert.deepEqual(queue(['apps/desktop/src/renderer/App.tsx']), q({ daemon_os: [], capture_os: [], perf: true }));
+test('a renderer change: capture only with deploy:windows on the PR', () => {
+  assert.deepEqual(pr(['apps/desktop/src/renderer/App.tsx']), p(none));
+  assert.deepEqual(pr(['apps/desktop/src/renderer/App.tsx'], ['deploy:windows']), p({ daemon_os: [], capture_os: ['windows-latest'], perf: false }));
 });
 
 test('a native browser patch or build-script change runs capture, which builds it, with deploy:windows', () => {
@@ -39,51 +34,46 @@ test('a native browser patch or build-script change runs capture, which builds i
   }
 });
 
-test('a desktop main-process change skips perf, which measures the Local Web UI', () => {
-  assert.equal(queue(['apps/desktop/src/main/index.ts']).perf, false);
-});
-
 test('a shared contract change runs the daemon job and capture', () => {
-  assert.deepEqual(pr(['packages/shared/src/phone-access.ts'], ['deploy:linux', 'deploy:windows']), p({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: ['windows-latest'], perf: true }));
+  assert.deepEqual(pr(['packages/shared/src/phone-access.ts'], ['deploy:linux', 'deploy:windows']), p({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: ['windows-latest'], perf: false }));
 });
 
 test('a profile change runs capture but not the daemon', () => {
-  assert.deepEqual(pr(['packages/profile/src/user-data.ts'], ['deploy:linux', 'deploy:windows']), p({ daemon_os: [], capture_os: ['windows-latest'], perf: true }));
+  assert.deepEqual(pr(['packages/profile/src/user-data.ts'], ['deploy:linux', 'deploy:windows']), p({ daemon_os: [], capture_os: ['windows-latest'], perf: false }));
 });
 
 test('labels opt a PR into each OS and the speed contract', () => {
   assert.deepEqual(pr(['crates/nekkod/src/main.rs', 'apps/desktop/src/main/index.ts'], ['deploy:macos']),
-    p({ daemon_os: ['macos-latest'], capture_os: ['macos-latest'], perf: true }));
+    p({ daemon_os: ['macos-latest'], capture_os: ['macos-latest'], perf: false }));
   assert.deepEqual(pr(['crates/nekkod/src/main.rs', 'apps/desktop/src/main/index.ts'], ['deploy:linux', 'deploy:windows', 'deploy:macos']),
-    p({ daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true }));
+    p({ daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: false }));
   assert.equal(pr(['README.md'], ['ci:perf']).perf, true);
-  assert.equal(pr(['scripts/perf/budgets.mjs']).perf, true);
-  assert.equal(queue(['scripts/perf/budgets.mjs']).perf, true);
+  assert.equal(pr(['scripts/perf/budgets.mjs']).perf, false);
 });
 
-test('no per-OS job runs in the queue: they run nightly instead', () => {
-  const group = queue(['crates/nekkod/src/main.rs', 'apps/desktop/src/main/index.ts']);
-  assert.deepEqual([group.daemon_os, group.capture_os], [[], []]);
+test('there is no merge queue tier: a merge_group event runs only what a PR would', () => {
+  const files = ['crates/nekkod/src/main.rs', 'scripts/perf/budgets.mjs'];
+  assert.deepEqual(ciScope({ event: 'merge_group', files }), pr(files));
 });
 
 test('CI, dependency and unknown file lists fall back to every job of the tier', () => {
   for (const files of [['.github/workflows/ci.yml'], ['package-lock.json'], ['scripts/ci-scope.mjs'], [], Array(FILE_LIST_CAP).fill('docs/x.md')]) {
     const label = JSON.stringify(files.slice(0, 1));
-    assert.deepEqual(pr(files), p({ daemon_os: [], capture_os: [], perf: true, licenses: true }), label);
-    assert.deepEqual(pr(files, ['deploy:linux', 'deploy:windows']), p({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: ['windows-latest'], perf: true, licenses: true }), label);
-    assert.deepEqual(queue(files), q({ daemon_os: [], capture_os: [], perf: true, licenses: true }), label);
+    assert.deepEqual(pr(files), p({ daemon_os: [], capture_os: [], perf: false, licenses: true }), label);
+    assert.deepEqual(pr(files, ['deploy:linux', 'deploy:windows']), p({ daemon_os: ['ubuntu-latest', 'windows-latest'], capture_os: ['windows-latest'], perf: false, licenses: true }), label);
   }
 });
 
-test('the loopback itests run on each PR with a build, including CI changes and unknown files', () => {
+test('the loopback itests never run on a PR, whatever it touches or is labelled', () => {
   for (const files of [['crates/nekkod/src/main.rs'], ['scripts/itest-relay-daemon.mjs'], ['.github/workflows/ci.yml'], []]) {
-    assert.equal(pr(files, ['deploy:macos', 'ci:perf']).itests, true, JSON.stringify(files));
+    assert.equal(pr(files, ['deploy:macos', 'ci:perf']).itests, false, JSON.stringify(files));
   }
-  assert.equal(queue(['README.md']).itests, true);
+  assert.equal(ciScope({ event: 'schedule', files: ['README.md'] }).itests, true);
 });
 
-// Both performance and integration results hold the required gate.
-test('ci.yml runs integration tests from scope and gate waits for them', () => {
+// The workflow's wiring for them: the job follows the scope output and does
+// not hold the required check, so a red itest never blocks a PR.
+test('ci.yml runs the itests job from the scope and keeps it out of gate', () => {
   const yml = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
   assert.match(yml, /^ {6}itests: \$\{\{ steps\.scope\.outputs\.itests \}\}$/m, 'scope exposes itests');
   const job = yml.match(/^ {2}itests:\n([\s\S]*?)(?=^ {2}\S)/m)?.[1];
@@ -95,8 +85,7 @@ test('ci.yml runs integration tests from scope and gate waits for them', () => {
   }
   const gate = yml.match(/^ {2}gate:\n {4}needs: \[([^\]]*)\]/m)?.[1];
   assert.ok(gate, 'a gate job');
-  assert.ok(gate.split(',').map((s) => s.trim()).includes('itests'), 'gate waits for itests');
-  assert.ok(gate.split(',').map((s) => s.trim()).includes('perf'), 'gate waits for performance');
+  assert.ok(!gate.split(',').map((s) => s.trim()).includes('itests'), 'gate does not wait for itests');
 });
 
 test('a deploy label adds its OS only to the jobs a change already needs', () => {
@@ -106,10 +95,9 @@ test('a deploy label adds its OS only to the jobs a change already needs', () =>
   assert.deepEqual(pr(['crates/nekkod/src/main.rs'], ['deploy:macos']).capture_os, []);
 });
 
-test('a change only to the native phone apps skips build, on the PR and in the queue', () => {
+test('a change only to the native phone apps skips build', () => {
   const native = ['apps/ios/App/AppModel.swift', 'apps/ios/project.yml', 'apps/android/app/src/main/java/Main.kt'];
   assert.deepEqual(pr(native), p({ build: false, daemon_os: [], capture_os: [], perf: false }));
-  assert.deepEqual(queue(native), { build: false, daemon_os: [], capture_os: [], perf: false, itests: false, licenses: false });
   // Anything else alongside, even docs, builds; so does an unknown list.
   assert.equal(pr([...native, 'docs/guide.md']).build, true);
   assert.equal(pr([...native, 'packages/shared/src/phone-access.ts']).build, true);
@@ -125,10 +113,9 @@ test('CodeQL analyses the languages a change is in', () => {
   assert.deepEqual(langs(['crates/nekkod/src/main.rs', 'Cargo.lock']), ['rust']);
   assert.deepEqual(langs(['scripts/perf/plot.py', '.github/workflows/android-native.yml']), ['actions', 'python']);
   assert.deepEqual(langs(['docs/guide.md', 'spec/README.md']), []);
-  // Unknown or CI changes: every Linux language, Swift too with deploy:ios on a PR; never Swift in the queue.
+  // Unknown or CI changes: every Linux language, Swift too with deploy:ios on a PR.
   assert.deepEqual(langs([]), ['actions', 'javascript-typescript', 'python', 'rust']);
   assert.deepEqual(langs(['.github/workflows/codeql.yml'], ['deploy:ios']), ['actions', 'javascript-typescript', 'python', 'rust', 'swift']);
-  assert.deepEqual(langs(['apps/ios/A.swift'], ['deploy:ios'], 'merge_group'), []);
   assert.deepEqual(langs(['README.md'], [], 'schedule'), ['actions', 'javascript-typescript', 'python', 'rust', 'swift']);
 });
 
@@ -144,7 +131,6 @@ test('ci.yml skips build from the scope, and the compliance check runs in scope 
 test('the license check runs only when dependencies or the assets list change', () => {
   for (const files of [['apps/desktop/package.json'], ['crates/nekkod/Cargo.toml'], ['Cargo.lock'], ['ASSETS.md'], ['scripts/license-policy.json']]) {
     assert.equal(pr(files).licenses, true, JSON.stringify(files));
-    assert.equal(queue(files).licenses, true, JSON.stringify(files));
   }
   assert.equal(pr(['README.md']).licenses, false);
   assert.equal(pr(['apps/desktop/src/renderer/App.tsx']).licenses, false);

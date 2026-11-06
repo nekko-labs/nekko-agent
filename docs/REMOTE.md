@@ -90,6 +90,19 @@ cannot connect to an older computer.
 > computer. Choosing another computer shows its models and folders at once, since every paired
 > computer is already connected; what you typed stays.
 >
+> **Automatic** (iPhone): with a **local model** (Ollama, LM Studio, llama.cpp, vLLM) and more
+> than one paired computer, **Run on** starts on **Automatic**. The phone asks each online
+> computer whether it is in use (a chat replying there, or someone at its keyboard) and starts the
+> chat on a free one, with the same model if that computer has it, else the last one used there,
+> else one it already has loaded. The line under the options says what it picked and why
+> (*Auto picked Studio Mac: MacBook is busy.*). When every computer is busy, or none other can run
+> a local model, the chat stays on the one used last. Choosing a **folder** decides the computer
+> (the folder lives on it), and picking a computer by hand turns Automatic off for that chat;
+> choose **Automatic** again to go back. New chat opened from one computer's list starts on that
+> computer. Chats on cloud models are not moved. A computer tells the phone only yes/no answers
+> (in use, a chat replying, no keyboard, on battery or hot), never how long it has been idle,
+> its battery level or its temperatures.
+>
 > On the iPhone, the model list opens on **All**, with **Cloud** and **Local** beside it at the
 > top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
 > servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
@@ -115,8 +128,8 @@ cannot connect to an older computer.
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
 >
-> **Simple and Detailed** (iPhone and Android): the switch at the top left of a chat picks the mode, and the
-> phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
+> **Simple and Detailed** (iPhone and Android): on iPhone the chat's **More** menu (or the chats list's view menu) picks the
+> mode; on Android the switch at the top left of a chat does. The phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
 > and effort** (an effort dial beside the model's name; tap it to change either) and the chat's
 > **context window** (a ring that fills as the window does, with the tokens in use; tap it to see
 > what fills it). **Detailed** adds a monitor under the chat's title: your computer's CPU, memory,
@@ -210,6 +223,11 @@ cannot connect to an older computer.
 > version, the phone protocol on each side and the open-source licenses of the app and the
 > libraries it ships.
 >
+> **Every computer stays connected** (Android): the app keeps a connection to every paired
+> computer, not only the one you are using, so switching to another (in Computers, or **New chat →
+> Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
+> The chat list still shows one computer's chats at a time.
+>
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
 > different phone protocol versions, the chat list and **Settings → About** show a banner naming
 > the side to update: Nekko Agent on the computer, or the app.
@@ -281,7 +299,7 @@ cannot connect to an older computer.
 > - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
-> - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
+> - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. **+ → Paste image** adds photos from the clipboard. The computer sends small previews, not the originals; older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt

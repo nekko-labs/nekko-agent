@@ -185,6 +185,7 @@
     <string name="chats_start_on">Iniciar em %1$s</string>
     <string name="chats_run_on">Executar em</string>
     <string name="chats_run_on_note">Um modelo local roda no próprio hardware do computador. Escolher outro computador mostra os modelos e pastas dele.</string>
+    <string name="chats_run_on_state">%1$s · %2$s</string>
     <string name="chats_shared_with">Compartilhado com o Nekko</string>
     <string name="chats_shared_note">Vai para a caixa de mensagem do chat. Você envia.</string>
     <string name="chats_remove_shared">Remover texto compartilhado</string>

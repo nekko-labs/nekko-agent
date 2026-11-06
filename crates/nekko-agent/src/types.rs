@@ -103,6 +103,22 @@ impl ProviderConfig {
     }
 }
 
+/// Native effort options reported by a live provider catalog, never inferred from an id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelEffort {
+    pub levels: Vec<ModelEffortOption>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModelEffortOption {
+    pub effort: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
 /// A model exposed by a provider.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,6 +128,9 @@ pub struct ModelInfo {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_length: Option<u64>,
+    /// Absent means unknown; an empty level list means explicitly unsupported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<ModelEffort>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loaded: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -227,9 +246,9 @@ pub struct ToolSpec {
     pub parameters: Value,
 }
 
-/// How hard the model should work on a turn. `normal` means the model's own
-/// default; the rest are Anthropic's rungs (see `claude.rs`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Native provider wire value. `normal` is retained only for legacy settings.
+/// Custom values allow newly advertised API levels without a client release.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum EffortLevel {
     Low,
@@ -238,10 +257,12 @@ pub enum EffortLevel {
     High,
     Xhigh,
     Max,
+    #[serde(untagged)]
+    Custom(String),
 }
 
 impl EffortLevel {
-    pub fn as_str(self) -> &'static str {
+    pub fn as_str(&self) -> &str {
         match self {
             Self::Low => "low",
             Self::Medium => "medium",
@@ -249,6 +270,7 @@ impl EffortLevel {
             Self::High => "high",
             Self::Xhigh => "xhigh",
             Self::Max => "max",
+            Self::Custom(value) => value,
         }
     }
 }

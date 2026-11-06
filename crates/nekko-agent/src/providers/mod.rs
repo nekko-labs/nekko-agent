@@ -3,6 +3,7 @@
 pub mod anthropic;
 pub mod chatgpt;
 pub mod claude_code;
+mod effort;
 pub mod ollama;
 pub mod openai_compat;
 mod prompt_caching;

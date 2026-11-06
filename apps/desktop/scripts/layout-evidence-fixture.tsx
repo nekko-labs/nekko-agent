@@ -71,6 +71,45 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     bridge.abortChat = async (id: string) => { (window as any).layoutFixture.lastAbort = id; };
     bridge.queuePrompt = async (id: string, prompt: any) => { (window as any).layoutFixture.lastQueue = { sessionId: id, prompt }; return records.find(s => s.id === id); };
     root.render(React.createElement('div', { style: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 24 } }, React.createElement(ChatPane, { key: surface, sessionId: 'a', surface: surface === 'window' ? 'full' : surface, commandCenter: surface === 'window', header: surface === 'composer' ? React.createElement('span', null, 'Persist quota history') : undefined })));
+  }, showPrLifecycle: async (stream = false) => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    const { applyEvent } = await import('../src/renderer/liveRuns');
+    const url = 'https://github.com/example/project/pull/42';
+    const record = records[0] as any;
+    const startedAt = now - 10000;
+    const pr = { url, owner: 'example', repo: 'project', number: 42, title: 'Keep pull requests visible in chat', state: stream ? 'open' : 'merged', isDraft: false, additions: 12, deletions: 3, changedFiles: 2, checks: 'passing', source: 'gh', mergedAt: new Date(startedAt + 5000).toISOString() };
+    record.messages = [{ id: 'prompt', role: 'user', content: 'Ship this change.', createdAt: startedAt }];
+    const steps = [
+      { id: 'create', command: 'gh pr create --draft --fill', output: url },
+      { id: 'draft', command: 'gh pr ready 42 --undo --repo example/project', output: '✓ Pull request example/project#42 is converted to "draft"' },
+      { id: 'ready', command: 'gh pr ready 42 --repo example/project', output: '✓ Pull request example/project#42 is marked as "ready for review"' },
+      { id: 'auto', command: 'gh pr merge 42 --auto --repo example/project', output: '✓ Pull request example/project#42 will be automatically merged via squash when all requirements are met' },
+      { id: 'queue', command: 'gh pr merge 42 --auto --repo example/project', output: '✓ Added pull request example/project#42 to the merge queue' },
+      { id: 'merge', command: 'gh pr merge 42 --repo example/project', output: '✓ Merged pull request example/project#42' },
+    ];
+    let tick = startedAt;
+    const emit = (step: typeof steps[number]) => {
+      const call = { id: step.id, name: 'bash', input: { command: step.command } };
+      const result = { toolCallId: step.id, output: step.output };
+      record.messages.push({ id: `call_${step.id}`, role: 'assistant', content: '', createdAt: ++tick, toolCalls: [call] });
+      record.messages.push({ id: `result_${step.id}`, role: 'tool', content: step.output, createdAt: ++tick, toolResult: result });
+      if (stream) {
+        const events = [{ type: 'tool_call', call }, { type: 'tool_result', result }];
+        for (const event of events) { applyEvent({ ...event, sessionId: 'a' } as any); emitAgent({ ...event, sessionId: 'a' }); }
+      }
+    };
+    if (!stream) { steps.forEach(emit); record.messages.push({ id: 'answer', role: 'assistant', content: 'Merged. The change is now on main.', createdAt: startedAt + 6000 }); }
+    bridge.listSessionPrs = async () => [pr];
+    bridge.openPath = async (href: string) => { (window as any).layoutFixture.lifecycle.openedUrl = href; };
+    bridge.getContextBundle = async () => ({ items: [], totalTokens: 0, budget: 128000 });
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], sessions: records.map(summarizeSession), settings, activeSessionId: 'a', prsBySession: { a: [pr] }, running: new Set() } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { key: `pr-${stream}`, sessionId: 'a' })));
+    (window as any).layoutFixture.lifecycle = { steps, emit: (index: number) => emit(steps[index]), finish: () => {
+      record.messages.push({ id: 'answer', role: 'assistant', content: 'Queued; waiting for required checks.', createdAt: ++tick });
+      applyEvent({ type: 'done', sessionId: 'a', messageId: 'answer' });
+      emitAgent({ type: 'done', sessionId: 'a', messageId: 'answer' });
+    } };
   }, showGreeting: async () => {
 
     const { ChatPane } = await import('../src/renderer/components/ChatPane');

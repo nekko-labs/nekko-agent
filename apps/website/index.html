@@ -206,13 +206,15 @@
 
       </div>
 
-      <!-- ===== app window mock rises out of the hero band ===== -->
+      <!-- Hidden for now: the workspace screenshot under the hero video. Restore by uncommenting.
+      
       <section class="showcase reveal" aria-label="Illustration of the workspace, not a live session">
                 <button class="media media-hero" type="button" aria-label="Nekko Agent workspace screenshot. Opens larger.">
           <img class="hero-shot hero-shot-dark" src="media/hero-dark-1920.webp?v=3" srcset="media/hero-dark-1920.webp?v=3 1920w, media/hero-dark.webp?v=3 2000w" sizes="(max-width: 960px) 100vw, 960px" width="2000" height="1088" alt="Nekko Agent with two agents working side by side: Claude Opus comparing Tokyo's weather with other capitals, and ChatGPT turning client notes into a launch plan with a timeline table" fetchpriority="high" decoding="async">
           <img class="hero-shot hero-shot-light" src="media/hero-colour-1920.webp?v=3" srcset="media/hero-colour-1920.webp?v=3 1920w, media/hero-colour.webp?v=3 2000w" sizes="(max-width: 960px) 100vw, 960px" width="2000" height="1088" alt="Nekko Agent with two agents working side by side: Claude Opus comparing Tokyo's weather with other capitals, and ChatGPT turning client notes into a launch plan with a timeline table" loading="lazy" decoding="async">
         </button>
       </section>
+      -->
 
       <!-- ===== why Nekko: five promises, one demo panel each. Travis is
            producing the videos; drop each one into its slot like the control
@@ -236,9 +238,9 @@
             <a class="card-link" href="#features">How the controls work <span aria-hidden="true">↓</span></a>
           </div>
           <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video: switching a chat from a local model to Claude Opus, then approving each file edit before it is made. Opens larger.">
-            <video class="panel-video" muted loop playsinline preload="none" width="1602" height="900" poster="media/demo-control-poster.webp" data-autoplay>
-              <source src="media/demo-control.webm" type="video/webm; codecs=av01.0.09M.08">
-              <source src="media/demo-control.mp4" type="video/mp4">
+            <video class="panel-video" muted loop playsinline preload="none" width="1602" height="900" poster="media/demo-control-poster.webp" data-autoplay data-poster-light="media/demo-control-light-poster.webp?v=1">
+              <source src="media/demo-control.webm" data-src-light="media/demo-control-light.webm?v=1" type="video/webm; codecs=av01.0.09M.08">
+              <source src="media/demo-control.mp4" data-src-light="media/demo-control-light.mp4?v=1" type="video/mp4">
             </video>
           </button>
         </article>
@@ -256,8 +258,8 @@
             <a class="card-link" href="#editions">Desktop, browser, Docker or terminal <span aria-hidden="true">↓</span></a>
           </div>
           <button class="media panel-media" type="button" data-demo="experience" aria-label="Demo video: two chats side by side, a local model writing taglines while Claude Opus adds a section to a web page. Opens larger.">
-            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-experience-poster.webp?v=3" data-autoplay>
-              <source src="media/demo-experience.mp4?v=3" type="video/mp4">
+            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-experience-poster.webp?v=3" data-autoplay data-poster-light="media/demo-experience-light-poster.webp?v=1">
+              <source src="media/demo-experience.mp4?v=3" data-src-light="media/demo-experience-light.mp4?v=1" type="video/mp4">
             </video>
           </button>
         </article>
@@ -352,7 +354,15 @@
             </ul>
             <a class="card-link" href="#beta">Get early access <span aria-hidden="true">↓</span></a>
           </div>
-          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video coming soon: the phone app approving a command. Opens larger."><span>Demo · On the go</span><span class="media-joke">Really cool animation coming soon from our marketing team when he's back from PTO!</span></button>
+          <!-- dark and light files; CSS shows the one for the current look -->
+          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video, an illustration of the beta phone app: a long run on your computer at home pauses on a risky command, your phone buzzes asking for approval, you tap Approve, and the run finishes. Opens larger.">
+            <video class="panel-video panel-look-dark" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-poster.webp" data-autoplay>
+              <source src="media/demo-convenient.mp4" type="video/mp4">
+            </video>
+            <video class="panel-video panel-look-light" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-light-poster.webp" data-autoplay>
+              <source src="media/demo-convenient-light.mp4" type="video/mp4">
+            </video>
+          </button>
         </article>
 
         <p class="micro center reveal panels-foot">Also in the box: scheduled agents and triggers, Whisper dictation on your computer, cost tracking for cloud models, skills and sub-agents, and connectors for GitHub, Linear, Slack, Discord, Gmail and Drive.</p>
@@ -671,7 +681,7 @@
       <button class="lightbox-close btn btn-ghost btn-sm" type="button" aria-label="Close">Close ✕</button>
       <div class="lightbox-stage"></div>
     </div>
-    <script src="site.js?v=13"></script>
+    <script src="site.js?v=14"></script>
     <script src="contributors.js?v=1" defer></script>
     <script src="/analytics.js?v=1" defer></script>
   </body>

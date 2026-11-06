@@ -13,7 +13,7 @@ describe('simple mode catalogue', () => {
 
   it('shows every control in Expert except what waits for something', () => {
     const off = SIMPLE_ITEMS.filter((i) => !simpleShown(i.id, true)).map((i) => i.id);
-    expect(off).toEqual(['changes', 'hardware', 'computers', 'pr-status', 'mon-hw', 'ph-monitors']);
+    expect(off).toEqual(['changes', 'hardware', 'computers', 'pr-status', 'ph-monitors']);
     const all = { localModel: true, changes: true, pr: true, agents: true, computers: true };
     expect(SIMPLE_ITEMS.every((i) => simpleShown(i.id, true, {}, all))).toBe(true);
   });
@@ -26,7 +26,7 @@ describe('simple mode catalogue', () => {
   });
 
   it('keeps monitors off in both modes until a local model runs', () => {
-    for (const id of ['hardware', 'mon-hw', 'ph-monitors']) for (const expert of [false, true]) {
+    for (const id of ['hardware', 'ph-monitors']) for (const expert of [false, true]) {
       expect(simpleShown(id, expert)).toBe(false);
       expect(simpleShown(id, expert, {}, { localModel: true })).toBe(true);
     }
@@ -98,6 +98,11 @@ describe('simple mode catalogue', () => {
     expect(simpleOptions(SIMPLE_ITEMS.find((i) => i.id === 'cost')!)).toEqual(['show', 'expert', 'hide']);
     expect(parseSimpleChoices({ hardware: 'expert', cost: 'auto' })).toEqual({});
     expect(parseSimpleChoices({ hardware: 'show' })).toEqual({ hardware: 'show' });
+  });
+
+  it('leaves the desktop Monitors panel to its own checked monitors', () => {
+    expect(SIMPLE_ITEMS.some((i) => i.id.startsWith('mon-'))).toBe(false);
+    expect(parseSimpleChoices({ 'mon-hw': 'hide', 'mon-budget': 'show' })).toEqual({});
   });
 
   it('shows ids it does not know', () => {

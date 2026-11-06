@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
-import type { ContextBundle, ContextItem, EffortLevel, Session } from '@nekko-agent/shared';
-import { chatEffort, effectiveEffort, modelDefaultEffort, modelEffortLevels } from '@nekko-agent/shared';
+import type { ContextBundle, ContextItem, EffortLevel, ModelInfo, Session } from '@nekko-agent/shared';
+import { chatEffort, effectiveEffort, modelEffortLevels } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { sourceMeta } from '../contextSources.js';
 import { fillTone } from './contextTone.js';
@@ -169,22 +169,26 @@ export const EFFORT_LABEL: Record<EffortLevel, string> = {
   max: 'Max',
 };
 
-/** Concrete, model-compatible stops. Recommendations never replace a saved choice. */
-export function effortRungs(saved: EffortLevel, modelId: string | undefined): { options: EffortLevel[]; index: number; shown: string } {
-  const options = modelEffortLevels(modelId);
-  const effective = effectiveEffort(saved, modelId);
-  return { options, index: Math.max(0, options.indexOf(effective)), shown: EFFORT_LABEL[effective] };
+export const effortLabel = (level: EffortLevel): string => EFFORT_LABEL[level] ?? level;
+
+/** Only provider-advertised stops. An unspecified default is not a synthetic rung. */
+export function effortRungs(saved: EffortLevel, modelId: string | undefined, metadata?: ModelInfo['effort']): { options: EffortLevel[]; index: number; shown: string } {
+  const options = modelEffortLevels(modelId, metadata);
+  const effective = effectiveEffort(saved, modelId, metadata);
+  const index = options.indexOf(effective);
+  return { options, index, shown: !options.length ? 'Unavailable' : index < 0 ? 'Provider default' : effortLabel(effective) };
 }
 
 type EffortProps = {
   modelId?: string;
+  metadata?: ModelInfo['effort'];
   onChanged?: () => void;
   session?: Pick<Session, 'id' | 'effort'> | null;
   onSessionChange?: (s: Session) => void;
 };
 
 /** The chat's effort (or the app-wide one without a chat), and setting it. */
-function useEffort({ modelId, onChanged, session, onSessionChange }: EffortProps) {
+function useEffort({ modelId, metadata, onChanged, session, onSessionChange }: EffortProps) {
   const appEffort = useStore((s) => s.settings?.effort);
   const saved = (session ? chatEffort(session, appEffort) : appEffort) ?? 'normal';
   const pick = (level: EffortLevel) => {
@@ -204,24 +208,7 @@ function useEffort({ modelId, onChanged, session, onSessionChange }: EffortProps
     }
   };
 
-  return { pick, ...effortRungs(saved, modelId) };
-}
-
-/** Simple's effort: the same levels as the dial's popover, at the foot of the model menu. */
-export function EffortChoices(props: EffortProps) {
-  const { pick, options, index } = useEffort(props);
-  return (
-    <div className="mt-1 shrink-0 border-t border-line px-1 pt-1" data-effort-in-model-menu>
-      <div className="flex items-center gap-2">
-        <span className="shrink-0 px-1 text-xs font-medium text-ink-soft">Effort</span>
-        <div className="flex min-w-0 flex-1 gap-1" role="radiogroup" aria-label="Reasoning effort">
-          {options.map((o, i) => (
-            <button key={o} type="button" role="radio" aria-checked={i === index} data-effort={o} className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink-soft hover:text-ink'}`} onClick={() => pick(o)} title={o === modelDefaultEffort(props.modelId) ? 'Recommended' : undefined}>{EFFORT_LABEL[o]}</button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  return { pick, ...effortRungs(saved, modelId, metadata) };
 }
 
 /**
@@ -231,7 +218,9 @@ export function EffortChoices(props: EffortProps) {
  */
 export function EffortSlider(props: EffortProps) {
   const { pick, options, index, shown } = useEffort(props);
-  const { modelId, session } = props;
+  const { metadata, session } = props;
+  const available = options.length > 0;
+  const description = index >= 0 ? metadata?.levels.find((level) => level.effort === options[index])?.description : undefined;
   const pop = usePopover(380);
   const step = (by: number) => {
     const next = options[Math.max(0, Math.min(options.length - 1, index + by))];
@@ -240,16 +229,16 @@ export function EffortSlider(props: EffortProps) {
   // The chat follows the app-wide setting when it has no choice of its own,
   // so the sheet footer says so instead of flattening to the same copy.
   const following = session ? session.effort == null : false;
-  // A dial with one notch per level the model takes, as on the phone; the
-  // button mirrors the iOS/Android ModelEffortButton (just the gauge, no label
-  // text) and the popover mirrors the ModelEffortSheet (large dial, capsule
-  // row, one footer sentence). Arrow keys step the level without opening.
+  // A borderless gauge opens the phone-style slider. Arrow keys also step
+  // through the advertised choices without opening the popover.
   return (
     <div className="effort-slider flex shrink-0 items-center" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
       <button
         ref={pop.anchor}
         type="button"
-        className="flex h-7 w-7 items-center justify-center rounded-lg border border-line hover:border-accent"
+        className="effort-trigger flex h-7 items-center justify-center gap-1.5 rounded-lg px-1 text-2xs text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent"
+        disabled={!available}
+        title={!available ? metadata ? 'Effort unavailable: this provider reports no selectable effort choices for this model.' : 'Effort unavailable: this provider has not reported effort choices for this model.' : `Reasoning effort: ${shown}`}
         onClick={() => pop.setOpen((o) => !o)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); step(1); }
@@ -261,27 +250,32 @@ export function EffortSlider(props: EffortProps) {
         data-effort-index={index}
         data-effort-count={options.length}
       >
-        <EffortDial index={index} count={options.length} size={18} />
+        <EffortDial index={Math.max(0, index)} count={options.length} size={18} />
+        <span>Effort</span>
       </button>
-      {pop.open && createPortal(
+      {pop.open && available && createPortal(
         <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-4 shadow-(--shadow-float)" role="dialog" aria-label="Reasoning effort" data-effort-popover>
           <div className="flex flex-col items-center gap-3">
-            <EffortDial index={index} count={options.length} size={96} />
+            <EffortDial index={Math.max(0, index)} count={options.length} size={96} />
             <span className="text-sm font-semibold text-ink">{shown}</span>
-            <div className="flex w-full flex-wrap gap-1.5" role="radiogroup" aria-label="Reasoning effort">
-              {options.map((o, i) => (
-                <button
-                  key={o}
-                  type="button"
-                  role="radio"
-                  aria-checked={i === index}
-                  className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-3 py-1.5 text-2xs font-semibold ${i === index ? 'bg-accent text-on-accent' : 'bg-(--surface-2) text-ink hover:bg-(--surface-3)'}`}
-                  onClick={() => pick(o)}
-                  data-effort={o}
-                  title={o === modelDefaultEffort(modelId) ? 'Recommended' : undefined}
-                >{EFFORT_LABEL[o]}{o === modelDefaultEffort(modelId) && <span className="block text-2xs opacity-80">Recommended</span>}</button>
-              ))}
+            {description && <p className="text-center text-xs text-ink-soft">{description}</p>}
+            <input
+              type="range"
+              min={0}
+              max={options.length - 1}
+              step={1}
+              value={Math.max(0, index)}
+              disabled={options.length === 1}
+              aria-label="Reasoning effort"
+              aria-valuetext={shown}
+              className="w-full accent-(--accent)"
+              onChange={(e) => { const level = options[Number(e.currentTarget.value)]; if (level) pick(level); }}
+            />
+            <div className="flex w-full justify-between gap-1 text-2xs text-ink-faint" aria-hidden="true">
+              {options.map((o) => <span key={o} className="min-w-0 break-words text-center" title={metadata?.levels.find((level) => level.effort === o)?.description}>{effortLabel(o)}</span>)}
             </div>
+            {index < 0 && <button type="button" className="text-xs text-accent" onClick={() => pick(options[0])}>Use {effortLabel(options[0])}</button>}
+            {metadata?.default && options.includes(metadata.default) && <p className="text-2xs text-ink-soft">Provider default: {effortLabel(metadata.default)}</p>}
             <p className="text-center text-2xs leading-snug text-ink-faint">
               {following ? "Following this computer's effort setting. " : ''}Higher effort thinks longer and spends more tokens.
             </p>

@@ -110,6 +110,42 @@ fn service(dir: &Path, name: &str) -> String {
     format!("dev.nekkolabs.nekko-agent.{name}.{hex}")
 }
 
+/// The keystore calls under way. macOS holds a Keychain call until the user
+/// answers its consent dialog (or unlocks the keychain), which can take
+/// minutes; a daemon that is starting reports such a wait to the app that
+/// started it (nekkod's `NEKKOD_WAITING`), so the app does not take it for a
+/// wedged daemon and kill it, which only asks the user again.
+pub mod waits {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{Duration, Instant};
+
+    static CALLS: Mutex<BTreeMap<u64, Instant>> = Mutex::new(BTreeMap::new());
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    /// One keystore call, counted until it is dropped.
+    pub struct Call(u64);
+
+    /// Count a keystore call until the returned guard is dropped.
+    pub fn begin() -> Call {
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        CALLS.lock().unwrap_or_else(|e| e.into_inner()).insert(id, Instant::now());
+        Call(id)
+    }
+
+    impl Drop for Call {
+        fn drop(&mut self) {
+            CALLS.lock().unwrap_or_else(|e| e.into_inner()).remove(&self.0);
+        }
+    }
+
+    /// How long the oldest keystore call under way has been waiting, if any is.
+    pub fn longest() -> Option<Duration> {
+        CALLS.lock().unwrap_or_else(|e| e.into_inner()).values().min().map(Instant::elapsed)
+    }
+}
+
 #[cfg(any(target_os = "macos", windows))]
 pub struct KeychainVault {
     service: String,
@@ -118,16 +154,19 @@ pub struct KeychainVault {
 #[cfg(any(target_os = "macos", windows))]
 impl Vault for KeychainVault {
     fn get(&self, name: &str) -> Option<String> {
+        let _call = waits::begin();
         keyring::Entry::new(&self.service, name).ok()?.get_password().ok()
     }
 
     fn set(&self, name: &str, value: &str) -> Result<(), String> {
+        let _call = waits::begin();
         keyring::Entry::new(&self.service, name)
             .and_then(|e| e.set_password(value))
             .map_err(|e| format!("could not save to the keychain: {e}"))
     }
 
     fn delete(&self, name: &str) {
+        let _call = waits::begin();
         if let Ok(e) = keyring::Entry::new(&self.service, name) {
             let _ = e.delete_credential();
         }
@@ -229,6 +268,16 @@ mod tests {
         fn kind(&self) -> &'static str {
             "refusing"
         }
+    }
+
+    #[test]
+    fn waits_count_a_call_until_it_ends() {
+        let call = waits::begin();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        assert!(waits::longest().is_some_and(|d| d >= std::time::Duration::from_millis(20)));
+        drop(call);
+        // Other tests' calls may overlap this one, but none is this old.
+        assert!(waits::longest().is_none_or(|d| d < std::time::Duration::from_millis(20)));
     }
 
     #[test]

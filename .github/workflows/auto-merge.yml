@@ -1,55 +1,135 @@
 name: Auto-merge
+# Arms GitHub's native auto-merge (squash) on every ready PR into main, so it
+# merges itself once `gate` and the other branch rules pass. There is no merge
+# queue (removed 2026-11-06): the speed contract and itests run nightly, and
+# `gate` on the PR is the last check before main. Then it makes sure the merge
+# actually releases.
+#
+# Draft and `hold` disarm it. With no queue to eject from, this workflow is what
+# keeps a held PR from merging: adding `hold` or converting to draft turns
+# auto-merge off, and removing `hold` or marking ready turns it back on.
+#
+# Only PRs based on main: a stacked layer targets the branch below it, and
+# auto-merging it would fold it into that branch. Stacks land with
+# `gh stack merge`.
+#
+# Why this also dispatches version-release: a merge performed with
+# GITHUB_TOKEN never starts a workflow run, so the `push` trigger on
+# version-release.yml has never once fired here. Every run in this repo's
+# history is `schedule` or `workflow_dispatch`; the push path is dead on
+# arrival for bot merges, which is what silently skipped v0.6.0's release and
+# left v0.6.1 waiting for a hand dispatch. Waiting for the merge and
+# dispatching explicitly is the same trick version-release already uses to
+# reach release.yml and docker.yml. The schedule stays as the backstop.
+#
+# Also on `synchronize`, so a newer push restarts the wait for the merge (and
+# cancels the older one). queue-sweeper.yml re-arms a ready PR whose request
+# went missing and re-runs a flaky `gate` once.
 
-# Trusted main policy only. Never check out PR code with a write token.
-# Native auto-merge waits for branch protections; no queue mutation or retries.
 on:
-  pull_request_target:
-    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-  workflow_dispatch:
-    inputs:
-      pr:
-        description: 'PR number to reconcile (does not rerun CI)'
-        required: true
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize, converted_to_draft, labeled, unlabeled]
 
 permissions:
-  contents: read
-  pull-requests: read
+  contents: write
+  pull-requests: write
+  # Needed to dispatch version-release.yml once the PR lands.
+  actions: write
+  # Needed to close the PR's linked issues: GitHub skips closing keywords on
+  # merges made with GITHUB_TOKEN.
+  issues: write
 
 concurrency:
-  group: native-auto-merge-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || inputs.pr }}
-  cancel-in-progress: false
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  auto-merge:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
+  hold:
+    if: ${{ github.event.pull_request.base.ref == 'main' && (github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'hold')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          persist-credentials: false
-          sparse-checkout: scripts
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      # App merges trigger push workflows (including release); GITHUB_TOKEN
-      # merges suppress them. The scheduled release remains a backstop.
-      - name: Create repository-scoped App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write
-          permission-pull-requests: write
-      - name: Reconcile native PR auto-merge
+      - name: Disarm auto-merge on a draft or held PR
+        run: gh pr merge --disable-auto "$PR_URL" || echo 'Auto-merge was not armed.'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR: ${{ github.event.pull_request.number || inputs.pr }}
-        run: node scripts/native-auto-merge.mjs
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+
+  auto-merge:
+    if: ${{ github.event.pull_request.base.ref == 'main' && !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'hold') }}
+    runs-on: ubuntu-latest
+    # Above the 40-minute wait below, so the timeout never turns this into a
+    # red check on its own.
+    timeout-minutes: 45
+    steps:
+      - name: Arm auto-merge
+        run: gh pr merge --auto --squash "$PR_URL" || echo '::warning::Auto-merge not armed; queue-sweeper.yml retries.'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+
+      # Dispatched for every merge, not just version bumps: version-release is
+      # idempotent (it stops when the version is already tagged), so a merge
+      # that does not bump the version costs one no-op run and a merge that
+      # does releases within seconds instead of waiting for the next tick.
+      #
+      # Waits only while the PR can still merge on its own: auto-merge armed and
+      # `gate` not red. Otherwise the job ends green rather than holding a
+      # runner until the timeout shows a red `auto-merge` check (#787 did after
+      # 45 minutes), and version-release's schedule releases whatever lands later.
+      - name: Release the merge
+        run: |
+          for _ in $(seq 1 120); do
+            pr=$(gh pr view "$PR_URL" --json state,autoMergeRequest,statusCheckRollup 2>/dev/null || echo '{"state":"UNKNOWN"}')
+            case "$(jq -r .state <<<"$pr")" in
+              MERGED)
+                # Closing keywords do nothing on a GITHUB_TOKEN merge, so close
+                # linked issues here. Failures warn; the release still dispatches.
+                issues=$(gh pr view "$PR_URL" --json closingIssuesReferences \
+                  -q ".closingIssuesReferences[] | select(\"\(.repository.owner.login)/\(.repository.name)\" == \"$GH_REPO\") | .number") \
+                  || echo "::warning::Could not read linked issues for $PR_URL."
+
+                for n in $issues; do
+                  issue_state=$(gh issue view "$n" --repo "$GH_REPO" --json state -q .state || echo UNKNOWN)
+                  [ "$issue_state" = OPEN ] || continue
+                  gh issue close "$n" --repo "$GH_REPO" --reason completed --comment "Fixed in #$PR_NUMBER." \
+                    || echo "::warning::Could not close #$n."
+                done
+
+                gh workflow run version-release.yml --repo "$GH_REPO" --ref main
+                # A merge that touched the iPhone app reaches TestFlight with
+                # ios-testflight.yml's nightly run. No CI dispatch here: the
+                # nightly full run covers every OS, the speed contract and the
+                # itests (ci.yml).
+                echo "Merged. Dispatched version-release for $PR_URL"
+                exit 0
+                ;;
+              CLOSED)
+                echo "PR was closed without merging. Nothing to release."
+                exit 0
+                ;;
+              OPEN)
+                if [ "$(jq -r '.autoMergeRequest != null' <<<"$pr")" != true ]; then
+                  echo "Auto-merge is not armed on $PR_URL, so not waiting."
+                  exit 0
+                fi
+                gate=$(jq -r '[.statusCheckRollup[]? | select(.name == "gate")] | last | .conclusion // ""' <<<"$pr")
+                case "$gate" in
+                  FAILURE|CANCELLED|TIMED_OUT)
+                    echo "gate is $gate. A fix push re-runs this job; queue-sweeper.yml re-runs a first-attempt failure once."
+                    exit 0
+                    ;;
+                esac
+                ;;
+            esac
+            sleep 20
+          done
+          echo "::warning::$PR_URL had not merged after 40 minutes, so no release was dispatched. The */15 schedule on version-release.yml remains the backstop."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # This job never checks out the repo, so gh has no git remote to infer
+          # from. `gh pr view` survives that because it is given a full URL;
+          # `gh workflow run` does not, and died with "not a git repository".
+          GH_REPO: ${{ github.repository }}

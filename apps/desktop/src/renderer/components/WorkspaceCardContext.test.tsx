@@ -90,21 +90,26 @@ describe('workspace card model line and attention', () => {
       isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} {...props} />,
   );
 
-  it('names the model alone, with its provider as optional subtext under it', () => {
+  it('names the model alone, with its provider only in the tooltip', () => {
     state.providers = [{ id: 'p', label: 'Claude', kind: 'anthropic' }];
     const html = render();
     expect(html).toContain('Opus 5.5');
     expect(html).toContain('<span class="min-w-0 truncate">Opus 5.5</span>');
-    expect(html).toMatch(/data-card-provider[^>]*>Claude</);
-    expect(render({ showProvider: false })).not.toContain('data-card-provider');
+    expect(html).toContain('title="Claude / claude-opus-5-5"');
+    expect(html).not.toMatch(/>Claude</);
     state.providers = [];
   });
 
-  it('highlights a card waiting on you like the active one', () => {
-    expect(render()).not.toContain('bg-accent-soft');
-    expect(render({ status: 'input' })).toContain('bg-accent-soft');
-    expect(render({ status: 'error' })).toContain('bg-accent-soft');
+  it('marks only the selected chat for its background, independently of status', () => {
+    for (const patch of [{}, { status: 'input' as const }, { status: 'error' as const }, { isActive: true }]) {
+      const html = render(patch);
+      expect(html).toContain('agent-chip-chat');
+      expect(html.includes('data-agent-active="true"')).toBe('isActive' in patch && patch.isActive === true);
+      expect(html).not.toContain('bg-accent-soft');
+      expect(html).not.toContain('border-color:');
+    }
     expect(render({ status: 'input' })).toContain('var(--attention)');
+    expect(render({ isActive: true })).toContain('font-medium text-ink');
   });
 });
 

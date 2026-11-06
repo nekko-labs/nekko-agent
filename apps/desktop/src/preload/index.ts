@@ -30,6 +30,7 @@ import { MAIN_EVENTS } from './routing.js';
 import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import {
+  PAGE_RELOADING_EVENT,
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
@@ -105,7 +106,7 @@ const api: NekkoApi = {
   telemetryCapture: (event, props) => inv(IpcChannels.telemetryCapture, event, props),
   telemetryStatus: () => inv(IpcChannels.telemetryStatus),
   feedbackInfo: () => inv(IpcChannels.feedbackInfo),
-  feedbackSend: (message, includeAppInfo) => inv(IpcChannels.feedbackSend, message, includeAppInfo),
+  feedbackSend: (message, includeAppInfo, screenshots) => inv(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
   syncTurnOn: () => inv(IpcChannels.syncTurnOn),
   syncConfirmRecoveryKey: (text) => inv(IpcChannels.syncConfirmRecoveryKey, text),
   syncRestore: (text) => inv(IpcChannels.syncRestore, text),
@@ -363,6 +364,9 @@ const api: NekkoApi = {
   buildImage: (req) => inv(IpcChannels.runnerImageBuild, req),
   resumeImage: () => inv(IpcChannels.runnerImageResume),
   cancelImage: () => inv(IpcChannels.runnerImageCancel),
+  linuxImageStatus: () => inv(IpcChannels.runnerLinuxImageStatus),
+  buildLinuxImage: () => inv(IpcChannels.runnerLinuxImageBuild),
+  cancelLinuxImage: () => inv(IpcChannels.runnerLinuxImageCancel),
   listRunners: () => inv(IpcChannels.runnerList),
   connectRunner: (req) => inv(IpcChannels.runnerConnect, req),
   updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
@@ -541,6 +545,11 @@ const api: NekkoApi = {
     bus.on(IpcEvents.runnerImageChanged, listener);
     return () => bus.removeListener(IpcEvents.runnerImageChanged, listener);
   },
+  onLinuxImageChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').LinuxImageView) => cb(view);
+    bus.on(IpcEvents.runnerLinuxImageChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerLinuxImageChanged, listener);
+  },
   onRunnersChanged: (cb) => {
     const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);
     bus.on(IpcEvents.runnerChanged, listener);
@@ -604,6 +613,7 @@ const chrome: WindowChromeBridge = {
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
+  onPageReloading: (listener) => { ipcRenderer.on(PAGE_RELOADING_EVENT, (_event, fadeMs: number) => listener(fadeMs)); },
   displays: {
     displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,
     list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),
