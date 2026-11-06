@@ -57,3 +57,19 @@ bottom of the rail, so it moves up under the last destination, set apart.
   It is still a button that opens the Send feedback sheet, not a destination: it
   never takes the active tile and is not part of the drag-to-reorder list.
 - Renderer-only. No host calls, settings, permissions or network use change.
+
+## Models brain-and-gear icon
+
+Implemented; focused icon tests, desktop typecheck, license checks and hidden
+macOS Electron navigation checks pass. Matching 1440px and 900px rest, hover and
+active screenshots inspected. Packaged Windows/Linux builds are unverified.
+The shared desktop/Local Web UI **Models**
+shortcut uses Gentleface 0.3.0 **brain-gear**, solid-round, instead of the CPU.
+Preserve the exact upstream geometry on its native 16px grid, rendered at 22px.
+The brain is violet (`#8b5cf6`) and the gear lavender (`#a78bfa`), matching the
+previous Models palette and the rail's colorful filled icons. The hub remains
+transparent, not a theme-specific patch. Keep the Models label, destination,
+keyboard focus, hover and active styling unchanged. The default phone tab bar
+still has no Models shortcut. No new runtime requests, dependencies, settings,
+permissions or data access. Acceptance: focused icon regression tests and matched
+rest/hover/active renderer captures at desktop and narrow widths.

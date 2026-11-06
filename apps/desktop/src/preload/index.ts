@@ -1,6 +1,6 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
 import { homedir, hostname, userInfo } from 'node:os';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
@@ -615,6 +615,7 @@ const chrome: WindowChromeBridge = {
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
+  setPageZoom: (factor) => { if (Number.isFinite(factor) && factor >= 0.8 && factor <= 1.5) webFrame.setZoomFactor(factor); },
   onPageReloading: (listener) => { ipcRenderer.on(PAGE_RELOADING_EVENT, (_event, fadeMs: number) => listener(fadeMs)); },
   displays: {
     displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,

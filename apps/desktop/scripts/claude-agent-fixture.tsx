@@ -73,6 +73,7 @@ const bridge: Record<string, unknown> = {
   getSettings: async () => ({ notices: [notice], providers }),
   saveProvider: async (p: unknown) => {
     calls.push({ method: 'saveProvider', p });
+    providers = [p as never];
   },
 };
 Object.assign(window, {

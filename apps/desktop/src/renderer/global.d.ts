@@ -13,6 +13,7 @@ declare global {
       platform: string;
       titleBarHeight: number;
       setTitleBarOverlay: (theme: { color: string; symbolColor: string }) => void;
+      setPageZoom: (factor: number) => void;
     };
   }
 }
