@@ -3720,6 +3720,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-layout[data-wall-layout] .command-wall-window > .panel { transition: none; }
   :is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] > .panel::before { animation: none; }
 }
+/* Dither the selected conversation's field as well as new chat. Reuse the
+   fixed monochrome tile behind content; never grain inactive panes or the
+   standalone composer, and do not add another layer to new chat. */
+:is([data-preset^='x-plum'], [data-preset^='x-indigo']) .command-wall-window[data-wall-selected] [data-chat-surface]:not([data-chat-surface='composer']):not([data-clean-start]) > section::after,
 [data-clean-start] .clean-start::after {
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='grain' x='0' y='0' width='100%25' height='100%25'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cpath fill='white' filter='url(%23grain)' d='M0 0h160v160H0z'/%3E%3C/svg%3E");
