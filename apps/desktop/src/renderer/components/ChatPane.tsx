@@ -2582,6 +2582,25 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     </div>
   );
 
+  // New chats give prompt suggestions their own row below the primary controls.
+  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className={`composer-suggestions empty:hidden ${cleanStart ? 'composer-suggestions-row' : ''}`} data-composer-suggestions>
+    <PromptAnalyzer
+      variant="chip"
+      text={deferredDraft}
+      sessionId={sessionId}
+      canModelFill={hasProvider}
+      workspaces={settings?.workspaces ?? []}
+      contextItems={ctx?.items ?? []}
+      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
+      onFill={({ snippet, placement }) => {
+        setDraft((d) =>
+          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
+        );
+        composerRef.current?.focus();
+      }}
+    />
+  </div>;
+
   return (
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
     <ChatImages.Provider value={chatImages}>
@@ -3362,24 +3381,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {/* Suggestions ride the bar beside the microphone, so typing never grows the box. Detailed only (#1687). */}
-                  {!imageMode && expertMode && showSuggest && <div className="composer-suggestions empty:hidden" data-composer-suggestions>
-                    <PromptAnalyzer
-                      variant="chip"
-                      text={deferredDraft}
-                      sessionId={sessionId}
-                      canModelFill={hasProvider}
-                      workspaces={settings?.workspaces ?? []}
-                      contextItems={ctx?.items ?? []}
-                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-                      onFill={({ snippet, placement }) => {
-                        setDraft((d) =>
-                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-                        );
-                        composerRef.current?.focus();
-                      }}
-                    />
-                  </div>}
+                  {!cleanStart && promptSuggestions}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3394,6 +3396,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       {composerStops ? <GfStopIcon className="h-[17px] w-[17px]" /> : wallWindow ? <GfSendIcon className="h-[17px] w-[17px]" /> : <NekkoAvatar size={24} />}
                     </button>
                 </div>
+                {cleanStart && promptSuggestions}
               </div>
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
