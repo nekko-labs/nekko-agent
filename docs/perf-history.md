@@ -42,6 +42,7 @@ numbers and conditions here even when raw traces are linked elsewhere.
 ## Cold-switch frame gate recalibrated on the six-zone board, 33 to 48 ms (#712, 2026-11-06)
 
 Area: perf harness. Result: measurement fix (gate recalibration); product target unchanged.
+Approval: Philip explicitly approved the separate 33 to 48 ms recalibration on 2026-11-06. This supersedes the earlier instruction to keep 33 ms for #712, not the 8.3 ms product target or the remount optimization in #1998.
 Conditions: the `perf` job logs of 778 CI reports from 2026-11-03 04:04 to 2026-11-06 10:30 UTC (pull request, merge-queue, scheduled and dispatched runs; mostly PRs that do not touch the renderer), all after #1521 moved the harness onto the six-zone board. GitHub Linux runners, 4 threads, Chrome 156, 33 cold switches per attempt, up to three attempts per report.
 
 | Best-of-three cold first-frame p95 | Value |

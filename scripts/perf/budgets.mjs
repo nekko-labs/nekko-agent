@@ -29,7 +29,8 @@
  * third over today's median; trends below that are docs/perf-history.md's job.
  * The product targets are unchanged.
  *
- * Cold-switch frame recalibrated 2026-11-06 (issue #712), from 33 to 48 ms.
+ * Cold-switch frame recalibrated 2026-11-06 (issue #712), from 33 to 48 ms,
+ * explicitly approved by Philip. No other gate or product target changes.
  * Since #1521 (2026-11-03) the harness measures the six-zone board the app
  * really shows, where a cold switch remounts a chat into the active zone
  * (#1998); the 33 ms gate had been set on a converted two-zone board. Over 778
