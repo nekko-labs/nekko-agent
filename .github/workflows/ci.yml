@@ -34,23 +34,23 @@ jobs:
         run: |
           npm run build:web
           cargo build --release -p nekkod
-          mkdir -p .diagnostic-builds .diagnostic-out
+          mkdir -p .diagnostic-builds diagnostic-out
           cp -R apps/desktop/out/renderer .diagnostic-builds/base
-          git rev-parse HEAD > .diagnostic-out/source.txt
-          lscpu > .diagnostic-out/cpu.txt
-          node --version > .diagnostic-out/node.txt
+          git rev-parse HEAD > diagnostic-out/source.txt
+          lscpu > diagnostic-out/cpu.txt
+          node --version > diagnostic-out/node.txt
       - name: Apply only the candidate icon lifecycle and build renderer
         env:
           CANDIDATE_REF: ${{ inputs.candidate_ref }}
         run: |
           git fetch origin "$CANDIDATE_REF"
-          git rev-parse FETCH_HEAD > .diagnostic-out/candidate.txt
+          git rev-parse FETCH_HEAD > diagnostic-out/candidate.txt
           git checkout FETCH_HEAD -- apps/desktop/src/renderer/gentleface-icons.tsx
-          git diff HEAD -- apps/desktop/src/renderer/gentleface-icons.tsx > .diagnostic-out/candidate.patch
-          test -s .diagnostic-out/candidate.patch
+          git diff HEAD -- apps/desktop/src/renderer/gentleface-icons.tsx > diagnostic-out/candidate.patch
+          test -s diagnostic-out/candidate.patch
           npm run build:web
           cp -R apps/desktop/out/renderer .diagnostic-builds/head
-          sha256sum .diagnostic-builds/{base,head}/assets/index-*.js > .diagnostic-out/build-hashes.txt
+          sha256sum .diagnostic-builds/{base,head}/assets/index-*.js > diagnostic-out/build-hashes.txt
       - name: Download official Chrome156 shell (same version as previous comparison)
         run: |
           node --input-type=module <<'NODE'
@@ -62,7 +62,7 @@ jobs:
           mkdirSync('.diagnostic-browsers', { recursive: true });
           execFileSync('curl', ['--fail', '--location', '--output', '.diagnostic-browsers/156.zip', url], { stdio: 'inherit' });
           execFileSync('unzip', ['-q', '.diagnostic-browsers/156.zip', '-d', '.diagnostic-browsers/156']);
-          writeFileSync('.diagnostic-out/browser.json', JSON.stringify({ version: version.version, url }, null, 2));
+          writeFileSync('diagnostic-out/browser.json', JSON.stringify({ version: version.version, url }, null, 2));
           NODE
       - name: Full uninstrumented latency workload base-head-head-base
         env:
@@ -72,7 +72,7 @@ jobs:
           export PERF_BROWSER="$PWD/.diagnostic-browsers/156/chrome-headless-shell-linux64/chrome-headless-shell"
           for phase in base-1 head-1 head-2 base-2; do
             case "$phase" in base*) variant=base;; *) variant=head;; esac
-            NEKKO_RENDERER_DIR="$PWD/.diagnostic-builds/$variant" node scripts/perf/run.mjs --only latency --no-gpu --report-only --out ".diagnostic-out/$phase"
+            NEKKO_RENDERER_DIR="$PWD/.diagnostic-builds/$variant" node scripts/perf/run.mjs --only latency --no-gpu --report-only --out "diagnostic-out/$phase"
           done
       - name: CPU profiles and cold-switch timelines for both builds
         env:
@@ -81,12 +81,23 @@ jobs:
           export NEKKOD_PATH="$PWD/target/release/nekkod"
           export PERF_BROWSER="$PWD/.diagnostic-browsers/156/chrome-headless-shell-linux64/chrome-headless-shell"
           for variant in base head; do
-            NEKKO_RENDERER_DIR="$PWD/.diagnostic-builds/$variant" node scripts/perf/run.mjs --only latency --profile --no-gpu --report-only --out ".diagnostic-out/profile-$variant"
-            gzip -9 .diagnostic-out/profile-$variant/*.trace.json
+            NEKKO_RENDERER_DIR="$PWD/.diagnostic-builds/$variant" node scripts/perf/run.mjs --only latency --profile --no-gpu --report-only --out "diagnostic-out/profile-$variant"
+            gzip -9 diagnostic-out/profile-$variant/*.trace.json
           done
+      - name: Require raw comparison evidence before upload
+        if: always()
+        run: |
+          find diagnostic-out -type f -printf '%p %s bytes\n' | sort
+          for phase in base-1 head-1 head-2 base-2 profile-base profile-head; do
+            test -s "diagnostic-out/$phase/perf-report.json"
+          done
+          test -n "$(find diagnostic-out/profile-base -name '*.cpuprofile' -print -quit)"
+          test -n "$(find diagnostic-out/profile-head -name '*.cpuprofile' -print -quit)"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: cold-mount-comparison
-          path: .diagnostic-out/
+          path: diagnostic-out/
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 14
