@@ -39,6 +39,31 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Cold-switch step of 2026-11-03: the harness, not the app (#712, 2026-11-06)
+
+Area: perf harness. Result: measurement change; no app regression found in the window.
+Conditions: CI figures are the `perf` job logs of scheduled and merge-queue runs whose head is a `main` first-parent commit, grouped by runner CPU (4 threads, Linux, Chrome 156). Local figures: Apple M5 Max, macOS, Google Chrome, `--only latency --attempts 1 --no-gpu --report-only`, one release `nekkod` built at `13338095` for every run, harness and app chosen with `--app`, 33 cold switches per run.
+
+The step on `main` falls between `9a8bed34` (#1573) and `13338095` (#1617). Cold first-frame p50 / first-attempt p95 on the same CPU class:
+
+| Runner | Before (last runs up to `9a8bed34`) | After (`13338095` onwards) |
+|---|---|---|
+| AMD EPYC 9V45 | 15.1-17.4 / 17.2-21.3 ms | 22.2-26.7 / 28.3-37.3 ms |
+| AMD EPYC 9V74 | 16.6-18.2 / 19.2-22.7 ms (one 22.6 / 27.9) | 23.4-28.3 / 29.4-36.4 ms |
+
+Local 2x2, harness of `9a8bed34` or `13338095` against the app of either, alternated (order old/old, new/old, old/new, new/new, then reversed):
+
+| Harness | App | Cold first-frame p50 / p95 (two runs) |
+|---|---|---|
+| `9a8bed34` | `9a8bed34` | 8.7 / 10.0, 6.8 / 10.1 ms |
+| `9a8bed34` | `13338095` | 9.3 / 10.6, 6.8 / 9.1 ms |
+| `13338095` | `9a8bed34` | 12.1 / 15.5, 9.6 / 12.3 ms |
+| `13338095` | `13338095` | 12.0 / 14.8, 12.5 / 15.3 ms |
+
+The harness of #1521 alone (`e0539806`) on app `13338095`: 9.7 / 14.7 and 9.8 / 15.0 ms, alternated with `13338095`'s harness at 9.7 / 12.2 and 10.8 / 14.6 ms.
+
+Why: #1521 seeds the six-zone board the app really shows (before it, the app converted the harness's board to two zones with everything else minimized). Since then a cold switch opens a chat that is not on the board into the active zone of a board with six live chats, a remount #1538 already listed as a real product cost (about 31 ms against 13 ms at 60 Hz). The 33 ms gate was calibrated on 2026-10-17 on the old board. The app's own code in the window moved the figure by less than run-to-run noise. Whether to recalibrate the gate on the new board or to make that remount cheaper is a product decision, not taken here. Source: #712, #1521, #1538, CI logs of the scheduled `main` runs 41554315816 and 41693364528 and the queue runs on those commits.
+
 ## Dynamic pane search routing (#1854, 2026-11-05)
 
 Area: renderer. Result: matched baseline failure reproduced; no performance improvement or zero-effect claim.
