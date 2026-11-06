@@ -64,7 +64,7 @@ app.whenReady().then(async () => {
     // SVG SMIL is not exposed by document.getAnimations(): inspect animated lengths.
     if (!process.env.NEKKO_TEST_SOURCE) {
       await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
-      await check('working steps use the ripple, not pause bars', `document.querySelectorAll('[data-plan-sheet] [aria-label="Working"] .plan-working-motion circle').length >= 3 && !document.querySelector('[data-plan-sheet] [aria-label="Paused"]')`);
+      await check('working steps and running checks use the ripple, not pause bars', `document.querySelectorAll('[data-plan-sheet] .plan-working .plan-working-motion circle').length >= 3 && !document.querySelector('[data-plan-sheet] [aria-label="Paused"]')`);
       await check('working ripple is inside the settled visible sheet', `(() => { const e = document.querySelector('[data-plan-sheet] .plan-working-motion'); if (!e) return false; const r = e.getBoundingClientRect(), s = e.closest('[data-plan-sheet]').getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.top >= s.top && r.bottom <= s.bottom && r.top >= 0 && r.bottom <= innerHeight && getComputedStyle(e).display !== 'none'; })()`);
       const frames = [], radii = [];
       for (let i = 0; i < 24; i++) {
@@ -100,7 +100,7 @@ app.whenReady().then(async () => {
     await check('the kind word is bold', `document.querySelectorAll('.plan-sheet-steps .plan-sheet-kind').length === 4 && [...document.querySelectorAll('.plan-sheet-steps .plan-sheet-kind')].every(e => +getComputedStyle(e).fontWeight >= 600)`);
     await check('PR chip on step 2', `!!document.querySelector('[data-plan-step-id="step_2"] [data-plan-chip="pr"]')`);
     await check('verification panel is gone', `!document.querySelector('[data-verification-checklist]')`);
-    await check('one Verify step holds every check as a sub-bullet', `document.querySelectorAll('[data-plan-step-id="verify:all"] [data-plan-substep] [data-plan-chip="verify"]').length === 2 && document.querySelectorAll('[data-plan-chip="verify"]').length === 2 && !document.querySelector('[data-plan-step-id="step_3"]')`);
+    await check('one Verify step holds every check as a sub-bullet', `document.querySelectorAll('[data-plan-step-id="verify:all"] [data-plan-substep] [data-plan-check]').length === 2 && !document.querySelector('[data-plan-chip="verify"]') && !document.querySelector('[data-plan-step-id="step_3"]')`);
     await check('CI chips on the Verify step', `document.querySelectorAll('[data-plan-step-id="verify:all"] [data-plan-chip="ci"]').length === 3 && document.querySelectorAll('[data-plan-chip="ci"]').length === 3`);
     await check('design link on step 1', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="link"]')`);
     const hover = await run(`(() => { const r = document.querySelector('[data-plan-step-id="step_3"]')?.getBoundingClientRect(); return r ? { x: Math.round(r.x + 40), y: Math.round(r.y + 8) } : { x: 1, y: 1 }; })()`);

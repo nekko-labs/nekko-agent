@@ -29,6 +29,7 @@ import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
+import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
@@ -2650,6 +2651,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
         </ChatHeader>
         )}
+        {/* A sub-agent says so across the top, with a way back to the chat that spawned it. */}
+        {surface !== 'composer' && !cleanStart && session?.parentSessionId && <SubagentBanner parentId={session.parentSessionId} onOpenParent={(id) => (commandCenter ? useStore.getState().focusChatOnWall(id, { keepLayout: true }) : useStore.getState().openChatPane(id))} />}
         {surface !== 'composer' && !cleanStart && showHardware && <ExpertMonitor />}
 
         {surface !== 'composer' && !cleanStart && (
