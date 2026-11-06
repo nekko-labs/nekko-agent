@@ -1165,6 +1165,7 @@ impl Turns {
                 opts,
                 &facts["provider"],
                 &mode,
+                str_at(facts, "effort"),
                 wake,
             )
             .await;
@@ -1396,6 +1397,7 @@ impl Turns {
         opts: &Value,
         provider: &Value,
         mode: &str,
+        effort: Option<&str>,
         wake: bool,
     ) {
         use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
@@ -1433,6 +1435,8 @@ impl Turns {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
             model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            // `normal` means no choice was made: Claude Code's own setting stands.
+            effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
             config_dir,
         };
@@ -1623,8 +1627,13 @@ impl Turns {
         // The turn is over: nothing it waited on can still be answered.
         self.pending.release(&session_id);
         // The `error` event only reaches windows open now. Saved, a chat reopened
-        // later can still offer Retry. A Stop is the user's, not a failure.
-        let failure = lock(&shared.last_error).clone().filter(|_| last_stop.is_none() && !shared.cancel.is_cancelled());
+        // later can still offer Retry. A Stop counts too: one that lands between
+        // steps leaves no partial reply to mark, so this is its only record.
+        let stopped = shared.cancel.is_cancelled();
+        let failure = lock(&shared.last_error)
+            .clone()
+            .filter(|_| last_stop.is_none())
+            .map(|message| if stopped { "Stopped".to_string() } else { message });
         if let Some(obj) = lock(session).as_object_mut() {
             obj.remove("activeRun");
             if let Some(message) = failure {
@@ -2139,6 +2148,7 @@ fn native_context(
         }
     });
     let mut ctx = ToolContext::new(approver);
+    ctx.app_data_root = nekko_js::home_dir().map(|home| home.join(".nekko-agent").to_string_lossy().into_owned());
     let parse = |key: &str| settings.get(key).filter(|v| !v.is_null()).cloned();
     if let Some(v) = parse("sandboxMode") {
         ctx.sandbox_mode = serde_json::from_value(v).ok()?;

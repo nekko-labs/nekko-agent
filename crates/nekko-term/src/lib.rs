@@ -2,6 +2,8 @@
 //!
 //! See `session.rs` for the data path and its flow-control rules.
 
+mod activity;
+pub use activity::TerminalActivity;
 mod ring;
 mod session;
 mod shells;

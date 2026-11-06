@@ -588,10 +588,11 @@ export function formatRate(tokensPerSecond: number): string {
  */
 /**
  * Whether the transcript ends on a reply that was cut off: the last message of
- * the current turn is an assistant message marked `interrupted`, or a tool call
- * the model asked for that never got its result. A chat opened on such a
- * transcript (after a restart, say) shows the interruption and offers Continue
- * even though no `error` event is around to announce it.
+ * the current turn is an assistant message marked `interrupted`, a tool call the
+ * model asked for that never got its result, or a tool result the model never
+ * answered. A chat opened on such a transcript (after a restart, say) shows the
+ * interruption and offers Continue even though no `error` event is around to
+ * announce it. A run still going looks the same, so callers check for one first.
  */
 export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   const last = history[history.length - 1];
@@ -606,6 +607,8 @@ export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   // An explicit successful terminal event is stronger than missing historical
   // tool bookkeeping (for example, an earlier failed/retried tool step).
   if (lastAssistant?.turnStats?.stop === 'complete') return false;
+  // A finished reply ends with the model's word, never on a tool's output.
+  if (last.role === 'tool') return true;
   const results = new Set(turn.flatMap((m) => m.toolResult ? [m.toolResult.toolCallId] : []));
   return turn.some((m) => m.role === 'assistant' && m.toolCalls?.some((call) => !results.has(call.id)));
 }

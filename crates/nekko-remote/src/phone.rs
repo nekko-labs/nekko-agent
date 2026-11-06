@@ -365,7 +365,7 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
     };
     match channel {
         "session:setSupportingWorkspaces" => {
-            if args.len() != 2 || !args[0].as_str().is_some_and(|s| !s.is_empty()) {
+            if args.len() != 2 || args[0].as_str().is_none_or(|s| s.is_empty()) {
                 return Err(denied("value-invalid", "session id"));
             }
             setting_value("defaultWorkspaceIds", &args[1])?;
