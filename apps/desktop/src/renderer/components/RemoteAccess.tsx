@@ -216,6 +216,7 @@ export function RemoteAccess() {
         Run and manage your chats, training runs, and goals from your phone. Everything is end-to-end encrypted;
         inference and tools keep running here, under this machine's guardrails.{!status.enabled && ' Pick how your phone connects:'}
       </p>
+      <ComputerName />
       {!status.enabled && status.stoppedBy && <RemoteStoppedBanner stoppedBy={status.stoppedBy} />}
       {status.error && !status.online && (
         <p className="mt-2 rounded border border-line px-2 py-1 text-xs text-ink-soft">{status.error}</p>
@@ -280,12 +281,12 @@ export function RemoteAccess() {
                 Nothing paired yet. Hit “Pair a device” and scan the QR from your phone.
               </p>
             ) : (
-              <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
+              <ul className="mt-2 divide-y divide-line">
                 {active
                   .slice()
                   .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
                   .map((d) => (
-                    <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+                    <li key={d.id} className="flex flex-wrap items-center gap-2 py-2 text-xs">
                       <span aria-hidden>{platformIcon(d.platform)}</span>
                       {renaming === d.id ? (
                         <input
@@ -310,6 +311,7 @@ export function RemoteAccess() {
                         style={{ background: connected.has(d.id) ? 'var(--success)' : 'var(--line)' }}
                       />
                       <span className="ml-auto text-ink-faint">{connected.has(d.id) ? 'connected' : `seen ${ago(d.lastSeenAt, now)}`}</span>
+                      <button className="btn btn-ghost py-0.5 text-xs" onClick={pair} aria-label={`Re-pair ${d.name}`}>Re-pair</button>
                       <button className="btn btn-ghost py-0.5 text-xs" style={{ color: 'var(--danger)' }} onClick={() => revoke(d)}>
                         Revoke
                       </button>
@@ -683,7 +685,7 @@ export function NetworkVisibilitySwitch() {
 
 export function NetworkVisibilityView({ vis, busy, onChange }: { vis: NetworkVisibilityStatus; busy?: boolean; onChange: (on: boolean) => void }) {
   return (
-    <div data-shot="network-visibility" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+    <div data-shot="network-visibility" className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="text-sm font-medium">Visible on this network</div>
         <p className="mt-0.5 text-xs text-ink-faint">
@@ -803,7 +805,7 @@ export function PhoneAccessView({
 }) {
   if (devices.length === 0) return null;
   return (
-    <div data-shot="phone-access" className="rounded-md border border-line p-3">
+    <div data-shot="phone-access">
       <div className="text-sm font-medium">What phones can do</div>
       <p className="mt-0.5 text-xs text-ink-faint">
         <span className="font-medium text-ink-soft">Read</span>: see chats, files, git, logs and boards.{' '}
@@ -812,13 +814,13 @@ export function PhoneAccessView({
         Guardrails or YOLO, need Face ID or the passcode on the phone within the last 5 minutes. Every change is listed
         here. Revoke a phone to stop everything.
       </p>
-      <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
+      <ul className="mt-2 divide-y divide-line">
         {devices.map((d) => {
           const access = phoneDeviceAccess(d);
           const list = activity[d.id];
           const open = openId === d.id;
           return (
-            <li key={d.id} className="px-3 py-2 text-xs" data-device={d.id}>
+            <li key={d.id} className="py-2 text-xs" data-device={d.id}>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="min-w-0 flex-1 truncate font-medium">
                   {d.name}
@@ -878,7 +880,7 @@ export function PhoneChangesSwitch() {
       .catch((e) => useStore.getState().pushToast('error', String(e)));
   };
   return (
-    <div className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+    <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="text-sm font-medium">Let phones see changes</div>
         <p className="mt-0.5 text-xs text-ink-faint">
@@ -946,7 +948,7 @@ export function LockPhonesView({ devices, busy, onChange }: { devices: RemoteDev
   if (devices.length === 0) return null;
   const locked = devices.every((d) => !phoneDeviceAccess(d).change);
   return (
-    <div data-shot="lock-phones" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+    <div data-shot="lock-phones" className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="text-sm font-medium">Lock phones</div>
         <p className="mt-0.5 text-xs text-ink-faint">
@@ -976,7 +978,7 @@ export function QuitFromPhoneSwitch() {
 
 export function QuitFromPhoneView({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div data-shot="quit-from-phone" className="flex items-start justify-between gap-3 rounded-md border border-line p-3">
+    <div data-shot="quit-from-phone" className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="text-sm font-medium">Let a phone quit Nekko Agent</div>
         <p className="mt-0.5 text-xs text-ink-faint">
@@ -1041,4 +1043,40 @@ export function ProtectComputerPromptView({ onSetUp, onDismiss }: { onSetUp: () 
       </div>
     </div>
   );
+}
+
+/** The name phones learn on authenticated app:info, with an OS hostname default. */
+export function ComputerName() {
+  const name = useStore((s) => s.settings?.machineName) ?? '';
+  const refreshSettings = useStore((s) => s.refreshSettings);
+  const [text, setText] = useState(name);
+  const [hostname, setHostname] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => { setText(name); }, [name]);
+  useEffect(() => {
+    let live = true;
+    void window.nekko.getAppInfo().then((info) => { if (live) setHostname(info.hostname ?? ''); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await window.nekko.updateSettings({ machineName: text.trim().slice(0, 40) });
+      await refreshSettings();
+    } catch {
+      setError('Could not save the computer name. Try again.');
+    } finally { setBusy(false); }
+  };
+  return <div className="mt-3">
+    <label htmlFor="computer-name" className="block text-xs font-medium">Computer name</label>
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <input id="computer-name" className="input min-w-0 flex-1 py-1 text-sm" maxLength={40} placeholder={hostname || 'Computer name'} value={text}
+        onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !busy) void save(); }} />
+      <button className="btn btn-outline py-1 text-xs" disabled={busy || text.trim() === name} onClick={() => void save()}>Save name</button>
+    </div>
+    <p className="mt-1 text-xs text-ink-faint">Shown on paired phones. Leave blank to use {hostname || 'this computer’s system name'}. You can also rename it just on your phone.</p>
+    {error && <p role="alert" className="mt-1 text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
+  </div>;
 }

@@ -1,14 +1,14 @@
 name: CI
 
-# Three tiers (scripts/ci-scope.mjs decides which jobs each run needs):
+# Two tiers (scripts/ci-scope.mjs decides which jobs each run needs):
 #
 #   pull_request   fast feedback: build, gated by the paths the PR touches. A
 #                  change only to the native phone apps (apps/ios, apps/android)
-#                  skips it: their own workflows test them.
-#   merge_group    the merge queue: adds the speed contract and itests for the
-#                  queued group, before anything reaches main.
+#                  skips it: their own workflows test them. `gate` here is what
+#                  main requires; there is no merge queue.
 #   schedule       nightly: every job on every OS (the Linux, Windows and macOS
-#                  daemon and capture). Skipped when main has not moved.
+#                  daemon and capture), the speed contract and the itests.
+#                  Skipped when main has not moved.
 #
 # Platform builds run nightly rather than per change, here and in the iOS,
 # Android, installer and development-identity workflows. A `deploy:linux`,
@@ -19,7 +19,6 @@ name: CI
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-  merge_group:
   schedule:
     # 03:17 JST.
     - cron: '17 18 * * *'
@@ -33,7 +32,7 @@ permissions:
   actions: read
   issues: write
 
-# Cancel stale PR revisions; keep every queue, schedule and dispatch run.
+# Cancel stale PR revisions; keep every schedule and dispatch run.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -71,23 +70,16 @@ jobs:
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Changed files
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          BASE: ${{ github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.merge_group.head_sha }}
         # Failure leaves the list empty, which ci-scope treats as "run everything".
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
-          else
-            gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq '.files[].filename' > "$RUNNER_TEMP/changed.txt" || true
-          fi
+        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
       - id: scope
         if: steps.fresh.outputs.run == 'true'
         env:
-          CI_CHANGED_FILES: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/changed.txt', runner.temp) || '' }}
+          CI_CHANGED_FILES: ${{ github.event_name == 'pull_request' && format('{0}/changed.txt', runner.temp) || '' }}
           CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: node scripts/ci-scope.mjs
 
@@ -224,9 +216,9 @@ jobs:
   # The speed contract (spec/platform/speed-responsiveness-the-speed-contract.md): headless Chrome over
   # the DevTools protocol against the Local Web UI and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
-  # regression shows its numbers, not only a red cross. It runs in the merge
-  # queue for changes it can measure, so a regression is stopped before main,
-  # and on a PR only with the `ci:perf` label.
+  # regression shows its numbers, not only a red cross. It runs nightly, and on
+  # a PR only with the `ci:perf` label; a regression that lands without the
+  # label shows up in the next nightly run's `ci-scheduled` issue.
   perf:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
@@ -250,7 +242,7 @@ jobs:
       # The web build comes from the `build` job (uploaded right after its
       # build:web, long before this release cargo build finishes). It is fetched
       # without a job-level `needs: build`, which would hold this job until all of
-      # build's tests finished and lengthen the queue's critical path. If build
+      # build's tests finished and lengthen the run's critical path. If build
       # ends without uploading it, this job builds its own.
       - name: Wait for the build job's web build
         id: dist
@@ -280,10 +272,10 @@ jobs:
         # runner has no GPU, so Chrome runs without its software GPU emulation.
         run: node scripts/perf/run.mjs --out perf-results --attempts 3 --no-gpu
       - name: Profile streaming frame work against the unchanged base after a failed gate
-        if: failure() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+        if: failure() && github.event_name == 'pull_request'
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           # Diagnostic only: keep the failed speed-contract result and its budgets.
           node scripts/perf/run.mjs --out perf-results/profile-head --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Head diagnostic missed a budget; original gate remains failed."
@@ -309,8 +301,8 @@ jobs:
   # models and fake services on 127.0.0.1 (a fake Telegram Bot API and GitHub, a
   # local relay, a Hypergate daemon from its public repo). Each script makes its
   # own temporary data dir and home and ends its process trees. Never on a PR,
-  # and `gate` does not need this job: it reports on what lands on main (every
-  # queue group, the schedule, a dispatch) without holding anything.
+  # and `gate` does not need this job: it reports on main (the nightly schedule,
+  # a dispatch) without holding anything.
   itests:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.itests == 'true'
@@ -357,14 +349,13 @@ jobs:
         run: node scripts/itest-mcp-http.mjs --spawn hypergate
 
   # The one required check. It passes when every job this run needed passed and
-  # the skipped ones were skipped on purpose, so branch protection and the merge
-  # queue need not know which jobs a change runs. A scheduled run that fails
+  # the skipped ones were skipped on purpose, so branch protection need not
+  # know which jobs a change runs. A scheduled run that fails
   # opens (or comments on) one `ci-scheduled` issue, so nobody has to watch it.
   #
   # With a `deploy:*` label it also waits (up to about 3 hours: macOS runners
-  # queue) for the label's runs in other workflows, so nothing queues a PR before
-  # they are green. In the queue it fails a group holding a draft, a `hold` PR, or
-  # a deploy-labelled PR without green runs, which ejects it (#1002).
+  # queue) for the label's runs in other workflows, so nothing merges a PR
+  # before they are green.
   # Only when dependencies or ASSETS.md change: a new package with a license the
   # policy has not seen stops here, before it ships. docs/runbooks/third-party.md.
   licenses:
@@ -393,7 +384,7 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v7
-        if: github.event_name == 'merge_group' || contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
+        if: contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
         with:
           sparse-checkout: scripts
       - name: The platform runs the deploy labels turned on passed
@@ -403,13 +394,6 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci-label-gate.mjs pr --pr "$PR" --sha "$SHA"
-      - name: Every PR in the group is ready, not held, and its deploy-label runs passed
-        if: github.event_name == 'merge_group'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BASE: ${{ github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.merge_group.head_sha }}
-        run: node scripts/ci-label-gate.mjs queue --base "$BASE" --head "$HEAD"
       - name: File the scheduled failure
         if: failure() && github.event_name == 'schedule'
         env:

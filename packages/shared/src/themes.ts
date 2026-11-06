@@ -45,8 +45,8 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'system',
     mode: 'system',
-    accent: '#6d5efc',
-    accent2: '#06b6d4',
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
     // Follows the computer: Dark Nekko in dark mode, Light Nekko in light (resolveThemePreset).
     swatch: ['#0c0c11', '#c084b5', '#fbfbfd', '#5a2352'],
     label: 'System',
@@ -54,17 +54,17 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'light',
     mode: 'light',
-    accent: '#6d5efc',
-    accent2: '#06b6d4',
-    swatch: ['#6d5efc', '#06b6d4', '#f2f2f7'],
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
+    swatch: ['#5a2352', '#8a4a7f', '#f2f2f7'],
     label: 'Light',
   },
   {
     id: 'dark',
     mode: 'dark',
-    accent: '#8b7dff',
-    accent2: '#22d3ee',
-    swatch: ['#8b7dff', '#22d3ee', '#16161c'],
+    accent: '#c084b5',
+    accent2: '#c99bb3',
+    swatch: ['#c084b5', '#c99bb3', '#16161c'],
     label: 'Dark',
   },
   {
@@ -1055,6 +1055,10 @@ export const THEME_PRESETS: ThemePreset[] = [
 const RETIRED_PRESET_ACCENTS: Record<string, Record<string, string>> = {
   nebula: { '#a78bfa': '#9d8ce6', '#f472b6': '#d98bb6' },
   terminal: { '#22c55e': '#3fb96a', '#84cc16': '#8fbf3a' },
+  // The base looks shipped the old violet and cyan before the plum palette (spec/brand/colour-palette.md).
+  system: { '#6d5efc': '#5a2352', '#06b6d4': '#8a4a7f' },
+  light: { '#6d5efc': '#5a2352', '#06b6d4': '#8a4a7f' },
+  dark: { '#8b7dff': '#c084b5', '#22d3ee': '#c99bb3' },
 };
 
 /** A saved accent, upgraded if it is a color the preset no longer ships. */

@@ -96,7 +96,7 @@ const toHex = (c: { r: number; g: number; b: number }) => '#' + [c.r, c.g, c.b].
 
 /** Each theme with the accent its preset applies (store.applyTheme). */
 const ACCENTS: Record<string, string> = {
-  light: '#6d5efc', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#8b7dff',
+  light: '#5a2352', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#c084b5',
   'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0', 'dark/nekko-dark': '#c4b9ff',
   ...Object.fromEntries(EXPERIMENTAL.map((p) => [`${p.mode}/${p.id}`, p.accent])),
 };

@@ -1,4 +1,5 @@
 [
+ "activity:state",
  "agent:replay",
  "app:info",
  "app:quit",
@@ -183,6 +184,9 @@
  "runner:imageResume",
  "runner:imageStatus",
  "runner:jobLog",
+ "runner:linuxImageBuild",
+ "runner:linuxImageCancel",
+ "runner:linuxImageStatus",
  "runner:list",
  "runner:remove",
  "runner:setEnabled",

@@ -75,7 +75,7 @@ test('ios_native_calls_the_picker_only_for_trusted_events', () => {
   const y = readFileSync(new URL('../.github/workflows/ios-native.yml', import.meta.url), 'utf8');
   const pickIf = y.match(/\n  pick:\n(?:.*\n)*?    if: (.*)\n/)[1];
   // Baseline evidence uses hosted runners, never the owner's trusted Mac.
-  assert.match(pickIf, /^\$\{\{ !inputs\.baseline_ref && vars\.NEKKO_MAC_RUNNERS == 'on' && /);
+  assert.match(pickIf, /^\$\{\{ !inputs\.baseline_ref && !inputs\.automatic_baseline_ref && vars\.NEKKO_MAC_RUNNERS == 'on' && /);
   assert.match(pickIf, / \}\}$/);
   // Only refs the runner group allows; a labeled PR always runs hosted.
   assert.match(pickIf, /\(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\)/);

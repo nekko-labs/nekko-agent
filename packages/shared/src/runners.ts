@@ -57,7 +57,10 @@ export interface JobRef {
   url?: string;
   pr?: PrRef | null;
 }
+export type Guest = 'macos' | 'linux';
 export interface SlotView {
+  /** Absent from daemons before Linux slots: macOS. */
+  guest?: Guest;
   state: SlotState;
   job: JobRef | null;
   /** Unix seconds the slot entered `state`. */
@@ -124,6 +127,10 @@ export interface RunnerView {
   reasons: Reason[];
   available: number;
   limit: SlotLimit | null;
+  /** Linux VMs that may run now: no Apple cap, the memory macOS slots leave. Absent from older daemons. */
+  linuxAvailable?: number;
+  /** Why Linux slots cannot start (no Linux image yet), when some are asked for. */
+  linuxError?: string | null;
   awake: boolean;
   error: string | null;
   today: Today;
@@ -326,34 +333,60 @@ export function runnerSubtitle(v: RunnerView): string {
 
 export interface SlotLine { title: string; text: string; progress: number; dim: boolean }
 
-/** One tile per configured macOS slot; slots past what the Mac allows are greyed with the bound's sentence. */
+/** Linux guests have no Apple cap; nekkod clamps the setting to this. */
+export const MAX_LINUX_SLOTS = 8;
+export const LINUX_SLOT_CHOICES = [0, 1, 2, 3, 4] as const;
+
+/** The Linux image builder's view, from `runner:linuxImageStatus`. */
+export interface LinuxImageView {
+  state: 'none' | 'building' | 'ready' | 'failed';
+  stage: 'download' | 'assemble' | 'provision' | 'test' | 'finish' | null;
+  /** 0 to 1 within a download. */
+  progress: number | null;
+  message: string | null;
+  /** What provisioning installed: `{ distro, runner, docker, kernel, ... }`. */
+  proof: { distro?: string; runner?: string; docker?: string; kernel?: string } | null;
+}
+
+/**
+ * One tile per configured macOS slot (slots past what the Mac allows are greyed with the bound's
+ * sentence), then one per Linux slot. Linux VMs boot only for a queued Linux job.
+ */
 export function slotLines(v: RunnerView, nowSecs: number): SlotLine[] {
-  const { macosSlots, maxJobMinutes } = v.config.settings;
-  return Array.from({ length: macosSlots }, (_, i) => {
-    const title = `Slot ${i + 1} · macOS`;
-    const s = v.slots[i];
-    if (!s) {
-      if (i >= v.available) return { title, text: `Not available: ${slotLimitText(v.limit)}`, progress: 0, dim: true };
-      const text = v.state === 'error' ? 'Stopped until the error above is fixed'
-        : v.reasons.length ? `Waiting: ${reasonText(v.reasons[0]).short}` : 'Starts a VM when a job is queued';
-      return { title, text, progress: 0, dim: false };
-    }
-    const elapsed = Math.max(0, nowSecs - s.since);
-    const line = (text: string, progress = 0): SlotLine => ({ title, text, progress, dim: false });
-    switch (s.state) {
-      case 'starting': return line('Starting a VM');
-      case 'ready': return line('Ready for a job');
-      case 'running':
-        return line(
-          s.job ? `${s.job.workflow} · ${s.job.job} · ${formatMinutes(elapsed)}` : `Running a job · ${formatMinutes(elapsed)}`,
-          Math.min(1, elapsed / (maxJobMinutes * 60)),
-        );
-      case 'draining':
-        return line(s.drainEndsAt === null ? 'Finishing' : `Finishing, stops in ${Math.max(1, Math.ceil((s.drainEndsAt - nowSecs) / 60))} min`);
-      case 'cleaning': return line('Deleting the VM');
-      default: return line(STATE_LABELS[s.state as RunnerState] ?? 'Working');
-    }
+  const { macosSlots, linuxSlots = 0 } = v.config.settings;
+  const of = (g: Guest) => v.slots.filter((s) => (s.guest ?? 'macos') === g);
+  const mac = Array.from({ length: macosSlots }, (_, i) => slotLine(v, `Slot ${i + 1} · macOS`, of('macos')[i], nowSecs, i >= v.available ? slotLimitText(v.limit) : null));
+  const linuxAvailable = v.linuxAvailable ?? 0;
+  const linux = Array.from({ length: Math.min(linuxSlots, MAX_LINUX_SLOTS) }, (_, i) => {
+    const why = v.linuxError ?? (i >= linuxAvailable ? 'the memory macOS slots leave is used up.' : null);
+    return slotLine(v, `Slot ${macosSlots + i + 1} · Linux`, of('linux')[i], nowSecs, why, 'Starts a VM when a Linux job is queued');
   });
+  return [...mac, ...linux];
+}
+
+function slotLine(v: RunnerView, title: string, s: SlotView | undefined, nowSecs: number, unavailable: string | null, idle = 'Starts a VM when a job is queued'): SlotLine {
+  const { maxJobMinutes } = v.config.settings;
+  if (!s) {
+    if (unavailable !== null) return { title, text: `Not available: ${unavailable}`, progress: 0, dim: true };
+    const text = v.state === 'error' ? 'Stopped until the error above is fixed'
+      : v.reasons.length ? `Waiting: ${reasonText(v.reasons[0]).short}` : idle;
+    return { title, text, progress: 0, dim: false };
+  }
+  const elapsed = Math.max(0, nowSecs - s.since);
+  const line = (text: string, progress = 0): SlotLine => ({ title, text, progress, dim: false });
+  switch (s.state) {
+    case 'starting': return line('Starting a VM');
+    case 'ready': return line('Ready for a job');
+    case 'running':
+      return line(
+        s.job ? `${s.job.workflow} · ${s.job.job} · ${formatMinutes(elapsed)}` : `Running a job · ${formatMinutes(elapsed)}`,
+        Math.min(1, elapsed / (maxJobMinutes * 60)),
+      );
+    case 'draining':
+      return line(s.drainEndsAt === null ? 'Finishing' : `Finishing, stops in ${Math.max(1, Math.ceil((s.drainEndsAt - nowSecs) / 60))} min`);
+    case 'cleaning': return line('Deleting the VM');
+    default: return line(STATE_LABELS[s.state as RunnerState] ?? 'Working');
+  }
 }
 
 /** The supervisor's own stop reasons, beside the `Reason` names. */
@@ -462,15 +495,20 @@ export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Part
   ) as Partial<RunnerSettings>;
 }
 
-/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`. */
-export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'test', 'finish'] as const;
+/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`, adding tools only `TOOLS_STAGES`. */
+export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'tools', 'test', 'finish'] as const;
 export type ImageStage = (typeof IMAGE_STAGES)[number];
-/** A build from Apple's image (with or without Xcode), or the image in use with Nekko's scripts replaced. */
-export type ImageKind = 'xcode' | 'macosOnly' | 'refresh';
+/**
+ * A build from Apple's image (with or without Xcode), or the image in use with Nekko's
+ * scripts replaced, or with the job tools it lacks installed.
+ */
+export type ImageKind = 'xcode' | 'macosOnly' | 'refresh' | 'tools';
 const REFRESH_STAGES: readonly ImageStage[] = ['check', 'scripts', 'test', 'finish'];
-const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts');
+const TOOLS_STAGES: readonly ImageStage[] = ['check', 'tools', 'test', 'finish'];
+const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts' && s !== 'tools');
 /** The stages a build of `kind` runs; a view with no build lists a full one. */
-export const imageStages = (kind: ImageKind | null): readonly ImageStage[] => (kind === 'refresh' ? REFRESH_STAGES : FULL_STAGES);
+export const imageStages = (kind: ImageKind | null): readonly ImageStage[] =>
+  kind === 'refresh' ? REFRESH_STAGES : kind === 'tools' ? TOOLS_STAGES : FULL_STAGES;
 export type ImageState = 'none' | 'ready' | 'building' | 'waiting' | 'failed';
 
 /** What the image holds, from the proof file `provision.sh` writes. */
@@ -479,6 +517,19 @@ export interface ImageInfo {
   xcode: string | null;
   actionsRunner: string;
   built: string;
+  /** The job tools found on the image's disk; absent for an image built before Nekko looked. */
+  tools?: string[];
+  /** Tools jobs run before their own setup (node, gh, jq) that this image lacks; absent from an older daemon. */
+  missingTools?: string[];
+}
+
+/** "a", "a and b", "a, b and c". */
+const andList = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
+/** The runner card's notice for an image without some job tools. */
+export function missingToolsLine(tools: string[]): string {
+  const one = tools.length === 1;
+  return `${andList(tools)} ${one ? 'is' : 'are'} missing from this Mac's runner image. Jobs that need ${one ? 'it' : 'them'} will fail.`;
 }
 
 export interface ImageView {
@@ -532,6 +583,7 @@ export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
   xcode: 'Add Xcode and tools',
   lockdown: 'Lock the VM down',
   scripts: "Update Nekko's scripts",
+  tools: 'Install the missing tools',
   test: 'Test a boot',
   finish: 'Turn the runner on',
 };

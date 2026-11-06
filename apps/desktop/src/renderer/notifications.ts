@@ -34,13 +34,7 @@ export function startDesktopNotifications(): () => void {
         return;
       }
       const sessionId = notificationSessionId(url);
-      if (!sessionId) return;
-      const s = useStore.getState();
-      s.setActiveSession(sessionId);
-      s.setView('command');
-      // Focus the session's workspace pane (or create one if it was closed);
-      // setActiveSession/setView alone never touch the workbench layout.
-      s.openChatPane(sessionId);
+      if (sessionId) openNotifiedChat(sessionId);
     });
     return () => { offStore(); offLink(); };
   }
@@ -68,13 +62,7 @@ export function startDesktopNotifications(): () => void {
         window.focus();
         const run = notice.link ? parseWorkflowRunLink(notice.link) : null;
         if (run) openWorkflowRun(run);
-        else {
-          const s = useStore.getState();
-          s.setActiveSession(notice.sessionId);
-          s.setView('command');
-          // Focus the session's workspace pane (or create one if it was closed).
-          s.openChatPane(notice.sessionId);
-        }
+        else openNotifiedChat(notice.sessionId);
         n.close();
       };
       shown = [...shown.filter((x) => x !== n).slice(-7), n];
@@ -121,6 +109,13 @@ export function notificationSessionId(raw: string): string | null {
     if (url.protocol !== 'nekko-agent:' || url.hostname !== 'session' || url.pathname !== '/open') return null;
     return url.searchParams.get('id') || null;
   } catch { return null; }
+}
+
+/** Show a notice's chat as the wall's selected window, as picking it in the Agents panel does. */
+function openNotifiedChat(sessionId: string): void {
+  const s = useStore.getState();
+  s.setActiveSession(sessionId);
+  s.focusChatOnWall(sessionId, { keepLayout: true });
 }
 
 /** Show a workflow run: the Workflows view opens with that run selected. */

@@ -53,33 +53,35 @@ git add -A   # or a scoped add; never commit .shots/ or other evidence dirs
 git commit -m "..."
 git push -u origin <branch>
 gh pr create --title "..." --body "..."    # ready, not --draft
-gh pr merge --auto                          # queue it; it merges itself when `gate` is green
+gh pr merge --auto --squash                 # it merges itself when `gate` is green
 ```
 
-`main` requires the merge queue and one check, `gate`. Do not merge with `--admin`:
-it skips the queue, and the queue is what tests your PR against everything landing
-beside it. The auto-merge workflow also queues every ready PR, so `gh pr merge
---auto` is a belt to its braces. Never add `--squash` (or another method) to it:
-with a method, gh arms classic auto-merge, which waits outside the queue forever.
-The queue's own setting squashes. The auto-merge workflow also runs on every push,
-so a fix to a red PR re-queues itself. Every 15 minutes `queue-sweeper.yml`
-re-queues a ready PR whose `gate` is green but which is not in the queue (once per
-head commit, so a queue ejection by a flake heals and a real one waits for your
-fix), and re-runs a red `gate`'s failed jobs once. `queue-repair.yml` picks up
-what is left: it merges `main` into a conflicting PR (settling conflicts in the
-append-only files by rule), and hands a code conflict, a `gate` still red after
-the re-run, or a second ejection to Codex with a `@codex` comment. If Codex is not
-set up or does not push a fix within an hour, the PR gets the `needs-human` label;
-your next push clears it. To keep a ready PR out of the
-queue, mark it draft or label it `hold`. If it is already queued, either one also
-fails the group's `gate`, so the queue ejects it rather than merging it. If you need it
-queued sooner, `gh pr merge --auto <n>` once `gate` is green still works.
+`main` requires one check, `gate`, a PR, and resolved review threads. There is no
+merge queue (removed 2026-11-06, [decision 0056](../decisions/0056-no-merge-queue-speed-contract-and-itests-run-nightly.md)):
+a PR merges itself through GitHub's native auto-merge (squash) as soon as `gate`
+passes. The speed contract and the loopback itests run nightly, not on the PR, so
+add `ci:perf` to a PR that changes a path the speed contract measures if you want
+the numbers before it lands. Do not merge with `--admin`: it skips `gate`.
+
+The auto-merge workflow arms auto-merge on every ready PR into main, so `gh pr
+merge --auto --squash` is a belt to its braces. It also runs on every push, so a
+fix to a red PR merges itself once `gate` goes green. Every 15 minutes
+`queue-sweeper.yml` arms auto-merge on a ready PR whose `gate` is green but which
+has no auto-merge request, and re-runs a red `gate`'s failed jobs once.
+`queue-repair.yml` picks up what is left: it merges `main` into a conflicting PR
+(settling conflicts in the append-only files by rule), and hands a code conflict
+or a `gate` still red after the re-run to Codex with a `@codex` comment. If Codex
+is not set up or does not push a fix within an hour, the PR gets the
+`needs-human` label; your next push clears it. (Both files keep their queue-era
+names.) To keep a ready PR from merging, mark it draft or label it `hold`: the
+auto-merge workflow turns auto-merge off for either, and back on when you mark it
+ready or remove `hold`.
 
 Platform builds run nightly, not per change. With a `deploy:linux`, `deploy:windows`,
 `deploy:macos`, `deploy:ios` or `deploy:android` label, `gate` on the PR waits for the
 runs the label turns on (ci.yml's per-OS daemon and capture, Native iOS, Native Android,
 Installers, Dev identity, CodeQL's Swift pass, Decision models' CoreML job, nekkod-npm's
-darwin build) and fails if any of them fails, so the PR is not queued until they are
+darwin build) and fails if any of them fails, so the PR does not merge until they are
 green. macOS runners queue, so that can take an hour or more. Adding the label re-runs CI.
 
 Native iOS runs in batches, not on every push: about a minute after a push, one run
@@ -91,7 +93,7 @@ one that conflicts only with others in the batch waits for a later batch. A red 
 marks every PR in it red: run `gh workflow run ios-native.yml --ref <branch>` on your
 branch to see whether the failure is yours (a green run on the PR beats a red batch).
 A head with a green batch is left out of later ones, so main moving can't turn it
-pending and push it out of the merge queue; a new push gets a new batch. Main moving
+pending and hold its `gate`; a new push gets a new batch. Main moving
 re-runs the same heads only when it changes a file Native iOS tests (a desktop-only
 merge leaves the last result standing), and that new batch cancels the older run.
 Preview the next batch with `node scripts/ios-batch.mjs --dry-run`.
@@ -103,33 +105,23 @@ the script cannot see. The nightly run always checks both.
 ### Ready, not draft
 
 Open the PR **ready** once your own verification passes (focused tests, and for UI
-changes the evidence below). Do not park it in draft to watch CI: the queue waits
-for CI, merges on green and ejects on red, with nobody watching. Use draft only
+changes the evidence below). Do not park it in draft to watch CI: auto-merge waits
+for CI and merges on green, with nobody watching. Use draft only
 while you are still working, or when a named release blocker holds the PR (see
 below). "CI is still running" is never a reason to stay draft.
 
-If the queue ejects your PR, it comes back with the failing run linked. Diagnose
-it like any red check below, push the fix, and it re-queues.
+### When a green PR does not merge
 
-### When the queue holds or ejects your PR
-
-- **A queued branch refuses pushes** (GH006, "Branches that are queued for
-  merging cannot be updated"). Push a fix right after an ejection, before the
-  sweeper re-queues it; if the push is refused, wait for that queue run to finish
-  instead of retrying.
-- **Green but never queued.** `mergeStateStatus` is `BLOCKED` with every check
+- **Green but not merging.** `mergeStateStatus` is `BLOCKED` with every check
   passing: usually an unresolved review thread. The common one is CodeQL's
   "improper code sanitization" on an `apps/desktop/scripts/*-sandbox.cjs` that
   splices `JSON.stringify(...)` into `executeJavaScript`; escape it with the `js()`
   helper the other sandboxes use (see `monitors-trio-sandbox.cjs`) and the thread
-  resolves on the rescan. To see the blocker, call the `enqueuePullRequest`
-  GraphQL mutation (the one in `queue-sweeper.yml`): it names the reason, and
-  queues the PR once it is clear.
-- **A stack's bottom layer is never queued by the bots.** `gh pr merge --auto`
-  and the `enqueuePullRequest` mutation refuse stacked PRs, and the merge-async
-  REST API they point to refuses the repo's App ("Enqueuer is not authorized to
-  merge"). Once its `gate` is green, run `gh stack merge <pr> --yes` yourself. Auto-merge armed with a merge method also sits
-  here forever; re-arm with plain `gh pr merge --auto`.
+  resolves on the rescan. `gh pr view <n> --json mergeStateStatus,reviewDecision`
+  and the PR page name the blocker.
+- **A stack's bottom layer is never merged by the bots.** The auto-merge workflow
+  skips PRs not based on main. Once its `gate` is green, run `gh stack merge <pr>
+  --yes` yourself.
 - **No PR CI after a push** means a conflict with `main` (`mergeable_state:
   dirty`): GitHub computes no merge ref and triggers nothing. Merge `main` in,
   or let `queue-repair.yml` do it within 15 minutes.
@@ -151,15 +143,15 @@ gh stack init                            # first layer, based on main
 gh stack add <next-branch>               # each layer builds on the one below
 gh stack submit                          # one PR per layer, linked as a stack
 gh stack sync                            # after main or a lower layer moves
-gh stack merge --yes                     # queue the stack (or up to a layer)
+gh stack merge --yes                     # merge the stack (or up to a layer)
 ```
 
 Each layer is a normal PR: fast-tier CI, ready not draft, its own Unfinished work
 section. Rebasing a lower layer re-runs CI on every layer above it, so keep stacks
 short (2-4 layers) and finish lower layers first.
 
-The auto-merge workflow and the sweeper only queue PRs based on `main`, so a
-layer whose base is another branch is never queued. Once its parent merges,
+The auto-merge workflow and the sweeper only arm auto-merge on PRs based on `main`,
+so a layer whose base is another branch never merges by itself. Once its parent merges,
 retarget the layer to `main` and merge `main` in. A squash-merged parent leaves
 its original commits in the child's history, so git's merge conflicts wherever
 both layers touched the same lines; a three-way `git merge-file` per file, using
@@ -207,6 +199,6 @@ request the remaining work again. For UI changes:
    checks, reviews, evidence and release-blocker requirements are satisfied.
    Never bypass required reviews, failing checks, or branch protections. The
    example merge command above is not permission to override these gates.
-6. **Queue it.** Open the PR ready (or `gh pr ready <n>` once verification is
-   done) and let the queue merge it. A draft never merges: the auto-merge
-   workflow only queues ready PRs.
+6. **Let it merge.** Open the PR ready (or `gh pr ready <n>` once verification is
+   done) and let auto-merge land it. A draft never merges: the auto-merge
+   workflow only arms ready PRs.

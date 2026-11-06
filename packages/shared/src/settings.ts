@@ -8,14 +8,14 @@ import type { ConnectorConfig } from './connectors.js';
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 /**
- * Brand accent. The default is an indigo-violet (paired in the UI with a cyan
- * secondary into a violet→cyan brand gradient, the modern developer-tool look).
+ * Brand accent. The default is the plum palette's light-mode accent
+ * (spec/brand/colour-palette.md); the old indigo-violet default is now legacy.
  * `LEGACY_ACCENTS` are prior defaults we migrate off on load so users who never
  * customized the accent get the refreshed color, while anyone who picked their
  * own keeps it.
  */
-export const DEFAULT_ACCENT = '#6d5efc';
-export const LEGACY_ACCENTS = ['#ff7a59'];
+export const DEFAULT_ACCENT = '#5a2352';
+export const LEGACY_ACCENTS = ['#ff7a59', '#6d5efc'];
 
 /** A reusable prompt, invokable from the composer as `/name`. */
 export interface PromptTemplate {
@@ -76,7 +76,15 @@ export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
 export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware' | 'localModels';
 export interface MonitorsDock {
   side: MonitorsSide;
+  /** Whether the panel is open in Detailed. */
   show: boolean;
+  /**
+   * Whether the panel is open in Simple; absent reads as closed. Simple and
+   * Detailed only open or close the panel: which monitors it holds is
+   * `monitors` in both modes.
+   */
+  simpleShow?: boolean;
+  /** The monitors checked in Configure: exactly the ones the panel shows. */
   monitors: Record<MonitorKey, boolean>;
   /** Saved reading order; older settings omit it (or call it panelOrder) and use the default order. */
   monitorOrder?: MonitorKey[];
@@ -85,7 +93,7 @@ export interface MonitorsDock {
 }
 export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
-  side: 'right', show: true,
+  side: 'right', show: true, simpleShow: false,
   // The hardware monitor leads; a Vitals panel was here until 2026-10-13
   // (sanitizeMonitorsDock drops it from saved docks). Local models sits under
   // Hardware: which model holds the GPU explains what the meters above report.
@@ -322,6 +330,8 @@ export interface AppSettings {
   quitFromPhone?: boolean;
   /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
   machineIcon?: string;
+  /** Display name shared with paired devices; blank uses the system hostname. */
+  machineName?: string;
   phoneChanges?: boolean;
   /** Chat pane's top-right action. Undefined means Complete (archive), not Delete. */
   chatPaneAction?: 'complete' | 'delete';
