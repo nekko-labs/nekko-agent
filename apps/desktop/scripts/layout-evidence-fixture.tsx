@@ -9,7 +9,7 @@ const current = async () => screensFixture.state;
 const displays = { displayId: localStorage.getItem('fixture.displayId'), list: current, toggle: current, setPlacement: current, toggleDesktop: current, setSpacesMode: current, go: async () => 'ok', report: () => {}, claim: async () => 'main', onChange: (cb: (s: unknown) => void) => { screensFixture.emit = cb; return () => {}; }, onPlaced: () => () => {} };
 // A sandbox can open the App as a second screen's window (localStorage 'fixture.displayId') before a reload.
 // A sandbox can pick Windows chrome (localStorage 'fixture.platform') before a reload.
-(window as any).nekkoChrome = { platform: localStorage.getItem('fixture.platform') ?? 'darwin', titleBarHeight: 38, setTitleBarOverlay: () => {}, serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
+(window as any).nekkoChrome = { platform: localStorage.getItem('fixture.platform') ?? 'darwin', titleBarHeight: 38, setTitleBarOverlay: () => {}, ...((window as any).nekkoTestZoom ? { setPageZoom: (window as any).nekkoTestZoom } : {}), serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
 const now = Date.now();
 const provider = { id: 'fixture', kind: 'openai', enabled: true, label: 'ChatGPT (subscription)', auth: 'subscription', tokenKey: 'fixture' };
 const session = (id: string, title: string, workspaceId?: string) => ({ id, title, createdAt: now, updatedAt: now - 3600e3, providerId: 'fixture', modelId: 'gpt-fixture', mode: 'agent', chatType: 'multimodal', workspaceId, messages: [], attachments: [], queuedPrompts: [] });
