@@ -10,6 +10,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const js = (v) => JSON.stringify(v).replace(/[<>/  ]/g, (c) => '\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.on('window-all-closed', () => {});
 
 app.whenReady().then(async () => {
@@ -30,7 +31,7 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
   };
   const click = async (label) => {
-    await run(`[...document.querySelectorAll('#accessibility button')].find((b) => (b.getAttribute('aria-label') || b.textContent).startsWith(${JSON.stringify(label)})).click()`);
+    await run(`[...document.querySelectorAll('#accessibility button')].find((b) => (b.getAttribute('aria-label') || b.textContent).startsWith(${js(label)})).click()`);
     await sleep(300);
   };
   const rootZoom = () => run(`document.documentElement.style.zoom`);

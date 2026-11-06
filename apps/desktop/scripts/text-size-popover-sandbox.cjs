@@ -11,6 +11,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const js = (v) => JSON.stringify(v).replace(/[<>/  ]/g, (c) => '\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.on('window-all-closed', () => {});
 
 app.whenReady().then(async () => {
@@ -78,7 +79,7 @@ app.whenReady().then(async () => {
       check(`${scale}% Settings search opens on its button`, search && Math.abs(search.offRight) < 2 && Math.abs(search.offTop) <= 4 && !search.offscreen);
       check(`${scale}% a measured point hits what was measured`, p.hitIsButton);
       for (const view of ['command', 'models', 'settings']) {
-        await run(`layoutFixture.store.getState().setView(${JSON.stringify(view)})`);
+        await run(`layoutFixture.store.getState().setView(${js(view)})`);
         await sleep(900);
         // The first-run tip covers the Agents board.
         await run(`[...document.querySelectorAll('[role="dialog"] button, .fixed button')].find((b) => /close|dismiss/i.test(b.getAttribute('aria-label') || ''))?.click()`);

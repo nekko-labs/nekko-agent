@@ -16,7 +16,7 @@ User intent: the app should read like the website, in the same two fonts everywh
 
 A **Style** group sits third in Settings, after Phone pairing, with one card, **Fonts and text**:
 
-- **Text size**: 80%, 90%, 100% (default), 110%, 125%, 150%. It scales the whole interface, since most sizes in the app are fixed pixels. The desktop app uses page zoom, the same as a browser's own zoom, so measured positions, clicks, the window size and scrolling all stay in one coordinate space, and a window at a large size lays out as a narrower one would. The Local Web UI cannot set page zoom and uses CSS `zoom` on the root, where menus placed from a measured position can land away from their button at sizes other than 100%. Saved as `textScale`; anything out of range reads as the nearest bound, anything not a number as 100.
+- **Text size**: 80%, 90%, 100% (default), 110%, 125%, 150%. It scales the whole interface, since most sizes in the app are fixed pixels. The desktop app uses page zoom, the same as a browser's own zoom, so measured positions, clicks, the window size and scrolling all stay in one coordinate space, and a window at a large size lays out as a narrower one would. The Local Web UI cannot set page zoom and uses CSS `zoom` on the root, where menus placed from a measured position can land away from their button at sizes other than 100%. See [decision 0060](../../docs/decisions/0060-text-size-is-page-zoom-on-the-desktop.md). Saved as `textScale`; anything out of range reads as the nearest bound, anything not a number as 100.
 - **Interface font** and **Code font**: the default (Inter Tight / JetBrains Mono), **System**, and every font in the fonts folder. Saved as `fontSans` / `fontMono`; an empty string means the default. A chosen font always falls back to the bundled one, so a missing file never leaves the app unstyled, and the list shows it as "(missing)".
 - Each font row previews its font.
 
@@ -44,5 +44,5 @@ Text size is also the first row of **Accessibility**, above Agent activity anima
 ## Status
 
 - Implemented 2026-10-24: bundled fonts, Style section, text size, fonts folder. Checked in the hidden layout harness (`apps/desktop/scripts/style-sandbox.cjs`); not yet checked in a packaged build.
-- Implemented 2026-11-06: text size in Settings > Accessibility with a preview and Apply. Not yet checked in a packaged build.
+- Implemented 2026-11-06: text size in Settings > Accessibility with a preview and Apply, and page zoom on the desktop. Checked in the hidden layout harness (`text-size-sandbox.cjs`, `text-size-nav-sandbox.cjs`, `text-size-popover-sandbox.cjs`) and by hand in a dev build; not yet checked in a packaged build.
 - Planned: the phone apps following the desktop's font choice.

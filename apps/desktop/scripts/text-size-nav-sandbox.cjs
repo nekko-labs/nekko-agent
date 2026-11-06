@@ -10,6 +10,7 @@ if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 app.setPath('sessionData', path.join(out, 'profile'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const js = (v) => JSON.stringify(v).replace(/[<>/  ]/g, (c) => '\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 app.on('window-all-closed', () => {});
 
 app.whenReady().then(async () => {
@@ -25,7 +26,7 @@ app.whenReady().then(async () => {
   const run = (source) => win.webContents.executeJavaScript(source, true);
   // Where a click on one section landed: the group at the top, and how far its top is from the scroller's.
   const landing = (id) => run(`(() => { try {
-    const target = document.getElementById('settings-' + ${JSON.stringify(id)});
+    const target = document.getElementById('settings-' + ${js(id)});
     let scroller = target.parentElement;
     while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
     const top = scroller.getBoundingClientRect().top;
@@ -45,7 +46,7 @@ app.whenReady().then(async () => {
       report.measures[scale] = {};
       for (const id of ids) {
         const title = await run(`document.getElementById('settings-${id}-title')?.textContent ?? ''`);
-        const clicked = await run(`(() => { const b = [...document.querySelectorAll('.settings-nav-item')].find((n) => n.textContent.trim() === ${JSON.stringify(title)}); if (b) b.click(); return !!b; })()`);
+        const clicked = await run(`(() => { const b = [...document.querySelectorAll('.settings-nav-item')].find((n) => n.textContent.trim() === ${js(title)}); if (b) b.click(); return !!b; })()`);
         await sleep(450);
         const land = await landing(id);
         report.measures[scale][id] = land;
