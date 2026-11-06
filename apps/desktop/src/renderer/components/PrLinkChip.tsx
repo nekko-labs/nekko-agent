@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { parsePrUrl, type PrInfo } from '@nekko-agent/shared';
-import { prTone } from './SessionPrLinks.js';
+import { PR_STATUS_LABEL as STATUS_LABEL, PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
+
+export { prStatus };
 
 /** How long a looked-up PR state is trusted before a chip asks again. */
 const FRESH_MS = 60_000;
@@ -43,32 +45,6 @@ export function resetPrInfoCache(): void {
 
 export function isPrUrl(href: string): boolean {
   return /^https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+\/?(?:[?#].*)?$/i.test(href) && parsePrUrl(href) !== null;
-}
-
-type Status = 'open' | 'draft' | 'merged' | 'closed' | 'unknown';
-
-export function prStatus(pr: PrInfo | null): Status {
-  if (!pr) return 'unknown';
-  if (pr.state === 'merged') return 'merged';
-  if (pr.state === 'closed') return 'closed';
-  return pr.isDraft ? 'draft' : 'open';
-}
-
-const STATUS_LABEL: Record<Status, string> = { open: 'Open', draft: 'Draft', merged: 'Merged', closed: 'Closed', unknown: 'Pull request' };
-
-/** GitHub's four PR glyphs, so the state reads at a glance before the colour does. */
-function PrStatusIcon({ status }: { status: Status }) {
-  const common = { className: 'h-3.5 w-3.5 shrink-0', viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
-  if (status === 'merged') {
-    return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="8" r="1.75" /><path d="M4.5 5.25v5.5M4.5 5.5c0 2.5 2 2.5 5.25 2.5" /></svg>;
-  }
-  if (status === 'closed') {
-    return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5M11.5 6.5v4.25M9.75 2.25l3.5 3.5M13.25 2.25l-3.5 3.5" /></svg>;
-  }
-  if (status === 'draft') {
-    return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5" /><path d="M11.5 3v.5M11.5 6.5v1M11.5 9.5v1" /></svg>;
-  }
-  return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5M11.5 10.75V6.5a2 2 0 0 0-2-2H7.5" /><path d="m9 3-1.5 1.5L9 6" /></svg>;
 }
 
 /**

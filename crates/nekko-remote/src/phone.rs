@@ -52,6 +52,9 @@ pub struct Policy {
     pub session_images: usize,
     pub thumb_side: u32,
     pub thumb_chars: usize,
+    /// `session:photo`: a photo opened full size, its long side and its largest data URL.
+    pub photo_side: u32,
+    pub photo_chars: usize,
     /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
     pub max_frame_bytes: usize,
     /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
@@ -65,6 +68,8 @@ pub struct Policy {
     pub option_switches: Vec<String>,
     pub engine_keys: Vec<String>,
     pub model_server_view: Vec<String>,
+    /// `activity:state`: yes/no answers only, never idle time, battery or temperatures.
+    pub activity_view: Vec<String>,
     pub model_setting_channels: Vec<String>,
     pub preset_path_keys: Vec<String>,
     pub computer_refused: Vec<String>,
@@ -138,6 +143,8 @@ pub fn policy() -> &'static Policy {
             session_images: v["sessionView"]["images"].as_u64().unwrap_or(0) as usize,
             thumb_side: v["sessionView"]["thumbSide"].as_u64().unwrap_or(0) as u32,
             thumb_chars: v["sessionView"]["thumbChars"].as_u64().unwrap_or(0) as usize,
+            photo_side: v["sessionView"]["photoSide"].as_u64().unwrap_or(0) as u32,
+            photo_chars: v["sessionView"]["photoChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
             views: crate::phone_views::Views::from_policy(&v),
@@ -153,6 +160,7 @@ pub fn policy() -> &'static Policy {
             option_switches: strings(&v["optionSwitches"]),
             engine_keys: strings(&v["engineKeys"]),
             model_server_view: strings(&v["modelServerView"]),
+            activity_view: strings(&v["activityView"]),
             model_setting_channels: strings(&v["modelSettingChannels"]),
             preset_path_keys: strings(&v["presetPathKeys"]),
             computer_refused: strings(&v["computerAccess"]["refused"]),
@@ -233,6 +241,15 @@ fn language_ok(s: &str) -> bool {
 fn setting_value(path: &str, value: &Value) -> Result<(), Denied> {
     let ok = match path {
         "defaultChatMode" => return chat_mode(value, path),
+        "defaultWorkspaceIds" => value.as_array().is_some_and(|ids| {
+            ids.len() <= 100
+                && ids.iter().all(|id| {
+                    id.as_str().is_some_and(|s| {
+                        (1..=256).contains(&s.len())
+                            && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+                    })
+                })
+        }),
         "machineIcon" => value.as_str().is_some_and(|i| i.is_empty() || has(&policy().computer_icons, i)),
         "chatPaneAction" => matches!(value.as_str(), Some("complete" | "delete")),
         "skipDeleteConfirmation" | "voice.enabled" => value.is_boolean(),
@@ -347,6 +364,12 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
+        "session:setSupportingWorkspaces" => {
+            if args.len() != 2 || args[0].as_str().is_none_or(|s| s.is_empty()) {
+                return Err(denied("value-invalid", "session id"));
+            }
+            setting_value("defaultWorkspaceIds", &args[1])?;
+        }
         "workspace:addByPath" | "workspace:remove" => {
             let what = if channel == "workspace:addByPath" { "folder path" } else { "workspace id" };
             if arg(0).as_str().is_none_or(|s| s.trim().is_empty() || s.contains('\0')) {
@@ -373,6 +396,16 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             id(0, "chat id")?;
             if args.len() > 1 && !arg(1).is_boolean() {
                 return Err(denied("value-invalid", "refresh"));
+            }
+        }
+        "session:photo" => {
+            id(0, "chat id")?;
+            id(1, "message id")?;
+            if !arg(2).as_f64().is_some_and(|i| i.fract() == 0.0 && i >= 0.0) {
+                return Err(denied("value-invalid", "photo index"));
+            }
+            if args.len() > 3 {
+                return Err(denied("option-denied", "extra argument"));
             }
         }
         "session:fork" => {
@@ -578,6 +611,11 @@ pub fn redact(channel: &str, result: Value) -> Value {
             _ => json!([]),
         },
         "session:get" | "chat:steer" => session_view(result),
+        // One photo's data URL, nothing else.
+        "session:photo" => match result {
+            Value::String(s) if s.starts_with("data:image/") => Value::String(s),
+            _ => Value::Null,
+        },
         "changes:list" => crate::phone_changes::view(&result, &policy().changes_view),
         "chat:editQueued" => match &result {
             Value::Object(o) => json!({
@@ -617,6 +655,7 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "engine:status" => crate::phone_views::engine(&result, &policy().views),
         "context:preview" => crate::phone_views::context(&result, &policy().views),
         "engine:settings" => pick(&result, &policy().model_server_view),
+        "activity:state" => pick(&result, &policy().activity_view),
         "model:unload" => {
             if result.is_object() {
                 pick(&result, &["message".into(), "ok".into()])
@@ -815,6 +854,8 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         "task:runNow" | "workflow:run" => vec![first.clone()],
         "tasks:list" | "workflows:list" | "usage:summary" => Vec::new(),
         "system:stats" | "gpu:stats" | "engine:status" => Vec::new(),
+        // The computer's own idle threshold: the phone never sets it.
+        "activity:state" => Vec::new(),
         // A chat's own context only: the phone never attaches a path.
         "context:preview" => vec![first.clone(), json!([])],
         "model:unload" => vec![first.clone(), args[1].clone()],
@@ -824,6 +865,7 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
         },
         "chat:editQueued" => vec![first.clone(), args[1].clone(), pick(&args[2], &policy().queue_edit_keys)],
         "pr:sessionList" => vec![first.clone(), json!(args.get(1) == Some(&Value::Bool(true)))],
+        "session:photo" => args[..3].to_vec(),
         "limits:get" => {
             // The phone names a provider; the computer reads that provider's limits key itself.
             let providers = run("providers:list".to_string(), json!([])).await?;
@@ -865,6 +907,9 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
     let mut result = run(channel.clone(), Value::Array(args)).await?;
     if channel == "session:get" {
         result = crate::phone_thumbs::thumbnail_images(result).await;
+    }
+    if channel == "session:photo" {
+        result = crate::phone_thumbs::full_photo(result).await;
     }
     Ok(redact(&channel, result))
 }
@@ -1926,6 +1971,23 @@ mod tests {
                 refused("key-invalid", "device:registerKey")
             );
             assert_eq!(r.devices.device("phone-1").unwrap().key, None);
+        }
+
+        #[test]
+        fn supporting_folders_require_proof_and_validate_ids() {
+            let k = signer(32);
+            let channel = "session:setSupportingWorkspaces";
+            let args = json!(["chat", ["docs"]]);
+            let r = policy_rig(ON, Some(&k), None, "guardrails");
+            assert_eq!(r.ask(channel, args.clone(), None), refused("proof-required", channel));
+            let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+            assert!(r.ask(channel, args.clone(), Some(p)).is_ok());
+            assert_eq!(*r.calls.lock().unwrap(), vec![(channel.to_string(), args)]);
+            for invalid in [json!(null), json!(["/private"]), json!([""]), json!([3])] {
+                assert!(screen(channel, &[json!("chat"), invalid.clone()]).is_err());
+                assert!(check_settings_patch(&json!({"defaultWorkspaceIds": invalid})).is_err());
+            }
+            assert!(check_settings_patch(&json!({"defaultWorkspaceIds": ["app", "docs"]})).is_ok());
         }
 
         #[test]
@@ -3037,6 +3099,21 @@ mod tests {
                 got.unwrap(),
                 json!({ "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "utilizationPct": 77 }] })
             );
+        }
+
+        #[test]
+        fn says_whether_the_computer_is_in_use_and_nothing_more() {
+            assert!(has(&policy().read_channels, "activity:state"));
+            let results = json!({ "activity:state": {
+                "userActive": true, "present": ["input"], "strain": ["battery"], "idleSeconds": 12.5, "headless": false,
+                "idleAfterSeconds": 300, "chatActive": false, "power": { "onBattery": true, "percent": 40 }, "cpuC": 71, "gpuC": 65,
+            }});
+            let (got, calls) = call_with(results, "activity:state", json!([{ "idleAfterSeconds": 1 }]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "userActive": true, "chatActive": false, "headless": false, "strain": ["battery"] })
+            );
+            assert_eq!(calls, vec![json!(["activity:state", []])], "the phone never sets the threshold");
         }
 
         #[test]

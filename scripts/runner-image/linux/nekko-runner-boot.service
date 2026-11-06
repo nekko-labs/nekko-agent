@@ -1,0 +1,15 @@
+# Runs one CI job from the NEKKOSEED disk, then powers the guest off (nekko-runner-boot.sh).
+[Unit]
+Description=Nekko CI runner: one job, then power off
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/nekko-runner-boot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=infinity
+
+[Install]
+WantedBy=multi-user.target

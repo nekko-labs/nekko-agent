@@ -7,7 +7,7 @@
 
 use crate::providers::anthropic::CLAUDE_MODELS;
 use crate::stream::{ChunkStream, Stop, spawn};
-use crate::types::{ChatRequest, ModelInfo, ProviderConfig, ProviderError, TestResult};
+use crate::types::{ChatRequest, ModelEffort, ModelEffortOption, ModelInfo, ProviderConfig, ProviderError, TestResult};
 
 /// The generic family aliases Claude Code resolves to the user's current
 /// plan default (`--model opus` -> whatever Opus the plan ships, which was
@@ -22,6 +22,17 @@ pub const MODEL_ALIASES: &[(&str, &str)] = &[
     ("sonnet", "Claude Sonnet (latest in plan)"),
     ("haiku", "Claude Haiku (latest in plan)"),
 ];
+
+/// The levels `claude --effort` takes. Claude Code owns this ladder and steps a
+/// level down itself on a model that lacks it, so every model offers all of them.
+/// No default: an unset chat passes no flag and keeps the user's Claude Code setting.
+pub fn effort_levels() -> ModelEffort {
+    let levels = ["low", "medium", "high", "xhigh", "max"];
+    ModelEffort {
+        levels: levels.map(|e| ModelEffortOption { effort: e.into(), description: None }).to_vec(),
+        default: None,
+    }
+}
 
 /// What a direct chat on this provider answers.
 pub const NOT_A_MODEL_API: &str =
@@ -52,6 +63,7 @@ impl ClaudeCodeProvider {
                 id: (*id).into(),
                 provider_id: self.config.id.clone(),
                 name: (*name).into(),
+                effort: Some(effort_levels()),
                 ..Default::default()
             })
             .collect())
@@ -84,7 +96,9 @@ mod tests {
     #[tokio::test]
     async fn lists_aliases_then_frontier_ids_and_never_chats() {
         let p = provider();
-        let ids: Vec<String> = p.list_models().await.unwrap().into_iter().map(|m| m.id).collect();
+        let models = p.list_models().await.unwrap();
+        assert!(models.iter().all(|m| m.effort == Some(effort_levels())));
+        let ids: Vec<String> = models.into_iter().map(|m| m.id).collect();
         // Aliases first so "whatever my plan ships" stays one click away.
         assert_eq!(&ids[..3], &["opus", "sonnet", "haiku"]);
         // Concrete frontier ids follow (Opus 5.5 at the top), passed through

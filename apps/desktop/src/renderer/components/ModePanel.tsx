@@ -2,19 +2,18 @@ import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom';
 import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatEffort, modelDefaultEffort, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
+  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
   modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionFolders.js';
-import { EFFORT_LABEL, effortRungs } from './ChatMetrics.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
-  BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon, EffortBarsIcon,
+  BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon,
   ExternalIcon, FileIcon, FolderIcon, GaugeIcon, InfoIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
   RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
 } from '../icons.js';
-import { BrainCircuitIcon, GfGaugeIcon, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
+import { BrainCircuitIcon, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
 
 const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
@@ -29,13 +28,6 @@ const TOOL_APPROACHES: Array<{ id: ToolApproach; label: string; description: str
 export const SAVED_MODE_GLYPH: Record<SavedModeIcon, (p: { className?: string }) => React.ReactElement> = {
   bolt: BoltIcon, dial: DialIcon, incognito: IncognitoIcon, box: CubeIcon, cap: CapIcon, sparkle: SparkleIcon, shield: ShieldIcon, 'globe-off': GlobeOffIcon,
   cloud: CloudIcon, route: RouteIcon, laptop: LaptopIcon,
-};
-
-const MODEL_SCOPE_DESC: Record<ModelScope | 'any', string> = {
-  cloud: 'Cloud providers only. A model on this machine is refused.',
-  fusion: 'Auto picks per turn and may move a turn between local and cloud models: never a weaker one, local counts as free.',
-  local: 'Models on this machine only, with the internet off. Nothing leaves your computer.',
-  any: 'Any provider you pick. Choose one to pin where this chat\'s models run.',
 };
 
 /** Why a mode or scope could not be applied as is to a chat on this model. */
@@ -218,11 +210,11 @@ type Fly = 'tools' | 'mcp' | 'connectors' | 'skills';
 
 /**
  * The composer's Mode panel: saved modes down a rail on the left, then every
- * per-chat setting in three columns (Environment and Model, Privacy,
+ * per-chat setting in three columns (Environment, Privacy,
  * Approach). Tools, MCP servers, Connectors and Skills open a list out the side.
  */
 export function ModePanel({
-  session, isCloudModel, modelId, onChange, onSandboxSetup, style, panelRef,
+  session, isCloudModel, onChange, onSandboxSetup, style, panelRef,
 }: Deps & { modelId?: string; style?: React.CSSProperties; panelRef?: React.Ref<HTMLDivElement> }) {
   const settings = useStore((s) => s.settings);
   const tools = useChatTools();
@@ -277,7 +269,6 @@ export function ModePanel({
   const mcpServers = settings?.mcpServers ?? [];
   const workspaces = settings?.workspaces ?? [];
   const folders = getSessionWorkspaceIds(session).map((id) => ({ id, folder: workspaces.find((w) => w.id === id) }));
-  const rungs = effortRungs(chatEffort(session, settings?.effort) ?? 'normal', modelId);
   const mcpOff = new Set(session.disabledMcpServers ?? []);
   const mcpOn = mcpServers.filter((s) => s.enabled && !mcpOff.has(s.id)).length;
   const connected = (settings?.connectors ?? []).filter((c) => c.connected);
@@ -358,7 +349,6 @@ export function ModePanel({
     </div>
   );
   const approvals: ChatMode = current.mode;
-  const scope = chatModelScope(session);
 
   return (<>
     <div ref={(el) => { panel.current = el; if (typeof panelRef === 'function') panelRef(el); else if (panelRef) (panelRef as React.MutableRefObject<HTMLDivElement | null>).current = el; }}
@@ -405,7 +395,7 @@ export function ModePanel({
         </div>
 
         <div className="mode-scroll"><div className="mode-grid">
-          <section className="mode-col" aria-label="Environment and Nekko router">
+          <section className="mode-col" aria-label="Environment">
             <p className="mode-sec"><CubeIcon /> Environment</p>
             <div className="mode-row is-stacked">
               <span className="mode-ic">{sandbox ? <CubeIcon /> : <LaptopIcon />}</span>
@@ -421,25 +411,6 @@ export function ModePanel({
             </div>
             {sandbox && <button className="mode-link" onClick={onSandboxSetup}>Sandbox setup</button>}
 
-            <p className="mode-sec is-sub"><RouteIcon /> Nekko router <HoverTip label="How your chats pick their model: where models run (local, cloud, or Fusion), and how much thinking effort to spend." multiline side="top"><button type="button" className="mode-info" aria-label="What Nekko router does" tabIndex={0}><InfoIcon /></button></HoverTip></p>
-            <div className="mode-row is-stacked is-nested">
-              <span className="mode-ic">{scope === 'cloud' ? <CloudIcon /> : scope === 'local' ? <LaptopIcon /> : <RouteIcon />}</span>
-              <span className="min-w-0 flex-1">{title('Models run', MODEL_SCOPE_DESC[scope ?? 'any'])}</span>
-              {tiles<ModelScope | 'any'>('Models run', scope ?? 'any', [['cloud', 'Cloud only', <CloudIcon />, { 'data-model-scope': 'cloud' }], ['fusion', 'Fusion', <RouteIcon />, { 'data-model-scope': 'fusion' }], ['local', 'Local only', <LaptopIcon />, { 'data-model-scope': 'local' }]],
-                (v) => void actions.setModelScope(v === scope ? null : v as ModelScope))}
-            </div>
-            <div className="mode-row is-disabled is-nested" aria-disabled="true">
-              <span className="mode-ic"><RouteIcon /></span>
-              <span className="min-w-0 flex-1"><span className="mode-t">Model router <span className="mode-badge">Coming soon</span>
-                <HoverTip label="Picks the model for each turn from what the task needs." multiline side="top"><button type="button" className="mode-info" aria-label="What Model router does" tabIndex={0}><InfoIcon /></button></HoverTip>
-              </span></span>
-            </div>
-            <div className="mode-row is-stacked">
-              <span className="mode-ic"><GfGaugeIcon /></span>
-              <span className="min-w-0 flex-1">{title('Effort', `How long the model thinks before acting. Your choice is remembered for new chats on this computer. Recommended: ${EFFORT_LABEL[modelDefaultEffort(modelId)]}.`)}</span>
-              {tiles<EffortLevel>('Effort', rungs.options[rungs.index], rungs.options.map((o, i) => [o, o === 'xhigh' ? 'X-high' : EFFORT_LABEL[o], <EffortBarsIcon level={Math.max(1, Math.round(((i + 1) / rungs.options.length) * 4))} />, { 'data-effort': o }]),
-                (v) => void actions.setEffort(v))}
-            </div>
           </section>
 
           <section className="mode-col" aria-label="Privacy">

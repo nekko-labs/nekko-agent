@@ -42,6 +42,7 @@ export const GearIcon = (p: P) => (
   <S {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></S>
 );
 export const PlusIcon = (p: P) => (<S {...p}><path d="M12 5v14M5 12h14" /></S>);
+export const MinusIcon = (p: P) => (<S {...p}><path d="M5 12h14" /></S>);
 export const SearchIcon = (p: P) => (<S {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></S>);
 export const CalendarIcon = (p: P) => (<S {...p}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></S>);
 export const ChevronUpIcon = (p: P) => (<S {...p}><path d="m6 15 6-6 6 6" /></S>);
@@ -203,3 +204,6 @@ export const COMPUTER_ICON_GLYPHS: Record<ComputerIconName, (p: P) => React.Reac
   terminal: (p) => <S {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m7 10 3 2-3 2M12 15h5" /></S>,
   cat: (p) => <S {...p}><path d="M5 5v9a7 7 0 0 0 14 0V5l-4 3a8 8 0 0 0-6 0L5 5Z" /><path d="M9.5 13h.01M14.5 13h.01" /></S>,
 };
+
+/** Hands up: YOLO runs without asking, except for explicit deny rules. */
+export const YoloIcon = ({ className }: { className?: string }) => <span className={className} aria-hidden="true" data-yolo-icon>🙌</span>;

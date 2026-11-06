@@ -1,6 +1,6 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
 import { homedir, hostname, userInfo } from 'node:os';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
@@ -106,7 +106,7 @@ const api: NekkoApi = {
   telemetryCapture: (event, props) => inv(IpcChannels.telemetryCapture, event, props),
   telemetryStatus: () => inv(IpcChannels.telemetryStatus),
   feedbackInfo: () => inv(IpcChannels.feedbackInfo),
-  feedbackSend: (message, includeAppInfo) => inv(IpcChannels.feedbackSend, message, includeAppInfo),
+  feedbackSend: (message, includeAppInfo, screenshots) => inv(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
   syncTurnOn: () => inv(IpcChannels.syncTurnOn),
   syncConfirmRecoveryKey: (text) => inv(IpcChannels.syncConfirmRecoveryKey, text),
   syncRestore: (text) => inv(IpcChannels.syncRestore, text),
@@ -364,6 +364,9 @@ const api: NekkoApi = {
   buildImage: (req) => inv(IpcChannels.runnerImageBuild, req),
   resumeImage: () => inv(IpcChannels.runnerImageResume),
   cancelImage: () => inv(IpcChannels.runnerImageCancel),
+  linuxImageStatus: () => inv(IpcChannels.runnerLinuxImageStatus),
+  buildLinuxImage: () => inv(IpcChannels.runnerLinuxImageBuild),
+  cancelLinuxImage: () => inv(IpcChannels.runnerLinuxImageCancel),
   listRunners: () => inv(IpcChannels.runnerList),
   connectRunner: (req) => inv(IpcChannels.runnerConnect, req),
   updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
@@ -371,6 +374,8 @@ const api: NekkoApi = {
   setRunnerEnabled: (id, enabled) => inv(IpcChannels.runnerSetEnabled, id, enabled),
   runnerJobLog: (id, jobId) => inv(IpcChannels.runnerJobLog, id, jobId),
   runnerVmLog: (id, vm) => inv(IpcChannels.runnerVmLog, id, vm),
+  runnerLiveLog: (id, vm) => inv(IpcChannels.runnerLiveLog, id, vm),
+  runnerJob: (id, action, repo, jobId) => inv(IpcChannels.runnerJob, id, action, repo, jobId),
   githubAccounts: () => inv(IpcChannels.runnerGithubAccounts),
   githubStart: (req) => inv(IpcChannels.runnerGithubStart, req),
   githubStatus: () => inv(IpcChannels.runnerGithubStatus),
@@ -542,6 +547,11 @@ const api: NekkoApi = {
     bus.on(IpcEvents.runnerImageChanged, listener);
     return () => bus.removeListener(IpcEvents.runnerImageChanged, listener);
   },
+  onLinuxImageChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').LinuxImageView) => cb(view);
+    bus.on(IpcEvents.runnerLinuxImageChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerLinuxImageChanged, listener);
+  },
   onRunnersChanged: (cb) => {
     const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);
     bus.on(IpcEvents.runnerChanged, listener);
@@ -605,6 +615,7 @@ const chrome: WindowChromeBridge = {
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
+  setPageZoom: (factor) => { if (Number.isFinite(factor) && factor >= 0.8 && factor <= 1.5) webFrame.setZoomFactor(factor); },
   onPageReloading: (listener) => { ipcRenderer.on(PAGE_RELOADING_EVENT, (_event, fadeMs: number) => listener(fadeMs)); },
   displays: {
     displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,

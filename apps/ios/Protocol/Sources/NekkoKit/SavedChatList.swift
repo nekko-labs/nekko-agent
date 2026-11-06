@@ -30,6 +30,9 @@ public struct SavedChatList: Equatable, Sendable {
                 if let w = s.workspaceId { o["workspaceId"] = .string(w) }
                 if let a = s.archivedAt { o["archivedAt"] = .int(a) }
                 if let order = s.order { o["order"] = .double(order) }
+                if let count = s.exchangeCount { o["exchangeCount"] = .int(count) }
+                if let phase = s.phase { o["phase"] = .string(phase) }
+                if s.activeWatchCount > 0 { o["activeWatchCount"] = .int(s.activeWatchCount) }
                 if s.pinned { o["pinned"] = .bool(true) }
                 return .object(o)
             }),

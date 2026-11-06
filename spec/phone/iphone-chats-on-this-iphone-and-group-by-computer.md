@@ -37,7 +37,8 @@ providers, it offers setup instead of implying a usable model already exists.
 The empty phone models page and an empty chat list that includes the phone show an
 original static SwiftUI phone-and-cloud illustration, **Connect a cloud provider**,
 and an explanation of the Keychain and no-tools boundaries. The action opens the
-existing secure provider editor. Cancelling saves nothing. Configured providers
+existing secure provider editor, whose Add stays off until a required key is typed.
+Cancelling saves nothing. Configured providers
 keep their existing list, switches, model loading, validation and removal behavior.
 A computer-only filter does not show the phone setup invitation. Existing chats are
 not hidden by the invitation. The existing first-run welcome and pairing route is
@@ -49,11 +50,11 @@ It remains usable with accessibility XL text and dark appearance. Configured pho
 providers do not show the invitation. No provider transport, Keychain service,
 HTTPS enforcement, test-before-save or relay behavior changes.
 
-Verification: focused native simulator UI checks cover empty Chats, Computers and
-Models, cancellation, required key, configured-provider suppression, dark mode and
-large text. Native before/after captures use an owned iPhone 17 Pro simulator on
-iOS 26.5 with the default computer theme. Physical-device provider access and
-translations remain unverified; no TestFlight deployment is part of this change.
+Verification: `PhoneSetupTests` (native simulator UI tests) cover empty Chats,
+Computers and Models, cancellation, the Add button staying off until a required key
+is typed, configured-provider suppression, dark mode and accessibility XL text.
+Before/after screenshots, physical-device provider access and translations remain
+unverified; no TestFlight deployment is part of this change.
 
 ## How it works
 

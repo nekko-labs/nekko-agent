@@ -18,6 +18,7 @@ import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { UsageReportsSection } from '../components/UsageReports.js';
 import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
+import { zoomOf } from '../textScale.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
 import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
@@ -102,6 +103,12 @@ export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   return cur as SettingsGroupId;
 }
 
+/** The `scrollTop` that brings `target` to the top of `scroller`, or as near as the page's end allows. */
+export function scrollTopFor(scroller: HTMLElement, target: HTMLElement): number {
+  const distance = (target.getBoundingClientRect().top - scroller.getBoundingClientRect().top) / zoomOf(scroller);
+  return Math.min(scroller.scrollTop + distance, scroller.scrollHeight - scroller.clientHeight);
+}
+
 export function SettingsView() {
   const { applyTheme, onboardingOpen, wavePreset, settings, settingsError, refreshSettings } = useStore(useShallow((s) => ({ applyTheme: s.applyTheme, onboardingOpen: s.onboardingOpen, wavePreset: s.resolvedPreset, settings: s.settings, settingsError: s.settingsError, refreshSettings: s.refreshSettings })));
   const tr = useT();
@@ -129,7 +136,7 @@ export function SettingsView() {
     const target = document.getElementById(`settings-${id}`);
     if (!scroller || !target) return;
     const from = scroller.scrollTop;
-    const to = Math.min(from + target.getBoundingClientRect().top - scroller.getBoundingClientRect().top, scroller.scrollHeight - scroller.clientHeight);
+    const to = scrollTopFor(scroller, target);
     cancelAnimationFrame(jumping.current);
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { scroller.scrollTop = to; return; }
     // Native smooth scroll takes ~500ms over a long page; this lands in 200ms with an ease-out.
@@ -171,32 +178,34 @@ export function SettingsView() {
   if (!settings) return <ServiceLoadState label="settings" error={settingsError} retry={reload} />;
 
   return (
-    <div ref={scrollRef} className="settings-panel h-full overflow-y-auto" onScroll={onScroll}>
-      <div ref={pageRef} className="settings-page" data-presenter-exempt>
-        {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
+    <div className="settings-panel">
+      <aside className="settings-rail">
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
-        <div aria-label="Skills and connectors" className="mb-7 flex flex-wrap gap-3">
+        <div aria-label="Skills and connectors" className="settings-shortcuts">
           {([{ view: 'skills', label: tr('nav.skills'), Icon: SkillsColorIcon }, { view: 'connectors', label: tr('nav.connectors'), Icon: ConnectorsColorIcon }] as const).map(({ view, label, Icon }) => (
-            <button key={view} type="button" onClick={() => useStore.getState().setView(view)} className="flex min-h-16 flex-1 items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-4 text-left text-base font-semibold hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-              <Icon className="h-7 w-7 shrink-0" />{label}<span aria-hidden="true" className="ml-auto">↗</span>
+            <button key={view} type="button" onClick={() => useStore.getState().setView(view)} className="settings-nav-item">
+              <Icon className="h-4 w-4 shrink-0" />{label}<span aria-hidden="true" className="ml-auto text-ink-faint">↗</span>
             </button>
           ))}
         </div>
-        <div className="flex flex-col gap-6 md:flex-row md:gap-8">
-          <nav aria-label="Settings sections" className="settings-nav" data-settings-search>
-            {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                className="settings-nav-item"
-                aria-current={active === g.id ? 'true' : undefined}
-                onClick={() => goTo(g.id)}
-              >
-                <g.icon className="h-4 w-4 shrink-0" />{g.label}
-              </button>
-            ))}
-          </nav>
-          <div className="min-w-0 flex-1">
+        <nav aria-label="Settings sections" className="settings-nav">
+          {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              className="settings-nav-item"
+              aria-current={active === g.id ? 'true' : undefined}
+              onClick={() => goTo(g.id)}
+            >
+              <g.icon className="h-4 w-4 shrink-0" />{g.label}
+            </button>
+          ))}
+        </nav>
+      </aside>
+      <div ref={scrollRef} className="settings-content" onScroll={onScroll}>
+        <div ref={pageRef} className="settings-page" data-presenter-exempt>
+          {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
+          <div className="min-w-0">
             <SettingsGroup id="general">
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
               <section className="card mt-5 p-5">

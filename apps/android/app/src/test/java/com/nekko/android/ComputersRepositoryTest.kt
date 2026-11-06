@@ -175,7 +175,7 @@ class ComputersRepositoryTest {
         repo.connect(a)
         runCurrent()
         assertTrue("reconnecting the same computer keeps its history", repo.connectionLog.value.size > states.size)
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals("another computer starts its own", listOf(RelayState.CONNECTING), repo.connectionLog.value.map { it.state }.distinct())
     }
@@ -368,7 +368,7 @@ class ComputersRepositoryTest {
         assertEquals(com.nekko.protocol.PhoneProtocol.VERSION - 1, repo.state.value.hostProtocol)
         assertEquals(com.nekko.protocol.ProtocolCheck.UPDATE_COMPUTER, repo.state.value.protocolCheck)
 
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         assertNull("another computer hasn't said yet", repo.state.value.hostProtocol)
         remotes.last.sayWelcome()
         runCurrent()
@@ -412,12 +412,31 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `re-pairing after route and room changes updates one computer`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        repo.rename(id, "Studio")
+        val pairedAt = repo.state.value.active?.pairedAt
+        val next = link.copy(relayUrl = "wss://new.example", room = "new-room", pair = "NEW999", alts = listOf("ws://192.168.1.2:4400"))
+        assertEquals(id, repo.pair(next))
+        assertEquals(1, repo.state.value.computers.size)
+        assertEquals("Studio", repo.state.value.active?.name)
+        assertEquals(pairedAt, repo.state.value.active?.pairedAt)
+        assertEquals(next.relayUrl, repo.state.value.active?.relayUrl)
+        assertEquals(next.alts, repo.state.value.active?.alts)
+        assertEquals("new-room", remotes.last.config.room)
+        assertEquals("NEW999", remotes.last.config.pairCode)
+    }
+
+    @Test
     fun `forget removes the secret and switches to the next computer`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()
         val repo = repo(store, remotes)
         val first = repo.pair(link)
-        val second = repo.pair(link.copy(room = "ffeeddccbbaa9988"))
+        val second = repo.pair(link.copy(room = "ffeeddccbbaa9988", hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals(second, repo.state.value.activeId)
         val secondRemote = remotes.last
@@ -446,7 +465,7 @@ class ComputersRepositoryTest {
         val store = FakeStore()
         val remotes = FakeRemotes { c ->
             when (c.channel) {
-                Channels.APP_INFO -> buildJsonObject { put("platform", "darwin"); put("version", "1.2.3") }
+                Channels.APP_INFO -> buildJsonObject { put("platform", "darwin"); put("version", "1.2.3"); put("hostname", "Studio Mac") }
                 Channels.PROVIDERS_LIST -> buildJsonArray {
                     add(buildJsonObject {
                         put("id", "openai"); put("kind", "openai"); put("label", "OpenAI"); put("enabled", true)
@@ -477,15 +496,160 @@ class ComputersRepositoryTest {
         runCurrent()
 
         val s = repo.state.value
-        assertEquals("Mac", s.active?.name)
+        assertEquals("Studio Mac", s.active?.name)
         assertEquals("darwin", s.active?.platform)
-        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"Mac\""))
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"Studio Mac\""))
         assertEquals(listOf("s1"), s.summaries.map { it.id })
         assertEquals("OpenAI", s.providers.single().label)
         assertEquals("gpt", s.defaults.defaultModelId)
         assertEquals(Activity.NEEDS_YOU, s.activity["s1"])
         assertFalse(s.summariesLoading)
         assertEquals(id, s.activeId)
+    }
+
+    private val attentionSnapshot = Json.parseToJsonElement("""{"s1":{"question":{"callId":"ask-1","questions":[],"askedAt":1}}}""")
+
+    @Test
+    fun `reconnect replaces stale attention while a failed pending read preserves it`() = runTest {
+        var pending: JsonElement = attentionSnapshot
+        var fail = false
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.CHAT_PENDING) {
+                if (fail) error("offline") else pending
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        fail = true
+        repo.refresh()
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        fail = false
+        pending = buildJsonObject {}
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.CONNECTING)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+        assertNull(repo.state.value.activity["s1"])
+    }
+
+    @Test
+    fun `legacy relay dismissal retains attention until full snapshot and switching resets it`() = runTest {
+        var pending = attentionSnapshot
+        val remotes = FakeRemotes { c -> if (c.channel == Channels.CHAT_PENDING) pending else FakeRemotes.defaultAnswer(c) }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        remotes.last.dismissals.emit(E2E.activityTag("other"))
+        runCurrent()
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        remotes.last.dismissals.emit(E2E.activityTag("s1"))
+        runCurrent()
+        assertFalse(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        pending = buildJsonObject {}
+        remotes.last.dismissals.emit(E2E.activityTag("s1"))
+        runCurrent(); advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+        repo.pair(link.copy(room = "ffffffffffffffff"))
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+    }
+
+    @Test
+    fun `answers on this phone retain attention until fresh pending proves none`() = runTest {
+        var refuse = false
+        var pending = attentionSnapshot
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.CHAT_PENDING -> pending
+                Channels.CHAT_ANSWER -> if (refuse) error("not connected") else kotlinx.serialization.json.JsonNull
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        refuse = true
+        assertTrue(runCatching { repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("ask-1")) }.isFailure)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        refuse = false
+        repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("older"))
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        pending = buildJsonObject {}
+        repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("ask-1"))
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+    }
+
+    @Test
+    fun `resolution elsewhere during refresh cannot be undone by its stale pending response`() = runTest {
+        val remotes = FakeRemotes { c -> if (c.channel == Channels.CHAT_PENDING) attentionSnapshot else FakeRemotes.defaultAnswer(c) }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        val pending = CompletableDeferred<JsonElement>()
+        remotes.handler = { c -> if (c.channel == Channels.CHAT_PENDING) pending.await() else FakeRemotes.defaultAnswer(c) }
+        val refresh = launch { repo.refresh() }
+        runCurrent()
+        remotes.last.events.emit(Events.AGENT_EVENT to Json.parseToJsonElement("""{"type":"question_resolved","sessionId":"s1","callId":"ask-1"}"""))
+        runCurrent()
+        assertFalse(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        // A post-resolution read proves zero before the old request returns.
+        remotes.handler = { c -> if (c.channel == Channels.CHAT_PENDING) buildJsonObject {} else FakeRemotes.defaultAnswer(c) }
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+        pending.complete(attentionSnapshot)
+        refresh.join()
+        assertTrue(repo.state.value.attention.known)
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+    }
+
+    @Test
+    fun `shared computer name updates but phone nickname persists`() = runTest {
+        var name = "Studio Mac"
+        val store = FakeStore()
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.APP_INFO) buildJsonObject {
+                put("platform", "darwin"); put("hostname", "system-name"); put("computerName", name)
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals("Studio Mac", repo.state.value.active?.name)
+        name = "Work Mac"
+        repo.refresh()
+        runCurrent()
+        assertEquals("Work Mac", repo.state.value.active?.name)
+        repo.rename(id, "Mac")
+        name = "New name"
+        repo.refresh()
+        runCurrent()
+        assertEquals("Mac", repo.state.value.active?.name)
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"nameIsCustom\":true"))
     }
 
     @Test
@@ -706,7 +870,7 @@ class ComputersRepositoryTest {
         val remotes = FakeRemotes()
         val first = repo(store, remotes)
         val a = first.pair(link)
-        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev"))
+        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev", hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals(b, first.state.value.activeId) // the last one paired is the last used
         val second = repo(store, remotes)
@@ -918,7 +1082,7 @@ class ComputersRepositoryTest {
         }
         val repo = repo(signer = signer)
         repo.pair(link)
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         repo.forget(repo.state.value.computers.first().id)
         assertEquals("another computer still knows the key", 0, forgot)
         repo.forget(repo.state.value.computers.single().id)
@@ -1029,7 +1193,7 @@ class ComputersRepositoryTest {
         val first = repo.pair(link)
         repo.drafts.set("s1", com.nekko.protocol.Draft("half a thought"))
         runCurrent()
-        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = TEST_HOST_KEY))
+        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         assertTrue("the other computer starts with none", repo.drafts.drafts.value.isEmpty())
         repo.connect(first)
         assertEquals("half a thought", repo.drafts.draft("s1").text)

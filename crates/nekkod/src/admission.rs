@@ -225,26 +225,20 @@ fn clamp_max_output_tokens(n: Option<&Value>) -> f64 {
     }
 }
 
-fn effort_name(e: nekko_agent::EffortLevel) -> &'static str {
-    use nekko_agent::EffortLevel::*;
-    match e {
-        Low => "low",
-        Medium => "medium",
-        Normal => "normal",
-        High => "high",
-        Xhigh => "xhigh",
-        Max => "max",
-    }
+fn effort_name(e: &nekko_agent::EffortLevel) -> &str {
+    e.as_str()
 }
 
 /// `EFFORT_TEMPERATURE`.
-fn effort_temperature(e: nekko_agent::EffortLevel) -> f64 {
+fn effort_temperature(e: &nekko_agent::EffortLevel) -> f64 {
     use nekko_agent::EffortLevel::*;
     match e {
         Low => 0.2,
         Medium => 0.5,
         Normal => 0.7,
         High | Xhigh | Max => 1.0,
+        // Native API-only levels do not define a sampling temperature.
+        Custom(_) => 0.7,
     }
 }
 
@@ -588,16 +582,22 @@ async fn admit(
         _ = cancel.cancelled() => return stopped(ctx, &session_id).await,
         result = crate::providers::resolve(ctx, &provider) => result,
     };
+    let model_id = s(&opts, "modelId");
+    // Claude Code's levels need no catalog snapshot, so a first turn resolves like any other.
+    let metadata = if s(&provider, "kind") == "claude-code" {
+        Some(nekko_agent::providers::claude_code::effort_levels())
+    } else {
+        resolution.as_ref().ok().and_then(|p| crate::providers::cached_effort(p, model_id))
+    };
     let (resolved, provider_error) = match resolution {
         Ok(p) => (Some(host_provider_config(ctx, &p)), None),
         Err(e) => (None, Some(e)),
     };
-    let model_id = s(&opts, "modelId");
     // The chat's own effort wins over the app-wide one (`chatEffort`).
     let effort = nekko_turn::chat_effort(&session, settings.get("effort"));
     let effort_setting: Option<nekko_agent::EffortLevel> =
         effort.as_ref().and_then(|e| serde_json::from_value(e.clone()).ok());
-    let stats_effort = nekko_agent::claude::effective_effort(effort_setting, model_id);
+    let stats_effort = nekko_agent::claude::effective_effort_with_metadata(effort_setting, model_id, metadata.as_ref());
     let kind = s(&provider, "kind");
 
     let mut facts = Map::new();
@@ -629,9 +629,10 @@ async fn admit(
     facts.insert("connectorSnippets".into(), connector_snippets);
     facts.insert("indexSnippets".into(), index_snippets);
     facts.insert("platform".into(), json!(platform()));
-    facts.insert("temperature".into(), json!(effort_temperature(stats_effort)));
-    facts.insert("effort".into(), effort.unwrap_or(json!("normal")));
-    facts.insert("statsEffort".into(), json!(effort_name(stats_effort)));
+    facts.insert("temperature".into(), json!(effort_temperature(&stats_effort)));
+    // Execution and reply stats must describe the same resolved choice.
+    facts.insert("effort".into(), json!(effort_name(&stats_effort)));
+    facts.insert("statsEffort".into(), json!(effort_name(&stats_effort)));
     if is_local(kind) {
         facts.insert(
             "maxOutputTokens".into(),

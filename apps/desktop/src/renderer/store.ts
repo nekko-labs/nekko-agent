@@ -6,7 +6,7 @@ import { rememberSplashColours } from './splash.js';
 import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
 import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
-import { syncTitleBarOverlay } from './chrome.js';
+import { setPageZoom, syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
 import { putCachedSession } from './sessionCache.js';
 import { autoDismisses, overflowToasts, TOAST_EXIT_MS, TOAST_MS } from './toastQueue.js';
@@ -177,6 +177,7 @@ let toastSeq = 0;
 interface UiState {
   completionTipSessionId: string | null;
   /** A workflow run to show when the Workflows view opens (a notification click). */
+  ciRunnersFocus: boolean;
   workflowFocus: { workflowId: string; runId: string } | null;
   /** A memory note's title to open when the Memory view shows (a chat's memory card). */
   memoryFocus: string | null;
@@ -608,6 +609,7 @@ export const textScaleOf = (v: number | undefined): number =>
 
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
+  ciRunnersFocus: false,
   workflowFocus: null,
   memoryFocus: null,
   settings: null,
@@ -931,7 +933,8 @@ export const useStore = create<UiState>((set, get) => ({
     if (mono) root.style.setProperty('--font-mono', mono);
     else root.style.removeProperty('--font-mono');
     const scale = textScaleOf(settings?.textScale);
-    root.style.zoom = scale === 100 ? '' : `${scale}%`;
+    // A browser tab has no page zoom to set, so it falls back to CSS zoom.
+    root.style.zoom = setPageZoom(scale / 100) || scale === 100 ? '' : `${scale}%`;
 
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
@@ -967,7 +970,7 @@ export const useStore = create<UiState>((set, get) => ({
   refreshTerminals: async () => {
     try {
       const terminals = await window.nekko.listTerminals();
-      set({ terminals });
+      if (JSON.stringify(get().terminals) !== JSON.stringify(terminals)) set({ terminals });
       // Shells do not outlive the app's backend, so a restored terminal window
       // usually points at nothing; drop it instead of showing a dead pane.
       const ids = new Set(terminals.map((t) => t.id));

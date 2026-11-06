@@ -62,7 +62,7 @@ app.whenReady().then(async () => {
         await sleep(700);
         await check('focused wall mounted', "!!document.querySelector('[data-wall-layout=focus]')");
         if (current) await check('focused frame has no ring', "(()=>{const p=document.querySelector('.command-wall-window > .panel');return getComputedStyle(p).boxShadow==='none' && getComputedStyle(p).borderTopWidth==='0px' && getComputedStyle(p,'::after').display==='none'})()");
-        if (current) await check('focused title strips hidden', "[...document.querySelectorAll('[data-pane-title-strip]')].every(e=>getComputedStyle(e).display==='none')");
+        if (current) await check('focused hero keeps its title strip', "(()=>{const e=document.querySelector('.command-wall-window[data-wall-hero] [data-pane-title-strip]');return !!e && getComputedStyle(e).display!=='none' && e.getBoundingClientRect().height>0 && !e.draggable})()");
         await capture(`focused-motion-${tag}-${theme}-${width}`);
       }
       win.setContentSize(1400, 900);

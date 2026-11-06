@@ -8,6 +8,10 @@ When a provider supplies thought text, the desktop app and Local Web UI show it 
 
 This changes only the display. It does not send another chat message to the model or expose provider metadata that was not already supplied as thought text.
 
+## Closing summaries
+
+In the desktop app and Local Web UI, a closing summary after tool activity is marked by a colored left border, without a card background or rounded outline. Text, topic headers, and message actions keep their positions. Mid-turn questions and other attention panels keep their highlighted background; ordinary conversation stays plain prose.
+
 ## Plan step activity
 
 In the desktop and Local Web UI plan sheet, each active step has an accent-coloured concentric ripple, including when several steps work at once. The centre pulses every 1.5 seconds and outward rings repeat over 3 seconds. An interrupted step shows pause bars instead. Reduced motion uses still rings. Done, pending and skipped retain their usual marks. Activity indicators are not verification passes.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateKeyPairSync, verify as cryptoVerify, createVerify } from 'node:crypto';
-import { activityPayload, alertPayload, capBytes, cardForLevel, cardPayload, cardPriority, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
+import { activityPayload, alertPayload, badgePayload, capBytes, cardForLevel, cardPayload, cardPriority, createPushSender, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
 
 describe('alert and dismissal payloads', () => {
   it('carry the kind and the opaque chat tag, never content', () => {
@@ -12,6 +12,29 @@ describe('alert and dismissal payloads', () => {
     // An older agent's notify: the same body it always had.
     expect(alertPayload({ title: 't', body: 'b' })).toEqual({ aps: { alert: { title: 't', body: 'b' }, sound: 'default' } });
     expect(dismissPayload('b'.repeat(32))).toEqual({ aps: { 'content-available': 1 }, dismiss: 'b'.repeat(32) });
+  });
+});
+
+describe('attention badge payloads', () => {
+  it.each([0, 1, 42, Number.MAX_SAFE_INTEGER])('carries an absolute badge of %s, including a resolving zero', (badge) => {
+    expect(alertPayload({ title: 'Nekko Agent', body: 'Needs you', badge }).aps.badge).toBe(badge);
+    expect(dismissPayload('a'.repeat(32), badge)).toEqual({ aps: { 'content-available': 1, badge }, dismiss: 'a'.repeat(32) });
+    expect(badgePayload(badge)).toEqual({ aps: { badge } });
+  });
+
+  it.each([-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('never publishes invalid badge %s', (badge) => {
+    expect(alertPayload({ title: 't', body: 'b', badge }).aps).not.toHaveProperty('badge');
+    expect(dismissPayload('tag', badge).aps).not.toHaveProperty('badge');
+    expect(() => badgePayload(badge)).toThrow('invalid badge count');
+  });
+
+  it('omits unknown counts and canonicalizes the actual APNs topic, not arbitrary app aliases', () => {
+    expect(alertPayload({ title: 't', body: 'b' }).aps).not.toHaveProperty('badge');
+    expect(dismissPayload('tag').aps).not.toHaveProperty('badge');
+    const sender = createPushSender({ APNS_BUNDLE_ID: 'dev.default', APNS_EXTRA_BUNDLE_IDS: ' dev.extra ' });
+    expect(sender.apnsTopic?.()).toBe('dev.default');
+    expect(sender.apnsTopic?.('dev.unlisted')).toBe('dev.default');
+    expect(sender.apnsTopic?.('dev.extra')).toBe('dev.extra');
   });
 });
 

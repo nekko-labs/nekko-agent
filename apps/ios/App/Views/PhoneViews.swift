@@ -147,6 +147,8 @@ struct PhoneProviderGettingStarted: View {
         .frame(maxWidth: 440)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity)
+        // Contain, or the container identifier replaces the button's own.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("phoneSetup.intro")
     }
 }
@@ -165,7 +167,7 @@ struct PhoneChatView: View {
     @State private var renaming = false
     @State private var renameText = ""
     @State private var confirmDelete = false
-    @FocusState private var typing: Bool
+    @State private var typing = false
 
     var body: some View {
         Group {
@@ -272,20 +274,17 @@ struct PhoneChatView: View {
     private func composer(_ chat: PhoneChat) -> some View {
         let running = phone.running.contains(chatId)
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return HStack(alignment: .bottom, spacing: 8) {
+        return VStack(spacing: 6) {
+            MarkdownComposerField(text: $text, focused: $typing, placeholder: "Message", identifier: "phoneChat.prompt")
+            HStack(alignment: .bottom, spacing: 8) {
             Button { picking = true } label: {
                 Image(systemName: "cpu").font(.body).foregroundStyle(palette.inkSoft)
                     .frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .accessibilityLabel("Model: \(modelName(chat))")
             .accessibilityIdentifier("phoneChat.model")
-            TextField("Message", text: $text, axis: .vertical).lineLimit(1...6)
-                .foregroundStyle(palette.ink)
-                .focused($typing)
-                .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(palette.surface, in: RoundedRectangle(cornerRadius: 18))
-                .overlay(RoundedRectangle(cornerRadius: 18).stroke(palette.line))
-                .accessibilityIdentifier("phoneChat.prompt")
+            Spacer(minLength: 0)
+            VoiceConversationButton(makeTarget: { .phone(chatId) })
             if running {
                 Button { phone.stop(chatId) } label: {
                     Image(systemName: "stop.fill").font(.body.weight(.bold))
@@ -313,6 +312,7 @@ struct PhoneChatView: View {
                 .accessibilityLabel("Send")
                 .accessibilityIdentifier("phoneChat.send")
             }
+        }
         }
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(.bar)
@@ -584,7 +584,8 @@ struct AddPhoneProviderSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     if busy { ProgressView() } else {
                         Button("Add") { Task { await add() } }
-                            .disabled(label.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .disabled(label.trimmingCharacters(in: .whitespaces).isEmpty
+                                      || (!kind.keyOptional && key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                             .accessibilityIdentifier("addPhoneProvider.save")
                     }
                 }

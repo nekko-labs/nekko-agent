@@ -1,8 +1,7 @@
 /**
  * The Nekko Agent mark, as vector art: an outline cat head (two ears, a soft
  * curve of forehead between them, a round jaw, nothing inside) in one thin
- * stroke with sharp corners, in white on the brand's indigo-to-lavender
- * gradient tile, plus the installer banners that
+ * stroke with sharp corners, white on the plum gradient tile for the app icon, plus the installer banners that
  * reuse it. Pure
  * string-building with no renderer behind it, so anything that needs the mark
  * -- the desktop icon pipeline, the phone app's icons, the marketing site's
@@ -25,6 +24,8 @@ const INK = '#854F6C';
 const TILE = '#190019';
 const TILE_END = '#5A2352';
 const RIM = INK;
+/** The app icon's mark: white on the plum tile. */
+const ICON_INK = '#FFFFFF';
 /** A horizontal linear gradient across whatever it fills, as an SVG <defs> entry. */
 const tileGradient = (id) =>
   `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${TILE}"/><stop offset="1" stop-color="${TILE_END}"/></linearGradient>`;
@@ -89,7 +90,7 @@ function iconSvg(size, px = size) {
 
   <g clip-path="url(#squircle)">
     <rect width="512" height="512" fill="url(#tile)"/>
-    ${markGroup(size, VIEWBOX, SPAN)}
+    ${markGroup(size, VIEWBOX, SPAN, ICON_INK)}
   </g>
 </svg>`;
 }
@@ -166,4 +167,4 @@ function bannerSvg(w, h, opts, pw = w, ph = h) {
 </svg>`;
 }
 
-module.exports = { iconSvg, bareMarkSvg, logoSvg, bannerSvg, TILE, TILE_END, INK, HEAD, ART };
+module.exports = { iconSvg, bareMarkSvg, logoSvg, bannerSvg, TILE, TILE_END, INK, ICON_INK, HEAD, ART };

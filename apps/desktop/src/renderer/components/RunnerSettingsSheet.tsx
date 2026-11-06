@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KEEP_AWAKE_LABELS,
+  LINUX_SLOT_CHOICES,
   MAX_JOB_CHOICES,
   PRIORITIES,
   PRIORITY_LABELS,
@@ -15,6 +16,7 @@ import {
   type HostView,
   type ImageView,
   type KeepAwake,
+  type LinuxImageView,
   type RunnerSettings,
   type RunnerView,
 } from '@nekko-agent/shared';
@@ -105,10 +107,45 @@ const Val = ({ children }: { children: React.ReactNode }) => <span className="ml
 
 const KEEP_AWAKE: KeepAwake[] = ['systemDefault', 'whileActive', 'always'];
 
+const LINUX_STAGES: Record<NonNullable<LinuxImageView['stage']>, string> = {
+  download: 'Downloading', assemble: 'Unpacking', provision: 'Installing', test: 'Test boot', finish: 'Finishing',
+};
+
+/** The Linux image: set it up, watch it build, rebuild it. About 10 minutes, no Xcode. */
+export function LinuxImageRow({ image, onAction }: { image: LinuxImageView; onAction?(action: 'build' | 'cancel'): void }) {
+  const about = image.proof ? [image.proof.distro, image.proof.runner && `runner ${image.proof.runner}`, image.proof.docker && `Docker ${image.proof.docker}`].filter(Boolean).join(' · ') : null;
+  return (
+    <Row label="Linux image" hint="Ubuntu 24.04, built on this Mac">
+      {image.state === 'building' ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-ink-soft">
+            {`${image.stage ? LINUX_STAGES[image.stage] : 'Working'}: ${image.message ?? ''}${image.progress !== null ? ` ${Math.round(image.progress * 100)}%` : ''}`}
+          </span>
+          {onAction && <button type="button" className="btn btn-outline py-1! text-xs" onClick={() => onAction('cancel')}>Cancel</button>}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          {onAction && (
+            <button type="button" className="btn btn-outline py-1! text-xs" onClick={() => onAction('build')}>
+              {image.state === 'ready' ? 'Rebuild Linux image' : 'Set up Linux image'}
+            </button>
+          )}
+          {image.state === 'ready' && about && <span className="text-xs text-ink-faint">{about}</span>}
+          {image.state === 'none' && <span className="text-xs text-ink-faint">Downloads about 600 MB and takes about 10 minutes.</span>}
+        </div>
+      )}
+      {image.state === 'failed' && image.message && <p className="mt-1 text-xs text-danger">{image.message}</p>}
+    </Row>
+  );
+}
+
 /** The settings form (mockup 4); pure so tests render it statically. */
-export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, toggling = false }: {
+export function SettingsBody({ view, image = null, linuxImage = null, onLinuxImage, draft, onDraft, onEnabled, onSave, onApplySize, onRemove, onCancel, onRebuild, onRefresh, saving, saveError = null, toggling = false }: {
   view: RunnerView;
   image?: ImageView | null;
+  /** `null` while unknown, or where the daemon builds no Linux image. */
+  linuxImage?: LinuxImageView | null;
+  onLinuxImage?(action: 'build' | 'cancel'): void;
   draft: RunnerSettings;
   onDraft(d: RunnerSettings): void;
   onEnabled(v: boolean): void;
@@ -120,6 +157,7 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
   onRebuild?(): void;
   onRefresh?(): void;
   saving: boolean;
+  saveError?: string | null;
   toggling?: boolean;
 }) {
   const { host } = view;
@@ -133,9 +171,10 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
   const jobChoices = MAX_JOB_CHOICES.includes(draft.maxJobMinutes) ? MAX_JOB_CHOICES : [...MAX_JOB_CHOICES, draft.maxJobMinutes];
 
   return (
-    <div className="flex flex-col gap-4 p-5">
+    <div className="flex flex-col gap-4 p-5" aria-busy={saving}>
       <h2 className="text-base font-semibold text-ink">Runner settings · This Mac</h2>
 
+      <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4">
       <Row label="Runner">
         <div className="flex items-center gap-3">
           <Toggle value={enabled} disabled={toggling} onChange={onEnabled} label="Runner on" />
@@ -165,6 +204,20 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
         />
         {view.limit && <p className="mt-1 text-xs text-ink-faint">{slotLimitText(view.limit)}</p>}
       </Row>
+      <Row label="Linux slots" hint="ARM64 Ubuntu with Docker; no Apple limit">
+        <Seg
+          label="Linux slots"
+          value={Math.min(draft.linuxSlots, LINUX_SLOT_CHOICES[LINUX_SLOT_CHOICES.length - 1])}
+          options={LINUX_SLOT_CHOICES.map((n) => ({ value: n, label: String(n) }))}
+          onChange={(v) => set('linuxSlots', v)}
+        />
+        <p className="mt-1 text-xs text-ink-faint">
+          {`Jobs with runs-on [self-hosted, Linux, ARM64] or ${view.config.label}-linux boot one when queued. They share the runner memory, after the macOS slots.`}
+        </p>
+      </Row>
+      {(draft.linuxSlots > 0 || (linuxImage && linuxImage.state !== 'none')) && linuxImage && (
+        <LinuxImageRow image={linuxImage} onAction={onLinuxImage} />
+      )}
       {suggested && (
         <Row label="Suggested size" hint="from what your jobs used">
           <div className="flex flex-wrap items-center gap-3">
@@ -292,10 +345,14 @@ export function SettingsBody({ view, image = null, draft, onDraft, onEnabled, on
         </Row>
       )}
 
+      </fieldset>
+
       {/* Sticky: the sheet is taller than a laptop window, and Save must stay in reach. */}
       <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-wrap items-center gap-2 border-t bg-surface px-5 pt-3 pb-5" style={{ borderColor: 'var(--line)' }}>
+        {saving && <p role="status" className="w-full text-sm text-ink-soft">Saving runner settings…</p>}
+        {saveError && <p role="alert" className="w-full text-sm text-danger">{saveError}</p>}
         <button type="button" className="btn btn-outline text-[var(--danger)]" disabled={saving} onClick={onRemove}>Remove runner</button>
-        <button type="button" className="btn btn-outline ml-auto" onClick={onCancel}>Cancel</button>
+        <button type="button" className="btn btn-outline ml-auto" disabled={saving} onClick={onCancel}>Cancel</button>
         <button type="button" className="btn btn-primary" disabled={saving} onClick={onSave}>{saving ? 'Saving…' : 'Save'}</button>
       </div>
     </div>
@@ -313,12 +370,31 @@ export interface Edits { base: RunnerSettings; draft: RunnerSettings }
 /** The first edit snapshots the settings it started from; later edits keep that base. */
 export const editDraft = (edits: Edits | null, view: RunnerView, draft: RunnerSettings): Edits => ({ base: edits?.base ?? view.config.settings, draft });
 
-/** Runner settings for one runner. After Save, the form shows what the daemon kept. */
+/** Runner settings for one runner. Save closes only after the daemon confirms persistence. */
 export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, onRefresh, beginReply }: { view: RunnerView; image?: ImageView | null; onClose(): void; onRebuild?(): void; onRefresh?(): Promise<void>; beginReply(): (v: RunnerView) => void }) {
   const pushToast = useStore((s) => s.pushToast);
   const [edits, setEdits] = useState<Edits | null>(null);
   const draft = shownSettings(view, edits?.draft ?? null);
   const [saving, setSaving] = useState(false);
+  const inFlight = useRef(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const close = () => { if (!inFlight.current) onClose(); };
+
+  const [linuxImage, setLinuxImage] = useState<LinuxImageView | null>(null);
+  useEffect(() => {
+    let live = true;
+    // An older daemon has no Linux image channels: the row stays hidden.
+    window.nekko.linuxImageStatus().then((v) => { if (live) setLinuxImage(v); }, () => {});
+    const off = window.nekko.onLinuxImageChanged((v) => setLinuxImage(v));
+    return () => { live = false; off(); };
+  }, []);
+  const linuxAction = async (action: 'build' | 'cancel') => {
+    try {
+      setLinuxImage(await (action === 'build' ? window.nekko.buildLinuxImage() : window.nekko.cancelLinuxImage()));
+    } catch (e) {
+      pushToast('error', `Couldn't ${action === 'build' ? 'set up' : 'cancel'} the Linux image: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
 
   const [toggling, setToggling] = useState(false);
   const setEnabled = async (enabled: boolean) => {
@@ -334,24 +410,39 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
     }
   };
   const save = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSaving(true);
-    const reply = beginReply();
-    const res = await saveSettings(view, edits?.base ?? view.config.settings, draft, { updateRunner: window.nekko.updateRunner, pushToast });
-    setSaving(false);
-    if (!res) return;
-    setEdits(null); // the view now carries what the daemon kept
-    reply(res.view);
+    setSaveError(null);
+    try {
+      const reply = beginReply();
+      const res = await saveSettings(view, edits?.base ?? view.config.settings, draft, {
+        updateRunner: window.nekko.updateRunner,
+        pushToast: (_kind, message) => setSaveError(message),
+      });
+      if (!res) return;
+      reply(res.view);
+      pushToast('success', 'Runner settings saved.');
+      onClose();
+    } finally {
+      inFlight.current = false;
+      setSaving(false);
+    }
   };
   // Apply saves the two sizes now and keeps any other edits in the form.
   const applySize = async (patch: Pick<RunnerSettings, 'cpusPerVm' | 'memoryPerVmMb'>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setSaveError(null);
     setSaving(true);
     try {
       const reply = beginReply();
       reply(await window.nekko.updateRunner(view.config.id, patch));
       setEdits((e) => e && { base: { ...e.base, ...patch }, draft: { ...e.draft, ...patch } });
     } catch (e) {
-      pushToast('error', `Could not apply the suggested size: ${e instanceof Error ? e.message : String(e)}`);
+      setSaveError(`Could not apply the suggested size: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
+      inFlight.current = false;
       setSaving(false);
     }
   };
@@ -373,20 +464,23 @@ export function RunnerSettingsSheet({ view, image = null, onClose, onRebuild, on
   };
 
   return (
-    <Modal title="Runner settings · This Mac" onClose={onClose} overlayClassName="p-4" className="card w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
+    <Modal title="Runner settings · This Mac" onClose={close} overlayClassName="p-4" className="card w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto shadow-(--shadow-float)">
       <SettingsBody
         view={view}
         image={image}
+        linuxImage={linuxImage}
+        onLinuxImage={(a) => void linuxAction(a)}
         draft={draft}
         onDraft={(d) => setEdits((e) => editDraft(e, view, d))}
         onEnabled={(v) => void setEnabled(v)}
         onSave={() => void save()}
         onApplySize={(p) => void applySize(p)}
         onRemove={() => void remove()}
-        onCancel={onClose}
+        onCancel={close}
         onRebuild={onRebuild}
         onRefresh={onRefresh && (() => void refresh())}
         saving={saving}
+        saveError={saveError}
         toggling={toggling}
       />
     </Modal>

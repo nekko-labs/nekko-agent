@@ -17,7 +17,7 @@ User intent: the app's dark look should match the website's default Dark look, a
 
 ## The branded System theme
 
-- **System** follows the computer's light or dark mode with the branded looks: Nekko Dark in dark mode, Lilac in light mode. It switches live when the computer changes mode.
+- **System** follows the computer's light or dark mode with the branded looks: Nekko Dark in dark mode, Lilac in light mode. It switches live when the computer changes mode. (`[superseded 2026-11-03]` System now resolves to Dark Nekko and Light Nekko; see [the colour palette](../brand/colour-palette.md).)
 - Its tile previews both looks.
 - A profile with no theme or preset saved (a fresh profile) is treated exactly like System, and the System tile shows as selected for it. A profile that saved System before this change gets the branded looks too.
 - An accent the user changed from System's shipped accents still overrides the branded look.

@@ -59,6 +59,38 @@ Without these the relay runs normally and just logs that push is disabled.
 The privacy model holds: the push body is generic ("Your task finished"); the
 relay only learns *that* a run completed, never its contents.
 
+### Attention badges (iPhone)
+
+The relay can attach an absolute `aps.badge` to ordinary alerts and dismissals,
+and send a badge-only APNs alert without a banner or sound. The count is distinct
+pending chats across rooms for the same APNs token and actual topic, not pushes
+sent or unread replies. A resolving zero is included when authoritative.
+
+Authority requires both integrations (legacy clients/agents deliberately receive no authoritative badge):
+
+- The agent sends `{type:'attention-snapshot', tags:[...]}` with the complete
+  pending-chat tag set on every agent connection, followed by ordered `notify`,
+  `activity` and `dismiss` deltas. `{type:'attention-unknown'}` withdraws authority.
+- Each iPhone `register-push` includes `badgeRooms`, the complete list of rooms
+  contributing to that token/topic's needs-you badge on this relay. Every
+  registration for the target must agree, including opted-out registrations.
+
+Missing registrations, snapshots, conflicting manifests, disconnects, dropped
+agent frames and overflow make the count unknown. The relay then omits the badge
+while preserving ordinary notifications. It does not clear a badge just because a
+room disappears. Registered offline rooms stay in memory, bounded by `maxRooms`.
+
+Regular banners are suppressed per connected device, not because some other
+client is connected. Badge reconciliation and dismissal still reach connected
+iPhones. Per-kind preferences still apply; the explicit test remains per-device
+and never changes a badge. The relay replaces ordinary agent-provided title/body
+with generic text. Live Activity privacy levels are unchanged.
+
+See the [attention specification](../../spec/phone/mobile-attention-notifications.md)
+for limits, protocol examples, and required agent/iOS integration. A single
+in-memory relay cannot aggregate independently hosted relays or multiple workers;
+do not enroll only a subset of an app-wide target's computers as if complete.
+
 ### Live Activities (iPhone)
 
 The native iPhone app shows a running chat on the Lock Screen and in the

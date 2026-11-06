@@ -5,13 +5,13 @@
 //! only after GitHub accepted it and the installation passed every check.
 
 use super::keychain::key_name;
-use super::provider::{JobRef, Minted, PrRef, Provider, ProviderError, RunnerStatus};
+use super::provider::{JobRef, JobSteps, Minted, PrRef, Provider, ProviderError, QueuedJob, RunnerStatus};
 use super::store::{GithubLink, Link, RunnerRecord, yes};
 use super::vm::GITHUB_SEED;
 use base64::Engine as _;
 use nekko_cloud::vault::Vault;
 use nekko_connectors::{Http, Request};
-use nekko_runner::{RunnerConfig, RunnerSettings, Scope};
+use nekko_runner::{Guest, RunnerConfig, RunnerSettings, Scope};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -198,8 +198,13 @@ fn base(scope: &Scope) -> String {
     }
 }
 
-fn labels(r: &RunnerRecord) -> [String; 4] {
-    ["self-hosted".into(), "macOS".into(), "ARM64".into(), r.config.label.clone()]
+/// A macOS VM keeps the owner's label; a Linux VM gets `<label>-linux`, so a job naming
+/// one never lands on the other.
+pub fn labels(r: &RunnerRecord, guest: Guest) -> [String; 4] {
+    match guest {
+        Guest::Macos => ["self-hosted".into(), "macOS".into(), "ARM64".into(), r.config.label.clone()],
+        Guest::Linux => ["self-hosted".into(), "Linux".into(), "ARM64".into(), format!("{}-linux", r.config.label)],
+    }
 }
 
 impl<H: Http> GitHub<H> {
@@ -546,7 +551,7 @@ impl<H: Http> GitHub<H> {
 }
 
 impl<H: Http + 'static> Provider for GitHub<H> {
-    async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+    async fn mint(&self, r: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
         // A repo can go public after connect: check again before a job of a stranger's PR could land here.
         if let (Scope::Repo { owner, repo }, false) = (&r.config.scope, link(r)?.allow_public) {
             let full = format!("{owner}/{repo}");
@@ -567,7 +572,8 @@ impl<H: Http + 'static> Provider for GitHub<H> {
                 return Err(ProviderError::Auth("This org runner has no runner group; connect again.".into()));
             }
         };
-        let body = json!({ "name": name, "runner_group_id": group, "labels": labels(r), "work_folder": "_work" });
+        let body =
+            json!({ "name": name, "runner_group_id": group, "labels": labels(r, guest), "work_folder": "_work" });
         let path = format!("{}/actions/runners/generate-jitconfig", base(&r.config.scope));
         let (s, v) = self.call(r, "POST", &path, Some(body)).await?;
         match (ok(s), v["runner"]["id"].as_u64(), v["encoded_jit_config"].as_str()) {
@@ -593,44 +599,92 @@ impl<H: Http + 'static> Provider for GitHub<H> {
 
     /// `None` for a runner that has not taken a job (never, or not yet).
     async fn job(&self, r: &RunnerRecord, _runner_id: u64, runner_name: &str) -> Result<Option<JobRef>, ProviderError> {
-        // A job that ended before anyone asked is only among the completed runs.
+        // First cover every repo's first page; optional pages share a per-status budget.
+        // At most 11 requests per repo per status, plus 24 extra per status.
+        const EXTRA_REQUESTS_PER_STATUS: usize = 24;
+        const RUN_PAGE_SIZE: usize = 10;
+        const JOB_PAGE_SIZE: usize = 100;
+        enum Extra {
+            Runs(String),
+            Jobs(String, Value, usize),
+        }
         for status in ["in_progress", "completed"] {
-            let found = self.jobs(r, status).await?.into_iter().find_map(|(repo, run, job)| {
-                (job["runner_name"].as_str() == Some(runner_name)).then(|| {
-                    // shortcut: GitHub lists no pull request for a fork's run, so its jobs show none.
-                    let pr = run["pull_requests"][0]["number"].as_u64().map(|number| PrRef {
-                        number,
-                        url: format!(
-                            "{}/pull/{number}",
-                            run["repository"]["html_url"]
-                                .as_str()
-                                .map_or(format!("https://github.com/{repo}"), String::from)
-                        ),
-                    });
-                    JobRef {
-                        run_id: run["id"].as_u64().unwrap_or_default(),
-                        job_id: job["id"].as_u64().unwrap_or_default(),
-                        workflow: run["name"].as_str().unwrap_or_default().to_string(),
-                        job: job["name"].as_str().unwrap_or_default().to_string(),
-                        url: job["html_url"].as_str().unwrap_or_default().to_string(),
-                        pr,
-                        repo,
+            let mut extra = std::collections::VecDeque::new();
+            for repo in &link(r)?.repos {
+                let path = format!("/repos/{repo}/actions/runs?status={status}&per_page={RUN_PAGE_SIZE}&page=1");
+                let (s, v) = self.call(r, "GET", &path, None).await?;
+                if !ok(s) {
+                    return Err(other("the workflow runs", s, &v));
+                }
+                let runs = v["workflow_runs"].as_array().map(Vec::as_slice).unwrap_or_default();
+                for run in runs.iter().take(RUN_PAGE_SIZE) {
+                    let Some(id) = run["id"].as_u64() else { continue };
+                    // A VM can have run an earlier attempt even when the run was retried.
+                    let path =
+                        format!("/repos/{repo}/actions/runs/{id}/jobs?filter=all&per_page={JOB_PAGE_SIZE}&page=1");
+                    let (s, v) = self.call(r, "GET", &path, None).await?;
+                    if !ok(s) {
+                        return Err(other("the jobs", s, &v));
                     }
-                })
-            });
-            if found.is_some() {
-                return Ok(found);
+                    let jobs = v["jobs"].as_array().map(Vec::as_slice).unwrap_or_default();
+                    if let Some(job) = jobs.iter().find(|job| job["runner_name"].as_str() == Some(runner_name)) {
+                        return Ok(Some(job_ref(repo.clone(), run, job)));
+                    }
+                    if jobs.len() >= JOB_PAGE_SIZE {
+                        extra.push_back(Extra::Jobs(repo.clone(), run.clone(), 2));
+                    }
+                }
+                if runs.len() >= RUN_PAGE_SIZE {
+                    extra.push_back(Extra::Runs(repo.clone()));
+                }
+            }
+            for _ in 0..EXTRA_REQUESTS_PER_STATUS {
+                let Some(next) = extra.pop_front() else { break };
+                match next {
+                    Extra::Runs(repo) => {
+                        let path =
+                            format!("/repos/{repo}/actions/runs?status={status}&per_page={RUN_PAGE_SIZE}&page=2");
+                        let (s, v) = self.call(r, "GET", &path, None).await?;
+                        if !ok(s) {
+                            return Err(other("the workflow runs", s, &v));
+                        }
+                        if let Some(runs) = v["workflow_runs"].as_array() {
+                            for run in runs.iter().take(RUN_PAGE_SIZE) {
+                                if run["id"].as_u64().is_some() {
+                                    extra.push_back(Extra::Jobs(repo.clone(), run.clone(), 1));
+                                }
+                            }
+                        }
+                    }
+                    Extra::Jobs(repo, run, page) => {
+                        let Some(id) = run["id"].as_u64() else { continue };
+                        let path = format!(
+                            "/repos/{repo}/actions/runs/{id}/jobs?filter=all&per_page={JOB_PAGE_SIZE}&page={page}"
+                        );
+                        let (s, v) = self.call(r, "GET", &path, None).await?;
+                        if !ok(s) {
+                            return Err(other("the jobs", s, &v));
+                        }
+                        let jobs = v["jobs"].as_array().map(Vec::as_slice).unwrap_or_default();
+                        if let Some(job) = jobs.iter().find(|job| job["runner_name"].as_str() == Some(runner_name)) {
+                            return Ok(Some(job_ref(repo, &run, job)));
+                        }
+                        if page == 1 && jobs.len() >= JOB_PAGE_SIZE {
+                            extra.push_back(Extra::Jobs(repo, run, 2));
+                        }
+                    }
+                }
             }
         }
         Ok(None)
     }
 
-    async fn queued(&self, r: &RunnerRecord) -> Result<u32, ProviderError> {
-        let ours = labels(r);
-        let n = self
+    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
+        let ours = labels(r, guest);
+        Ok(self
             .jobs(r, "queued")
             .await?
-            .iter()
+            .into_iter()
             .filter(|(_, _, job)| job["status"].as_str() == Some("queued"))
             .filter(|(_, _, job)| {
                 let want = job["labels"].as_array().cloned().unwrap_or_default();
@@ -638,8 +692,12 @@ impl<H: Http + 'static> Provider for GitHub<H> {
                 !want.is_empty()
                     && want.iter().all(|l| l.as_str().is_some_and(|l| ours.iter().any(|o| o.eq_ignore_ascii_case(l))))
             })
-            .count();
-        Ok(u32::try_from(n).unwrap_or(u32::MAX))
+            .map(|(repo, run, job)| QueuedJob {
+                created_at: job["created_at"].as_str().map(String::from),
+                job: job_ref(repo, &run, &job),
+                ..Default::default()
+            })
+            .collect())
     }
 
     async fn remove(&self, r: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
@@ -674,6 +732,48 @@ impl<H: Http + 'static> Provider for GitHub<H> {
             (s, _) if ok(s) => Ok(()),
             (s, v) => Err(other("the re-run", s, &v)),
         }
+    }
+
+    async fn cancel(&self, r: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
+        let path = format!("/repos/{}/actions/runs/{}/cancel", job.repo, job.run_id);
+        match self.call(r, "POST", &path, None).await? {
+            (s, _) if ok(s) => Ok(()),
+            (s, v) => Err(other("the cancel", s, &v)),
+        }
+    }
+}
+
+/// A job of `run` in `repo`, with its steps once it has any.
+fn job_ref(repo: String, run: &Value, job: &Value) -> JobRef {
+    // shortcut: GitHub lists no pull request for a fork's run, so its jobs show none.
+    let pr = run["pull_requests"][0]["number"].as_u64().map(|number| PrRef {
+        number,
+        url: format!(
+            "{}/pull/{number}",
+            run["repository"]["html_url"].as_str().map_or(format!("https://github.com/{repo}"), String::from)
+        ),
+    });
+    let steps = job["steps"].as_array().filter(|s| !s.is_empty()).map(|steps| {
+        let status = |s: &Value| s["status"].as_str().unwrap_or_default().to_string();
+        JobSteps {
+            done: steps.iter().filter(|s| status(s) == "completed").count() as u32,
+            total: steps.len() as u32,
+            current: steps
+                .iter()
+                .find(|s| status(s) == "in_progress")
+                .and_then(|s| s["name"].as_str())
+                .map(String::from),
+        }
+    });
+    JobRef {
+        run_id: run["id"].as_u64().unwrap_or_default(),
+        job_id: job["id"].as_u64().unwrap_or_default(),
+        workflow: run["name"].as_str().unwrap_or_default().to_string(),
+        job: job["name"].as_str().unwrap_or_default().to_string(),
+        url: job["html_url"].as_str().unwrap_or_default().to_string(),
+        pr,
+        steps,
+        repo,
     }
 }
 

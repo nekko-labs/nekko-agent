@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { LABEL_WORKFLOWS, groupPrNumbers, labelRuns, needsLabelRuns, queueBlockers } from './ci-label-gate.mjs';
+import { LABEL_WORKFLOWS, labelRuns, needsLabelRuns } from './ci-label-gate.mjs';
 
 const run = (id, path, status, conclusion = null) => ({ id, name: path.split('/').pop(), path, status, conclusion, html_url: `https://example/${id}` });
 const ios = '.github/workflows/ios-native.yml';
@@ -35,16 +35,7 @@ test('a re-run that passed replaces the failed one', () => {
   assert.deepEqual(labelRuns([run(1, ios, 'completed', 'failure'), run(7, ios, 'completed', 'success')]).failed, []);
 });
 
-test("a group's PRs come from its squashed commit subjects", () => {
-  assert.deepEqual(groupPrNumbers([
-    'iPhone chat list: open short groups (#1001)\n\n- body (#5)',
-    'Add phone safety exits (SK-3) (#994)',
-    'A commit with no PR number',
-    'Again (#994)',
-  ]), [1001, 994]);
-});
-
-test('drafts and hold block the group; deploy labels are read from either label shape', () => {
+test('deploy labels are read from either label shape', () => {
   const prs = [
     { number: 1, isDraft: true, labels: { nodes: [] } },
     { number: 2, isDraft: false, labels: { nodes: [{ name: 'hold' }] } },
@@ -52,7 +43,6 @@ test('drafts and hold block the group; deploy labels are read from either label 
     { number: 4, isDraft: false, labels: { nodes: [{ name: 'deploy:android' }] } },
     { number: 5, isDraft: false, labels: ['ci:perf'] },
   ];
-  assert.deepEqual(queueBlockers(prs), ['#1 is a draft.', '#2 is labelled `hold`.']);
   assert.deepEqual(prs.filter(needsLabelRuns).map(pr => pr.number), [3, 4]);
 });
 
@@ -64,11 +54,11 @@ test('every listed workflow exists, and is switched on by a deploy label', () =>
   }
 });
 
-test('gate runs the check on PRs and in the queue, and CI re-runs when a label is added', () => {
+test('gate runs the check on PRs, and CI re-runs when a label is added', () => {
   const ci = readFileSync(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
   assert.match(ci, /types: \[opened, synchronize, reopened, labeled\]/);
   assert.match(ci, /ci-label-gate\.mjs pr /);
-  assert.match(ci, /ci-label-gate\.mjs queue /);
+  assert.doesNotMatch(ci, /merge_group/);
 });
 
 test('Native iOS passes on a green batch status, a green run, or neither when the PR needs no iOS', () => {
@@ -85,7 +75,21 @@ test('Native iOS passes on a green batch status, a green run, or neither when th
   assert.deepEqual(labelRuns([], { iosRequired: false }), { pending: [], failed: [], passed: [] });
 });
 
-test('retired Expo runs cannot block native workflows or the merge queue', () => {
+test('Automatic evidence dispatch still runs the full required Native iOS suite', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/ios-native.yml', import.meta.url), 'utf8');
+  const protocolJob = workflow.split('  protocol-and-build:')[1];
+  const condition = protocolJob.split('\n').find(line => line.trimStart().startsWith('if:'));
+  assert.match(workflow, /uses: \.\/\.github\/workflows\/native-machine-evidence\.yml/);
+  assert.doesNotMatch(condition, /automatic_baseline_ref/, 'Evidence must not stand in for the full native suite');
+  const evidence = readFileSync(new URL('../.github/workflows/native-machine-evidence.yml', import.meta.url), 'utf8');
+  assert.match(evidence, /revision: \[before, after\]/);
+  assert.match(evidence, /RUNTIME=com\.apple\.CoreSimulator\.SimRuntime\.iOS-27-0\n/);
+  assert.match(evidence, /TYPE=com\.apple\.CoreSimulator\.SimDeviceType\.iPhone-18-Pro\n/);
+  assert.doesNotMatch(evidence, /reverse_each|\.max_by/, 'Both revisions need an identical simulator, not each runner\'s newest OS');
+  assert.doesNotMatch(evidence, /cp .*NewChatView\.swift/, 'The base app implementation must stay unchanged');
+});
+
+test('retired Expo runs cannot block native workflows or gate', () => {
   const retired = '.github/workflows/mobile.yml';
   assert.ok(!LABEL_WORKFLOWS.includes(retired));
   for (const status of ['queued', 'in_progress', 'completed']) {

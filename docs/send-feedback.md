@@ -14,9 +14,12 @@ On desktop, the Local Web UI and Docker, start by choosing **Good** or **Needs i
 
 - **Summary**: one line, up to 120 characters.
 - **Description**: what happened, or what you'd like. The summary and description share a limit of 4,000 characters, and the count under the description shows how much you've used.
+- **Screenshots** (optional): for Needs improvement only. Drop, paste or browse for up to 3 PNG, JPG or JPEG images, up to 5 MB each. Screenshots can show names, chats or file paths, so check yours before you send.
 - **Include app info**: for Needs improvement only.
 
-Press **Send feedback**, or Ctrl+Enter (⌘+Enter on a Mac). If you close the sheet with something written, it asks before throwing it away. If sending fails, what you wrote stays there so you can try again.
+Press **Send**, or Ctrl+Enter (⌘+Enter on a Mac). If you close the sheet with something written, it asks before throwing it away. If sending fails, what you wrote stays there so you can try again.
+
+You can also email us at feedback@nekkoagent.com. The sheet shows the address once you've made a choice, under **Other ways** for **Needs improvement**. Hover over it to copy it.
 
 On iPhone, iPad and Android, the quick note is one text box of up to 4,000 characters with a **Send** button.
 
@@ -24,11 +27,13 @@ The note goes straight to Nekko Labs through Nekko Cloud. You don't need an acco
 
 **Include app info** is off by default. Switch it on to add the app, version, OS and its version, and CPU type, so we can reproduce what you saw. The sheet shows those values before you send.
 
-What the note never carries: your name or email, an account or device id, the device's name or model, your language, IP address, chats or files. Nekko Cloud doesn't log the request, and it stores the note with only the day it arrived. That also means we can't reply to it. If you'd like an answer, open a GitHub issue instead.
+What the note never carries: your name or email, an account or device id, the device's name or model, your language, IP address, chats or files, apart from any screenshots you choose to add. Nekko Cloud doesn't log the request, and it stores the note with only the day it arrived.
+
+Screenshots are checked again by Nekko Cloud: a file that isn't a whole PNG or JPEG is refused, and the sheet tells you which one. Before storing them, Nekko Cloud removes hidden details such as a phone photo's location, camera details and text an editor wrote in, and it never keeps the file name. Screenshots are deleted 90 days after they arrive; the note stays. That also means we can't reply to it. If you'd like an answer, open a GitHub issue instead.
 
 ## 2. Copy for an agent
 
-On desktop, the Local Web UI and Docker, this is under **Other ways** in the sheet.
+On desktop, the Local Web UI and Docker, this is under **Other ways** in the sheet, which appears when you choose **Needs improvement**.
 
 **Copy prompt** puts a ready-made prompt on your clipboard. Paste it into the coding agent you already use: Claude Code, Codex, or a Nekko agent. The prompt tells the agent to:
 
@@ -42,7 +47,7 @@ The sheet shows the full prompt before you copy it. Its last line names the app 
 
 ## 3. GitHub issues
 
-**Create issue** (under **Other ways** on desktop, the Local Web UI and Docker) or **Open GitHub** on the phone apps opens the [bug report and feature request forms](https://github.com/nekko-labs/nekko-agent/issues/new/choose). Issues are public, and you can follow along and get replies there.
+**Create issue** (under **Other ways** on desktop, the Local Web UI and Docker, after choosing **Needs improvement**) or **Open GitHub** on the phone apps opens the [bug report and feature request forms](https://github.com/nekko-labs/nekko-agent/issues/new/choose). Issues are public, and you can follow along and get replies there.
 
 ## Contributing
 

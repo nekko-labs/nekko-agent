@@ -15,7 +15,8 @@ A reply can fail between steps, for example when the account runs out of usage r
 - When a turn ends on an error, the host saves `turnFailure` on the chat: the error text and the id of the transcript's last message. It is not a message, so it is never sent to a model.
 - Opening the chat shows the same notice with the original error, Retry and Delete last message.
 - The notice applies only while that message is still the last one, so deleting or restarting past it retires it. Starting the next turn clears the record, and Dismiss clears it for good.
-- A Stop is not recorded: it is the user's choice, and a stopped reply with partial output keeps its `interrupted` marker as before.
+- A Stop is recorded the same way, with the message `Stopped`, and reads "Reply paused" rather than as a failure. A Stop that lands between steps, during a model call that has not streamed anything, leaves no partial reply to mark, so without this record the chat just ended with nothing to say why or to retry. A stopped reply with partial output also keeps its `interrupted` marker.
+- A transcript that ends on a tool result, with no run active and no `turnStats.stop: complete`, reads as interrupted even with no record, because a finished reply ends with the model's word. This covers chats stopped before the record existed. Dismiss saves `turnFailure: null`, so a dismissed notice of either kind stays gone after reopening, until the next turn.
 - Incognito chats are never written to disk, so their failures still end with the app.
 
 ## Replies that reach the output limit `[implemented 2026-10-28; provider and loop unit-tested; Anthropic-family providers only]`

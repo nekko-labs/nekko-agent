@@ -1,26 +1,24 @@
-// Decides which of ci.yml's slow jobs a run needs. Three tiers:
+// Decides which of ci.yml's slow jobs a run needs. Two tiers:
 //
-// - pull_request (fast tier): `build`, gated by the paths the PR touches. The
+// - pull_request: `build`, gated by the paths the PR touches; the speed
+//   contract (`perf`) when the PR changes what it measures (`ci:perf` forces
+//   it); and `itests`, the loopback end-to-end scripts (Local Web UI + nekkod +
+//   scripted models), whenever the PR needs `build`. `gate` waits for both. The
 //   per-OS jobs (the daemon, capture) run on a PR only with a `deploy:<os>`
 //   label (`deploy:linux`, `deploy:windows`, `deploy:macos`), and only when the
-//   change touches what they test. `ci:perf` opts a PR into the speed contract.
-//   Labels are read when a run starts; adding one re-runs CI.
-// - merge_group (queue tier): what must hold before anything reaches main. Adds
-//   the speed contract and itests, path-gated like the PR tier. A group's file
-//   list is its diff against main, so a skipped job is one that no PR in the
-//   group could affect. No per-OS jobs: a labelled PR already ran them.
+//   change touches what they test. Labels are read when a run starts; adding
+//   one re-runs CI.
 // - schedule, push to main, workflow_dispatch (full tier): every job on every
-//   OS, macOS included. The schedule is nightly: platform builds run once a
-//   day, not per change, unless a `deploy:<platform>` label asks.
+//   OS, macOS included, plus the speed contract and itests. The schedule is
+//   nightly: platform builds run once a day, not per change, unless a
+//   `deploy:<platform>` label asks.
+//
+// There is no merge queue (removed 2026-11-06), so nothing runs between a PR's
+// `gate` and main: the PR is the last place to stop a speed or itest
+// regression (decision 0059, superseding 0056's nightly-only runs).
 //
 // Unknown changed files (none listed, or a list at the API's 3,000-file cap) and
 // changes to CI itself fall back to every job of the tier.
-//
-// `itests`, the loopback end-to-end scripts (Local Web UI + nekkod + scripted
-// models), never run on a pull request, and `gate` does not wait for them, so
-// they report without holding a PR or the queue. They run on what lands on
-// main: every merge-queue group (ci.yml has no `push` trigger; the queue's
-// group is the commit main moves to), the nightly schedule and a dispatch.
 
 const RUST = [/^crates\//, /^Cargo\.(toml|lock)$/, /^rust-toolchain\.toml$/, /^rustfmt\.toml$/];
 // Shared's contracts feed the engine's golden sets (the phone allowlist, the IPC names).
@@ -31,7 +29,7 @@ const CAPTURE = [/^apps\/desktop\//, /^packages\//, /^vendor\/agent-browser\//, 
 const PERF = [/^scripts\/perf\//, /^apps\/desktop\/src\/renderer\//, /^apps\/local-web-ui\//, /^packages\//, ...RUST];
 // The native phone apps: their own workflows (ios-native.yml, android-native.yml)
 // build and test them, and nothing in `build` reads them. A change only here
-// skips `build` (npm and the cargo build of nekkod) and the queue's itests.
+// skips `build` (npm and the cargo build of nekkod) and the itests.
 const NATIVE_APPS = [/^apps\/ios\//, /^apps\/android\//];
 // CodeQL's languages, by the files that hold them.
 const CODEQL = {
@@ -55,29 +53,27 @@ export function ciScope({ event, files = [], labels = [] }) {
   if (FULL.has(event)) {
     return { build: true, daemon_os: ['ubuntu-latest', 'windows-latest', 'macos-latest'], capture_os: ['windows-latest', 'macos-latest'], perf: true, itests: true, licenses: false };
   }
-  const queue = event === 'merge_group';
   const all = files.length === 0 || files.length >= FILE_LIST_CAP || touches(files, EVERYTHING);
   // A `deploy:<os>` label adds that OS's row to a job the change already needs, never to one it doesn't.
   const os = name => labels.includes(`deploy:${name}`);
   const build = all || !files.every(file => NATIVE_APPS.some(pattern => pattern.test(file)));
   const daemon = all || touches(files, DAEMON);
   const capture = all || touches(files, CAPTURE);
-  const perf = labels.includes('ci:perf') || (queue && (all || touches(files, PERF)));
   return {
     build,
     daemon_os: [...(daemon && os('linux') ? ['ubuntu-latest'] : []), ...(daemon && os('windows') ? ['windows-latest'] : []), ...(daemon && os('macos') ? ['macos-latest'] : [])],
     capture_os: [...(capture && os('windows') ? ['windows-latest'] : []), ...(capture && os('macos') ? ['macos-latest'] : [])],
-    perf,
-    itests: queue && build,
+    perf: labels.includes('ci:perf') || all || touches(files, PERF),
+    itests: build,
     licenses: all || touches(files, LICENSES),
   };
 }
 
 /**
  * The languages codeql.yml analyses. The schedule and a dispatch take all five.
- * A PR or queue group takes the ones its files are in (every Linux one when the
- * list is unknown or CI changed); Swift needs a macOS runner, so a PR takes it
- * only with `deploy:ios` and the queue never does.
+ * A PR takes the ones its files are in (every Linux one when the list is
+ * unknown or CI changed); Swift needs a macOS runner, so a PR takes it only
+ * with `deploy:ios`.
  */
 export function codeqlLanguages({ event, files = [], labels = [] }) {
   if (FULL.has(event)) return Object.keys(CODEQL);

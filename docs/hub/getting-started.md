@@ -30,7 +30,7 @@ The quickest way to start is the installer.
    - **macOS (Apple silicon):** the `.dmg`
    - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
 2. Run it. On macOS, drag Nekko Agent into Applications.
-3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab (the violet brain-and-gear icon in the left navigation). Click a model's name there to make it the default for new chats.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
@@ -39,6 +39,10 @@ macOS builds are signed and notarized, so they open normally. If Windows shows a
 A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The very first time, a short **Send your first prompt** intro opens over it: three looping demos (start with a question, add your files, send). **Skip**, the ✕, Escape or a click outside closes it, and it does not open again. It stays closed for anyone who turned off contextual tips. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. In Nekko and Indigo, the selected window instead keeps a soft plum gradient into the full conversation, with a gentle violet/rose color crossfade; in Dynamic View only the active agent has that gradient, even while other agents are working. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Agent chat rows in the left panel stay flat, without a tile background or border; the title, status and keyboard focus outline identify the relevant chat. The composer's effort gauge is borderless, and **Suggestions** appears on its own row below the model/action controls when there are suggestions to show. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
+
+## Returning to the latest message
+
+When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
 
 ## Reviewing visual changes
 
@@ -139,7 +143,7 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 
 Closing the desktop window hides it to the tray; the engine and running work remain alive. This is not Quit. **Quit Nekko Agent** stops the service and managed processes; **Stop Nekko service** stops the service while leaving the UI available. This does not promise execution during OS sleep, shutdown or logout.
 
-**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
+**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification, on screen or later from the Windows notification centre, brings the window forward and opens that chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
 
 **Full-screen games (Windows).** While a game runs in exclusive fullscreen, Nekko Agent holds its notices and shows them together when you leave the game, one per chat and kind. Windows you open yourself (launching the app, a link, the tray) still open at once.
 
@@ -151,11 +155,25 @@ Hover over the left navigation panel, including its curved top and bottom wings,
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 
+Each terminal has its own Agents-panel row, including terminals opened beside a chat and shells that have exited. It shows the terminal-reported title and activity when available. The strip above terminal output shows working/ready/attention status, reported directory, and an observed GitHub PR link. **Refresh** fetches that PR's current state and checks; until then, the link is explicitly unverified. No terminal output is sent to a model for summaries.
+
+Claude Code users can opt into explicit tool/permission/completion signals using the [terminal hook setup](https://github.com/nekko-labs/nekko-agent/blob/main/docs/terminal-claude-hooks.md). Nekko never installs hooks or approves tools silently. Without integration signals a terminal says **Shell open**, not Working.
+
 ### Approvals and delegated work
 
 When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
 
-For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent chips on the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
+For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent cards along the bottom of the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
+
+### Model and effort controls
+
+The composer shows the model title without a subscription suffix. Open its menu for provider and account details. Cloud providers appear first under **Cloud**, followed by **Local**; when both exist they occupy independently scrolling columns. Your default model is marked inside its provider group instead of repeated at the top.
+
+**Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog. On a Claude subscription, the choices are the ones Claude Code takes, and it applies the closest level a model has.
+
+In a new chat, prompt-writing **Suggestions** appear on a separate row below the composer controls in Expert only. Ongoing chats keep Suggestions beside the microphone. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
+
+Local chats can read and write `~/.nekko-agent` without adding it as a project folder. This is the app data directory and may contain sensitive local state; normal write approvals still apply. This does not grant the rest of your home folder, change the project directory, or expose the host folder to Sandbox containers.
 
 ### Quickly filter the model picker
 
@@ -169,13 +187,15 @@ The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
 
 ### How the Agents panel groups your agents
 
-By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. Use the sliders button to group by project, date or computer instead.
+The selected agent has a tinted background across its row, so you can spot the chat you are viewing without hovering. Hovering a chat row adds a soft tinted glow with a quick fade, without switching chats. Keyboard focus gets the same glow and a visible outline; reduced motion removes the fade. Other rows stay flat at rest; their status icons still show whether they are working, waiting or finished.
+
+By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Accessibility > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
 ### Delegated agents in the Agents panel
 
-Delegated subagents appear as compact rows beneath their parent, in Claude chats too, where a subagent's chat is a live copy you can read but not write to. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
+Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
 A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
 
@@ -185,11 +205,13 @@ When older conversation is summarized, a **Conversation compacted** event card s
 
 ### Answering agent questions
 
-When an agent needs a choice, its question opens at the bottom of the conversation. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Choose an option or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. The pixel question-mark icon identifies the question.
+When an agent needs a choice, its question opens at the bottom of the conversation without moving your typing focus, even when another agent asks while you are writing. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Click or Tab into the question to answer it: use the options, arrow and number keys, or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. Moving between steps keeps the keyboard in the question only while you are interacting with it. The pixel question-mark icon identifies the question.
 
 ### Links and files in replies
 
-A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser. Other web links have a **Preview** button that loads the page inside the message.
+A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser.
+
+In agent chats, confirmed PR command results also leave inline cards where the interaction happened: created (including draft creation), set to draft, ready for review, auto-merge enabled, queued, merged, closed, reopened, updated, reviewed or viewed. They appear while the agent is working and remain in saved history. **Merge requested** means the command was accepted, not that the PR merged; **PR queued** and **PR merged** require their own confirmation. The first card for an open PR keeps its live status and review actions, while older event labels stay historical. Ambiguous scripts and failed commands do not create success cards. Other web links have a **Preview** button that loads the page inside the message.
 
 Click a file link to open the file in a window beside the chat. Code is coloured by language, and the toolbar shows which language was detected. You can edit the file there: it saves itself a moment after you stop typing (turn **Auto-save** off in the toolbar if you prefer), and **Ctrl+S** (**Cmd+S** on macOS) saves at once. The toolbar tells you when a save happens: *Auto-saved at 9:41* or *Saved at 9:41*.
 
@@ -206,7 +228,7 @@ The Agent Board header also has a single **+**: hover or click it for the same t
 | New terminal | Cmd+Shift+T | Ctrl+Shift+T |
 | Search chats | Cmd+Shift+F | Ctrl+Shift+F |
 
-Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat.
+Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat. In Dynamic view, click an agent window's transcript, title bar, or composer first to search that window.
 
 
 ### Compact agent row and monitor controls
@@ -272,7 +294,7 @@ Hover the edge between the agent list and chat wall, or the edge beside Monitors
 
 ### Skills and Connectors shortcuts
 
-Open **Settings** to find large **Skills** and **Connectors** chips at the top. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
 ### Download progress in Model Server
 
@@ -289,6 +311,8 @@ other models and runtimes remain available while one downloads.
 After a reply, **Suggested follow-ups** can offer relevant next messages such as **Inspect the saved PNGs directly** or **Try another image viewer**. Each button sends the words it displays; nothing is sent until you choose one. These suggestions are not questions from you or approval requests from the agent.
 
 When delegation is available, use the small sliding toggle to choose **This chat** (the default) or **Subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
+
+Starred models stay listed under their provider as well as in the model picker shortcuts. Either entry selects the same model. To reorder a monitor card, press its header and move the pointer; clicking without movement does not lift it or show a landing preview.
 
 ### Text formatting toolbar
 

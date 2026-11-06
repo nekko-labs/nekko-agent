@@ -89,7 +89,7 @@ extension ComputersStore {
     }
 
     /// Chats needing you on every paired computer.
-    public var fleetNeedsYouCount: Int { activity(on: nil).values.filter { $0 == .needsYou }.count }
+    public var fleetNeedsYouCount: Int { computers.reduce(0) { $0 + (attention[$1.id]?.pending.count ?? 0) } }
 
     /// Opening a chat that is on another computer makes that computer active
     /// first, so the chat screen talks to it. Its link is taken over: no wait.
@@ -137,6 +137,7 @@ extension ComputersStore {
 
     /// Dial one fleet computer, showing its saved list until it answers.
     func openLink(_ id: String) {
+        invalidateAttention(id)
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
         var peer = Peer()
@@ -162,7 +163,9 @@ extension ComputersStore {
 
     /// The active computer's connection, kept in the fleet as `peer` says it was.
     func adopt(_ id: String, _ client: RemoteConnection, as peer: Peer, suspended: Bool) {
+        let keptAttention = attention[id]
         dropLink(id)
+        attention[id] = keptAttention
         peers[id] = peer
         let link = PeerLink(client: client)
         link.suspended = suspended
@@ -184,10 +187,12 @@ extension ComputersStore {
             link.client.close()
         }
         peers[id] = nil
+        invalidateAttention(id)
     }
 
     func suspendFleet() {
-        for link in links.values where !link.suspended {
+        for (id, link) in links where !link.suspended {
+            invalidateAttention(id)
             link.suspended = true
             link.client.close()
         }
@@ -205,7 +210,7 @@ extension ComputersStore {
     func nudgeFleet() {
         for (id, link) in links {
             link.client.nudge()
-            if peers[id]?.conn == .online { schedulePeerSummaries(id) }
+            if peers[id]?.conn == .online { Task { await refreshPeer(id) } }
         }
     }
 
@@ -229,6 +234,7 @@ extension ComputersStore {
         guard peers[id] != nil else { return }
         switch signal {
         case .status(let s):
+            if s.state != .online { invalidateAttention(id) }
             peers[id]?.conn = s.state
             peers[id]?.detail = s.detail
             if let d = s.denied { peers[id]?.denied = d } else if s.state == .online { peers[id]?.denied = nil }
@@ -240,13 +246,15 @@ extension ComputersStore {
             peers[id]?.hostProtocol = version
             if hadCode { dropPairCode(id) }
         case .control(.dismiss(let tag)):
-            onDismiss?(tag)
+            dismissAttention(tag: tag, on: id)
         case .control:
             break
         case .event(let channel, let payload):
             guard channel == Events.agentEvent, let e = AgentEvent.from(payload), let before = peers[id]?.activity else { return }
             let next = ActivityTracker.next(before, e)
             if next != before { peers[id]?.activity = next }
+            receiveAttention(e, on: id)
+            onComputerEvent?(id, e)
             // The list stays fresh when a turn ends there, as the active computer's does.
             switch e {
             case .done, .sessionMeta: schedulePeerSummaries(id)
@@ -257,10 +265,11 @@ extension ComputersStore {
 
     /// Read what the list shows from one fleet computer.
     func refreshPeer(_ id: String) async {
-        guard let c = links[id]?.client else { return }
+        guard peers[id]?.conn == .online, let c = links[id]?.client else { return }
+        let ticket = beginAttention(id)
         async let list = orNil { try await c.call(Channels.sessionsSummaries) }
         async let folders = orNil { try await c.call(Channels.workspaceList) }
-        async let pending = orNil { try await c.call(Channels.chatPending) }
+        async let pending = orNil { try await c.call(Channels.chatPending, [], timeout: 5) }
         async let info = orNil { try await c.call(Channels.appInfo) }
         let r = (await list, await folders, await pending, await info)
         guard links[id]?.client === c, peers[id] != nil else { return }
@@ -271,10 +280,10 @@ extension ComputersStore {
         }
         if r.1 != nil { peers[id]?.workspaces = WorkspaceFolder.list(r.1) }
         // Approvals and questions already waiting when the link (re)connects.
-        for (sid, p) in PendingInput.map(r.2) where p.approval != nil || p.question != nil { peers[id]?.activity[sid] = .needsYou }
+        replaceAttention(r.2, on: id, ticket: ticket)
         if r.3 != nil {
             let appInfo = AppInfo.from(r.3)
-            learnPlatform(appInfo.platform, for: id)
+            learnPlatform(appInfo.platform, for: id, name: appInfo.computerName ?? appInfo.hostname)
             learnIcon(appInfo.machineIcon, for: id)
         }
         savePeerList(id)

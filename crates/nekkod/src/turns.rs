@@ -134,8 +134,10 @@ pub struct Pending {
 struct PendingInner {
     /// `PendingInput` by session, in the order sessions started waiting.
     by_session: Map<String, Value>,
-    approvals: HashMap<String, (String, oneshot::Sender<bool>)>,
-    questions: HashMap<String, (String, oneshot::Sender<Value>)>,
+    /// Every waiter, including requests hidden by the single visible request
+    /// per kind. Its payload restores the visible map when a newer one resolves.
+    approvals: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
+    questions: HashMap<String, (String, oneshot::Sender<Value>, Value)>,
 }
 
 impl PendingInner {
@@ -170,9 +172,9 @@ impl Pending {
         let (tx, rx) = oneshot::channel();
         let mut p = lock(&self.inner);
         let id = str_at(call, "id").unwrap_or_default().to_string();
-        p.approvals.insert(id, (session_id.into(), tx));
         let approval =
             json!({ "call": call, "reason": reason, "severity": severity, "requestedAt": nekko_js::now_ms() });
+        p.approvals.insert(id, (session_id.into(), tx, approval.clone()));
         p.set(session_id, "approval", Some(approval));
         rx
     }
@@ -181,7 +183,7 @@ impl Pending {
         let (tx, rx) = oneshot::channel();
         let mut p = lock(&self.inner);
         let id = str_at(request, "callId").unwrap_or_default().to_string();
-        p.questions.insert(id, (session_id.into(), tx));
+        p.questions.insert(id, (session_id.into(), tx, request.clone()));
         p.set(session_id, "question", Some(request.clone()));
         rx
     }
@@ -189,11 +191,17 @@ impl Pending {
     /// `resolveApproval`: false when no turn here waits on that call.
     pub fn approve(&self, session_id: &str, call_id: &str, approved: bool) -> bool {
         let mut p = lock(&self.inner);
-        let Some((_, tx)) = p.approvals.remove(call_id) else { return false };
+        if p.approvals.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
+            return false;
+        }
+        let Some((_, tx, _)) = p.approvals.remove(call_id) else { return false };
         let _ = tx.send(approved);
         let current = p.by_session.get(session_id).and_then(|e| e.get("approval")).and_then(|a| a.get("call"));
         if current.and_then(|c| str_at(c, "id")) == Some(call_id) {
-            p.set(session_id, "approval", None);
+            // The newest displayed request may have hidden another waiter.
+            // Keep chat:pending complete until every request has resolved.
+            let remaining = p.approvals.values().find(|(sid, _, _)| sid == session_id).map(|(_, _, v)| v.clone());
+            p.set(session_id, "approval", remaining);
         }
         true
     }
@@ -201,10 +209,14 @@ impl Pending {
     /// `resolveQuestion`: false when no turn here waits on that question.
     pub fn answer(&self, session_id: &str, call_id: &str, answers: Value) -> bool {
         let mut p = lock(&self.inner);
-        let Some((_, tx)) = p.questions.remove(call_id) else { return false };
+        if p.questions.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
+            return false;
+        }
+        let Some((_, tx, _)) = p.questions.remove(call_id) else { return false };
         let current = p.by_session.get(session_id).and_then(|e| e.get("question"));
         if current.and_then(|q| str_at(q, "callId")) == Some(call_id) {
-            p.set(session_id, "question", None);
+            let remaining = p.questions.values().find(|(sid, _, _)| sid == session_id).map(|(_, _, v)| v.clone());
+            p.set(session_id, "question", remaining);
         }
         let _ = tx.send(answers);
         true
@@ -215,16 +227,16 @@ impl Pending {
     pub fn release(&self, session_id: &str) {
         let mut p = lock(&self.inner);
         let approvals: Vec<String> =
-            p.approvals.iter().filter(|(_, (s, _))| s == session_id).map(|(k, _)| k.clone()).collect();
+            p.approvals.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
         for id in approvals {
-            if let Some((_, tx)) = p.approvals.remove(&id) {
+            if let Some((_, tx, _)) = p.approvals.remove(&id) {
                 let _ = tx.send(false);
             }
         }
         let questions: Vec<String> =
-            p.questions.iter().filter(|(_, (s, _))| s == session_id).map(|(k, _)| k.clone()).collect();
+            p.questions.iter().filter(|(_, (s, _, _))| s == session_id).map(|(k, _)| k.clone()).collect();
         for id in questions {
-            if let Some((_, tx)) = p.questions.remove(&id) {
+            if let Some((_, tx, _)) = p.questions.remove(&id) {
                 let _ = tx.send(json!([]));
             }
         }
@@ -1153,6 +1165,7 @@ impl Turns {
                 opts,
                 &facts["provider"],
                 &mode,
+                str_at(facts, "effort"),
                 wake,
             )
             .await;
@@ -1384,6 +1397,7 @@ impl Turns {
         opts: &Value,
         provider: &Value,
         mode: &str,
+        effort: Option<&str>,
         wake: bool,
     ) {
         use crate::harness::{BRIDGE_SERVER, BRIDGE_TOOL, INTERRUPT_GRACE, Wanted, permission_mode, provider_account};
@@ -1421,6 +1435,8 @@ impl Turns {
             cwd: cwd.clone(),
             add_dirs: rest.to_vec(),
             model: str_at(opts, "modelId").filter(|m| !js::trim(m).is_empty()).map(str::to_string),
+            // `normal` means no choice was made: Claude Code's own setting stands.
+            effort: effort.filter(|e| *e != "normal").map(str::to_string),
             permission_mode: permission_mode(mode),
             config_dir,
         };
@@ -1611,8 +1627,13 @@ impl Turns {
         // The turn is over: nothing it waited on can still be answered.
         self.pending.release(&session_id);
         // The `error` event only reaches windows open now. Saved, a chat reopened
-        // later can still offer Retry. A Stop is the user's, not a failure.
-        let failure = lock(&shared.last_error).clone().filter(|_| last_stop.is_none() && !shared.cancel.is_cancelled());
+        // later can still offer Retry. A Stop counts too: one that lands between
+        // steps leaves no partial reply to mark, so this is its only record.
+        let stopped = shared.cancel.is_cancelled();
+        let failure = lock(&shared.last_error)
+            .clone()
+            .filter(|_| last_stop.is_none())
+            .map(|message| if stopped { "Stopped".to_string() } else { message });
         if let Some(obj) = lock(session).as_object_mut() {
             obj.remove("activeRun");
             if let Some(message) = failure {
@@ -2127,6 +2148,7 @@ fn native_context(
         }
     });
     let mut ctx = ToolContext::new(approver);
+    ctx.app_data_root = nekko_js::home_dir().map(|home| home.join(".nekko-agent").to_string_lossy().into_owned());
     let parse = |key: &str| settings.get(key).filter(|v| !v.is_null()).cloned();
     if let Some(v) = parse("sandboxMode") {
         ctx.sandbox_mode = serde_json::from_value(v).ok()?;
@@ -3127,6 +3149,51 @@ mod tests {
         assert!(snap["s1"].get("question").is_none() && snap["s1"].get("approval").is_some());
         p.release("s1");
         assert!(!approval.await.unwrap(), "a released approval is a no");
+        assert_eq!(p.snapshot(), json!({}));
+    }
+
+    #[tokio::test]
+    async fn pending_snapshot_preserves_older_requests_after_the_newest_is_answered() {
+        let p = Pending::default();
+        let a1 = p.park_approval("s", &call("a1"), "r", &json!("low"));
+        let a2 = p.park_approval("s", &call("a2"), "r", &json!("high"));
+        let q1 = p.park_question("s", &json!({ "callId": "q1" }));
+        let q2 = p.park_question("s", &json!({ "callId": "q2" }));
+        assert!(!p.approve("wrong-session", "a2", true));
+        assert!(!p.answer("wrong-session", "q2", json!([])));
+        assert!(p.approve("s", "a2", true));
+        assert!(a2.await.unwrap());
+        assert_eq!(p.snapshot()["s"]["approval"]["call"]["id"], "a1");
+        assert!(p.answer("s", "q2", json!([])));
+        assert_eq!(q2.await.unwrap(), json!([]));
+        assert_eq!(p.snapshot()["s"]["question"]["callId"], "q1");
+        assert!(p.approve("s", "a1", true));
+        assert!(a1.await.unwrap());
+        assert!(p.snapshot()["s"].get("approval").is_none());
+        assert!(p.snapshot()["s"].get("question").is_some());
+        assert!(p.answer("s", "q1", json!([])));
+        assert_eq!(q1.await.unwrap(), json!([]));
+        assert_eq!(p.snapshot(), json!({}));
+    }
+
+    #[tokio::test]
+    async fn pending_snapshot_keeps_newer_requests_and_deduplicates_the_same_request() {
+        let p = Pending::default();
+        let replaced = p.park_approval("s", &call("a1"), "r", &json!("low"));
+        let a1 = p.park_approval("s", &call("a1"), "r", &json!("low"));
+        assert!(replaced.await.is_err());
+        let a2 = p.park_approval("s", &call("a2"), "r", &json!("low"));
+        let q1 = p.park_question("s", &json!({ "callId": "q1" }));
+        let q2 = p.park_question("s", &json!({ "callId": "q2" }));
+        assert!(p.approve("s", "a1", true));
+        assert!(a1.await.unwrap());
+        assert!(p.answer("s", "q1", json!([])));
+        assert_eq!(q1.await.unwrap(), json!([]));
+        assert_eq!(p.snapshot()["s"]["approval"]["call"]["id"], "a2");
+        assert_eq!(p.snapshot()["s"]["question"]["callId"], "q2");
+        p.release("s");
+        assert!(!a2.await.unwrap());
+        assert_eq!(q2.await.unwrap(), json!([]));
         assert_eq!(p.snapshot(), json!({}));
     }
 

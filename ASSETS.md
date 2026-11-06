@@ -20,11 +20,13 @@ Thank you to everyone who built and maintains these.
 | Handjet | nekkoagent.com's LED-style headings, self-hosted (latin subset) | Fontsource 5.3.1 | OFL-1.1 | apps/website/fonts/OFL-handjet.txt | [Fontsource](https://fontsource.org/fonts/handjet) |
 | Space Mono | nekkoagent.com's retro labels, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-space-mono.txt | [Fontsource](https://fontsource.org/fonts/space-mono) |
 | Lobe Icons | Provider marks in Settings. The names and marks belong to their owners. | snapshot from @lobehub/icons-static-svg | MIT | apps/desktop/src/renderer/public/providers/LICENSE | [lobehub/lobe-icons](https://github.com/lobehub/lobe-icons) |
-| Gentleface | Shared desktop and Local Web UI control icons, including Send, Stop and native SVG motion | 0.3.0 | MIT | apps/desktop/src/renderer/assets/gentleface/LICENSE | [gentleface.com](https://gentleface.com/animated-icons) |
+| Gentleface | Shared desktop and Local Web UI control icons, including Send, Stop, native SVG motion and the recolored workflow-clock (Scheduled Tasks) and brain-gear (Models) rail icons | 0.3.0 | MIT | apps/desktop/src/renderer/assets/gentleface/LICENSE | [gentleface.com](https://gentleface.com/animated-icons) |
 | Simple Icons | Connector marks. The names and marks belong to their owners. | snapshot | CC0-1.0 | - | [simpleicons.org](https://simpleicons.org) |
-| llama.cpp | Runs local models. Downloaded when you set up the model server. | b11899 | MIT | - | [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) |
-| stable-diffusion.cpp | Local image generation. Downloaded only if you add it. | master-1015-e41fbcf | MIT | - | [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) |
+| llama.cpp | Runs local models. Downloaded when you set up the model server. | b11985 | MIT | - | [ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp) |
+| stable-diffusion.cpp | Local image generation. Downloaded only if you add it. | master-1026-997478a | MIT | - | [leejet/stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp) |
 | whisper.cpp and Whisper Tiny.en | Nekko Voice. Downloaded on first use, with its own notice beside it. | v1.9.2 | MIT | - | [ggml-org/whisper.cpp](https://github.com/ggml-org/whisper.cpp) |
+| Ubuntu 24.04 cloud image | The Linux CI runner VM. Downloaded from Canonical onto your Mac when you set up Linux slots; not bundled. | 24.04 (noble, current release) | Ubuntu licensing (GPL-2.0 and other free licenses) | - | [cloud-images.ubuntu.com](https://cloud-images.ubuntu.com/noble/current/) |
+| Docker Engine | Containers inside Linux CI runner VMs, installed from Ubuntu's archive at setup; not bundled. | Ubuntu's docker.io | Apache-2.0 | - | [moby/moby](https://github.com/moby/moby) |
 | uv | Sets up the MLX runtime on Apple silicon. Downloaded when needed. | 0.12.21 | MIT OR Apache-2.0 | - | [astral-sh/uv](https://github.com/astral-sh/uv) |
 | Laya decision models | Quick on-device decisions, converted to ONNX by Nekko Labs | decision-models-v1 | Apache-2.0 | scripts/decision-models/LICENSE | [convaiinnovations](https://huggingface.co/convaiinnovations) |
 

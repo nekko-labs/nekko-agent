@@ -185,6 +185,14 @@
     <string name="chats_start_on">在 %1$s 上开始</string>
     <string name="chats_run_on">运行于</string>
     <string name="chats_run_on_note">本地模型在电脑自己的硬件上运行。选择其他电脑会显示它的模型和文件夹。</string>
+    <string name="chats_run_on_state">%1$s · %2$s</string>
+    <string name="chats_auto">自动</string>
+    <string name="chats_auto_note">一台空闲的电脑</string>
+    <string name="chats_auto_finding">正在寻找空闲的电脑…</string>
+    <string name="chats_auto_free_busy">已自动选择 %1$s：%2$s 正忙。</string>
+    <string name="chats_auto_free">已自动选择 %1$s：它空闲。</string>
+    <string name="chats_auto_all_busy">所有电脑都在忙，因此自动保留了上次使用的 %1$s。</string>
+    <string name="chats_auto_none">目前没有其他电脑能运行本地模型，因此自动保留了 %1$s。</string>
     <string name="chats_shared_with">共享到 Nekko</string>
     <string name="chats_shared_note">会放入聊天的消息框。由你来发送。</string>
     <string name="chats_remove_shared">移除共享的文本</string>

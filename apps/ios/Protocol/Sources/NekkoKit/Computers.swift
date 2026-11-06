@@ -30,6 +30,8 @@ public protocol RemoteConnection: Caller {
     func registerPush(token: String) async throws
     /// `kinds`: the pushes this phone wants; nil asks for all.
     func registerPush(token: String, kinds: [String]?) async throws
+    /// The complete needs-you room manifest, or nil when no single relay owns it.
+    func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws
     /// The Live Activity card's push tokens and level (`RelayClient.registerCard`).
     func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws
     /// Frames from the relay itself (`RelayControl`).
@@ -42,6 +44,9 @@ public protocol RemoteConnection: Caller {
 
 extension RemoteConnection {
     public func registerPush(token: String, kinds: [String]?) async throws { try await registerPush(token: token) }
+    public func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws {
+        try await registerPush(token: token, kinds: kinds)
+    }
     public func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) {}
     /// A connection with one route only has to dial again.
     public func networkChanged(_ path: NetworkPath) { reconnect() }
@@ -54,13 +59,15 @@ extension RelayClient: RemoteConnection {}
 public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public var name: String
-    public let relayUrl: String
+    public var relayUrl: String
     public let pairedAt: Int64
     public var platform: String?
     /// Other addresses of the same relay, from the pairing link (TASKS.md IO-20).
     public var alts: [String]
     /// Its `machineIcon`, learned from `app:info` once connected. Nil shows nothing.
     public var icon: String?
+    /// True only for a phone-local nickname; nil migrates older saved names.
+    public var nameIsCustom: Bool?
 
     public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = [], icon: String? = nil) {
         self.id = id
@@ -70,6 +77,7 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         self.platform = platform
         self.alts = alts
         self.icon = icon
+        self.nameIsCustom = nil
     }
 
     /// Pairings saved before routes existed have no `alts`.
@@ -82,6 +90,7 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         platform = try c.decodeIfPresent(String.self, forKey: .platform)
         alts = try c.decodeIfPresent([String].self, forKey: .alts) ?? []
         icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        nameIsCustom = try c.decodeIfPresent(Bool.self, forKey: .nameIsCustom)
     }
 
     /// Every address, best first (the order the client tries them).
@@ -116,7 +125,7 @@ public struct ModelGroup: Equatable, Sendable, Identifiable {
 
 public let defaultComputerName = "My computer"
 
-/// Name the computer after its OS (`app:info` platform), like the other phone apps.
+/// Fallback for older computers that report a platform but no hostname.
 public func osName(_ platform: String?) -> String {
     switch platform {
     case "win32": return "Windows PC"
@@ -158,7 +167,11 @@ public final class ComputersStore {
     public private(set) var appearance: Appearance?
     public private(set) var pcSettings = PcSettings()
     public private(set) var workspaces: [WorkspaceFolder] = []
-    public private(set) var activity: [String: Activity] = [:]
+    public internal(set) var activity: [String: Activity] = [:]
+    /// Per-computer pending-input authority; nil counts are intentionally unknown.
+    public internal(set) var attention: [String: AttentionState] = [:]
+    /// All computer events for system notifications, separate from active-chat subscribers.
+    public var onComputerEvent: ((String, AgentEvent) -> Void)?
     /// Each listed chat's pull requests (`pr:sessionList`) for its row: only chats whose transcript names one.
     public private(set) var rowPrs: [String: [PullRequest]] = [:]
     /// When each chat's row PRs were asked for, and the links it named then.
@@ -244,7 +257,7 @@ public final class ComputersStore {
     /// Which side to update when the phone and the computer speak different versions.
     public var protocolCheck: ProtocolCheck { ProtocolCheck.compare(computer: hostProtocol) }
     public var groups: [ChatGroup] { ChatGroup.of(summaries, folders: workspaces) }
-    public var needsYouCount: Int { activity.values.filter { $0 == .needsYou }.count }
+    public var needsYouCount: Int { activeId.flatMap { attention[$0]?.pending.count } ?? 0 }
     public var runningCount: Int { activity.values.filter { $0 == .running }.count }
     public var modelGroups: [ModelGroup] {
         providers.filter(\.enabled).map { ModelGroup(provider: $0, models: models[$0.id], error: modelErrors[$0.id]) }
@@ -639,7 +652,9 @@ public final class ComputersStore {
     public func pair(_ link: PairingLink) async throws -> String {
         guard let hostKey = link.hostKey else { throw PairingRefusal.noHostKey }
         // Re-scanning a computer we already know keeps its id and name.
-        let existing = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        let sameRoute = computers.last { c in c.relayUrl == link.relayUrl && secret(c.id)?.room == link.room }
+        if let pinned = sameRoute.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
+        let existing = computers.last { secret($0.id)?.pinned == hostKey } ?? sameRoute
         if let pinned = existing.flatMap({ secret($0.id)?.pinned }), pinned != hostKey { throw PairingRefusal.differentComputer }
         let keyHex = E2E.toHex(await deriveKey(link.key, link.room))
         let id = existing?.id ?? newId()
@@ -647,11 +662,13 @@ public final class ComputersStore {
         if existing == nil {
             computers.append(Computer(id: id, name: defaultComputerName, relayUrl: link.relayUrl, pairedAt: now(), alts: link.alts))
             saveIndex()
-        } else if let i = computers.firstIndex(where: { $0.id == id }), computers[i].alts != link.alts {
+        } else if let i = computers.firstIndex(where: { $0.id == id }) {
             // A fresh QR carries the computer's routes as they are now.
+            computers[i].relayUrl = link.relayUrl
             computers[i].alts = link.alts
             saveIndex()
         }
+        dropLink(id) // A fleet link still holds the old credentials and routes.
         connect(id)
         return id
     }
@@ -660,6 +677,7 @@ public final class ComputersStore {
         let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
         guard !trimmed.isEmpty, let i = computers.firstIndex(where: { $0.id == id }) else { return }
         computers[i].name = trimmed
+        computers[i].nameIsCustom = true
         saveIndex()
     }
 
@@ -677,7 +695,9 @@ public final class ComputersStore {
         offlineFiles?.remove(id)
         transcriptCache?.removeComputer(id)
         computers.removeAll { $0.id == id }
+        attention[id] = nil
         saveIndex()
+        registerPushNow()
         if wasActive {
             activeId = computers.first?.id
             store.set(Self.activeKey, activeId)
@@ -694,8 +714,9 @@ public final class ComputersStore {
     /// the computer left behind keeps its link in the fleet, and a computer the
     /// fleet already reaches is taken over as it is, with no new connection.
     public func connect(_ id: String) {
-        defer { syncFleet() }
+        defer { syncFleet(); registerPushNow() }
         let leaving = id != activeId ? active : nil
+        if id == activeId { invalidateAttention(id) }
         // The computer left behind must not push (or start) a card on this phone any more:
         // tell it and its relay, best effort, then close that connection (or hand it to
         // the fleet). The switch never waits.
@@ -821,6 +842,7 @@ public final class ComputersStore {
     private func handle(_ signal: Signal, computerId: String, hadCode: Bool) {
         switch signal {
         case .status(let s):
+            if s.state != .online { invalidateAttention(computerId) }
             conn = s.state
             connDetail = s.detail
             if let r = s.route { route = r }
@@ -849,7 +871,7 @@ public final class ComputersStore {
         case .control(.pushRegistered(let delivers)):
             relayDelivers = delivers
         case .control(.dismiss(let tag)):
-            onDismiss?(tag)
+            dismissAttention(tag: tag, on: computerId)
         case .event(let channel, let payload):
             if channel == Events.appearanceUpdated {
                 appearance = Appearance.from(payload)
@@ -864,6 +886,8 @@ public final class ComputersStore {
             for f in listeners.values { f(e) }
             let next = ActivityTracker.next(activity, e)
             if next != activity { activity = next }
+            receiveAttention(e, on: computerId)
+            onComputerEvent?(computerId, e)
             // Keep the list fresh when a turn ends anywhere (another device, a task).
             switch e {
             case .done, .sessionMeta: scheduleSummaries()
@@ -874,6 +898,7 @@ public final class ComputersStore {
 
     /// Drop the live connection (the pairing stays).
     public func disconnect() {
+        if let id = activeId, links[id] == nil { invalidateAttention(id) }
         generation += 1
         pump?.cancel()
         pump = nil
@@ -896,13 +921,17 @@ public final class ComputersStore {
         nudgeFleet()
         if !pendingSignOuts.isEmpty { Task { await flushSignOuts() } }
         if conn == .online {
+            Task { await refreshAttention() }
             scheduleSummaries()
             flushOutbox()
         }
     }
 
     /// The phone changed network: dial a fresh socket now.
-    public func reconnect() { client?.reconnect() }
+    public func reconnect() {
+        if let id = activeId { invalidateAttention(id) }
+        client?.reconnect()
+    }
 
     /// The phone changed network (`path` says whether a LAN route can work):
     /// pick the route again and dial a fresh socket now.
@@ -951,6 +980,7 @@ public final class ComputersStore {
         suspendFleet()
         guard let c = client, !suspended else { return }
         suspended = true
+        if let id = activeId { invalidateAttention(id) }
         c.close()
     }
 
@@ -1033,19 +1063,38 @@ public final class ComputersStore {
         registerPushNow()
     }
 
+    private var pushRegistration: Task<Void, Never>?
+
+    /// Conservative single-authority enrollment: alternate endpoints cannot be
+    /// assumed to share one relay process. Never send a per-relay subtotal.
+    public var pushBadgeRooms: [String]? {
+        let routes = computers.flatMap(\.routes)
+        let rooms = computers.compactMap { secret($0.id)?.room }
+        guard rooms.count == computers.count else { return nil }
+        return PushBadgeManifest.rooms(routes: routes, rooms: rooms, needsYou: pushKinds?.contains(.needsYou) ?? true)
+    }
+
     private func registerPushNow() {
         // Every computer reached, so a chat that needs you on any of them can say so.
         for id in links.keys { registerPush(peer: id) }
         guard conn == .online, let token = pushToken, let c = client else { return }
-        let kinds = pushKinds?.map(\.rawValue)
-        Task { try? await c.registerPush(token: token, kinds: kinds) }
+        let previous = pushRegistration
+        pushRegistration = Task { [weak self] in
+            await previous?.value
+            guard let self, self.client === c, self.conn == .online, self.pushToken == token else { return }
+            try? await c.registerPush(token: token, kinds: self.pushKinds?.map(\.rawValue), badgeRooms: self.pushBadgeRooms)
+        }
     }
 
     /// Register this phone's push token on one fleet link, once it is online.
     func registerPush(peer id: String) {
         guard peers[id]?.conn == .online, let token = pushToken, let c = links[id]?.client else { return }
-        let kinds = pushKinds?.map(\.rawValue)
-        Task { try? await c.registerPush(token: token, kinds: kinds) }
+        let previous = pushRegistration
+        pushRegistration = Task { [weak self] in
+            await previous?.value
+            guard let self, self.links[id]?.client === c, self.peers[id]?.conn == .online, self.pushToken == token else { return }
+            try? await c.registerPush(token: token, kinds: self.pushKinds?.map(\.rawValue), badgeRooms: self.pushBadgeRooms)
+        }
     }
 
     /// *Send a test notification* (IO-30): ask the computer, which asks the relay
@@ -1090,6 +1139,8 @@ public final class ComputersStore {
 
     public func refresh() async {
         guard let c = client else { return }
+        let attentionId = activeId
+        let ticket = attentionId.map { beginAttention($0) }
         summariesLoading = true
         lastError = nil
         do {
@@ -1098,7 +1149,7 @@ public final class ComputersStore {
             async let settings = c.call(Channels.settingsGet)
             async let workspaces = orNil { try await c.call(Channels.workspaceList) }
             async let info = orNil { try await c.call(Channels.appInfo) }
-            async let pending = orNil { try await c.call(Channels.chatPending) }
+            async let pending = orNil { try await c.call(Channels.chatPending, [], timeout: 5) }
             let s = try await settings
             let r = (try await summaries, try await providers, s, await workspaces, await info, await pending)
             guard client === c else { return }
@@ -1110,11 +1161,11 @@ public final class ComputersStore {
             self.pcSettings = PcSettings.from(r.2)
             self.workspaces = WorkspaceFolder.list(r.3)
             // Approvals and questions already waiting when we (re)connect.
-            for (sid, p) in PendingInput.map(r.5) where p.approval != nil || p.question != nil { activity[sid] = .needsYou }
+            if let attentionId, let ticket { replaceAttention(r.5, on: attentionId, ticket: ticket) }
             let appInfo = AppInfo.from(r.4)
             hostVersion = appInfo.version
             quitFromPhone = appInfo.quitFromPhone
-            learnPlatform(appInfo.platform, for: activeId)
+            learnPlatform(appInfo.platform, for: activeId, name: appInfo.computerName ?? appInfo.hostname)
             // A failed read says nothing about the icon; an answer without one clears it.
             if r.4 != nil, let id = activeId { learnIcon(appInfo.machineIcon, for: id) }
             summariesLoading = false
@@ -1125,6 +1176,7 @@ public final class ComputersStore {
             transcripts.keepOnly(Set((r.0.array ?? []).compactMap { $0.str("id") }))
         } catch {
             if client === c {
+                if let attentionId, let ticket { replaceAttention(nil, on: attentionId, ticket: ticket) }
                 summariesLoading = false
                 summariesLoaded = true
                 lastError = error.localizedDescription
@@ -1304,7 +1356,7 @@ public final class ComputersStore {
     }
 
     /// Start a chat on the computer with a model, a folder and a tool policy.
-    public func createChat(providerId: String, modelId: String, workspaceId: String?, mode: PcSettings.ChatMode?, effort: Effort? = nil) async throws -> String {
+    public func createChat(providerId: String, modelId: String, workspaceId: String?, mode: PcSettings.ChatMode?, effort: Effort? = nil, supportingWorkspaceIds: [String] = []) async throws -> String {
         let r = try remote()
         let created = try await r.call(Channels.sessionCreate, workspaceId.map { [.string($0)] } ?? [])
         guard let session = Session.from(created) else { throw RelayError("Your computer didn’t create the chat.") }
@@ -1312,8 +1364,14 @@ public final class ComputersStore {
         if let mode { options["mode"] = .string(mode.rawValue) }
         if let effort { options["effort"] = .string(effort.rawValue) }
         do {
+            guard client === r else { throw RelayError("The selected computer changed. Open the new chat on its original computer.", fromComputer: true) }
             // A mode above the computer's default needs Face ID (`call(raising:)`).
             _ = try await call(raising: Channels.sessionSetOptions, [.string(session.id), .object(options)])
+            guard client === r else { throw RelayError("The selected computer changed. Open the new chat on its original computer.", fromComputer: true) }
+            if !supportingWorkspaceIds.isEmpty {
+                _ = try await call(change: Channels.sessionSetSupportingWorkspaces,
+                                   [.string(session.id), .array(supportingWorkspaceIds.map(JSONValue.string))])
+            }
         } catch {
             // The chat exists either way: show it, then say why its options didn't stick.
             scheduleSummaries()
@@ -1329,7 +1387,21 @@ public final class ComputersStore {
     /// Change the computer's phone-settable settings; the reply is what was saved there.
     /// Raising `defaultChatMode` needs Face ID (`call(raising:)`).
     public func updatePcSettings(_ patch: JSONValue) async throws {
-        pcSettings = PcSettings.from(try await call(raising: Channels.settingsUpdate, [patch]))
+        let c = try remote()
+        let saved = try await call(raising: Channels.settingsUpdate, [patch])
+        guard client === c else { return }
+        pcSettings = PcSettings.from(saved)
+    }
+
+    /// The star changes future chats on this computer, not the current chat's folder.
+    public func setDefaultWorkspace(_ id: String, included: Bool) async throws {
+        guard conn == .online, workspaces.contains(where: { $0.id == id }) else {
+            throw RelayError("Connect to the computer and choose a saved folder.")
+        }
+        let valid = Set(workspaces.map(\.id))
+        var ids = pcSettings.defaultWorkspaceIds.filter { valid.contains($0) && $0 != id }
+        if included { ids.append(id) }
+        try await updatePcSettings(["defaultWorkspaceIds": .array(ids.map(JSONValue.string))])
     }
 
     /// Set the active computer's icon, there, so every device shows the same one: a name from `computerIcons`, or "" for none.
@@ -1392,13 +1464,18 @@ public final class ComputersStore {
         cache.save(id, SavedChatList(savedAt: now(), summaries: summaries, folders: workspaces))
     }
 
-    func learnPlatform(_ platform: String?, for id: String?) {
-        guard let platform, let id, let i = computers.firstIndex(where: { $0.id == id }),
-              computers[i].platform != platform else { return }
-        // First connection names the computer after its OS, unless the user renamed it.
-        if computers[i].name == defaultComputerName { computers[i].name = osName(platform) }
-        computers[i].platform = platform
-        saveIndex()
+    func learnPlatform(_ platform: String?, for id: String?, name: String? = nil) {
+        guard let id, let i = computers.firstIndex(where: { $0.id == id }) else { return }
+        let old = computers[i]
+        let generic = [defaultComputerName, "Mac", "Windows PC", "Linux PC"].contains(old.name)
+        let custom = old.nameIsCustom ?? !generic
+        let reported = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !custom {
+            computers[i].name = reported.flatMap { $0.isEmpty ? nil : String($0.prefix(40)) } ?? (generic ? osName(platform ?? old.platform) : old.name)
+        }
+        computers[i].nameIsCustom = custom
+        if let platform { computers[i].platform = platform }
+        if computers[i] != old { saveIndex() }
     }
 
     func learnIcon(_ icon: String?, for id: String) {
@@ -1468,3 +1545,29 @@ private final class HelloBox: @unchecked Sendable {
         c?.resume(returning: s)
     }
 }
+
+#if DEBUG
+extension ComputersStore {
+    /// In-memory native UI evidence only. No secret, client, pairing or persistence is created.
+    public func seedParityFixture(step: Int = 0) {
+        computers = [Computer(id: "parity-fixture", name: "Fixture Mac", relayUrl: "ws://127.0.0.1:1", pairedAt: 0)]
+        activeId = "parity-fixture"
+        conn = .online
+        summariesLoading = false
+        summariesLoaded = true
+        workspaces = [WorkspaceFolder(id: "app", name: "App", path: "/Projects/App"), WorkspaceFolder(id: "docs", name: "Docs", path: "/Projects/Docs")]
+        pcSettings = PcSettings.from(["defaultWorkspaceIds": ["app"], "effort": "medium"])
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        summaries = SessionSummary.visible([
+            ["id": "draft", "title": "A new idea", "exchangeCount": 0, "updatedAt": .int(now)],
+            ["id": "moving", "title": "iPhone parity", "exchangeCount": 2, "updatedAt": .int(now),
+             "phase": step == 0 ? "building" : "verifying", "activeRun": step < 2 ? [:] : .null,
+             "activeWatchCount": step == 2 ? 1 : 0],
+            ["id": "input", "title": "Choose the release", "exchangeCount": 1, "updatedAt": .int(now)],
+            ["id": "done", "title": "Finished review", "exchangeCount": 1, "updatedAt": .int(now)]
+        ])
+        activity = ["input": .needsYou]
+        if step < 2 { activity["moving"] = .running }
+    }
+}
+#endif

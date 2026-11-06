@@ -1828,9 +1828,6 @@
           "model": "claude-opus-5",
           "max_tokens": 64000,
           "stream": true,
-          "output_config": {
-            "effort": "high"
-          },
           "messages": [
             {
               "role": "user",
@@ -2190,9 +2187,6 @@
           "model": "claude-opus-5",
           "max_tokens": 64000,
           "stream": true,
-          "output_config": {
-            "effort": "high"
-          },
           "messages": [
             {
               "role": "user",
@@ -2371,9 +2365,6 @@
           "model": "claude-opus-5",
           "max_tokens": 64000,
           "stream": true,
-          "output_config": {
-            "effort": "high"
-          },
           "messages": [
             {
               "role": "user",

@@ -1,4 +1,4 @@
-//! Remote access (`packages/host/src/remote.ts`): the persisted relay config
+//! Daemon-owned remote access: the persisted relay config
 //! and paired-device registry in `remote.json`, the single-use pairing code,
 //! and the live relay agent. The registry is the auth layer: a device must
 //! complete the HELLO handshake against it before the agent serves a single

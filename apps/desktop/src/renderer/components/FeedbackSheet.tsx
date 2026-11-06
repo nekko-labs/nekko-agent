@@ -4,11 +4,14 @@ import {
   agentPrompt, appInfoLine, feedbackNote, feedbackNoteLength, type FeedbackAppInfo, type FeedbackKind,
 } from '@nekko-agent/shared';
 import { CheckIcon, CloseIcon, WrenchIcon } from '../icons.js';
+import { FeedbackScreenshots, useFeedbackScreenshots } from './FeedbackScreenshots.js';
 import { StarryNekko } from './StarryNekko.js';
 import { Modal, Toggle } from './primitives/index.js';
 
 /** Opens the sheet from anywhere: the rail button, the command palette, Help → Send feedback…. */
 export const openFeedback = () => window.dispatchEvent(new Event('nekko:feedback'));
+
+const FEEDBACK_EMAIL = 'feedback@nekkoagent.com';
 
 const PROMPTS: Record<FeedbackKind, { summary: string; description: string; sent: string }> = {
   good: {
@@ -55,6 +58,68 @@ function ContributeNote() {
   );
 }
 
+function EmailLine() {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(FEEDBACK_EMAIL).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }).catch(() => {});
+  };
+  return (
+    <p className="flex items-center gap-1.5 text-xs text-ink-soft" data-testid="feedback-email">
+      Email us at
+      <span className="group inline-flex items-center gap-1.5">
+        <span className="select-text text-ink">{FEEDBACK_EMAIL}</span>
+        {/* Takes its space while hidden, so the line doesn't shift under the pointer. */}
+        <button
+          type="button"
+          className={`btn btn-ghost px-1.5! py-0.5! text-2xs transition-opacity focus-visible:opacity-100 group-hover:opacity-100 ${copied ? 'opacity-100' : 'opacity-0'}`}
+          aria-label={`Copy ${FEEDBACK_EMAIL}`}
+          onClick={copy}
+          data-testid="feedback-email-copy"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </span>
+    </p>
+  );
+}
+
+/** What sits under the form: nothing until a choice is made, then the route that suits it. */
+export function OtherWays({ kind, info }: { kind: FeedbackKind | null; info: FeedbackAppInfo | null }) {
+  const [copied, setCopied] = useState(false);
+  if (!kind) return null;
+  if (kind === 'good') return <EmailLine />;
+
+  const prompt = agentPrompt(info);
+  const copy = () => {
+    navigator.clipboard?.writeText(prompt).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }).catch(() => {});
+  };
+  return (
+    <details className="rounded-xl border border-line px-3 py-2 text-xs text-ink-soft">
+      <summary className="cursor-pointer font-medium text-ink-faint">Other ways: use an agent, create a GitHub issue yourself, or email us</summary>
+      <div className="mt-2 grid gap-5">
+        <section aria-labelledby="feedback-agent">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 id="feedback-agent" className="font-medium text-ink">Let an agent help you write it</h3>
+              <p className="text-2xs text-ink-faint">Copy a prompt into Claude Code, Codex or a Nekko agent. It asks you a few questions, then files a GitHub issue once you approve it.</p>
+            </div>
+            <button type="button" className="btn btn-outline shrink-0 px-2! py-1! text-xs" onClick={copy} data-testid="feedback-copy">{copied ? 'Copied' : 'Copy prompt'}</button>
+          </div>
+          <pre className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md border border-line px-2 py-1 font-mono text-2xs text-ink-faint" aria-label="Prompt that will be copied">{prompt}</pre>
+        </section>
+        <section className="flex items-center justify-between gap-3" aria-labelledby="feedback-github">
+          <div>
+            <h3 id="feedback-github" className="font-medium text-ink">Create a GitHub issue yourself</h3>
+            <p className="text-2xs text-ink-faint">No agent needed. Fill in the form on GitHub. Issues are public, so you can follow along and get replies.</p>
+          </div>
+          <ExternalLink url={FEEDBACK_ISSUES_URL} className="btn btn-outline shrink-0 px-2! py-1! text-xs" testId="feedback-github">Create issue</ExternalLink>
+        </section>
+        <EmailLine />
+      </div>
+    </details>
+  );
+}
+
 function KindTile({ value, chosen, onChoose, inputRef, icon, title, hint }: {
   value: FeedbackKind;
   chosen: boolean;
@@ -79,7 +144,6 @@ function KindTile({ value, chosen, onChoose, inputRef, icon, title, hint }: {
 
 export function FeedbackBody({ onClose }: { onClose: () => void }) {
   const [info, setInfo] = useState<FeedbackAppInfo | null>(null);
-  const [copied, setCopied] = useState(false);
   const [kind, setKind] = useState<FeedbackKind | null>(null);
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
@@ -89,6 +153,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   const [sent, setSent] = useState<FeedbackKind | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
+  const screenshots = useFeedbackScreenshots();
 
   const firstChoice = useRef<HTMLInputElement>(null);
   const summaryField = useRef<HTMLInputElement>(null);
@@ -106,11 +171,6 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   // The control that had focus is gone from these two views, so hand it on.
   useEffect(() => { if (sent) closeButton.current?.focus(); }, [sent]);
   useEffect(() => { if (discarding) keepEditing.current?.focus(); }, [discarding]);
-
-  const prompt = agentPrompt(info);
-  const copy = () => {
-    navigator.clipboard?.writeText(prompt).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); }).catch(() => {});
-  };
 
   const length = kind ? feedbackNoteLength(kind, summary, description) : 0;
   const over = length - FEEDBACK_MAX_CHARS;
@@ -130,8 +190,9 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     setSending(true);
     setError(null);
     try {
-      // Only Needs improvement offers app info; a switch left on before changing to Good sends nothing.
-      await window.nekko.feedbackSend(feedbackNote(kind, summary, description), kind === 'improve' && includeInfo);
+      // Only Needs improvement offers app info and screenshots; anything set before changing to Good stays behind.
+      const improving = kind === 'improve';
+      await window.nekko.feedbackSend(feedbackNote(kind, summary, description), improving && includeInfo, improving ? await screenshots.forUpload() : []);
       setDiscarding(false);
       setSent(kind);
     } catch (e) {
@@ -146,7 +207,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     if (discarding) {
       setDiscarding(false);
       requestAnimationFrame(() => sendButton.current?.focus());
-    } else if (!sent && (summary.trim() || description.trim())) {
+    } else if (!sent && (summary.trim() || description.trim() || screenshots.shots.length)) {
       setDiscarding(true);
     } else {
       onClose();
@@ -166,6 +227,19 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     } else if (target instanceof HTMLInputElement && target.type === 'radio') {
       e.preventDefault();
     }
+  };
+
+  const onPaste = (e: React.ClipboardEvent) => {
+    const files = [...e.clipboardData.files];
+    if (kind !== 'improve' || !files.length) return;
+    e.preventDefault();
+    void screenshots.add(files);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    if (kind !== 'improve') return;
+    e.preventDefault();
+    void screenshots.add([...e.dataTransfer.files]);
   };
 
   const status = sent ? `Your feedback was sent successfully. ${PROMPTS[sent].sent}`
@@ -205,7 +279,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
             <div className="mt-3"><ContributeNote /></div>
           </div>
         ) : (
-          <form className="flex min-h-0 flex-col" noValidate onKeyDown={onKeyDown} onSubmit={e => { e.preventDefault(); void send(); }}>
+          <form className="flex min-h-0 flex-col" noValidate onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={e => { if (kind === 'improve') e.preventDefault(); }} onDrop={onDrop} onSubmit={e => { e.preventDefault(); void send(); }}>
             <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 pb-5 pt-1">
               <fieldset>
                 <legend className="mb-1 block text-xs font-medium text-ink-soft">What kind of feedback is this?</legend>
@@ -262,70 +336,53 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                     {showDescriptionProblem && <p id="feedback-description-error" className="mt-1 text-xs text-danger">{descriptionProblem}</p>}
                   </div>
 
+                  {kind === 'improve' && <FeedbackScreenshots {...screenshots} />}
+
                   {kind === 'improve' && (
-                    <label className="flex items-start gap-2">
-                      <Toggle value={includeInfo} onChange={setIncludeInfo} label="Include app info" />
-                      <span className="text-xs">
+                    <label className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 text-xs">
                         <span className="text-ink">Include app info</span>
                         <span className="block text-2xs text-ink-faint">
                           App, version, OS and version, and CPU type. Nothing that identifies you.
                           {includeInfo && info && <span className="mt-0.5 block font-mono text-ink-soft">{appInfoLine(info).replace(/^App: /, '')}</span>}
                         </span>
                       </span>
+                      <Toggle value={includeInfo} onChange={setIncludeInfo} label="Include app info" />
                     </label>
                   )}
                 </div>
               )}
 
-              <details className="rounded-xl border border-line px-3 py-2 text-xs text-ink-soft">
-                <summary className="cursor-pointer font-medium text-ink-faint">Other ways: use an agent, or create a GitHub issue yourself</summary>
-                <div className="mt-2 grid gap-2">
-                  <section className="rounded-xl border border-line px-3 py-2" aria-labelledby="feedback-agent">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h3 id="feedback-agent" className="font-medium text-ink">Let an agent help you write it</h3>
-                        <p className="text-2xs text-ink-faint">Copy a prompt into Claude Code, Codex or a Nekko agent. It asks you a few questions, then files a GitHub issue once you approve it.</p>
-                      </div>
-                      <button type="button" className="btn btn-outline shrink-0 px-2! py-1! text-xs" onClick={copy} data-testid="feedback-copy">{copied ? 'Copied' : 'Copy prompt'}</button>
-                    </div>
-                    <pre className="mt-2 max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md border border-line px-2 py-1 font-mono text-2xs text-ink-faint" aria-label="Prompt that will be copied">{prompt}</pre>
-                  </section>
-                  <section className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2" aria-labelledby="feedback-github">
-                    <div>
-                      <h3 id="feedback-github" className="font-medium text-ink">Create a GitHub issue yourself</h3>
-                      <p className="text-2xs text-ink-faint">No agent needed. Fill in the form on GitHub. Issues are public, so you can follow along and get replies.</p>
-                    </div>
-                    <ExternalLink url={FEEDBACK_ISSUES_URL} className="btn btn-outline shrink-0 px-2! py-1! text-xs" testId="feedback-github">Create issue</ExternalLink>
-                  </section>
-                </div>
-              </details>
-            </div>
-
-            <div className="flex flex-col gap-3 border-t border-line px-5 py-4">
-              {error && <p className="rounded-xl border border-danger px-3 py-2 text-xs text-ink" style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)' }} role="alert">{error} Your feedback is still here.</p>}
-              {discarding ? (
-                <div className="flex items-center gap-3 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }} data-testid="feedback-discard">
-                  <span className="min-w-0 flex-1"><strong className="font-semibold">Discard this feedback?</strong> What you've written will be lost.</span>
-                  <button ref={keepEditing} type="button" className="btn btn-outline shrink-0 px-2! py-1! text-xs" onClick={requestClose}>Keep editing</button>
-                  <button type="button" className="btn btn-ghost shrink-0 px-2! py-1! text-xs" onClick={onClose}>Discard</button>
-                </div>
-              ) : kind && (
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  {!attempted && over <= 0 && blocked && <span className="mr-auto text-xs text-ink-faint">{summaryProblem ?? descriptionProblem}</span>}
-                  <button
-                    ref={sendButton}
-                    type="submit"
-                    className={`btn btn-primary ${blocked || sending ? 'cursor-not-allowed opacity-55' : ''}`}
-                    aria-disabled={blocked || sending}
-                    aria-keyshortcuts="Control+Enter Meta+Enter"
-                    data-testid="feedback-send"
-                  >
-                    {sending ? 'Sending…' : 'Send feedback'}
-                  </button>
-                </div>
-              )}
+              <OtherWays kind={kind} info={info} />
               <ContributeNote />
             </div>
+
+            {kind && (
+              <div className="flex flex-col gap-3 border-t border-line px-5 py-4">
+                {error && <p className="rounded-xl border border-danger px-3 py-2 text-xs text-ink" style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)' }} role="alert">{error} Your feedback is still here.</p>}
+                {discarding ? (
+                  <div className="flex items-center gap-3 rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }} data-testid="feedback-discard">
+                    <span className="min-w-0 flex-1"><strong className="font-semibold">Discard this feedback?</strong> What you've written and added will be lost.</span>
+                    <button ref={keepEditing} type="button" className="btn btn-outline shrink-0 px-2! py-1! text-xs" onClick={requestClose}>Keep editing</button>
+                    <button type="button" className="btn btn-ghost shrink-0 px-2! py-1! text-xs" onClick={onClose}>Discard</button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {!attempted && over <= 0 && blocked && <span className="mr-auto text-xs text-ink-faint">{summaryProblem ?? descriptionProblem}</span>}
+                    <button
+                      ref={sendButton}
+                      type="submit"
+                      className={`btn btn-primary ${blocked || sending ? 'cursor-not-allowed opacity-55' : ''}`}
+                      aria-disabled={blocked || sending}
+                      aria-keyshortcuts="Control+Enter Meta+Enter"
+                      data-testid="feedback-send"
+                    >
+                      {sending ? 'Sending…' : 'Send'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </form>
         )}
         <div className="sr-only" role="status">{status}</div>

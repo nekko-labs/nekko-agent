@@ -23,6 +23,12 @@ cannot see your computers or files. A configured provider keeps its existing
 models, enable switch and key-management actions. This is separate from remote
 control of a computer described below.
 
+## Groups on iPhone
+
+Chat-list groups start folded. Tap a heading to reveal its chats; its activity icon stays visible while folded, showing attention, working, watching or done. Search reveals matching chats without changing which groups you opened. General and ungrouped chats stay visible, as does the separate Needs you section.
+
+Inside a conversation, related tool calls fold under a purpose heading with an icon for reading, searching, editing, checking, running commands or other work. Running dots and failure text remain visible beside that purpose. Failed groups start open so errors are not hidden; you can fold them yourself.
+
 ## From another computer
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
@@ -77,6 +83,31 @@ computer's key, which proves your computer on every connection. Phones and the c
 both need the update: an older app cannot connect to an updated computer, and an updated app
 cannot connect to an older computer.
 
+### Re-pairing and naming your computer
+
+For a phone already listed in **Paired devices**, click **Re-pair** beside its name and scan the
+fresh QR from the phone. You do not need to revoke it first, and your other phones stay paired.
+iPhone and Android update the existing computer when its identity key is unchanged, even after a
+relay address changes, keeping its nickname and saved data.
+
+**Computer name** in the same settings card starts with your computer's system name. Enter a name
+and click **Save name**, or clear it to use the system name again. The phone learns it when it
+connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
+that nickname is kept when the computer's shared name changes or you pair it again.
+
+A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
+credentials. For safety the phone does not merge different keys just because their names match.
+Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
+to old duplicates that were saved with different identity keys.
+
+## iPhone chat controls
+
+New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
+
+The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
+
+From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
+
 ## The phone app
 
 > **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in
@@ -109,6 +140,19 @@ cannot connect to an older computer.
 > computer. Choosing another computer shows its models and folders at once, since every paired
 > computer is already connected; what you typed stays.
 >
+> **Automatic** (iPhone and Android): with a **local model** (Ollama, LM Studio, llama.cpp, vLLM) and more
+> than one paired computer, **Run on** starts on **Automatic**. The phone asks each online
+> computer whether it is in use (a chat replying there, or someone at its keyboard) and starts the
+> chat on a free one, with the same model if that computer has it, else the last one used there,
+> else one it already has loaded. The line under the options says what it picked and why
+> (*Auto picked Studio Mac: MacBook is busy.*). When every computer is busy, or none other can run
+> a local model, the chat stays on the one used last. Choosing a **folder** decides the computer
+> (the folder lives on it), and picking a computer by hand turns Automatic off for that chat;
+> choose **Automatic** again to go back. New chat opened from one computer's list starts on that
+> computer. Chats on cloud models are not moved. A computer tells the phone only yes/no answers
+> (in use, a chat replying, no keyboard, on battery or hot), never how long it has been idle,
+> its battery level or its temperatures.
+>
 > On the iPhone, the model list opens on **All**, with **Cloud** and **Local** beside it at the
 > top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
 > servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
@@ -133,6 +177,20 @@ cannot connect to an older computer.
 > Then pick **This iPhone** under **New chat → Run on**. These chats sit in the same list as your
 > computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
 > and ChatGPT subscriptions and local model servers still need a computer.
+>
+> **Connectors** (iPhone): **Settings → Connectors** (or **Connectors** in the chat list's menu)
+> connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
+> project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist). Each token stays in this
+> iPhone's Keychain and goes only to its own service; your computers keep their own connectors.
+> Connect checks the token first and says who it signed in as.
+>
+> **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
+> review, opened by you and assigned to you on the selected git provider; **Projects** lists the
+> ones in the repositories your computers' folders hold, plus any you add. Tap one for **Review
+> it**, **Fix the failing checks**, **Address the review comments**, **Summarize it**, **Update
+> from the base branch** or **Ask about it** (also on touch and hold, and swipe right to review).
+> Each opens New chat with the prompt written, on the computer that has that repository and in
+> its folder; nothing is sent until you tap **Start**.
 >
 > **Simple and Detailed** (iPhone and Android): on iPhone the chat's **More** menu (or the chats list's view menu) picks the
 > mode; on Android the switch at the top left of a chat does. The phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
@@ -229,6 +287,11 @@ cannot connect to an older computer.
 > version, the phone protocol on each side and the open-source licenses of the app and the
 > libraries it ships.
 >
+> **Every computer stays connected** (Android): the app keeps a connection to every paired
+> computer, not only the one you are using, so switching to another (in Computers, or **New chat →
+> Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
+> The chat list still shows one computer's chats at a time.
+>
 > **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
 > different phone protocol versions, the chat list and **Settings → About** show a banner naming
 > the side to update: Nekko Agent on the computer, or the app.
@@ -300,7 +363,7 @@ cannot connect to an older computer.
 > - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
-> - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. **+ → Paste image** adds photos from the clipboard. The computer sends small previews, not the originals; older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
+> - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. It sharpens as the computer sends the photo at full size (a spinner shows while it loads). **⋯** saves it to Photos, copies it or shares it, and swiping up or down closes the viewer. **+ → Paste image** adds photos from the clipboard. Chats carry small previews; the viewer asks for one full-size photo at a time (`session:photo`). Older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt

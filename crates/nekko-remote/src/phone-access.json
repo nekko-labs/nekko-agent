@@ -1,5 +1,6 @@
 {
  "channels": [
+  "activity:state",
   "app:info",
   "app:quit",
   "artifact:read",
@@ -59,7 +60,9 @@
   "session:delete",
   "session:fork",
   "session:get",
+  "session:photo",
   "session:setOptions",
+  "session:setSupportingWorkspaces",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -158,6 +161,7 @@
   "providers:list",
   "providers:sealKey",
   "session:get",
+  "session:photo",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -171,6 +175,7 @@
   "engine:status",
   "gpu:stats",
   "system:stats",
+  "activity:state",
   "git:branches",
   "git:compare",
   "git:diff",
@@ -192,6 +197,7 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "session:setSupportingWorkspaces",
   "workspace:addByPath",
   "workspace:remove",
   "providers:saveSealed",
@@ -287,6 +293,7 @@
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
   "machineIcon",
   "skipDeleteConfirmation",
   "voice.enabled",
@@ -298,6 +305,7 @@
   "automationsPaused",
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
   "defaultModelId",
   "defaultProviderId",
   "machineIcon",
@@ -486,6 +494,12 @@
   "clientModelSettings",
   "shareWithComputers"
  ],
+ "activityView": [
+  "chatActive",
+  "headless",
+  "strain",
+  "userActive"
+ ],
  "modelSettingChannels": [
   "engine:saveModelPreset",
   "engine:settings",
@@ -532,7 +546,9 @@
   "textChars": 4000,
   "images": 40,
   "thumbSide": 384,
-  "thumbChars": 98304
+  "thumbChars": 98304,
+  "photoSide": 2048,
+  "photoChars": 6291456
  },
  "changesView": {
   "files": 50,

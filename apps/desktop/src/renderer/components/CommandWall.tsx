@@ -1,3 +1,4 @@
+import { terminalPresentation } from './terminalActivity.js';
 import { computerIdOf } from '@nekko-agent/shared';
 import { ComputerChip } from './ComputerChip.js';
 import { terminalExcerpt } from './terminalExcerpt.js';
@@ -282,8 +283,13 @@ export function commandWallGeometry(state: CommandWallState, width: number, heig
 
 /** Stable keyed windows across layouts keep transcripts, terminals and drafts warm. */
 /** A terminal's state as the wall mascot shows it: an open shell sleeps, an exit is done or failed. */
-export function terminalStatus(terminal: Pick<TerminalInfo, 'running' | 'exitCode'>): AgentStatus {
-  if (terminal.running) return 'idle';
+export function terminalStatus(terminal: Pick<TerminalInfo, 'running' | 'exitCode' | 'activity'>): AgentStatus {
+  if (terminal.running) {
+    if (terminal.activity?.state === 'attention') return 'input';
+    if (terminal.activity?.state === 'running') return 'working';
+    if (terminal.activity?.lastExitCode) return 'error';
+    return 'idle';
+  }
   return terminal.exitCode ? 'error' : 'done';
 }
 
@@ -567,7 +573,7 @@ export function CommandWall({
 
   const focusWindow = (pane: WbPane) => {
     setState((s) => ({ ...s, layout: { ...s.layout, mode: 'focus' }, hero: pane.refId }));
-    if (pane.kind === 'chat') onSelect(pane.refId);
+    if (pane.kind === 'chat' || pane.kind === 'terminal') onSelect(pane.refId);
   };
 
   const update = useCallback((fn: (root: WbNode | null) => WbNode | null) => setState((s) => {
@@ -595,11 +601,15 @@ export function CommandWall({
       ? { ...s, root: splitPane(s.root, at.paneId, at.dir, { ...wallPane(kind, refId), zone: nextZoneName(s.root) }) }
       : openWallPane(zoneId ? { ...s, activeZone: zoneId } : s, kind, refId));
     // A chat just made is the one you mean to talk to next.
-    if (kind === 'chat') onSelect(refId);
+    if (kind === 'chat' || kind === 'terminal') onSelect(refId);
   };
 
   // Clicking a zone, or anything in it, makes it the active zone.
-  const activate = (paneId: string) => setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
+  const activate = (paneId: string) => {
+    setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
+    const pane = allPanes(state.root).find((p) => p.id === paneId);
+    if (pane?.kind === 'terminal') onSelect(pane.refId);
+  };
   const [zoneMenu, setZoneMenu] = useState<{ x: number; y: number; paneId: string } | null>(null);
   const [renamingZone, setRenamingZone] = useState<string | null>(null);
   const renameZoneTo = (id: string, name: string) => { setRenamingZone(null); setState((s) => ({ ...s, root: renameZone(s.root, id, name) })); };
@@ -775,7 +785,7 @@ export function CommandWall({
 
   const titleOf = (pane: WbPane): string => {
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
-    if (pane.kind === 'terminal') return terminalById.get(pane.refId)?.title || 'Terminal';
+    if (pane.kind === 'terminal') { const t = terminalById.get(pane.refId); return t ? terminalPresentation(t).title : 'Terminal'; }
     if (pane.kind === 'zone') return pane.zone ?? 'Zone';
     return pane.kind === 'automations' ? 'Automations' : 'Insights';
   };
@@ -801,12 +811,13 @@ export function CommandWall({
       agentStatus = agentStatusOfLane(lane, blocked, wakeSourcesOf(session));
       status = needsYou && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
     } else if (terminal) {
-      status = terminal.running ? { label: 'Shell open', tone: 'var(--success)' } : { label: terminal.exitCode ? `Exited with code ${terminal.exitCode}` : 'Exited', tone: 'var(--ink-faint)' };
+      const p = terminalPresentation(terminal);
+      status = { label: p.status, tone: p.tone };
     }
     const title = titleOf(pane);
     const flashing = flash?.paneId === pane.id;
     const openable = pane.kind === 'chat' || pane.kind === 'terminal';
-    const selected = pane.kind === 'chat' && pane.refId === selectedId;
+    const selected = (pane.kind === 'chat' || pane.kind === 'terminal') && pane.refId === selectedId;
     const n = pane.kind === 'chat' ? numberOf.get(pane.refId) : undefined;
 
     const rect = shownPanes.get(pane.id);
@@ -906,8 +917,8 @@ export function CommandWall({
         <PaneFrame
           pane={pane}
           title={title}
-          // The window's number, then Nekko (the agent's own icon) wearing its status badge; a terminal shows its prompt icon first.
-          icon={pane.kind === 'chat' ? <><WallNumber n={n} /><span data-agent-status><WallMascot status={agentStatus} /></span></>
+          // The window's number (it tells tiled windows apart, so not in Focus), then Nekko (the agent's own icon) wearing its status badge; a terminal shows its prompt icon first.
+          icon={pane.kind === 'chat' ? <>{tiled && <WallNumber n={n} />}<span data-agent-status><WallMascot status={agentStatus} /></span></>
             : terminal ? <>{iconOf(pane.kind)}<span data-agent-status><WallMascot status={terminalStatus(terminal)} label={status?.label} /></span></> : iconOf(pane.kind)}
           badge={
             <>
@@ -922,12 +933,14 @@ export function CommandWall({
           stripStyle={needsYou ? { background: 'color-mix(in srgb, var(--warning) 10%, transparent)' } : undefined}
           addable={WALL_ADDABLE}
           closeTitle={pane.kind === 'chat' ? 'Stop agent and watchers, then remove from the wall (chat is kept)' : 'Remove from the wall'}
+          // Focus shows one window, so there is nowhere to move it to.
+          locked={!tiled}
           onPickUp={pickable ? (e) => pickUp(e, pane, title) : undefined}
           canSplit={(dir) => wallArrangement(state.layout) === 'grid' && !inDeck && canSplit(state.root, pane.id, dir)}
           onAddWindow={() => live.current.setState((s) => s.layout.mode === 'focus' ? { ...s, layout: { ...s.layout, mode: 'grid' } } : s)}
           onSplit={(dir, kind) => { void live.current.addWindow(kind, { paneId: pane.id, dir }); }}
           onClose={() => { void closeWallAgent(pane, () => live.current.update((root) => clearZone(root, pane.id))); }}
-          focusAction={openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><FocusIcon className="h-5 w-5" /></button>}
+          focusAction={tiled && openable && <button type="button" className="command-wall-action agent-zen-action" title="Zen: focus this window (Ctrl+Shift+1)" aria-label={`Focus ${title}`} onClick={() => live.current.focusWindow(pane)}><FocusIcon className="h-5 w-5" /></button>}
           onMinimize={() => live.current.update((root) => clearZone(root, pane.id))}
           onFocus={() => { if (pane.kind === 'chat') live.current.onSelect(pane.refId); }}
         >
@@ -938,7 +951,7 @@ export function CommandWall({
           <div className="command-wall-content" inert={!box || deckCard} aria-hidden={!box || deckCard || undefined} data-companions-visible={showCompanions && companions.length > 0 || undefined} data-focus-chat={(focusedChat || parked) || undefined}>
 
             <div className="command-wall-primary">
-           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={fullSurface ? undefined : selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
+           {pane.kind === 'chat' ? <PaneVisibleContext.Provider value={!parked}><PaneDensityHint.Provider value={density}><ChatPane key={pane.refId} sessionId={pane.refId} commandCenter surface={fullSurface ? 'full' : 'transcript'} cleanStart={focusedChat || tiled} status={agentStatus ?? 'idle'} selected={selected} /></PaneDensityHint.Provider></PaneVisibleContext.Provider>
             : pane.kind === 'terminal' ? <TerminalPane key={pane.refId} terminalId={pane.refId} />
             : null}
            </div>

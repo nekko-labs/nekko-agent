@@ -45,6 +45,40 @@ describe('liveRuns', () => {
     expect(getLiveRun('a')?.transcriptThroughId).toBeUndefined();
   });
 
+  it('anchors live PR results before later text and retains them through replay and finish', () => {
+    const call = { id: 'draft', name: 'bash', input: { command: 'gh pr ready 42 --undo --repo o/r' } };
+    const events: AgentEvent[] = [
+      { type: 'tool_call', sessionId: 'a', call },
+      { type: 'tool_result', sessionId: 'a', result: { toolCallId: call.id, output: '' } },
+      text('a', 'The PR is now a draft.'),
+    ];
+    events.forEach((event, index) => applyEvent(event, 1000 + index));
+    const run = getLiveRun('a')!;
+    expect(run.blocks.map((block) => block.kind)).toEqual(['activity', 'pr', 'text']);
+    expect(run.prMessages).toHaveLength(2);
+    const prMessages = run.prMessages;
+    applyEvent(text('a', ' Next step.'));
+    expect(getLiveRun('a')!.prMessages).toBe(prMessages);
+    applyReplay({ sessionId: 'a', events: events.map(({ sessionId: _id, ...event }) => event), at: [1000, 1001, 1002] } as any);
+    expect(getLiveRun('a')!.blocks).toEqual(run.blocks);
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')!.prMessages).toEqual(prMessages);
+  });
+
+  it('does not keep failed, oversized, duplicate or ordinary tool outputs as live PR events', () => {
+    const fire = (id: string, name: string, command: string, output: string, isError = false) => {
+      applyEvent({ type: 'tool_call', sessionId: 'a', call: { id, name, input: { command } } });
+      applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: id, output, isError } });
+    };
+    fire('failed', 'bash', 'gh pr merge 9 --repo o/r', 'denied', true);
+    fire('large', 'bash', 'gh pr view 9 --repo o/r', 'x'.repeat(LIVE_STREAM_MAX + 1));
+    fire('read', 'read_file', 'gh pr create', 'https://github.com/o/r/pull/9');
+    expect(getLiveRun('a')!.blocks.filter((block) => block.kind === 'pr')).toEqual([]);
+    fire('ok', 'bash', 'gh pr ready 9 --repo o/r', '');
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'ok', output: '' } });
+    expect(getLiveRun('a')!.blocks.filter((block) => block.kind === 'pr')).toHaveLength(1);
+  });
+
   it('times each tool call from its call to its result', () => {
     applyEvent(call('a', 'bash'), 1_000);
     applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'c_bash', output: 'ok' } }, 3_500);

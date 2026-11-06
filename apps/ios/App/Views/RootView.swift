@@ -28,6 +28,10 @@ enum Route: Hashable {
     case simpleMode
     /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
     case phoneModels
+    /// Connectors: a git provider and project tools, connected on this iPhone itself (decision 0058).
+    case connectors
+    /// The selected git provider's pull requests, with one-tap prompts (decision 0058).
+    case pullRequests
 }
 
 struct RootView: View {
@@ -133,7 +137,7 @@ struct RootView: View {
     private var covered: Bool { app.prefs.appLock && (app.lock.locked || phase != .active) }
 
     private func syncCover() {
-        // Before the first unlock the cover is the launch animation's held first frame, so
+        // Before the first unlock the cover is the launch animation, building and holding, so
         // the animation underneath takes over without a seam; after that it is the dissolving cat.
         let lock = LockView(phase: phase, cat: app.lock.everUnlocked, opening: !covered) { cover.opened() }
             .environment(app)
@@ -208,6 +212,8 @@ struct RouteView: View {
         case .liveActivities: LiveActivitySettingsView()
         case .simpleMode: SimpleModeSettingsView()
         case .phoneModels: PhoneModelsView()
+        case .connectors: ConnectorsView()
+        case .pullRequests: PullRequestsView(path: $path)
         }
     }
 }
@@ -305,7 +311,7 @@ struct SceneReader: UIViewRepresentable {
 }
 
 /// Shown over everything while the app lock is on: the opening animation's
-/// lavender and cat, so the return is one dissolve with Face ID in the middle.
+/// plum and cat, so the return is one dissolve with Face ID in the middle.
 /// Unlock appears only if Face ID was cancelled or failed.
 struct LockView: View {
     /// RootView's: the cover's window is not part of the SwiftUI scene, so it
@@ -331,8 +337,8 @@ struct LockView: View {
             if cat {
                 SplashView(kind: .resume, ready: opening, onDone: opened)
             } else {
-                // The launch animation's first frame (the launch screen's cat), held: unlocked,
-                // the cover goes at once and the same frame underneath starts its zoom.
+                // The launch animation itself, building the cat and holding it: unlocked, the cover
+                // goes at once and the same frame underneath (same clock) carries on into the zoom.
                 SplashView(ready: false) {}
             }
             if app.lock.locked && phase == .active && prompted && !app.lock.authenticating {
@@ -382,14 +388,14 @@ struct CatMark: View {
     }
 }
 
-/// The brand mark on its own: the head in the brand lavender, with no tile
+/// The brand mark on its own: the head in the brand plum secondary, with no tile
 /// behind it, as the desktop, Android and the opening animation show it. The
 /// tiled square is only the Home Screen icon.
 struct BrandMark: View {
-    static let lavender = Color(red: 0x9d / 255, green: 0x8c / 255, blue: 0xe6 / 255)
+    static let ink = Color(red: 0x85 / 255, green: 0x4f / 255, blue: 0x6c / 255)
 
     var body: some View {
-        CatMark().foregroundStyle(Self.lavender).accessibilityHidden(true)
+        CatMark().foregroundStyle(Self.ink).accessibilityHidden(true)
     }
 }
 

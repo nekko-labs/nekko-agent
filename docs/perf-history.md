@@ -39,6 +39,105 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Cold-switch step of 2026-11-03: the harness, not the app (#712, 2026-11-06)
+
+Area: perf harness. Result: measurement change; no app regression found in the window.
+Conditions: CI figures are the `perf` job logs of scheduled and merge-queue runs whose head is a `main` first-parent commit, grouped by runner CPU (4 threads, Linux, Chrome 156). Local figures: Apple M5 Max, macOS, Google Chrome, `--only latency --attempts 1 --no-gpu --report-only`, one release `nekkod` built at `13338095` for every run, harness and app chosen with `--app`, 33 cold switches per run.
+
+The step on `main` falls between `9a8bed34` (#1573) and `13338095` (#1617). Cold first-frame p50 / first-attempt p95 on the same CPU class:
+
+| Runner | Before (2026-11-02 up to `9a8bed34`) | After (`13338095` to 2026-11-05) |
+|---|---|---|
+| AMD EPYC 9V45 | 15.1-18.1 / 17.2-23.1 ms (7 commits) | 22.2-26.7 / 27.0-37.3 ms (24 commits) |
+| AMD EPYC 9V74 | 16.6-22.6 / 19.2-28.2 ms (9 commits) | 23.4-28.3 / 29.2-36.4 ms (22 commits) |
+
+Local 2x2, harness of `9a8bed34` or `13338095` against the app of either, alternated (order old/old, new/old, old/new, new/new, then reversed):
+
+| Harness | App | Cold first-frame p50 / p95 (two runs) |
+|---|---|---|
+| `9a8bed34` | `9a8bed34` | 8.7 / 10.0, 6.8 / 10.1 ms |
+| `9a8bed34` | `13338095` | 9.3 / 10.6, 6.8 / 9.1 ms |
+| `13338095` | `9a8bed34` | 12.1 / 15.5, 9.6 / 12.3 ms |
+| `13338095` | `13338095` | 12.0 / 14.8, 12.5 / 15.3 ms |
+
+The harness of #1521 alone (`e0539806`) on app `13338095`: 9.7 / 14.7 and 9.8 / 15.0 ms, alternated with `13338095`'s harness at 9.7 / 12.2 and 10.8 / 14.6 ms.
+
+Why: #1521 seeds the six-zone board the app really shows (before it, the app converted the harness's board to two zones with everything else minimized). Since then a cold switch opens a chat that is not on the board into the active zone of a board with six live chats, a remount #1538 already listed as a real product cost (about 31 ms against 13 ms at 60 Hz). The 33 ms gate was calibrated on 2026-10-17 on the old board. The app's own code in the window moved the figure by less than run-to-run noise. Whether to recalibrate the gate on the new board or to make that remount cheaper is a product decision, not taken here. Source: #712, #1521, #1538, CI logs of the scheduled `main` runs 41554315816 and 41693364528 and the queue runs on those commits.
+
+## Dynamic pane search routing (#1854, 2026-11-05)
+
+Area: renderer. Result: matched baseline failure reproduced; no performance improvement or zero-effect claim.
+Conditions: same Linux runner, Intel Xeon Platinum 8573C (4 threads, 16 GB), Chrome/156.0.8078.79, Node22.23.4, 1440x1000, full latency workload, 33 cold switches per run. Exact base `9f9cffb607014608c14faf80b680a84c85fb70d4`, queue head `98a5cc2d5bb6fbac681aba7f81454bacf951a458`; order base/head/head/base. Clean snapshots and identical performance harness/daemon sources verified; separately built release daemons share SHA256 `a139292055626875d1a744439ca60854d62e37fc5a2ef9d8303764d32ddbad93`.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-frame p95 | 40.4 / 38.3 ms | 38.8 / 36.1 ms |
+| Cold-chat first-frame p50 | 29.0 / 29.0 ms | 29.7 / 29.9 ms |
+
+Both unchanged-base runs and both head runs fail the unchanged 33 ms gate. Raw nearest-rank percentiles were recomputed from the reports. This proves baseline failure on this runner, not a causal speedup or absence of influence from the routing change. The original protected queue [42033611344](https://github.com/nekko-labs/nekko-agent/actions/runs/42033611344) failed only cold first-frame paint at 36.3 / 37.6 / 34.3 ms p95 on the same CPU/browser class; build, integration tests, CodeQL and all other measured latency/memory rows passed, terminal typing skipped. Earlier cumulative [42031593338](https://github.com/nekko-labs/nekko-agent/actions/runs/42031593338) failed at 34.5 / 33.7 / 34.3 ms on Xeon 6973P-C, not a matched causal comparison.
+
+Separate timeline-instrumented base/head runs measured 38.4 / 39.2 ms p95 (p50 31.6 / 31.3 ms). Inspected cold traces contain 176562 / 171446 events; nested renderer-main totals for style UpdateLayoutTree 481.215 / 442.285 ms, Layout 200.154 / 194.624 ms, Paint 502.808 / 469.747 ms and Layerize 1604.836 / 1502.413 ms are whole-phase observations, not per-click causal attribution. Profiling overhead means this pair is not equivalent to the unprofiled controls. Earlier automatic streaming-only profiles do not measure cold-chat latency.
+
+Source: [exact matched reports, provenance and timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42035974208), [PR #1854](https://github.com/nekko-labs/nekko-agent/pull/1854), baseline [#712](https://github.com/nekko-labs/nekko-agent/issues/712). The diagnostic workflow completed, but all six measurements missed the budget; workflow success is not a passed product gate. No budget change. The temporary diagnostic workflow must never merge.
+## Phone re-pair and computer names (#1781, 2026-11-05)
+
+Area: renderer / perf harness. Result: baseline failure reproduced; no optimization or zero-effect claim.
+Conditions: same Linux runner, AMD EPYC 9V45 (4 threads), Chrome/156.0.8078.79, Node22.23.4, 1440x1000, scripted local model, 33 cold switches per run, unchanged latency harness and budgets. Order base/head/head/base. Exact queue parent `1cbfcd50186fcaec877d26aaca9ab101f04a0687`, failed combined head `b14c9d41c0f39680440771cb3d0572d77ccc014b` (product head `928b1635`). Both source snapshots clean. Each release daemon built from its own snapshot, both SHA256 `5c6a3d32d7f84f50a846d2b0feaf419e72c9d49a8077f7376669547bb5985e18`.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-paint p95 | 39.0 / 35.0 ms | 38.7 / 31.6 ms |
+| Cold-chat first-paint p50 | 30.3 / 26.2 ms | 29.7 / 24.6 ms |
+
+Both unchanged-base runs failed the 33 ms gate. The first head also failed and the second passed; these two matched pairs show no consistent head regression, not proof of zero effect or a performance improvement. All 33 actual cold samples per run, revisions, clean statuses and binary hashes were inspected. Earlier combined queue runs missed the same metric: [41969707092](https://github.com/nekko-labs/nekko-agent/actions/runs/41969707092) on EPYC7763/Chrome156.0.8078.47, p95 attempts45.0/45.5/43.7ms; [41970739734](https://github.com/nekko-labs/nekko-agent/actions/runs/41970739734) on EPYC9V74/Chrome156.0.8078.79, attempts34.7/38.3/35.3ms. Other measured speed/memory rows and build/integration/analysis passed. Different-runner numbers are not a speedup time series. Automatic streaming-only profiles skipped the failing cold metric and were not baseline proof.
+
+Separate timeline-instrumented pair: base/head cold p95 **34.5 / 34.2 ms**, p50 **27.3 / 27.4 ms**, 33 samples each. Inspected cold-switch trace files (203811/224842 events). Renderer-main whole-phase nested totals, base/head: UpdateLayoutTree **646.228 / 614.891 ms**, Layout **153.080 / 157.301 ms**, Paint **1963.557 / 2083.449 ms**, Layerize **1233.972 / 1328.307 ms**. Profiling overhead and overlapping nested events preclude per-interaction causal attribution; no trace-based speed win is claimed.
+
+Source: [matched reports, samples, provenance and latency traces](https://github.com/nekko-labs/nekko-agent/actions/runs/41972417341), baseline tracker [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Product behavior and budgets unchanged. Later queue attempts on other runners also failed only cold first-paint.
+## Incoming questions preserve typing focus (#1814, 2026-11-05)
+
+Area: renderer. Result: baseline cold-paint failure reproduced; no performance improvement claimed and no budgets changed.
+Conditions: exact queue parent `2475c3b3e50f27a33c0271e417b587cfae522651` and head `8f7b413ea66e22f42f23c544676774656f456eaf`, same AMD EPYC 9V74 Linux runner (4 threads, 16 GB), Chrome/156.0.8078.79, Node 22, 1440x1000, scripted 300 tok/s provider, 1000 + 12x400-message chats, 33 cold switches per measurement. Full latency order base/head/head/base, one attempt each, without profiling. Tracked snapshots clean; perf harness, crates and Cargo.lock identical. Independently built release daemons had the same SHA-256 `65b34418bb1079c19a303e689afaf9c40cb60825441284503c96292cab46089d`.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold first-frame p95 | 39.0 / 35.2 ms | 34.2 / 34.1 ms |
+| Cold first-frame p50 | 26.9 / 27.0 ms | 25.3 / 27.1 ms |
+
+All four fail the unchanged 33 ms gate. This establishes an exact-parent baseline failure on this runner, not zero impact or a speedup. The original queue on Intel Xeon 6973P-C (same browser, Linux 4 threads) measured 34.6 / 33.9 / 33.8 ms; all other measured speed/memory rows, build, integration tests and CodeQL passed. Do not treat the original frame-only automatic profiles as cold-switch evidence.
+
+Separate timeline-instrumented base/head p95 was 39.9 / 41.3 ms. Inspected cold-switch traces contain 179441 / 162435 events; renderer-thread nested event totals: UpdateLayoutTree 701.503 / 692.301 ms, Layout 172.874 / 165.797 ms, Paint 2167.981 / 2058.461 ms. These whole-phase totals overlap and have instrumentation overhead; they are not per-click causal attribution. Raw source revisions, cleanliness, hashes, reports, samples and traces are in [matched diagnostic 41992014521](https://github.com/nekko-labs/nekko-agent/actions/runs/41992014521) and retained locally in `.shots/pr1814-archive`. The temporary diagnostic workflow must never merge. Baseline tracker: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Later queue attempts [42005371375](https://github.com/nekko-labs/nekko-agent/actions/runs/42005371375) and [42007380317](https://github.com/nekko-labs/nekko-agent/actions/runs/42007380317) failed only cold first-paint (p95 41.1 to 44.2 ms, EPYC 7763); build, integration tests, CodeQL and every other measured speed/memory row passed.
+## Existing-chat static grain (#1904, 2026-11-06)
+
+Area: renderer. Result: no regression reproduced in two matched latency pairs; original runner-specific cold-paint failure remains unexplained. No speedup or zero-effect claim.
+Conditions: exact queue parent `50d6e93c6f26424870cf2ad0743c69a21d97094f`, head `fce171e745563042fa7c0bdc79363e719f179df6`; same Linux Intel Xeon 6973P-C runner (4 threads, 16 GB), Chrome 156.0.8078.79, Node 22.23.4, 1440x1000, scripted model, 33 cold switches per measurement. Clean snapshots, unchanged latency harness and independently built identical release daemon binaries (SHA256 `debfcc01554946e966330170e802054153e88d7d49a7f6d198243cabe4358e6b`). Order base/head/head/base, full latency workload, one attempt each.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-frame p95 | 31.4 / 32.6 ms | 28.4 / 31.9 ms |
+| Cold-chat first-frame p50 | 23.7 / 22.9 ms | 23.4 / 25.2 ms |
+
+All four full latency measurements passed their budgets, including the unchanged 33 ms cold-paint gate. Raw nearest-rank samples, snapshot identities, clean-tree assertions and daemon hashes were inspected. The original queue run on AMD EPYC 7763 (same Chrome, Linux 4 threads, 16 GB) failed only cold first-frame paint at p95 36.6 / 40.6 / 37.1 ms, 33 samples each. Other measured speed/memory rows and build/integration tests passed; terminal typing was skipped. Automatic streaming-only profiles did not measure the failing cold-switch metric. The Intel comparison does not reproduce a baseline failure or establish the cause on AMD; it supports one evidence-backed protected requeue, not repeated retries if the failure recurs. Related baseline investigation: [#712](https://github.com/nekko-labs/nekko-agent/issues/712).
+
+Separate timeline-instrumented base/head cold-paint p95 was 31.0 / 32.8 ms. Inspected cold traces contain 195607 / 196657 events. Renderer-main whole-phase totals in ms: UpdateLayoutTree 384.870 / 394.106, Layout 167.313 / 167.238, Paint 420.876 / 418.657, Layerize 1310.728 / 1309.487. Nested events overlap; totals are not per-click causality or unprofiled gate measurements. Grain implementation and budgets were not changed during diagnosis.
+
+Source: [matched reports, raw samples, provenance and cold-paint traces](https://github.com/nekko-labs/nekko-agent/actions/runs/42134801181), [original queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/42131946898). Raw artifacts retained locally under `.shots/chat-gradient-dither/`. Temporary `ci/1904-cold-paint` workflow is diagnostic only and must never merge.
+## Inline PR lifecycle model queue diagnosis (#1820/#1821, 2026-11-05)
+
+Area: renderer / shared projection. Result: unchanged-base cold-paint failure reproduced; no product optimization or zero-regression claim.
+Conditions: exact queue parent `edcdeb9c7da0ef7d5e4f4cf1af26cc5f1fe91861` and model group `4920a6924fa21ad04600f5f0c3e4cacb532c21ce`, one AMD EPYC 9V45 Linux runner (4 threads, 16 GB), Chrome156.0.8078.79, Node22.23.4, 1440x1000, 33 cold switches per phase. Clean snapshots, identical perf harness/daemon sources and independently built release daemons with identical SHA256 `cded2594759104dad5a059fe91e7cb9a612b4f2959c9d72432bedabecfda54e6`.
+
+| Unprofiled metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold first-frame p95 | 30.7 / 37.2 ms | 30.2 / 31.7 ms |
+| Cold first-frame p50 | 25.6 / 25.9 ms | 24.0 / 23.7 ms |
+
+Order was base/head/head/base. Both head runs pass the unchanged 33 ms gate; only the second unprofiled base fails. This establishes a baseline failure in this comparison, not two unprofiled baseline failures, a measured speedup, or proof the feature has no effect. Separate timeline-instrumented base/head p95 was 38.9 / 36.2 ms, p50 31.0 / 31.8 ms; both fail, but profiling overhead prevents treating these as additional unprofiled controls. Cold-phase trace event counts were 207832 / 202330. Renderer-main nested totals (overlap, not per-click attribution): style 750.609 / 734.030 ms, Layout 185.460 / 183.592 ms, Paint 2010.819 / 2068.347 ms, Layerize 1347.518 / 1310.612 ms. No causal repair is inferred from whole-phase totals.
+
+Original queue [42014517917](https://github.com/nekko-labs/nekko-agent/actions/runs/42014517917) on EPYC7763 / Chrome156.0.8078.79 failed cold p95 40.3 / 39.0 / 37.4 ms (33 samples each); other measured speed/memory budgets passed, terminal typing skipped. Its automatic unchanged-base profile measured streaming frames only, not cold latency. An already-started replacement [42016971870](https://github.com/nekko-labs/nekko-agent/actions/runs/42016971870), different parent `31c3505ce` and EPYC9V45 / Chrome156.0.8078.47, passed cold p95 31.3 ms / p50 22.3 ms (33 samples); its gate refused the subsequently held/draft PR as intended. Different-runner results are not a repair.
+
+Source: [matched reports, raw samples, exact provenance and latency timelines](https://github.com/nekko-labs/nekko-agent/actions/runs/42017796367). Tracking: [#712](https://github.com/nekko-labs/nekko-agent/issues/712). No budget change.
+
 ## Follow-up slider and text toolbar (#1760, 2026-11-05)
 
 Area: renderer. Result: baseline cold-paint gate failure reproduced; no performance win or zero-regression claim.
@@ -128,6 +227,18 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-11
+
+### #1894 iPhone: pixel build-up before Face ID, about a second in all (2026-11-06)
+Area: renderer
+Result: improvement
+Conditions: as #1833 (iPhone 17 Pro simulator, iOS 27.0, Xcode 27.2, Debug signed ad hoc, app lock on, simulated Face ID, 1/30 s frame reading); before is main after #1836. Two cold launches per build.
+
+| Metric | Before | After |
+|---|---|---|
+| Face ID sheet gone to app fully on screen, fresh install | not detected (probe missed) | 0.47 s |
+| Face ID sheet gone to app fully on screen, relaunch | 0.93 s | 0.50 s |
+
+Why: the build-up is back but plays from the first frame, under the Face ID prompt, at a 0.28 s beat; after unlock only the 0.294 s zoom is left (was 0.525 s). Lock off, first drawn frame to app on screen is about 0.95 s (read off frames, not probed).
 
 ### #1862 Desktop reload: same wait, no wrong screens (2026-11-05)
 Area: renderer

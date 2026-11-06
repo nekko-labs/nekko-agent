@@ -3,6 +3,7 @@
 //! [`ByLink`] sends each call to the provider the record is linked to.
 
 use super::store::{Link, RunnerRecord};
+use nekko_runner::Guest;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 
@@ -40,6 +41,40 @@ pub struct JobRef {
     /// The pull request the job ran for.
     #[serde(default)]
     pub pr: Option<PrRef>,
+    /// How far a running job has got; `None` when the provider lists no steps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub steps: Option<JobSteps>,
+}
+
+/// A running job's steps: how many finished of how many, and the one running now.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JobSteps {
+    pub done: u32,
+    pub total: u32,
+    pub current: Option<String>,
+}
+
+/// A job waiting for a runner with this record's labels.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedJob {
+    #[serde(flatten)]
+    pub job: JobRef,
+    /// When it was queued, as the provider wrote it (ISO 8601).
+    pub created_at: Option<String>,
+    /// The owner declined it: this Mac starts no VM for it.
+    #[serde(default)]
+    pub declined: bool,
+    /// The owner accepted it now: a VM starts for it as if the runner were in Runner first.
+    #[serde(default)]
+    pub accepted: bool,
+}
+
+impl QueuedJob {
+    pub fn key(&self) -> (String, u64) {
+        (self.job.repo.clone(), self.job.job_id)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -65,7 +100,13 @@ impl std::fmt::Display for ProviderError {
 }
 
 pub trait Provider: Send + Sync + 'static {
-    fn mint(&self, r: &RunnerRecord, name: &str) -> impl Future<Output = Result<Minted, ProviderError>> + Send;
+    /// A registration for one VM of `guest`, with that guest's labels.
+    fn mint(
+        &self,
+        r: &RunnerRecord,
+        name: &str,
+        guest: Guest,
+    ) -> impl Future<Output = Result<Minted, ProviderError>> + Send;
     fn status(
         &self,
         r: &RunnerRecord,
@@ -78,8 +119,12 @@ pub trait Provider: Send + Sync + 'static {
         runner_id: u64,
         runner_name: &str,
     ) -> impl Future<Output = Result<Option<JobRef>, ProviderError>> + Send;
-    /// Jobs waiting for a runner with this record's labels.
-    fn queued(&self, r: &RunnerRecord) -> impl Future<Output = Result<u32, ProviderError>> + Send;
+    /// Jobs waiting for a runner with this record's labels for `guest`.
+    fn queued(
+        &self,
+        r: &RunnerRecord,
+        guest: Guest,
+    ) -> impl Future<Output = Result<Vec<QueuedJob>, ProviderError>> + Send;
     /// Removes a registration; one that is already gone is `Ok`.
     fn remove(&self, r: &RunnerRecord, runner_id: u64) -> impl Future<Output = Result<(), ProviderError>> + Send;
     /// Removes every offline registration named exactly `<name_prefix><unix secs>-<n>`; returns how many.
@@ -89,6 +134,8 @@ pub trait Provider: Send + Sync + 'static {
         name_prefix: &str,
     ) -> impl Future<Output = Result<u32, ProviderError>> + Send;
     fn rerun(&self, r: &RunnerRecord, job: &JobRef) -> impl Future<Output = Result<(), ProviderError>> + Send;
+    /// Cancels a running job (GitHub can only cancel its whole run).
+    fn cancel(&self, r: &RunnerRecord, job: &JobRef) -> impl Future<Output = Result<(), ProviderError>> + Send;
 }
 
 /// Routes every call to `github` or `gitlab` by the record's link.
@@ -98,10 +145,10 @@ pub struct ByLink<G: Provider, L: Provider> {
 }
 
 impl<G: Provider, L: Provider> Provider for ByLink<G, L> {
-    async fn mint(&self, r: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+    async fn mint(&self, r: &RunnerRecord, name: &str, guest: Guest) -> Result<Minted, ProviderError> {
         match r.link {
-            Link::Github(_) => self.github.mint(r, name).await,
-            Link::Gitlab(_) => self.gitlab.mint(r, name).await,
+            Link::Github(_) => self.github.mint(r, name, guest).await,
+            Link::Gitlab(_) => self.gitlab.mint(r, name, guest).await,
         }
     }
 
@@ -119,10 +166,10 @@ impl<G: Provider, L: Provider> Provider for ByLink<G, L> {
         }
     }
 
-    async fn queued(&self, r: &RunnerRecord) -> Result<u32, ProviderError> {
+    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
         match r.link {
-            Link::Github(_) => self.github.queued(r).await,
-            Link::Gitlab(_) => self.gitlab.queued(r).await,
+            Link::Github(_) => self.github.queued(r, guest).await,
+            Link::Gitlab(_) => self.gitlab.queued(r, guest).await,
         }
     }
 
@@ -146,6 +193,13 @@ impl<G: Provider, L: Provider> Provider for ByLink<G, L> {
             Link::Gitlab(_) => self.gitlab.rerun(r, job).await,
         }
     }
+
+    async fn cancel(&self, r: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
+        match r.link {
+            Link::Github(_) => self.github.cancel(r, job).await,
+            Link::Gitlab(_) => self.gitlab.cancel(r, job).await,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -167,7 +221,7 @@ mod tests {
     }
 
     impl Provider for Tagged {
-        async fn mint(&self, _: &RunnerRecord, name: &str) -> Result<Minted, ProviderError> {
+        async fn mint(&self, _: &RunnerRecord, name: &str, _: Guest) -> Result<Minted, ProviderError> {
             self.log(format!("mint {name}"));
             Ok(Minted { runner_id: 1, seed_file: self.0, jit_config: "c".into() })
         }
@@ -179,9 +233,9 @@ mod tests {
             self.log(format!("job {id} {name}"));
             Ok(None)
         }
-        async fn queued(&self, _: &RunnerRecord) -> Result<u32, ProviderError> {
+        async fn queued(&self, _: &RunnerRecord, _: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
             self.log("queued".into());
-            Ok(0)
+            Ok(Vec::new())
         }
         async fn remove(&self, _: &RunnerRecord, id: u64) -> Result<(), ProviderError> {
             self.log(format!("remove {id}"));
@@ -193,6 +247,10 @@ mod tests {
         }
         async fn rerun(&self, _: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
             self.log(format!("rerun {}", job.job_id));
+            Ok(())
+        }
+        async fn cancel(&self, _: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
+            self.log(format!("cancel {}", job.job_id));
             Ok(())
         }
     }
@@ -240,15 +298,16 @@ mod tests {
         };
         for (r, tag) in [(&gh, "gh"), (&gl, "gl")] {
             log.lock().unwrap().clear();
-            assert_eq!(p.mint(r, "n").await.unwrap().seed_file, tag);
+            assert_eq!(p.mint(r, "n", Guest::Macos).await.unwrap().seed_file, tag);
             p.status(r, 5).await.unwrap();
             p.job(r, 5, "n").await.unwrap();
-            p.queued(r).await.unwrap();
+            p.queued(r, Guest::Macos).await.unwrap();
             p.remove(r, 5).await.unwrap();
             p.remove_stale(r, "nekko-h-").await.unwrap();
             p.rerun(r, &job).await.unwrap();
+            p.cancel(r, &job).await.unwrap();
             let want: Vec<String> =
-                ["mint n", "status 5", "job 5 n", "queued", "remove 5", "remove_stale nekko-h-", "rerun 9"]
+                ["mint n", "status 5", "job 5 n", "queued", "remove 5", "remove_stale nekko-h-", "rerun 9", "cancel 9"]
                     .iter()
                     .map(|c| format!("{tag} {c}"))
                     .collect();

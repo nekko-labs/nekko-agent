@@ -238,7 +238,7 @@ export function PaneFrame({
     >
       <div
         className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1"
-        style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: 'grab', ...stripStyle }}
+        style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: locked ? undefined : 'grab', ...stripStyle }}
         draggable={!locked && !onPickUp}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move';
@@ -259,7 +259,7 @@ export function PaneFrame({
           setMenu({ x: e.clientX, y: e.clientY });
         }}
         data-pane-title-strip=""
-        title="Drag to move this window"
+        title={locked ? undefined : 'Drag to move this window'}
       >
         {icon}
         {statusIndicator}
@@ -276,7 +276,7 @@ export function PaneFrame({
         {/* The pane's own actions, portalled in, so there is one bar per window
             rather than the frame's and the pane's stacked on each other. */}
         <div ref={setActionSlot} className="flex shrink-0 items-center gap-0.5" />
-        {!hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
+        {pane.kind !== 'chat' && !hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
         {focusAction}
         {onMinimize && <button
           type="button"
