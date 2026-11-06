@@ -66,9 +66,7 @@ const PREVIEWS: Record<string, () => React.JSX.Element> = {
   ),
   'Agents wall': () => (
     <div className="sm-frame">
-      <div className="sm-row"><span className="sm-window"><b>Research agent</b><M id="cardmeta">Opus 5.5 · 48k context tokens</M></span><span className="sm-window"><b>New window</b><M>Chat</M><M id="terminal">Terminal</M></span></div>
-      <div className="sm-row"><M id="mon-hw">Hardware</M><M id="mon-hw">Local models</M><M id="mon-budget">Budget</M><M id="mon-budget">Utilization</M><M>Automations</M></div>
-    </div>
+      <div className="sm-row"><span className="sm-window"><b>Research agent</b><M id="cardmeta">Opus 5.5 · 48k context tokens</M></span><span className="sm-window"><b>New window</b><M>Chat</M><M id="terminal">Terminal</M></span></div>    </div>
   ),
   Workflows: () => (
     <div className="sm-frame"><div className="sm-row"><M>Workflows</M><M id="ci">CI runners</M></div><div className="sm-lines"><i /><i style={{ width: '70%' }} /></div></div>
@@ -99,7 +97,7 @@ export function SimpleModeSettings() {
           <p className="mt-1 max-w-prose text-xs text-ink-soft">
             Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.{' '}
             <b>Show</b> puts a control in both modes whenever it applies, <b>Detailed only</b> keeps it for Detailed, and <b>Hide</b> puts it away in both.{' '}
-            Monitors wait for a local model to run: choose <b>Always</b> to pin them on.
+            The hardware gauges wait for a local model to run: choose <b>Always</b> to pin them on. The Monitors panel's own Configure menu picks its monitors for both modes.
           </p>
           <p className="mt-1 text-xs text-ink-faint">{hiddenInSimple} of {desktop.length} controls are out of sight in Simple. Kept on this computer.</p>
         </div>

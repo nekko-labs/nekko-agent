@@ -88,8 +88,9 @@ fn sanitize_clamps_out_of_range_values() {
     .sanitized();
     assert_eq!(
         (s.macos_slots, s.linux_slots, s.memory_per_vm_mb, s.runner_memory_mb, s.cpus_per_vm),
-        (2, 0, 8192, None, Some(2))
+        (2, 3, 8192, None, Some(2))
     );
+    assert_eq!(RunnerSettings { linux_slots: 40, ..Default::default() }.sanitized().linux_slots, 8);
     assert_eq!((s.disk_budget_gb, s.disk_floor_gb, s.max_job_minutes), (50, 10, 1440));
     assert_eq!(s.trusted_networks, vec!["gw:aa".to_string()]);
     assert_eq!(RunnerSettings { memory_per_vm_mb: 1024, ..Default::default() }.sanitized().memory_per_vm_mb, 4096);

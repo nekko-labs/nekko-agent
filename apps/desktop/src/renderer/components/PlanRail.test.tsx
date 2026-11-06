@@ -45,7 +45,7 @@ describe('plan sheet, folded and open (#1317)', () => {
     expect(folded).not.toContain('Find every inline check');
     expect(folded).not.toContain('Change plan');
   });
-  it('sums the sub-agents into one chip when folded, and puts each under its step when open', () => {
+  it('shows the sub-agents as live cards when folded, and puts each under its step when open', () => {
     store.sessions = [
       { id: 'k1', parentSessionId: 's', title: 'Map checks', createdAt: 0 },
       { id: 'k2', parentSessionId: 's', title: 'Update routes', createdAt: 0, activeRun: { startedAt: 1 } },
@@ -53,7 +53,8 @@ describe('plan sheet, folded and open (#1317)', () => {
     ];
     try {
       const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
-      expect(folded).toMatch(/data-plan-chip="subagents" title="Sub-agents: 1 running, 1 done">Sub-agents<b>1<\/b>[^]*?aria-label="running"[^]*?<b>1<\/b>[^]*?aria-label="done"/);
+      expect(folded).toMatch(/data-subagent-card="k2" data-status="working"[^]*?data-subagent-card="k1" data-status="done"/);
+      expect(folded).not.toContain('Not mine');
       const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
       expect(open).toContain('1 of 4 done');
       for (const kind of ['Build', 'Verify', 'Ship']) expect(open).toContain(`>${kind}</span>`);
