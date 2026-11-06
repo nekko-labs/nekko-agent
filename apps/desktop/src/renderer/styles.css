@@ -3959,7 +3959,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   }
 }
 
-.command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }
+/* The strip carries the chat's name and controls. Clean start has neither yet. */
+.command-wall-layout[data-wall-layout='focus'] .panel:has([data-clean-start]) > [data-pane-title-strip] { display: none; }
 
 /* The pending question shares the transcript scroll, with no outer panel. */
 .conversation-question { margin-top: 16px; animation: conversation-question-rise 220ms ease-out; }
