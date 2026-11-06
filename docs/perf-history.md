@@ -228,6 +228,16 @@ Threads worth an article, with the entries that tell each story:
 
 ## 2026-11
 
+### #2021 Light-theme alignment: baseline cold-paint failure (2026-11-06)
+Area: renderer. Result: no regression demonstrated; unchanged base also fails.
+Conditions: AMD EPYC 7763 (4 threads), Linux, Chrome/156.0.8078.79, 1440x1000; 33 cold switches per unprofiled attempt, base/head/head/base order on one runner.
+
+| Metric | Before (base-1 / base-2) | After (head-1 / head-2) |
+|---|---|---|
+| Cold chat first frame p95, 33 ms gate | 40.0 / 41.9 ms | 39.6 / 39.6 ms |
+
+Why: the light palette changes do not demonstrate a cold-switch regression in these matched runs; this does not establish a speedup or zero impact. Base `3a82ab9e19d9e3d25c9b5419ca801b37ce6dd7be` fails twice; synthetic PR merge `e1ce917179516a7ce49e319c2351dc070319a52d` is faster in both pairs. The original contract failed only cold first-frame paint (p95 attempts 38.0 / 39.8 / 42.3 ms); other measured budgets passed. Raw samples were recomputed and both cold-switch browser traces contain Layout and Paint events. Source: [CI run 42233008104](https://github.com/nekko-labs/nekko-agent/actions/runs/42233008104), `perf-report` artifact (matched reports and traced pair), baseline issue #712. No budget was changed and no causal claim is made from the traces alone.
+
 ### #1894 iPhone: pixel build-up before Face ID, about a second in all (2026-11-06)
 Area: renderer
 Result: improvement
