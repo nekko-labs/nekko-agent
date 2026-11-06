@@ -1,6 +1,7 @@
 import XCTest
 
 /// Recorder-backed native surface only. These tests do not claim APNs or SpringBoard evidence.
+@MainActor
 final class AttentionNotificationsUITests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
@@ -14,8 +15,7 @@ final class AttentionNotificationsUITests: XCTestCase {
         let element = app.descendants(matching: .any).matching(identifier: id).firstMatch
         XCTAssertTrue(element.waitForExistence(timeout: 5))
         let predicate = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", value, value)
-        expectation(for: predicate, evaluatedWith: element)
-        waitForExpectations(timeout: 5)
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: predicate, object: element)], timeout: 5), .completed)
     }
 
     func testOpeningDoesNotClearAnswerAndRemoteDismissDo() {

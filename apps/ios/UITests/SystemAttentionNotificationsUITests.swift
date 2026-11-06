@@ -31,13 +31,25 @@ final class SystemAttentionNotificationsUITests: XCTestCase {
 
     private func homeBadge(_ expected: Int, phase: String) {
         XCUIDevice.shared.press(.home)
-        let icon = springboard.icons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nekko Agent")).firstMatch
-        for _ in 0..<3 {
-            if icon.exists && icon.isHittable { break }
-            springboard.swipeLeft()
+        // A second Home returns to the first page, including from App Library.
+        // SpringBoard exposes duplicate off-page icons; firstMatch can select a
+        // hidden Home icon while the Library's 68pt unlabeled tile is visible.
+        XCUIDevice.shared.press(.home)
+        let candidates = springboard.icons.matching(identifier: "Nekko Agent")
+        let visibleHome = NSPredicate { _, _ in
+            candidates.allElementsBoundByIndex.contains { $0.isHittable && $0.frame.height > 80 }
         }
-        XCTAssertTrue(icon.waitForExistence(timeout: 10), springboard.debugDescription)
-        XCTAssertTrue(icon.isHittable, "Evidence must show the app's Home Screen icon, not an off-page AX element")
+        for page in 0..<3 {
+            if XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: visibleHome, object: nil)], timeout: 3) == .completed { break }
+            if page < 2 { springboard.swipeLeft() }
+        }
+        guard let icon = candidates.allElementsBoundByIndex.first(where: { $0.isHittable && $0.frame.height > 80 }) else {
+            capture("home-navigation-failed-" + phase)
+            XCTFail("Evidence must show the labeled Home Screen icon, not App Library or an off-page AX element: \(springboard.debugDescription)")
+            return
+        }
+        XCTAssertTrue(icon.isHittable)
+        XCTAssertGreaterThan(icon.frame.height, 80, "Home icon with its label; not the 68pt App Library tile")
         let badge = NSPredicate { element, _ in
             guard let icon = element as? XCUIElement else { return false }
             let value = icon.value as? String ?? ""

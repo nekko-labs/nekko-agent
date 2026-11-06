@@ -37,6 +37,15 @@ test('after route and fixture retain strict debug and store isolation', () => {
   assert.doesNotMatch(fixture, /AppModel\.shared|UserDefaults|ComputersStore\(|UNNotificationRequest\(/);
 });
 
+test('UI harness retains actor isolation and visible labeled Home icon acceptance', () => {
+  const recorder = readFileSync(new URL('../UITests/AttentionNotificationsUITests.swift', import.meta.url), 'utf8');
+  const system = readFileSync(new URL('../UITests/SystemAttentionNotificationsUITests.swift', import.meta.url), 'utf8');
+  assert.match(recorder, /@MainActor\nfinal class AttentionNotificationsUITests/);
+  assert.doesNotMatch(recorder, /waitForExpectations\(/);
+  assert.match(system, /allElementsBoundByIndex\.first\(where: \{ \$0\.isHittable && \$0\.frame\.height > 80 \}\)/);
+  assert.match(system, /XCTAssertEqual\(result, \.completed/);
+});
+
 test('workflow avoids Bash 3.2 empty-array nounset and layout probe guards iOS 18 APIs', () => {
   const workflow = readFileSync(new URL('../../../.github/workflows/ios-attention-evidence.yml', import.meta.url), 'utf8');
   assert.doesNotMatch(workflow, /CONDITIONS=\(\)/);
