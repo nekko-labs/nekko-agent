@@ -398,11 +398,44 @@ A waiting runner card lists every reason it is not taking jobs:
 A newer version of the runner may add a reason this app does not know yet; it shows as
 "A condition is not met."
 
-## Recent jobs
+## Jobs
 
-The runner card lists the last five jobs, one line each: when it ended, the workflow and job,
+Below the Mac's facts, the runner card lists its jobs in three groups. A group with nothing in
+it is left out.
+
+**Queued** lists jobs waiting on GitHub for a runner with this runner's label, with how long each
+has waited. Each one offers:
+
+- **Accept now** starts a VM for that job right away, as if the runner were in **Runner first**,
+  even when your mode would hold it (for example Do not disturb while you type). The job then runs
+  to the end under Runner first's rules. The hard limits still apply (low memory, heat, low disk,
+  Low Power Mode and Apple's limit of 2 macOS VMs), and so do your own conditions under **Only
+  when** (on power, trusted networks, hotspots, VPN). When one of those blocks it, the button is
+  off and says why. GitHub hands the new VM whichever matching job is first in line, which is usually
+  the oldest. For a Linux job (when you have Linux slots), it starts a Linux VM instead.
+- **Decline** keeps this Mac from starting a VM for that job, so another runner or a hosted Mac
+  can take it. A VM this Mac already has waiting may still pick it up, because GitHub decides
+  which ready runner gets which job.
+- **Undo** takes back either.
+
+**In progress** shows each running job: **Working on** and the job, linked to its page on GitHub,
+how long it has run, and how far it has got, "Step 8 of 12: Build and test iOS · 58%", with a bar
+for that percent. The percent counts the job's finished steps; GitHub reports no finer progress,
+and GitLab reports no steps, so a GitLab job shows no bar. Each running job has:
+
+- **Live log**: what the VM prints, read again every few seconds: the runner starting, then the
+  output of each step as it runs (with secrets masked, as on GitHub). The step output needs an
+  image with the current scripts (**Update scripts** in runner settings).
+- **Re-run**: cancels the run and starts the job again once GitHub has finished cancelling it.
+- **Cancel**: cancels the run. GitHub can only cancel a whole workflow run, not one job, so both
+  ask first.
+
+## Completed jobs
+
+The **Completed** group lists the last five jobs, one line each: when it ended, the workflow and job,
 how it ended and how long it ran. **Job** opens the job on GitHub, and **PR #N** opens the pull
 request it ran for (GitHub names no pull request for a run from a fork, so those show none).
+**Re-run** runs that job again on GitHub.
 
 Click a line to see the VM step by step (started, online, running the job, stopped, deleted,
 each with its time), the end of the job's log, read from GitHub when you open it, and the VM's

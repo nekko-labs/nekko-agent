@@ -45,6 +45,27 @@ const VM_LOG = [
   '2026-11-03T07:19:52Z runner exited with 0',
   '2026-11-03T07:19:52Z shutting down',
 ].join('\n');
+// The running VM's console: the runner's own lines, then the step output the boot script follows.
+const LIVE_LOG = [
+  '2026-11-06T06:11:02Z starting the GitHub Actions runner',
+  '√ Connected to GitHub',
+  '2026-11-06 06:11:05Z: Listening for Jobs',
+  '2026-11-06 06:11:07Z: Running job: protocol-and-build',
+  ...Array.from({ length: 24 }, (_, i) => `2026-11-06T06:${String(40 + Math.floor(i / 3)).padStart(2, '0')}:${String((i * 13) % 60).padStart(2, '0')}.5512345Z CompileSwift normal arm64 /Users/runner/work/nekko-agent/apps/ios/Sources/Protocol/Frame${i}.swift`),
+  '2026-11-06T06:48:51.1234567Z ** BUILD SUCCEEDED **',
+  '2026-11-06T06:48:52.0011223Z Testing started on iPhone 17 Pro',
+].join('\n');
+const PR = (number: number) => ({ number, url: `https://github.com/nekko-labs/nekko-agent/pull/${number}` });
+const RUNNING_JOB = {
+  repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'Native iOS', job: 'protocol-and-build',
+  url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/904/job/9041', pr: PR(904),
+  steps: { done: 7, total: 12, current: 'Build and test iOS' },
+};
+const QUEUE = [
+  { repo: 'nekko-labs/nekko-agent', runId: 907, jobId: 9071, workflow: 'Native iOS', job: 'protocol-and-build', url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/907/job/9071', pr: PR(907), createdAt: new Date((NOW - 4 * 60) * 1000).toISOString(), declined: false, accepted: false },
+  { repo: 'nekko-labs/nekko-agent', runId: 906, jobId: 9061, workflow: 'Desktop', job: 'macOS notarize', url: 'https://github.com/nekko-labs/nekko-agent/actions/runs/906/job/9061', pr: null, createdAt: new Date((NOW - 9 * 60) * 1000).toISOString(), declined: true, accepted: false },
+];
+
 const view = (over: Partial<RunnerView> = {}, settings: Partial<RunnerView['config']['settings']> = {}): RunnerView => ({
   config: {
     id: 'r1', scope: { kind: 'repo', owner: 'nekko-labs', repo: 'nekko-agent' }, label: 'nekko-cloud-mac',
@@ -62,11 +83,14 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   'first-visit': async () => [],
   running: async () => [view({
     state: 'running', awake: true, reasons: ['userActive'],
-    slots: [{ state: 'running', job: { repo: 'nekko-labs/nekko-agent', runId: 904, jobId: 9041, workflow: 'ios-native', job: 'PR #904' }, since: NOW - 11 * 60, drainEndsAt: null }],
+    slots: [{ state: 'running', vm: 'nekko-macbookpro-77cce2cf-1-1', job: RUNNING_JOB, since: NOW - 49 * 60, drainEndsAt: null }],
+    queue: QUEUE, acceptWhy: [],
     today: { jobs: 14, seconds: 2 * 3600 + 38 * 60 },
     recent: [audit(25 * 60, 'iOS build', 'finished', 14 * 60, [], 903), audit(70 * 60, 'iOS build', 'finished', 17 * 60), audit(3 * 3600, 'iOS build', 'lost', 6 * 60, ['slept'], 899)],
   }, { priority: 'balanced' })],
   'recent-job-open': async () => scenes.running(),
+  'jobs-live-log': async () => scenes.running(),
+  'jobs-cancel-confirm': async () => scenes.running(),
   waiting: async () => [view({
     state: 'waiting', reasons: ['onBattery', 'network', 'userActive'], available: 1, limit: 'memory',
     host: { ...host, onBattery: true, batteryPct: 62, networkId: 'gw:10:0c:6e:5b:01:aa', networkTrusted: false },
@@ -213,6 +237,8 @@ const bridge: any = {
   setRunnerEnabled: async () => view({}),
   runnerJobLog: async () => JOB_LOG,
   runnerVmLog: async () => VM_LOG,
+  runnerLiveLog: async () => LIVE_LOG,
+  runnerJob: async () => null,
   openPath: async () => {},
   imageStatus: async () => {
     // A daemon that is not ready for the first call, as at launch.
