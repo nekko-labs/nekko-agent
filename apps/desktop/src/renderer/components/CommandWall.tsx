@@ -1,3 +1,4 @@
+import { terminalPresentation } from './terminalActivity.js';
 import { computerIdOf } from '@nekko-agent/shared';
 import { ComputerChip } from './ComputerChip.js';
 import { terminalExcerpt } from './terminalExcerpt.js';
@@ -282,8 +283,13 @@ export function commandWallGeometry(state: CommandWallState, width: number, heig
 
 /** Stable keyed windows across layouts keep transcripts, terminals and drafts warm. */
 /** A terminal's state as the wall mascot shows it: an open shell sleeps, an exit is done or failed. */
-export function terminalStatus(terminal: Pick<TerminalInfo, 'running' | 'exitCode'>): AgentStatus {
-  if (terminal.running) return 'idle';
+export function terminalStatus(terminal: Pick<TerminalInfo, 'running' | 'exitCode' | 'activity'>): AgentStatus {
+  if (terminal.running) {
+    if (terminal.activity?.state === 'attention') return 'input';
+    if (terminal.activity?.state === 'running') return 'working';
+    if (terminal.activity?.lastExitCode) return 'error';
+    return 'idle';
+  }
   return terminal.exitCode ? 'error' : 'done';
 }
 
@@ -567,7 +573,7 @@ export function CommandWall({
 
   const focusWindow = (pane: WbPane) => {
     setState((s) => ({ ...s, layout: { ...s.layout, mode: 'focus' }, hero: pane.refId }));
-    if (pane.kind === 'chat') onSelect(pane.refId);
+    if (pane.kind === 'chat' || pane.kind === 'terminal') onSelect(pane.refId);
   };
 
   const update = useCallback((fn: (root: WbNode | null) => WbNode | null) => setState((s) => {
@@ -595,11 +601,15 @@ export function CommandWall({
       ? { ...s, root: splitPane(s.root, at.paneId, at.dir, { ...wallPane(kind, refId), zone: nextZoneName(s.root) }) }
       : openWallPane(zoneId ? { ...s, activeZone: zoneId } : s, kind, refId));
     // A chat just made is the one you mean to talk to next.
-    if (kind === 'chat') onSelect(refId);
+    if (kind === 'chat' || kind === 'terminal') onSelect(refId);
   };
 
   // Clicking a zone, or anything in it, makes it the active zone.
-  const activate = (paneId: string) => setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
+  const activate = (paneId: string) => {
+    setState((s) => (s.activeZone === paneId ? s : { ...s, activeZone: paneId }));
+    const pane = allPanes(state.root).find((p) => p.id === paneId);
+    if (pane?.kind === 'terminal') onSelect(pane.refId);
+  };
   const [zoneMenu, setZoneMenu] = useState<{ x: number; y: number; paneId: string } | null>(null);
   const [renamingZone, setRenamingZone] = useState<string | null>(null);
   const renameZoneTo = (id: string, name: string) => { setRenamingZone(null); setState((s) => ({ ...s, root: renameZone(s.root, id, name) })); };
@@ -775,7 +785,7 @@ export function CommandWall({
 
   const titleOf = (pane: WbPane): string => {
     if (pane.kind === 'chat') return sessionById.get(pane.refId)?.title ?? 'Chat';
-    if (pane.kind === 'terminal') return terminalById.get(pane.refId)?.title || 'Terminal';
+    if (pane.kind === 'terminal') { const t = terminalById.get(pane.refId); return t ? terminalPresentation(t).title : 'Terminal'; }
     if (pane.kind === 'zone') return pane.zone ?? 'Zone';
     return pane.kind === 'automations' ? 'Automations' : 'Insights';
   };
@@ -801,12 +811,13 @@ export function CommandWall({
       agentStatus = agentStatusOfLane(lane, blocked, wakeSourcesOf(session));
       status = needsYou && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
     } else if (terminal) {
-      status = terminal.running ? { label: 'Shell open', tone: 'var(--success)' } : { label: terminal.exitCode ? `Exited with code ${terminal.exitCode}` : 'Exited', tone: 'var(--ink-faint)' };
+      const p = terminalPresentation(terminal);
+      status = { label: p.status, tone: p.tone };
     }
     const title = titleOf(pane);
     const flashing = flash?.paneId === pane.id;
     const openable = pane.kind === 'chat' || pane.kind === 'terminal';
-    const selected = pane.kind === 'chat' && pane.refId === selectedId;
+    const selected = (pane.kind === 'chat' || pane.kind === 'terminal') && pane.refId === selectedId;
     const n = pane.kind === 'chat' ? numberOf.get(pane.refId) : undefined;
 
     const rect = shownPanes.get(pane.id);

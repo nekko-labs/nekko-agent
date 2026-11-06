@@ -46,7 +46,13 @@ This is the policy the "Bound failed-check investigations" rules below apply to.
 ### `perf` fails on your PR
 
 `perf` runs on every PR that touches what the speed contract measures, and `gate`
-waits for it. Read which phase failed:
+waits for it. When the contract fails on a PR, the job then measures the failed
+budgets on the unchanged base and on head, alternately on the same runner (base,
+head, head, base, `scripts/perf/compare.mjs`), and puts the table in the job
+summary ("Matched base/head comparison") with the reports and one traced pair in
+the `perf-report` artifact. That is the matched comparison the rules below ask
+for; a hand-made `ci/<pr>-cold-paint` workflow is no longer needed for it. Read
+which phase failed:
 
 - A missing selector, a layout the script waits for, or a phase that times out
   waiting for the UI is the PR's: it changed something the script drives.

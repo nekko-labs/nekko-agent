@@ -30,7 +30,7 @@ The quickest way to start is the installer.
    - **macOS (Apple silicon):** the `.dmg`
    - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
 2. Run it. On macOS, drag Nekko Agent into Applications.
-3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab. Click a model's name there to make it the default for new chats.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab (the violet brain-and-gear icon in the left navigation). Click a model's name there to make it the default for new chats.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
@@ -155,6 +155,10 @@ Hover over the left navigation panel, including its curved top and bottom wings,
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 
+Each terminal has its own Agents-panel row, including terminals opened beside a chat and shells that have exited. It shows the terminal-reported title and activity when available. The strip above terminal output shows working/ready/attention status, reported directory, and an observed GitHub PR link. **Refresh** fetches that PR's current state and checks; until then, the link is explicitly unverified. No terminal output is sent to a model for summaries.
+
+Claude Code users can opt into explicit tool/permission/completion signals using the [terminal hook setup](https://github.com/nekko-labs/nekko-agent/blob/main/docs/terminal-claude-hooks.md). Nekko never installs hooks or approves tools silently. Without integration signals a terminal says **Shell open**, not Working.
+
 ### Approvals and delegated work
 
 When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
@@ -165,7 +169,7 @@ For an identified subagent, **Open ↗** beside its activity row opens the child
 
 The composer shows the model title without a subscription suffix. Open its menu for provider and account details. Cloud providers appear first under **Cloud**, followed by **Local**; when both exist they occupy independently scrolling columns. Your default model is marked inside its provider group instead of repeated at the top.
 
-**Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog.
+**Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog. On a Claude subscription, the choices are the ones Claude Code takes, and it applies the closest level a model has.
 
 In a new chat, prompt-writing **Suggestions** appear on a separate row below the composer controls in Expert only. Ongoing chats keep Suggestions beside the microphone. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
 

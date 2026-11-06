@@ -19,11 +19,12 @@ export function ModelsWorkspace() {
   const localRef = useRef<HTMLElement>(null);
   const cloudRef = useRef<HTMLElement>(null);
   // Arriving opens at the top; a later move between the two destinations
-  // (the command palette, a voice command) scrolls to its section.
-  const arrived = useRef(false);
+  // (the command palette, a voice command) scrolls to its section. Comparing
+  // views, not counting runs: StrictMode runs this effect twice on arrival.
+  const shown = useRef(view);
   useEffect(() => {
-    if (arrived.current) (view === 'modelserver' ? localRef : cloudRef).current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-    arrived.current = true;
+    if (shown.current !== view) (view === 'modelserver' ? localRef : cloudRef).current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    shown.current = view;
   }, [view]);
   return <div className="models-workspace">
     <section ref={localRef} className="models-section" aria-labelledby="models-local-title">
