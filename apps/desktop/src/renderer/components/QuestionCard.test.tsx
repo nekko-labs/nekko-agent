@@ -32,6 +32,14 @@ const html = (r: AskRequest = request) =>
   renderToStaticMarkup(<QuestionCard request={r} onAnswer={() => {}} onSkip={() => {}} />);
 
 describe('QuestionCard', () => {
+  it('offers an explicit Tab stop without autofocus in full and compact cards', () => {
+    for (const compact of [false, true]) {
+      const out = renderToStaticMarkup(<QuestionCard compact={compact} request={request} onAnswer={() => {}} onSkip={() => {}} />);
+      expect(out).toContain('tabindex="0"');
+      expect(out).not.toContain('autofocus');
+    }
+  });
+
   it('defaults to orange attention styling with brighter panel and option surfaces', () => {
     const out = html();
     expect(out).toContain('data-question-tone="attention"');

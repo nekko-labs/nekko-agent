@@ -139,6 +139,11 @@ lacks the permission gets a 403, and the picker falls back to hosted with `api 4
 
 ## First job
 
+The image needs `node`, `gh` and `jq`: `ios-native.yml` runs `node` before `actions/setup-node`,
+and a batch reports with `gh` and `jq` (#1845). An image built by an older Nekko lacks `node`
+and `gh`, and its card says so: choose **Install them** and wait for the image to pass its test
+boot before the first job. A build from this version installs them itself.
+
 ```bash
 gh workflow run ios-native.yml --ref main -R nekko-labs/nekko-agent
 ```

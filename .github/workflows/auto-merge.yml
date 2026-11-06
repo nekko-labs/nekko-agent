@@ -1,32 +1,30 @@
 name: Auto-merge
-
-# Turns on GitHub's native auto-merge for every ready PR into main. With the
-# merge queue required on main, that adds the PR to the queue once its PR-tier
-# checks pass; the queue runs the queue tier and merges. Then it closes the
-# PR's linked issues.
+# Arms GitHub's native auto-merge (squash) on every ready PR into main, so it
+# merges itself once `gate` and the other branch rules pass. There is no merge
+# queue (removed 2026-11-06): the speed contract and itests run nightly, and
+# `gate` on the PR is the last check before main. Then it closes the PR's
+# linked issues.
+#
+# Draft and `hold` disarm it. With no queue to eject from, this workflow is what
+# keeps a held PR from merging: adding `hold` or converting to draft turns
+# auto-merge off, and removing `hold` or marking ready turns it back on.
 #
 # Only PRs based on main: a stacked layer targets the branch below it, and
-# auto-merging it would fold it into that branch rather than queue it. Stacks
-# are queued with `gh stack merge`.
-#
-# No merge method on purpose. With a method (`--squash`), `gh pr merge --auto`
-# arms GitHub's classic auto-merge, which waits outside the queue forever on a
-# branch that requires one (#751 and #755 sat green and never queued). Without
-# one, gh enqueues the PR, and the queue's own setting (squash) merges it.
+# auto-merging it would fold it into that branch. Stacks land with
+# `gh stack merge`.
 #
 # A merge no longer releases anything: releases start from a version tag a
 # person pushes (docs/decisions/0055), so this no longer dispatches
 # version-release.yml after the merge as it did when a package.json bump was
 # the release trigger.
 #
-# Also on `synchronize`: a fix pushed after a red `gate` re-runs `gate`, and
-# before this nothing re-queued the PR unless its author remembered `gh pr
-# merge --auto`. A newer push cancels the older wait. queue-sweeper.yml covers
-# the rest (queue ejections, a `gate` that went green after this job stopped).
+# Also on `synchronize`, so a newer push restarts the wait for the merge (and
+# cancels the older one). queue-sweeper.yml re-arms a ready PR whose request
+# went missing and re-runs a flaky `gate` once.
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review, synchronize, converted_to_draft, labeled, unlabeled]
 
 permissions:
   contents: write
@@ -40,82 +38,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  auto-merge:
-    if: ${{ !github.event.pull_request.draft && github.event.pull_request.base.ref == 'main' }}
+  hold:
+    if: ${{ github.event.pull_request.base.ref == 'main' && (github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'hold')) }}
     runs-on: ubuntu-latest
-    # Above the two waits below (20 min for gate, then only while queued), so
-    # the timeout never turns this into a red check on its own.
-    timeout-minutes: 65
+    timeout-minutes: 5
     steps:
-      # GitHub refuses auto-merge for a stacked PR; a person queues a stack with `gh stack merge`.
-      - name: Queue the PR
-        run: gh pr merge --auto "$PR_URL" || echo '::notice::Auto-merge not armed (a stacked PR? queue it with gh stack merge).'
+      - name: Disarm auto-merge on a draft or held PR
+        run: gh pr merge --disable-auto "$PR_URL" || echo 'Auto-merge was not armed.'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
 
-      # Armed on `opened`, before any check has run, `--auto` on a queue-required
-      # branch records an auto-merge request that GitHub does not always turn
-      # into a queue entry when `gate` goes green (#756 sat 25 minutes like
-      # that). So wait for `gate` here and enqueue explicitly once it passes;
-      # an enqueue of a PR already in the queue is a no-op.
-      #
-      # The enqueue uses the repo's GitHub App, not GITHUB_TOKEN: a merge group
-      # created by GITHUB_TOKEN starts no `merge_group` workflow runs (the same
-      # recursion guard as bot pushes), so `gate` never reports and the entry
-      # times out (#756's first group had zero runs). The App is installed only
-      # on this repository (see runtime-updates.yml).
-      - name: Create repository-scoped App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          client-id: ${{ vars.RUNTIME_UPDATE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RUNTIME_UPDATE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write
-          permission-pull-requests: write
-      - name: Enqueue once gate passes
+  auto-merge:
+    if: ${{ github.event.pull_request.base.ref == 'main' && !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'hold') }}
+    runs-on: ubuntu-latest
+    # Above the 40-minute wait below, so the timeout never turns this into a
+    # red check on its own.
+    timeout-minutes: 45
+    steps:
+      - name: Arm auto-merge
+        run: gh pr merge --auto --squash "$PR_URL" || echo '::warning::Auto-merge not armed; queue-sweeper.yml retries.'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_ID: ${{ github.event.pull_request.node_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: |
-          for _ in $(seq 1 60); do
-            pr=$(gh pr view "$PR_URL" --json state,isDraft,headRefOid,statusCheckRollup)
-            state=$(jq -r .state <<<"$pr")
-            [ "$state" = OPEN ] || { echo "PR is $state."; exit 0; }
-            if [ "$(jq -r .isDraft <<<"$pr")" = true ]; then echo 'Back in draft; not queueing.'; exit 0; fi
-            gate=$(jq -r '[.statusCheckRollup[] | select(.name == "gate")] | last | .conclusion // ""' <<<"$pr")
-            case "$gate" in
-              SUCCESS)
-                head=$(jq -r .headRefOid <<<"$pr")
-                # A stacked PR is refused here ("must be enqueued using the asynchronous merge
-                # REST API"), and that API refuses this App ("Enqueuer is not authorized to
-                # merge"), so stacks are queued by a person with `gh stack merge`.
-                gh api graphql -f query='mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{state position}}}' \
-                  -f id="$PR_ID" -f head="$head" || echo '::warning::Enqueue failed (queue a stacked PR with gh stack merge); auto-merge stays armed.'
-                exit 0
-                ;;
-              FAILURE|CANCELLED|TIMED_OUT)
-                echo "gate is $gate. A fix push re-runs this job; queue-sweeper.yml re-runs a first-attempt failure once."
-                exit 0
-                ;;
-            esac
-            sleep 20
-          done
-          echo '::warning::gate did not finish within 20 minutes; auto-merge stays armed.'
 
-      # Waits only while the PR is queued. One that is open and out of the queue
-      # (gate red, ejected, still pending) ends the job green rather than
-      # holding a runner until the timeout shows a red `auto-merge` check (#787
-      # did after 45 minutes). The sweeper re-queues it.
+      # Waits only while the PR can still merge on its own: auto-merge armed and
+      # `gate` not red. Otherwise the job ends green rather than holding a
+      # runner until the timeout shows a red `auto-merge` check (#787 did after
+      # 45 minutes).
       - name: Close linked issues once merged
         run: |
-          out=0
           for _ in $(seq 1 120); do
-            state=$(gh pr view "$PR_URL" --json state -q .state 2>/dev/null || echo UNKNOWN)
-            case "$state" in
+            pr=$(gh pr view "$PR_URL" --json state,autoMergeRequest,statusCheckRollup 2>/dev/null || echo '{"state":"UNKNOWN"}')
+            case "$(jq -r .state <<<"$pr")" in
               MERGED)
                 # Closing keywords do nothing on a GITHUB_TOKEN merge, so close
                 # linked issues here. Failures warn.
@@ -131,10 +86,9 @@ jobs:
                 done
 
                 # A merge that touched the iPhone app reaches TestFlight with
-                # ios-testflight.yml's nightly run.
-                # No CI dispatch here: the merge queue tested this exact group on
-                # top of main before merging it, and the nightly full run covers
-                # every OS (ci.yml).
+                # ios-testflight.yml's nightly run. No CI dispatch here: the
+                # nightly full run covers every OS, the speed contract and the
+                # itests (ci.yml).
                 echo "Merged: $PR_URL"
                 exit 0
                 ;;
@@ -142,17 +96,20 @@ jobs:
                 echo "PR was closed without merging. Nothing to close."
                 exit 0
                 ;;
+              OPEN)
+                if [ "$(jq -r '.autoMergeRequest != null' <<<"$pr")" != true ]; then
+                  echo "Auto-merge is not armed on $PR_URL, so not waiting."
+                  exit 0
+                fi
+                gate=$(jq -r '[.statusCheckRollup[]? | select(.name == "gate")] | last | .conclusion // ""' <<<"$pr")
+                case "$gate" in
+                  FAILURE|CANCELLED|TIMED_OUT)
+                    echo "gate is $gate. A fix push re-runs this job; queue-sweeper.yml re-runs a first-attempt failure once."
+                    exit 0
+                    ;;
+                esac
+                ;;
             esac
-            # Three misses in a row, so the gap between enqueue and the entry
-            # showing up is not read as "out of the queue".
-            queued=$(gh api graphql -F url="$PR_URL" \
-              -f query='query($url:URI!){resource(url:$url){... on PullRequest{mergeQueueEntry{state}}}}' \
-              -q '.data.resource.mergeQueueEntry != null' 2>/dev/null || echo true)
-            if [ "$queued" = true ]; then out=0; else out=$((out + 1)); fi
-            if [ "$out" -ge 3 ]; then
-              echo "$PR_URL is open and not in the merge queue, so not waiting. queue-sweeper.yml queues it once gate is green."
-              exit 0
-            fi
             sleep 20
           done
           echo "::warning::$PR_URL had not merged after 40 minutes, so its linked issues were not closed here."

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,13 +10,34 @@ afterEach(() => { vi.unstubAllEnvs(); vi.resetModules(); });
 
 describe('development launcher safety', () => {
   it('refuses to start when Electron would run as plain Node', async () => {
-    vi.stubEnv('ELECTRON_RUN_AS_NODE', '1');
-    await expect(import(/* @vite-ignore */ launcher)).rejects.toThrow('Unset ELECTRON_RUN_AS_NODE');
-    vi.stubEnv('ELECTRON_RUN_AS_NODE', '');
-    vi.resetModules();
-    const mod = await import(/* @vite-ignore */ launcher);
-    expect(typeof mod.prepareWindowsRuntime).toBe('function');
-    expect(typeof mod.prepareMacBundle).toBe('function');
+    // Exercise the native .mjs loader, not two cold Vite imports (which can
+    // spend the whole safety-test budget waiting on transform RPC under CI load).
+    // Importing is safe: the launcher's argv/main guard never spawns Electron.
+    // Fail if an import touches Electron: its lazy binary install downloads on
+    // require in CI, where ELECTRON_SKIP_BINARY_DOWNLOAD skips npm's install.
+    const script = `
+      import { createRequire } from 'node:module';
+      const require = createRequire(import.meta.url);
+      const Module = require('node:module');
+      const load = Module._load;
+      Module._load = function(id, ...args) {
+        if (id === 'electron') throw new Error('Electron must not be resolved on plain import');
+        return load.call(this, id, ...args);
+      };
+      import(${JSON.stringify(new URL(launcher, import.meta.url).href)})`;
+    const blocked = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, encoding: 'utf8', timeout: 2000,
+    });
+    expect(blocked.error).toBeUndefined();
+    expect(blocked.status).toBe(1);
+    expect(blocked.stderr).toContain('Unset ELECTRON_RUN_AS_NODE');
+    const allowed = spawnSync(process.execPath, ['--input-type=module', '-e',
+      `${script}.then(mod => console.log(JSON.stringify([typeof mod.prepareWindowsRuntime, typeof mod.prepareMacBundle])))`], {
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '' }, encoding: 'utf8', timeout: 2000,
+    });
+    expect(allowed.error).toBeUndefined();
+    expect(allowed.status).toBe(0);
+    expect(JSON.parse(allowed.stdout)).toEqual(['function', 'function']);
   });
 
   it('rebuilds the cached runtime when the app icon changes', async () => {

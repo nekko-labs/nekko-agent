@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * Queue repair: un-sticks ready PRs that the merge queue cannot land by itself.
+ * Queue repair: un-sticks ready PRs that native auto-merge cannot land by
+ * itself. (The name predates 2026-11-06, when the merge queue was removed.)
  *
- * auto-merge.yml queues a PR and queue-sweeper.yml re-queues an ejected one and
- * re-runs a flaky `gate` once. Two cases still sat with nobody watching, because
- * the agent session that opened the PR had often ended:
+ * auto-merge.yml arms auto-merge and queue-sweeper.yml re-arms a missing request
+ * and re-runs a flaky `gate` once. Two cases still sat with nobody watching,
+ * because the agent session that opened the PR had often ended:
  *
  *   - the PR conflicts with main (usually on a file every PR appends to), and
- *   - `gate` stays red after the sweeper's re-run, or the queue ejects the PR a
- *     second time at the same head.
+ *   - `gate` stays red after the sweeper's re-run.
  *
- * For each ready, same-repo PR into main that is not queued, this:
+ * For each ready, same-repo PR into main, this:
  *
  *   1. merges main into the branch on the runner. Conflicts only in files with a
  *      known rule (RULES below) are resolved mechanically and the merge is pushed
- *      with the repo's App token, so CI runs and auto-merge.yml re-queues it;
- *   2. when every job that failed also fails in other PRs' merge groups (a
+ *      with the repo's App token, so CI runs and auto-merge lands it once green;
+ *   2. when every job that failed also fails in other PRs' CI runs (a
  *      baseline failure on main, such as a flaky budget), asks nobody: Codex
  *      cannot fix main from a PR branch. It says so once, waits, and retries the
  *      PR once main's failure is gone (at most RETRY_BUDGET times per head);
@@ -47,13 +47,13 @@ export const CODEX_BUDGET = 3;
 export const NEEDS_HUMAN = 'needs-human';
 /** Retries of one head after a baseline failure on main has cleared. */
 export const RETRY_BUDGET = 2;
-/** How far back other PRs' merge groups count as main's own state. */
+/** How far back other PRs' CI runs count as main's own state. */
 export const BASELINE_WINDOW_MS = 6 * 60 * 60 * 1000;
-/** A job failing in this many other PRs' merge groups is failing on main, not in one PR. */
+/** A job failing in this many other PRs' CI runs is failing on main, not in one PR. */
 export const BASELINE_MIN_PRS = 2;
 
 /**
- * The job names failing on main: those that failed in the merge groups of at
+ * The job names failing on main: those that failed in the CI runs of at
  * least BASELINE_MIN_PRS other PRs within BASELINE_WINDOW_MS.
  *   runs: [{ pr, at, failed: [jobName] }]
  */
@@ -111,14 +111,13 @@ export const marker = (kind, sha) => `<!-- queue-repair:${kind}:${sha} -->`;
 
 /**
  * What to do with one PR. Pure: everything it needs is in `pr`.
- *   pr: { draft, crossRepo, queued, labels[], mergeable, head, gate, gateAttempt, markers[] }
+ *   pr: { draft, crossRepo, labels[], mergeable, head, gate, gateAttempt, markers[] }
  * Returns { action: 'skip' | 'merge' | 'codex' | 'needs-human', kind?, why }.
  */
 export function decide(pr, now = Date.now()) {
   if (pr.draft) return { action: 'skip', why: 'draft' };
   if (pr.crossRepo) return { action: 'skip', why: 'from a fork; nothing is pushed to forks' };
   if (pr.labels.includes('hold')) return { action: 'skip', why: 'labelled hold' };
-  if (pr.queued) return { action: 'skip', why: 'in the queue' };
 
   const here = pr.markers.filter((m) => m.sha === pr.head);
   if (here.some((m) => m.kind === NEEDS_HUMAN)) return { action: 'skip', why: 'waiting for a person at this head' };
@@ -129,7 +128,7 @@ export function decide(pr, now = Date.now()) {
     return { action: 'needs-human', why: `Codex was asked (${asked.kind.slice(6)}) over an hour ago and pushed nothing` };
   }
 
-  const waiting = here.find((m) => m.kind === 'baseline-ci' || m.kind === 'baseline-queue');
+  const waiting = here.find((m) => m.kind === 'baseline-ci');
   if (waiting && !(pr.mergeable === 'CONFLICTING')) {
     return { action: 'baseline', kind: waiting.kind.slice(9), retries: here.filter((m) => m.kind === 'retried').length };
   }
@@ -139,9 +138,6 @@ export function decide(pr, now = Date.now()) {
   if (pr.mergeable === 'CONFLICTING' || pr.mergeable === 'UNKNOWN') return { action: 'merge', why: `mergeable is ${pr.mergeable}` };
 
   if (RED.has(pr.gate) && pr.gateAttempt >= 2) return codexOrHuman(pr, 'ci', `gate is ${pr.gate} after the sweeper's re-run`);
-  if (pr.gate === 'SUCCESS' && here.some((m) => m.kind === 'sweeper-enqueued')) {
-    return codexOrHuman(pr, 'queue', 'the queue ejected it again after the sweeper re-queued it');
-  }
   return { action: 'skip', why: `gate is ${pr.gate || 'pending'}` };
 }
 
@@ -169,9 +165,8 @@ export function codexPrompt(kind, { branch, head, files = [], jobs = [] }) {
       ...rules,
     ].join('\n');
   }
-  const where = kind === 'queue' ? `The merge queue ejected this PR twice at ${head.slice(0, 8)}; these jobs failed in its merge group:` : `\`gate\` is red at ${head.slice(0, 8)} after a re-run; these jobs failed:`;
   return [
-    `@codex ${where}`,
+    `@codex \`gate\` is red at ${head.slice(0, 8)} after a re-run; these jobs failed:`,
     jobList || '- (no failed job found; read the latest run)',
     '',
     'Find the cause in the logs and fix it on this branch. If `main` fails the same way, do not work around it here: reply saying so.',
@@ -327,7 +322,6 @@ function openPrs() {
     pullRequests(states:OPEN,baseRefName:"main",first:100){nodes{
       id number isDraft isCrossRepository headRefName headRefOid mergeable author{login}
       labels(first:20){nodes{name}}
-      mergeQueueEntry{state}
       comments(last:100){nodes{body createdAt}}
       commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100){nodes{
         ... on CheckRun{name conclusion checkSuite{workflowRun{databaseId}}}
@@ -346,7 +340,6 @@ function openPrs() {
       author: n.author?.login,
       mergeable: n.mergeable,
       labels: n.labels.nodes.map((l) => l.name),
-      queued: n.mergeQueueEntry != null,
       markers: readMarkers(n.comments.nodes),
       gate: gate?.conclusion ?? '',
       gateRun: gate?.checkSuite?.workflowRun?.databaseId ?? null,
@@ -368,44 +361,26 @@ function failedJobs(runId, attempt) {
   return jobs.filter((j) => ['failure', 'timed_out', 'cancelled'].includes(j.conclusion) && j.name !== 'gate').map((j) => ({ name: j.name, url: j.html_url }));
 }
 
-/** The latest failed merge-group run for this PR since `since`. */
-function failedQueueRun(number, since) {
-  // Filtered by the API (failed CI runs since the re-queue): the unfiltered newest 100
-  // merge-group runs of every workflow can be a few hours deep on a busy day.
-  const created = encodeURIComponent(`>=${new Date(since).toISOString()}`);
-  const runs = JSON.parse(gh(['api', `repos/${REPO}/actions/runs?event=merge_group&status=failure&created=${created}&per_page=100`])).workflow_runs ?? [];
-  return runs.find((r) => r.name === 'CI' && r.head_branch?.includes(`/pr-${number}-`)) ?? null;
-}
-
-/** Other PRs' recent failed merge-group runs, with the jobs that failed: main's own state. */
-let recentQueueFailures = null;
-function queueFailures(now) {
-  if (recentQueueFailures) return recentQueueFailures;
-  const runs = JSON.parse(gh(['api', `repos/${REPO}/actions/runs?event=merge_group&status=failure&per_page=50`])).workflow_runs ?? [];
-  recentQueueFailures = runs
+/** Other PRs' recent failed CI runs, with the jobs that failed: main's own state. */
+let recentCiFailures = null;
+function ciFailures(now) {
+  if (recentCiFailures) return recentCiFailures;
+  const runs = JSON.parse(gh(['api', `repos/${REPO}/actions/runs?event=pull_request&status=failure&per_page=50`])).workflow_runs ?? [];
+  recentCiFailures = runs
     .filter((r) => r.name === 'CI' && now - Date.parse(r.created_at) <= BASELINE_WINDOW_MS)
-    .map((r) => ({ pr: Number(/\/pr-(\d+)-/.exec(r.head_branch ?? '')?.[1]), at: Date.parse(r.created_at), failed: failedJobs(r.id).map((j) => j.name) }))
+    .map((r) => ({ pr: r.pull_requests?.[0]?.number, at: Date.parse(r.created_at), failed: failedJobs(r.id).map((j) => j.name) }))
     .filter((r) => r.pr);
-  return recentQueueFailures;
+  return recentCiFailures;
 }
 
-/** The jobs behind a `ci` (red gate) or `queue` (second ejection) failure. */
-function jobsFor(pr, kind) {
-  if (kind === 'ci') return pr.gateRun ? failedJobs(pr.gateRun, pr.gateAttempt) : [];
-  const since = pr.markers.find((m) => m.kind === 'sweeper-enqueued' && m.sha === pr.head)?.at ?? 0;
-  const run = failedQueueRun(pr.number, since);
-  return run ? failedJobs(run.id) : null;
-}
+/** The jobs behind a red `gate`. */
+const jobsFor = (pr) => (pr.gateRun ? failedJobs(pr.gateRun, pr.gateAttempt) : []);
 
-/** Put the PR through its checks again: back into the queue, or `gate`'s failed jobs re-run. */
+/** Put the PR through its checks again: `gate`'s failed jobs re-run. */
 function retry(pr, kind, why, { dryRun }) {
   console.log(`#${pr.number}: ${why}; retrying (${kind}).`);
   if (dryRun) return;
-  if (kind === 'queue') {
-    gh(['api', 'graphql', '-f', 'query=mutation($id:ID!,$head:GitObjectID){enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head}){mergeQueueEntry{position}}}', '-f', `id=${pr.id}`, '-f', `head=${pr.head}`], { token: env.PUSH_TOKEN });
-  } else {
-    gh(['run', 'rerun', String(pr.gateRun), '--failed']);
-  }
+  gh(['run', 'rerun', String(pr.gateRun), '--failed']);
   comment(pr, `Queue repair: main's own failure has cleared, so this PR is being checked again. ${marker('retried', pr.head)}`, { dryRun });
 }
 
@@ -420,7 +395,7 @@ function needsHuman(pr, why, { dryRun }) {
   gh(['label', 'create', NEEDS_HUMAN, '--color', 'D93F0B', '--description', 'Queue repair could not land this; a person has to look'], { allowFail: true });
   gh(['pr', 'edit', String(pr.number), '--add-label', NEEDS_HUMAN], { allowFail: true });
   const who = pr.author && !pr.author.endsWith('[bot]') ? `@${pr.author} ` : '';
-  comment(pr, `${who}Queue repair could not get this PR back into the merge queue: ${why}. Push a fix (or merge \`main\` in) and it is picked up again; the \`${NEEDS_HUMAN}\` label comes off on the next push. ${marker(NEEDS_HUMAN, pr.head)}`, { dryRun });
+  comment(pr, `${who}Queue repair could not get this PR to merge: ${why}. Push a fix (or merge \`main\` in) and it is picked up again; the \`${NEEDS_HUMAN}\` label comes off on the next push. ${marker(NEEDS_HUMAN, pr.head)}`, { dryRun });
 }
 
 function askCodex(pr, kind, info, { dryRun }) {
@@ -514,17 +489,13 @@ export function main(argv = process.argv.slice(2)) {
         needsHuman(pr, d.why, { dryRun });
       } else {
         const kind = d.kind;
-        const jobs = jobsFor(pr, kind);
-        if (jobs === null) {
-          console.log(`#${pr.number}: out of the queue again, but no failed merge-group run of its own (likely a PR ahead of it); waiting for main.`);
-          continue;
-        }
-        const baseline = baselineJobs(queueFailures(now), pr.number, now);
+        const jobs = jobsFor(pr);
+        const baseline = baselineJobs(ciFailures(now), pr.number, now);
         const onMain = onlyBaseline(jobs, baseline);
         const names = jobs.map((j) => `\`${j.name}\``).join(', ');
         if (d.action === 'baseline') {
           if (onMain) console.log(`#${pr.number}: ${names} still failing on main; waiting.`);
-          else if (d.retries < RETRY_BUDGET) retry(pr, kind, `${names || 'its failure'} no longer failing in other PRs' merge groups`, { dryRun });
+          else if (d.retries < RETRY_BUDGET) retry(pr, kind, `${names || 'its failure'} no longer failing in other PRs' CI runs`, { dryRun });
           else {
             const next = codexOrHuman(pr, kind, `${names} failed again after ${d.retries} retries once main's failure had cleared`);
             if (next.action === 'codex') askCodex(pr, kind, { jobs, why: next.why }, { dryRun });
@@ -532,8 +503,8 @@ export function main(argv = process.argv.slice(2)) {
           }
         } else if (onMain) {
           // Not this PR's to fix, and not Codex's: no budget spent.
-          console.log(`#${pr.number}: ${names} also failing in other PRs' merge groups; waiting for main.`);
-          comment(pr, `Queue repair: ${d.why}, but ${names} also failed in the merge groups of at least ${BASELINE_MIN_PRS} other PRs in the last ${BASELINE_WINDOW_MS / 3600000} hours, so this looks like main's own failure, not this PR's. Nobody is asked to fix it here; this PR is checked again once that failure stops. ${marker(`baseline-${kind}`, pr.head)}`, { dryRun });
+          console.log(`#${pr.number}: ${names} also failing in other PRs' CI runs; waiting for main.`);
+          comment(pr, `Queue repair: ${d.why}, but ${names} also failed in the CI runs of at least ${BASELINE_MIN_PRS} other PRs in the last ${BASELINE_WINDOW_MS / 3600000} hours, so this looks like main's own failure, not this PR's. Nobody is asked to fix it here; this PR is checked again once that failure stops. ${marker(`baseline-${kind}`, pr.head)}`, { dryRun });
         } else {
           askCodex(pr, kind, { jobs, why: d.why }, { dryRun });
         }

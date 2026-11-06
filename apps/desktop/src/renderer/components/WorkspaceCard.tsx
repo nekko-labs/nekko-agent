@@ -1,7 +1,7 @@
 import { ComputerChip, useComputerOf } from './ComputerChip.js';
 import React, { memo, useRef, useState } from 'react';
 import type { BlockedReason, PrInfo, SessionLane, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
-import { getSessionWorkspaceIds, guessContextWindow, isLocalProvider, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
+import { getSessionWorkspaceIds, guessContextWindow, reportedClaudeCodeContext, shortModelName } from '@nekko-agent/shared';
 import { useStore, type Workspace } from '../store.js';
 import { useShown } from '../simpleMode.js';
 import { allPanes } from '../layout.js';
@@ -166,7 +166,6 @@ function WorkspaceCardImpl({
   projects,
   subAgentCount = 0,
   showMetadata = true,
-  showProvider = true,
   showComputer = true,
   showComputerIcons = true,
   zoneTint,
@@ -190,9 +189,7 @@ function WorkspaceCardImpl({
   subAgentCount?: number;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
-  /** The provider subtext under the model; off, the model line stands alone. */
-  showProvider?: boolean;
-  /** The computer a remote agent runs on; off, the provider line stands alone. */
+  /** The computer a remote agent runs on, on a line under the model. */
   showComputer?: boolean;
   /** That computer's icon, when it has one. */
   showComputerIcons?: boolean;
@@ -277,7 +274,7 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* Chat rows stay flat; selection is carried by their title and status. */
+      /* Only the selected chat gets a background; status keeps its own icon. */
       className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
       title={title}
@@ -328,7 +325,7 @@ function WorkspaceCardImpl({
       </div>
 
       {/* Line 2: what is running it: the model, then how full the context
-          window is. Where the model comes from is subtext on the next line. */}
+          window is. Where it comes from is in the tooltip, not a line of its own. */}
       {showMetadata && <>
       <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
         <Fact
@@ -363,11 +360,9 @@ function WorkspaceCardImpl({
         )}
       </div>
 
-      {((showProvider && provider) || (showComputer && computersShown && computer)) && (
+      {showComputer && computersShown && computer && (
         <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
-          {showComputer && computersShown && computer && <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />}
-          {showComputer && computersShown && computer && showProvider && provider && <span aria-hidden>·</span>}
-          {showProvider && provider && <span className="truncate" data-card-provider>{isLocalProvider(provider.kind) ? 'Local' : provider.label}</span>}
+          <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />
         </div>
       )}
 

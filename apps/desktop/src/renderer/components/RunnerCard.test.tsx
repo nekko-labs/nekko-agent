@@ -36,7 +36,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   ],
   ...over,
 });
-const render = (v: RunnerView, image: ImageView | null = null) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} beginReply={() => () => {}} />);
+const render = (v: RunnerView, image: ImageView | null = null, onAddTools?: () => Promise<void>) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} onAddTools={onAddTools} beginReply={() => () => {}} />);
 const image = (over: Partial<ImageView> = {}): ImageView => ({
   state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
 });
@@ -132,6 +132,19 @@ describe('RunnerCard', () => {
   it('a_failed_build_says_why_and_a_paused_one_resumes', () => {
     expect(render(noImage, image({ state: 'failed', stage: 'xcode', error: 'This Mac has 18 GB free.' }))).toMatch(/role="alert"[^>]*>Setup stopped: This Mac has 18 GB free\./);
     expect(render(noImage, image({ canResume: true, stage: 'xcode' }))).toContain('Resume setup');
+  });
+
+  it('an_image_without_job_tools_says_so_and_offers_to_install_them', () => {
+    const info = { macos: '27.2', xcode: 'Xcode 27.2', actionsRunner: '2.338.1', built: '2026-11-01', missingTools: ['node', 'gh'] };
+    const html = render(view(), image({ state: 'ready', info }), async () => {});
+    expect(html).toContain('data-missing-tools="node gh"');
+    expect(html).toContain("node and gh are missing from this Mac&#x27;s runner image. Jobs that need them will fail.");
+    expect(html).toMatch(/<button[^>]*>Install them<\/button>/);
+    expect(html).not.toContain('—');
+    // Nothing missing, or a build under way, shows no notice.
+    expect(render(view(), image({ state: 'ready', info: { ...info, missingTools: [] } }), async () => {})).not.toContain('data-missing-tools');
+    expect(render(view(), image({ state: 'building', kind: 'tools', stage: 'tools', info }), async () => {})).not.toContain('data-missing-tools');
+    expect(render(view(), image({ state: 'ready', info: { ...info, missingTools: ['gh'] } }), async () => {})).toMatch(/<button[^>]*>Install it<\/button>/);
   });
 
   it('a_ready_image_offers_the_workflow_and_no_setup', () => {

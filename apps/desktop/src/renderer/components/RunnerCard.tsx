@@ -7,6 +7,7 @@ import {
   imageBusy,
   imageFraction,
   imageLine,
+  missingToolsLine,
   networkText,
   reasonText,
   runnerSubtitle,
@@ -136,15 +137,42 @@ function ImageRow({ image, onSetup }: { image: ImageView; onSetup?(): void }) {
   );
 }
 
+/** An image in use without tools jobs run before their own setup, with the way to add them. */
+function MissingToolsRow({ tools, onAddTools }: { tools: string[]; onAddTools?(): Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const pushToast = useStore((s) => s.pushToast);
+  const add = async () => {
+    setBusy(true);
+    try {
+      await onAddTools?.();
+    } catch (e) {
+      pushToast('error', `Couldn't start installing them: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      className="mt-3 flex items-center gap-3 rounded-xl border px-3 py-2"
+      style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
+      data-missing-tools={tools.join(' ')}
+    >
+      <p role="status" className="min-w-0 flex-1 text-xs">{missingToolsLine(tools)}</p>
+      {onAddTools && <button className="btn btn-primary py-1! text-xs" disabled={busy} onClick={() => void add()}>{tools.length === 1 ? 'Install it' : 'Install them'}</button>}
+    </div>
+  );
+}
+
 /** One connected runner (mockup 3): state, slots, the Mac's facts and recent jobs. */
 /**
  * `beginReply` is called as a request starts and returns where its answer goes,
  * so the section can drop an answer a newer push has already overtaken.
  */
-export function RunnerCard({ view: given, now, image = null, onSettings, onSetup, beginReply }: { view: RunnerView; now: number; image?: ImageView | null; onSettings(): void; onSetup?(): void; beginReply(): (v: RunnerView) => void }) {
+export function RunnerCard({ view: given, now, image = null, onSettings, onSetup, onAddTools, beginReply }: { view: RunnerView; now: number; image?: ImageView | null; onSettings(): void; onSetup?(): void; onAddTools?(): Promise<void>; beginReply(): (v: RunnerView) => void }) {
   const [busy, setBusy] = useState(false);
   const pushToast = useStore((s) => s.pushToast);
   const settingUp = image !== null && (image.state !== 'ready' || image.canResume);
+  const missingTools = !settingUp && image?.state === 'ready' ? (image.info?.missingTools ?? []) : [];
   // Setup is the answer to "No VM image yet", so a runner that is on waits for it, and one that is off stays off.
   const view: RunnerView = settingUp && given.error === NO_IMAGE_ERROR ? { ...given, state: given.state === 'error' ? 'waiting' : given.state, error: null } : given;
   const { config, state, host, today } = view;
@@ -194,6 +222,7 @@ export function RunnerCard({ view: given, now, image = null, onSettings, onSetup
         </p>
       )}
       {image && settingUp && <ImageRow image={image} onSetup={onSetup} />}
+      {missingTools.length > 0 && <MissingToolsRow tools={missingTools} onAddTools={onAddTools} />}
 
       {(state === 'waiting' || state === 'draining') && view.reasons.length > 0 && (
         <ul className="mt-3 space-y-0.5 text-xs text-ink-soft">

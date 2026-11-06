@@ -1,7 +1,8 @@
 import type { AgentEvent, PendingInput, SessionSummary, ToolCall, ToolResult } from '@nekko-agent/shared';
 import { summarizeDelegation, summarizeToolCall } from '@nekko-agent/shared';
 
-const NO_STATUS = 'No current run status recorded.';
+/** The detail `childActivity` gives a child with no live run to report. */
+export const NO_STATUS = 'No current run status recorded.';
 
 export type SubagentStatus = 'working' | 'waiting' | 'completed' | 'failed' | 'stopped';
 export interface SubagentActivity { status: SubagentStatus; detail: string; toolId?: string; text?: string }
