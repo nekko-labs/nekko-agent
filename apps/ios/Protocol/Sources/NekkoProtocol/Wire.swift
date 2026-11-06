@@ -16,6 +16,8 @@ public enum Channels {
     public static let sessionsSummaries = "sessions:summaries"
     public static let sessionCreate = "session:create"
     public static let sessionGet = "session:get"
+    /// One photo a user attached, sharp enough for the full-screen viewer: `(chatId, messageId, index)` → a data URL or null.
+    public static let sessionPhoto = "session:photo"
     /// A chat's durable watches: what each watches, when it wakes and how that went (never the continuation prompt).
     public static let sessionWatches = "session:watches"
     /// A computer's page in one read: version, hardware, live stats, the model server (`PHONE_MACHINE_VIEW`).
@@ -121,7 +123,7 @@ public enum Channels {
     public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove])
 
     public static let all = [
-        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet,
+        settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
         sessionSetOptions, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
@@ -329,12 +331,13 @@ public struct ChatMessage: Equatable, Sendable {
     public let toolCalls: [ToolCall]
     public let toolResult: ToolResult?
     public let interrupted: Bool
+    public var turnStats: TurnStats? = nil
 
     public static func == (a: ChatMessage, b: ChatMessage) -> Bool {
         a.id == b.id && a.role == b.role && a.content == b.content && a.reasoning == b.reasoning
             && a.createdAt == b.createdAt && a.imageCount == b.imageCount && a.skill?.name == b.skill?.name
             && a.skill?.input == b.skill?.input && a.toolCalls == b.toolCalls && a.toolResult == b.toolResult
-            && a.interrupted == b.interrupted && a.images == b.images
+            && a.interrupted == b.interrupted && a.images == b.images && a.turnStats == b.turnStats
     }
 
     public static func from(_ v: JSONValue?) -> ChatMessage? {
@@ -347,7 +350,8 @@ public struct ChatMessage: Equatable, Sendable {
             createdAt: v.long("createdAt"), imageCount: v["images"]?.array?.count ?? max(0, Int(v.long("imageCount") ?? 0)),
             images: v["images"]?.array?.map { $0.string ?? "" } ?? [], skill: skill,
             toolCalls: v["toolCalls"]?.array?.compactMap(ToolCall.from) ?? [],
-            toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"))
+            toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"),
+            turnStats: role == "assistant" ? TurnStats.from(v["turnStats"]) : nil)
     }
 }
 
@@ -792,10 +796,13 @@ public struct AppInfo: Equatable, Sendable {
     /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
     public var quitFromPhone = false
     /// The computer's icon, one of `computerIcons`; nil when it has none, or one this app doesn't draw.
+    public var hostname: String?
+    public var computerName: String?
     public var machineIcon: String?
 
     public static func from(_ v: JSONValue?) -> AppInfo {
         AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false,
+                hostname: v?.str("hostname"), computerName: v?.str("computerName"),
                 machineIcon: v?.str("machineIcon").flatMap { computerIcons.contains($0) ? $0 : nil })
     }
 }

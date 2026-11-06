@@ -19,10 +19,12 @@ Anyone using Nekko Agent, on any device, can tell Nekko Labs something is broken
 
 The sheet on desktop, the Local Web UI and Docker is one form that opens up as it is used, styled like the Scheduled Tasks editor. iPhone, iPad and Android keep the three-section sheet above.
 
-- **Always there:** the choice of **Good** or **Needs improvement** (nothing preselected), **Other ways** (collapsed, with the agent prompt and the GitHub issue forms as two separate options), and the contributing line linking to `CONTRIBUTING.md`.
-- **After choosing Needs improvement:** Summary, Description, Screenshots, Include app info and Send feedback.
-- **After choosing Good:** Summary, Description and Send feedback. Praise rarely needs screenshots or app info, so they are not offered, and any set before changing to Good are not sent. Text typed before changing the choice stays.
-- **Screenshots:** optional, by drop, paste or the file picker. Up to 3, each up to 5 MB, so at most 15 MB a note. PNG, JPG and JPEG only, proven by the file's first bytes as well as its extension (`feedbackScreenshotProblem`). A refused file says why, in view, and the rest are kept. The sheet warns that screenshots can show names, chats or file paths.
+- **Always there:** the choice of **Good** or **Needs improvement** (nothing preselected) and the contributing line linking to `CONTRIBUTING.md`. Nothing else shows until a choice is made.
+- **After choosing Needs improvement:** Summary, Description, Screenshots, Include app info (its switch at the far right), **Other ways** (collapsed, with the agent prompt, the GitHub issue forms and the email line as separate options inside one border) and Send.
+- **After choosing Good:** Summary, Description, the email line and Send.
+- **The email line:** plain text, "Email us at feedback@nekkoagent.com". A Copy button appears on hovering the address, or on keyboard focus.
+- **Good and screenshots:** Praise rarely needs screenshots or app info, so they are not offered, and any set before changing to Good are not sent. Text typed before changing the choice stays.
+- **Screenshots:** optional, by drop, paste or the file picker. Up to 3, each up to 5 MB, so at most 15 MB a note. PNG, JPG and JPEG only, proven by the file's first bytes as well as its extension (`feedbackScreenshotProblem`). A refused file says why, in view, and the rest are kept. Each added screenshot shows a thumbnail; one that can't be drawn shows a picture icon instead of a broken image, and stays on the note. The sheet warns that screenshots can show names, chats or file paths.
 - **Required:** the choice, Summary (up to 120 characters) and Description. Send names the first thing missing, and pressing it with something missing shows each problem and moves focus to the first.
 - **The note's text is unchanged on the wire.** The form joins everything into `message`, as `Needs improvement: <summary>`, a blank line, then the description (`feedbackNote` in `packages/shared/src/feedback.ts`). The 4,000 limit therefore covers the whole note, and the count under the description shows the whole note from the start.
 - **Wording stays positive:** "Needs improvement" and "needs work", never "broken" or a thumbs down. Good has a star-eyed Nekko and Needs improvement a wrench.

@@ -1,0 +1,87 @@
+name: iOS group evidence
+on:
+  workflow_call:
+    inputs:
+      baseline_ref:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  groups:
+    runs-on: xcode-27
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .group-harness
+          persist-credentials: false
+          sparse-checkout: |
+            apps/ios/scripts/group-evidence.mjs
+            apps/ios/scripts/GroupEvidenceTests.swift
+            apps/ios/UITests/PurposeGroupsTests.swift
+          sparse-checkout-cone-mode: false
+      - name: Overlay deterministic fixture and record revisions
+        env:
+          BASELINE: ${{ inputs.baseline_ref }}
+          REVISION: ${{ matrix.revision }}
+        run: |
+          set -euo pipefail
+          [[ "$BASELINE" =~ ^[0-9a-fA-F]{40}$ ]]
+          mkdir -p apps/ios/evidence
+          echo "app=$(git rev-parse HEAD) harness=$(git -C .group-harness rev-parse HEAD)" > apps/ios/evidence/revisions.txt
+          cp .group-harness/apps/ios/scripts/GroupEvidenceTests.swift apps/ios/UITests/
+          cp .group-harness/apps/ios/UITests/PurposeGroupsTests.swift apps/ios/UITests/
+          node .group-harness/apps/ios/scripts/group-evidence.mjs "--$REVISION"
+      - name: Focused protocol tests
+        if: matrix.revision == 'after'
+        working-directory: apps/ios/Protocol
+        run: swift test --filter 'ChatListLayoutTests|ToolPurposeTests'
+      - run: brew install xcodegen
+      - name: Build and capture real native views
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          DEVICE=$(xcrun simctl create Nekko-Group-Evidence "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl ui "$DEVICE" appearance light
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
+          COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
+          xcodebuild "${COMMON[@]}" build-for-testing
+          xcrun simctl io "$DEVICE" recordVideo evidence/groups.mp4 &
+          VIDEO=$!
+          trap 'kill -INT "$VIDEO" || true; wait "$VIDEO" || true' EXIT
+          xcodebuild "${COMMON[@]}" -resultBundlePath evidence/groups.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/GroupEvidenceTests \
+            -only-testing:NekkoNativeUITests/PurposeGroupsTests
+      - name: Export and remove owned simulator
+        if: always()
+        working-directory: apps/ios
+        run: |
+          if [ -n "${DEVICE:-}" ]; then
+            xcrun simctl shutdown "$DEVICE" || true
+            xcrun simctl delete "$DEVICE" || true
+          fi
+          if [ -d evidence/groups.xcresult ]; then
+            xcrun xcresulttool export attachments --path evidence/groups.xcresult --output-path evidence/shots
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-group-evidence-${{ matrix.revision }}
+          path: apps/ios/evidence/**
+          if-no-files-found: error

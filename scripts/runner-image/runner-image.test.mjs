@@ -60,6 +60,13 @@ if [ -n "\${FAKE_STATS_DISK:-}" ]; then
     sleep 0.1
   done
 fi
+# FAKE_PAGES: the runner writes a step's page, and a hostile job plants a symlink beside it.
+if [ -n "\${FAKE_PAGES:-}" ]; then
+  mkdir -p '${home}/actions-runner/_diag/pages'
+  echo "step output" > '${home}/actions-runner/_diag/pages/step_1.log'
+  ln -s /etc/master.passwd '${home}/actions-runner/_diag/pages/evil.log'
+  sleep 0.5
+fi
 if [ -e '${home}/.nekko/jit-config' ]; then echo "run.sh saw jit-config" >> '${log}'; fi
 if [ -n "\${FAKE_HOSTILE:-}" ]; then
   mkdir -p '${victim}' && echo keep > '${victim}/jit-config' && echo keep > '${victim}/gitlab-runner.toml'
@@ -131,6 +138,12 @@ test('github_seed_starts_run_sh_as_runner_then_shuts_down', () => {
   assert.ok(!calls.includes('run.sh saw jit-config'), 'the copy is gone before the job starts');
   assert.ok(!out.includes('QUJD'), 'the JIT config is never logged');
   assert.match(out, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ /m);
+});
+
+test('step_pages_are_followed_as_the_runner_user_never_through_a_symlink', () => {
+  const { calls } = run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_PAGES: '1' } });
+  const tails = calls.filter((c) => c.includes(' tail -n +1 -f '));
+  assert.deepEqual(tails, [`sudo -u runner -H -- tail -n +1 -f ${home}/actions-runner/_diag/pages/step_1.log`]);
 });
 
 test('usage_is_sampled_onto_the_stats_disk_only', () => {

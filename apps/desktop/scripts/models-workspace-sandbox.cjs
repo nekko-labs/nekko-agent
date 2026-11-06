@@ -40,9 +40,9 @@ app.whenReady().then(async () => {
       }
     }
     // Interact with the real renderer; do not save credentials or run any server.
-    if (await run("!!document.querySelector('.models-subnav')")) {
+    if (await run("!!document.querySelector('.models-workspace')")) {
       win.setContentSize(1440, 900);
-      await run("document.querySelectorAll('.models-subnav button')[1].click()");
+      await run("layoutFixture.store.getState().setView('models')");
       await sleep(300);
       report.metrics.shortcuts = [];
       for (const kind of ['chatgpt', 'anthropic', 'openai', 'openrouter', 'vertex', 'any']) {
@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
         await run(`document.querySelector('[aria-label="Close provider setup"]').click()`);
         await sleep(100);
       }
-      await run("document.querySelectorAll('.models-subnav button')[0].click()");
+      await run("layoutFixture.store.getState().setView('modelserver')");
       await sleep(300);
       if (!(await run("!!document.querySelector('.models-local-connections')"))) throw new Error('Local connections missing');
       await run("document.querySelector('.models-local-connections').scrollIntoView()");
@@ -68,10 +68,10 @@ app.whenReady().then(async () => {
       const { GifWriter } = require(path.join(modules, 'omggif'));
       const frames = [];
       for (let i = 0; i < 12; i++) {
-        if (i === 0) await run("document.querySelectorAll('.models-subnav button')[1].click()");
+        if (i === 0) await run("layoutFixture.store.getState().setView('models')");
         if (i === 3) await run("document.querySelector('[aria-label=\"More providers\"]').click()");
         if (i === 6) await run("document.querySelector('[aria-label=\"Close provider setup\"]').click()");
-        if (i === 9) await run("document.querySelectorAll('.models-subnav button')[0].click()");
+        if (i === 9) await run("layoutFixture.store.getState().setView('modelserver')");
         await sleep(250);
         frames.push(PNG.sync.read((await win.capturePage(undefined, { stayHidden: true, stayAwake: true })).resize({ width: 960 }).toPNG()));
       }
@@ -90,7 +90,7 @@ app.whenReady().then(async () => {
       const gif = new GifWriter(buffer, frames[0].width, frames[0].height, { palette: colors, loop: 0 });
       for (const f of frames) { const pixels = new Uint8Array(f.width * f.height); for (let i = 0; i < pixels.length; i++) pixels[i] = indices.get(key(f.data, i * 4)); gif.addFrame(0, 0, f.width, f.height, pixels, { delay: 25 }); }
       fs.writeFileSync(path.join(out, 'models-navigation.gif'), buffer.subarray(0, gif.end()));
-      report.metrics.navigation = 'cloud to local via subnavigation';
+      report.metrics.navigation = 'cloud to local via the section destinations';
     }
     report.metrics.bounds = win.getBounds();
     report.metrics.visible = win.isVisible();

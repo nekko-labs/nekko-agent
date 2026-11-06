@@ -20,9 +20,9 @@ You find it in **Scheduled Tasks**, as the **CI runners** section below your tas
 
 ## Why run jobs on your Mac
 
-- **Faster.** On a 2021 MacBook Pro (M1 Max), our iOS CI job took 39 minutes in a VM against 65
-  minutes on GitHub's hosted Mac the same day, and 47 minutes on a typical hosted run. App builds
-  were 2.6x faster. Newer Macs should do better. Numbers, runs and caveats:
+- **Faster.** On an M5 Max MacBook Pro, our iOS CI job took a median 40 minutes in a VM against
+  59 minutes on GitHub's hosted Macs, with simulator tests 2x and app builds 4.6x faster. On a 2021
+  M1 Max it took 39 minutes against 65 the same day. Numbers, runs and caveats:
   [CI runner performance](ci-runner-performance.md).
 - **No hosted macOS minutes.** Jobs on your own Mac don't use GitHub's hosted macOS minutes, the
   most expensive kind.
@@ -111,7 +111,9 @@ The build takes about 30 minutes plus the download, and runs by itself:
    "Update this Mac to macOS 27 to set it up here."
 2. **Download the macOS image** from Apple.
 3. **Install the macOS VM**: macOS goes into a new VM, not onto this Mac.
-4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator and Homebrew are added.
+4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator, Homebrew, `node`, `gh`
+   and `jq` are added (workflows run these before any setup step of theirs, as on GitHub's
+   hosted Macs).
    With no Xcode on this Mac the sheet offers **macOS only**; install Xcode for iOS jobs.
 5. **Lock the VM down.**
 6. **Test a boot.** Then the image goes in and the runner turns on in the mode you chose.
@@ -139,6 +141,15 @@ space.
 **Update scripts**, beside **Rebuild image**, is for an update to Nekko's own scripts inside the
 image. It copies the image, writes the new scripts in and test-boots the copy, in a few minutes. A new
 macOS or Xcode still needs **Rebuild image**.
+
+### Missing tools
+
+An image set up by an older Nekko may lack `node`, `gh` or `jq`, and a job that runs one
+before its own setup fails in seconds with `command not found`. The runner card then says, for
+example, "node and gh are missing from this Mac's runner image. Jobs that need them will fail."
+Choose **Install them**: Nekko copies the image, starts the copy once to install them with
+Homebrew, checks its disk for them and test-boots it: minutes, not a rebuild's half hour. The image in use keeps
+taking jobs until then, and the sheet shows the stages and any failure like setup does.
 
 ## Use an app you already have
 
@@ -387,11 +398,44 @@ A waiting runner card lists every reason it is not taking jobs:
 A newer version of the runner may add a reason this app does not know yet; it shows as
 "A condition is not met."
 
-## Recent jobs
+## Jobs
 
-The runner card lists the last five jobs, one line each: when it ended, the workflow and job,
+Below the Mac's facts, the runner card lists its jobs in three groups. A group with nothing in
+it is left out.
+
+**Queued** lists jobs waiting on GitHub for a runner with this runner's label, with how long each
+has waited. Each one offers:
+
+- **Accept now** starts a VM for that job right away, as if the runner were in **Runner first**,
+  even when your mode would hold it (for example Do not disturb while you type). The job then runs
+  to the end under Runner first's rules. The hard limits still apply (low memory, heat, low disk,
+  Low Power Mode and Apple's limit of 2 macOS VMs), and so do your own conditions under **Only
+  when** (on power, trusted networks, hotspots, VPN). When one of those blocks it, the button is
+  off and says why. GitHub hands the new VM whichever matching job is first in line, which is usually
+  the oldest. For a Linux job (when you have Linux slots), it starts a Linux VM instead.
+- **Decline** keeps this Mac from starting a VM for that job, so another runner or a hosted Mac
+  can take it. A VM this Mac already has waiting may still pick it up, because GitHub decides
+  which ready runner gets which job.
+- **Undo** takes back either.
+
+**In progress** shows each running job: **Working on** and the job, linked to its page on GitHub,
+how long it has run, and how far it has got, "Step 8 of 12: Build and test iOS · 58%", with a bar
+for that percent. The percent counts the job's finished steps; GitHub reports no finer progress,
+and GitLab reports no steps, so a GitLab job shows no bar. Each running job has:
+
+- **Live log**: what the VM prints, read again every few seconds: the runner starting, then the
+  output of each step as it runs (with secrets masked, as on GitHub). The step output needs an
+  image with the current scripts (**Update scripts** in runner settings).
+- **Re-run**: cancels the run and starts the job again once GitHub has finished cancelling it.
+- **Cancel**: cancels the run. GitHub can only cancel a whole workflow run, not one job, so both
+  ask first.
+
+## Completed jobs
+
+The **Completed** group lists the last five jobs, one line each: when it ended, the workflow and job,
 how it ended and how long it ran. **Job** opens the job on GitHub, and **PR #N** opens the pull
 request it ran for (GitHub names no pull request for a run from a fork, so those show none).
+**Re-run** runs that job again on GitHub.
 
 Click a line to see the VM step by step (started, online, running the job, stopped, deleted,
 each with its time), the end of the job's log, read from GitHub when you open it, and the VM's

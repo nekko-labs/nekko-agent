@@ -49,7 +49,7 @@ app.whenReady().then(async () => {
       if (nav) {
         // The jump animates: part way there one frame-batch in, landed on the section top within 400ms.
         const jump = await run(`new Promise((done) => {
-          const s = document.querySelector('nav[aria-label="Settings sections"]').closest('.overflow-y-auto');
+          const s = document.querySelector('.settings-content');
           const samples = [];
           const t0 = performance.now();
           [...document.querySelectorAll('.settings-nav-item')].find((b) => b.textContent.includes('System')).click();
@@ -59,7 +59,7 @@ app.whenReady().then(async () => {
         report.measures[`jump-${width}`] = jump;
         const end = jump.samples.at(-1)[1];
         check(`System jump animates through intermediate positions (${width})`, jump.samples.some(([, y]) => y > 0 && y < end));
-        check(`System jump lands on the section within 400ms (${width})`, Math.abs(jump.target) <= 2 || end === (await run(`(() => { const s = document.querySelector('nav[aria-label="Settings sections"]').closest('.overflow-y-auto'); return s.scrollHeight - s.clientHeight; })()`)));
+        check(`System jump lands on the section within 400ms (${width})`, Math.abs(jump.target) <= 2 || end === (await run(`(() => { const s = document.querySelector('.settings-content'); return s.scrollHeight - s.clientHeight; })()`)));
         check(`System stays highlighted after the jump (${width})`, await run(`document.querySelector('.settings-nav-item[aria-current]')?.textContent.includes('System')`));
         await run(`[...document.querySelectorAll('.settings-nav-item')].find((b) => b.textContent.includes('Phone pairing')).click()`);
         await sleep(1200);

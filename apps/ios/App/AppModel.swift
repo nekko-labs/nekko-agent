@@ -23,7 +23,7 @@ final class AppModel {
     let cloud: CloudSync
     /// This iPhone as a place chats run, on its own cloud providers (decision 0050).
     let phone: PhoneChats
-    /// GitHub, Linear, Jira and the rest, connected on this iPhone itself (decision 0055).
+    /// GitHub, Linear, Jira and the rest, connected on this iPhone itself (decision 0058).
     let connectors: ConnectorsModel
     private let connectorKeychain: KeychainStore
     private let cloudKeychain: KeychainStore
@@ -134,7 +134,7 @@ final class AppModel {
         #else
         phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
         #endif
-        // Connector tokens have a Keychain service of their own too (decision 0055).
+        // Connector tokens have a Keychain service of their own too (decision 0058).
         let connectorKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.phone-connectors")
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { connectorKeychain.wipe() }

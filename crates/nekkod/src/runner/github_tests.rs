@@ -474,15 +474,15 @@ async fn linux_jobs_count_only_for_linux_vms() {
     ] });
     let runs = json!({ "workflow_runs": [{ "id": 100, "name": "CI" }] });
     let t = rig(vec![token(), (200, runs.clone()), (200, jobs.clone()), (200, runs), (200, jobs)], true);
-    assert_eq!(t.gh.queued(&repo_record(), Guest::Linux).await, Ok(2), "amd64 jobs never come here");
-    assert_eq!(t.gh.queued(&repo_record(), Guest::Macos).await, Ok(1));
+    assert_eq!(t.gh.queued(&repo_record(), Guest::Linux).await.unwrap().len(), 2, "amd64 jobs never come here");
+    assert_eq!(t.gh.queued(&repo_record(), Guest::Macos).await.unwrap().len(), 1);
     let label = repo_record().config.label;
     assert_eq!(labels(&repo_record(), Guest::Linux), ["self-hosted", "Linux", "ARM64", &format!("{label}-linux")]);
     assert_eq!(labels(&repo_record(), Guest::Macos)[1], "macOS");
 }
 
 #[tokio::test]
-async fn queued_counts_jobs_with_our_labels() {
+async fn queued_lists_jobs_with_our_labels() {
     let t = rig(
         vec![
             token(),
@@ -490,7 +490,8 @@ async fn queued_counts_jobs_with_our_labels() {
             (
                 200,
                 json!({ "jobs": [
-                    { "id": 1, "status": "queued", "labels": ["self-hosted", "macOS", "nekko-cloud-mac"] },
+                    { "id": 1, "name": "build", "status": "queued", "created_at": "2026-11-06T01:02:03Z",
+                      "labels": ["self-hosted", "macOS", "nekko-cloud-mac"] },
                     { "id": 2, "status": "queued", "labels": ["ubuntu-latest"] },
                     { "id": 3, "status": "queued", "labels": ["self-hosted", "gpu"] },
                     { "id": 4, "status": "in_progress", "labels": ["self-hosted"] },
@@ -499,7 +500,10 @@ async fn queued_counts_jobs_with_our_labels() {
         ],
         true,
     );
-    assert_eq!(t.gh.queued(&repo_record(), Guest::Macos).await, Ok(1));
+    let q = t.gh.queued(&repo_record(), Guest::Macos).await.unwrap();
+    assert_eq!(q.len(), 1);
+    assert_eq!((q[0].job.job_id, q[0].job.run_id, q[0].job.job.as_str()), (1, 100, "build"));
+    assert_eq!(q[0].created_at.as_deref(), Some("2026-11-06T01:02:03Z"));
     let urls = t.http.urls();
     assert_eq!(urls[1], "GET https://api.github.com/repos/o/r/actions/runs?status=queued&per_page=10");
     assert_eq!(urls[2], "GET https://api.github.com/repos/o/r/actions/runs/100/jobs?filter=latest&per_page=100");
@@ -591,6 +595,36 @@ async fn rerun_posts_the_job() {
     };
     assert_eq!(t.gh.rerun(&repo_record(), &job).await, Ok(()));
     assert_eq!(t.http.urls()[1], "POST https://api.github.com/repos/o/r/actions/jobs/5/rerun");
+}
+
+#[tokio::test]
+async fn running_job_counts_its_finished_steps() {
+    let t = rig(
+        vec![
+            token(),
+            (200, json!({ "workflow_runs": [{ "id": 100, "name": "CI" }] })),
+            (
+                200,
+                json!({ "jobs": [{ "id": 5, "name": "build", "runner_name": "nekko-mac1-1-1", "steps": [
+                    { "name": "Set up job", "status": "completed" },
+                    { "name": "Checkout", "status": "completed" },
+                    { "name": "Build iOS", "status": "in_progress" },
+                    { "name": "Test", "status": "queued" },
+                ] }] }),
+            ),
+        ],
+        true,
+    );
+    let job = t.gh.job(&repo_record(), 0, "nekko-mac1-1-1").await.unwrap().unwrap();
+    assert_eq!(job.steps, Some(JobSteps { done: 2, total: 4, current: Some("Build iOS".into()) }));
+}
+
+#[tokio::test]
+async fn cancel_posts_the_run() {
+    let t = rig(vec![token(), (202, json!({}))], true);
+    let job = JobRef { repo: "o/r".into(), run_id: 100, job_id: 5, ..Default::default() };
+    assert_eq!(t.gh.cancel(&repo_record(), &job).await, Ok(()));
+    assert_eq!(t.http.urls()[1], "POST https://api.github.com/repos/o/r/actions/runs/100/cancel");
 }
 
 #[test]

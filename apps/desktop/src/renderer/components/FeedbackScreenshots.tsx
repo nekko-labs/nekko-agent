@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   FEEDBACK_SCREENSHOT_MAX_COUNT, feedbackScreenshotProblem, feedbackScreenshotType, type FeedbackScreenshot,
 } from '@nekko-agent/shared';
-import { CloseIcon } from '../icons.js';
+import { CloseIcon, PhotoIcon } from '../icons.js';
 
 interface Shot {
   id: number;
@@ -25,6 +25,24 @@ async function toBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
+/** A data URL, because the renderer's CSP has no `blob:` in img-src. */
+export async function screenshotPreviewUrl(file: File): Promise<string> {
+  return `data:${feedbackScreenshotType(await firstBytes(file))};base64,${await toBase64(file)}`;
+}
+
+/** The image, or a stand-in when it passed the checks but won't decode (a damaged file, say). */
+function ShotPreview({ shot }: { shot: Shot }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <div role="img" aria-label={shot.name} className="grid h-16 w-full place-items-center bg-surface-2 text-ink-faint" data-testid="feedback-shot-placeholder">
+        <PhotoIcon className="h-6 w-6" />
+      </div>
+    );
+  }
+  return <img src={shot.url} alt={shot.name} className="block h-16 w-full bg-surface-2 object-cover object-top" onError={() => setBroken(true)} />;
+}
+
 /** The screenshots on a note. Lives in the form, so paste and drop work anywhere on it. */
 export function useFeedbackScreenshots() {
   const [shots, setShots] = useState<Shot[]>([]);
@@ -32,8 +50,6 @@ export function useFeedbackScreenshots() {
   const latest = useRef(shots);
   latest.current = shots;
   const nextId = useRef(0);
-
-  useEffect(() => () => { for (const shot of latest.current) URL.revokeObjectURL(shot.url); }, []);
 
   const add = async (files: File[]) => {
     const kept = [...latest.current];
@@ -45,15 +61,13 @@ export function useFeedbackScreenshots() {
         ? `${name} wasn't added. You can add up to ${FEEDBACK_SCREENSHOT_MAX_COUNT} screenshots.`
         : feedbackScreenshotProblem(name, file.size, await firstBytes(file));
       if (problem) problems.push(problem);
-      else kept.push({ id: nextId.current++, name, file, url: URL.createObjectURL(file) });
+      else kept.push({ id: nextId.current++, name, file, url: await screenshotPreviewUrl(file) });
     }
     setShots(kept);
     setErrors(problems);
   };
 
   const remove = (id: number) => {
-    const shot = latest.current.find(s => s.id === id);
-    if (shot) URL.revokeObjectURL(shot.url);
     setShots(latest.current.filter(s => s.id !== id));
     setErrors([]);
   };
@@ -99,7 +113,7 @@ export function FeedbackScreenshots({ shots, errors, add, remove }: Pick<ReturnT
         <ul ref={list} className="mb-2 grid grid-cols-3 gap-2" aria-labelledby="feedback-shots-label">
           {shots.map((shot, index) => (
             <li key={shot.id} className="relative min-w-0 overflow-hidden rounded-xl border border-line">
-              <img src={shot.url} alt={shot.name} className="block h-16 w-full bg-surface-2 object-cover object-top" />
+              <ShotPreview shot={shot} />
               <div className="px-2 py-1 text-2xs">
                 <span className="block truncate text-ink" title={shot.name}>{shot.name}</span>
                 <span className="block text-ink-faint">{fileSize(shot.file.size)}</span>
@@ -148,7 +162,7 @@ export function FeedbackScreenshots({ shots, errors, add, remove }: Pick<ReturnT
       <ul ref={problems} className="mt-2 scroll-mb-6 text-xs text-danger empty:hidden" role="alert">
         {errors.map(error => <li key={error}>{error}</li>)}
       </ul>
-      <p id="feedback-shots-privacy" className="mt-1 text-2xs text-ink-faint">Screenshots can show names, chats or file paths. Check yours before you send.</p>
+      <p id="feedback-shots-privacy" className="mt-1 text-2xs text-accent">Important: Screenshots can show names, chats or file paths. Check yours before you send.</p>
     </div>
   );
 }

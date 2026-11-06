@@ -1251,7 +1251,24 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
             { "id": "a0", "role": "assistant", "content": "Noted.", "createdAt": 2 },
         ],
     });
-    let rig = turn_rig("shield", session);
+    // Include a known account name in the workspace path on every OS, without
+    // changing the test process's environment or using a real user's profile.
+    let username = "shield-fixture-user";
+    let fixture = tempfile::tempdir().unwrap();
+    let home = fixture.path().join("users").join(username);
+    let home_env = home.to_string_lossy();
+    let rig = turn_rig_at_with_env(
+        &home.join("workspace"),
+        session,
+        json!({}),
+        &[
+            ("HOME", Some(home_env.as_ref())),
+            ("USERPROFILE", Some(home_env.as_ref())),
+            ("USER", Some(username)),
+            ("USERNAME", Some(username)),
+            ("LOGNAME", Some(username)),
+        ],
+    );
     let model = scripted_model(vec![
         call_tool("c_write", "write_file", json!({ "path": "contact.txt", "content": "[PII_EMAIL_1]\n" })),
         say_text("Saved [PII_EMAIL_1] to contact.txt"),
@@ -1275,6 +1292,7 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
     let requests = model.requests.lock().unwrap().clone();
     let wire = serde_json::to_string(&requests).unwrap();
     assert!(!wire.contains("jane.doe@example.com"), "the email left the computer: {wire}");
+    assert!(!wire.contains(username), "the workspace username left the computer: {wire}");
     assert!(wire.contains("[PII_EMAIL_1]"), "{wire}");
     assert!(wire.contains("## Private values"), "{wire}");
 
@@ -1289,14 +1307,23 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
     assert_eq!(call["input"]["content"], "jane.doe@example.com\n");
 
     // The preview names it, and says the shield is on for this cloud chat.
-    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai", "enabled": true, "baseUrl": "https://api.openai.com/v1" }], "defaultProviderId": "p1" })).await;
+    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "defaultProviderId": "p1" })).await;
     let (status, preview) =
         post(rig.d.port, "privacy:preview", json!(["s_shield", "cc bob@example.com"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{preview}");
     assert_eq!(preview["enabled"], true);
     assert_eq!(preview["reach"], "cloud");
     assert_eq!(preview["draft"], "cc [PII_EMAIL_2]");
-    let values: Vec<&str> =
-        preview["findings"].as_array().unwrap().iter().map(|f| f["value"].as_str().unwrap()).collect();
+    assert!(
+        preview["findings"].as_array().unwrap().iter().any(|f| f["kind"] == "username" && f["value"] == username),
+        "{preview}"
+    );
+    let values: Vec<&str> = preview["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["kind"] == "email")
+        .map(|f| f["value"].as_str().unwrap())
+        .collect();
     assert_eq!(values, ["jane.doe@example.com", "bob@example.com"]);
 }

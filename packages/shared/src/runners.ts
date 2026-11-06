@@ -56,12 +56,30 @@ export interface JobRef {
   /** The job's page; empty when the provider gave none. Absent from older daemons. */
   url?: string;
   pr?: PrRef | null;
+  /** A running job's steps, refreshed every 15 s; absent when the provider lists none (GitLab). */
+  steps?: JobSteps | null;
 }
+export interface JobSteps { done: number; total: number; current: string | null }
+/** A job waiting for a runner with this one's labels. */
+export interface QueuedJob extends JobRef {
+  /** ISO 8601, as the provider wrote it. */
+  createdAt: string | null;
+  /** The owner declined it: this Mac starts no VM for it. */
+  declined: boolean;
+  /** The owner accepted it now: a VM starts for it as if the runner were in Runner first. */
+  accepted: boolean;
+}
+/** What `runner:job` does to a job: a queued one, a running one, or a recent one. */
+export type JobAction = 'decline' | 'accept' | 'undo' | 'cancel' | 'restart' | 'rerun';
 export type Guest = 'macos' | 'linux';
 export interface SlotView {
   /** Absent from daemons before Linux slots: macOS. */
   guest?: Guest;
   state: SlotState;
+  /** The VM's name, for `runner:liveLog`. Absent from older daemons. */
+  vm?: string;
+  /** Started for a job the owner accepted now. */
+  boosted?: boolean;
   job: JobRef | null;
   /** Unix seconds the slot entered `state`. */
   since: number;
@@ -141,6 +159,10 @@ export interface RunnerView {
   forkApprovalOpen: boolean;
   /** Newest first. */
   recent: AuditLine[];
+  /** Jobs waiting for a runner with this one's labels. Absent from older daemons. */
+  queue?: QueuedJob[];
+  /** Why Accept now would not start a VM: the hard limits Runner first keeps. Empty when it would. */
+  acceptWhy?: Reason[];
   /** `null` until the Mac has been read. */
   suggestedSize: SizeSuggestion | null;
 }
@@ -331,7 +353,7 @@ export function runnerSubtitle(v: RunnerView): string {
   return `${scope.kind} scope · label ${label} · ${PRIORITY_LABELS[settings.priority]} · ${KEEP_AWAKE_LABELS[settings.keepAwake]}`;
 }
 
-export interface SlotLine { title: string; text: string; progress: number; dim: boolean }
+export interface SlotLine { title: string; text: string; active: boolean; dim: boolean }
 
 /** Linux guests have no Apple cap; nekkod clamps the setting to this. */
 export const MAX_LINUX_SLOTS = 8;
@@ -364,29 +386,49 @@ export function slotLines(v: RunnerView, nowSecs: number): SlotLine[] {
   return [...mac, ...linux];
 }
 
+/** What one slot's VM does, as a tile; a running job's progress is on the job, not here. */
 function slotLine(v: RunnerView, title: string, s: SlotView | undefined, nowSecs: number, unavailable: string | null, idle = 'Starts a VM when a job is queued'): SlotLine {
-  const { maxJobMinutes } = v.config.settings;
   if (!s) {
-    if (unavailable !== null) return { title, text: `Not available: ${unavailable}`, progress: 0, dim: true };
+    if (unavailable !== null) return { title, text: `Not available: ${unavailable}`, active: false, dim: true };
     const text = v.state === 'error' ? 'Stopped until the error above is fixed'
       : v.reasons.length ? `Waiting: ${reasonText(v.reasons[0]).short}` : idle;
-    return { title, text, progress: 0, dim: false };
+    return { title, text, active: false, dim: false };
   }
   const elapsed = Math.max(0, nowSecs - s.since);
-  const line = (text: string, progress = 0): SlotLine => ({ title, text, progress, dim: false });
+  const line = (text: string, active = true): SlotLine => ({ title, text, active, dim: false });
   switch (s.state) {
     case 'starting': return line('Starting a VM');
     case 'ready': return line('Ready for a job');
     case 'running':
-      return line(
-        s.job ? `${s.job.workflow} · ${s.job.job} · ${formatMinutes(elapsed)}` : `Running a job · ${formatMinutes(elapsed)}`,
-        Math.min(1, elapsed / (maxJobMinutes * 60)),
-      );
+      return line(s.job ? `${s.job.workflow} · ${s.job.job} · ${formatMinutes(elapsed)}` : `Running a job · ${formatMinutes(elapsed)}`);
     case 'draining':
       return line(s.drainEndsAt === null ? 'Finishing' : `Finishing, stops in ${Math.max(1, Math.ceil((s.drainEndsAt - nowSecs) / 60))} min`);
-    case 'cleaning': return line('Deleting the VM');
+    case 'cleaning': return line('Deleting the VM', false);
     default: return line(STATE_LABELS[s.state as RunnerState] ?? 'Working');
   }
+}
+
+/** How far a running job has got, from its steps: "Step 3 of 8: Build · 25%". Null when the provider lists no steps. */
+export function stepText(steps: JobSteps | null | undefined): { text: string; fraction: number } | null {
+  if (!steps || steps.total <= 0) return null;
+  const fraction = Math.min(1, Math.max(0, steps.done / steps.total));
+  const pct = `${Math.round(fraction * 100)}%`;
+  if (steps.done >= steps.total) return { text: `All ${steps.total} steps done · ${pct}`, fraction };
+  return { text: `Step ${steps.done + 1} of ${steps.total}${steps.current ? `: ${steps.current}` : ''} · ${pct}`, fraction };
+}
+
+/** How long a queued job has waited, from the provider's ISO time. */
+export function waitingText(createdAt: string | null, nowSecs: number): string {
+  const t = createdAt ? Date.parse(createdAt) / 1000 : Number.NaN;
+  return Number.isFinite(t) ? `waiting ${formatMinutes(Math.max(0, nowSecs - t))}` : 'waiting';
+}
+
+/** Why Accept now cannot start a VM for a queued job, as a sentence; null when it can. */
+export function acceptBlocked(v: RunnerView): string | null {
+  if (!v.config.settings.enabled) return 'Turn the runner on first.';
+  if (v.error) return 'Fix the error above first.';
+  const why = v.acceptWhy ?? [];
+  return why.length ? reasonText(why[0]).sentence : null;
 }
 
 /** The supervisor's own stop reasons, beside the `Reason` names. */
@@ -495,15 +537,20 @@ export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Part
   ) as Partial<RunnerSettings>;
 }
 
-/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`. */
-export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'test', 'finish'] as const;
+/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`, adding tools only `TOOLS_STAGES`. */
+export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'tools', 'test', 'finish'] as const;
 export type ImageStage = (typeof IMAGE_STAGES)[number];
-/** A build from Apple's image (with or without Xcode), or the image in use with Nekko's scripts replaced. */
-export type ImageKind = 'xcode' | 'macosOnly' | 'refresh';
+/**
+ * A build from Apple's image (with or without Xcode), or the image in use with Nekko's
+ * scripts replaced, or with the job tools it lacks installed.
+ */
+export type ImageKind = 'xcode' | 'macosOnly' | 'refresh' | 'tools';
 const REFRESH_STAGES: readonly ImageStage[] = ['check', 'scripts', 'test', 'finish'];
-const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts');
+const TOOLS_STAGES: readonly ImageStage[] = ['check', 'tools', 'test', 'finish'];
+const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts' && s !== 'tools');
 /** The stages a build of `kind` runs; a view with no build lists a full one. */
-export const imageStages = (kind: ImageKind | null): readonly ImageStage[] => (kind === 'refresh' ? REFRESH_STAGES : FULL_STAGES);
+export const imageStages = (kind: ImageKind | null): readonly ImageStage[] =>
+  kind === 'refresh' ? REFRESH_STAGES : kind === 'tools' ? TOOLS_STAGES : FULL_STAGES;
 export type ImageState = 'none' | 'ready' | 'building' | 'waiting' | 'failed';
 
 /** What the image holds, from the proof file `provision.sh` writes. */
@@ -512,6 +559,19 @@ export interface ImageInfo {
   xcode: string | null;
   actionsRunner: string;
   built: string;
+  /** The job tools found on the image's disk; absent for an image built before Nekko looked. */
+  tools?: string[];
+  /** Tools jobs run before their own setup (node, gh, jq) that this image lacks; absent from an older daemon. */
+  missingTools?: string[];
+}
+
+/** "a", "a and b", "a, b and c". */
+const andList = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
+/** The runner card's notice for an image without some job tools. */
+export function missingToolsLine(tools: string[]): string {
+  const one = tools.length === 1;
+  return `${andList(tools)} ${one ? 'is' : 'are'} missing from this Mac's runner image. Jobs that need ${one ? 'it' : 'them'} will fail.`;
 }
 
 export interface ImageView {
@@ -565,6 +625,7 @@ export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
   xcode: 'Add Xcode and tools',
   lockdown: 'Lock the VM down',
   scripts: "Update Nekko's scripts",
+  tools: 'Install the missing tools',
   test: 'Test a boot',
   finish: 'Turn the runner on',
 };

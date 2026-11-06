@@ -3,7 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # A full release tag, pushed by a person: `v0.9.0` starts the 0.9 line
+      # (docs/decisions/0055). A short `v0.9` is expanded to `v0.9.0` by
+      # version-release.yml. The nightly counter tags (`nightly/<platform>/...`)
+      # match neither, and are pushed with GITHUB_TOKEN, which starts nothing.
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
   # Dispatched at a tag by version-release.yml (a tag pushed with GITHUB_TOKEN
   # can't trigger the push event above), and usable by hand to re-run a release
   # for an existing tag. Run it with `--ref v1.2.3` so `github.ref_name` is the
@@ -151,6 +156,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
+      # The tag is the version (docs/decisions/0055): package.json versions are
+      # no longer bumped in PRs, so the installers take theirs from here. After
+      # `npm ci`, as publish-cli does, so the lockfile is installed untouched.
+      - name: Stamp the tag's version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "$GITHUB_REF_NAME is not a release tag; run this workflow with --ref vMAJOR.MINOR.PATCH." >&2
+            exit 1
+          fi
+          npm pkg set "version=$version"
+          npm pkg set "version=$version" -w @nekko-agent/desktop -w @nekko-agent/local-web-ui
       - run: npm run build
 
       # Build installers (Windows: NSIS, macOS: dmg/zip, Linux:

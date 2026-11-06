@@ -36,6 +36,10 @@ on:
         description: 'Evidence only: before app full SHA. Runs focused iOS + Android captures instead of the full suite.'
         required: false
         default: ''
+      groups_baseline_ref:
+        description: 'Evidence only: full before SHA for collapsed iOS groups and activity icons.'
+        required: false
+        default: ''
       automatic_baseline_ref:
         description: 'Evidence only: full before SHA for iPhone Automatic computer routing.'
         required: false
@@ -44,6 +48,11 @@ on:
         description: 'Evidence only: after app full SHA (defaults to the dispatched commit)'
         required: false
         default: ''
+      attention_evidence:
+        description: 'Capture turn details and test attention notifications instead of mode labels'
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
   statuses: write
@@ -54,8 +63,23 @@ concurrency:
   group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
+  group-evidence:
+    if: github.event_name == 'workflow_dispatch' && inputs.groups_baseline_ref != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-group-evidence.yml
+    with:
+      baseline_ref: ${{ inputs.groups_baseline_ref }}
   # The existing registered workflow is the entry point for pre-merge evidence;
   # a new workflow_dispatch file alone is not registered on main yet.
+  attention-evidence:
+    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != '' && inputs.attention_evidence
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-attention-evidence.yml
+    with:
+      baseline_ref: ${{ inputs.baseline_ref }}
+      source_ref: ${{ inputs.source_ref || github.sha }}
   automatic-evidence:
     if: github.event_name == 'workflow_dispatch' && inputs.automatic_baseline_ref != ''
     permissions:
@@ -64,7 +88,7 @@ jobs:
     with:
       baseline_ref: ${{ inputs.automatic_baseline_ref }}
   mode-evidence:
-    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.baseline_ref != '' && !inputs.attention_evidence
     permissions:
       contents: read
     uses: ./.github/workflows/native-mode-evidence.yml
@@ -77,7 +101,7 @@ jobs:
     # workflows), so a labeled PR always runs hosted. The picker is not the boundary against fork
     # code (a fork PR's own workflow file could name the runner directly): that is the repo's
     # fork-approval setting and the runner group (see docs/runbooks/ci-runner-pilot.md).
-    if: ${{ !inputs.baseline_ref && !inputs.automatic_baseline_ref && vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/ios-batch') }}
+    if: ${{ !inputs.baseline_ref && !inputs.groups_baseline_ref && !inputs.automatic_baseline_ref && vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/ios-batch') }}
     # A failed picker leaves its output empty (protocol-and-build falls back) and must not fail the run.
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -100,7 +124,7 @@ jobs:
   protocol-and-build:
     needs: pick
     # !cancelled(): a skipped or failed picker must not skip this job.
-    if: ${{ !inputs.baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
+    if: ${{ !inputs.baseline_ref && !inputs.groups_baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
     runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
     # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
     # passing runs off mid-test. A slow runner reaches 75 by itself, and a retried journey adds about 8.

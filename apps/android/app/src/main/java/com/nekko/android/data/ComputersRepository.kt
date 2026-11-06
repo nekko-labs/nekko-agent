@@ -81,7 +81,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import java.util.UUID
 
-/** Name the computer after its OS (`app:info` platform), like the Expo app. */
+/** Fallback for older computers that report a platform but no hostname. */
 fun osName(platform: String?): String = when (platform) {
     "win32" -> "Windows PC"
     "darwin" -> "Mac"
@@ -383,18 +383,18 @@ class ComputersRepository(
         val id = lock.withLock {
             // Re-scanning a computer we already know keeps its id and name.
             val list = _state.value.computers
-            val existing = list.lastOrNull { c ->
+            val sameRoute = list.lastOrNull { c ->
                 c.relayUrl == link.relayUrl && StoredJson.decodeSecret(store.get(secretKey(c.id)))?.room == link.room
             }
-            // Rotating a pairing changes the room, so a new key here is not the same computer.
-            val pinned = existing?.let { StoredJson.decodeSecret(store.get(secretKey(it.id))) }?.pin
+            val pinned = sameRoute?.let { StoredJson.decodeSecret(store.get(secretKey(it.id))) }?.pin
             if (pinned != null && pinned != hostKey) throw RelayException(Pairing.DIFFERENT_COMPUTER)
+            val existing = list.lastOrNull { StoredJson.decodeSecret(store.get(secretKey(it.id)))?.pin == hostKey } ?: sameRoute
             // Paired again after signing out: the old sign-out must never reach the new pairing.
             signOuts.cancel(link.relayUrl, link.room)
             val id = existing?.id ?: newId()
             store.set(secretKey(id), StoredJson.encodeSecret(ComputerSecret(link.room, link.key, keyHex, link.pair, hostKey)))
             // The computer's routes may have changed since (another Wi-Fi, LAN addresses on or off).
-            val next = if (existing != null) list.map { if (it.id == id) it.copy(alts = link.alts) else it }
+            val next = if (existing != null) list.map { if (it.id == id) it.copy(relayUrl = link.relayUrl, alts = link.alts) else it }
             else list + Computer(id, DEFAULT_COMPUTER_NAME, link.relayUrl, now(), alts = link.alts)
             saveIndex(next)
             _state.update { it.copy(computers = next) }
@@ -408,7 +408,7 @@ class ComputersRepository(
 
     suspend fun rename(id: String, name: String) = lock.withLock {
         val next = _state.value.computers.map { c ->
-            if (c.id == id) c.copy(name = name.trim().take(40).ifEmpty { c.name }) else c
+            if (c.id == id) c.copy(name = name.trim().take(40).ifEmpty { c.name }, nameIsCustom = true) else c
         }
         saveIndex(next)
         _state.update { it.copy(computers = next) }
@@ -717,7 +717,7 @@ class ComputersRepository(
             n
         }
         r.info?.let {
-            learnPlatform(id, it.platform)
+            learnPlatform(id, it.platform, it.computerName ?: it.hostname)
             learnIcon(id, it.machineIcon)
         }
         savePeerList(id)
@@ -1082,7 +1082,7 @@ class ComputersRepository(
             transcripts.keepOnly(r.summaries.map { it.id }.toSet())
             liveList = true
             saveList()
-            _state.value.activeId?.let { learnPlatform(it, r.info?.platform) }
+            _state.value.activeId?.let { learnPlatform(it, r.info?.platform, r.info?.computerName ?: r.info?.hostname) }
             // A failed read says nothing about the icon; an answer without one clears it.
             if (r.info != null) _state.value.activeId?.let { learnIcon(it, r.info.machineIcon) }
         } catch (e: CancellationException) {
@@ -1183,15 +1183,15 @@ class ComputersRepository(
         }
     }
 
-    private suspend fun learnPlatform(id: String, platform: String?) {
-        if (platform == null) return
+    private suspend fun learnPlatform(id: String, platform: String?, reportedName: String?) {
         lock.withLock {
             val list = _state.value.computers
             val c = list.firstOrNull { it.id == id } ?: return
-            if (c.platform == platform) return
-            // First connection names the computer after its OS, unless the user renamed it.
-            val name = if (c.name == DEFAULT_COMPUTER_NAME) osName(platform) else c.name
-            val next = list.map { if (it.id == id) it.copy(platform = platform, name = name) else it }
+            val generic = c.name in listOf(DEFAULT_COMPUTER_NAME, "Mac", "Windows PC", "Linux PC")
+            val custom = c.nameIsCustom ?: !generic
+            val name = if (custom) c.name else reportedName?.trim()?.take(40)?.takeIf { it.isNotEmpty() } ?: if (generic) osName(platform ?: c.platform) else c.name
+            val next = list.map { if (it.id == id) it.copy(platform = platform ?: c.platform, name = name, nameIsCustom = custom) else it }
+            if (next == list) return
             _state.update { it.copy(computers = next) }
             saveIndex(next)
         }

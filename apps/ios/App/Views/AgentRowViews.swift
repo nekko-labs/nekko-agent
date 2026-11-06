@@ -380,11 +380,10 @@ struct PurposeGroupRow<Content: View>: View {
                 withAnimation(.snappy) { open = !expanded }
             } label: {
                 HStack(alignment: .center, spacing: 8) {
-                    if running { RunningDots() } else {
-                        Image(systemName: h.failed > 0 ? "xmark" : "checkmark").font(.caption.weight(.semibold))
-                            .foregroundStyle(h.failed > 0 ? palette.danger : palette.success)
-                            .frame(width: 16, height: 16).accessibilityHidden(true)
-                    }
+                    Image(systemName: Purpose.icon(purpose, calls)).font(.caption.weight(.semibold))
+                        .foregroundStyle(palette.accent)
+                        .frame(width: 16, height: 16).accessibilityHidden(true)
+                    if running { RunningDots() }
                     VStack(alignment: .leading, spacing: 1) {
                         Text(h.headline).font(.footnote.weight(.semibold)).foregroundStyle(running ? palette.accent : palette.inkSoft).lineLimit(1)
                         if !quiet.isEmpty || h.failed > 0 {

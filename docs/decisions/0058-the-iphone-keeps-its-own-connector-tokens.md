@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-05
 ---
 
-# 0055. The iPhone connects to GitHub, Linear and the rest itself, with tokens in its own Keychain
+# 0058. The iPhone connects to GitHub, Linear and the rest itself, with tokens in its own Keychain
 
 ## Context
 

@@ -36,7 +36,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   ],
   ...over,
 });
-const render = (v: RunnerView, image: ImageView | null = null) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} beginReply={() => () => {}} />);
+const render = (v: RunnerView, image: ImageView | null = null, onAddTools?: () => Promise<void>) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} onAddTools={onAddTools} beginReply={() => () => {}} />);
 const image = (over: Partial<ImageView> = {}): ImageView => ({
   state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
 });
@@ -50,6 +50,49 @@ describe('RunnerCard', () => {
       '8 GB · 4 cores', 'On AC', 'Trusted · home', '14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on for nekko-labs/nekko-agent"',
       'data-runner-card="r1"', 'aria-label="Runner settings for nekko-labs/nekko-agent"', 'ci · darwin daemon · stopped after 2 min',
     ]) expect(html).toContain(s);
+  });
+
+  it('groups jobs as queued, in progress and completed', () => {
+    const html = render(view({
+      queue: [{ repo: 'nekko-labs/nekko-agent', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: new Date((now - 180) * 1000).toISOString(), declined: false, accepted: false }],
+    }));
+    const at = (s: string) => html.indexOf(s);
+    expect(at('Queued · 1')).toBeGreaterThan(-1);
+    expect(at('Queued · 1')).toBeLessThan(at('In progress · 1'));
+    expect(at('In progress · 1')).toBeLessThan(at('Completed'));
+    expect(html).toContain('waiting 3 min');
+    // No group for what is not there.
+    expect(render(view({ slots: [], recent: [] }))).not.toContain('data-runner-jobs');
+  });
+
+  it('a running job says how far it has got, with a real percent', () => {
+    const job = { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'Native iOS', job: 'protocol-and-build', url: 'https://github.com/x/1', steps: { done: 6, total: 12, current: 'Build iOS' } };
+    const html = render(view({ slots: [{ state: 'running', vm: 'nekko-mac1-1', job, since: now - 2940, drainEndsAt: null }] }));
+    expect(html).toContain('Working on <a');
+    expect(html).toContain('Native iOS · protocol-and-build</a>');
+    expect(html).toContain('Step 7 of 12: Build iOS · 50%');
+    expect(html).toMatch(/role="progressbar"[^>]*aria-valuenow="50"/);
+    for (const b of ['>Live log<', '>Re-run<', '>Cancel<']) expect(html).toContain(b);
+  });
+
+  it('a running job without steps shows no made-up bar', () => {
+    const html = render(view());
+    expect(html).toContain('ios-native · PR #904');
+    expect(html).not.toContain('role="progressbar"');
+  });
+
+  it('a queued job can be accepted or declined, and either undone', () => {
+    const q = { repo: 'o/r', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: null };
+    const fresh = render(view({ queue: [{ ...q, declined: false, accepted: false }] }));
+    expect(fresh).toContain('>Accept now<');
+    expect(fresh).toContain('>Decline<');
+    const declined = render(view({ queue: [{ ...q, declined: true, accepted: false }] }));
+    expect(declined).toContain('Declined: this Mac starts no VM for it');
+    expect(declined).toContain('>Undo<');
+    expect(render(view({ queue: [{ ...q, declined: false, accepted: true }] }))).toContain('Accepted: a VM starts for it now');
+    // A hard limit Runner first keeps: Accept now is off, with the reason.
+    const hot = render(view({ acceptWhy: ['thermalCritical'], queue: [{ ...q, declined: false, accepted: false }] }));
+    expect(hot).toMatch(/disabled=""[^>]*title="[^"]*hot[^"]*"|title="[^"]*hot[^"]*"[^>]*disabled=""/i);
   });
 
   it('error_card_shows_the_daemons_sentence', () => {
@@ -132,6 +175,19 @@ describe('RunnerCard', () => {
   it('a_failed_build_says_why_and_a_paused_one_resumes', () => {
     expect(render(noImage, image({ state: 'failed', stage: 'xcode', error: 'This Mac has 18 GB free.' }))).toMatch(/role="alert"[^>]*>Setup stopped: This Mac has 18 GB free\./);
     expect(render(noImage, image({ canResume: true, stage: 'xcode' }))).toContain('Resume setup');
+  });
+
+  it('an_image_without_job_tools_says_so_and_offers_to_install_them', () => {
+    const info = { macos: '27.2', xcode: 'Xcode 27.2', actionsRunner: '2.338.1', built: '2026-11-01', missingTools: ['node', 'gh'] };
+    const html = render(view(), image({ state: 'ready', info }), async () => {});
+    expect(html).toContain('data-missing-tools="node gh"');
+    expect(html).toContain("node and gh are missing from this Mac&#x27;s runner image. Jobs that need them will fail.");
+    expect(html).toMatch(/<button[^>]*>Install them<\/button>/);
+    expect(html).not.toContain('—');
+    // Nothing missing, or a build under way, shows no notice.
+    expect(render(view(), image({ state: 'ready', info: { ...info, missingTools: [] } }), async () => {})).not.toContain('data-missing-tools');
+    expect(render(view(), image({ state: 'building', kind: 'tools', stage: 'tools', info }), async () => {})).not.toContain('data-missing-tools');
+    expect(render(view(), image({ state: 'ready', info: { ...info, missingTools: ['gh'] } }), async () => {})).toMatch(/<button[^>]*>Install it<\/button>/);
   });
 
   it('a_ready_image_offers_the_workflow_and_no_setup', () => {

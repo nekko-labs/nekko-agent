@@ -4,6 +4,12 @@ Drive the Nekko Agent running on your computer from your phone: start and manage
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
+## Groups on iPhone
+
+Chat-list groups start folded. Tap a heading to reveal its chats; its activity icon stays visible while folded, showing attention, working, watching or done. Search reveals matching chats without changing which groups you opened. General and ungrouped chats stay visible, as does the separate Needs you section.
+
+Inside a conversation, related tool calls fold under a purpose heading with an icon for reading, searching, editing, checking, running commands or other work. Running dots and failure text remain visible beside that purpose. Failed groups start open so errors are not hidden; you can fold them yourself.
+
 ## From another computer
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
@@ -57,6 +63,23 @@ phone's own device key, which signs every connection from then on, and gives the
 computer's key, which proves your computer on every connection. Phones and the computer
 both need the update: an older app cannot connect to an updated computer, and an updated app
 cannot connect to an older computer.
+
+### Re-pairing and naming your computer
+
+For a phone already listed in **Paired devices**, click **Re-pair** beside its name and scan the
+fresh QR from the phone. You do not need to revoke it first, and your other phones stay paired.
+iPhone and Android update the existing computer when its identity key is unchanged, even after a
+relay address changes, keeping its nickname and saved data.
+
+**Computer name** in the same settings card starts with your computer's system name. Enter a name
+and click **Save name**, or clear it to use the system name again. The phone learns it when it
+connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
+that nickname is kept when the computer's shared name changes or you pair it again.
+
+A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
+credentials. For safety the phone does not merge different keys just because their names match.
+Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
+to old duplicates that were saved with different identity keys.
 
 ## The phone app
 
@@ -313,7 +336,7 @@ cannot connect to an older computer.
 > - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
-> - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. **+ → Paste image** adds photos from the clipboard. The computer sends small previews, not the originals; older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
+> - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. It sharpens as the computer sends the photo at full size (a spinner shows while it loads). **⋯** saves it to Photos, copies it or shares it, and swiping up or down closes the viewer. **+ → Paste image** adds photos from the clipboard. Chats carry small previews; the viewer asks for one full-size photo at a time (`session:photo`). Older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
