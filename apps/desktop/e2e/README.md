@@ -28,6 +28,13 @@ Open `.shots/e2e/report/index.html` to see every `shot()` capture per step.
   inactive, and must never take focus (every test asserts it). No OS input:
   Playwright's input goes through CDP to the page.
 - **Synthetic data only.** Scenarios never reach a host, daemon or the network.
+- **Declare onboarding state.** The `command-center` scenario exercises a returning
+  Expert user's sidebar and wall. Its reset marks both `commandWall.zonesIntro`
+  and `firstPromptIntroSeen` as seen: empty synthetic chats must not open a first-run
+  modal over the journey (#833). First-prompt eligibility remains covered by
+  `firstPromptIntroGate.test.ts`; do not suppress dialogs globally or force clicks
+  through an overlay to make a journey pass. Synthetic terminal records use
+  `TerminalInfo`, including `shell` and `createdAt`, so real cards can render them.
 - **Journeys, not features.** Add a `test.step` to the journey that owns the
   surface before you add a new spec. A new spec is for a new user journey.
 - **Assert behaviour.** Prefer roles, labels and `data-*` hooks over CSS classes
