@@ -2388,11 +2388,10 @@
 :is(.msg-ai, .msg-user) pre { overflow-wrap: normal; }
 
 /* Who a block of agent text is for (spec/chat/thinking-and-replies.md). Thinking
-   is quiet, with its icon out in the transcript's 30px gutter. A reply, and
-   anything left for the reader mid-turn, sits on a panel that grows into the
-   gutter. Its right edge stays on the row's, like .msg-user, clear of the
-   swipe-left times. Neither moves the text column, so a block that changes
-   voice when the turn moves on does not re-wrap. */
+   is quiet, with its icon out in the transcript's 30px gutter. A closing reply
+   has only a colored left rule; attention mid-turn keeps its panel. Both grow
+   into the gutter and keep their right edge on the row's, clear of swipe-left
+   times. Neither moves the text column, so settling a voice does not re-wrap. */
 .msg-ai[data-voice='working'] {
   position: relative;
   color: var(--ink-soft);
@@ -2410,12 +2409,14 @@
   margin-inline: -14px 0;
   /* The hidden hover actions under the text are the bottom padding. */
   padding: 10px 14px 2px 12px;
+  border: 0;
   border-inline-start: 2px solid var(--accent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: 0;
+  background: transparent;
 }
 .msg-ai[data-voice='attention'] {
   border-inline-start-color: var(--attention);
+  border-radius: 12px;
   background: color-mix(in srgb, var(--attention) 8%, transparent);
 }
 
