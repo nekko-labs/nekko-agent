@@ -50,11 +50,13 @@ waits for it. Read which phase failed:
 
 - A missing selector, a layout the script waits for, or a phase that times out
   waiting for the UI is the PR's: it changed something the script drives.
-- Only **Switch to a cold chat, frame painted** over its 33 ms gate, on a PR that
-  does not touch chat switching or first paint, is the known flake on unchanged
-  code (issue #712: `perf` failed 17 of 35 queue runs on 2026-11-05/06, on this row). Re-run the
-  failed jobs once (`gh run rerun <id> --failed`; `queue-sweeper.yml` also does
-  this once by itself) and add the run to #712. Do not raise the budget.
+- Only **Switch to a cold chat, frame painted** over its gate, on a PR that does
+  not touch chat switching or first paint. The gate was 33 ms until 2026-11-06,
+  when unchanged code failed it in about two runs out of three (issue #712); it is
+  now 48 ms, calibrated on the six-zone board, so a failure is no longer expected
+  noise. Compare base and head on the same runner before anything else. If the
+  unchanged base also misses it, add the run to #712. Re-run the failed jobs once
+  only after naming a concrete transient cause. Do not raise the budget.
 - Any other timing budget missed on a PR that does not touch that path is the
   older flap (issue #704): add the run there and compare against the nightly runs.
 

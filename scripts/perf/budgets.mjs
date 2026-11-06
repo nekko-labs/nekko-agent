@@ -27,7 +27,18 @@
  * about 10%: 30, 14, 33 and 27 ms. Replayed against the same 115 reports: 0
  * fail, 6 need a second attempt. The gates catch a regression of roughly a
  * third over today's median; trends below that are docs/perf-history.md's job.
- * The product targets are unchanged. `--strict`
+ * The product targets are unchanged.
+ *
+ * Cold-switch frame recalibrated 2026-11-06 (issue #712), from 33 to 48 ms.
+ * Since #1521 (2026-11-03) the harness measures the six-zone board the app
+ * really shows, where a cold switch remounts a chat into the active zone
+ * (#1998); the 33 ms gate had been set on a converted two-zone board. Over 778
+ * CI reports from 2026-11-03 to 06 (mostly PRs that do not touch the
+ * renderer) the best-of-three p95 had a median of 36.9 ms, p95 44.0, p99 46.9
+ * and max 51.2 ms; 512 of them failed 33 ms. At 48 ms, 2 fail and 34 need a
+ * second attempt. 48 ms is about a third above that median, the sensitivity
+ * of the 2026-10-17 calibration, not that calibration's max-plus-10% (56 ms).
+ * Lower it again with #1998. `--strict`
  * (`npm run perf:strict`) judges against the targets themselves, for runs on
  * real hardware.
  */
@@ -36,7 +47,7 @@ export const BUDGETS = [
   { id: 'terminal_keypress', label: 'Keypress to paint, terminal', target: 8.3, ci: 20.8 },
   { id: 'stream_frame_work', label: 'Main-thread work per frame while a reply streams at 300 tokens/s', target: 4, ci: 14 },
   { id: 'warm_switch', label: 'Switch to a warm chat, to paint', target: 8.3, ci: 30 },
-  { id: 'cold_switch_frame', label: 'Switch to a cold chat, frame painted', target: 8.3, ci: 33 },
+  { id: 'cold_switch_frame', label: 'Switch to a cold chat, frame painted', target: 8.3, ci: 48 },
   { id: 'cold_switch_history', label: 'Switch to a cold chat, newest screenful of history painted', target: 100, ci: 250 },
 ];
 
