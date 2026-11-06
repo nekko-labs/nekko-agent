@@ -1220,7 +1220,9 @@ export interface NekkoApi {
   /** Its live hardware readings, for the Monitors dock. */
   computerStats(id: string): Promise<{ system: import('./monitor.js').SystemStats | null; gpu: import('./models.js').GpuStats | null }>;
   /** Its Model Server, as the phone view reports it. Null with Read off over there. */
-  computerEngineStatus(id: string): Promise<{ running: boolean; resident: unknown[] } | null>;
+  computerEngineStatus(id: string): Promise<{ running: boolean; installed?: boolean; resident: unknown[] } | null>;
+  /** What a connected computer's monitors read, through the computer's own gate (its phone views). */
+  computerRead(id: string, channel: 'providers:list' | 'limits:get' | 'usage:summary', args?: unknown[]): Promise<unknown>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
   /** Set the icon in that machine's own settings; empty removes it. */

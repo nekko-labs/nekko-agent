@@ -1,9 +1,9 @@
 /**
  * The Nekko Agent mark, as vector art: an outline cat head (two ears, a soft
  * curve of forehead between them, a round jaw, nothing inside) in one thin
- * stroke with sharp corners, white on the plum gradient tile for the app icon, plus the installer banners that
- * reuse it. Pure
- * string-building with no renderer behind it, so anything that needs the mark
+ * stroke with sharp corners, white on the plum gradient tile for the app icon
+ * and plum in the installer banners. Pure string-building with no renderer
+ * behind it, so anything that needs the mark
  * -- the desktop icon pipeline, the phone app's icons, the marketing site's
  * favicon -- draws from this one source instead of keeping its own copy of the
  * shape. The renderer's `components/BrandMark.tsx` holds the same two paths
@@ -76,9 +76,10 @@ function markGroup(size, box, span, color = INK) {
  * gradient. The tile is bright enough to hold its own edge on a dark taskbar,
  * so it needs no rim light. Everything is expressed in a 512 viewBox and
  * scaled by the renderer, so the only size-dependent decisions are how much
- * detail survives.
+ * detail survives. `color` lets installer banners retain the plum brand ink
+ * without inheriting the app icon's white default.
  */
-function iconSvg(size, px = size) {
+function iconSvg(size, px = size, color = ICON_INK) {
   const corner = 114; // 22.3% of 512, the platform squircle radius
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" viewBox="0 0 ${VIEWBOX} ${VIEWBOX}">
   <defs>
@@ -90,7 +91,7 @@ function iconSvg(size, px = size) {
 
   <g clip-path="url(#squircle)">
     <rect width="512" height="512" fill="url(#tile)"/>
-    ${markGroup(size, VIEWBOX, SPAN, ICON_INK)}
+    ${markGroup(size, VIEWBOX, SPAN, color)}
   </g>
 </svg>`;
 }
@@ -142,11 +143,11 @@ function logoSvg() {
 
 /**
  * The Windows installer's header strip and sidebar panel. Same gradient, same
- * mark, and the product's actual name in white.
+ * plum mark, and the product's actual name in plum.
  */
 function bannerSvg(w, h, opts, pw = w, ph = h) {
   const { markSize, markX, markY, title, titleSize, layout } = opts;
-  const inner = iconSvg(512)
+  const inner = iconSvg(512, 512, INK)
     .replace(/^<svg[^>]*>/, '')
     .replace(/<\/svg>$/, '');
   const column = layout === 'column';
