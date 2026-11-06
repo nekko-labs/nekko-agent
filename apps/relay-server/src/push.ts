@@ -19,18 +19,29 @@ export interface PushPayload {
   kind?: string;
   /** The chat's opaque tag (a hash of the session id), so a later `dismiss` can find it. */
   tag?: string;
+  /** Current distinct waiting chats across the token's rooms, not deliveries or unread chats. */
+  badge?: number;
 }
 
 /** The APNs body of an alert push: content-free, plus the kind and the chat's opaque tag (exported for tests). */
 export function alertPayload(payload: PushPayload) {
   const aps: Record<string, unknown> = { alert: { title: payload.title, body: payload.body }, sound: 'default' };
   if (payload.tag) aps['thread-id'] = payload.tag;
+  if (validBadge(payload.badge)) aps.badge = payload.badge;
   return { aps, ...(payload.kind ? { kind: payload.kind } : {}), ...(payload.tag ? { tag: payload.tag } : {}) };
 }
 
 /** A silent push that tells an iPhone to remove the delivered notification for a chat (exported for tests). */
-export function dismissPayload(tag: string) {
-  return { aps: { 'content-available': 1 }, dismiss: tag };
+export function dismissPayload(tag: string, badge?: number) {
+  return { aps: { 'content-available': 1, ...(validBadge(badge) ? { badge } : {}) }, dismiss: tag };
+}
+
+const validBadge = (badge: number | undefined): badge is number => Number.isSafeInteger(badge) && badge! >= 0;
+
+/** Badge-only alert push: iOS applies it without waking a suspended app. No banner or sound. */
+export function badgePayload(badge: number) {
+  if (!validBadge(badge)) throw new Error('invalid badge count');
+  return { aps: { badge } };
 }
 
 /**
@@ -46,6 +57,139 @@ export interface ActivityPush {
   severity?: 'low' | 'medium' | 'high';
 }
 
+/** What a phone asked its card to show (`register-card`); `none` drops the registration. */
+export type CardLevel = 'minimal' | 'standard' | 'detailed';
+export const CARD_LEVELS: ReadonlySet<string> = new Set<CardLevel>(['minimal', 'standard', 'detailed']);
+
+/** The iPhone card's `NekkoCardAttributes`, for a push-to-start. */
+export interface CardAttributes {
+  computerId: string;
+  computerName: string;
+  level: CardLevel;
+}
+
+/** A card the agent built (`card` / `card-start`), as one phone may see it. */
+export interface CardState {
+  chats: Record<string, unknown>[];
+  focusId?: string;
+  more?: number;
+  listening?: boolean;
+  heard?: string;
+}
+
+/**
+ * A push to the iPhone's one Live Activity card. Unlike every other push it
+ * carries the chats' text (titles, steps, reply lines, at the level the phone
+ * asked for): ActivityKit draws only what the push holds, in the clear.
+ */
+export interface CardPush {
+  event: 'start' | 'update' | 'end';
+  state: CardState;
+  /** For `start`. */
+  attributes?: CardAttributes;
+  /** APNs priority (`cardPriority`); 10 when absent. */
+  priority?: 5 | 10;
+}
+
+/** At most `max` UTF-8 bytes of a string, cut on a character boundary ('' for anything else). */
+export function capBytes(v: unknown, max: number): string {
+  if (typeof v !== 'string') return '';
+  let out = '';
+  let bytes = 0;
+  for (const ch of v) {
+    bytes += Buffer.byteLength(ch);
+    if (bytes > max) break;
+    out += ch;
+  }
+  return out;
+}
+
+/**
+ * The APNs priority of a card push (exported for tests): 5 when only a step,
+ * a reply or a time changed since the last push to that card (iOS budgets
+ * priority 10), 10 for anything the user should see at once: a chat changing
+ * state or call, joining or leaving, the focus moving, a start or an end.
+ */
+export function cardPriority(previous: CardState | undefined, push: CardPush): 5 | 10 {
+  if (push.event !== 'update' || !previous) return 10;
+  const shape = (s: CardState) =>
+    JSON.stringify([s.focusId ?? null, s.more ?? 0, s.chats.map((c) => [c.id, c.state, c.callId ?? null])]);
+  return shape(previous) === shape(push.state) ? 5 : 10;
+}
+
+/** APNs refuses a Live Activity payload over 4 KB: the state gets 3500 bytes, as `buildCard` allows it. */
+const CARD_STATE_BYTES = 3500;
+const CHAT_STATES = new Set(['needsYou', 'working', 'watching', 'done', 'failed']);
+const SEVERITIES = new Set(['low', 'medium', 'high']);
+
+/** At most `max` characters, the last an ellipsis when cut (the card's `oneLine`). */
+const clip = (v: unknown, max: number) => {
+  const chars = [...(typeof v === 'string' ? v : '')];
+  return chars.length > max ? chars.slice(0, max - 1).join('') + '…' : chars.join('');
+};
+const id = (v: unknown) => (typeof v === 'string' && v.length > 0 && v.length <= 200 ? v : undefined);
+const date = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+
+/**
+ * The agent's card as a phone at `level` may see it (exported for tests):
+ * Minimal blanks the titles, step and reply, Standard the reply. Only the
+ * fields `LiveCardState` decodes are kept, text clipped, and the last chats
+ * (never the focused one) move into `more` while the push would pass 4 KB.
+ * Null when the agent sent no card.
+ */
+export function cardForLevel(state: unknown, level: CardLevel): CardState | null {
+  const s = state as Record<string, unknown> | null;
+  if (!s || typeof s !== 'object' || !Array.isArray(s.chats)) return null;
+  const chats: Record<string, unknown>[] = [];
+  for (const c of s.chats.slice(0, 8) as Record<string, unknown>[]) {
+    if (!c || typeof c !== 'object' || !id(c.id) || typeof c.state !== 'string') continue;
+    const chat: Record<string, unknown> = {
+      id: c.id,
+      short: level === 'minimal' ? '' : clip(c.short, 20),
+      state: CHAT_STATES.has(c.state) ? c.state : 'working',
+      step: level === 'minimal' ? '' : clip(c.step, 60),
+      reply: level === 'detailed' ? clip(c.reply, 60) : '',
+      closeWord: clip(c.closeWord, 20),
+    };
+    // The row title, left out when empty as the phone writes it.
+    const title = level === 'minimal' ? '' : clip(c.title, 40);
+    if (title) chat.title = title;
+    if (date(c.finishedAt) !== undefined) chat.finishedAt = c.finishedAt;
+    if (date(c.startedAt) !== undefined) chat.startedAt = c.startedAt;
+    if (id(c.callId)) chat.callId = c.callId;
+    if (typeof c.severity === 'string' && SEVERITIES.has(c.severity)) chat.severity = c.severity;
+    chats.push(chat);
+  }
+  const card: CardState = { chats };
+  if (id(s.focusId)) card.focusId = s.focusId as string;
+  card.more = Math.max(0, Math.floor(date(s.more) ?? 0)) + Math.max(0, s.chats.length - 8);
+  card.listening = s.listening === true;
+  card.heard = clip(s.heard, 200);
+  // The state's budget, as on the computer and the phone; the rest of the payload stays under 600 bytes.
+  const big = () => Buffer.byteLength(JSON.stringify(card)) > CARD_STATE_BYTES;
+  if (big()) for (const c of chats) c.reply = '';
+  for (let i = chats.length - 1; i >= 0 && big(); i--) {
+    if (chats[i].id === card.focusId) continue;
+    chats.splice(i, 1);
+    card.more += 1;
+  }
+  return card;
+}
+
+/** The APNs body of a card push (exported for tests). A card the computer stops updating reads as stale after 15 minutes. */
+export function cardPayload(push: CardPush, nowSec: number = Math.floor(Date.now() / 1000)) {
+  const aps: Record<string, unknown> = { timestamp: nowSec, event: push.event, 'content-state': push.state };
+  if (push.event === 'end') aps['dismissal-date'] = nowSec;
+  else aps['stale-date'] = nowSec + 15 * 60;
+  if (push.event === 'start') {
+    aps['attributes-type'] = 'NekkoCardAttributes';
+    aps.attributes = push.attributes;
+    // ActivityKit needs an alert to start a Live Activity from a push.
+    aps.alert = { title: 'Nekko Agent', body: 'Your computer is working on a chat.' };
+  }
+  return { aps };
+}
+
 export interface PushSender {
   enabled: boolean;
   /** Whether this relay holds the credentials to push to that platform (told to the phone). */
@@ -53,8 +197,14 @@ export interface PushSender {
   /** `app` is the iPhone app's bundle id when the phone named one the relay allows. */
   send(token: string, platform: 'ios' | 'android', payload: PushPayload, app?: string): Promise<void>;
   sendActivity?(token: string, push: ActivityPush, app?: string): Promise<void>;
+  /** The iPhone's one Live Activity card: `token` is its update token, or its push-to-start token for `start`. */
+  sendCard?(token: string, push: CardPush, app?: string): Promise<void>;
   /** A silent push removing a chat's delivered notification (iPhone only). */
-  sendDismiss?(token: string, tag: string, app?: string): Promise<void>;
+  sendDismiss?(token: string, tag: string, app?: string, badge?: number): Promise<void>;
+  /** Badge-only APNs alert, not a background wake-up. */
+  sendBadge?(token: string, badge: number, app?: string): Promise<void>;
+  /** Canonical APNs topic, so aliases of the default app share one count. */
+  apnsTopic?(app?: string): string;
 }
 
 /** The APNs body of a Live Activity push (exported for tests). */
@@ -99,6 +249,7 @@ async function sendApns(
   token: string,
   body: unknown,
   pushType: 'alert' | 'liveactivity' | 'background' = 'alert',
+  priority: 5 | 10 = 10,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const client = http2.connect(`https://${host}`);
@@ -110,7 +261,7 @@ async function sendApns(
       'apns-topic': topic,
       'apns-push-type': pushType,
       // Apple requires priority 5 for a background (silent) push.
-      'apns-priority': pushType === 'background' ? '5' : '10',
+      'apns-priority': pushType === 'background' ? '5' : String(priority),
       'content-type': 'application/json',
     });
     let status = 0;
@@ -213,10 +364,20 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
   return {
     enabled: apnsReady || fcmReady,
     delivers: (platform) => (platform === 'ios' ? apnsReady : fcmReady),
-    async sendDismiss(token, tag, app) {
+    apnsTopic: topicFor,
+    async sendBadge(token, badge, app) {
       try {
         if (!apnsJwt) return;
-        await sendApns(apnsHost, apnsJwt(), topicFor(app), token, dismissPayload(tag), 'background');
+        await sendApns(apnsHost, apnsJwt(), topicFor(app), token, badgePayload(badge), 'alert');
+      } catch (e) {
+        console.warn(`[push] badge failed: ${(e as Error).message}`);
+      }
+    },
+    async sendDismiss(token, tag, app, badge) {
+      try {
+        if (!apnsJwt) return;
+        // A badge is a user-visible update, even with no banner. Do not budget it as a silent wake.
+        await sendApns(apnsHost, apnsJwt(), topicFor(app), token, dismissPayload(tag, badge), validBadge(badge) ? 'alert' : 'background');
         console.log('[push] dismissal sent');
       } catch (e) {
         console.warn(`[push] dismissal failed: ${(e as Error).message}`);
@@ -229,6 +390,16 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
         console.log(`[push] Live Activity ${push.event} sent`);
       } catch (e) {
         console.warn(`[push] activity send failed: ${(e as Error).message}`);
+      }
+    },
+    async sendCard(token, push, app) {
+      try {
+        if (!apnsJwt) return void console.log('[push] APNs not configured (set APNS_KEY_P8/APNS_KEY_ID/APNS_TEAM_ID)');
+        const topic = `${topicFor(app)}.push-type.liveactivity`;
+        await sendApns(apnsHost, apnsJwt(), topic, token, cardPayload(push), 'liveactivity', push.priority ?? 10);
+        console.log(`[push] card ${push.event} sent`);
+      } catch (e) {
+        console.warn(`[push] card send failed: ${(e as Error).message}`);
       }
     },
     async send(token, platform, payload, app) {

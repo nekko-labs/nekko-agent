@@ -1,3 +1,5 @@
+import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckIcon, ChevronIcon } from '../icons.js';
@@ -26,6 +28,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
   onChange: (next: AgentPanelView) => void;
   onClose: () => void;
 }) {
+  const hasComputers = useShown('computers', { computers: useStore((s) => s.computers.length > 0) });
   const ref = useRef<HTMLDivElement>(null);
   const subRef = useRef<HTMLDivElement>(null);
   const rowRefs = useRef<Partial<Record<Sub, HTMLButtonElement | null>>>({});
@@ -88,14 +91,14 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
       aria-haspopup="menu"
       aria-expanded={sub === id}
       data-view-menu-row={id}
-      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] ${sub === id ? 'bg-surface-2 text-ink' : 'text-ink-soft hover:bg-surface-2 hover:text-ink'}`}
+      className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-sm ${sub === id ? 'bg-surface-2 text-ink' : 'text-ink-soft hover:bg-surface-2 hover:text-ink'}`}
       onMouseEnter={() => openSub(id)}
       onMouseLeave={closeSubSoon}
       onClick={() => { openSub(id); focusSub(); }}
       onKeyDown={(e) => { if (e.key === 'ArrowRight') { e.preventDefault(); openSub(id); focusSub(); } }}
     >
       <span className="flex-1">{label}</span>
-      {value && <span className="truncate text-[12px] text-ink-faint">{value}</span>}
+      {value && <span className="truncate text-xs text-ink-faint">{value}</span>}
       <ChevronIcon className="h-3 w-3 shrink-0 text-ink-faint" />
     </button>
   );
@@ -110,8 +113,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         aria-label="Agent panel view"
         tabIndex={-1}
         data-agent-view-menu
-        className="card fixed z-[1000] p-1.5 shadow-xl outline-hidden"
-        style={{ left, top, width: MENU_W, background: 'var(--paper)' }}
+        className="context-menu card fixed z-[1000] p-2 shadow-(--shadow-float) outline-hidden"
+        style={{ left, top, width: MENU_W }}
         onContextMenu={(e) => e.preventDefault()}
         onKeyDown={(e) => {
           if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -124,11 +127,11 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         {topRow('group', 'Group by', GROUP_BY_LABELS[view.groupBy])}
         {topRow('sort', 'Sort by', SORT_BY_LABELS[view.sortBy])}
         {topRow('show', 'Show')}
-        <div className="mx-1.5 my-1 h-px bg-line" role="separator" />
+        <div className="mx-2 my-1 h-px bg-line" role="separator" />
         <button
           role="menuitem"
           disabled={isDefaultView(view)}
-          className="block w-full rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+          className="block w-full rounded-lg px-3 py-1 text-left text-sm text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
           onMouseEnter={() => setSub(null)}
           onClick={() => onChange(DEFAULT_AGENT_PANEL_VIEW)}
         >
@@ -141,8 +144,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           role="menu"
           aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : 'Show'}
           data-agent-view-submenu={sub}
-          className="card fixed z-[1001] p-1.5 shadow-xl"
-          style={{ width: SUB_W, background: 'var(--paper)', left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
+          className="context-menu card fixed z-[1001] p-2 shadow-(--shadow-float)"
+          style={{ width: SUB_W, left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
           onMouseEnter={keepSub}
           onMouseLeave={closeSubSoon}
           onContextMenu={(e) => e.preventDefault()}
@@ -156,7 +159,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           }}
         >
           {sub === 'group' && <>
-            {(['project', 'status', 'date'] as AgentGroupBy[]).map((g) => (
+            {(hasComputers ? ['status', 'project', 'date', 'computer'] as AgentGroupBy[] : ['status', 'project', 'date'] as AgentGroupBy[]).map((g) => (
               <Choice key={g} checked={view.groupBy === g} onClick={() => set({ groupBy: g })}>{GROUP_BY_LABELS[g]}</Choice>
             ))}
             <Divider />
@@ -177,8 +180,10 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           {sub === 'show' && <>
             <Choice toggle checked={view.showMetadata} onClick={() => set({ showMetadata: !view.showMetadata })}
               title="The model, context, git and sub-agent lines under each card">Metadata</Choice>
-            <Choice toggle checked={view.showMetadata && view.showProvider} disabled={!view.showMetadata} onClick={() => set({ showProvider: !view.showProvider })}
-              title="Where each card's model comes from, under the model">Model provider</Choice>
+            {hasComputers && <Choice toggle checked={view.showComputer} onClick={() => set({ showComputer: !view.showComputer })}
+              title="Which computer a card's agent runs on">Computer</Choice>}
+            {hasComputers && <Choice toggle checked={view.showComputerIcons} onClick={() => set({ showComputerIcons: !view.showComputerIcons })}
+              title="A computer's icon, when it has one">Computer icons</Choice>}
             <Divider />
             <Choice toggle checked={view.showAutomations} onClick={() => set({ showAutomations: !view.showAutomations })}
               title="Chats an automation started">Automations</Choice>
@@ -193,7 +198,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
 }
 
 function Divider() {
-  return <div className="mx-1.5 my-1 h-px bg-line" role="separator" />;
+  return <div className="mx-2 my-1 h-px bg-line" role="separator" />;
 }
 
 /** A submenu row with its check on the right, as a radio choice or a toggle. */
@@ -211,7 +216,7 @@ function Choice({ checked, toggle = false, disabled = false, title, onClick, chi
       aria-checked={checked}
       disabled={disabled}
       title={title}
-      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+      className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-sm text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
       onClick={onClick}
     >
       <span className="flex-1">{children}</span>

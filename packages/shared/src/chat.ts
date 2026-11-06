@@ -10,8 +10,6 @@ export interface ToolCall {
   input: Record<string, unknown>;
   /** Set when Claude Code ran the call (a Claude Agent chat): shown, never run by Nekko. */
   executedBy?: 'claude-code';
-  /** A Claude Code sub-agent's call: the id of the call that started the sub-agent. */
-  parentToolCallId?: string;
 }
 
 export interface ToolResult {
@@ -24,8 +22,6 @@ export interface ToolResult {
   /** Claude Code denied the call itself (a Claude Agent chat), with its reason. */
   denied?: boolean;
   deniedReason?: string;
-  /** A Claude Code sub-agent's result: the id of the call that started the sub-agent. */
-  parentToolCallId?: string;
 }
 
 /**
@@ -45,6 +41,8 @@ export interface AgentWatchView {
   pending: boolean;
   failures: number;
   lastError?: string;
+  /** Armed by Nekko itself on a PR the chat opened (Settings > Pull requests), not by the agent. */
+  auto?: boolean;
 }
 
 export interface ChatMessage {
@@ -222,7 +220,16 @@ export interface CodeModeSavings {
   toolCalls: number;
 }
 
+/** Display-only engine notices. Never included in model history. */
+export interface ConnectivityNotice {
+  id: string;
+  kind: 'lost' | 'restored' | 'resuming';
+  createdAt: number;
+  content: string;
+}
+
 export interface Session {
+  connectivityNotices?: ConnectivityNotice[];
   id: string;
   title: string;
   workspaceId?: string;
@@ -241,6 +248,13 @@ export interface Session {
    * final answer back to the parent's `spawn_agent` tool call.
    */
   parentSessionId?: string;
+  /** The `spawn_agent` call that started this sub-agent, in its parent's transcript. */
+  spawnCallId?: string;
+  /**
+   * This sub-agent ran inside its parent's Claude Code session, which keeps the
+   * real history. This chat is a copy to watch, so nothing can be sent to it.
+   */
+  claudeCodeSubagent?: boolean;
   /** When set, this chat is driven by an automation task (shown in the Tasks
    *  board, kept out of the regular chat boards/lanes). */
   taskId?: string;
@@ -312,9 +326,8 @@ export interface Session {
   /** Settings for an image-generation chat. */
   imageParams?: ImageChatParams;
   /**
-   * Per-chat reasoning toggle for models that support it: `true` forces thinking
-   * on, `false` suppresses it, `undefined` leaves the model's default. Only
-   * offered in the UI when the selected model is reasoning-capable.
+   * Legacy per-chat reasoning preference, retained for saved-session compatibility.
+   * Ignored by the engine. Thinking is on, with local model overrides under Expert.
    */
   thinking?: boolean;
   /** Tool names the user disabled for this chat (subset of the builtins). */
@@ -366,7 +379,7 @@ export interface Session {
   queue?: QueuedPrompt[];
   /**
    * The newest `clientMessageId`s this chat has taken (`chat:send` or
-   * `chat:queue`), oldest first, at most `CLIENT_MESSAGE_IDS_KEPT`. A repeat is
+   * `chat:queue`), oldest first, capped by nekkod. A repeat is
    * answered without a second turn or queue entry (exactly-once delivery from a
    * phone's outbox).
    */
@@ -378,17 +391,14 @@ export interface Session {
    */
   activeRun?: { startedAt: number };
   /**
-   * The plan for the prompt this chat is working on: decoded from the prompt,
-   * then whatever the user edited it into. Lives on the session so the rail
-   * survives a tab switch, and so a chat resumed tomorrow still shows what it
-   * was told to do.
+   * How the last turn failed, for a chat opened after the `error` event has gone.
+   * Cleared when the next turn starts, or by Dismiss (null). It only applies
+   * while `afterMessageId` is still the transcript's last message.
    */
-  plan?: import('./prompt-plan.js').PromptPlan;
+  turnFailure?: { message: string; afterMessageId?: string } | null;
   /**
    * The plan the agent itself wrote for this chat, via the `update_plan` tool:
    * what it decided to do after reading the request, kept live as it works.
-   * Distinct from `plan`, which is the user's editable draft decoded from the
-   * prompt.
    */
   agentPlan?: import('./training.js').PlanStep[];
   /**
@@ -400,9 +410,9 @@ export interface Session {
   order?: number;
   /**
    * When the chat was archived (epoch ms). An archived chat leaves the
-   * workspace list but keeps its transcript, readable from the Archived list
-   * until it is restored or `ARCHIVE_RETENTION_DAYS` pass, when it is deleted.
-   * Absent (or null, once restored) means the chat is live.
+   * workspace list but keeps its transcript indefinitely, readable from the
+   * Archived list until it is restored or explicitly deleted. Absent (or null,
+   * once restored) means the chat is live.
    */
   archivedAt?: number | null;
   createdAt: number;
@@ -511,7 +521,13 @@ export type AgentEvent =
    * so anything showing it should re-read it. Emitted mid-turn, which is why it
    * is an event rather than something a listener polls for.
    */
-  | { type: 'session_meta'; sessionId: string };
+  | { type: 'session_meta'; sessionId: string; connectivityNotice?: ConnectivityNotice }
+  /**
+   * A Claude Agent chat's Claude Code now runs `tasks` background tasks (shell
+   * commands, sub-agents). It keeps working after the turn's `done` and wakes
+   * on its own when one finishes, so the chat says so meanwhile.
+   */
+  | { type: 'claude_code_background'; sessionId: string; tasks: number };
 
 /**
  * What a session is waiting on a person for, right now.
@@ -572,10 +588,11 @@ export function formatRate(tokensPerSecond: number): string {
  */
 /**
  * Whether the transcript ends on a reply that was cut off: the last message of
- * the current turn is an assistant message marked `interrupted`, or a tool call
- * the model asked for that never got its result. A chat opened on such a
- * transcript (after a restart, say) shows the interruption and offers Continue
- * even though no `error` event is around to announce it.
+ * the current turn is an assistant message marked `interrupted`, a tool call the
+ * model asked for that never got its result, or a tool result the model never
+ * answered. A chat opened on such a transcript (after a restart, say) shows the
+ * interruption and offers Continue even though no `error` event is around to
+ * announce it. A run still going looks the same, so callers check for one first.
  */
 export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   const last = history[history.length - 1];
@@ -590,6 +607,8 @@ export function lastReplyInterrupted(history: ChatMessage[]): boolean {
   // An explicit successful terminal event is stronger than missing historical
   // tool bookkeeping (for example, an earlier failed/retried tool step).
   if (lastAssistant?.turnStats?.stop === 'complete') return false;
+  // A finished reply ends with the model's word, never on a tool's output.
+  if (last.role === 'tool') return true;
   const results = new Set(turn.flatMap((m) => m.toolResult ? [m.toolResult.toolCallId] : []));
   return turn.some((m) => m.role === 'assistant' && m.toolCalls?.some((call) => !results.has(call.id)));
 }
@@ -623,24 +642,9 @@ export interface QueuePayload {
 /** Queue entries are kept backwards-compatible with older string-only sessions. */
 export type QueuedPrompt = string | QueuePayload;
 
-/** How many `clientMessageId`s a chat remembers. A phone's outbox resends within minutes, so this is plenty. */
-export const CLIENT_MESSAGE_IDS_KEPT = 200;
-
 /** A usable `clientMessageId`: a short id of letters, digits, `-` and `_` (a UUID), else undefined. */
 export function clientMessageIdOf(value: unknown): string | undefined {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : undefined;
-}
-
-/** True when the chat has already taken this `clientMessageId`. */
-export function hasClientMessageId(session: Pick<Session, 'clientMessageIds'> | null | undefined, id: string | undefined): boolean {
-  return !!id && !!session?.clientMessageIds?.includes(id);
-}
-
-/** `ids` with `add` appended (each once, oldest first), cut to the newest `CLIENT_MESSAGE_IDS_KEPT`. */
-export function rememberClientMessageIds(ids: readonly string[] | undefined, add: readonly string[]): string[] {
-  const out = [...(ids ?? [])];
-  for (const id of add) if (!out.includes(id)) out.push(id);
-  return out.slice(Math.max(0, out.length - CLIENT_MESSAGE_IDS_KEPT));
 }
 
 export function queueItemText(item: QueuedPrompt): string {
@@ -649,10 +653,6 @@ export function queueItemText(item: QueuedPrompt): string {
 
 export function queueItemPayload(item: QueuedPrompt): QueuePayload {
   return typeof item === 'string' ? { text: item } : item;
-}
-
-export function queueItemsEqual(a: QueuedPrompt, b: QueuedPrompt): boolean {
-  return JSON.stringify(queueItemPayload(a)) === JSON.stringify(queueItemPayload(b));
 }
 
 export interface SendOptions {
@@ -713,80 +713,6 @@ export interface SendOptions {
 export interface ReplySuggestions {
   options: string[];
   next: string | null;
-}
-
-/** A suggestion chip stays a chip: past this it's a paragraph, not an option. */
-const SUGGESTION_OPTION_MAX = 120;
-const SUGGESTION_NEXT_MAX = 240;
-
-function cleanSuggestion(text: string, max: number): string {
-  return text
-    .replace(/^[-*•\d]+[.)]?\s+/, '') // bullet or numbered-list marker
-    .replace(/^["'`,]+|["'`,]+$/g, '') // quote wrappers, and a trailing comma off a JSON fragment
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, max);
-}
-
-/**
- * Read the suggestion call's answer. The prompt asks for one JSON object
- * (`{"options": [...], "next": "..."}`) and most models comply; small local
- * models drift, so a bare-lines read stands in for it: each non-empty line is
- * an option and the first is the ghost text. Returns null when nothing usable
- * came back.
- */
-export function parseReplySuggestions(raw: string): ReplySuggestions | null {
-  const braces = raw.indexOf('{');
-  const lastBrace = raw.lastIndexOf('}');
-  if (braces >= 0 && lastBrace > braces) {
-    try {
-      const parsed = JSON.parse(raw.slice(braces, lastBrace + 1)) as {
-        options?: unknown;
-        next?: unknown;
-        suggestion?: unknown;
-        draft?: unknown;
-      };
-      const options = (Array.isArray(parsed.options) ? parsed.options : [])
-        .map((o) => (typeof o === 'string' ? cleanSuggestion(o, SUGGESTION_OPTION_MAX) : ''))
-        .filter(Boolean);
-      const nextRaw = [parsed.next, parsed.suggestion, parsed.draft].find((v) => typeof v === 'string');
-      const next = typeof nextRaw === 'string' ? cleanSuggestion(nextRaw, SUGGESTION_NEXT_MAX) : null;
-      // Valid JSON that came back empty is a real "no suggestions" answer; the
-      // line read below would only re-serve the object's own fragments.
-      if (options.length || next) return { options: dedupeSuggestions(options).slice(0, 4), next };
-      return null;
-    } catch {
-      /* fall through to the line read */
-    }
-  }
-  const options = dedupeSuggestions(
-    raw
-      .split(/\r?\n/)
-      // JSON-ishness is judged on the raw line, before cleaning strips the
-      // quotes that mark a fragment like `"options": [`.
-      .map((line) => line.trim())
-      .filter(
-        (line) =>
-          line &&
-          !/^[{}[\],]/.test(line) &&
-          !/^["'][A-Za-z_]+["']\s*:/.test(line) &&
-          !/^(options|next|suggestion|draft)\s*:/i.test(line),
-      )
-      .map((line) => cleanSuggestion(line, SUGGESTION_OPTION_MAX))
-      .filter(Boolean),
-  ).slice(0, 4);
-  if (!options.length) return null;
-  return { options, next: options[0] };
-}
-
-function dedupeSuggestions(options: string[]): string[] {
-  const seen = new Set<string>();
-  return options.filter((o) => {
-    const key = o.toLowerCase();
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 /** Explicit execution mode is authoritative; legacy sessions retain their previous behavior. */

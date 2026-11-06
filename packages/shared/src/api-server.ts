@@ -136,18 +136,6 @@ export function apiServerUrl(settings: ApiServerSettings, host = '127.0.0.1'): s
 }
 
 /**
- * The address to hand to clients: what the user advertised, else what is bound.
- *
- * Kept separate from `apiServerUrl` because the two genuinely differ behind a
- * tunnel, a container port mapping, or a Tailscale name, and quoting the bound
- * address there produces a CLI line that cannot reach anything.
- */
-export function apiServerClientUrl(settings: ApiServerSettings, host = '127.0.0.1'): string {
-  const advertised = settings.advertisedUrl?.trim();
-  return advertised ? trimTrailingSlashes(advertised) : apiServerUrl(settings, host);
-}
-
-/**
  * Why these settings cannot be served, or null when they can.
  *
  * Checked in the shared package because both ends need the same answer: the UI

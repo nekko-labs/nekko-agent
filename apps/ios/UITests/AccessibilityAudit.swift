@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 extension XCTestCase {
     /// The appearances the light-and-dark tests run in: NEKKO_UI_THEMES ("light" on CI
     /// for a change that keeps its colours; scripts/ios-theme-scope.mjs), else both.
@@ -22,7 +23,7 @@ extension XCTestCase {
     ///   the audit samples whatever covers them.
     /// - Clipping on the system search field's placeholder.
     /// - Hit regions of activity indicators (spinners aren't tappable).
-    /// - Contrast and clipping of text partly under the navigation bar or in the home indicator's strip.
+    /// - Contrast and clipping of text partly under the navigation bar, the status bar or in the home indicator's strip.
     /// - Findings the audit can't attach to an element.
     /// `ignoring`: element labels excluded on this screen, each with its reason at the call site.
     /// `covered`: a pinned, translucent bar; text under it is measured against the
@@ -39,11 +40,15 @@ extension XCTestCase {
         let window = app.windows.firstMatch.frame
         // If the keyboard is still up, what's under it (and its Done bar) isn't what the user sees.
         let keyboard = app.keyboards.firstMatch.exists ? app.keyboards.firstMatch.frame.insetBy(dx: 0, dy: -44) : .null
-        // Text scrolled under the translucent navigation bar, or into the home
-        // indicator's strip, is sampled against the bar: listed, not blocking.
+        // Text scrolled under the translucent navigation bar, into the status bar's strip
+        // above it, or into the home indicator's strip, is sampled against the bar: listed,
+        // not blocking. The status strip isn't part of the bar's frame and nothing there
+        // takes the hit test, so a row under it still reads as hittable (runs 41278277522,
+        // 41281896368: a list row and a transcript line at y ≈ 40 failed contrast).
         let navBar = app.navigationBars.firstMatch.exists ? app.navigationBars.firstMatch.frame : CGRect.null
+        let statusStrip = window.isEmpty ? CGRect.null : CGRect(x: window.minX, y: window.minY, width: window.width, height: 62)
         let homeStrip = window.isEmpty ? CGRect.null : CGRect(x: window.minX, y: window.maxY - 34, width: window.width, height: 34)
-        let bars = navBar.union(homeStrip)
+        let bars = navBar.union(statusStrip).union(homeStrip)
 
         var blocking: [String] = [], other: [String] = []
         // XCTest's audit sometimes times out on a busy simulator (code -56), more than once
@@ -53,9 +58,13 @@ extension XCTestCase {
             other = []
             do {
                 try app.performAccessibilityAudit { issue in
-                    let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(issue.element))"
-                    let ignored = issue.element.map { ignoring.contains($0.label) } ?? false
-                    if !ignored, Self.blocks(issue, in: window, keyboard: keyboard, covered: covered, bars: bars) { blocking.append(line) } else { other.append(line) }
+                    // One snapshot per finding: each property read on the element is a fresh
+                    // query of the whole tree, and with a run in flight on a loaded simulator
+                    // ~13 of them per finding made one screen's audit take over 3 minutes (#1019).
+                    let snap = try? issue.element?.snapshot()
+                    let line = "\(Self.name(issue.auditType)): \(issue.compactDescription) — \(Self.describe(snap))"
+                    let ignored = snap.map { ignoring.contains($0.label) } ?? false
+                    if !ignored, Self.blocks(issue, snap, in: window, keyboard: keyboard, covered: covered, bars: bars) { blocking.append(line) } else { other.append(line) }
                     return true // handled here; reported below
                 }
                 break
@@ -77,27 +86,29 @@ extension XCTestCase {
         }
     }
 
-    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, in window: CGRect, keyboard: CGRect, covered: CGRect,
-                               bars: CGRect) -> Bool {
+    private static func blocks(_ issue: XCUIAccessibilityAuditIssue, _ e: XCUIElementSnapshot?, in window: CGRect, keyboard: CGRect,
+                               covered: CGRect, bars: CGRect) -> Bool {
         if issue.auditType == .dynamicType { return false }
         // The audit names no element for some findings: nothing to act on, but listed.
-        guard let e = issue.element, e.exists else { return false }
+        guard let e else { return false }
         if !e.isEnabled { return false }
         if !window.isEmpty, !window.contains(e.frame) { return false }
         if !keyboard.isNull, e.frame.intersects(keyboard) { return false }
-        if !covered.isNull, issue.auditType == .contrast || issue.auditType == .textClipped, e.frame.intersects(covered) { return false }
-        if !bars.isNull, issue.auditType == .contrast || issue.auditType == .textClipped, e.frame.intersects(bars) { return false }
-        // Covered by other UI (a pinned bar, a card over the transcript): the
-        // audit samples whatever is on top, not the element's own colours.
-        if issue.auditType == .contrast || issue.auditType == .textClipped, !e.isHittable { return false }
+        let sampled = issue.auditType == .contrast || issue.auditType == .textClipped
+        if !covered.isNull, sampled, e.frame.intersects(covered) { return false }
+        if !bars.isNull, sampled, e.frame.intersects(bars) { return false }
         if issue.auditType == .textClipped, e.elementType == .searchField { return false }
         // A spinner can't be tapped, so a hit region on it means nothing.
         if issue.auditType == .hitRegion, e.elementType == .activityIndicator { return false }
+        // Covered by other UI (a pinned bar, a card over the transcript): the
+        // audit samples whatever is on top, not the element's own colours.
+        // Last, as it is the one check that queries the app again.
+        if sampled, issue.element?.isHittable != true { return false }
         return true
     }
 
-    private static func describe(_ element: XCUIElement?) -> String {
-        guard let e = element, e.exists else { return "(no element)" }
+    private static func describe(_ e: XCUIElementSnapshot?) -> String {
+        guard let e else { return "(no element)" }
         let label = e.label.isEmpty ? e.identifier : e.label
         return "\(e.elementType.rawValue) \"\(label)\" \(NSCoder.string(for: e.frame))"
     }

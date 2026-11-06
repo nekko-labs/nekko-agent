@@ -11,6 +11,22 @@ public enum Effort: String, CaseIterable, Sendable {
         return isOpenAIReasoning(modelId) ? [.low, .medium, .normal, .high] : [.low, .normal, .high]
     }
 
+    /// General recommendation, independent of the computer's or phone's saved choice.
+    public static func recommended(for modelId: String) -> Effort {
+        guard usesNativeEffort(modelId) else { return .normal }
+        if let c = claude(modelId), c.family == "opus", c.major > 5 || (c.major == 5 && c.minor >= 5) { return .medium }
+        return .high
+    }
+
+    /// Match shared `effectiveEffort`: map a saved rung to one this model supports.
+    public static func effective(_ setting: Effort?, for modelId: String) -> Effort {
+        let level = setting ?? .normal
+        if usesNativeEffort(modelId) { return level == .normal ? recommended(for: modelId) : level }
+        if level == .xhigh || level == .max { return .high }
+        if !isOpenAIReasoning(modelId) && level == .medium { return .normal }
+        return level
+    }
+
     /// Anthropic's `output_config.effort`: Claude from the 4.7 generation on, Fable and Mythos always.
     static func usesNativeEffort(_ modelId: String) -> Bool {
         guard let c = claude(modelId) else { return false }

@@ -45,25 +45,26 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'system',
     mode: 'system',
-    accent: '#6d5efc',
-    accent2: '#06b6d4',
-    swatch: ['#6d5efc', '#06b6d4', '#8b7dff', '#22d3ee'],
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
+    // Follows the computer: Dark Nekko in dark mode, Light Nekko in light (resolveThemePreset).
+    swatch: ['#0c0c11', '#c084b5', '#fbfbfd', '#5a2352'],
     label: 'System',
   },
   {
     id: 'light',
     mode: 'light',
-    accent: '#6d5efc',
-    accent2: '#06b6d4',
-    swatch: ['#6d5efc', '#06b6d4', '#f2f2f7'],
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
+    swatch: ['#5a2352', '#8a4a7f', '#f2f2f7'],
     label: 'Light',
   },
   {
     id: 'dark',
     mode: 'dark',
-    accent: '#8b7dff',
-    accent2: '#22d3ee',
-    swatch: ['#8b7dff', '#22d3ee', '#16161c'],
+    accent: '#c084b5',
+    accent2: '#c99bb3',
+    swatch: ['#c084b5', '#c99bb3', '#16161c'],
     label: 'Dark',
   },
   {
@@ -79,7 +80,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#1e1b2b',
     ink: '#ece9f5',
     inkSoft: '#a7a1bb',
-    inkFaint: '#6f6a84',
+    inkFaint: '#88839b',
     line: '#262334',
   },
   {
@@ -94,7 +95,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#192019',
     ink: '#e8f5e8',
     inkSoft: '#8fab8f',
-    inkFaint: '#576b57',
+    inkFaint: '#7a8c7a',
     line: '#1f281f',
   },
   {
@@ -109,7 +110,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#2e3440',
     ink: '#eceff4',
     inkSoft: '#9ca6b6',
-    inkFaint: '#6b7787',
+    inkFaint: '#969fab',
     line: '#3b4252',
   },
   {
@@ -124,7 +125,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#f3ead9',
     ink: '#2b211a',
     inkSoft: '#6d5d4d',
-    inkFaint: '#9e8d7a',
+    inkFaint: '#756657',
     line: '#e8dfc8',
   },
   {
@@ -140,7 +141,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#f1edff',
     ink: '#17151f',
     inkSoft: '#5d5970',
-    inkFaint: '#8f8aa3',
+    inkFaint: '#6c687d',
     line: '#e6e1f5',
   },
   {
@@ -156,8 +157,25 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#d9d2f5',
     ink: '#17151f',
     inkSoft: '#2c2640',
-    inkFaint: '#4a4366',
+    inkFaint: '#322d44',
     line: '#c4b8ee',
+  },
+  {
+    // The marketing site's Dark look (the site default): indigo-black ground, lavender and aqua glows.
+    id: 'nekko-dark',
+    mode: 'dark',
+    accent: '#c4b9ff',
+    accent2: '#8ae4f2',
+    swatch: ['#0d0b18', '#c4b9ff', '#8ae4f2', '#181430'],
+    label: 'Nekko Dark',
+    paper: '#0d0b18',
+    surface: '#181430',
+    surface2: '#1d1a36',
+    ink: '#ffffff',
+    inkSoft: '#c0bad9',
+    inkFaint: '#8f89ab',
+    line: '#2f2d38',
+    wave: { from: '#9d8ce6', to: '#8ae4f2', peak: 0.3 },
   },
   {
     id: 'ember',
@@ -203,7 +221,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#fef6de',
     ink: '#17151f',
     inkSoft: '#1b2041',
-    inkFaint: '#7f786b',
+    inkFaint: '#716b61',
     line: '#ded1b0',
     wave: { from: '#253b8f', to: '#253b8f', peak: 0.22 },
   },
@@ -260,7 +278,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#ecf7fe',
     ink: '#17151f',
     inkSoft: '#4a1630',
-    inkFaint: '#717883',
+    inkFaint: '#656b76',
     line: '#c4d2de',
     wave: { from: '#c11759', to: '#c11759', peak: 0.22 },
   },
@@ -317,7 +335,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#bbfeec',
     ink: '#17151f',
     inkSoft: '#111d27',
-    inkFaint: '#4d7e76',
+    inkFaint: '#456f6a',
     line: '#7dddc5',
     wave: { from: '#02313b', to: '#02313b', peak: 0.22 },
   },
@@ -374,7 +392,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#ebfafe',
     ink: '#17151f',
     inkSoft: '#1b2962',
-    inkFaint: '#707a83',
+    inkFaint: '#656e77',
     line: '#c1d7df',
     wave: { from: '#2356fe', to: '#2356fe', peak: 0.22 },
   },
@@ -431,7 +449,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#fff7ca',
     ink: '#17151f',
     inkSoft: '#301f22',
-    inkFaint: '#7f785c',
+    inkFaint: '#716b54',
     line: '#dfd293',
     wave: { from: '#6b352a', to: '#6b352a', peak: 0.22 },
   },
@@ -488,7 +506,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#d4ffaa',
     ink: '#17151f',
     inkSoft: '#171a1e',
-    inkFaint: '#5f7e44',
+    inkFaint: '#56703f',
     line: '#a1de66',
     wave: { from: '#18251d', to: '#18251d', peak: 0.22 },
   },
@@ -545,7 +563,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#ffd4c9',
     ink: '#17151f',
     inkSoft: '#181224',
-    inkFaint: '#7f5e5b',
+    inkFaint: '#664c4d',
     line: '#dfa092',
     wave: { from: '#ffffff', to: '#ffffff', peak: 0.34 },
   },
@@ -583,7 +601,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#fffefb',
     ink: '#17151f',
     inkSoft: '#51281d',
-    inkFaint: '#8e736c',
+    inkFaint: '#886e68',
     line: '#ecebe8',
     wave: { from: '#ff6115', to: '#ffbe9b', peak: 0.26 },
   },
@@ -602,7 +620,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     surface2: '#fffdf8',
     ink: '#17151f',
     inkSoft: '#5d2c1c',
-    inkFaint: '#7f7d7f',
+    inkFaint: '#757375',
     line: '#dfdcd6',
     wave: { from: '#ff6115', to: '#ff6115', peak: 0.22 },
   },
@@ -662,6 +680,76 @@ export const THEME_PRESETS: ThemePreset[] = [
     inkFaint: '#a3adad',
     line: '#2a3535',
     wave: { from: '#c1e5e5', to: '#daefef', peak: 0.3 },
+  },
+  {
+    // Plum on the stock Light surfaces: plum fills, #854f6c as the secondary, black text.
+    id: 'x-plum-white',
+    mode: 'light',
+    // #190019 reads as black on thin strokes, so small accents use lighter
+    // plums; the deep plum stays on the main buttons (styles.css).
+    accent: '#5a2352',
+    accent2: '#8a4a7f',
+    swatch: ['#190019', '#854f6c', '#f2f2f7'],
+    label: 'Light Nekko',
+    group: 'experimental',
+    family: 'plum',
+    familyLabel: 'Nekko',
+    ink: '#000000',
+    paper: '#fbfbfd',
+    surface: '#ffffff',
+    surface2: '#f2f2f7',
+    wave: { from: '#190019', to: '#854f6c', peak: 0.26 },
+  },
+  {
+    // Plum on the stock Dark surfaces. #190019 is too dark to read as text on
+    // the dark paper, so a lighter plum carries the accent and plum fills behind it.
+    id: 'x-plum-dark',
+    mode: 'dark',
+    accent: '#c084b5',
+    accent2: '#c99bb3', // #854f6c lightened: it is also small text on the dark surfaces
+    swatch: ['#190019', '#854f6c', '#16161c'],
+    label: 'Dark Nekko',
+    group: 'experimental',
+    family: 'plum',
+    familyLabel: 'Nekko',
+    ink: '#ffffff',
+    paper: '#0c0c11',
+    surface: '#16161c',
+    surface2: '#20202a',
+    wave: { from: '#c084b5', to: '#854f6c', peak: 0.3 },
+  },
+  {
+    // The Nekko pair with indigo (#2b124c) as the main colour in place of plum.
+    id: 'x-indigo-white',
+    mode: 'light',
+    accent: '#4a2a7a',
+    accent2: '#6e4fa0',
+    swatch: ['#2b124c', '#854f6c', '#f2f2f7'],
+    label: 'Light Indigo',
+    group: 'experimental',
+    family: 'indigo',
+    familyLabel: 'Indigo',
+    ink: '#000000',
+    paper: '#fbfbfd',
+    surface: '#ffffff',
+    surface2: '#f2f2f7',
+    wave: { from: '#2b124c', to: '#854f6c', peak: 0.26 },
+  },
+  {
+    id: 'x-indigo-dark',
+    mode: 'dark',
+    accent: '#a68fd0',
+    accent2: '#c99bb3',
+    swatch: ['#2b124c', '#854f6c', '#16161c'],
+    label: 'Dark Indigo',
+    group: 'experimental',
+    family: 'indigo',
+    familyLabel: 'Indigo',
+    ink: '#ffffff',
+    paper: '#0c0c11',
+    surface: '#16161c',
+    surface2: '#20202a',
+    wave: { from: '#a68fd0', to: '#854f6c', peak: 0.3 },
   },
   {
     id: 'x-mulberry-white',
@@ -967,6 +1055,10 @@ export const THEME_PRESETS: ThemePreset[] = [
 const RETIRED_PRESET_ACCENTS: Record<string, Record<string, string>> = {
   nebula: { '#a78bfa': '#9d8ce6', '#f472b6': '#d98bb6' },
   terminal: { '#22c55e': '#3fb96a', '#84cc16': '#8fbf3a' },
+  // The base looks shipped the old violet and cyan before the plum palette (spec/brand/colour-palette.md).
+  system: { '#6d5efc': '#5a2352', '#06b6d4': '#8a4a7f' },
+  light: { '#6d5efc': '#5a2352', '#06b6d4': '#8a4a7f' },
+  dark: { '#8b7dff': '#c084b5', '#22d3ee': '#c99bb3' },
 };
 
 /** A saved accent, upgraded if it is a color the preset no longer ships. */
@@ -989,6 +1081,25 @@ export function experimentalFamilies(): Array<{ id: string; label: string; prese
   return out;
 }
 
+/**
+ * The preset whose colours actually apply. System follows the computer's
+ * light/dark mode with the plum looks, Dark Nekko or Light Nekko; every other id
+ * is itself.
+ */
+export function resolveThemePreset(presetId: string | undefined, prefersDark: boolean): string | undefined {
+  if (presetId !== 'system') return presetId;
+  return prefersDark ? 'x-plum-dark' : 'x-plum-white';
+}
+
+/**
+ * The preset the user picked. Nothing saved (a fresh profile) is System; a base
+ * mode saved without a preset stays without one.
+ */
+export function themePresetOf(settings: { theme?: string; themePreset?: string } | null | undefined): string | undefined {
+  if (settings?.themePreset) return settings.themePreset;
+  return !settings?.theme || settings.theme === 'system' ? 'system' : undefined;
+}
+
 /** Look up a preset by id. */
 export function findThemePreset(id: string | undefined): ThemePreset | undefined {
   return THEME_PRESETS.find((p) => p.id === id);
@@ -1000,33 +1111,4 @@ export interface Appearance {
   themePreset?: string;
   accent?: string;
   accent2?: string;
-}
-
-const HEX = /^#[0-9a-fA-F]{6}$/;
-const PRESET_ID = /^[a-z0-9-]{1,32}$/;
-
-/**
- * The public look of `settings`, built field by field so nothing else in the
- * settings can ride along to the relay: the mode (anything unknown reads as
- * `system`), the preset id when it looks like one (`[a-z0-9-]{1,32}`; the phone ignores ids it does not know), and the accents as
- * lowercase 6-digit hex (anything else is dropped). The daemon builds the same
- * object (`crates/nekkod/src/settings.rs`, `appearance_of`).
- */
-export function appearanceOf(settings: { theme?: unknown; themePreset?: unknown; accent?: unknown; accent2?: unknown } | null | undefined): Appearance {
-  const theme: ThemeMode = settings?.theme === 'light' || settings?.theme === 'dark' ? settings.theme : 'system';
-  const out: Appearance = { theme };
-  const preset = settings?.themePreset;
-  if (typeof preset === 'string' && PRESET_ID.test(preset)) out.themePreset = preset;
-  for (const k of ['accent', 'accent2'] as const) {
-    const v = settings?.[k];
-    if (typeof v === 'string' && HEX.test(v)) out[k] = v.toLowerCase();
-  }
-  return out;
-}
-
-/** Whether a settings patch can change `appearanceOf` (a reset is `null`). */
-export function touchesAppearance(patch: unknown): boolean {
-  if (patch === null || patch === undefined) return true;
-  if (typeof patch !== 'object') return false;
-  return ['theme', 'themePreset', 'accent', 'accent2'].some((k) => k in (patch as object));
 }

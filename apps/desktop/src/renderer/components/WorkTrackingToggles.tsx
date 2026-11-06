@@ -12,10 +12,10 @@ type PullRequests = NonNullable<AppSettings['pullRequests']>;
 function Toggle({ label, hint, value, defaultOn, onChange }: { label: string; hint: string; value?: boolean; defaultOn?: boolean; onChange: (v: boolean) => void }) {
   const ask = !defaultOn && value === undefined;
   return (
-    <label className="mt-3 flex items-center justify-between gap-3 text-[13px]">
+    <label className="mt-3 flex items-center justify-between gap-3 text-sm">
       <span>
         {label}
-        <span className="mt-0.5 block text-[11px] text-ink-faint">{ask ? `${hint} Not set yet: Nekko asks the first time.` : hint}</span>
+        <span className="mt-0.5 block text-2xs text-ink-faint">{ask ? `${hint} Not set yet: Nekko asks the first time.` : hint}</span>
       </span>
       <input
         type="checkbox"
@@ -46,6 +46,7 @@ export function PullRequestToggles({ value = {}, onChange }: { value?: PullReque
   return (
     <>
       <Toggle defaultOn label="Link each PR to its issue" hint="Adds a closing link such as Closes #123 to the description." value={value.linkIssue} onChange={(v) => set({ linkIssue: v })} />
+      <Toggle defaultOn label="Watch each PR until it is merge-ready" hint="When an agent opens a PR, Nekko watches it and wakes the agent as checks finish or reviews arrive, so it fixes failures and lands the PR when allowed. Cancel a watch from the chat to stop it for one PR." value={value.watchUntilMergeReady} onChange={(v) => set({ watchUntilMergeReady: v })} />
       <Toggle label="Include my prompt in PR descriptions" hint="Quotes what you asked for." value={value.includePrompt} onChange={(v) => set({ includePrompt: v })} />
       <Toggle label="Include my screenshots in PR descriptions" hint="Relevant images you sent, kept apart from the agent's own verification evidence." value={value.includeScreenshots} onChange={(v) => set({ includeScreenshots: v })} />
     </>

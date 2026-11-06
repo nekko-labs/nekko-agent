@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Translated from values/strings_appearance.xml (scripts/translations.py fill). -->
+<resources>
+    <string name="appearance_title">外观</string>
+    <string name="appearance_theme">主题</string>
+    <string name="appearance_language">语言</string>
+    <string name="appearance_match_computer">与我的电脑一致</string>
+    <string name="appearance_match_phone">与这台手机一致</string>
+    <string name="appearance_match_phone_detail">浅色或深色，跟随手机设置</string>
+    <string name="appearance_light">浅色</string>
+    <string name="appearance_dark">深色</string>
+    <string name="appearance_presets">桌面主题</string>
+    <string name="appearance_experimental">实验性</string>
+    <string name="appearance_done">完成</string>
+    <string name="appearance_computer_waiting">正在等待 %1$s；在此期间使用手机设置</string>
+    <string name="appearance_computer_dark">%1$s 为深色</string>
+    <string name="appearance_computer_light">%1$s 为浅色</string>
+    <string name="appearance_computer_system">%1$s 跟随其系统；手机使用自己的设置</string>
+    <string name="appearance_footer_computer">保存在这台手机上。应用跟随 %1$s 的主题、强调色和配色，你在那里更改后会立即生效。</string>
+    <string name="appearance_footer">保存在这台手机上。桌面主题，以这台手机自己的对比度显示。</string>
+</resources>

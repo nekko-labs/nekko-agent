@@ -70,8 +70,8 @@ export function EmptyArea({ art, title, children, action, className = '' }: { ar
   return (
     <div className={`flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-line px-6 py-8 text-center text-ink-faint ${className}`}>
       <div className="text-ink-soft">{art}</div>
-      <p className="text-[13.5px] font-semibold text-ink">{title}</p>
-      {children && <p className="max-w-md text-[12.5px] leading-relaxed text-ink-faint">{children}</p>}
+      <p className="text-sm font-semibold text-ink">{title}</p>
+      {children && <p className="max-w-md text-xs leading-relaxed text-ink-faint">{children}</p>}
       {action && <div className="mt-1 flex gap-2">{action}</div>}
     </div>
   );

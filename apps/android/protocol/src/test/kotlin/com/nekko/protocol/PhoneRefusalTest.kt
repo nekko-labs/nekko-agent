@@ -35,17 +35,27 @@ class PhoneRefusalTest {
         )
     }
 
-    @Test fun `raising the mode without a proof says to change it on the computer`() {
-        val mode = "Switching to Guardrails or YOLO needs a confirmation this phone can’t give yet. Change the mode on Studio."
+    @Test fun `proof and key refusals say what to do`() {
+        val mode = "Confirm with your fingerprint or screen lock to let chats on Studio run with fewer approvals."
         for (channel in listOf(Channels.SESSION_SET_OPTIONS, Channels.SETTINGS_UPDATE)) {
             val r = refusal("proof-required", channel)
             assertTrue(r.isProof)
             assertTrue(r.isModeChange)
             assertEquals(mode, r.message("Studio"))
         }
-        val other = refusal("proof-required", "chat:send")
+        val other = refusal("proof-required", "git:commit")
         assertFalse(other.isModeChange)
-        assertEquals("Studio needs a confirmation this phone can’t give yet. Do this on Studio.", other.message("Studio"))
+        assertEquals("Studio couldn’t confirm it was you. Try again.", other.message("Studio"))
+        assertEquals("Studio couldn’t confirm it was you. Try again.", refusal("proof-replayed", "git:commit").message("Studio"))
+        assertEquals(
+            "Studio couldn’t confirm it was you: check that this phone’s clock is right, then try again.",
+            refusal("proof-stale", "files:write").message("Studio"),
+        )
+        assertEquals(
+            "Studio knows a different key for this phone. Remove this phone on Studio and pair it again.",
+            refusal("key-mismatch", "device:registerKey").message("Studio"),
+        )
+        assertEquals("Studio couldn’t set up confirmations from this phone. Try again.", refusal("key-missing", "git:push").message("Studio"))
     }
 
     @Test fun `unknown phones and channels, and codes with no words`() {
@@ -54,7 +64,7 @@ class PhoneRefusalTest {
             "Studio doesn’t allow this from a phone. Update Nekko Agent on Studio if it’s new.",
             refusal("channel-denied", "files:write").message("Studio"),
         )
-        assertNull(refusal("key-mismatch", "chat:send").message("Studio"))
+        assertNull(refusal("value-invalid", "chat:send").message("Studio"))
         assertFalse(refusal("read-off", "x").isProof)
     }
 

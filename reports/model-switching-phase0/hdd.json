@@ -1,0 +1,172 @@
+{
+  "machine": "RTX 5090 32 GB (PCIe 5 x16), 47 GB RAM, Windows 11, llama.cpp b11149 CUDA",
+  "server": "~/.nekko-agent/engine/win-x64-cuda/llama-server.exe",
+  "args": [
+    "--n-gpu-layers",
+    "999",
+    "--ctx-size",
+    "4096"
+  ],
+  "repeats": 2,
+  "models": [
+    {
+      "name": "Qwen3 8B Q4_K_M",
+      "sizeBytes": 5027784512,
+      "volumes": [
+        {
+          "volume": "HDD (WD 20 TB, SATA 7200 rpm)",
+          "rawReadMbps": [
+            233.98099162084534,
+            234.1869418395273
+          ],
+          "cachedReadMbps": [
+            7444.414010075561,
+            7248.732299820879
+          ],
+          "cold": [
+            {
+              "readyMs": 24117.8947,
+              "startupMs": 139.304,
+              "weightsMs": 23940.287,
+              "serveMs": 38.30370000000039,
+              "firstTokenMs": 177.8711,
+              "hotTokenMs": 161.0999
+            },
+            {
+              "readyMs": 24635.1996,
+              "startupMs": 179.489,
+              "weightsMs": 24386.942,
+              "serveMs": 68.76859999999942,
+              "firstTokenMs": 190.3443,
+              "hotTokenMs": 147.8184
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 2970.3032,
+              "startupMs": 129.805,
+              "weightsMs": 2789.1290000000004,
+              "serveMs": 51.36919999999964,
+              "firstTokenMs": 165.0113,
+              "hotTokenMs": 154.1843
+            },
+            {
+              "readyMs": 2993.5255,
+              "startupMs": 162.321,
+              "weightsMs": 2764.015,
+              "serveMs": 67.18950000000041,
+              "firstTokenMs": 175.8918,
+              "hotTokenMs": 169.1953
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gemma 4 E4B Q4_K_M",
+      "sizeBytes": 5335289664,
+      "volumes": [
+        {
+          "volume": "HDD (WD 20 TB, SATA 7200 rpm)",
+          "rawReadMbps": [
+            236.93932218552638,
+            202.48963997124443
+          ],
+          "cachedReadMbps": [
+            8408.1616422683,
+            7489.625871735995
+          ],
+          "cold": [
+            {
+              "readyMs": 25628.152400000003,
+              "startupMs": 133.975,
+              "weightsMs": 25471.088,
+              "serveMs": 23.08940000000439,
+              "firstTokenMs": 298.70550000000003,
+              "hotTokenMs": 254.0922
+            },
+            {
+              "readyMs": 25322.502,
+              "startupMs": 131.941,
+              "weightsMs": 25129.249,
+              "serveMs": 61.31200000000172,
+              "firstTokenMs": 317.4978,
+              "hotTokenMs": 267.7166
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 3437.0404,
+              "startupMs": 128.096,
+              "weightsMs": 3246.888,
+              "serveMs": 62.05639999999994,
+              "firstTokenMs": 310.6787,
+              "hotTokenMs": 224.115
+            },
+            {
+              "readyMs": 3448.262,
+              "startupMs": 144.448,
+              "weightsMs": 3223.876,
+              "serveMs": 79.9380000000001,
+              "firstTokenMs": 310.1712,
+              "hotTokenMs": 218.55079999999998
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gemma 4 12B Q4_K_M",
+      "sizeBytes": 7381384864,
+      "volumes": [
+        {
+          "volume": "HDD (WD 20 TB, SATA 7200 rpm)",
+          "rawReadMbps": [
+            236.2258540963415,
+            234.80977207533454
+          ],
+          "cachedReadMbps": [
+            9482.302847497167,
+            7475.807300528596
+          ],
+          "cold": [
+            {
+              "readyMs": 34938.8304,
+              "startupMs": 141.683,
+              "weightsMs": 34748.25,
+              "serveMs": 48.89740000000165,
+              "firstTokenMs": 165.40109999999999,
+              "hotTokenMs": 112.8951
+            },
+            {
+              "readyMs": 35521.536400000005,
+              "startupMs": 140.359,
+              "weightsMs": 35330.556000000004,
+              "serveMs": 50.62140000000363,
+              "firstTokenMs": 405.3465,
+              "hotTokenMs": 351.928
+            }
+          ],
+          "warm": [
+            {
+              "readyMs": 4224.3929,
+              "startupMs": 124.325,
+              "weightsMs": 4040.174,
+              "serveMs": 59.89390000000003,
+              "firstTokenMs": 129.7131,
+              "hotTokenMs": 103.3032
+            },
+            {
+              "readyMs": 4997.3311,
+              "startupMs": 134.223,
+              "weightsMs": 4825.911,
+              "serveMs": 37.19710000000032,
+              "firstTokenMs": 417.6545,
+              "hotTokenMs": 338.8047
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -7,15 +7,16 @@ import XCTest
 /// live stack as LiveRelayTests (apps/ios/scripts/itest-stack.sh): opt-in
 /// with `TEST_RUNNER_NEKKO_ITEST_LINK`, and only on an iPad (a phone is
 /// always one column). Each step is a screenshot attachment.
+@MainActor
 final class PanesTests: XCTestCase {
     /// The faked hinge's thickness (Hinge.thickness in the app).
     private let hinge: CGFloat = 24
 
-    override func setUp() {
+    override func setUp() async throws {
         continueAfterFailure = false
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         XCUIDevice.shared.orientation = .portrait
     }
 
@@ -142,7 +143,7 @@ final class PanesTests: XCTestCase {
         let app = XCUIApplication()
         let theme = ProcessInfo.processInfo.environment["NEKKO_ITEST_THEME"] ?? "light"
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", theme, "-uiTestReset", "YES",
-                               "-paneTipShown", "NO", "-foldNoteDismissed", "NO"] + extra
+                               "-paneTipShown", "NO", "-foldNoteDismissed", "NO", "-expertMode", "YES"] + extra
         app.launch()
         addUIInterruptionMonitor(withDescription: "system alerts") { alert in
             for label in ["Allow", "OK", "Allow While Using App"] where alert.buttons[label].exists {
@@ -166,7 +167,7 @@ final class PanesTests: XCTestCase {
         app.buttons["Pair"].firstMatch.tap()
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         if springboard.buttons["Allow"].waitForExistence(timeout: 4) { springboard.buttons["Allow"].tap() }
-        let online = app.buttons.matching(NSPredicate(format: "label == %@", "Computers and settings, online")).firstMatch
+        let online = app.buttons.matching(NSPredicate(format: "label ==[c] %@", "Computers and settings, online")).firstMatch
         XCTAssertTrue(online.waitForExistence(timeout: 30), "connected to the computer")
     }
 

@@ -1,6 +1,7 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL } from '../notificationVisibility.js';
-import { contextBridge, ipcRenderer, webUtils } from 'electron';
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron';
+import { homedir, hostname, userInfo } from 'node:os';
 import { PREVIEW_CHANNEL } from '../previewPolicy.js';
 if (process.isMainFrame) contextBridge.exposeInMainWorld('nekkoPreview', { open: (source: string) => ipcRenderer.invoke(PREVIEW_CHANNEL, source) });
 import type {
@@ -24,10 +25,12 @@ import type {
 import { AGENT_REPLAY, IpcChannels, IpcEvents } from '@nekko-agent/shared';
 import { ENGINE_ENDPOINT_CHANNEL, PICK_FOLDER_CHANNEL, SERVICE_CONTROL_CHANNEL } from '../engineChannels.js';
 import { createEngineSocket, type Listener } from './engine-socket.js';
+import { heldWhileHidden, pageHidden } from './hiddenReads.js';
 import { MAIN_EVENTS } from './routing.js';
 import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import {
+  PAGE_RELOADING_EVENT,
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
@@ -96,13 +99,14 @@ const api: NekkoApi = {
   cloudBeginOAuth: (provider) => inv(IpcChannels.cloudBeginOAuth, provider),
   cloudCancelOAuth: () => inv(IpcChannels.cloudCancelOAuth),
   cloudSignOut: () => inv(IpcChannels.cloudSignOut),
+  cloudDeleteAccount: () => inv(IpcChannels.cloudDeleteAccount),
   connectionsStatus: () => inv(IpcChannels.connectionsStatus),
   connectionsEvents: (id, limit) => inv(IpcChannels.connectionsEvents, id, limit),
   connectionsClear: () => inv(IpcChannels.connectionsClear),
   telemetryCapture: (event, props) => inv(IpcChannels.telemetryCapture, event, props),
   telemetryStatus: () => inv(IpcChannels.telemetryStatus),
   feedbackInfo: () => inv(IpcChannels.feedbackInfo),
-  feedbackSend: (message, includeAppInfo) => inv(IpcChannels.feedbackSend, message, includeAppInfo),
+  feedbackSend: (message, includeAppInfo, screenshots) => inv(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
   syncTurnOn: () => inv(IpcChannels.syncTurnOn),
   syncConfirmRecoveryKey: (text) => inv(IpcChannels.syncConfirmRecoveryKey, text),
   syncRestore: (text) => inv(IpcChannels.syncRestore, text),
@@ -119,7 +123,7 @@ const api: NekkoApi = {
   voiceUninstall: (engine) => inv(IpcChannels.voiceUninstall, engine),
   voiceTranscribe: (wav) => inv(IpcChannels.voiceTranscribe, wav),
   voicePermission: (action) => inv(IpcChannels.voicePermission, action),
-  engineStatus: () => inv(IpcChannels.engineStatus),
+  engineStatus: heldWhileHidden(() => inv(IpcChannels.engineStatus), pageHidden),
   engineInstall: (buildId, runtime) => inv(IpcChannels.engineInstall, buildId, runtime),
   engineUninstall: (runtime) => inv(IpcChannels.engineUninstall, runtime),
   engineInstallPreview: (runtime, buildId) => inv(IpcChannels.engineInstallPreview, runtime, buildId),
@@ -163,11 +167,12 @@ const api: NekkoApi = {
   machineRecommendations: (opts) => inv(IpcChannels.machineRecommendations, opts),
   backgroundState: () => inv(IpcChannels.backgroundState),
   machineDismissNudge: (task) => inv(IpcChannels.machineDismissNudge, task ?? null),
-  getGpuStats: () => inv(IpcChannels.gpuStats),
+  getGpuStats: heldWhileHidden(() => inv(IpcChannels.gpuStats), pageHidden),
   getSystemStats: () => inv(IpcChannels.systemStats),
 
   listSessions: () => inv(IpcChannels.sessionsList),
   nextAgentWatchAt: (sessionId) => inv(IpcChannels.sessionNextWatch, sessionId),
+  cancelAgentWatch: (sessionId, id) => inv(IpcChannels.sessionCancelWatch, sessionId, id),
   listAgentWatches: (sessionId) => inv(IpcChannels.sessionWatches, sessionId),
   listSessionSummaries: () => inv(IpcChannels.sessionsSummaries),
   createSession: (workspaceId) => inv(IpcChannels.sessionCreate, workspaceId),
@@ -231,10 +236,12 @@ const api: NekkoApi = {
   truncateSession: (id, messageId) => inv(IpcChannels.sessionTruncate, id, messageId),
   clearSessions: (scope) => inv(IpcChannels.sessionsClear, scope),
   purgeExpiredArchives: () => inv(IpcChannels.sessionsPurgeArchived),
+  getHistoryUsage: () => inv(IpcChannels.sessionsHistoryUsage),
+  clearHistory: (range) => inv(IpcChannels.sessionsClearHistory, range),
   forkSession: (id, beforeMessageId) => inv(IpcChannels.sessionFork, id, beforeMessageId),
   resetSettings: () => inv(IpcChannels.settingsReset),
   listFonts: () => inv(IpcChannels.fontsList),
-  wipeAllData: () => inv(IpcChannels.dataWipe),
+  wipeAllData: (opts) => inv(IpcChannels.dataWipe, opts ?? {}),
   listTools: () => inv(IpcChannels.toolsList),
 
   openFilesDialog: () => inv(IpcChannels.dialogOpenFiles),
@@ -288,6 +295,7 @@ const api: NekkoApi = {
   linkPrStack: (sessionId, url) => inv(IpcChannels.prLinkStack, sessionId, url),
   createPr: (workspaceId, opts) => inv(IpcChannels.prCreate, workspaceId, opts),
   getPrChecks: (url) => inv(IpcChannels.prChecks, url),
+  getPrInfo: (url) => inv(IpcChannels.prInfo, url),
 
   gitDiff: (workspaceId, opts) => inv(IpcChannels.gitDiff, workspaceId, opts),
   gitLog: (workspaceId, opts) => inv(IpcChannels.gitLog, workspaceId, opts),
@@ -351,6 +359,28 @@ const api: NekkoApi = {
   listWorkflowRuns: (workflowId) => inv(IpcChannels.workflowRuns, workflowId),
   listWorkflowSkillDefs: () => inv(IpcChannels.workflowSkillDefs),
   dispatchWorkflowEvent: (event) => inv(IpcChannels.workflowEvent, event),
+  imageStatus: () => inv(IpcChannels.runnerImageStatus),
+  imagePlan: () => inv(IpcChannels.runnerImagePlan),
+  buildImage: (req) => inv(IpcChannels.runnerImageBuild, req),
+  resumeImage: () => inv(IpcChannels.runnerImageResume),
+  cancelImage: () => inv(IpcChannels.runnerImageCancel),
+  linuxImageStatus: () => inv(IpcChannels.runnerLinuxImageStatus),
+  buildLinuxImage: () => inv(IpcChannels.runnerLinuxImageBuild),
+  cancelLinuxImage: () => inv(IpcChannels.runnerLinuxImageCancel),
+  listRunners: () => inv(IpcChannels.runnerList),
+  connectRunner: (req) => inv(IpcChannels.runnerConnect, req),
+  updateRunner: (id, settings) => inv(IpcChannels.runnerUpdate, id, settings),
+  removeRunner: (id) => inv(IpcChannels.runnerRemove, id),
+  setRunnerEnabled: (id, enabled) => inv(IpcChannels.runnerSetEnabled, id, enabled),
+  runnerJobLog: (id, jobId) => inv(IpcChannels.runnerJobLog, id, jobId),
+  runnerVmLog: (id, vm) => inv(IpcChannels.runnerVmLog, id, vm),
+  runnerLiveLog: (id, vm) => inv(IpcChannels.runnerLiveLog, id, vm),
+  runnerJob: (id, action, repo, jobId) => inv(IpcChannels.runnerJob, id, action, repo, jobId),
+  githubAccounts: () => inv(IpcChannels.runnerGithubAccounts),
+  githubStart: (req) => inv(IpcChannels.runnerGithubStart, req),
+  githubStatus: () => inv(IpcChannels.runnerGithubStatus),
+  githubCancel: () => inv(IpcChannels.runnerGithubCancel),
+  setForkApproval: (req) => inv(IpcChannels.runnerSetForkApproval, req),
 
   listConnectors: () => inv(IpcChannels.connectorsList),
   connectConnector: (kind: ConnectorKind, token, settings) => inv(IpcChannels.connectorConnect, kind, token, settings),
@@ -387,6 +417,17 @@ const api: NekkoApi = {
   getMessagingStatus: () => inv(IpcChannels.messagingStatus),
   getRemotePairing: () => inv(IpcChannels.remotePairing),
   startRemotePairing: () => inv(IpcChannels.remotePair),
+  startComputerPairing: () => inv(IpcChannels.remotePairComputer),
+  listComputers: () => inv(IpcChannels.computersList),
+  pairComputer: (link) => inv(IpcChannels.computersPair, link),
+  renameComputer: (id, name) => inv(IpcChannels.computersRename, id, name),
+  setComputerColor: (id, color) => inv(IpcChannels.computersSetColor, id, color),
+  forgetComputer: (id) => inv(IpcChannels.computersForget, id),
+  setComputerIcon: (id, icon) => inv(IpcChannels.computersSetIcon, id, icon),
+  computerStats: (id) => inv(IpcChannels.computersStats, id),
+  computerEngineStatus: (id) => inv(IpcChannels.computersCall, id, 'engine:status', []),
+  createSessionOn: (computerId, workspaceId) => inv(IpcChannels.computersCreateSession, computerId, workspaceId),
+  computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),
   revokeRemoteDevice: (deviceId) => inv(IpcChannels.remoteRevoke, deviceId),
   renameRemoteDevice: (deviceId, name) => inv(IpcChannels.remoteRename, deviceId, name),
@@ -419,6 +460,7 @@ const api: NekkoApi = {
   getClaudePolicy: () => inv(IpcChannels.claudePolicy),
   getClaudeCapability: (providerId, capability) => inv(IpcChannels.claudeCapability, providerId, capability),
   getClaudePlanUsage: (providerId) => inv(IpcChannels.claudePlanUsage, providerId),
+  claudeBackgroundTasks: () => inv(IpcChannels.claudeBackgroundTasks),
   getClaudeCodeStatus: (providerId, account) => inv(IpcChannels.claudeCodeStatus, providerId, account),
   getMcpStatus: () => inv(IpcChannels.mcpStatus),
   detectHypergate: (port?: number) => inv(IpcChannels.mcpHypergate, port),
@@ -475,6 +517,11 @@ const api: NekkoApi = {
     bus.on(IpcEvents.changesUpdated, listener);
     return () => bus.removeListener(IpcEvents.changesUpdated, listener);
   },
+  onComputersUpdated: (cb) => {
+    const listener = () => cb();
+    bus.on(IpcEvents.computersUpdated, listener);
+    return () => bus.removeListener(IpcEvents.computersUpdated, listener);
+  },
   onTasksUpdated: (cb) => {
     const listener = (_: unknown, tasks: import('@nekko-agent/shared').AutomationTask[]) => cb(tasks);
     bus.on(IpcEvents.tasksUpdated, listener);
@@ -494,6 +541,26 @@ const api: NekkoApi = {
     const listener = (_: unknown, snapshot: import('@nekko-agent/shared').WorkflowsSnapshot) => cb(snapshot);
     bus.on(IpcEvents.workflowsUpdated, listener);
     return () => bus.removeListener(IpcEvents.workflowsUpdated, listener);
+  },
+  onImageChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').ImageView) => cb(view);
+    bus.on(IpcEvents.runnerImageChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerImageChanged, listener);
+  },
+  onLinuxImageChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').LinuxImageView) => cb(view);
+    bus.on(IpcEvents.runnerLinuxImageChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerLinuxImageChanged, listener);
+  },
+  onRunnersChanged: (cb) => {
+    const listener = (_: unknown, views: import('@nekko-agent/shared').RunnerView[]) => cb(views);
+    bus.on(IpcEvents.runnerChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerChanged, listener);
+  },
+  onGithubSetupChanged: (cb) => {
+    const listener = (_: unknown, view: import('@nekko-agent/shared').GithubSetupView) => cb(view);
+    bus.on(IpcEvents.runnerGithubChanged, listener);
+    return () => bus.removeListener(IpcEvents.runnerGithubChanged, listener);
   },
   onDownloadsUpdated: (cb) => {
     const listener = (_: unknown, jobs: import('@nekko-agent/shared').DownloadJob[]) => cb(jobs);
@@ -521,9 +588,20 @@ const api: NekkoApi = {
     bus.on(IpcEvents.deepLink, listener);
     return () => bus.removeListener(IpcEvents.deepLink, listener);
   },
+  onVoiceLockStop: (cb: () => void) => {
+    const listener = () => cb();
+    bus.on(IpcEvents.voiceLockStop, listener);
+    return () => bus.removeListener(IpcEvents.voiceLockStop, listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('nekko', api);
+
+// Presenter mode (NEKKO_PRESENTER=1): the renderer masks these names, emails
+// and key-shaped text outside Settings, for screen recordings.
+if (process.env.NEKKO_PRESENTER === '1') {
+  contextBridge.exposeInMainWorld('nekkoPresenter', { user: userInfo().username, home: homedir(), host: hostname() });
+}
 
 /**
  * The window-chrome bridge, separate from the app API on purpose: `NekkoApi`
@@ -537,6 +615,8 @@ const chrome: WindowChromeBridge = {
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),
+  setPageZoom: (factor) => { if (Number.isFinite(factor) && factor >= 0.8 && factor <= 1.5) webFrame.setZoomFactor(factor); },
+  onPageReloading: (listener) => { ipcRenderer.on(PAGE_RELOADING_EVENT, (_event, fadeMs: number) => listener(fadeMs)); },
   displays: {
     displayId: process.argv.find((a) => a.startsWith(DISPLAY_ARG))?.slice(DISPLAY_ARG.length) ?? null,
     list: () => ipcRenderer.invoke(DISPLAYS_LIST_CHANNEL),

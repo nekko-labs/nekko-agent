@@ -2,17 +2,19 @@
  * Remote access (phone remote control) over the relay.
  *
  * Security model, in one paragraph: the local agent dials OUT to a relay and
- * claims a room with a pairing secret; devices (phones) present the same secret
- * to the relay (transport auth) and all payloads are end-to-end encrypted with a
- * key derived from that secret, so the relay only ever routes ciphertext. On top
- * of that transport, every device must complete an application-level HELLO
- * handshake with the agent: known + not-revoked devices are welcomed, brand-new
- * devices are enrolled only with a short-lived single-use pairing code, a
- * revoked device comes back only the same way (a fresh code from the owner),
- * and everything else is denied. The agent unicasts responses and events per device
- * (never broadcast), so a revoked device receives nothing even while it still
- * holds the old link. Rotating the secret is the cryptographic kill switch: it
- * re-keys the room and forces every device to re-pair.
+ * claims a room with a pairing secret; devices (phones) present a credential
+ * derived from the same secret to the relay. That secret gets a device onto the
+ * relay and no further. Each connection then runs a key exchange the agent signs
+ * with its host key, which the device pinned from its pairing link, so all
+ * payloads are sealed under a key only that connection's two ends hold (decision
+ * 0041) and the relay only ever routes ciphertext. Every device must complete an
+ * application-level HELLO handshake with the agent: known + not-revoked devices
+ * are welcomed, brand-new devices are enrolled only with a short-lived
+ * single-use pairing code, a revoked device comes back only the same way (a
+ * fresh code from the owner), and everything else is denied. A revoked device
+ * that kept its old link can't pose as the computer or read anyone's traffic.
+ * It can still reach the relay, so rotating the secret remains the way to shut
+ * it out of the room: it forces every device to re-pair.
  */
 
 /** A phone/browser paired to this machine for remote control. */
@@ -59,9 +61,6 @@ export interface PairingGrant {
   expiresAt: number;
 }
 
-/** How long a pairing code stays valid. */
-export const PAIRING_TTL_MS = 10 * 60 * 1000;
-
 /** Remote-access status for the Settings UI. */
 export interface RemoteStatus {
   enabled: boolean;
@@ -83,6 +82,8 @@ export interface RemotePairing {
   relayUrl: string;
   room: string;
   key: string;
+  /** The computer's public key, which a device pins (X9.63 P-256, base64). */
+  hostKey?: string;
 }
 
 /* ------------------------------------------------------------------------- *
@@ -103,8 +104,63 @@ export interface RemotePairing {
  *   it (single use), and every request after the welcome carries it plus a
  *   rising `seq`. Older phones are legacy: accepted unless the computer's
  *   `acceptLegacyPhones` is false, then refused with `update-required`.
+ * 5 (2026-11-01): device-key HELLOs (decision 0036). The HELLO carries the
+ *   device's P-256 public key (`helloKey`) and a signature (`sig`) of
+ *   `helloText(deviceId, room, challenge)`; a device enrolls its key with the
+ *   pairing code and must sign every later HELLO with it. Anything older is
+ *   refused with `update-required`, and a device without an enrolled key with
+ *   `bad-key` (pair again).
+ * 6 (2026-11-02): the computer proves itself and each connection has its own
+ *   key (decision 0041). The challenge carries the computer's ephemeral key
+ *   (`eph`) and its host key's signature (`sig`) of `hostText`; the device
+ *   checks that against the host key pinned from its link, and answers
+ *   `{eph, enc}`: its own ephemeral key beside the HELLO sealed under
+ *   `sessionKey`. Everything after is sealed under that key. Anything older is
+ *   refused with `update-required`.
  */
-export const REMOTE_PROTOCOL_VERSION = 4;
+export const REMOTE_PROTOCOL_VERSION = 6;
+
+/** The first protocol whose HELLO is signed with a device key (crates/nekko-remote `HELLO_KEY_PROTOCOL`). */
+export const REMOTE_HELLO_KEY_PROTOCOL = 5;
+
+/**
+ * What a HELLO signs with the device key (ECDSA P-256 SHA-256, raw r||s):
+ * `nekko-hello-v2`, the deviceId, the room, the challenge and both ephemeral
+ * keys, one per line, so a signature is good for this one exchange.
+ */
+export function helloText(deviceId: string, room: string, challenge: string, hostEph: string, clientEph: string): string {
+  return ['nekko-hello-v2', deviceId, room, challenge, hostEph, clientEph].join(String.fromCharCode(10));
+}
+
+/** What a computer signs with its host key in a challenge. */
+export function hostText(room: string, challenge: string, hostEph: string): string {
+  return ['nekko-host-v1', room, challenge, hostEph].join(String.fromCharCode(10));
+}
+
+/** The HKDF info of a connection's key. */
+export function sessionInfo(room: string, challenge: string, hostEph: string, clientEph: string): string {
+  return ['nekko-session-v1', room, challenge, hostEph, clientEph].join(String.fromCharCode(10));
+}
+
+/** Whether `sig` is the pinned host key's signature of this challenge. Anything malformed is false. */
+export async function challengeIsGenuine(hostKey: string, room: string, c: { challenge: string; eph: string; sig: string }): Promise<boolean> {
+  const fromB64 = (s: string) => Uint8Array.from(atob(s), (ch) => ch.charCodeAt(0));
+  try {
+    const key = await crypto.subtle.importKey('raw', fromB64(hostKey), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    return await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, fromB64(c.sig), new TextEncoder().encode(hostText(room, c.challenge, c.eph)));
+  } catch {
+    return false;
+  }
+}
+
+/** `helloKey` (X9.63 public key, base64) and `sig` (raw r||s, base64) for a HELLO in this exchange. */
+export async function helloProof(keys: CryptoKeyPair, deviceId: string, room: string, challenge: string, hostEph: string, clientEph: string): Promise<{ helloKey: string; sig: string }> {
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', keys.publicKey));
+  const text = helloText(deviceId, room, challenge, hostEph, clientEph);
+  const sig = new Uint8Array(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, keys.privateKey, new TextEncoder().encode(text)));
+  const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+  return { helloKey: b64(raw), sig: b64(sig) };
+}
 
 /** The first protocol whose HELLO answers the agent's challenge (crates/nekko-remote `CHALLENGE_PROTOCOL`). */
 export const REMOTE_CHALLENGE_PROTOCOL = 4;
@@ -114,6 +170,10 @@ export interface RemoteChallenge {
   type: 'challenge';
   /** 18 random bytes, base64. */
   challenge: string;
+  /** The computer's half of the key exchange, X9.63 P-256, base64. */
+  eph: string;
+  /** The host key's signature of `hostText`, raw r||s, base64. */
+  sig: string;
 }
 
 /** First sealed frame a device sends after connecting. */
@@ -128,6 +188,10 @@ export interface RemoteHello {
   protocol?: number;
   /** The connection's `RemoteChallenge`, required from protocol 4. */
   challenge?: string;
+  /** From protocol 5: the device's P-256 public key, X9.63 uncompressed, base64. */
+  helloKey?: string;
+  /** From protocol 5: `helloKey`'s signature of `helloText`, raw r||s, base64. */
+  sig?: string;
 }
 
 /** A phone's request: from protocol 4 it carries its connection's challenge and a `seq` above every earlier one. */
@@ -160,103 +224,8 @@ export const PUSH_KINDS: readonly PushKind[] = ['needs-you', 'finished', 'failed
 /** The phone channel the relay agent answers itself: a test push to the asking phone. */
 export const PUSH_TEST_CHANNEL = 'push:test';
 
-/** Outcome of validating a HELLO against the device registry. Pure; host applies it. */
-export type HelloVerdict =
-  | { action: 'welcome'; device: RemoteDevice; enrolled: boolean }
-  | { action: 'deny'; reason: RemoteDenyReason };
-
-/**
- * Validate a device HELLO. Known devices are welcomed unless revoked; unknown
- * devices enroll only with a live pairing code. A revoked device is re-admitted
- * only with a live pairing code too: the same proof a new phone needs, made on
- * the computer by its owner, single use. A phone keeps its device id across
- * "forget this computer", so without this a revoked phone could never pair
- * again short of rotating the room secret. Pure so it's unit-testable; the
- * caller persists the returned device (new or lastSeen-updated) and consumes the
- * pairing grant when `enrolled` is true.
- */
-export function verifyHello(
-  devices: RemoteDevice[],
-  hello: unknown,
-  pairing: PairingGrant | null,
-  now: number,
-): HelloVerdict {
-  const h = hello as RemoteHello | null;
-  if (!h || h.type !== 'hello' || typeof h.deviceId !== 'string' || !h.deviceId.trim()) {
-    return { action: 'deny', reason: 'invalid' };
-  }
-  const known = devices.find((d) => d.id === h.deviceId);
-  if (known && !known.revoked) {
-    return { action: 'welcome', device: { ...known, lastSeenAt: now }, enrolled: false };
-  }
-  // A revoked device with no code is told it was removed; one that brings a
-  // code is pairing again, so it is checked exactly like a new device and gets
-  // a fresh registry entry.
-  if (!h.pair) return { action: 'deny', reason: known ? 'revoked' : 'unknown-device' };
-  if (!pairing || pairing.code !== h.pair || pairing.expiresAt <= now) {
-    return { action: 'deny', reason: 'bad-code' };
-  }
-  // A device sends these, so a non-string is ignored rather than trusted (a
-  // number here used to throw, leaving the phone with no reply at all).
-  const name = typeof h.name === 'string' ? h.name : '';
-  const platform = typeof h.platform === 'string' ? h.platform : undefined;
-  const device: RemoteDevice = {
-    id: h.deviceId,
-    name: name.trim().slice(0, 60) || defaultDeviceName(platform),
-    platform: normalizePlatform(platform),
-    createdAt: now,
-    lastSeenAt: now,
-  };
-  return { action: 'welcome', device, enrolled: true };
-}
-
-export function normalizePlatform(p?: string): string {
-  const v = (p || '').toLowerCase();
-  return v === 'ios' || v === 'android' || v === 'web' ? v : 'unknown';
-}
-
-export function defaultDeviceName(platform?: string): string {
-  switch (normalizePlatform(platform)) {
-    case 'ios':
-      return 'iPhone';
-    case 'android':
-      return 'Android phone';
-    case 'web':
-      return 'Browser';
-    default:
-      return 'Device';
-  }
-}
-
-/* ------------------------------------------------------------------------- *
- * Random material. Uses WebCrypto (browser + Node 20+).
- * ------------------------------------------------------------------------- */
-
-const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O/1/I/L
-
-/** Human-typeable one-time pairing code (~40 bits with the 31-char alphabet). */
-export function newPairingCode(len = 8): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(len));
-  let out = '';
-  for (let i = 0; i < len; i++) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
-  return out;
-}
-
-/** Room code (routing only, not secret, but unguessable). */
-export function newRoomCode(): string {
-  return hex(crypto.getRandomValues(new Uint8Array(8)));
-}
-
-/** Pairing secret: 128-bit hex. Feeds relay transport auth + PBKDF2 → AES-GCM. */
-export function newRoomSecret(): string {
-  return hex(crypto.getRandomValues(new Uint8Array(16)));
-}
-
-function hex(bytes: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, '0');
-  return s;
-}
+/** The phone channel the relay agent answers itself: the Live Activity card's level, focus or dismissal (crates/nekko-remote `CARD_CHANNEL`). */
+export const CARD_CHANNEL = 'card:set';
 
 /* ------------------------------------------------------------------------- *
  * Relay wire protocol (plain-JSON routing envelopes; payload stays ciphertext).
@@ -274,9 +243,40 @@ function hex(bytes: Uint8Array): string {
  *   agent → relay : { type:'notify', kind, tag?, deviceId?, title, body } (content-free push trigger)
  *   agent → relay : { type:'dismiss', tag }        (a needs-you push was handled)
  *   agent → relay : { type:'push-remove', deviceId }
+ *   agent → relay : { type:'activity', tag, phase, callId?, severity? } (per-chat Live Activity, older iPhones)
+ *   agent → relay : { type:'card', state } | { type:'card-start', state } (the iPhone's one Live Activity card)
  *   client → relay: { type:'register-push', token, platform, deviceId, kinds? }
+ *   client → relay: { type:'register-activity', deviceId, tag, token, app? } (older iPhones)
+ *   client → relay: { type:'register-card', deviceId, token?, startToken?, level, computerId, computerName, app? }
  *   relay → client: { type:'agent-online' } | { type:'agent-offline' }
  *   relay → client: { type:'push-registered', delivers } | { type:'dismiss', tag }
+ *
+ * The Live Activity card (always-on voice, Part 4). An iPhone shows one card
+ * for all of a computer's chats (`LiveCardState` in apps/ios LiveCard.swift).
+ * It registers the card's ActivityKit push token (`token`, while a card is up)
+ * and its push-to-start token (`startToken`, iOS 17.2 and later) with the
+ * relay, with its `level` ('minimal' | 'standard' | 'detailed'; 'none' drops
+ * the registration) and the computer's id and name for a started card's
+ * attributes. Over the sealed connection it tells the computer its level, a
+ * chip tap and a closed chat with `CARD_CHANNEL` (`{ level?, focus?, dismiss? }`,
+ * answered by the relay agent itself). While any phone wants a card the
+ * computer builds it with the app's rules (crates/nekko-remote card.rs, both
+ * held to fixtures/live-card.json) and sends `card` when it changes; dates are
+ * seconds since 2001, as ActivityKit decodes them. It includes chat text
+ * only when some phone asked for Standard or Detailed. The relay pushes
+ * `event: 'update'` to every registered card, or `'end'` when `state.chats`
+ * is empty, blanking the title, step and reply at Minimal and the reply at
+ * Standard, with step and reply cut to 60 characters and the payload under
+ * 4 KB. `card-start` (a run in a chat a phone sent `chat:send`/`chat:queue`
+ * to in the last two hours, or one a watch woke) also pushes `event: 'start'`
+ * with `attributes-type: 'NekkoCardAttributes'` to each phone with no card up
+ * and no open socket in the room, once until it registers again. A push that
+ * only changes a step, a reply or a time goes at APNs priority 5, anything
+ * else at 10; `computerId` and `computerName` are kept to 64 UTF-8 bytes. Unlike every other push the card carries
+ * chat text in the clear (ActivityKit draws only what the push holds), so it
+ * passes through the relay and Apple's push service at Standard and Detailed.
+ * APNs delivery and push-to-start are unverified until the relay has the
+ * production APNs key and a device runs it.
  */
 export interface RelayClientOpen {
   type: 'client-open';

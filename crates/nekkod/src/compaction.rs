@@ -31,19 +31,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
-
 /// One running compaction.
 struct Job {
     abort: AbortController,
@@ -118,12 +105,10 @@ impl Compactions {
             }
             return Ok(Started::Running(running));
         }
-        if crate::routes::running_chats(ctx).iter().any(|s| s == session_id)
-            || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(session_id))
-        {
+        if crate::routes::running_chats(ctx).iter().any(|s| s == session_id) || ctx.admission.is_admitting(session_id) {
             return Err("Wait for the current reply to finish before compacting.".into());
         }
-        let store = ctx.sessions.clone().ok_or("Session not found.")?;
+        let store = ctx.sessions.clone();
         let (st, id) = (store.clone(), session_id.to_string());
         let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
         let settings = crate::settings::current(ctx).await;
@@ -255,10 +240,10 @@ async fn run(
     }
 
     let marker = v::summary_message(
-        &format!("compact_{}", uuid()),
+        &format!("compact_{}", nekko_js::uuid()),
         &summary,
         plan.summarized,
-        plan.created_at.as_ref().unwrap_or(&json!(now_ms())),
+        plan.created_at.as_ref().unwrap_or(&json!(nekko_js::now_ms())),
     );
     let target_new = lock(&job.progress).get("target") == Some(&json!("new"));
     let (st, id, before) = (store.clone(), session_id.clone(), session.clone());
@@ -343,8 +328,8 @@ impl SummaryCalls {
             None => v::SUMMARY_SYSTEM.to_string(),
         };
         let mut user = ChatMessage::new(Role::User, prompt);
-        user.id = uuid();
-        user.extra.insert("createdAt".into(), json!(now_ms()));
+        user.id = nekko_js::uuid();
+        user.extra.insert("createdAt".into(), json!(nekko_js::now_ms()));
         let request = ChatRequest {
             model: self.model.clone(),
             messages: vec![user],
@@ -371,17 +356,12 @@ impl SummaryCalls {
                             &self.model,
                             &self.session_id,
                             &item,
-                            now_ms() as f64,
+                            nekko_js::now_ms() as f64,
                         );
-                        if self.ctx.accounts.enabled() {
-                            self.ctx.accounts.usage_line(&record);
-                        }
+                        self.ctx.accounts.usage_line(&record);
                     }
                     Ok(ProviderChunk::Done) => {
-                        if subscription
-                            && let Some(key) = token_key.clone()
-                            && self.ctx.accounts.enabled()
-                        {
+                        if subscription && let Some(key) = token_key.clone() {
                             let accounts = self.ctx.accounts.clone();
                             tokio::spawn(async move {
                                 accounts.poll(&key).await;

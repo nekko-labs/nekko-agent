@@ -31,6 +31,16 @@ struct ConnectionView: View {
                     }
                     LabeledContent("Status", value: stateName(store.conn))
                     LabeledContent("Tailscale on this iPhone", value: tailnet ? "Connected" : "Off")
+                    // Reach the Tailscale switch straight from here when it's off,
+                    // so there's always a one-tap way back to the tailnet even
+                    // when the state is .idle or .denied (TS-4).
+                    if !tailnet {
+                        Button { app.openTailscale() } label: {
+                            Label("Open Tailscale to reconnect", systemImage: "network")
+                        }
+                        .accessibilityIdentifier("open-tailscale-status")
+                        .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
+                    }
                     if let at = store.connectionLog.lastOnline, store.conn != .online {
                         LabeledContent("Last online") { Text(at, format: .relative(presentation: .named)) }
                     }
@@ -50,6 +60,16 @@ struct ConnectionView: View {
                             Button { app.openTailscale() } label: { Label("Open Tailscale", systemImage: "network") }
                                 .accessibilityIdentifier("open-tailscale")
                                 .accessibilityHint("Opens the Tailscale app, or the App Store if it isn’t installed.")
+                        }
+                        // Pair key no longer matches, or the computer refused
+                        // the key: the only fix is to rescan a fresh code.
+                        if store.connDetail == RelayStatus.badPairingKey
+                            || (store.conn == .denied && store.denied == .badKey) {
+                            Button { app.openPair = true } label: {
+                                Label("Pair again", systemImage: "qrcode.viewfinder")
+                            }
+                            .accessibilityIdentifier("pair-again")
+                            .accessibilityHint("Opens the pairing screen so you can scan a fresh code from your computer.")
                         }
                         if store.conn != .denied {
                             Button { store.connect(c.id) } label: { Label("Try again now", systemImage: "arrow.clockwise") }
@@ -104,6 +124,7 @@ struct ConnectionView: View {
                 Text("Pair a computer first.").foregroundStyle(palette.inkSoft)
             }
         }
+        .appBackground()
         .navigationTitle("Connection")
         .onAppear { tailnet = Tailnet.isConnected }
         .onChange(of: phase) { _, p in if p == .active { tailnet = Tailnet.isConnected } }
@@ -111,6 +132,7 @@ struct ConnectionView: View {
     }
 }
 
+@MainActor
 private var appVersion: String {
     let info = Bundle.main.infoDictionary
     let v = info?["CFBundleShortVersionString"] as? String ?? "?"

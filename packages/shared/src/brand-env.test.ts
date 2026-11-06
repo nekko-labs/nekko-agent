@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { brandEnv, ENV_PREFIX, ENV_PREFIXES } from './brand-env.js';
+import { brandEnv } from './brand-env.js';
 
 describe('brandEnv', () => {
-  it('advertises the current brand', () => {
-    expect(ENV_PREFIX).toBe('NEKKO_');
-    expect(ENV_PREFIXES).toEqual(['NEKKO_']);
-  });
-
   it('reads the current name', () => {
     expect(brandEnv('TOKEN', { NEKKO_TOKEN: 'new' })).toBe('new');
   });

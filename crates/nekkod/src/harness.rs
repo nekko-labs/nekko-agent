@@ -6,7 +6,7 @@
 //!   tasks (a reap would end them). The chat stores Claude Code's session id
 //!   (`claudeCodeSessionId`), so the next turn after a reap, a crash or an app
 //!   restart continues the conversation with `--resume`.
-//! - A change of model, permission mode or folders relaunches the child
+//! - A change of model, effort, permission mode or folders relaunches the child
 //!   (with `--resume`): those are launch flags. A change of Claude Code
 //!   account relaunches it too, as a new Claude Code session, since the old
 //!   one lives in the other account's folder (turns.rs).
@@ -18,7 +18,11 @@
 //! - Between turns the child is watched ([`Harness::idle`]): Claude Code
 //!   wakes on its own when a background command or sub-agent finishes, and
 //!   that work becomes a Nekko turn (turns.rs `wake`), so its permission
-//!   prompts have a turn to wait in and the chat shows it working.
+//!   prompts have a turn to wait in and the chat shows it working. A wake-up
+//!   reads the child that woke whatever flags it was launched with.
+//! - The number of background tasks each child runs is published as it
+//!   changes (`claude_code_background`) and kept for `claude:backgroundTasks`,
+//!   so the chat can say Claude Code is still working after a turn's Done.
 //!
 //! The turn itself (events, transcript, Stop and Steer) runs in turns.rs
 //! (`claude_code_turn`) over [`nekko_harness::run_turn`].
@@ -104,6 +108,15 @@ pub struct Harness {
     /// own stream (`rate_limit_event`, `/usage`), by provider id. Shown only
     /// where the `usage_limits` policy row allows (`claude:planUsage`).
     plan_usage: Mutex<HashMap<String, serde_json::Value>>,
+    /// Background tasks each chat's Claude Code still runs, by chat id
+    /// (`claude:backgroundTasks`); a chat with none is not listed.
+    background: Mutex<HashMap<String, usize>>,
+    /// How many of those tasks are watchers, by chat id, for the chat summaries;
+    /// a chat with none is not listed.
+    watchers: Mutex<HashMap<String, usize>>,
+    /// Sub-agents still running, by parent chat and delegating call. They
+    /// outlive a turn when they run in the background (subagents.rs).
+    subagents: Mutex<HashMap<String, HashMap<String, crate::subagents::Run>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,6 +149,7 @@ pub struct Wanted {
     pub cwd: PathBuf,
     pub add_dirs: Vec<PathBuf>,
     pub model: Option<String>,
+    pub effort: Option<String>,
     pub permission_mode: PermissionMode,
     /// The provider's Claude Code account folder; `None` for the default login.
     pub config_dir: Option<PathBuf>,
@@ -153,6 +167,7 @@ impl Wanted {
         spec.cwd == self.cwd
             && spec.add_dirs == self.add_dirs
             && spec.model == self.model
+            && spec.effort == self.effort
             && spec.permission_mode == self.permission_mode
             && spec.config_dir == self.config_dir
     }
@@ -168,11 +183,15 @@ impl Wanted {
             cwd: self.cwd.clone(),
             session,
             model: self.model.clone(),
+            effort: self.effort.clone(),
             permission_mode: self.permission_mode,
             mcp_config: None,
             permission_prompt_tool: None,
             add_dirs: self.add_dirs.clone(),
             config_dir: self.config_dir.clone(),
+            // Claude Code runs read-only git without asking: keep repository
+            // configuration from naming programs those commands run.
+            env: nekko_tools::gitguard::agent_git_env(),
         }
     }
 }
@@ -194,6 +213,65 @@ impl Harness {
     /// What a provider's Claude Code last reported about plan usage, if anything.
     pub fn plan_usage(&self, provider_id: &str) -> Option<serde_json::Value> {
         lock(&self.plan_usage).get(provider_id).cloned()
+    }
+
+    /// A chat's Claude Code now runs `n` background tasks, `watchers` of them watchers.
+    pub fn note_background(&self, session_id: &str, n: usize, watchers: usize) {
+        for (all, count) in [(&self.background, n), (&self.watchers, watchers)] {
+            let mut all = lock(all);
+            if count == 0 {
+                all.remove(session_id);
+            } else {
+                all.insert(session_id.to_string(), count);
+            }
+        }
+    }
+
+    pub fn add_subagent(&self, parent: &str, call_id: &str, run: crate::subagents::Run) {
+        lock(&self.subagents).entry(parent.to_string()).or_default().insert(call_id.to_string(), run);
+    }
+
+    pub fn with_subagent<T>(
+        &self,
+        parent: &str,
+        call_id: &str,
+        f: impl FnOnce(&mut crate::subagents::Run) -> T,
+    ) -> Option<T> {
+        lock(&self.subagents).get_mut(parent)?.get_mut(call_id).map(f)
+    }
+
+    pub fn remove_subagent(&self, parent: &str, call_id: &str) -> Option<crate::subagents::Run> {
+        let mut all = lock(&self.subagents);
+        let runs = all.get_mut(parent)?;
+        let run = runs.remove(call_id);
+        if runs.is_empty() {
+            all.remove(parent);
+        }
+        run
+    }
+
+    /// The calls of a chat's running sub-agents, those that run in the background only if asked.
+    pub fn open_subagents(&self, parent: &str, background_too: bool) -> Vec<String> {
+        let all = lock(&self.subagents);
+        let runs = all.get(parent).into_iter().flatten();
+        runs.filter(|(_, run)| background_too || !run.background).map(|(id, _)| id.clone()).collect()
+    }
+
+    /// The child chats of every running sub-agent, for `chat:running`.
+    pub fn running_subagents(&self) -> Vec<String> {
+        lock(&self.subagents).values().flatten().map(|(_, run)| run.chat_id()).collect()
+    }
+
+    /// `claude:backgroundTasks`: how many background tasks each chat's Claude
+    /// Code runs, for the chats that run any.
+    pub fn background_tasks(&self) -> serde_json::Value {
+        serde_json::json!(*lock(&self.background))
+    }
+
+    /// How many background watchers each chat's Claude Code runs, for the
+    /// chats that run any.
+    pub fn background_watchers(&self) -> HashMap<String, usize> {
+        lock(&self.watchers).clone()
     }
 
     /// The chat's slot (made on first use).
@@ -428,11 +506,23 @@ const SHELL_TOOLS: &[&str] = &["Bash", "PowerShell"];
 const EDIT_TOOLS: &[&str] = &["Edit", "MultiEdit", "Write", "NotebookEdit"];
 
 /// Whether `path` is inside one of the chat's folders (relative paths are
-/// the first folder's). Case-insensitive on Windows, as its paths are.
+/// the first folder's). Case-insensitive on Windows, as its paths are. Both
+/// where the path is written and where it really is (links followed) must
+/// be inside: a link in a folder may point anywhere.
 pub fn inside(path: &str, roots: &[PathBuf]) -> bool {
     let Some(first) = roots.first() else { return false };
     let p = std::path::Path::new(path);
     let full = if p.is_absolute() { p.to_path_buf() } else { first.join(p) };
+    if !lexically_inside(&full, roots) {
+        return false;
+    }
+    let real = PathBuf::from(nekko_tools::real_location(&full.to_string_lossy()));
+    let real_roots: Vec<PathBuf> =
+        roots.iter().map(|r| PathBuf::from(nekko_tools::real_location(&r.to_string_lossy()))).collect();
+    lexically_inside(&real, &real_roots)
+}
+
+fn lexically_inside(full: &std::path::Path, roots: &[PathBuf]) -> bool {
     let norm = |p: &std::path::Path| -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for c in p.components() {
@@ -449,7 +539,7 @@ pub fn inside(path: &str, roots: &[PathBuf]) -> bool {
         }
         out
     };
-    let full = norm(&full);
+    let full = norm(full);
     roots.iter().any(|r| {
         let r = norm(r);
         full.len() >= r.len() && full[..r.len()] == r[..]
@@ -523,6 +613,24 @@ pub fn decide(
     }
 }
 
+/// The input a prompt Nekko allowed without asking runs with: a shell command
+/// gets `--no-ext-diff --no-textconv` on its git diff, log and show, so it
+/// cannot run a diff or textconv program named in repository configuration.
+pub fn auto_run_input(tool: &str, input: &serde_json::Value) -> serde_json::Value {
+    let mut out = input.clone();
+    if !SHELL_TOOLS.contains(&tool) {
+        return out;
+    }
+    let dialect = if tool == "PowerShell" { nekko_tools::Dialect::PowerShell } else { nekko_tools::Dialect::Posix };
+    if let Some(command) = input.get("command").and_then(serde_json::Value::as_str) {
+        let hardened = nekko_tools::gitguard::harden_git_command(command, dialect);
+        if hardened != command {
+            out["command"] = serde_json::Value::String(hardened);
+        }
+    }
+    out
+}
+
 /// `nekko-agent` on PATH: the launcher the app installs, or the npm package.
 pub fn cli_on_path() -> Option<PathBuf> {
     let names: &[&str] = if cfg!(windows) { &["nekko-agent.cmd", "nekko-agent.exe"] } else { &["nekko-agent"] };
@@ -540,12 +648,14 @@ pub fn new_token() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn wanted() -> Wanted {
         Wanted {
             cwd: "C:/w".into(),
             add_dirs: vec![],
             model: Some("opus".into()),
+            effort: None,
             permission_mode: PermissionMode::Default,
             config_dir: None,
         }
@@ -639,6 +749,66 @@ mod tests {
     }
 
     #[test]
+    fn a_link_in_a_chat_folder_is_judged_where_it_points() {
+        let base = std::env::temp_dir().join(format!("nekkod-harness-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let (ws, outside) = (base.join("ws"), base.join("outside"));
+        std::fs::create_dir_all(&ws).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        #[cfg(unix)]
+        let linked = std::os::unix::fs::symlink(&outside, ws.join("link"));
+        // A junction needs no privilege, unlike a symlink.
+        #[cfg(windows)]
+        let linked = std::os::windows::fs::symlink_dir(&outside, ws.join("link")).or_else(|_| {
+            let ok = std::process::Command::new("cmd")
+                .args(["/d", "/c", "mklink", "/J"])
+                .arg(ws.join("link"))
+                .arg(&outside)
+                .output()
+                .is_ok_and(|o| o.status.success());
+            if ok { Ok(()) } else { Err(std::io::Error::other("mklink /J failed")) }
+        });
+        if linked.is_err() {
+            eprintln!("cannot create a symlink here; skipped");
+            let _ = std::fs::remove_dir_all(&base);
+            return;
+        }
+        let roots = vec![ws.clone()];
+        assert!(inside(&ws.join("real.txt").to_string_lossy(), &roots));
+        assert!(!inside(&ws.join("link").join("target.txt").to_string_lossy(), &roots));
+        assert!(!inside("link/target.txt", &roots));
+        assert_eq!(
+            decide("guardrails", "Write", &json!({ "file_path": ws.join("link").join("t.txt") }), &[], &roots),
+            Decision::Ask {
+                reason: format!(
+                    "Claude Code wants to change a file outside this chat's folders: {}",
+                    ws.join("link").join("t.txt").display()
+                ),
+                severity: "high"
+            }
+        );
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn auto_allowed_shell_commands_turn_off_git_drivers() {
+        let out = auto_run_input("Bash", &json!({ "command": "git diff && git status", "description": "d" }));
+        assert_eq!(out["command"], "git diff --no-ext-diff --no-textconv && git status");
+        assert_eq!(out["description"], "d");
+        let same = json!({ "command": "ls -la" });
+        assert_eq!(auto_run_input("Bash", &same), same);
+        let edit = json!({ "file_path": "a", "command": "git diff" });
+        assert_eq!(auto_run_input("Write", &edit), edit);
+    }
+
+    #[test]
+    fn claude_code_launches_with_the_agent_git_env() {
+        let w = wanted();
+        let spec = w.launch(bin(), None);
+        assert!(spec.env.iter().any(|(_, v)| v.as_deref() == Some("safe.bareRepository")), "{:?}", spec.env);
+    }
+
+    #[test]
     fn the_mcp_config_starts_the_bridge_with_its_token() {
         let cmd = BridgeCommand::electron("C:/app/Nekko.exe", "C:/app/resources/cli/nekko-agent-cli.cjs");
         let c = cmd.mcp_config("http://127.0.0.1:5000", "tok");
@@ -717,6 +887,9 @@ mod tests {
         assert!(w.matches(&resumed));
         let mut other = w.clone();
         other.model = Some("sonnet".into());
+        assert!(!other.matches(&resumed));
+        other = w.clone();
+        other.effort = Some("high".into());
         assert!(!other.matches(&resumed));
         other = w.clone();
         other.permission_mode = PermissionMode::AcceptEdits;

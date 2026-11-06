@@ -91,7 +91,7 @@ pub fn sub_agent_failure(call_id: &str, message: &str) -> Value {
     } else {
         "delegation_failed"
     };
-    let body =
-        json!({ "ok": false, "code": code, "message": format!("Sub-agent failed: {message}"), "fallbackUsed": false });
+    let body = json!({ "ok": false, "code": code, "message": format!("Sub-agent failed: {message}"), "fallbackUsed": false,
+            "recovery": "Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model." });
     json!({ "toolCallId": call_id, "output": nekko_js::stringify(&body), "isError": true })
 }

@@ -378,7 +378,7 @@
    "input": "The exact model ID is not available from the target provider.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"model_unavailable\",\"message\":\"Sub-agent failed: The exact model ID is not available from the target provider.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"model_unavailable\",\"message\":\"Sub-agent failed: The exact model ID is not available from the target provider.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -386,7 +386,7 @@
    "input": "The selected model is not a chat model. No child was created.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"not_chat_model\",\"message\":\"Sub-agent failed: The selected model is not a chat model. No child was created.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"not_chat_model\",\"message\":\"Sub-agent failed: The selected model is not a chat model. No child was created.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -394,7 +394,7 @@
    "input": "Could not verify the target provider model list.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"model_list_unavailable\",\"message\":\"Sub-agent failed: Could not verify the target provider model list.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"model_list_unavailable\",\"message\":\"Sub-agent failed: Could not verify the target provider model list.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -402,7 +402,7 @@
    "input": "Target provider is unknown or disabled.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"provider_unavailable\",\"message\":\"Sub-agent failed: Target provider is unknown or disabled.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"provider_unavailable\",\"message\":\"Sub-agent failed: Target provider is unknown or disabled.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -410,7 +410,7 @@
    "input": "Target provider requires a valid HTTP(S) endpoint.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"invalid_endpoint\",\"message\":\"Sub-agent failed: Target provider requires a valid HTTP(S) endpoint.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"invalid_endpoint\",\"message\":\"Sub-agent failed: Target provider requires a valid HTTP(S) endpoint.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -418,7 +418,7 @@
    "input": "Delegation cancelled before creating a child.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"cancelled\",\"message\":\"Sub-agent failed: Delegation cancelled before creating a child.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"cancelled\",\"message\":\"Sub-agent failed: Delegation cancelled before creating a child.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -426,7 +426,7 @@
    "input": "Stopped with the chat.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"delegation_failed\",\"message\":\"Sub-agent failed: Stopped with the chat.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"delegation_failed\",\"message\":\"Sub-agent failed: Stopped with the chat.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -434,7 +434,7 @@
    "input": "A nonblank task is required for the sub-agent.",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"delegation_failed\",\"message\":\"Sub-agent failed: A nonblank task is required for the sub-agent.\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"delegation_failed\",\"message\":\"Sub-agent failed: A nonblank task is required for the sub-agent.\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   },
@@ -442,7 +442,7 @@
    "input": "quote \"this\" \\ and \n newline",
    "output": {
     "toolCallId": "call_1",
-    "output": "{\"ok\":false,\"code\":\"delegation_failed\",\"message\":\"Sub-agent failed: quote \\\"this\\\" \\\\ and \\n newline\",\"fallbackUsed\":false}",
+    "output": "{\"ok\":false,\"code\":\"delegation_failed\",\"message\":\"Sub-agent failed: quote \\\"this\\\" \\\\ and \\n newline\",\"fallbackUsed\":false,\"recovery\":\"Delegation did not complete. Report this failure to the user immediately. If the user has not stopped or paused the task, inspect the child's saved checkpoint and continue directly when safe; otherwise name the exact blocker. Do not silently stop, retry the same failure, or switch provider/model.\"}",
     "isError": true
    }
   }

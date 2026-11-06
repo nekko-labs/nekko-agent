@@ -37,11 +37,14 @@ const SETTINGS = {
   themePreset: 'nebula',
   defaultProviderId: 'p1',
   defaultModelId: 'm1',
-  favoriteModels: ['p1::m1'],
+  favoriteModels: ['p1::m1'], machineIcon: 'tower',
   defaultChatMode: 'ask',
+  defaultWorkspaceIds: ['w'],
+  effort: 'high',
   chatPaneAction: 'complete',
   skipDeleteConfirmation: false,
   automationsPaused: false,
+  orchestration: { strategy: 'solo', maxDepth: 2, maxParallel: 4, delegationRoute: { providerId: 'p1', modelId: 'm1' } },
   prompts: [{ id: 'fix', name: 'fix', body: 'Find and fix the bug.' }],
   sandboxMode: 'workspace',
   providers: [{ id: 'p1', kind: 'anthropic', label: 'Claude', baseUrl: 'https://x', apiKey: 'sk-secret', tokenKey: 'tk', enabled: true }],
@@ -73,10 +76,10 @@ describe('phone channel allowlist', () => {
   it('refuses the dangerous channels and anything unlisted', () => {
     for (const c of [
       'data:wipe', 'settings:reset', 'remote:revoke', 'remote:rotate', 'remote:enable', 'remote:pair',
-      'terminal:run', 'terminal:update', 'terminals:list:native', 'terminal:attach', 'file:write', 'workspace:addByPath',
-      'workspace:remove', 'voice:install', 'voice:uninstall', 'connector:connect', 'connector:disconnect',
+      'terminal:run', 'terminal:update', 'terminals:list:native', 'terminal:attach', 'file:write',
+      'voice:install', 'voice:uninstall', 'connector:connect', 'connector:disconnect',
       'mcp:status', 'mcp:hypergate:connect', 'providers:save', 'oauth:begin', 'file:read', 'task:create',
-      'turn:pending', 'no:such',
+      'turn:pending', 'runner:list', 'runner:connect', 'runner:githubStart', 'runner:githubCancel', 'runner:setForkApproval', 'no:such',
     ]) {
       expect(phoneChannelAllowed(c), c).toBe(false);
       expect(code(() => screenPhoneCall(c, [])), c).toBe('channel-denied');
@@ -85,7 +88,43 @@ describe('phone channel allowlist', () => {
   });
 });
 
+describe('saved folders from a phone', () => {
+  it('sets only bounded supporting folder ids through the signed change gate', async () => {
+    expect(phoneChannelClass('session:setSupportingWorkspaces')).toBe('change');
+    const dispatch = vi.fn(() => ({ id: 'chat' }));
+    await callFromPhone(dispatch, 'session:setSupportingWorkspaces', ['chat', ['docs']]);
+    expect(dispatch).toHaveBeenCalledWith('session:setSupportingWorkspaces', ['chat', ['docs']]);
+    for (const args of [[], ['', []], ['chat', ['/private']], ['chat', [], 'extra']]) {
+      expect(code(() => screenPhoneCall('session:setSupportingWorkspaces', args))).toBe('value-invalid');
+    }
+  });
+  for (const [channel, value] of [['workspace:addByPath', '/Users/me/project'], ['workspace:remove', 'ws_123']]) {
+    it(`screens and forwards ${channel} with its existing positional payload and list result`, async () => {
+      expect(phoneChannelAllowed(channel)).toBe(true);
+      expect(phoneChannelClass(channel)).toBe('change');
+      const folders = [{ id: 'ws_123', name: 'project', path: '/Users/me/project', addedAt: 1 }];
+      const dispatch = vi.fn(() => folders);
+      expect(await callFromPhone(dispatch, channel, [value])).toEqual(folders);
+      expect(dispatch).toHaveBeenCalledExactlyOnceWith(channel, [value]);
+      dispatch.mockClear();
+      for (const invalid of [undefined, null, 1, {}, [], '', '  ', 'a\0b']) {
+        await expect(callFromPhone(dispatch, channel, [invalid])).rejects.toThrow(/value-invalid/);
+      }
+      await expect(callFromPhone(dispatch, channel, [value, {}])).rejects.toThrow(/option-denied/);
+      expect(dispatch).not.toHaveBeenCalled();
+    });
+  }
+});
+
 describe('settings from a phone', () => {
+  it('allows only bounded opaque default folder ids, never paths', () => {
+    for (const ids of [[], ['ws_123', 'folder-2']]) {
+      expect(code(() => screenPhoneCall('settings:update', [{ defaultWorkspaceIds: ids }]))).toBe('ok');
+    }
+    for (const ids of [null, 'ws_123', ['/Users/me'], [''], [3], ['a'.repeat(257)], Array(101).fill('id')]) {
+      expect(code(() => screenPhoneCall('settings:update', [{ defaultWorkspaceIds: ids }]))).toBe('value-invalid');
+    }
+  });
   it('accepts only the listed keys with valid values', () => {
     expect(code(() => screenPhoneCall('settings:update', [{ defaultChatMode: 'guardrails', chatPaneAction: 'delete' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('settings:update', [{ voice: { enabled: false, language: 'es' } }]))).toBe('ok');
@@ -137,9 +176,19 @@ describe('settings from a phone', () => {
       expect(text).not.toMatch(/secret|sk-|hf_|ghp_|tokenKey|apiKey|providers|guardrails|workspaces|hooks|modelPath|private/);
       expect(Object.keys(view).sort()).toEqual([...new Set(PHONE_SETTINGS_VIEW.map((p) => p.split('.')[0]))].sort());
       expect(view.voice).toEqual({ enabled: true, language: 'en' });
+      expect(view.orchestration).toEqual({ strategy: 'solo' });
       expect(view.defaultModelId).toBe('m1');
+      expect(view.effort).toBe('high');
     }
     for (const key of PHONE_SETTINGS_KEYS) expect(PHONE_SETTINGS_VIEW as readonly string[]).toContain(key);
+  });
+
+  it('exposes effort read-only, never as a phone-writable global setting', () => {
+    expect(code(() => screenPhoneCall('settings:update', [{ effort: 'max' }]))).toBe('setting-denied');
+  });
+
+  it('exposes the delegation strategy read-only', () => {
+    expect(code(() => screenPhoneCall('settings:update', [{ orchestration: { strategy: 'swarm' } }]))).toBe('setting-denied');
   });
 
   it('strips provider records to id, kind, label and enabled', () => {
@@ -193,20 +242,43 @@ describe('settings from a phone', () => {
 });
 
 describe('chat options from a phone', () => {
-  it('allows the model, completing and organising, not tools or isolation', () => {
+  it('allows every run setting, checking the closed ones', () => {
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { providerId: 'p', modelId: 'm' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { archivedAt: 123 }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 'xhigh' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 'ludicrous' }]))).toBe('value-invalid');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', { effort: 3 }]))).toBe('value-invalid');
-    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { disabledTools: [] }]))).toBe('option-denied');
-    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('option-denied');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { disabledTools: [] }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { executionMode: 'local' }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { workMode: 'design', autoModel: true }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { autoModel: 'yes' }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { unattended: true }]))).toBe('option-denied');
     expect(code(() => screenPhoneCall('session:setOptions', ['s1', null]))).toBe('value-invalid');
   });
 
   it('allows a plain chat:send, not attaching files on the computer', () => {
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', providerId: 'p', modelId: 'm', text: 'hi' }]))).toBe('ok');
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', attachedPaths: ['/etc/passwd'] }]))).toBe('option-denied');
+  });
+
+  it('lets a phone send at the next step and interrupt, and checks what it sends', () => {
+    expect(code(() => screenPhoneCall('chat:steer', ['s', 'look at the tests first']))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:steer', ['', 'hi']))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:steer', ['s', '   ']))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:steer', ['s', 5]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 0]))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 1, { providerId: 'p', modelId: 'm' }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', -1]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 1.5]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 0, { providerId: 'p', yolo: true }]))).toBe('option-denied');
+    expect(code(() => screenPhoneCall('chat:interruptQueued', ['s', 0, 'p']))).toBe('value-invalid');
+  });
+
+  it('answers chat:steer with the same view as session:get', () => {
+    const messages = Array.from({ length: 400 }, (_, i) => ({ id: String(i), role: 'user', content: 'x'.repeat(9000) }));
+    const view = redactPhoneResult('chat:steer', { id: 's', messages }) as { messages: unknown[] };
+    expect(view).toEqual(redactPhoneResult('session:get', { id: 's', messages }));
+    expect(view.messages.length).toBeLessThan(400);
   });
 
   it('lets an outbox id through on chat:send and chat:queue, only a short id', () => {

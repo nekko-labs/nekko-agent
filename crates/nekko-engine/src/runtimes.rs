@@ -6,7 +6,7 @@
 //! until the engine itself moves.
 
 use crate::capacity::{self, AutoFitInput, FitRequest, Hardware, ModelFacts, PlanOptions};
-use crate::{BoxFuture, js_round, num, to_fixed};
+use crate::{BoxFuture, js_round, num};
 use regress::Regex;
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -119,7 +119,7 @@ pub fn is_localhost_url(base: &str) -> bool {
 /// `lmsBin`: LM Studio's bundled CLI, else `lms` on PATH.
 pub fn lms_bin() -> String {
     let name = if cfg!(windows) { "lms.exe" } else { "lms" };
-    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+    let home = nekko_js::home_dir();
     match home.map(|h| h.join(".lmstudio").join("bin").join(name)) {
         Some(p) if p.exists() => p.to_string_lossy().into_owned(),
         _ => "lms".into(),
@@ -207,10 +207,6 @@ struct Supervised {
     child: tokio::process::Child,
     started_at: f64,
     log: Arc<Mutex<Vec<String>>>,
-}
-
-fn now_ms() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -685,7 +681,16 @@ impl Runtimes {
                     options.insert("num_ctx".into(), p("contextTokens").cloned().unwrap_or(Value::Null));
                 }
                 if let Some(g) = p("gpuLayers") {
-                    options.insert("num_gpu".into(), g.clone());
+                    // Ollama, like llama.cpp, counts the output layer as one past the
+                    // model's blocks: `num_gpu` equal to the block count (what a full
+                    // offload's `gpuLayers` holds) leaves it on the CPU, so all of
+                    // them asks for everything (see `--n-gpu-layers` in launch.rs).
+                    let asked = nekko_js::to_number(Some(g));
+                    let full = g.is_number()
+                        && asked > 0.0
+                        && Self::info_number(&self.ollama_show(base, model).await["model_info"], "block_count")
+                            .is_some_and(|blocks| asked >= blocks);
+                    options.insert("num_gpu".into(), if full { json!(999) } else { g.clone() });
                 }
                 let mut body =
                     Obj::default().set("model", model).set("prompt", "").set("options", Value::Object(options));
@@ -725,7 +730,11 @@ impl Runtimes {
                                         nekko_js::to_number(Some(g)) / nekko_js::to_number(Some(layers)),
                                     ),
                                 );
-                                Some(if share >= 0.999 { "max".into() } else { to_fixed(share, 2) })
+                                Some(if share >= 0.999 {
+                                    "max".into()
+                                } else {
+                                    nekko_js::to_fixed_unsigned_zero(share, 2)
+                                })
                             }
                         }
                     }
@@ -886,7 +895,7 @@ impl Runtimes {
                 }
             });
         }
-        let started_at = now_ms();
+        let started_at = nekko_js::now_ms_f64();
         let deadline = Instant::now() + Duration::from_secs(60);
         while Instant::now() < deadline {
             if let Ok(Some(status)) = child.try_wait() {
@@ -1021,7 +1030,7 @@ impl Runtimes {
                     .set("running", true)
                     .set("owned", false)
                     .set("baseUrl", base)
-                    .set("startedAt", num(now_ms()))
+                    .set("startedAt", num(nekko_js::now_ms_f64()))
                     .set("resident", json!([]))
                     .opt("log", log.map(|l| json!(l)))
                     .done()

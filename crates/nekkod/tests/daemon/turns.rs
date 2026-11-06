@@ -3,6 +3,44 @@
 use crate::common::*;
 
 #[tokio::test(flavor = "multi_thread")]
+async fn thinking_ignores_stale_chat_flags_and_only_accepts_local_expert_off() {
+    for (name, kind, managed, admitted, expected) in [
+        ("cloud-stale", "openai", false, false, None),
+        ("local-stale", "openai-compat", false, false, Some(true)),
+        ("expert-off", "llamacpp", true, false, Some(false)),
+        ("expert-on", "llamacpp", true, true, Some(true)),
+    ] {
+        let rig = turn_rig(
+            name,
+            json!({
+                "id": "s_think", "title": "Named", "workspaceId": "w1", "thinking": false,
+                "messages": [], "createdAt": 1, "updatedAt": 1
+            }),
+        );
+        let model = scripted_model(vec![say_text("answer")]).await;
+        let mut spec = turn_spec(&rig, &model, "t_think", "s_think", json!({}));
+        spec["facts"]["provider"]["kind"] = json!(kind);
+        spec["facts"]["provider"]["managedCachePrompt"] = json!(managed);
+        spec["facts"]["thinking"] = json!(admitted);
+        let (status, started) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{name}: {started}");
+        let (_, end) = turn_record(&rig, "t_think", "s_think").await;
+        assert_eq!(end["stop"], "complete", "{name}: {end}");
+        let requests = model.requests.lock().unwrap();
+        assert!(!requests.is_empty());
+        assert_eq!(
+            requests[0].pointer("/chat_template_kwargs/enable_thinking").and_then(Value::as_bool),
+            expected,
+            "{name}"
+        );
+        if expected.is_none() {
+            assert!(requests[0].get("chat_template_kwargs").is_none());
+        }
+        assert_eq!(saved_session(&rig, "s_think")["thinking"], false, "no migration needed");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn large_image_reply_completes_and_followup_starts_with_local_provider() {
     use axum::routing::post as route_post;
 
@@ -93,6 +131,167 @@ fn event_types(events: &[Value]) -> Vec<String> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn admission_switches_provider_effort_without_sending_the_inherited_unsupported_rung() {
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let rig = turn_rig(
+        "switch-effort",
+        json!({
+            "id":"s_switch_effort", "title":"Named", "titleAuto":false, "workspaceId":"w1",
+            "messages":[], "createdAt":1, "updatedAt":1
+        }),
+    );
+    let requests = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let lists = Arc::new(AtomicUsize::new(0));
+    let counted = lists.clone();
+    let seen = requests.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let app = axum::Router::new()
+        .route(
+            "/codex/models",
+            axum::routing::get(move |headers: axum::http::HeaderMap| {
+                counted.fetch_add(1, Ordering::SeqCst);
+                let extra = if headers.get("authorization").unwrap() == "Bearer source" { "ultra" } else { "high" };
+                async move {
+                    axum::Json(json!({"models":[{
+                        "slug":"gpt-5", "supported_reasoning_levels":[{"effort":"medium"}, {"effort":extra}],
+                        "default_reasoning_level":"medium"
+                    }]}))
+                }
+            }),
+        )
+        .route(
+            "/codex/responses",
+            axum::routing::post(move |axum::Json(request): axum::Json<Value>| {
+                seen.lock().unwrap().push(request);
+                async {
+                    let body = format!(
+                        "data: {}\n\ndata: {}\n\n",
+                        json!({"type":"response.output_text.delta", "delta":"hello"}),
+                        json!({"type":"response.completed", "response":{"usage":{"input_tokens":1,"output_tokens":1}}})
+                    );
+                    axum::response::Response::builder()
+                        .header("content-type", "text/event-stream")
+                        .body(axum::body::Body::from(body))
+                        .unwrap()
+                }
+            }),
+        );
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let providers: Vec<Value> = ["source", "destination"]
+        .into_iter()
+        .map(|id| {
+            json!({
+                "id":id, "kind":"chatgpt", "enabled":true, "apiKey":id, "accountId":id,
+                "baseUrl":format!("http://127.0.0.1:{port}")
+            })
+        })
+        .collect();
+    write_settings(&rig, json!({"providers":providers, "effort":"ultra", "defaultChatMode":"yolo"})).await;
+    for id in ["source", "destination"] {
+        let (status, models) = post(rig.d.port, "models:list", json!([id]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{models}");
+        assert_eq!(models[0]["effort"]["default"], "medium");
+    }
+    for (provider, saved, expected) in [
+        ("source", None, "ultra"),
+        ("destination", None, "medium"),
+        ("destination", Some("ultra"), "medium"),
+        ("source", Some("ultra"), "ultra"),
+    ] {
+        if let Some(saved) = saved {
+            let (status, body) =
+                post(rig.d.port, "session:setOptions", json!(["s_switch_effort", {"effort":saved}]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+        }
+        let opts = json!({"sessionId":"s_switch_effort", "providerId":provider, "modelId":"gpt-5", "text":"go"});
+        let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        assert_eq!(requests.lock().unwrap().last().expect("request")["reasoning"]["effort"], expected);
+        let replies = std::fs::read_to_string(rig.data.join("replies.jsonl")).unwrap();
+        let reply: Value = serde_json::from_str(replies.lines().last().unwrap()).unwrap();
+        assert_eq!(reply["effort"], expected);
+    }
+    assert_eq!(lists.load(Ordering::SeqCst), 2, "no extra catalogs at admission");
+    assert_eq!(requests.lock().unwrap().len(), 4);
+    assert_eq!(saved_session(&rig, "s_switch_effort")["effort"], "ultra");
+    server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn admission_resolves_inherited_and_saved_effort_from_the_picker_catalog() {
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let session = json!({
+        "id":"s_effort", "title":"Named", "titleAuto":false, "workspaceId":"w1",
+        "messages":[], "createdAt":1, "updatedAt":1
+    });
+    let rig = turn_rig("catalog-effort", session);
+    let requests = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let lists = Arc::new(AtomicUsize::new(0));
+    let counted = lists.clone();
+    let seen = requests.clone();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let app = axum::Router::new()
+        .route("/v1/models", axum::routing::get(move || {
+            counted.fetch_add(1, Ordering::SeqCst);
+            async { axum::Json(json!({"data":[{
+                "id":"claude-opus-5-5", "display_name":"Opus", "capabilities":{"effort":{
+                    "supported":true, "medium":{"supported":true}, "high":{"supported":true}
+                }}
+            }], "has_more":false})) }
+        }))
+        .route("/v1/messages", axum::routing::post(move |axum::Json(request): axum::Json<Value>| {
+            seen.lock().unwrap().push(request);
+            async {
+                let events = [
+                    json!({"type":"message_start", "message":{"usage":{"input_tokens":1}}}),
+                    json!({"type":"content_block_delta", "index":0, "delta":{"type":"text_delta", "text":"hello"}}),
+                    json!({"type":"message_delta", "delta":{"stop_reason":"end_turn"}, "usage":{"output_tokens":1}}),
+                    json!({"type":"message_stop"})
+                ];
+                let body: String = events.iter().map(|e| format!("data: {e}\n\n")).collect();
+                axum::response::Response::builder().header("content-type", "text/event-stream")
+                    .body(axum::body::Body::from(body)).unwrap()
+            }
+        }));
+    let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let provider = json!({"id":"p1", "kind":"anthropic", "enabled":true, "apiKey":"test",
+        "baseUrl":format!("http://127.0.0.1:{port}")});
+    write_settings(&rig, json!({"providers":[provider], "effort":"ultra", "defaultChatMode":"yolo"})).await;
+    // Warm exactly the catalog the picker reads. Admission adds no API calls.
+    let (status, models) = post(rig.d.port, "models:list", json!(["p1"]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{models}");
+    assert_eq!(models[0]["effort"]["levels"][0]["effort"], "medium");
+    for (saved, expected) in [(None, None), (Some("ultra"), None), (Some("high"), Some("high"))] {
+        if let Some(saved) = saved {
+            let (status, body) =
+                post(rig.d.port, "session:setOptions", json!(["s_effort", {"effort":saved}]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+        }
+        let opts = json!({"sessionId":"s_effort", "providerId":"p1", "modelId":"claude-opus-5-5", "text":"go"});
+        let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let requests = requests.lock().unwrap();
+        let request = requests.last().expect("admission sent a request");
+        assert_eq!(request.pointer("/output_config/effort").and_then(Value::as_str), expected, "{request}");
+        let replies = std::fs::read_to_string(rig.data.join("replies.jsonl")).unwrap();
+        let reply: Value = serde_json::from_str(replies.lines().last().unwrap()).unwrap();
+        assert_eq!(reply["effort"], expected.unwrap_or("normal"));
+    }
+    assert_eq!(lists.load(Ordering::SeqCst), 1);
+    assert_eq!(requests.lock().unwrap().len(), 3);
+    assert_eq!(saved_session(&rig, "s_effort")["effort"], "high", "resolution does not rewrite saved preferences");
+    server.abort();
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     let session = json!({
         "id": "s_admit", "title": "New chat", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
@@ -130,6 +329,7 @@ async fn chat_send_is_admitted_and_driven_by_the_daemon() {
     assert_eq!(messages.first().unwrap()["content"], "Explain the pineapple");
     assert_eq!(messages.last().unwrap()["content"], "the answer");
     // The disabled provider's turn was refused; this one ran and ended.
+    until_turn_end_heard(&rig.events, "s_admit").await;
     let events = rig.events.lock().unwrap().clone();
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "error"), "{events:?}");
     assert!(events.iter().any(|e| e["sessionId"] == "s_admit" && e["type"] == "done"), "{events:?}");
@@ -393,6 +593,49 @@ async fn a_daemon_turn_asks_runs_tools_and_saves_every_step() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_chat_moving_along_the_loop_tells_windows_that_do_not_show_it() {
+    let chat = json!({ "id": "s_loop", "title": "Named", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("loop", chat);
+    // Two reads: only the first moves the chat, the second is the same phase.
+    let model = scripted_model(vec![
+        call_tool("c_a", "read_file", json!({ "path": "app.ts" })),
+        call_tool("c_b", "read_file", json!({ "path": "app.ts" })),
+        say_text("read it"),
+    ])
+    .await;
+    let port = rig.d.port;
+    let mut elsewhere = ws(port, &format!("/api/ws?sessions=s_none&token={TOKEN}"), None).await.unwrap();
+    let mut everything = ws(port, &format!("/api/events?token={TOKEN}"), None).await.unwrap();
+    let spec = turn_spec(&rig, &model, "turn_loop", "s_loop", json!({}));
+    let (status, _) = post(port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (quiet, full) = tokio::join!(
+        collect_until_done(&mut elsewhere, &["s_loop"]),
+        collect_until_done(&mut everything, &["s_loop"]),
+    );
+
+    let types = |frames: &[(String, Value)]| -> Vec<String> {
+        frames
+            .iter()
+            .filter(|(ch, p)| ch == "agent:event" && p["sessionId"] == "s_loop")
+            .map(|(_, p)| p["type"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let (quiet, full) = (types(&quiet), types(&full));
+    let first_step = full.iter().position(|t| t == "step").unwrap();
+    let after = full[first_step..].iter().filter(|t| *t == "session_meta").count();
+    assert_eq!(after, 1, "one move, one telling: {full:?}");
+    // A window not showing the chat gets the turn's first event and no other call.
+    assert_eq!(quiet.iter().filter(|t| *t == "tool_call").count(), 1, "{quiet:?}");
+    assert_eq!(quiet.last().map(String::as_str), Some("done"), "{quiet:?}");
+    assert_eq!(quiet[quiet.len() - 2], "session_meta", "the move still reaches it: {quiet:?}");
+
+    let (_, summaries) = post(port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    let summary = summaries.as_array().unwrap().iter().find(|s| s["id"] == "s_loop").unwrap();
+    assert_eq!(summary["phase"], "building");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_daemon_turn_parks_approvals_and_answers_them_itself() {
     let session = json!({
         "id": "s_turn_a", "title": "Named", "mode": "ask", "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1
@@ -448,7 +691,9 @@ async fn stopping_a_daemon_turn_ends_it_and_clears_the_run_marker() {
     let (events, end) = turn_record(&rig, "turn_s", "s_turn_s").await;
     assert_eq!(end["aborted"], true);
     assert!(event_types(&events).contains(&"error".to_string()));
-    assert!(saved_session(&rig, "s_turn_s").get("activeRun").is_none());
+    let saved = saved_session(&rig, "s_turn_s");
+    assert!(saved.get("activeRun").is_none());
+    assert_eq!(saved["turnFailure"]["message"], "Stopped", "a reopened chat still offers Retry");
     let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_s"]), Some(TOKEN)).await;
     assert_eq!(alive, json!(false));
 }
@@ -499,6 +744,7 @@ async fn a_chain_the_daemon_admitted_admits_its_queued_prompts_too() {
     assert_eq!(contents, ["first", "first answer", "and then this", "second answer"]);
     assert_eq!(saved["queue"], json!([]));
     // Two turns of one chain, each told to the UI as it ended.
+    until_turn_end_heard(&rig.events, "s_chain").await;
     let dones =
         rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_chain" && e["type"] == "done").count();
     assert_eq!(dones, 2);
@@ -617,14 +863,6 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     assert_eq!(polled, Value::Null);
     let (_, problem) = post(rig.d.port, "limits:problem", json!(["chatgpt:none"]), Some(TOKEN)).await;
     assert_eq!(problem["kind"], "signed_out");
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn without_a_data_dir_accounting_is_not_served() {
-    let d = start();
-    let (status, body) = post(d.port, "limits:get", json!(["k"]), Some(TOKEN)).await;
-    assert_eq!(status, 400);
-    assert_eq!(body["error"], "unknown channel limits:get");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -889,6 +1127,26 @@ async fn interrupting_starts_the_chosen_queued_prompt_and_keeps_the_others() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_message_sent_mid_turn_reaches_the_next_model_call() {
+    let session = json!({ "id": "s_mid", "title": "Named", "titleAuto": false, "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let rig = turn_rig("mid", session);
+    let model = scripted_model(vec![call_tool("c1", "read_file", json!({ "path": "a.txt" })), say_text("done")]).await;
+    let spec = turn_spec(&rig, &model, "turn_d_mid", "s_mid", json!({}));
+    let (status, _) = post(rig.d.port, "chat:queue", json!(["s_mid", "also check the tests"]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (_, record) = turn_record(&rig, "turn_d_mid", "s_mid").await;
+    assert_eq!(record["stop"], "complete", "{record}");
+    let saved = saved_session(&rig, "s_mid");
+    assert_eq!(saved["queue"], json!([]), "{saved}");
+    let requests = model.requests.lock().unwrap().clone();
+    assert_eq!(requests.len(), 2, "no second turn: the same turn read it");
+    assert!(requests[1].to_string().contains("also check the tests"), "{}", requests[1]);
+    assert!(!requests[0].to_string().contains("also check the tests"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_resent_client_message_id_runs_one_turn_and_queues_once() {
     let session = json!({ "id": "s_once", "title": "Named", "titleAuto": false, "workspaceId": "w1", "messages": [], "createdAt": 1, "updatedAt": 1 });
     let rig = turn_rig("once", session);
@@ -993,7 +1251,24 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
             { "id": "a0", "role": "assistant", "content": "Noted.", "createdAt": 2 },
         ],
     });
-    let rig = turn_rig("shield", session);
+    // Include a known account name in the workspace path on every OS, without
+    // changing the test process's environment or using a real user's profile.
+    let username = "shield-fixture-user";
+    let fixture = tempfile::tempdir().unwrap();
+    let home = fixture.path().join("users").join(username);
+    let home_env = home.to_string_lossy();
+    let rig = turn_rig_at_with_env(
+        &home.join("workspace"),
+        session,
+        json!({}),
+        &[
+            ("HOME", Some(home_env.as_ref())),
+            ("USERPROFILE", Some(home_env.as_ref())),
+            ("USER", Some(username)),
+            ("USERNAME", Some(username)),
+            ("LOGNAME", Some(username)),
+        ],
+    );
     let model = scripted_model(vec![
         call_tool("c_write", "write_file", json!({ "path": "contact.txt", "content": "[PII_EMAIL_1]\n" })),
         say_text("Saved [PII_EMAIL_1] to contact.txt"),
@@ -1017,6 +1292,7 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
     let requests = model.requests.lock().unwrap().clone();
     let wire = serde_json::to_string(&requests).unwrap();
     assert!(!wire.contains("jane.doe@example.com"), "the email left the computer: {wire}");
+    assert!(!wire.contains(username), "the workspace username left the computer: {wire}");
     assert!(wire.contains("[PII_EMAIL_1]"), "{wire}");
     assert!(wire.contains("## Private values"), "{wire}");
 
@@ -1031,14 +1307,23 @@ async fn privacy_shield_sends_placeholders_and_keeps_real_values_on_this_compute
     assert_eq!(call["input"]["content"], "jane.doe@example.com\n");
 
     // The preview names it, and says the shield is on for this cloud chat.
-    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai", "enabled": true, "baseUrl": "https://api.openai.com/v1" }], "defaultProviderId": "p1" })).await;
+    write_settings(&rig, json!({ "providers": [{ "id": "p1", "kind": "openai", "enabled": true, "baseUrl": format!("http://127.0.0.1:{}/v1", model.port) }], "defaultProviderId": "p1" })).await;
     let (status, preview) =
         post(rig.d.port, "privacy:preview", json!(["s_shield", "cc bob@example.com"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{preview}");
     assert_eq!(preview["enabled"], true);
     assert_eq!(preview["reach"], "cloud");
     assert_eq!(preview["draft"], "cc [PII_EMAIL_2]");
-    let values: Vec<&str> =
-        preview["findings"].as_array().unwrap().iter().map(|f| f["value"].as_str().unwrap()).collect();
+    assert!(
+        preview["findings"].as_array().unwrap().iter().any(|f| f["kind"] == "username" && f["value"] == username),
+        "{preview}"
+    );
+    let values: Vec<&str> = preview["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["kind"] == "email")
+        .map(|f| f["value"].as_str().unwrap())
+        .collect();
     assert_eq!(values, ["jane.doe@example.com", "bob@example.com"]);
 }

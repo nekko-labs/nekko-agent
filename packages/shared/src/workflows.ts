@@ -5,7 +5,7 @@
  * Two things separate this from a CI pipeline. First, steps are *routed*, not
  * just sequenced: a step names where control goes on success and on failure, so
  * a verify step that finds problems can send the run back to build and try
- * again (bounded, see MAX_STEP_LOOPS). Second, a workflow starts from whatever
+ * again (bounded by nekkod's MAX_STEP_LOOPS). Second, a workflow starts from whatever
  * fires it: by hand, on a schedule, from the CLI, from Slack, or off a git
  * provider event (a PR opened, closed, commented on).
  *
@@ -23,7 +23,7 @@ export type WorkflowStepKind = 'prompt' | 'skill' | 'workflow' | 'shell' | 'acti
 export const WORKFLOW_STEP_KINDS: Array<{ kind: WorkflowStepKind; label: string; hint: string }> = [
   { kind: 'prompt', label: 'Prompt', hint: 'Give the agent an instruction and let it work.' },
   { kind: 'skill', label: 'Skill', hint: 'Run an installed skill by name.' },
-  { kind: 'workflow', label: 'Workflow', hint: 'Trigger another workflow and wait for it.' },
+  { kind: 'workflow', label: 'Scheduled task', hint: 'Run another scheduled task and wait for it.' },
   { kind: 'shell', label: 'Shell', hint: 'Run a command in the workspace.' },
   { kind: 'action', label: 'Action', hint: 'Call an integration: post a message, comment on a PR, set a commit status.' },
 ];
@@ -40,42 +40,12 @@ export type WorkflowTransition =
   | { goto: 'step'; stepId: string };
 
 /**
- * How many times one step may be entered in a single run. A verify → build
- * cycle is the point of the feature, so it can't be banned, but it has to be
- * bounded or a workflow that never converges runs forever.
- */
-export const MAX_STEP_LOOPS = 10;
-
-/** How deep a workflow step may nest another workflow before it's refused. */
-export const MAX_WORKFLOW_DEPTH = 3;
-
-/**
  * Tokens a prompt or skill step ends with to report its own outcome, so routing
  * works for agent steps the way an exit code works for shell steps. The step's
  * instructions ask for one; without either, the step counts as passed.
  */
 export const STEP_PASS_TOKEN = '⟦PASS⟧';
 export const STEP_FAIL_TOKEN = '⟦FAIL⟧';
-
-/** Appended to an agent step's prompt so it reports an outcome the run can route on. */
-export function stepOutcomeInstruction(canRetry: boolean): string {
-  return [
-    `When you are done, end your reply with ${STEP_PASS_TOKEN} if this step succeeded, or ${STEP_FAIL_TOKEN} if it did not.`,
-    canRetry
-      ? `A ${STEP_FAIL_TOKEN} sends the run back for another attempt, so say what went wrong before the token.`
-      : `A ${STEP_FAIL_TOKEN} ends the run, so say what blocked you before the token.`,
-  ].join(' ');
-}
-
-/** Read a step's self-reported outcome out of its final answer. */
-export function readStepOutcome(text: string): 'pass' | 'fail' {
-  // Last token wins: an agent that discusses the tokens before deciding still
-  // ends on the real verdict.
-  const pass = text.lastIndexOf(STEP_PASS_TOKEN);
-  const fail = text.lastIndexOf(STEP_FAIL_TOKEN);
-  if (fail > pass) return 'fail';
-  return 'pass';
-}
 
 export interface WorkflowStep {
   /** Stable within the workflow; transitions reference it. */
@@ -277,7 +247,7 @@ export const WORKFLOW_ACTIONS: WorkflowActionSpec[] = [
     connector: 'github',
     group: 'GitHub',
     label: 'Keep one PR comment up to date',
-    hint: 'Updates the comment this workflow left on the PR, or adds it. With no PR number it skips. @mentions are posted as plain text, and a very long body is cut.',
+    hint: 'Updates the comment this task left on the PR, or adds it. With no PR number it skips. @mentions are posted as plain text, and a very long body is cut.',
     params: [
       { key: 'repo', label: 'Repo', placeholder: 'owner/name (defaults to the trigger)' },
       { key: 'number', label: 'PR number', placeholder: '{{trigger.number}}' },
@@ -355,22 +325,10 @@ export const GITHUB_POLL_EVENTS: Array<{ id: string; label: string }> = [
 /** What can start a workflow. */
 export type WorkflowTriggerKind = 'manual' | 'schedule' | 'cli' | 'slack' | 'git' | 'connector' | 'webhook';
 
-/**
- * Triggers that start a run without anyone asking, so "Pause all automations"
- * (`AppSettings.automationsPaused`) holds them back. Manual and CLI runs are a
- * person asking and still go. Mirrored in nekko-automation's workflow_rules.rs.
- */
-export const PAUSABLE_TRIGGER_KINDS: readonly WorkflowTriggerKind[] = ['schedule', 'git', 'slack', 'connector', 'webhook'];
-
-/** Whether a run fired by `kind` waits while automations are paused. */
-export function pausedBlocks(kind: WorkflowTriggerKind, paused: boolean | undefined): boolean {
-  return !!paused && PAUSABLE_TRIGGER_KINDS.includes(kind);
-}
-
 export const WORKFLOW_TRIGGER_KINDS: Array<{ kind: WorkflowTriggerKind; label: string; hint: string }> = [
   { kind: 'manual', label: 'Manual', hint: 'Only when you press Run.' },
   { kind: 'schedule', label: 'Schedule', hint: 'On a cron expression or a fixed interval.' },
-  { kind: 'cli', label: 'CLI', hint: 'From the terminal: nekko-agent workflow run <command>.' },
+  { kind: 'cli', label: 'CLI', hint: 'From the terminal: nekko-agent scheduled-task run <command>.' },
   { kind: 'slack', label: 'Slack', hint: 'When a message matches in a channel.' },
   { kind: 'git', label: 'Git provider', hint: 'On a pull request, push, or comment event.' },
   { kind: 'connector', label: 'Connector', hint: 'Poll an integration (Slack, Linear, Jira, GitHub, GitLab) for new events.' },
@@ -567,22 +525,25 @@ export interface WorkflowsSnapshot {
   runs: WorkflowRun[];
 }
 
-/** Fields accepted when creating a workflow; the rest is filled in by the host. */
+/**
+ * Fields accepted when creating a workflow; the rest is filled in by the host.
+ * As an update, `null` clears a field (JSON drops an `undefined` key).
+ */
 export interface NewWorkflow {
   name: string;
-  description?: string;
+  description?: string | null;
   category?: string;
   enabled?: boolean;
   steps?: WorkflowStep[];
   triggers?: WorkflowTrigger[];
-  workspaceId?: string;
-  providerId?: string;
-  modelId?: string;
+  workspaceId?: string | null;
+  providerId?: string | null;
+  modelId?: string | null;
   notify?: WorkflowNotify;
   templateId?: string;
-  localModelOnly?: boolean;
-  toolAccess?: import('./workflow-access.js').WorkflowToolAccess;
-  prCheckout?: boolean;
+  localModelOnly?: boolean | null;
+  toolAccess?: import('./workflow-access.js').WorkflowToolAccess | null;
+  prCheckout?: boolean | null;
   runPolicy?: import('./tasks.js').AutomationRunPolicy | null;
 }
 
@@ -632,7 +593,7 @@ export function triggerLabel(t: WorkflowTrigger, wf?: Workflow): string {
       if (t.cron) return `Cron ${t.cron}`;
       return t.intervalMs ? `Every ${formatEvery(t.intervalMs)}` : 'Schedule (unset)';
     case 'cli':
-      return `CLI: ${wf ? cliCommand(wf, t) : t.command || '(workflow slug)'}`;
+      return `CLI: ${wf ? cliCommand(wf, t) : t.command || '(task slug)'}`;
     case 'slack':
       return `Slack ${t.channel ? `#${t.channel.replace(/^#/, '')}` : '(any channel)'}${t.keyword ? ` · "${t.keyword}"` : ''}`;
     case 'git': {
@@ -846,7 +807,7 @@ export function stepSummary(step: WorkflowStep): string {
     case 'shell':
       return short || 'no command';
     case 'workflow':
-      return 'runs another workflow';
+      return 'runs another scheduled task';
     case 'action':
       return findWorkflowAction(step.run)?.label ?? (short || 'no action chosen');
     case 'skill':
@@ -871,20 +832,6 @@ export function unreachableSteps(steps: WorkflowStep[]): string[] {
     }
   }
   return steps.filter((s) => !seen.has(s.id)).map((s) => s.id);
-}
-
-/** Aggregate progress of a run, for the header and the list rows. */
-export function runProgress(run: WorkflowRun | undefined, wf: Workflow): { done: number; total: number; ratio: number; current?: WorkflowStep } {
-  const total = wf.steps.length;
-  if (!run || total === 0) return { done: 0, total, ratio: 0 };
-  const settled = new Set(run.steps.filter((s) => s.status === 'success' || s.status === 'skipped').map((s) => s.stepId));
-  const running = run.steps.find((s) => s.status === 'running');
-  return {
-    done: settled.size,
-    total,
-    ratio: total ? Math.min(1, settled.size / total) : 0,
-    current: running ? wf.steps.find((s) => s.id === running.stepId) : undefined,
-  };
 }
 
 /** Wall-clock duration of a run (or so far, if it's still going). */
@@ -1023,37 +970,6 @@ export function nextCronRun(expr: string, from = new Date()): number | undefined
   return undefined;
 }
 
-/** When a workflow's schedule triggers should next fire, earliest first. */
-export function nextScheduledRun(wf: Workflow, from = Date.now()): number | undefined {
-  const candidates: number[] = [];
-  for (const t of wf.triggers.filter(triggerEnabled)) {
-    if (t.kind !== 'schedule') continue;
-    if (t.cron) {
-      const next = nextCronRun(t.cron, new Date(from));
-      if (next) candidates.push(next);
-    } else if (t.intervalMs && t.intervalMs > 0) {
-      candidates.push((wf.lastRunAt ?? from) + Math.max(60_000, t.intervalMs));
-    }
-  }
-  return candidates.length ? Math.min(...candidates) : undefined;
-}
-
-/** A branch name matched against a trigger's branch filters (`main`, `release/*`). */
-export function branchMatches(branch: string, patterns?: string[]): boolean {
-  if (!patterns?.length) return true;
-  return patterns.some((p) => {
-    const pattern = p.trim();
-    if (!pattern) return false;
-    if (!pattern.includes('*')) return pattern === branch;
-    const rx = new RegExp(`^${pattern.split('*').map(escapeRegex).join('.*')}$`);
-    return rx.test(branch);
-  });
-}
-
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /** An inbound event offered to the workflow listeners. */
 export interface WorkflowEvent {
   kind: WorkflowTriggerKind;
@@ -1080,69 +996,6 @@ export interface WorkflowEvent {
   payload?: Record<string, unknown>;
   /** connector: who caused it (GitHub `actor.login`). */
   actor?: string;
-}
-
-/** Whether one trigger accepts an inbound event. */
-export function triggerAccepts(wf: Workflow, t: WorkflowTrigger, e: WorkflowEvent): boolean {
-  if (!triggerEnabled(t) || t.kind !== e.kind) return false;
-  if (e.workflowId && wf.id !== e.workflowId) return false;
-  switch (e.kind) {
-    case 'cli':
-      return !e.command || cliCommand(wf, t) === e.command;
-    case 'slack': {
-      const want = t.channel?.replace(/^#/, '').trim();
-      const got = e.channel?.replace(/^#/, '').trim();
-      if (want && want !== got) return false;
-      if (t.keyword && !(e.text ?? '').toLowerCase().includes(t.keyword.toLowerCase())) return false;
-      return true;
-    }
-    case 'git': {
-      if ((t.provider ?? 'github') !== (e.provider ?? 'github')) return false;
-      if (t.events?.length && e.event && !(t.events as string[]).includes(e.event)) return false;
-      if (t.repo?.trim() && e.repo && t.repo.trim() !== e.repo) return false;
-      if (e.branch && !branchMatches(e.branch, t.branches)) return false;
-      return true;
-    }
-    case 'connector': {
-      if (t.connector && t.connector !== e.connector) return false;
-      if (t.event && t.event !== e.event) return false;
-      if (t.action?.trim() && t.action.trim() !== e.payload?.action) return false;
-      // Fails closed: an event with no actor never passes a trigger that names one.
-      if (t.actor?.trim() && t.actor.trim().toLowerCase() !== e.actor?.toLowerCase()) return false;
-      return filterMatches(t.filter, e);
-    }
-    case 'webhook': {
-      if (t.webhookSecret && t.webhookSecret !== e.secret) return false;
-      return filterMatches(t.filter, e);
-    }
-    default:
-      return true;
-  }
-}
-
-/** Simple substring filter: the filter text must appear in the event text or payload. */
-function filterMatches(filter: string | undefined, e: WorkflowEvent): boolean {
-  if (!filter?.trim()) return true;
-  const haystack = [e.text ?? '', e.repo ?? '', e.branch ?? '', e.channel ?? '', JSON.stringify(e.payload ?? {})].join('\n').toLowerCase();
-  return haystack.includes(filter.toLowerCase());
-}
-
-/** Every enabled workflow an event should start. */
-export function matchWorkflows(list: Workflow[], e: WorkflowEvent): Workflow[] {
-  return list.filter((wf) => wf.enabled && wf.triggers.some((t) => triggerAccepts(wf, t, e)));
-}
-
-/** Context lines describing the event, prepended to the run's first prompt. */
-export function eventContext(e: WorkflowEvent): string {
-  const rows: string[] = [];
-  if (e.provider) rows.push(`provider: ${e.provider}`);
-  if (e.event) rows.push(`event: ${e.event}`);
-  if (e.repo) rows.push(`repo: ${e.repo}`);
-  if (e.branch) rows.push(`branch: ${e.branch}`);
-  if (e.channel) rows.push(`channel: ${e.channel}`);
-  if (e.text) rows.push(`message: ${e.text}`);
-  for (const [k, v] of Object.entries(e.payload ?? {})) rows.push(`${k}: ${String(v)}`);
-  return rows.length ? `This run was triggered by an event:\n${rows.join('\n')}` : '';
 }
 
 /**
@@ -1784,7 +1637,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   },
   {
     id: 'blank',
-    name: 'Empty workflow',
+    name: 'Empty scheduled task',
     description: 'One prompt step, run by hand. Build it up from there.',
     category: UNCATEGORIZED,
     build: () => ({

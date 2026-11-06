@@ -1,14 +1,39 @@
-# Workflows: models and unattended runs
+# Scheduled tasks: models and unattended runs
 
-A workflow runs with nobody watching it: on a schedule, from a git event, a
-connector poll or a webhook. These settings, under **Runs** in the workflow
+A scheduled task runs with nobody watching it: on a schedule, from a git event, a
+connector poll or a webhook. These settings, under **Runs** in the scheduled task
 editor, decide which model it uses and what its agent steps may do.
+
+## Your first scheduled task
+
+If you have no scheduled tasks yet, the Scheduled Tasks tab walks you through your first one:
+
+1. Expand **Shopping & web browsing**, **Developer**, **Research**, or **Email &
+   productivity** and pick an idea, such as checking product stock, reviewing
+   new GitHub PRs, or summarizing email.
+2. Enter the page, repository, topic, or email source. Read the requirements:
+   you may need web tools, a project folder, or a connected service.
+3. Choose **Continue to editor** to review the instructions, model, tools, and
+   trigger, then explicitly create the scheduled task.
+
+These starters run **manually** at first. Creating one does not run it. Try it
+with **Run** when you are ready. To automate it, add a schedule or event trigger
+in the editor. For new-PR reviews, configure a GitHub pull-request trigger and
+repository access; choosing the example alone does not enable automatic reviews.
+The starter drafts reports and does not ask to buy products, send email, or post
+reviews. Review tool permissions, since prompt instructions do not enforce access.
+
+Use **Back to ideas** to choose something else, or **Browse all templates or start
+from scratch** to use the existing template gallery. Travis's overview and example
+videos are labeled **coming soon**; the placeholders do not play or load videos.
+The guide currently appears in desktop and responsive web, not the native phone
+apps.
 
 ## Model
 
 - **Model** sets the model for every prompt and skill step. Left on
   **Default model**, steps use the model chosen in Models.
-- Each prompt or skill step can override it. **Use workflow model** is the
+- Each prompt or skill step can override it. **Use the task's model** is the
   default. The step graph names a step's model when the step overrides it.
 - Auto is not offered: a run has to know its model before it starts.
 
@@ -37,7 +62,7 @@ your default model is not local.
 | None | Use no tools. Answers come from the prompt and context. |
 | Read files | Read, search and list files in the workspace. |
 | Allowlist | Use only the tools each step lists. |
-| Full workspace | Use every tool, under your default chat mode. The default, and what existing workflows use. |
+| Full workspace | Use every tool, under your default chat mode. The default, and what existing scheduled tasks use. |
 
 Shell steps and action steps you write in the editor are not agent tools; they
 run under every setting.
@@ -74,7 +99,7 @@ Denied: unattended automation run (write_file: Write /path/to/file)
 ```
 
 The refusal is in the step's transcript and the agent carries on. Runs never
-offer `ask_user` either. This applies to every workflow, including ones made
+offer `ask_user` either. This applies to every scheduled task, including ones made
 before these settings existed; nothing else about them changes.
 
 ## Skill steps
@@ -129,7 +154,7 @@ frontmatter is not sent to the model.
 With **Check out the pull request** on (`prCheckout`), a run started by a
 GitHub `pr_opened` or `pr_updated` event works on the PR's own code:
 
-- The workflow's project folder must be a clone of the repository, with
+- The scheduled task's project folder must be a clone of the repository, with
   `origin` on GitHub. The run fetches `pull/<number>/head` from `origin` into a
   ref of its own and checks it out as a detached Git worktree under the app's
   data folder (`workflow-checkouts/<run>`).
@@ -155,4 +180,4 @@ an outside contributor, is untrusted, and its run never executes the PR's code:
   *lint/audit skipped: untrusted PR* instead of failing.
 
 Shell steps you write are not agent tools: they run as written for every PR,
-so keep them out of a workflow that reviews other people's PRs.
+so keep them out of a scheduled task that reviews other people's PRs.

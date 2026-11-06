@@ -1,0 +1,406 @@
+{
+  "name": "burst-chat-short-nekko-spec-vs-llama-server-default-qwen3-8b",
+  "valid": true,
+  "problems": [],
+  "notes": "Short chat: a one-sentence question with little in the prompt to copy, the unfavourable case for n-gram speculative decoding. Nekko: router on 11500, speculative decoding ON (--spec-default). llama-server b11224: only -m and --port. 3 warmup requests per server.",
+  "settings": {
+    "targets": {
+      "nekko-spec": "http://127.0.0.1:11500/v1",
+      "llama-server-default": "http://127.0.0.1:8090/v1"
+    },
+    "model": "qwen3-8b",
+    "target_models": {
+      "nekko-spec": "chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M",
+      "llama-server-default": "qwen3-8b"
+    },
+    "target_weights_sha256": {
+      "nekko-spec": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785",
+      "llama-server-default": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "runs": 16,
+    "warmup": 3,
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": true,
+    "scenario": "burst",
+    "pause_s": 20.0,
+    "preheat_s": 0,
+    "max_drift_pct": 3.0,
+    "workload": "chat-short",
+    "prompt_sha256": "757866708c3bb41f8f9b44a1e42b2ee85611630feb7e13be8c3dfce3e6f2eaf6",
+    "script_sha256": "30dd89d6a25fdedfaae6d9cbbcd1c76d398dc8c977e8bf3167d14a2646e3ca96"
+  },
+  "summary": {
+    "nekko-spec": {
+      "ttft_ms": {
+        "median": 173.15381250227802,
+        "min": 161.86579200439155,
+        "max": 188.12474999867845,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 150.82453491568282,
+        "min": 108.55005231608821,
+        "max": 351.1710211403096,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 278.1745239568255,
+        "min": 255.14984073247774,
+        "max": 291.4609536690342,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 147.46785177425969,
+      "server_prefill_tok_s_median": 533.1831085728556,
+      "decode_drift_pct": 2.8,
+      "decode_all_tokens_tok_s": 154.2050100516505,
+      "drafts": {
+        "accepted_per_request": {
+          "median": 212.0,
+          "min": 63,
+          "max": 428
+        },
+        "acceptance_rate": 0.566
+      }
+    },
+    "llama-server-default": {
+      "ttft_ms": {
+        "median": 109.92391650506761,
+        "min": 105.17550000804476,
+        "max": 115.84125000808854,
+        "n": 16
+      },
+      "decode_tok_s": {
+        "median": 97.0813150871748,
+        "min": 97.01646370350693,
+        "max": 97.21164903138762,
+        "n": 16
+      },
+      "prefill_tok_s_est": {
+        "median": 437.57627751836606,
+        "min": 388.4626589997769,
+        "max": 453.6639744583481,
+        "n": 16
+      },
+      "server_decode_tok_s_median": 96.66725910481009,
+      "server_prefill_tok_s_median": 584.4022956434617,
+      "decode_drift_pct": -0.2,
+      "decode_all_tokens_tok_s": 97.0996804372304,
+      "drafts": null
+    }
+  },
+  "replies": {
+    "nekko-spec": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 0,
+      "of": 16
+    },
+    "llama-server-default": {
+      "completion_tokens": [
+        512
+      ],
+      "same_as_most_common_reply": 2,
+      "of": 16
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-10-29T17:13:35.092394+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; finishing charge; 0:08 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11500,
+        "pid": 57118,
+        "processes": [
+          {
+            "pid": 17251,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server --model ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --alias chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M --host 127.0.0.1 --port 64169 --ctx-size 32768 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          },
+          {
+            "pid": 57118,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekkod --config-stdin",
+            "version": null
+          },
+          {
+            "pid": 57222,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm host",
+            "version": null
+          },
+          {
+            "pid": 57223,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm egress",
+            "version": null
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 17251,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server --model ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --alias chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M --host 127.0.0.1 --port 64169 --ctx-size 32768 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 781,
+        "cpu": 3.4,
+        "command": "duetexpertd"
+      },
+      {
+        "pid": 405,
+        "cpu": 3.3,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 380,
+        "cpu": 1.6,
+        "command": "locationd"
+      },
+      {
+        "pid": 635,
+        "cpu": 1.1,
+        "command": "BiomeAgent"
+      },
+      {
+        "pid": 637,
+        "cpu": 0.4,
+        "command": "linkd"
+      },
+      {
+        "pid": 654,
+        "cpu": 0.4,
+        "command": "routined"
+      },
+      {
+        "pid": 57120,
+        "cpu": 0.3,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 81946,
+        "cpu": 0.3,
+        "command": "PerfPowerServices"
+      }
+    ],
+    "scripts": {
+      "commit": "c7abfaf951b5737a70de3a1e478fdd50bd7d97a6",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+      "bytes": 5027783488,
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "target_model_files": {
+      "nekko-spec": {
+        "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+        "bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+      },
+      "llama-server-default": {
+        "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+        "bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+      }
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-10-29T17:27:11.209054+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; finishing charge; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11500,
+        "pid": 57118,
+        "processes": [
+          {
+            "pid": 17251,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server --model ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --alias chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M --host 127.0.0.1 --port 64169 --ctx-size 32768 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          },
+          {
+            "pid": 57118,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekkod --config-stdin",
+            "version": null
+          },
+          {
+            "pid": 57222,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm host",
+            "version": null
+          },
+          {
+            "pid": 57223,
+            "command": "~/code/agent-nekko/target/dev-daemon/nekko-vm egress",
+            "version": null
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 17251,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server --model ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --alias chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M --host 127.0.0.1 --port 64169 --ctx-size 32768 --cache-reuse 256 --no-cache-idle-slots --spec-default",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 7.4,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 35796,
+        "cpu": 0.1,
+        "command": "Visual Studio Code.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.0,
+        "command": "UserEventAgent"
+      },
+      {
+        "pid": 336,
+        "cpu": 0.0,
+        "command": "fseventsd"
+      },
+      {
+        "pid": 337,
+        "cpu": 0.0,
+        "command": "mediaremoted"
+      },
+      {
+        "pid": 340,
+        "cpu": 0.0,
+        "command": "systemstats"
+      }
+    ],
+    "scripts": {
+      "commit": "c7abfaf951b5737a70de3a1e478fdd50bd7d97a6",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 814.4,
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 6.2,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 35800,
+        "cpu": 0.4,
+        "command": "tsc"
+      },
+      {
+        "pid": 380,
+        "cpu": 0.2,
+        "command": "locationd"
+      },
+      {
+        "pid": 598,
+        "cpu": 0.2,
+        "command": "AppleCentauriAlpha"
+      },
+      {
+        "pid": 35411,
+        "cpu": 0.2,
+        "command": "Visual Studio Code.app"
+      },
+      {
+        "pid": 57115,
+        "cpu": 0.2,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 57120,
+        "cpu": 0.2,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.1,
+        "command": "logd"
+      }
+    ]
+  }
+}

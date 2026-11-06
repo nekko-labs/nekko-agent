@@ -1,3 +1,4 @@
+import { rememberConnectivityNotice } from './components/ConnectivityNotices.js';
 /**
  * Every running turn, folded and kept alive for as long as the host is running
  * it, not for as long as somebody is looking at it.
@@ -28,15 +29,18 @@
  */
 
 import { useCallback, useSyncExternalStore } from 'react';
-import type { AgentEvent, AgentReplay, ToolCall } from '@nekko-agent/shared';
+import type { AgentEvent, AgentReplay, ChatMessage, ToolCall } from '@nekko-agent/shared';
 import type { Activity } from './components/agent-console/transcript.js';
-import { accumulateDecodeMs, describeLiveActivity, emptyLiveActivity, reduceLiveActivity, type LiveActivity } from '@nekko-agent/shared';
+import { accumulateDecodeMs, describeLiveActivity, emptyLiveActivity, isPrInteractionCall, reduceLiveActivity, type LiveActivity } from '@nekko-agent/shared';
+import { reportAgentWorking } from './workingAgents.js';
 
-export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; items: Activity[] };
+export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; items: Activity[] } | { kind: 'pr'; toolCallId: string };
 
 /** One session's in-flight turn, as much of it as a pane needs to redraw. */
 export interface LiveRun {
   sessionId: string;
+  /** Saved tail before a user-initiated resume; never hide this work. */
+  transcriptThroughId?: string;
   /** Progress text and working steps in the order they arrive. */
   blocks: LiveBlock[];
   /** The assistant text streamed so far this turn. */
@@ -45,6 +49,8 @@ export interface LiveRun {
   reasoning: string;
   /** Tool calls made this turn, in order. */
   tools: ToolCall[];
+  /** Only attributable PR calls/results, stable while text streams. Large outputs wait for saved history. */
+  prMessages?: Pick<ChatMessage, 'role' | 'toolCalls' | 'toolResult'>[];
   /** When the turn started, for the elapsed clock. */
   startedAt: number;
   /** Output tokens and decode time, summed across the turn's steps. */
@@ -127,6 +133,14 @@ function emptyRun(sessionId: string, now: number): LiveRun {
   };
 }
 
+/** Seed a resumed run before its first event, keeping its saved transcript visible. */
+export function beginResumedRun(sessionId: string, transcriptThroughId?: string): void {
+  startSubagentActivity(sessionId);
+  finished.delete(sessionId);
+  runs.set(sessionId, { ...emptyRun(sessionId, Date.now()), transcriptThroughId });
+  markDirty(sessionId);
+}
+
 /**
  * Sessions whose next repaint is still pending.
  *
@@ -174,6 +188,7 @@ const STARTS_RUN = new Set<AgentEvent['type']>([
  * a DOM or an IPC bridge.
  */
 export function applyEvent(event: AgentEvent, now = Date.now()): void {
+  if (event.type === 'session_meta' && event.connectivityNotice) rememberConnectivityNotice(event.sessionId, event.connectivityNotice);
   const id = event.sessionId;
   if (!runs.has(id) && STARTS_RUN.has(event.type)) startSubagentActivity(id);
   foldSubagentActivity(event, now);
@@ -182,6 +197,8 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
   const folded = reduceLiveActivity(runs.get(id)?.activity, event, now);
 
   if (event.type === 'done' || event.type === 'error') {
+    // Here and not only in the pane: a reply can end with no pane open to hear it.
+    reportAgentWorking(id, false);
     const ended = runs.get(id);
     runs.delete(id);
     if (ended) {
@@ -257,6 +274,7 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
         next.reasoningStartedAt = 0;
       }
       next.tools = [...prev.tools, event.call];
+      if (isPrInteractionCall(event.call)) next.prMessages = [...(prev.prMessages ?? []), { role: 'assistant', toolCalls: [event.call] }];
       break;
     case 'usage':
       next.generation = undefined;
@@ -269,6 +287,12 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
         ...b,
         items: b.items.map((it) => it.kind === 'tool' && it.call.id === event.result.toolCallId && it.endedAt === undefined ? { ...it, endedAt: now, ...(event.result.isError ? { failed: true } : {}) } : it),
       });
+      if (!event.result.isError && event.result.output.length <= LIVE_STREAM_MAX
+        && prev.prMessages?.some((m) => m.toolCalls?.some((call) => call.id === event.result.toolCallId))
+        && !prev.prMessages.some((m) => m.toolResult?.toolCallId === event.result.toolCallId)) {
+        next.prMessages = [...prev.prMessages, { role: 'tool', toolResult: event.result }];
+        next.blocks = [...next.blocks, { kind: 'pr', toolCallId: event.result.toolCallId }];
+      }
       // A step boundary: the next model call starts from here.
       next.stepMark = { blocks: next.blocks, text: next.text, reasoning: next.reasoning };
       break;
@@ -295,9 +319,12 @@ export function applyReplay(replay: AgentReplay): void {
   const events = replay.events ?? [];
   if (!events.length) return;
   const keepStart = runs.get(id)?.startedAt;
+  const transcriptThroughId = runs.get(id)?.transcriptThroughId;
   runs.delete(id);
   resetSubagentActivityFor(id);
   events.forEach((e, i) => applyEvent({ ...e, sessionId: id } as AgentEvent, replay.at?.[i] ?? Date.now()));
+  const replayed = runs.get(id);
+  if (replayed && transcriptThroughId) runs.set(id, { ...replayed, transcriptThroughId });
   const run = runs.get(id);
   if (run && keepStart !== undefined && keepStart < run.startedAt) runs.set(id, { ...run, startedAt: keepStart });
   markDirty(id);

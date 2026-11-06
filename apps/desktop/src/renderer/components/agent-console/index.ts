@@ -5,7 +5,7 @@ export { ApprovalBar } from './ApprovalBar.js';
 export type { PendingApproval } from './ApprovalBar.js';
 export { AutoQualityMenu, ModelPicker } from './ModelPicker.js';
 export { MessageBubble } from './MessageBubble.js';
-export { ReasoningBlock } from './ReasoningBlock.js';
+export { FoldThoughtsContext, ReasoningBlock } from './ReasoningBlock.js';
 export { ReplyStatus } from './ReplyStatus.js';
 export { ToolCard } from './ToolCard.js';
 export { useElementWidth } from './useElementWidth.js';

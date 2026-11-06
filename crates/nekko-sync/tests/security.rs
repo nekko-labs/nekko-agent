@@ -188,3 +188,16 @@ fn fingerprints_are_short_and_distinct() {
     assert_eq!(a.len(), 19);
     assert_ne!(a, fingerprint(&DeviceKey::generate().public()));
 }
+
+#[test]
+fn the_epoch_proof_is_hkdf_of_the_keyring_and_tied_to_its_epoch() {
+    let k = Keyring::generate();
+    let mut want = [0u8; 32];
+    hkdf::Hkdf::<sha2::Sha256>::new(None, &k.to_bytes())
+        .expand(format!("{EPOCH_PROOF_LABEL}\n7").as_bytes(), &mut want)
+        .unwrap();
+    assert_eq!(epoch_proof(&k, 7), want);
+    // Another epoch number or the next epoch's keyring gives another proof.
+    assert_ne!(epoch_proof(&k, 7), epoch_proof(&k, 8));
+    assert_ne!(epoch_proof(&k, 7), epoch_proof(&k.rotate(), 7));
+}

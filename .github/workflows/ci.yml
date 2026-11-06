@@ -1,27 +1,29 @@
 name: CI
 
-# Three tiers (scripts/ci-scope.mjs decides which jobs each run needs):
+# Two tiers (scripts/ci-scope.mjs decides which jobs each run needs):
 #
-#   pull_request   fast feedback: build, Linux daemon, Windows capture, gated by
-#                  the paths the PR touches. About 8 minutes. A change only to
-#                  the native phone apps (apps/ios, apps/android) skips them all:
-#                  its own workflows test it.
-#   merge_group    the merge queue: adds the Windows daemon and the speed
-#                  contract for the queued group, before anything reaches main.
-#   schedule       every 6 hours, and before the nightly release: every job on
-#                  every OS, macOS included. Skipped when main has not moved.
+#   pull_request   build, the speed contract and the loopback itests, gated by
+#                  the paths the PR touches. A change only to the native phone
+#                  apps (apps/ios, apps/android) skips all three: their own
+#                  workflows test them. `gate` here is what main requires;
+#                  there is no merge queue, so this is the last check before
+#                  main (decision 0059).
+#   schedule       nightly: every job on every OS (the Linux, Windows and macOS
+#                  daemon and capture), the speed contract and the itests.
+#                  Skipped when main has not moved.
 #
-# macOS runs on the schedule rather than per change: the Team plan runs 5 macOS
-# jobs at once across every workflow, and per-PR macOS jobs queued 50-100
-# minutes. `ci:macos` / `ci:perf` labels opt a single PR in; with `ci:macos`,
-# `gate` also waits for the macOS runs the label turns on in other workflows
+# Platform builds run nightly rather than per change, here and in the iOS,
+# Android, installer and development-identity workflows. A `deploy:linux`,
+# `deploy:windows`, `deploy:macos`, `deploy:ios` or `deploy:android` label opts
+# a single PR into that platform's runs (`ci:perf` forces the speed contract), and
+# `gate` waits for the runs a deploy label turns on in other workflows
 # (scripts/ci-label-gate.mjs). Adding a label re-runs CI so it takes effect.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-  merge_group:
   schedule:
-    - cron: '17 */6 * * *'
+    # 03:17 JST.
+    - cron: '17 18 * * *'
   # Full run on any branch: `gh workflow run ci.yml --ref <branch>`.
   workflow_dispatch:
 
@@ -32,7 +34,7 @@ permissions:
   actions: read
   issues: write
 
-# Cancel stale PR revisions; keep every queue, schedule and dispatch run.
+# Cancel stale PR revisions; keep every schedule and dispatch run.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -46,6 +48,7 @@ jobs:
       capture_os: ${{ steps.scope.outputs.capture_os }}
       perf: ${{ steps.scope.outputs.perf }}
       itests: ${{ steps.scope.outputs.itests }}
+      licenses: ${{ steps.scope.outputs.licenses }}
       run: ${{ steps.fresh.outputs.run }}
     steps:
       - uses: actions/checkout@v7
@@ -69,23 +72,16 @@ jobs:
           fi
           echo "run=$run" >> "$GITHUB_OUTPUT"
       - name: Changed files
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          BASE: ${{ github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.merge_group.head_sha }}
         # Failure leaves the list empty, which ci-scope treats as "run everything".
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
-          else
-            gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq '.files[].filename' > "$RUNNER_TEMP/changed.txt" || true
-          fi
+        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
       - id: scope
         if: steps.fresh.outputs.run == 'true'
         env:
-          CI_CHANGED_FILES: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/changed.txt', runner.temp) || '' }}
+          CI_CHANGED_FILES: ${{ github.event_name == 'pull_request' && format('{0}/changed.txt', runner.temp) || '' }}
           CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: node scripts/ci-scope.mjs
 
@@ -222,14 +218,17 @@ jobs:
   # The speed contract (spec/platform/speed-responsiveness-the-speed-contract.md): headless Chrome over
   # the DevTools protocol against the Local Web UI and a scripted model. Fails
   # when a p95 exceeds its budget; the report is uploaded either way so a
-  # regression shows its numbers, not only a red cross. It runs in the merge
-  # queue for changes it can measure, so a regression is stopped before main,
-  # and on a PR only with the `ci:perf` label.
+  # regression shows its numbers, not only a red cross. It runs on every PR that
+  # changes what it measures (renderer, web server, packages, daemon, harness),
+  # or with the `ci:perf` label, and `gate` waits for it, so a regression is
+  # stopped before main. It also runs nightly.
   perf:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.perf == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # A green run takes about 12 minutes; a failed one also builds the base
+    # and measures it against head six times (about 15 more).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -248,7 +247,7 @@ jobs:
       # The web build comes from the `build` job (uploaded right after its
       # build:web, long before this release cargo build finishes). It is fetched
       # without a job-level `needs: build`, which would hold this job until all of
-      # build's tests finished and lengthen the queue's critical path. If build
+      # build's tests finished and lengthen the run's critical path. If build
       # ends without uploading it, this job builds its own.
       - name: Wait for the build job's web build
         id: dist
@@ -273,28 +272,43 @@ jobs:
       - if: steps.dist.outputs.ready != 'true'
         run: npm run build:web
       - name: Speed contract
+        id: contract
         # Judged against the 2x regression gate in budgets.mjs; a missed budget is
         # measured once more before it fails the job (noisy shared runners). The
         # runner has no GPU, so Chrome runs without its software GPU emulation.
         run: node scripts/perf/run.mjs --out perf-results --attempts 3 --no-gpu
-      - name: Profile streaming frame work against the unchanged base after a failed gate
-        if: failure() && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+      # Diagnostic only: the failed speed contract stays failed. It measures the
+      # budgets that failed (not a fixed part: a cold-switch failure is
+      # latency, which the old streaming-only profile never measured) on the
+      # unchanged base and on this head, alternately on this same runner
+      # (base, head, head, base), then one timeline-traced pair. The table goes
+      # to the job summary; reports and traces to the perf-report artifact.
+      - name: Measure the failed budgets on the unchanged base and on head
+        if: failure() && steps.contract.outcome == 'failure' && github.event_name == 'pull_request'
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          # Diagnostic only: keep the failed speed-contract result and its budgets.
-          node scripts/perf/run.mjs --out perf-results/profile-head --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Head diagnostic missed a budget; original gate remains failed."
+          parts=$(node scripts/perf/compare.mjs parts perf-results/perf-report.json)
+          if [ -z "$parts" ]; then echo 'No failed budget to compare.'; exit 0; fi
           git fetch --no-tags origin "$BASE_SHA"
           git worktree add --detach ../perf-base "$BASE_SHA"
-          cd ../perf-base
-          npm ci
-          npm run build:web
-          cargo build -p nekkod --release --locked
-          node scripts/perf/run.mjs --out "$GITHUB_WORKSPACE/perf-results/profile-base" --quick --only frames --profile --timeline --dump-trace --no-gpu || echo "Base diagnostic missed a budget; inspect uploaded report."
+          (cd ../perf-base && npm ci && npm run build:web && cargo build -p nekkod --release --locked)
+          out="$GITHUB_WORKSPACE/perf-results/compare"
+          for part in $parts; do
+            for phase in base-1 head-1 head-2 base-2; do
+              tree=../perf-base; [ "${phase%-*}" = head ] && tree=.
+              (cd "$tree" && node scripts/perf/run.mjs --out "$out/$part/$phase" --only "$part" --attempts 1 --no-gpu --report-only) || echo "$phase did not finish its run"
+            done
+            for side in base head; do
+              tree=../perf-base; [ "$side" = head ] && tree=.
+              (cd "$tree" && node scripts/perf/run.mjs --out "$out/$part/trace-$side" --only "$part" --attempts 1 --timeline --dump-trace --no-gpu --report-only) || echo "trace-$side did not finish its run"
+            done
+            node scripts/perf/compare.mjs summary perf-results/perf-report.json "$out/$part" "$part" | tee -a "$out/summary.md"
+          done
       - name: Report
         if: always()
-        run: cat perf-results/perf-report.md >> "$GITHUB_STEP_SUMMARY" || true
+        run: cat perf-results/perf-report.md perf-results/compare/summary.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -306,9 +320,8 @@ jobs:
   # Loopback end-to-end checks: the Local Web UI behind nekkod, with scripted
   # models and fake services on 127.0.0.1 (a fake Telegram Bot API and GitHub, a
   # local relay, a Hypergate daemon from its public repo). Each script makes its
-  # own temporary data dir and home and ends its process trees. Never on a PR,
-  # and `gate` does not need this job: it reports on what lands on main (every
-  # queue group, the schedule, a dispatch) without holding anything.
+  # own temporary data dir and home and ends its process trees. Runs on every PR
+  # that needs `build`, and nightly; `gate` waits for it.
   itests:
     needs: scope
     if: needs.scope.outputs.run == 'true' && needs.scope.outputs.itests == 'true'
@@ -355,16 +368,27 @@ jobs:
         run: node scripts/itest-mcp-http.mjs --spawn hypergate
 
   # The one required check. It passes when every job this run needed passed and
-  # the skipped ones were skipped on purpose, so branch protection and the merge
-  # queue need not know which jobs a change runs. A scheduled run that fails
+  # the skipped ones were skipped on purpose, so branch protection need not
+  # know which jobs a change runs. A scheduled run that fails
   # opens (or comments on) one `ci-scheduled` issue, so nobody has to watch it.
   #
-  # With `ci:macos` it also waits (up to about 3 hours: macOS runners queue) for
-  # the label's runs in other workflows, so nothing queues a PR before they are
-  # green. In the queue it fails a group holding a draft, a `hold` PR, or a
-  # `ci:macos` PR without green runs, which ejects it (#1002).
+  # With a `deploy:*` label it also waits (up to about 3 hours: macOS runners
+  # queue) for the label's runs in other workflows, so nothing merges a PR
+  # before they are green.
+  # Only when dependencies or ASSETS.md change: a new package with a license the
+  # policy has not seen stops here, before it ships. docs/runbooks/third-party.md.
+  licenses:
+    needs: scope
+    if: needs.scope.outputs.run == 'true' && needs.scope.outputs.licenses == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: node scripts/third-party.mjs check
+
   gate:
-    needs: [scope, build, daemon, capture, perf]
+    needs: [scope, build, daemon, capture, perf, itests, licenses]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 190
@@ -379,30 +403,23 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v7
-        if: github.event_name == 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
+        if: contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
         with:
           sparse-checkout: scripts
-      - name: The macOS runs ci:macos turned on passed
-        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:macos')
+      - name: The platform runs the deploy labels turned on passed
+        if: github.event_name == 'pull_request' && contains(join(github.event.pull_request.labels.*.name, ' '), 'deploy:')
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci-label-gate.mjs pr --pr "$PR" --sha "$SHA"
-      - name: Every PR in the group is ready, not held, and its macOS runs passed
-        if: github.event_name == 'merge_group'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BASE: ${{ github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.merge_group.head_sha }}
-        run: node scripts/ci-label-gate.mjs queue --base "$BASE" --head "$HEAD"
       - name: File the scheduled failure
         if: failure() && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          body="The 6-hourly full CI run (every OS, macOS and the speed contract) failed on $GITHUB_SHA: $RUN_URL"
+          body="The nightly full CI run (every OS and the speed contract) failed on $GITHUB_SHA: $RUN_URL"
           open=$(gh issue list -R "$GITHUB_REPOSITORY" --label ci-scheduled --state open --limit 1 --json number -q '.[0].number')
           if [ -n "$open" ]; then
             gh issue comment "$open" -R "$GITHUB_REPOSITORY" --body "$body"

@@ -1,8 +1,9 @@
 import { setChatOptionsAndDefaults, settingsPatchWithModeReset } from '../chatDefaults.js';
-import { AGENT_REPLAY, IpcChannels, IpcEvents, deriveKey, seal, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
+import { AGENT_REPLAY, IpcChannels, IpcEvents, challengeIsGenuine, deriveKey, ephemeralKeys, publicKeyText, relayAuth, RELAY_PAIRING_VERSION, REMOTE_PROTOCOL_VERSION, helloProof, seal, sessionInfo, sessionKey, open, withApiServerDefaults, RELEASE_NOTES_URL, LOCAL_RELAY_PORT } from '@nekko-agent/shared';
 import type { AgentReplay, LocalRelayStatus, NetworkVisibilityStatus, AppSettings, AgentEvent, IndexStatus, NekkoApi, AppInfo, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePlanUsageStatus, ClaudePolicyStatus, UpdateInfo, TerminalEvent, OAuthStatus, SubscriptionLimits } from '@nekko-agent/shared';
 import { readBrandKey } from './brandStorage.js';
 import { openTerminalSocket } from './terminal-socket.js';
+import { loadHelloKeys } from './helloKeys.js';
 import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
 import { runWebAuthnCeremony } from '../webauthnCeremony.js';
 import { webAuthnUnavailableReason } from './secureContext.js';
@@ -53,6 +54,10 @@ function makeWebClient(): NekkoApi {
   const tasksCbs = new Set<(t: import('@nekko-agent/shared').AutomationTask[]) => void>();
   const trainingCbs = new Set<(r: import('@nekko-agent/shared').TrainingRun[]) => void>();
   const workflowCbs = new Set<(s: import('@nekko-agent/shared').WorkflowsSnapshot) => void>();
+  const imageCbs = new Set<(view: import('@nekko-agent/shared').ImageView) => void>();
+  const linuxImageCbs = new Set<(view: import('@nekko-agent/shared').LinuxImageView) => void>();
+  const runnerCbs = new Set<(views: import('@nekko-agent/shared').RunnerView[]) => void>();
+  const githubSetupCbs = new Set<(view: import('@nekko-agent/shared').GithubSetupView) => void>();
   const oauthStatusCbs = new Set<(s: OAuthStatus) => void>();
   const cloudStatusCbs = new Set<(s: import('@nekko-agent/shared').CloudStatus) => void>();
   const limitsUpdatedCbs = new Set<(e: { tokenKey: string; limits: SubscriptionLimits }) => void>();
@@ -74,6 +79,10 @@ function makeWebClient(): NekkoApi {
     else if (channel === IpcEvents.backgroundUpdated) backgroundCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.trainingUpdated) trainingCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.workflowsUpdated) workflowCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerImageChanged) imageCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerLinuxImageChanged) linuxImageCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerChanged) runnerCbs.forEach((cb) => cb(payload));
+    else if (channel === IpcEvents.runnerGithubChanged) githubSetupCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.oauthStatus) oauthStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.cloudStatus) cloudStatusCbs.forEach((cb) => cb(payload));
     else if (channel === IpcEvents.limitsUpdated) limitsUpdatedCbs.forEach((cb) => cb(payload));
@@ -93,10 +102,24 @@ function makeWebClient(): NekkoApi {
   let relayUrl = p.get('relay');
   let room = p.get('room');
   let key = p.get('key');
+  let hostKey = p.get('host');
   let pairCode: string | null = p.get('pair');
+  const savedPin = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('nekko_relay') || 'null');
+    } catch {
+      return null;
+    }
+  })();
+  if (relayUrl && room && key && savedPin?.room === room && savedPin.hostKey && savedPin.hostKey !== hostKey) {
+    // A link can't replace the computer this browser pinned (decision 0041). A reset gets a new room.
+    alert('This link names a different computer than the one you paired with. Forget that computer first if it was reset.');
+    relayUrl = room = key = hostKey = pairCode = null;
+    history.replaceState(null, '', location.pathname);
+  }
   if (relayUrl && room && key) {
     // Persist creds and scrub them from the address bar/history right away.
-    localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key }));
+    localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, hostKey, v: RELAY_PAIRING_VERSION }));
     try {
       history.replaceState(null, '', location.pathname);
     } catch {
@@ -105,10 +128,16 @@ function makeWebClient(): NekkoApi {
   } else {
     try {
       const saved = JSON.parse(localStorage.getItem('nekko_relay') || 'null');
-      if (saved?.relay && saved?.room && saved?.key) {
+      if (saved?.relay && saved?.room && saved?.key && saved.v !== RELAY_PAIRING_VERSION) {
+        // Saved before the computer's last change of pairing (decisions 0036, 0041): pair again.
+        localStorage.removeItem('nekko_relay');
+        sessionStorage.setItem('nekko_relay_denied', 'pair-again');
+        alert('Nekko Agent changed how devices connect. Pair this device again from Settings → Remote access on your computer.');
+      } else if (saved?.relay && saved?.room && saved?.key) {
         relayUrl = saved.relay;
         room = saved.room;
         key = saved.key;
+        hostKey = saved.hostKey ?? null;
         // Native pairing screen stores the one-time code alongside the creds
         // (there's no URL to carry it after the reload).
         if (saved.pair) pairCode = saved.pair;
@@ -150,10 +179,37 @@ function makeWebClient(): NekkoApi {
     let nextId = 1;
     let relay: WebSocket | null = null;
     let welcomed = false;
-    // E2E key shared with the agent; the relay only carries ciphertext.
+    // The room key only carries the computer's challenge. It proves nothing:
+    // every device ever paired held it. The pinned host key's signature does.
     const keyP = deriveKey(key, room);
-    const sendSealed = async (frame: unknown) => {
-      relay?.send(JSON.stringify({ enc: await seal(await keyP, frame) }));
+    // This connection's key, from the exchange the challenge starts.
+    let session: CryptoKey | null = null;
+    // This browser's device key: every HELLO is signed with it (protocol 5, decision 0036).
+    const helloKeysP = loadHelloKeys();
+    // The connection's challenge and request counter (relay replay protection).
+    let challenge: string | null = null;
+    let seq = 0;
+    let sendQueue: Promise<void> = Promise.resolve();
+    const answer = async (c: { challenge: string; eph: string; sig: string }) => {
+      if (!hostKey || !(await challengeIsGenuine(hostKey, room!, c))) return;
+      const ours = await ephemeralKeys();
+      const eph = await publicKeyText(ours.publicKey);
+      const sealedTo = await sessionKey(ours.privateKey, c.eph, sessionInfo(room!, c.challenge, c.eph, eph));
+      const proof = await helloProof(await helloKeysP, deviceId!, room!, c.challenge, c.eph, eph);
+      const hello = {
+        type: 'hello', deviceId, name: deviceName, platform, protocol: REMOTE_PROTOCOL_VERSION, challenge: c.challenge, ...proof,
+        ...(pairCode ? { pair: pairCode } : {}),
+      };
+      welcomed = false;
+      session = sealedTo;
+      challenge = c.challenge;
+      seq = 0;
+      relay?.send(JSON.stringify({ eph, enc: await seal(sealedTo, hello) }));
+      // A replayed challenge gets a HELLO nobody can read: don't wait for ever.
+      const sent = relay;
+      setTimeout(() => {
+        if (!welcomed && relay === sent) sent?.close();
+      }, 15_000);
     };
     const onDenied = (reason: string) => {
       // Kicked out of the registry (revoked, or a stale/used pairing link).
@@ -168,7 +224,7 @@ function makeWebClient(): NekkoApi {
         pairCode = null; // enrollment done; never resend the code
         sessionStorage.removeItem('nekko_relay_denied');
         // Drop a stored one-time code so it never leaks or gets replayed.
-        localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key }));
+        localStorage.setItem('nekko_relay', JSON.stringify({ relay: relayUrl, room, key, hostKey, v: RELAY_PAIRING_VERSION }));
       } else if (frame.type === 'denied') {
         onDenied(String(frame.reason || 'denied'));
       } else if (frame.type === 'res' && pending.has(frame.id)) {
@@ -179,12 +235,14 @@ function makeWebClient(): NekkoApi {
         dispatchEvent(frame.channel, frame.payload);
       }
     };
-    const connect = () => {
+    // The relay checks a credential derived from the secret, never the secret (decision 0036).
+    const authP = relayAuth(key, room);
+    const connect = async () => {
       welcomed = false;
-      relay = new WebSocket(`${relayUrl.replace(/\/$/, '')}/relay?role=client&room=${encodeURIComponent(room)}&key=${encodeURIComponent(key)}`);
-      relay.onopen = () => {
-        void sendSealed({ type: 'hello', deviceId, name: deviceName, platform, ...(pairCode ? { pair: pairCode } : {}) });
-      };
+      session = null;
+      const auth = await authP;
+      relay = new WebSocket(`${relayUrl.replace(/\/$/, '')}/relay?role=client&room=${encodeURIComponent(room)}&key=${encodeURIComponent(auth)}`);
+      // The computer sends each new connection a signed challenge; the HELLO answers it.
       relay.onmessage = async (ev) => {
         let env: any;
         try {
@@ -194,22 +252,31 @@ function makeWebClient(): NekkoApi {
         }
         if (env.enc) {
           try {
-            handle(await open(await keyP, env.enc));
+            if (session) return handle(await open(session, env.enc));
+          } catch {
+            /* a new challenge, or tampered: read below */
+          }
+          try {
+            // Under the room key only a challenge counts: anyone ever paired could have sealed this.
+            const frame = await open<any>(await keyP, env.enc);
+            if (frame.type === 'challenge') await answer(frame);
           } catch {
             /* tampered / wrong key */
           }
-        } else if (env.type === 'agent-online' && relay?.readyState === WebSocket.OPEN && !welcomed) {
-          // Agent (re)connected after us → repeat the handshake.
-          void sendSealed({ type: 'hello', deviceId, name: deviceName, platform, ...(pairCode ? { pair: pairCode } : {}) });
         }
+        // When the computer (re)connects after us it challenges this connection itself.
       };
       relay.onclose = (ev) => {
         welcomed = false;
-        if (ev.code === 4001) return; // kicked (revoked) → don't reconnect-loop
-        setTimeout(connect, 1000);
+        // A close isn't sealed, so it ends nothing: a real removal comes back as a
+        // sealed refusal on the next dial. The relay refusing this pairing may mean
+        // the computer was reset, so say so, and keep trying at an easier pace.
+        const refused = ev.code === 1008 && /bad pairing key/i.test(ev.reason);
+        if (refused) sessionStorage.setItem('nekko_relay_denied', 'pair-again');
+        setTimeout(() => void connect(), refused ? 15_000 : 1000);
       };
     };
-    connect();
+    void connect();
     const ready = () =>
       new Promise<void>((res, rej) => {
         if (welcomed) return res();
@@ -227,10 +294,18 @@ function makeWebClient(): NekkoApi {
     call = async (channel, ...args) => {
       await ready();
       const id = nextId++;
-      const enc = await seal(await keyP, { type: 'req', id, channel, args });
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject });
-        relay!.send(JSON.stringify({ enc }));
+        // Sealed and sent one at a time, so requests leave in seq order.
+        const sent = sendQueue.then(async () => {
+          const enc = await seal(session!, { type: 'req', id, seq: ++seq, challenge, channel, args });
+          relay!.send(JSON.stringify({ enc }));
+        });
+        sendQueue = sent.catch(() => {});
+        sent.catch((e) => {
+          pending.delete(id);
+          reject(e);
+        });
         setTimeout(() => {
           if (pending.has(id)) {
             pending.delete(id);
@@ -339,13 +414,14 @@ function makeWebClient(): NekkoApi {
     cloudBeginOAuth: (provider) => call(IpcChannels.cloudBeginOAuth, provider),
     cloudCancelOAuth: () => call(IpcChannels.cloudCancelOAuth),
     cloudSignOut: () => call(IpcChannels.cloudSignOut),
+    cloudDeleteAccount: () => call(IpcChannels.cloudDeleteAccount),
     connectionsStatus: () => call(IpcChannels.connectionsStatus),
     connectionsEvents: (id, limit) => call(IpcChannels.connectionsEvents, id, limit),
     connectionsClear: () => call(IpcChannels.connectionsClear),
     telemetryCapture: (event, props) => call(IpcChannels.telemetryCapture, event, props),
     telemetryStatus: () => call(IpcChannels.telemetryStatus),
     feedbackInfo: () => call(IpcChannels.feedbackInfo),
-    feedbackSend: (message, includeAppInfo) => call(IpcChannels.feedbackSend, message, includeAppInfo),
+    feedbackSend: (message, includeAppInfo, screenshots) => call(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
     syncTurnOn: () => call(IpcChannels.syncTurnOn),
     syncConfirmRecoveryKey: (text) => call(IpcChannels.syncConfirmRecoveryKey, text),
     syncRestore: (text) => call(IpcChannels.syncRestore, text),
@@ -415,6 +491,7 @@ function makeWebClient(): NekkoApi {
 
     listSessions: () => call(IpcChannels.sessionsList),
     nextAgentWatchAt: (sessionId) => call(IpcChannels.sessionNextWatch, sessionId),
+    cancelAgentWatch: (sessionId, id) => call(IpcChannels.sessionCancelWatch, sessionId, id),
     listAgentWatches: (sessionId) => call(IpcChannels.sessionWatches, sessionId),
     listSessionSummaries: () => call(IpcChannels.sessionsSummaries),
     createSession: (workspaceId) => call(IpcChannels.sessionCreate, workspaceId),
@@ -478,10 +555,12 @@ function makeWebClient(): NekkoApi {
     truncateSession: (id, messageId) => call(IpcChannels.sessionTruncate, id, messageId),
     clearSessions: (scope) => call(IpcChannels.sessionsClear, scope),
     purgeExpiredArchives: () => call(IpcChannels.sessionsPurgeArchived),
+  getHistoryUsage: () => call(IpcChannels.sessionsHistoryUsage),
+  clearHistory: (range) => call(IpcChannels.sessionsClearHistory, range),
     forkSession: (id, beforeMessageId) => call(IpcChannels.sessionFork, id, beforeMessageId),
     resetSettings: () => call(IpcChannels.settingsReset),
     listFonts: () => call(IpcChannels.fontsList),
-    wipeAllData: () => call(IpcChannels.dataWipe),
+    wipeAllData: (opts) => call(IpcChannels.dataWipe, opts ?? {}),
     listTools: () => call(IpcChannels.toolsList),
 
     // No native picker in the browser, ask for server-side path(s).
@@ -540,6 +619,7 @@ function makeWebClient(): NekkoApi {
     linkPrStack: (sessionId, url) => call(IpcChannels.prLinkStack, sessionId, url),
     createPr: (workspaceId, opts) => call(IpcChannels.prCreate, workspaceId, opts),
     getPrChecks: (url) => call(IpcChannels.prChecks, url),
+    getPrInfo: (url) => call(IpcChannels.prInfo, url),
 
     gitDiff: (workspaceId, opts) => call(IpcChannels.gitDiff, workspaceId, opts),
     gitLog: (workspaceId, opts) => call(IpcChannels.gitLog, workspaceId, opts),
@@ -603,6 +683,28 @@ function makeWebClient(): NekkoApi {
     listWorkflowRuns: (workflowId) => call(IpcChannels.workflowRuns, workflowId),
     listWorkflowSkillDefs: () => call(IpcChannels.workflowSkillDefs),
     dispatchWorkflowEvent: (event) => call(IpcChannels.workflowEvent, event),
+    imageStatus: () => call(IpcChannels.runnerImageStatus),
+    imagePlan: () => call(IpcChannels.runnerImagePlan),
+    buildImage: (req) => call(IpcChannels.runnerImageBuild, req),
+    resumeImage: () => call(IpcChannels.runnerImageResume),
+    cancelImage: () => call(IpcChannels.runnerImageCancel),
+    linuxImageStatus: () => call(IpcChannels.runnerLinuxImageStatus),
+    buildLinuxImage: () => call(IpcChannels.runnerLinuxImageBuild),
+    cancelLinuxImage: () => call(IpcChannels.runnerLinuxImageCancel),
+    listRunners: () => call(IpcChannels.runnerList),
+    connectRunner: (req) => call(IpcChannels.runnerConnect, req),
+    updateRunner: (id, settings) => call(IpcChannels.runnerUpdate, id, settings),
+    removeRunner: (id) => call(IpcChannels.runnerRemove, id),
+    setRunnerEnabled: (id, enabled) => call(IpcChannels.runnerSetEnabled, id, enabled),
+    runnerJobLog: (id, jobId) => call(IpcChannels.runnerJobLog, id, jobId),
+    runnerLiveLog: (id, vm) => call(IpcChannels.runnerLiveLog, id, vm),
+    runnerJob: (id, action, repo, jobId) => call(IpcChannels.runnerJob, id, action, repo, jobId),
+    runnerVmLog: (id, vm) => call(IpcChannels.runnerVmLog, id, vm),
+    githubAccounts: () => call(IpcChannels.runnerGithubAccounts),
+    githubStart: (req) => call(IpcChannels.runnerGithubStart, req),
+    githubStatus: () => call(IpcChannels.runnerGithubStatus),
+    githubCancel: () => call(IpcChannels.runnerGithubCancel),
+    setForkApproval: (req) => call(IpcChannels.runnerSetForkApproval, req),
 
     listConnectors: () => call(IpcChannels.connectorsList),
     connectConnector: (kind, t, settings) => call(IpcChannels.connectorConnect, kind, t, settings),
@@ -639,6 +741,19 @@ function makeWebClient(): NekkoApi {
     getMessagingStatus: () => call(IpcChannels.messagingStatus),
     getRemotePairing: () => call(IpcChannels.remotePairing),
     startRemotePairing: () => call(IpcChannels.remotePair),
+    startComputerPairing: () => call(IpcChannels.remotePairComputer),
+    // Connected computers are the desktop app's: a server has no window to show them in.
+    listComputers: async () => [],
+    pairComputer: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
+    renameComputer: async () => [],
+    setComputerColor: async () => [],
+    forgetComputer: async () => [],
+    setComputerIcon: async () => [],
+    computerStats: async () => ({ system: null, gpu: null }),
+    computerEngineStatus: async () => null,
+    createSessionOn: () => Promise.reject(new Error('Connected computers are in the desktop app.')),
+    computerCatalog: async () => null,
+    onComputersUpdated: () => () => {},
     listRemoteDevices: () => call(IpcChannels.remoteDevices),
     revokeRemoteDevice: (deviceId) => call(IpcChannels.remoteRevoke, deviceId),
     renameRemoteDevice: (deviceId, name) => call(IpcChannels.remoteRename, deviceId, name),
@@ -680,6 +795,7 @@ function makeWebClient(): NekkoApi {
     getClaudePolicy: () => call(IpcChannels.claudePolicy) as Promise<ClaudePolicyStatus>,
     getClaudeCapability: (providerId, capability) => call(IpcChannels.claudeCapability, providerId, capability) as Promise<ClaudeCapabilityStatus>,
     getClaudePlanUsage: (providerId) => call(IpcChannels.claudePlanUsage, providerId) as Promise<ClaudePlanUsageStatus>,
+    claudeBackgroundTasks: () => call(IpcChannels.claudeBackgroundTasks) as Promise<Record<string, number>>,
     getClaudeCodeStatus: (providerId, account) => call(IpcChannels.claudeCodeStatus, providerId, account) as Promise<ClaudeCodeStatus>,
     getMcpStatus: () => call(IpcChannels.mcpStatus),
     detectHypergate: (port) => call(IpcChannels.mcpHypergate, port),
@@ -749,6 +865,22 @@ function makeWebClient(): NekkoApi {
       workflowCbs.add(cb);
       return () => workflowCbs.delete(cb);
     },
+    onImageChanged: (cb) => {
+      imageCbs.add(cb);
+      return () => imageCbs.delete(cb);
+    },
+    onLinuxImageChanged: (cb) => {
+      linuxImageCbs.add(cb);
+      return () => linuxImageCbs.delete(cb);
+    },
+    onRunnersChanged: (cb) => {
+      runnerCbs.add(cb);
+      return () => runnerCbs.delete(cb);
+    },
+    onGithubSetupChanged: (cb) => {
+      githubSetupCbs.add(cb);
+      return () => githubSetupCbs.delete(cb);
+    },
     onLimitsUpdated: (cb) => {
       limitsUpdatedCbs.add(cb);
       return () => limitsUpdatedCbs.delete(cb);
@@ -768,6 +900,7 @@ function makeWebClient(): NekkoApi {
     // A browser tab has no OS handing it `nekko-agent://` URLs, so this is the
     // honest implementation rather than a missing one.
     onDeepLink: () => () => {},
+    onVoiceLockStop: () => () => {},
     onUpdateEvent: (cb) => {
       // Poll the server version; emit 'available' once it differs from load.
       let stopped = false;

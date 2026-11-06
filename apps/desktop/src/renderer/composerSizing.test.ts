@@ -15,18 +15,14 @@ const board = stylesheet('components/commandWallLayouts.css');
 const narrow = { media: 'max-width: 767px' };
 
 describe('wall composer sizing', () => {
-  it.each(['top', 'bottom'] as const)('docks the composer %s as a sibling of the board in the column, not over it', async (side) => {
+  it.each(['top', 'bottom'] as const)('has no shared composer beside the board, whatever a saved dock says (%s)', async (side) => {
+    // Every agent window has its own composer now (#1317); an old saved dock is ignored.
     const page = await loadCommandCenter();
     const html = page.render({ commandWall: { composer: { side, align: 'center' } } as never });
     const column = html.slice(html.indexOf('class="wall-column"'));
-    const row = column.indexOf(`class="wall-composer-row" data-dock="${side}-center"`);
-    const wall = column.indexOf('data-stub="wall"');
-    expect(row).toBeGreaterThan(-1);
-    expect(column.match(/class="wall-composer-row"/g)).toHaveLength(1);
-    expect(side === 'top' ? row < wall : row > wall).toBe(true);
-    // In flow: a relative flex row that never shrinks, holding a relative composer.
-    expect(cssRule(styles, '.wall-composer-row')).toMatchObject({ position: 'relative', display: 'flex', 'flex-shrink': '0' });
-    expect(cssRule(styles, '.wall-composer').position).toBe('relative');
+    expect(column).toContain('data-stub="wall"');
+    expect(column).not.toContain('wall-composer-row');
+    expect(column).not.toContain('data-stub="composer"');
   });
   it('keeps the outer board shrinkable at narrow widths without scrolling the shell', () => {
     expect(cssRule(styles, '.wall-column')).toMatchObject({ 'min-height': '0', overflow: 'hidden' });

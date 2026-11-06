@@ -1,0 +1,17 @@
+{
+  "name": "@nekko-agent/artifact-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Nekko Artifacts server: publishes an artifact (HTML page, doc, image, report) at a stable, shareable URL, served from an origin isolated from the app. Self-hostable; Nekko Cloud runs the same server.",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "fastify": "^5.12.5"
+  }
+}

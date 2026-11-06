@@ -24,6 +24,7 @@ impl Drop for Daemon {
 fn start(data_dir: &std::path::Path) -> Daemon {
     let config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data_dir });
     let mut child = Command::new(env!("CARGO_BIN_EXE_nekkod"))
+        .env("NEKKO_FILE_VAULT", "1")
         .arg("--config-stdin")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -118,6 +119,31 @@ async fn machine_channels_are_served_without_a_backend() {
     if cfg!(target_os = "macos") {
         assert!(act["idleSeconds"].as_f64().unwrap() >= 0.0, "{act}");
         assert_eq!(act["headless"], json!(false), "{act}");
+    }
+
+    // Whether a full-screen app (a game) is in front: a state, never which app.
+    let (status, fs) = post(d.port, "activity:fullscreen", json!([])).await;
+    assert_eq!(status, 200, "{fs}");
+    let state = fs["state"].as_str().unwrap_or_default();
+    assert!(["free", "d3dFullscreen", "busy", "presentation"].contains(&state), "{fs}");
+    assert_eq!(fs["quiet"], json!(state == "d3dFullscreen"), "{fs}");
+    assert_eq!(fs.as_object().map(|o| o.len()), Some(2), "{fs}");
+    if !cfg!(windows) {
+        assert_eq!(fs, json!({ "quiet": false, "state": "free" }));
+    }
+
+    // Low memory: the level, and with detail, the daemon's own share and the
+    // biggest app. Closing is refused for Nekko and the system.
+    let (status, mem) = post(d.port, "memory:state", json!([{ "detail": true }])).await;
+    assert_eq!(status, 200, "{mem}");
+    assert!(["ok", "low", "critical"].contains(&mem["level"].as_str().unwrap_or_default()), "{mem}");
+    assert!(mem["totalBytes"].as_u64().unwrap() > 0 && mem["nekkoBytes"].as_u64().unwrap() > 0, "{mem}");
+    // What shutting the local models down would free: none loaded here.
+    let (status, models) = post(d.port, "engine:memory", json!([])).await;
+    assert_eq!((status, models), (200, json!({ "models": 0, "busy": 0, "bytes": 0 })));
+    for name in ["nekkod", "explorer", ""] {
+        let (status, closed) = post(d.port, "memory:closeApp", json!([name])).await;
+        assert_eq!((status, closed["ok"].clone()), (200, json!(false)), "{name}: {closed}");
     }
 
     let (status, body) = post(d.port, "resource:queue", json!(["list", {}])).await;

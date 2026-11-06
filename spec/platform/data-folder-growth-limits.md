@@ -11,8 +11,8 @@ area: platform
 
 | Record (in the data folder) | Limit |
 | --- | --- |
-| `logs/app.log`, `logs/nekkod.log` | Rotate at 5 MB, 3 older files kept (already so). |
-| `logs/connections.log` | Rotates at 2 MB, 2 older files kept ([Connections](connections-switch-and-activity-log.md)). |
+| `logs/app.log`, `logs/nekkod.log` | Rotate at 5 MB, 3 older files kept (already so). `[updated 2026-11-03, GD13; unit-tested]` Rotated files last written more than 14 days ago are deleted whenever the log opens or rotates. Each line is redacted as it is written (nekkod's `logs::redact`, the same rules `logs:read` applies, and a TypeScript copy in `apps/desktop/src/main/logRedact.ts` for the app log, both held to `crates/nekkod/tests/golden/log-redact.json`). On macOS and Linux the daemon log tees its stderr descriptor, so the agent's child processes' inherited stderr is redacted too; on Windows only the daemon's own lines and panics reach the file, as before. Lines are redacted whole: a write that splits a line waits for its end, and a line over 16 KB is cut there and marked `[cut]`. |
+| `logs/connections.log` | Rotates at 2 MB, 2 older files kept ([Connections](connections-switch-and-activity-log.md)). `[updated 2026-11-03]` Older than 14 days: deleted, as above; each event redacted as it is written. |
 | `sessions/<id>.commands.log` | Past 5 MB, cut back to its last 4 MB of whole lines. Deleted with its chat. |
 | `quota-history.jsonl` | Lines older than 30 days are dropped at startup. Nothing in the app reads it back. |
 | Model downloads left as `<file>.part` | Removed at startup once untouched for 7 days. The download queue does not survive a restart, so only downloading the same file again would have resumed one. Finished models are never touched. |

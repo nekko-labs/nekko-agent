@@ -6,28 +6,33 @@ import type { ContextBundle } from '@nekko-agent/shared';
 import { ContextGauge, EffortSlider, effortRungs, formatContextTokens } from './ChatMetrics.js';
 
 describe('effort slider', () => {
-  it('puts Low at the left end for Opus 5.5 and marks its default on the Medium rung', () => {
-    expect(effortRungs('normal', 'claude-opus-5-5')).toEqual({ options: ['low', 'normal', 'high', 'xhigh', 'max'], index: 1, shown: 'Default · Medium' });
-    expect(effortRungs('low', 'claude-opus-5-5')).toMatchObject({ index: 0, shown: 'Low' });
-    expect(effortRungs('max', 'claude-opus-5-5')).toMatchObject({ index: 4, shown: 'Max' });
-    // The default-first slider rendered with no settings loaded.
-    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" />);
-    expect(html).toContain('max="4"');
-    expect(html).toContain('value="1"');
+  const metadata = { levels: ['low', 'medium', 'high', 'xhigh', 'max'].map((effort) => ({ effort })), default: 'medium' };
+  it('uses only the provider choices and default', () => {
+    expect(effortRungs('normal', 'claude-opus-5-5', metadata)).toEqual({ options: ['low', 'medium', 'high', 'xhigh', 'max'], index: 1, shown: 'Medium' });
+    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" metadata={metadata} />);
+    expect(html).toContain('data-effort-count="5"');
+    expect(html).toContain('data-effort-index="1"');
+    expect(html).toContain('aria-label="Reasoning effort: Medium"');
+    expect(html).not.toContain('border-line');
   });
   it('shows the chat effort when given a chat', () => {
-    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" session={{ id: 'c', effort: 'max' }} />);
-    expect(html).toContain('value="4"');
+    const html = renderToStaticMarkup(<EffortSlider modelId="claude-opus-5-5" metadata={metadata} session={{ id: 'c', effort: 'max' }} />);
+    expect(html).toContain('data-effort-index="4"');
     expect(html).toContain('Reasoning effort for this chat');
   });
-  it('treats picking the default rung explicitly as the default', () => {
-    expect(effortRungs('medium', 'claude-opus-5-5').shown).toBe('Default · Medium');
-    expect(effortRungs('high', 'claude-opus-5')).toMatchObject({ options: ['low', 'medium', 'normal', 'xhigh', 'max'], index: 2, shown: 'Default · High' });
-    expect(effortRungs('medium', 'claude-opus-5')).toMatchObject({ index: 1, shown: 'Medium' });
+  it.each(['claude-opus-5-5', 'llama3', 'gpt-5'])('does not guess choices for %s without metadata', (modelId) => {
+    expect(effortRungs('normal', modelId)).toEqual({ options: [], index: -1, shown: 'Unavailable' });
+    const html = renderToStaticMarkup(<EffortSlider modelId={modelId} />);
+    expect(html).toContain('disabled=""');
+    expect(html).toContain('Reasoning effort: Unavailable');
+    expect(html).not.toContain('Normal');
   });
-  it('leaves non-native scales unchanged', () => {
-    expect(effortRungs('normal', 'llama3')).toEqual({ options: ['low', 'normal', 'high'], index: 1, shown: 'Normal' });
-    expect(effortRungs('high', 'gpt-5')).toEqual({ options: ['low', 'medium', 'normal', 'high'], index: 3, shown: 'High' });
+  it('labels future provider levels without a hardcoded map entry', () => {
+    expect(effortRungs('ultra', 'new-model', { levels: [{ effort: 'ultra' }] })).toEqual({ options: ['ultra'], index: 0, shown: 'ultra' });
+  });
+  it('does not present the legacy normal sentinel as an advertised choice', () => {
+    expect(effortRungs('normal', 'new-model', { levels: [{ effort: 'high' }] })).toEqual({ options: ['high'], index: -1, shown: 'Provider default' });
+    expect(effortRungs('normal', 'new-model', { levels: [] })).toEqual({ options: [], index: -1, shown: 'Unavailable' });
   });
 });
 
@@ -52,10 +57,25 @@ describe('context token formatting', () => {
     ('retains the filled gauge at %i tokens with %s tone', (tokens, tone) => {
       const html = renderToStaticMarkup(<ContextGauge bundle={null} draftTokens={Number(tokens)} contextWindow={1000000} />);
       expect(html).toContain(` / ~1m`);
-      expect(html).toContain(`color-mix(in srgb, var(--${tone}) 28%, transparent)`);
-      expect(html).toContain(`color-mix(in srgb, var(--${tone}) 12%, var(--surface-2))`);
-      expect(html).toContain('absolute inset-0 origin-left transition-transform duration-300');
-      expect(html).toContain(`transform:scaleX(${Number(tokens) / 1000000})`);
+      // The ring, filled by its dash so the stroke repaints and nothing re-lays out.
+      expect(html).toContain(`stroke="var(--${tone})"`);
+      expect(html).toContain(`stroke-dasharray="${Number(tokens) / 10000} 100"`);
       expect(html).not.toContain('transition-[width]');
     });
+});
+
+describe('dials', () => {
+  it('sweeps 240° open at the bottom, with the large arc past halfway', async () => {
+    const { arcPath } = await import('./ModeViews.js');
+    // Start at 150° (lower left), so an empty arc starts and ends there.
+    expect(arcPath(20, 2, 0)).toBe('M 2.21 14.50 A 9 9 0 0 1 2.21 14.50');
+    // Half the sweep is straight up; the full sweep ends lower right.
+    expect(arcPath(20, 2, 0.5)).toBe('M 2.21 14.50 A 9 9 0 0 1 10.00 1.00');
+    expect(arcPath(20, 2, 1)).toBe('M 2.21 14.50 A 9 9 0 1 1 17.79 14.50');
+  });
+  it('draws the context window as a ring with the count', () => {
+    const html = renderToStaticMarkup(<ContextGauge bundle={null} draftTokens={90000} contextWindow={100000} windowReported />);
+    expect(html).toContain('stroke-dasharray="90 100"');
+    expect(html).toContain('90k / 100k');
+  });
 });

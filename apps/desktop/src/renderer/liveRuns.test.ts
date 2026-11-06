@@ -1,6 +1,7 @@
+import { rememberedConnectivityNotices } from './components/ConnectivityNotices.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEvent } from '@nekko-agent/shared';
-import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
+import { LIVE_STREAM_MAX, __resetLiveRuns, applyEvent, beginResumedRun, applyReplay, clampLive, clearLiveRun, getLiveRun, runningSessionIds, takeFinishedRun } from './liveRuns.js';
 
 // The registry repaints on an animation frame; the folding itself is synchronous
 // and is what these tests are about, so the scheduler is stubbed out.
@@ -32,11 +33,66 @@ describe('liveRuns', () => {
     expect(takeFinishedRun('a')!.blocks).toEqual(blocks);
   });
 
+  it('retains a resume boundary through events, replay and the persisted handoff', () => {
+    beginResumedRun('a', 'saved-tool-result');
+    expect(getLiveRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent(text('a', 'Continuing'));
+    applyReplay({ sessionId: 'a', events: [{ type: 'text', delta: 'Continuing' }] } as any);
+    expect(getLiveRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')?.transcriptThroughId).toBe('saved-tool-result');
+    applyEvent(text('a', 'Next turn'));
+    expect(getLiveRun('a')?.transcriptThroughId).toBeUndefined();
+  });
+
+  it('anchors live PR results before later text and retains them through replay and finish', () => {
+    const call = { id: 'draft', name: 'bash', input: { command: 'gh pr ready 42 --undo --repo o/r' } };
+    const events: AgentEvent[] = [
+      { type: 'tool_call', sessionId: 'a', call },
+      { type: 'tool_result', sessionId: 'a', result: { toolCallId: call.id, output: '' } },
+      text('a', 'The PR is now a draft.'),
+    ];
+    events.forEach((event, index) => applyEvent(event, 1000 + index));
+    const run = getLiveRun('a')!;
+    expect(run.blocks.map((block) => block.kind)).toEqual(['activity', 'pr', 'text']);
+    expect(run.prMessages).toHaveLength(2);
+    const prMessages = run.prMessages;
+    applyEvent(text('a', ' Next step.'));
+    expect(getLiveRun('a')!.prMessages).toBe(prMessages);
+    applyReplay({ sessionId: 'a', events: events.map(({ sessionId: _id, ...event }) => event), at: [1000, 1001, 1002] } as any);
+    expect(getLiveRun('a')!.blocks).toEqual(run.blocks);
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')!.prMessages).toEqual(prMessages);
+  });
+
+  it('does not keep failed, oversized, duplicate or ordinary tool outputs as live PR events', () => {
+    const fire = (id: string, name: string, command: string, output: string, isError = false) => {
+      applyEvent({ type: 'tool_call', sessionId: 'a', call: { id, name, input: { command } } });
+      applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: id, output, isError } });
+    };
+    fire('failed', 'bash', 'gh pr merge 9 --repo o/r', 'denied', true);
+    fire('large', 'bash', 'gh pr view 9 --repo o/r', 'x'.repeat(LIVE_STREAM_MAX + 1));
+    fire('read', 'read_file', 'gh pr create', 'https://github.com/o/r/pull/9');
+    expect(getLiveRun('a')!.blocks.filter((block) => block.kind === 'pr')).toEqual([]);
+    fire('ok', 'bash', 'gh pr ready 9 --repo o/r', '');
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'ok', output: '' } });
+    expect(getLiveRun('a')!.blocks.filter((block) => block.kind === 'pr')).toHaveLength(1);
+  });
+
   it('times each tool call from its call to its result', () => {
     applyEvent(call('a', 'bash'), 1_000);
     applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'c_bash', output: 'ok' } }, 3_500);
     const block = getLiveRun('a')!.blocks[0];
     expect(block.kind === 'activity' && block.items[0]).toMatchObject({ kind: 'tool', startedAt: 1_000, endedAt: 3_500 });
+  });
+
+  it('retains live connectivity notices without starting or resurrecting a run', () => {
+    const notice = { id: 'outage1', kind: 'restored' as const, createdAt: 1000, content: 'Reachability restored; select Continue.' };
+    applyEvent({ type: 'session_meta', sessionId: 'incognito', connectivityNotice: notice });
+    applyEvent({ type: 'session_meta', sessionId: 'incognito', connectivityNotice: notice });
+    expect(rememberedConnectivityNotices('incognito')).toEqual([notice]);
+    expect(getLiveRun('incognito')).toBeUndefined();
+    expect(runningSessionIds()).toEqual([]);
   });
 
   it('does not reopen a finished turn for a late session_meta', () => {

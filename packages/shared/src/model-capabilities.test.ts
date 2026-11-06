@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { estimateTranscriptTokens, estimateTokens } from './context.js';
 import {
   claudeContextWindow,
-  claudeMaxOutputTokens,
   effectiveEffort,
   guessContextWindow,
   modelDefaultEffort,
@@ -69,16 +68,33 @@ describe('GPT context guesses', () => {
 });
 
 describe('effort capability', () => {
-  it('offers the five Anthropic rungs only where the model takes an effort level', () => {
-    expect(modelEffortLevels('claude-opus-5-5')).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
-    expect(modelEffortLevels('claude-fable-5-1')).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
-    expect(modelEffortLevels('claude-haiku-5-5')).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+  it('prefers API options, including future values, without a synthetic normal option', () => {
+    const effort = { levels: [{ effort: 'medium' }, { effort: 'ultra', description: 'More reasoning' }, { effort: 'future-level' }], default: 'ultra' };
+    expect(modelEffortLevels('unknown-model', effort)).toEqual(['medium', 'ultra', 'future-level']);
+    expect(modelDefaultEffort('unknown-model', effort)).toBe('ultra');
+    expect(effectiveEffort('normal', 'unknown-model', effort)).toBe('ultra');
+    expect(effectiveEffort('future-level', 'unknown-model', effort)).toBe('future-level');
+    expect(effectiveEffort('max', 'unknown-model', effort)).toBe('ultra');
+    expect(modelEffortLevels('claude-opus-5', { levels: [] })).toEqual([]);
+    expect(modelDefaultEffort('claude-opus-5', { levels: [] })).toBe('normal');
+    expect(effectiveEffort('normal', 'claude-opus-5', { levels: [{ effort: 'high' }] })).toBe('normal');
+  });
+  it('resolves inherited or saved choices against the destination provider catalog', () => {
+    const source = { levels: [{ effort: 'medium' }, { effort: 'ultra' }], default: 'medium' };
+    const destination = { levels: [{ effort: 'medium' }, { effort: 'high' }], default: 'medium' };
+    expect(effectiveEffort('ultra', 'gpt-5', source)).toBe('ultra');
+    expect(effectiveEffort('ultra', 'gpt-5', destination)).toBe('medium');
+    expect(effectiveEffort(undefined, 'gpt-5', destination)).toBe('medium');
+    expect(effectiveEffort('ultra', 'claude-opus-5-5', { levels: [{ effort: 'high' }] })).toBe('normal');
+    expect(effectiveEffort('ultra', 'claude-opus-5-5', { levels: [] })).toBe('normal');
+    expect(effectiveEffort('ultra', 'gpt-5')).toBe('ultra');
+  });
+  it('does not invent effort choices when the API metadata is absent', () => {
+    for (const id of ['claude-opus-5-5', 'claude-fable-5-1', 'claude-haiku-5-5', 'claude-haiku-4-5', 'gpt-5', 'openai/gpt-6-sol', 'llama3']) {
+      expect(modelEffortLevels(id)).toEqual([]);
+    }
     expect(modelDefaultEffort('claude-haiku-5-5')).toBe('high');
-    // 4.6 and Haiku 4.5 still sample, so they get the temperature scale.
     expect(usesNativeEffort('claude-sonnet-4-6')).toBe(false);
-    expect(modelEffortLevels('claude-haiku-4-5')).toEqual(['low', 'normal', 'high']);
-    expect(modelEffortLevels('gpt-5')).toEqual(['low', 'medium', 'normal', 'high']);
-    expect(modelEffortLevels('openai/gpt-6-sol')).toEqual(['low', 'medium', 'normal', 'high']);
   });
 
   it('knows Opus 5.5 defaults to medium, not high', () => {
@@ -89,27 +105,9 @@ describe('effort capability', () => {
   });
 
   it('maps a saved rung the model lacks to the nearest one it has', () => {
-    expect(effectiveEffort('xhigh', 'gpt-5')).toBe('high');
+    expect(effectiveEffort('xhigh', 'gpt-5')).toBe('xhigh');
     expect(effectiveEffort('medium', 'gpt-5')).toBe('medium');
     expect(effectiveEffort('medium', 'llama3')).toBe('normal');
     expect(effectiveEffort('xhigh', 'claude-opus-5')).toBe('xhigh');
-  });
-});
-
-describe('claudeMaxOutputTokens', () => {
-  it('reads the output ceiling off the family and generation', () => {
-    expect(claudeMaxOutputTokens('claude-opus-5-5')).toBe(64_000);
-    expect(claudeMaxOutputTokens('anthropic/claude-opus-4-1')).toBe(32_000);
-    expect(claudeMaxOutputTokens('claude-opus-4-5')).toBe(64_000);
-    expect(claudeMaxOutputTokens('claude-sonnet-4-6')).toBe(64_000);
-    expect(claudeMaxOutputTokens('claude-3-5-sonnet')).toBe(32_000); // not the family-first id shape: unknown
-    expect(claudeMaxOutputTokens('claude-sonnet-3-5')).toBe(8_192);
-    expect(claudeMaxOutputTokens('claude-haiku-4-5-20251001')).toBe(64_000);
-    expect(claudeMaxOutputTokens('claude-haiku-5-5')).toBe(128_000);
-    expect(claudeMaxOutputTokens('claude-fable-5-1')).toBe(64_000);
-  });
-  it('gives an unrecognised id a generous middle value', () => {
-    expect(claudeMaxOutputTokens('my-proxy-model')).toBe(32_000);
-    expect(claudeMaxOutputTokens(undefined)).toBe(32_000);
   });
 });

@@ -36,13 +36,15 @@ Nekko does not switch accounts on its own unless you ask it to: in a chat on **�
 - `Subscription · Claude Code 2.1.263 · ~/.claude-work · you@work.com · Team plan`: a Claude plan, through Claude Code on this computer.
 - `API · Anthropic API key`, or `API · Amazon Bedrock · us-east-1`: an API or cloud account Nekko calls directly.
 
+**Your first subscription account** takes one press: **Add provider → Claude → Subscription** shows three steps, *Install Claude Code*, *Sign in* and *Connect*, starting at the one your computer has reached. Press the button and each step starts when the last one finishes; you only need to sign in when your browser opens.
+
 **API accounts** (an Anthropic API key, or Bedrock, Vertex or Foundry) work like any other API provider: choose **Add provider → Claude → API → Connect** once per key or cloud account.
 
 **Subscription accounts** run the Claude Code you already have installed. Each one is a separate Claude Code login:
 
 1. On the Models page, choose **Add provider → Claude**, then the **Subscription** column. Your usual Claude Code login connects first.
 2. Choose **+ Another subscription account** and give it a name, such as `Work`. Nekko shows the folder Claude Code will keep that login in: `~/.claude-work`.
-3. Choose **Sign in to Work**. A terminal opens inside the panel with Claude Code running on that folder. Type `/login` and finish signing in with Anthropic, in Claude Code's own flow.
+3. Choose **Sign in to Work**. A terminal opens inside the panel and runs Claude Code's own sign-in on that folder (`claude auth login --claudeai`), which opens Anthropic's sign-in page in your browser. Sign in there; if no page opens, open the link the terminal shows and paste back any code it asks for. The panel moves on by itself once you're signed in.
 4. Nekko reads who the new login is (`claude auth status` prints its email, organization and plan) and checks it against the accounts you already have:
    - **A different person or organization** (say, your company's Team seat beside your personal Max plan): **Add Work** is ready.
    - **Another personal plan** beside a personal plan you already connected: Nekko explains that Anthropic's plan limits "assume ordinary, individual usage" and asks you to confirm the account is for separate work, not for adding up your limits, before **Add** turns on.
@@ -56,7 +58,7 @@ CLAUDE_CONFIG_DIR=~/.claude-work claude
 
 **What Nekko does and does not touch.** Nekko starts Claude Code with `CLAUDE_CONFIG_DIR` set to the account's folder, and asks `claude auth status` whether it is signed in, and as whom (email, organization and plan, which the CLI prints itself). It never opens the folder, never reads or copies the login inside it, never sets a token, and never changes the Claude Code binary. The folder name comes only from the account name (`a-z`, `0-9` and `-`), never from a path you type.
 
-**Usage.** Claude Code shows each account's plan usage itself (`/usage`). Nekko shows none for a Claude plan, because Anthropic has no approved way for another app to read it.
+**Usage.** Nekko shows a Claude plan's usage limits (the current session and the week) as that account's own Claude Code reports them while it works, or when you run `/usage` in the chat. Nekko never asks Anthropic for them with your login, so they are only as fresh as Claude Code's last report.
 
 ## What Anthropic allows
 
@@ -67,6 +69,7 @@ Anthropic's rules for Claude Code ([Legal and compliance](https://code.claude.co
 | What you want to do | Allowed? | Notes |
 | --- | --- | --- |
 | Use your own Claude plan through the Subscription option | Yes | You sign in inside Claude Code with `/login`; Nekko never sees the login. |
+| See Claude Code’s own plan on the chat’s plan sheet | Yes | Nekko reads the to-do list Claude Code prints (its `TodoWrite` and task calls) and shows it; nothing is added to Claude Code. |
 | Keep a work and a personal Claude account, each for its own work | Yes | Each is a separate subscription account with its own login. |
 | Teammates each using their own account | Yes | Each person signs in to their own Claude Code, in their own Nekko. |
 | Any number of API keys or cloud accounts | Yes | Billed to whoever owns each key or account. Every Nekko feature works on them. |
@@ -78,8 +81,28 @@ Anthropic's rules for Claude Code ([Legal and compliance](https://code.claude.co
 
 This page describes how Nekko works, not legal advice. If something matters to your business, ask Anthropic.
 
+## Where your keys are kept
+
+API keys, connector and MCP server tokens, and sign-ins (ChatGPT, OpenRouter, Google) are saved in your computer's own keystore: the Keychain on a Mac, the Credential Manager on Windows. Nekko's settings file keeps everything else. On Linux there is no keystore Nekko can rely on, so they stay in the settings files, readable only by you.
+
+**Settings > System > Backup & restore** exports your settings without any key or token. Importing a backup keeps the keys this computer already has; on a new computer, add your keys again. **Delete everything** deletes the saved keys too.
+
+### macOS Keychain access requests
+
+On a Mac, the app keeps its API keys, sign-ins, and encryption keys together in one Keychain item per app data profile. Its name is **Nekko Agent: API keys, sign-ins and encryption keys**, followed by a short profile identifier. macOS may identify the requesting engine as **nekkod**. This unlocks Nekko Agent's saved credentials; it is not a request to read unrelated passwords in your Keychain.
+
+The engine loads this item once and shares it across the app, rather than reading a separate Keychain item for each key. macOS decides whether approval is needed, especially after a signing identity changes. Saving a changed credential can also require authorization.
+
+**Upgrading from separate items:** the first use of an older saved key moves it into the shared item only after checking that the new copy reads back correctly. Apple may still ask you to approve each old item during this one-time move. Existing per-item permissions cannot be combined retroactively. Later read-only starts use the shared item.
+
+If you deny access, the app remembers that refusal instead of repeatedly asking through other startup callers. Your saved keys are retained, but the affected credentials are unavailable in that run. Unlock Keychain if necessary, then quit and reopen Nekko Agent when you want to retry. Changes made manually in Keychain also take effect after reopening the app. Older app versions do not understand the consolidated storage, so downgrading may require signing in again.
+
 ## Accounts on another computer
 
 Nekko runs Claude Code on the computer it runs on. To use an account that lives on another machine (for example Claude Code inside WSL on a Windows desktop), open a terminal to it from **Terminal → SSH hosts** and run `claude` there: it appears as a terminal tab in the same window, with that machine's login, but not as a Nekko chat. Running a Claude subscription chat on another computer, with its approvals and transcript in this window, is not built yet.
 
 Your phone works the other way round: it drives the Nekko on your computer, with whatever accounts that computer has. See [Phone remote control](REMOTE.md).
+
+### Navigating provider setup
+
+In Models, the underlined section selects **Local model server** or **Cloud providers**. Click **More providers** (···) to open the full chooser. Click it again, click outside the setup area, or press Escape to close it without saving. Settings uses the same underlined section links. Its Skills and Connectors pages have a **Back to Settings** button.

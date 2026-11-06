@@ -72,10 +72,10 @@ describe('plan rail artifacts', () => {
     vi.doMock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ sessions: [], openChatPane: () => {}, settings: {} }) }));
     const { PlanRail } = await import('./PlanRail.js');
     const chat = (id: string, messages?: unknown[]) => ({ id, messages, agentPlan: [] }) as unknown as Session;
-    renderToStaticMarkup(<PlanRail sessionId="s" session={chat('s', [])} streaming={false} />);
-    renderToStaticMarkup(<PlanRail sessionId="s" session={chat('other', [])} streaming={false} />);
-    renderToStaticMarkup(<PlanRail sessionId="s" session={chat('s')} streaming={false} />);
-    renderToStaticMarkup(<PlanRail sessionId="s" session={null} streaming={false} />);
+    renderToStaticMarkup(<PlanRail sessionId="s" session={chat('s', [])} />);
+    renderToStaticMarkup(<PlanRail sessionId="s" session={chat('other', [])} />);
+    renderToStaticMarkup(<PlanRail sessionId="s" session={chat('s')} />);
+    renderToStaticMarkup(<PlanRail sessionId="s" session={null} />);
     expect(seen.map((p) => p.hydrated)).toEqual([true, false, false, false]);
     expect(seen.every((p) => p.sessionId === 's')).toBe(true);
   });

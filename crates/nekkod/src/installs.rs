@@ -38,10 +38,6 @@ fn arch() -> &'static str {
     if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" }
 }
 
-fn now() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
-}
-
 /// Whether the model server is running. Before the server is set, the
 /// daemon serving the engine's port says so instead.
 fn server_running(engine: &crate::engine::Engine) -> bool {
@@ -113,7 +109,7 @@ impl Installs {
                     adapters.clone(),
                     external,
                     before_replace.clone(),
-                    Arc::new(now),
+                    Arc::new(nekko_js::now_ms_f64),
                     vc.clone(),
                 )
             };
@@ -168,7 +164,11 @@ impl Installs {
                 if runtime == "mlx" { self.mlx.uninstall() } else { self.installer(runtime).uninstall() }
             }
             "engine:detect" => self.detect(text(0).unwrap_or("llama")).await,
-            "engine:installedBin" => json!(self.llama.installed_bin().await),
+            // Without the GPU probe, so the tray can ask every few seconds.
+            "engine:installedBin" => match text(0).unwrap_or("llama") {
+                "mlx" => json!(self.mlx.bin_path().await),
+                runtime => json!(self.installer(runtime).installed_bin().await),
+            },
             other => return Err(format!("{other} is not an install channel")),
         })
     }

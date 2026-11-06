@@ -1,7 +1,9 @@
 import React, { useLayoutEffect, useRef } from 'react';
 type AgentPanelOrientation = 'vertical' | 'horizontal';
-import { PanelLeftIcon, PanelSwapIcon } from '../icons.js';
+import { PanelSwapIcon } from '../icons.js';
+import { SidebarCollapseIcon, SidebarExpandIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
+import { EASE_OUT } from '../easing.js';
 
 /**
  * The Agents panel's own show/hide and column/row controls. They stay in the
@@ -43,7 +45,7 @@ export function AgentPanelControls({ show, orientation, onToggle, onOrientation,
       const dx = before.left - after.left;
       const dy = before.top - after.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+      el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 280, easing: EASE_OUT });
     }
     last.current = new Map(items.map((el) => [el, el.getBoundingClientRect()]));
   }, [stacked]);
@@ -61,7 +63,7 @@ export function AgentPanelControls({ show, orientation, onToggle, onOrientation,
           aria-pressed={show}
           onClick={onToggle}
         >
-          <PanelLeftIcon className="h-4 w-4 shrink-0" />
+          {show ? <SidebarCollapseIcon className="h-4 w-4 shrink-0" /> : <SidebarExpandIcon className="h-4 w-4 shrink-0" />}
         </button>
       </HoverTip>
       <HoverTip label={orientationLabel} side={tipSide}>

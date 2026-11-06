@@ -24,7 +24,7 @@ Search and download models from Hugging Face inside the app, see which fit the g
 
 ### 3. Every model side by side
 
-Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. Nekko does not sign in with Claude Free, Pro, or Max plans: Anthropic does not allow third-party apps to. An upcoming Claude Agent provider runs the user's own installed Claude Code instead.
+Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. To use a Claude plan (Pro, Max or Team), Nekko runs the user's own installed Claude Code, which they sign in to themselves; Nekko never signs in to Claude or reads Claude credentials. Scheduled tasks, Nekko's own tools inside that chat and plan usage limits stay off on a Claude plan for now; an API key or cloud account turns every feature on.
 
 ### 4. Spend, savings, and live monitoring
 
@@ -94,10 +94,13 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 
 ### Using Nekko Agent
 
+- [Verification and PR progress](https://nekkoagent.com/docs/chat-progress.md): Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat.
+- [Simple and Detailed](https://nekkoagent.com/docs/simple-and-expert.md): Switch between the everyday app and every control, and choose what Simple shows.
 - [Fonts and text](https://nekkoagent.com/docs/fonts-and-text.md): Text size, the interface and code fonts, and adding your own fonts.
 - [Browser automation](https://nekkoagent.com/docs/browser-automation.md): Chat-owned browser actions, security boundaries and native driver migration status.
 - [Connections](https://nekkoagent.com/docs/connections.md): Switch off every network connection at once or one by one, and see how often each one is used.
 - [Usage and crash reports](https://nekkoagent.com/docs/usage-reports.md): Opt in to anonymous usage and crash reports, what they contain, and how to see each send.
+- [Voice](https://nekkoagent.com/docs/voice.md): Tap the mic once and talk: dictation that stays on, "Nekko" commands, and speech that never leaves your computer.
 - [Privacy Shield](https://nekkoagent.com/docs/privacy-shield.md): Replace emails, phone numbers, secrets and your own terms with placeholders before a request reaches a cloud model.
 - [Code mode](https://nekkoagent.com/docs/code-mode.md): Let the model write code that calls your tools in a sandbox, so long tool lists and big results cost far fewer tokens.
 - [Running models locally](https://nekkoagent.com/docs/local-models.md): Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM).
@@ -111,16 +114,20 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 - [Encrypted sync](https://nekkoagent.com/docs/sync-encryption.md): How Pro and Team sync your chats without Nekko Cloud being able to read them.
 - [CLI and MCP](https://nekkoagent.com/docs/cli.md): Use Nekko Agent from the terminal, or as an MCP server inside Claude Code, Codex and Cursor.
 - [Automations](https://nekkoagent.com/docs/automations.md): Ready-made automations, run results and notifications, and pausing them all.
-- [Workflow runs](https://nekkoagent.com/docs/workflows.md): Pick a workflow's model, keep it on local models, and control what its unattended runs may do.
+- [Scheduled task runs](https://nekkoagent.com/docs/workflows.md): Pick a scheduled task's model, keep it on local models, and control what its unattended runs may do.
 - [Local CI runner](https://nekkoagent.com/docs/local-ci-runner.md): Run a GitHub or GitLab repo's builds and tests on your own machine.
+- [CI runners on your Mac](https://nekkoagent.com/docs/ci-runners.md): Run your GitHub Actions jobs on this Mac, each in a throwaway VM, without getting in your way.
+- [Bring your own CI runner image](https://nekkoagent.com/docs/ci-runners-image.md): What Nekko's image build does, and how to build the macOS image yourself on macOS 26.
+- [CI runner performance](https://nekkoagent.com/docs/ci-runner-performance.md): How fast a job runs on your Mac compared with GitHub's hosted Macs, measured on our own iOS CI.
 - [Decision models](https://nekkoagent.com/docs/decision-models.md): Typed questions answered with calibrated probabilities, in one forward pass.
-- [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast the engine runs a model compared with Ollama and LM Studio.
+- [Local inference benchmarks](https://nekkoagent.com/docs/benchmarks.md): How fast Nekko Agent runs a model compared with llama.cpp, Ollama, LM Studio and MLX, and the runner to check it yourself.
 - [Floop tasks](https://nekkoagent.com/docs/floop.md): Show your team's Floop tasks in Nekko Agent and let the agent pick up, update and finish them.
 - [Send feedback](https://nekkoagent.com/docs/send-feedback.md): Tell Nekko Labs what's broken or missing: a prompt for your own agent, a quick anonymous note, or a GitHub issue.
 
 ### Contributing
 
 - [Contributing](https://nekkoagent.com/docs/contributing.md): Set up a development checkout, the project layout, and what a pull request needs.
+- [Credits](https://nekkoagent.com/docs/credits.md): The projects, assets and runtimes Nekko Agent is built on, and their licenses.
 - [Architecture](https://nekkoagent.com/docs/architecture.md): How the desktop app, the TypeScript host and the Rust engine daemon fit together.
 - [Release signing](https://nekkoagent.com/docs/release-signing.md): How the macOS and Windows builds are signed and notarized.
 

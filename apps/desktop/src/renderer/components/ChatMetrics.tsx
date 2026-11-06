@@ -1,9 +1,11 @@
 import React from 'react';
-import type { ContextBundle, ContextItem, EffortLevel, Session } from '@nekko-agent/shared';
-import { chatEffort, effectiveEffort, modelDefaultEffort, modelEffortLevels, usesNativeEffort } from '@nekko-agent/shared';
+import { createPortal } from 'react-dom';
+import type { ContextBundle, ContextItem, EffortLevel, ModelInfo, Session } from '@nekko-agent/shared';
+import { chatEffort, effectiveEffort, modelEffortLevels } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { sourceMeta } from '../contextSources.js';
 import { fillTone } from './contextTone.js';
+import { EffortDial, usePopover } from './ModeViews.js';
 
 const FREE_COLOR = 'var(--surface-2)';
 
@@ -32,6 +34,7 @@ export function ContextGauge({
   contextWindow,
   windowReported = false,
   reported,
+  ringOnly = false,
 }: {
   bundle: ContextBundle | null;
   /** The skill armed in the composer, folded into the token count when present. */
@@ -57,6 +60,8 @@ export function ContextGauge({
    * prompt and tools, and its compactions), and its window beats any guess.
    */
   reported?: { used: number; window?: number };
+  /** Simple: the ring alone, at the row's right end; the numbers wait in its tooltip. */
+  ringOnly?: boolean;
 }) {
   const included = reported ? [] : (bundle?.items ?? []).filter((i: ContextItem) => i.included);
   const base = reported ? reported.used : included.reduce((s, i) => s + i.tokens, 0);
@@ -88,29 +93,26 @@ export function ContextGauge({
   const freePct = windowTokens ? (free / windowTokens) * 100 : 0;
 
   return (
-    <div className="group relative flex min-w-0 shrink-0 items-center text-[11px] text-ink-faint">
-      {/* One bar that fills as the window does, with the count written on it.
-          `~` marks a window guessed from the model family rather than reported. */}
+    <div className="group relative flex min-w-0 shrink-0 items-center text-2xs text-ink-faint">
+      {/* A ring that fills as the window does, and the count beside it, as on
+          the phone. `~` marks a window guessed from the model family rather
+          than reported. */}
       <span
-        className="context-bar relative flex h-6 min-w-[92px] cursor-default items-center justify-center overflow-hidden rounded-md border border-line px-2 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
-        style={{ background: windowTokens > 0 ? `color-mix(in srgb, ${fillTone(pct)} 12%, var(--surface-2))` : 'var(--surface-2)' }}
+        className="context-bar flex h-6 cursor-default items-center gap-2 rounded-md px-2 tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
         tabIndex={0}
         aria-label={`Context window: ${num(used)}${windowTokens ? ` of ${num(windowTokens)}` : ''} tokens in use`}
       >
-        {/* Filled by scaling, not by width: the count moves with every streamed
-            token, and a width transition re-laid-out the page on every frame. */}
-        <span
-          aria-hidden
-          className="absolute inset-0 origin-left transition-transform duration-300"
-          style={{ transform: `scaleX(${pct / 100})`, background: `color-mix(in srgb, ${fillTone(windowTokens > 0 ? pct : NaN)} 28%, transparent)` }}
-        />
-        <span className="relative text-ink-soft">
+        <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" className="shrink-0 -rotate-90">
+          <circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--surface-2)" strokeWidth="3" />
+          {windowTokens > 0 && <circle cx="8" cy="8" r="6.5" fill="none" stroke={fillTone(pct)} strokeWidth="3" strokeLinecap="round" pathLength={100} strokeDasharray={`${pct} 100`} className="transition-[stroke-dasharray] duration-300" />}
+        </svg>
+        {!ringOnly && <span className="text-ink-soft" style={pct >= 60 ? { color: fillTone(pct) } : undefined}>
           {formatContextTokens(used)}{windowTokens ? ` / ${!windowKnown ? '~' : ''}${formatContextTokens(windowTokens)}` : ''}
-        </span>
+        </span>}
       </span>
       {/* Expanded breakdown: segmented bar + per-source rows with %, plus free space. */}
       <div
-        className="pointer-events-none absolute bottom-7 left-0 z-40 hidden w-72 rounded-xl border border-line p-3 text-[11px] shadow-lg group-hover:block group-focus-within:block"
+        className={`pointer-events-none absolute bottom-7 ${ringOnly ? 'right-0' : 'left-0'} z-40 hidden w-72 rounded-xl border border-line p-3 text-2xs shadow-(--shadow-float) group-hover:block group-focus-within:block`}
         style={{ background: 'var(--surface)' }}
         role="tooltip"
       >
@@ -126,7 +128,7 @@ export function ContextGauge({
           : windowReported ? 'Window reported by the model catalog. Usage is estimated.' : 'Window estimated from model family; the provider has not reported its exact limit.'}</p>
         {/* Segmented usage bar */}
         {windowTokens > 0 && (
-          <div className="mb-2.5 flex h-2 w-full overflow-hidden rounded-full" style={{ background: FREE_COLOR }}>
+          <div className="mb-2 flex h-2 w-full overflow-hidden rounded-full" style={{ background: FREE_COLOR }}>
             {rows.map((r) => (
               <span key={r.src} title={`${r.meta.label}: ${num(r.n)} tok`} style={{ width: `${r.pctWin}%`, background: r.meta.color }} />
             ))}
@@ -149,7 +151,7 @@ export function ContextGauge({
             <span className="w-9 shrink-0 text-right tabular-nums text-ink-faint">{freePct.toFixed(1)}%</span>
           </div>
         )}
-        <div className="mt-1.5 flex justify-between border-t border-line pt-1.5 font-medium text-ink">
+        <div className="mt-1 flex justify-between border-t border-line pt-1 font-medium text-ink">
           <span>Total in use</span>
           <span className="tabular-nums">{num(used)} tok</span>
         </div>
@@ -167,38 +169,26 @@ export const EFFORT_LABEL: Record<EffortLevel, string> = {
   max: 'Max',
 };
 
-/**
- * The slider's stops for a model, lowest first, and which one the saved
- * setting sits on.
- *
- * The model's default takes its own rung's place rather than a stop of its
- * own at the far left: "Default · Medium" sitting left of Low read as the
- * bottom of the scale, so Opus 5.5 looked like it had no Low at all.
- */
-export function effortRungs(saved: EffortLevel, modelId: string | undefined): { options: EffortLevel[]; index: number; shown: string } {
-  const levels = modelEffortLevels(modelId);
-  const native = usesNativeEffort(modelId);
-  const fallback = modelDefaultEffort(modelId);
-  // What this model will actually be sent, which is what the slider shows: a
-  // saved `xhigh` on a temperature model runs as `high`, and says so.
-  const effective = effectiveEffort(saved, modelId);
-  const atDefault = native && effective === fallback;
-  const options: EffortLevel[] = native ? levels.map((l) => (l === fallback ? 'normal' : l)) : levels;
-  const index = Math.max(0, options.indexOf(atDefault ? 'normal' : effective));
-  return { options, index, shown: atDefault ? `Default · ${EFFORT_LABEL[fallback]}` : EFFORT_LABEL[effective] };
+export const effortLabel = (level: EffortLevel): string => EFFORT_LABEL[level] ?? level;
+
+/** Only provider-advertised stops. An unspecified default is not a synthetic rung. */
+export function effortRungs(saved: EffortLevel, modelId: string | undefined, metadata?: ModelInfo['effort']): { options: EffortLevel[]; index: number; shown: string } {
+  const options = modelEffortLevels(modelId, metadata);
+  const effective = effectiveEffort(saved, modelId, metadata);
+  const index = options.indexOf(effective);
+  return { options, index, shown: !options.length ? 'Unavailable' : index < 0 ? 'Provider default' : effortLabel(effective) };
 }
 
-/**
- * Model-specific effort rungs on a compact slider beside the model picker.
- * Given a chat, it shows and sets that chat's effort (`Session.effort`, which
- * falls back to the app-wide setting); without one it sets the app-wide one.
- */
-export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
+type EffortProps = {
   modelId?: string;
+  metadata?: ModelInfo['effort'];
   onChanged?: () => void;
   session?: Pick<Session, 'id' | 'effort'> | null;
   onSessionChange?: (s: Session) => void;
-}) {
+};
+
+/** The chat's effort (or the app-wide one without a chat), and setting it. */
+function useEffort({ modelId, metadata, onChanged, session, onSessionChange }: EffortProps) {
   const appEffort = useStore((s) => s.settings?.effort);
   const saved = (session ? chatEffort(session, appEffort) : appEffort) ?? 'normal';
   const pick = (level: EffortLevel) => {
@@ -206,43 +196,93 @@ export function EffortSlider({ modelId, onChanged, session, onSessionChange }: {
     onChanged?.();
     if (session) {
       void window.nekko.setSessionOptions(session.id, { effort: level })
-        .then((s) => { if (s) onSessionChange?.(s); })
+        .then(async (s) => {
+          if (!s) return;
+          onSessionChange?.(s);
+          await window.nekko.updateSettings({ effort: level });
+          await useStore.getState().refreshSettings();
+        })
         .catch((e) => useStore.getState().pushToast('error', String(e)));
     } else {
       void window.nekko.updateSettings({ effort: level }).then(() => useStore.getState().refreshSettings());
     }
   };
 
-  const { options, index, shown } = effortRungs(saved, modelId);
-  // 0..1 up the rungs: it drives the glow's size and arms the top rung's
-  // speed lines.
-  const level = options.length > 1 ? index / (options.length - 1) : 0;
-  const atMax = options.length > 1 && index === options.length - 1;
+  return { pick, ...effortRungs(saved, modelId, metadata) };
+}
+
+/**
+ * Model-specific effort rungs on a compact slider beside the model picker.
+ * Given a chat, it shows and sets that chat's effort (`Session.effort`, which
+ * falls back to the app-wide setting); without one it sets the app-wide one.
+ */
+export function EffortSlider(props: EffortProps) {
+  const { pick, options, index, shown } = useEffort(props);
+  const { metadata, session } = props;
+  const available = options.length > 0;
+  const description = index >= 0 ? metadata?.levels.find((level) => level.effort === options[index])?.description : undefined;
+  const pop = usePopover(380);
+  const step = (by: number) => {
+    const next = options[Math.max(0, Math.min(options.length - 1, index + by))];
+    if (next) pick(next);
+  };
+  // The chat follows the app-wide setting when it has no choice of its own,
+  // so the sheet footer says so instead of flattening to the same copy.
+  const following = session ? session.effort == null : false;
+  // A borderless gauge opens the phone-style slider. Arrow keys also step
+  // through the advertised choices without opening the popover.
   return (
-    <div className="effort-slider flex shrink-0 items-center gap-1 rounded-r-lg border border-l-0 border-line px-2 py-1 text-[11px]" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort (the app default; a chat can set its own)'}>
-      <label htmlFor="composer-effort" className="text-ink-faint">Effort</label>
-      <span
-        className="effort-track"
-        style={{ '--effort-fill': `${level * 100}%`, '--effort-level': level } as React.CSSProperties}
+    <div className="effort-slider flex shrink-0 items-center" title={session ? 'Reasoning effort for this chat' : 'Reasoning effort, remembered for new chats on this computer'}>
+      <button
+        ref={pop.anchor}
+        type="button"
+        className="effort-trigger flex h-7 items-center justify-center gap-1.5 rounded-lg px-1 text-2xs text-ink-soft hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent"
+        disabled={!available}
+        title={!available ? metadata ? 'Effort unavailable: this provider reports no selectable effort choices for this model.' : 'Effort unavailable: this provider has not reported effort choices for this model.' : `Reasoning effort: ${shown}`}
+        onClick={() => pop.setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); step(1); }
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); step(-1); }
+        }}
+        aria-haspopup="dialog"
+        aria-expanded={pop.open}
+        aria-label={`Reasoning effort: ${shown}`}
+        data-effort-index={index}
+        data-effort-count={options.length}
       >
-        <input
-          id="composer-effort"
-          type="range"
-          min={0}
-          max={options.length - 1}
-          step={1}
-          value={Math.max(0, index)}
-          onChange={(event) => pick(options[Number(event.target.value)])}
-          aria-label="Reasoning effort"
-          aria-valuetext={shown}
-        />
-        {atMax && (
-          <span className="effort-speed" aria-hidden="true">
-            <i /><i /><i />
-          </span>
-        )}
-      </span>
-      <span className="min-w-12 text-right text-ink-soft">{shown}</span>
+        <EffortDial index={Math.max(0, index)} count={options.length} size={18} />
+        <span>Effort</span>
+      </button>
+      {pop.open && available && createPortal(
+        <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-4 shadow-(--shadow-float)" role="dialog" aria-label="Reasoning effort" data-effort-popover>
+          <div className="flex flex-col items-center gap-3">
+            <EffortDial index={Math.max(0, index)} count={options.length} size={96} />
+            <span className="text-sm font-semibold text-ink">{shown}</span>
+            {description && <p className="text-center text-xs text-ink-soft">{description}</p>}
+            <input
+              type="range"
+              min={0}
+              max={options.length - 1}
+              step={1}
+              value={Math.max(0, index)}
+              disabled={options.length === 1}
+              aria-label="Reasoning effort"
+              aria-valuetext={shown}
+              className="w-full accent-(--accent)"
+              onChange={(e) => { const level = options[Number(e.currentTarget.value)]; if (level) pick(level); }}
+            />
+            <div className="flex w-full justify-between gap-1 text-2xs text-ink-faint" aria-hidden="true">
+              {options.map((o) => <span key={o} className="min-w-0 break-words text-center" title={metadata?.levels.find((level) => level.effort === o)?.description}>{effortLabel(o)}</span>)}
+            </div>
+            {index < 0 && <button type="button" className="text-xs text-accent" onClick={() => pick(options[0])}>Use {effortLabel(options[0])}</button>}
+            {metadata?.default && options.includes(metadata.default) && <p className="text-2xs text-ink-soft">Provider default: {effortLabel(metadata.default)}</p>}
+            <p className="text-center text-2xs leading-snug text-ink-faint">
+              {following ? "Following this computer's effort setting. " : ''}Higher effort thinks longer and spends more tokens.
+            </p>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

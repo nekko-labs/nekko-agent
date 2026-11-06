@@ -30,6 +30,14 @@ impl Request {
         Self::new("PATCH", url, headers, body)
     }
 
+    pub fn put(url: impl Into<String>, headers: &[(&str, &str)], body: Option<String>) -> Self {
+        Self::new("PUT", url, headers, body)
+    }
+
+    pub fn delete(url: impl Into<String>, headers: &[(&str, &str)]) -> Self {
+        Self::new("DELETE", url, headers, None)
+    }
+
     fn new(method: &'static str, url: impl Into<String>, headers: &[(&str, &str)], body: Option<String>) -> Self {
         Self {
             method,
@@ -84,11 +92,8 @@ impl Http for Net {
     fn send(&self, req: Request) -> BoxFut<'_, Result<Response, String>> {
         Box::pin(async move {
             let client = if req.no_redirect { &self.manual } else { &self.follow };
-            let mut b = match req.method {
-                "POST" => client.post(&req.url),
-                "PATCH" => client.patch(&req.url),
-                _ => client.get(&req.url),
-            };
+            let method = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|_| FETCH_FAILED.to_string())?;
+            let mut b = client.request(method, &req.url);
             for (k, v) in &req.headers {
                 b = b.header(k, v);
             }
@@ -108,5 +113,33 @@ impl Http for Net {
             let body = res.text().await.map_err(|_| FETCH_FAILED.to_string())?;
             Ok(Response { status, body, location })
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// The request line a one-shot local server received.
+    async fn method_sent(req: impl FnOnce(String) -> Request) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/x", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut s, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 4096];
+            let n = s.read(&mut buf).await.unwrap();
+            s.write_all(b"HTTP/1.1 204 No Content\r\ncontent-length: 0\r\n\r\n").await.unwrap();
+            String::from_utf8_lossy(&buf[..n]).lines().next().unwrap_or_default().to_string()
+        });
+        let res = Net::default().send(req(url)).await.unwrap();
+        assert_eq!(res.status, 204);
+        server.await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn put_and_delete_are_sent_as_themselves() {
+        assert!(method_sent(|u| Request::put(u, &[], Some("{}".into()))).await.starts_with("PUT /x "));
+        assert!(method_sent(|u| Request::delete(u, &[])).await.starts_with("DELETE /x "));
     }
 }

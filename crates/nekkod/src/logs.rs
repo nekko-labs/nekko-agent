@@ -7,8 +7,12 @@
 //! `<dataDir>/logs/app.log` (Electron main's console, apps/desktop
 //! `appLog.ts`), each rotated at [`ROTATE_BYTES`] into `.1` .. `.{KEEP}`.
 //!
-//! Every line a read returns goes through [`redact`] first, and a search
-//! matches the redacted line, so a search cannot confirm a secret either.
+//! Lines are redacted twice: when written ([`redact`] on each line of the
+//! daemon log, inherited child stderr included), so the files on disk hold no
+//! secret the rules catch; and when read, so a log written by an older
+//! version, or by the app, is still shown redacted. A search matches the
+//! redacted line, so it cannot confirm a secret either. Rotated files older
+//! than [`MAX_AGE`] are deleted whenever a log opens or rotates.
 
 use serde_json::{Map, Value, json};
 use std::fs::{File, OpenOptions};
@@ -23,6 +27,12 @@ pub const CHANNELS: &[&str] = &["logs:list", "logs:read"];
 pub const ROTATE_BYTES: u64 = 5 * 1024 * 1024;
 /// Rotated files kept beside the live one (`.1` is the newest).
 pub const KEEP: usize = 3;
+/// Rotated files older than this are deleted.
+pub const MAX_AGE: std::time::Duration = std::time::Duration::from_secs(14 * 24 * 60 * 60);
+/// A line still waiting for its end is written anyway past this many bytes,
+/// and a written line is cut to it, so one huge line (a base64 dump) can
+/// neither hold the pipe nor fill the log.
+const PARTIAL_MAX: usize = 16 * 1024;
 /// What a read returns by default, and at most.
 const TAIL_DEFAULT: u64 = 64 * 1024;
 const TAIL_MAX: u64 = 1024 * 1024;
@@ -59,6 +69,7 @@ impl RotatingLog {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        prune(path, MAX_AGE);
         let file = open_append(path)?;
         let size = file.metadata().map(|m| m.len()).unwrap_or(0);
         Ok(RotatingLog { path: path.to_path_buf(), max, keep, file: Some(file), size })
@@ -90,8 +101,59 @@ impl RotatingLog {
         }
         self.file = Some(open_append(&self.path)?);
         self.size = 0;
+        prune(&self.path, MAX_AGE);
         Ok(())
     }
+}
+
+/// `nekkod.log.2` is a rotated `nekkod.log`.
+fn is_rotated(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, n)| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Delete `path`'s rotated files last written more than `max_age` ago.
+pub fn prune(path: &Path, max_age: std::time::Duration) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name().map(|n| n.to_string_lossy().into_owned())) else {
+        return;
+    };
+    let prefix = format!("{name}.");
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let file = entry.file_name().to_string_lossy().into_owned();
+        if !file.starts_with(&prefix) || !is_rotated(&file) {
+            continue;
+        }
+        let old = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > max_age);
+        if old {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// Empty a logs folder (Delete everything): live logs are cut to nothing in
+/// place, as their writers hold them open; rotated and other files go.
+pub fn clear_dir(dir: &Path) -> std::io::Result<()> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path)?;
+        } else if [DAEMON_LOG, APP_LOG, crate::connections::LOG].contains(&name.as_str()) {
+            OpenOptions::new().write(true).truncate(true).open(&path)?;
+        } else {
+            std::fs::remove_file(&path)?;
+        }
+    }
+    Ok(())
 }
 
 fn open_append(path: &Path) -> std::io::Result<File> {
@@ -116,25 +178,43 @@ fn stamp() -> String {
     chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string()
 }
 
-/// Stamps each line start with the time, across writes that split lines.
+/// One finished line as the daemon log stores it: stamped and redacted.
+fn log_line(line: &[u8]) -> Vec<u8> {
+    let text = String::from_utf8_lossy(&line[..line.len().min(PARTIAL_MAX)]);
+    let body = text.strip_suffix('\n').unwrap_or(&text);
+    let body = body.strip_suffix('\r').unwrap_or(body);
+    let cut = if line.len() > PARTIAL_MAX { " [cut]" } else { "" };
+    format!("{} {}{cut}\n", stamp(), redact(body)).into_bytes()
+}
+
+/// Whole lines out of writes that split them, each stamped and redacted (a
+/// secret cut across two writes is still one line here). A line waits for its
+/// end, up to [`PARTIAL_MAX`] bytes.
 #[cfg_attr(not(unix), allow(dead_code))]
-struct Stamper {
-    at_line_start: bool,
+#[derive(Default)]
+struct Lines {
+    partial: Vec<u8>,
 }
 
 #[cfg_attr(not(unix), allow(dead_code))]
-impl Stamper {
-    fn stamp(&mut self, chunk: &[u8]) -> Vec<u8> {
-        let mut out = Vec::with_capacity(chunk.len() + 32);
-        for line in chunk.split_inclusive(|b| *b == b'\n') {
-            if self.at_line_start {
-                out.extend_from_slice(stamp().as_bytes());
-                out.push(b' ');
-            }
-            out.extend_from_slice(line);
-            self.at_line_start = line.ends_with(b"\n");
+impl Lines {
+    fn push(&mut self, chunk: &[u8]) -> Vec<u8> {
+        self.partial.extend_from_slice(chunk);
+        let cut = match self.partial.iter().rposition(|b| *b == b'\n') {
+            Some(i) => i + 1,
+            None if self.partial.len() >= PARTIAL_MAX => self.partial.len(),
+            None => return Vec::new(),
+        };
+        let ready: Vec<u8> = self.partial.drain(..cut).collect();
+        ready.split_inclusive(|b| *b == b'\n').flat_map(log_line).collect()
+    }
+
+    /// What is left at the end, as a line of its own.
+    fn finish(&mut self) -> Vec<u8> {
+        if self.partial.is_empty() {
+            return Vec::new();
         }
-        out
+        log_line(&std::mem::take(&mut self.partial))
     }
 }
 
@@ -199,7 +279,7 @@ pub fn note(line: &str) {
     eprintln!("{line}");
     #[cfg(not(unix))]
     if let Some(log) = DAEMON.get() {
-        let _ = lock(log).append(format!("{} {line}\n", stamp()).as_bytes());
+        let _ = lock(log).append(&log_line(line.as_bytes()));
     }
 }
 
@@ -233,7 +313,7 @@ fn tee_stderr(log: Arc<Mutex<RotatingLog>>) -> Option<(i32, std::sync::mpsc::Rec
     let mut original = if writer_fd >= 0 { Some(unsafe { File::from_raw_fd(writer_fd) }) } else { None };
     let (tx, rx) = std::sync::mpsc::channel();
     let spawned = std::thread::Builder::new().name("nekkod-log".into()).spawn(move || {
-        let mut stamper = Stamper { at_line_start: true };
+        let mut lines = Lines::default();
         let mut buf = vec![0u8; 16 * 1024];
         loop {
             let n = match reader.read(&mut buf) {
@@ -245,8 +325,12 @@ fn tee_stderr(log: Arc<Mutex<RotatingLog>>) -> Option<(i32, std::sync::mpsc::Rec
             if let Some(o) = original.as_mut() {
                 let _ = o.write_all(&buf[..n]);
             }
-            let _ = lock(&log).append(&stamper.stamp(&buf[..n]));
+            let out = lines.push(&buf[..n]);
+            if !out.is_empty() {
+                let _ = lock(&log).append(&out);
+            }
         }
+        let _ = lock(&log).append(&lines.finish());
         let _ = tx.send(());
     });
     if spawned.is_err() {
@@ -281,8 +365,9 @@ fn rules() -> &'static Rules {
     RULES.get_or_init(|| {
         let re = |src: &str, flags: &str| regress::Regex::with_flags(src, flags).expect("redaction pattern compiles");
         Rules {
-            // https://user:pass@host
-            userinfo: re(r"([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@", "i"),
+            // https://user:pass@host. The scheme is bounded: unbounded, every
+            // start in a long run of letters scanned to its end (quadratic).
+            userinfo: re(r"([a-z][a-z0-9+.-]{0,31}://)[^/\s:@]+:[^/\s@]+@", "i"),
             // Authorization schemes.
             scheme: re(r"\b(bearer|basic|token)\s+([A-Za-z0-9._~+/=-]{8,})", "i"),
             // Query parameters that open something (the iOS Diagnostics.redact set and more).
@@ -593,17 +678,13 @@ impl Logs {
 }
 
 pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> Result<Value, String> {
-    let Some(dir) = ctx.workspace.data_dir().map(Path::to_path_buf) else {
-        return Err(format!("{channel} needs the data directory"));
-    };
-    let logs = Logs::new(&dir);
+    let logs = Logs::new(ctx.workspace.data_dir());
     match channel {
         "logs:list" => {
             let store = ctx.sessions.clone();
             tokio::task::spawn_blocking(move || {
                 let titles: std::collections::HashMap<String, String> = store
-                    .map(|s| s.summaries())
-                    .unwrap_or_default()
+                    .summaries()
                     .into_iter()
                     .filter_map(|s| {
                         Some((s.get("id")?.as_str()?.to_string(), s.get("title")?.as_str().unwrap_or("").to_string()))
@@ -660,18 +741,74 @@ mod tests {
     }
 
     #[test]
-    fn stamps_line_starts_across_split_writes() {
-        let mut s = Stamper { at_line_start: true };
-        let a = String::from_utf8(s.stamp(b"one\ntw")).unwrap();
-        let b = String::from_utf8(s.stamp(b"o\nthree")).unwrap();
-        let all = format!("{a}{b}");
-        let lines: Vec<&str> = all.split('\n').collect();
-        assert_eq!(lines.len(), 3);
-        for (line, want) in lines.iter().zip(["one", "two", "three"]) {
+    fn stamps_and_redacts_whole_lines_across_split_writes() {
+        let mut l = Lines::default();
+        // The key is split across two writes; the line is redacted whole.
+        let a = String::from_utf8(l.push(b"one\nauth Bearer sk-ant-api03-abcdefgh")).unwrap();
+        let b = String::from_utf8(l.push(b"ijklmnopqrstuvwxyz0123\nthree")).unwrap();
+        let c = String::from_utf8(l.finish()).unwrap();
+        let all = format!("{a}{b}{c}");
+        assert!(!all.contains("abcdefgh") && !all.contains("ijklmnop"), "{all}");
+        let lines: Vec<&str> = all.trim_end().split('\n').collect();
+        assert_eq!(lines.len(), 3, "{all}");
+        for (line, want) in lines.iter().zip(["one", "auth Bearer [redacted]", "three"]) {
             let (stamp, rest) = line.split_once(' ').unwrap();
             assert!(stamp.ends_with('Z') && stamp.len() == 24, "{stamp}");
             assert_eq!(rest, want);
         }
+        // A line with no end is written once it is long enough, and a long
+        // line is cut (quickly: the patterns backtrack on long runs).
+        let started = std::time::Instant::now();
+        let long = String::from_utf8(l.push(&vec![b'x'; PARTIAL_MAX])).unwrap();
+        assert!(long.ends_with("x\n"), "{}", &long[long.len() - 20..]);
+        let cut = String::from_utf8(l.push(&[vec![b'y'; PARTIAL_MAX * 4], b"\n".to_vec()].concat())).unwrap();
+        assert!(cut.lines().all(|line| line.len() < PARTIAL_MAX + 40), "every written line is cut");
+        assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+    }
+
+    #[test]
+    fn rotated_logs_older_than_the_limit_are_deleted() {
+        let d = tmp();
+        let path = d.path().join("nekkod.log");
+        let old = std::time::SystemTime::now() - MAX_AGE - std::time::Duration::from_secs(60);
+        for (name, when) in
+            [("nekkod.log.1", None), ("nekkod.log.2", Some(old)), ("nekkod.log", Some(old)), ("other.log.3", Some(old))]
+        {
+            let f = File::create(d.path().join(name)).unwrap();
+            if let Some(t) = when {
+                f.set_modified(t).unwrap();
+            }
+        }
+        RotatingLog::open(&path, ROTATE_BYTES, KEEP).unwrap();
+        assert!(d.path().join("nekkod.log.1").exists(), "a recent rotated log stays");
+        assert!(!d.path().join("nekkod.log.2").exists(), "an old rotated log goes");
+        assert!(path.exists(), "the live log is never pruned");
+        assert!(d.path().join("other.log.3").exists(), "another log's files are its own business");
+    }
+
+    #[test]
+    fn clearing_empties_live_logs_and_deletes_the_rest() {
+        let d = tmp();
+        let mut log = RotatingLog::open(&d.path().join(DAEMON_LOG), ROTATE_BYTES, KEEP).unwrap();
+        log.append(b"secret chat\n").unwrap();
+        for name in [APP_LOG, "app.log.1", "connections.log.2", "stray.txt"] {
+            std::fs::write(d.path().join(name), "personal\n").unwrap();
+        }
+        clear_dir(d.path()).unwrap();
+        let mut left: Vec<String> = std::fs::read_dir(d.path())
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(left, [APP_LOG, DAEMON_LOG]);
+        for name in &left {
+            assert_eq!(std::fs::read(d.path().join(name)).unwrap().len(), 0, "{name}");
+        }
+        // The writer still holding the file carries on into the emptied log.
+        log.append(b"after\n").unwrap();
+        assert!(std::fs::read_to_string(d.path().join(DAEMON_LOG)).unwrap().ends_with("after\n"));
+        assert!(clear_dir(&d.path().join("missing")).is_ok());
     }
 
     #[test]

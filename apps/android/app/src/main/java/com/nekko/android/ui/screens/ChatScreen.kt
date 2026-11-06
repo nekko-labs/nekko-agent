@@ -1,5 +1,7 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 import com.nekko.android.voice.DictationController
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -14,8 +16,10 @@ import java.io.File
 import com.nekko.android.ui.chat.MicUi
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,8 +28,12 @@ import android.Manifest
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +46,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -51,7 +60,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -66,6 +74,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
+import com.nekko.android.ui.chat.PurposeGroupCard
+import com.nekko.android.ui.chat.AgentContext
+import com.nekko.android.ui.chat.LocalAgentContext
+import com.nekko.android.ui.chat.SubagentGroup
+import com.nekko.android.ui.chat.allSubagents
 import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
@@ -73,6 +86,11 @@ import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Block
+import com.nekko.protocol.Purpose
+import com.nekko.protocol.ReplyTopics
+import com.nekko.protocol.PurposeRun
+import com.nekko.android.chat.TurnSteps
+import com.nekko.android.ui.chat.StepsLine
 import java.util.Locale
 import android.content.ClipData
 import android.content.ClipDescription
@@ -92,30 +110,180 @@ import androidx.compose.ui.draganddrop.mimeTypes
 import androidx.compose.ui.draganddrop.toAndroidDragEvent
 import androidx.compose.ui.draw.alpha
 import com.nekko.android.ui.components.Dot
+import com.nekko.android.ui.chat.ForkAction
+import com.nekko.android.ui.files.FilesDialog
+import com.nekko.android.ui.previews.PreviewWindow
+import com.nekko.android.previews.LocalChatPreviews
+import androidx.compose.runtime.CompositionLocalProvider
+import com.nekko.android.ui.git.GitDialog
+import com.nekko.android.ui.terminal.TerminalsDialog
+import androidx.compose.material.icons.filled.Terminal
+import com.nekko.android.ui.git.PrChip
+import com.nekko.android.ui.git.PrSheet
+import com.nekko.protocol.PullRequest
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import com.nekko.android.ui.panes.PaneSlot
+import com.nekko.android.ui.chat.ChatOptionsRow
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.SimpleView
+import com.nekko.android.data.SimpleMode
+import com.nekko.android.ui.chat.ModelEffortSheet
+import com.nekko.android.ui.chat.AgentDetails
+import com.nekko.android.ui.chat.LongChatNudge
+import com.nekko.android.ui.chat.MiniMonitor
+import com.nekko.android.ui.simple.PollHardware
+import com.nekko.android.ui.simple.ModePill
+import com.nekko.android.ui.simple.rememberModePill
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.nekko.android.data.ModelPick
+import com.nekko.android.data.SimpleVisibility
+import androidx.compose.material3.CenterAlignedTopAppBar
+import com.nekko.protocol.RelayState
+import com.nekko.protocol.ENGINE_PROVIDER_ID
+import com.nekko.protocol.RelayException
+import com.nekko.android.ui.chat.ChatModeDialog
+import com.nekko.android.ui.chat.WaitingList
+import com.nekko.android.ui.chat.RefusalNote
+import com.nekko.android.ui.chat.RenameChatDialog
+import com.nekko.android.ui.security.PendingStepUp
+import com.nekko.android.ui.security.StepUpSheet
+import com.nekko.android.ui.settings.modeTitleRes
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Shield
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     vm: ChatViewModel,
     initialDraft: String? = null,
     dictationOn: Boolean = false,
     onBack: () -> Unit,
+    /** Open another chat: one forked from here, with [draft] waiting in its message box (AN-29). */
+    onOpenChat: (id: String, draft: String?) -> Unit = { _, _ -> },
     /** Set when the chat is one of an open folding phone's two panes (header actions, drag and drop, tabletop). */
     pane: PaneSlot? = null,
+    /** The composer's **+** → New agent. */
+    onNewChat: (() -> Unit)? = null,
+    /** Simple's "chat getting long" line → New chat on this computer with [ModelPick] (the chat's model) chosen. */
+    onStartFresh: ((ModelPick?) -> Unit)? = null,
 ) {
+    // Simple or Expert and the per-control choices, read from the chat's own prefs so the screen works outside the app's provider;
+    // a model loaded on the computer's Model Server brings the monitors into Simple too.
+    val expert by vm.expert.collectAsStateWithLifecycle()
+    val raw by vm.simpleChoices.collectAsStateWithLifecycle()
+    val hardware by vm.hardware.state.collectAsStateWithLifecycle()
+    val pill by vm.pillPlace.collectAsStateWithLifecycle()
+    val loaded = hardware.localModelLoaded
+    val simple = remember(expert, raw, loaded, pill) { SimpleView(expert, SimpleMode.parse(raw), loaded, pill, vm::setPillPlace, vm::setExpert) }
+    CompositionLocalProvider(LocalSimple provides simple) {
+        ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat, onStartFresh)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChatScreenContent(
+    vm: ChatViewModel,
+    initialDraft: String?,
+    dictationOn: Boolean,
+    onBack: () -> Unit,
+    onOpenChat: (id: String, draft: String?) -> Unit,
+    pane: PaneSlot?,
+    onNewChat: (() -> Unit)?,
+    onStartFresh: ((ModelPick?) -> Unit)?,
+) {
+    val simple = LocalSimple.current
+    val showHardware = simple.shown("hardware")
+    val showSteps = simple.shown("thinking")
+    val showGit = simple.shown("ph-git")
     val chat by vm.ui.collectAsStateWithLifecycle()
+    val watches by vm.watches.collectAsStateWithLifecycle()
+    val subagents by vm.subagents.collectAsStateWithLifecycle()
+    val agentContext = AgentContext(watches, subagents.children, subagents.activity, chat.running, chat.modelId)
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    // Read with the chat and after each turn: Changes shows only with something in it.
+    // A short turn can start and end between two frames, so `running` alone may never appear to change.
+    LaunchedEffect(vm.sessionId, chat.running, chat.blocks.size, changesAllowed) { if (changesAllowed && !chat.running) vm.loadChanges() }
+    val changesLoad by vm.changes.collectAsStateWithLifecycle()
+    val changedFiles = changesLoad.changes?.let { it.files.size + it.omittedFiles } ?: 0
+    val hardware by vm.hardware.state.collectAsStateWithLifecycle()
+    val computers by vm.computers.collectAsStateWithLifecycle()
+    val computerName = computers.active?.name ?: stringResource(R.string.chats_your_computer)
+    var showModelEffort by remember { mutableStateOf(false) }
+    val list = rememberLazyListState()
+    val pill = rememberModePill { !list.canScrollBackward }
+    // The top bar's bottom and the message box's top (root coordinates): the pill moves between them.
+    var barBottom by remember { mutableFloatStateOf(0f) }
+    var floor by remember { mutableStateOf<Float?>(null) }
+    val online = computers.conn == RelayState.ONLINE
+    // The model's name for the row under the message box (the computer's list, cached for the connection).
+    LaunchedEffect(chat.providerId, online) { if (online) chat.providerId?.let { vm.loadModels(it) } }
+    // The Monitor names loaded models from the Model Server's own list.
+    LaunchedEffect(pill.expanded, online) { if (pill.expanded && online) vm.loadModels(ENGINE_PROVIDER_ID) }
+    // The minimal monitor re-reads every 3 s while it shows; Simple otherwise asks the Model Server every 10 s
+    // whether a local model is loaded (which brings the monitor in).
+    PollHardware(vm.hardware, online, full = showHardware, light = simple.visibility("hardware") == SimpleVisibility.AUTO)
+    // Simple's "chat getting long" line, until dismissed for this chat.
+    var longChatDismissed by rememberSaveable(vm.sessionId) { mutableStateOf(false) }
+    val savings = chat.context?.let { c -> SimpleMode.freshSavings(chat.contextTokens ?: c.usedTokens, c.contextWindow, c.sources) }
+    var showMenu by remember { mutableStateOf(false) }
+    val pinned by vm.pinned.collectAsStateWithLifecycle()
+    var showRename by remember { mutableStateOf(false) }
+    var showMode by remember { mutableStateOf(false) }
+    // A mode raise the computer wants a second factor for (SK-7): the sheet asks, then sends it again.
+    var modeStepUp by remember { mutableStateOf<PendingStepUp?>(null) }
+    var prs by remember(vm.sessionId) { mutableStateOf<List<PullRequest>>(emptyList()) }
+    var showPrs by remember { mutableStateOf(false) }
+    // The chat's pull request chip: read when the chat opens, after each turn, and when Git or the
+    // pull request sheet closes (a merge or close from the phone changes it).
+    var prReads by remember { mutableIntStateOf(0) }
+    LaunchedEffect(vm.sessionId, chat.running, prReads) {
+        if (!chat.running) try { prs = vm.pullRequests(refresh = prReads > 0) } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) {}
+    }
     var restoring by remember { mutableStateOf(false) }
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val p = Nekko.palette
     val mic = rememberMic(vm.dictation.takeIf { dictationOn })
     val attach = rememberAttach(vm)
-    val list = rememberLazyListState()
+    val prompts by vm.prompts.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val res = LocalResources.current
+    val editInNewChat = stringResource(R.string.chats_edit_in_new_chat)
+    val forkFromHere = stringResource(R.string.chats_fork_from_here)
+    // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
+    // everything up to the next prompt. Streaming blocks aren't saved yet, so they offer Copy only.
+    val forkAction: (Block) -> ForkAction? = { block ->
+        if ((block is Block.User || (block is Block.Assistant && !block.streaming)) && vm.canFork(block)) {
+            ForkAction(if (block is Block.User) editInNewChat else forkFromHere) {
+                scope.launch {
+                    try {
+                        val (id, draft) = vm.fork(block)
+                        onOpenChat(id, draft)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, e.message ?: res.getString(R.string.chats_fork_failed), android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        } else {
+            null
+        }
+    }
 
     // Stable keys: a provider that reuses a call id across turns gets a suffix.
     val keyed = remember(chat.blocks) {
@@ -135,159 +303,384 @@ fun ChatScreen(
     // A note above the messages when the computer sent only the newest ones.
     val headerCount = if (chat.omittedMessages > 0) 1 else 0
     val footerCount = 1
-    val lastIndex = headerCount + keyed.size + footerCount - 1
+    // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
+    // Simple folds each turn's reasoning and tool steps into one line that opens in place (the approval card still asks).
+    var openTurns by remember(vm.sessionId) { mutableStateOf(setOf<String>()) }
+    val rows = remember(keyed, showSteps, chat.running, openTurns) { transcriptRows(keyed, showSteps, chat.running, openTurns) }
+    // How each reply reads in its turn: a note, something left for you, or the reply (spec/chat/thinking-and-replies.md).
+    val voices = remember(keyed, chat.running) { keyed.map { it.first }.zip(ReplyTopics.voices(chat.blocks, chat.running)).toMap() }
+    val lastIndex = headerCount + rows.size + footerCount - 1
 
-    // Follow the reply while it streams, unless the user scrolled up to read.
+    // Open at the newest message, then follow the reply while it streams, unless the user scrolled up to read.
     val streamTick = (chat.blocks.lastOrNull() as? Block.Assistant)?.let { it.text.length + (it.reasoning?.length ?: 0) } ?: 0
-    LaunchedEffect(keyed.size, streamTick, chat.error) {
-        if (keyed.isEmpty()) return@LaunchedEffect
+    var openedAtBottom by remember(vm.sessionId) { mutableStateOf(false) }
+    LaunchedEffect(rows.size, keyed.size, streamTick, chat.error, chat.ready) {
+        if (!chat.ready || keyed.isEmpty()) return@LaunchedEffect
+        if (!openedAtBottom) {
+            // The list replaces the spinner in this frame: wait until it has items, then jump without animating.
+            snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
+            list.scrollToItem(lastIndex)
+            openedAtBottom = true
+            return@LaunchedEffect
+        }
         val info = list.layoutInfo
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
-        // totalItemsCount is 0 on the first frame: start at the bottom.
-        if (nearBottom || info.totalItemsCount == 0) list.scrollToItem(lastIndex)
+        if (nearBottom) list.scrollToItem(lastIndex)
+    }
+
+    // Keep the newest message in view when the list gets shorter (the keyboard opens, the message box grows),
+    // if it was at the bottom; a list scrolled up to read stays where it is.
+    LaunchedEffect(list) {
+        var height = 0
+        var atBottom = false
+        snapshotFlow { list.layoutInfo.viewportSize.height to !list.canScrollForward }.collect { (h, bottom) ->
+            if (h < height && atBottom) list.scrollBy((height - h).toFloat()) else atBottom = bottom
+            height = h
+        }
     }
 
     if (showChanges && changesAllowed) {
-        val changes by vm.changes.collectAsStateWithLifecycle()
         ChangesSheet(
-            changes.changes, changes.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false },
+            changesLoad.changes, changesLoad.error, onRefresh = vm::loadChanges, onDismiss = { showChanges = false },
             onAsk = { quote -> vm.quote(quote); showChanges = false },
         )
     }
 
-    Scaffold(
-        containerColor = p.paper,
-        topBar = {
-            TopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
-                actions = {
-                    if (changesAllowed) {
-                        IconButton(onClick = { vm.loadChanges(); showChanges = true }) {
-                            Icon(Icons.Filled.Difference, contentDescription = "Changes")
-                        }
+    // ⋮ → Rename, Pin, Complete, Chat mode: changes on the computer; a refusal is said in a toast.
+    val chatAction: (String, suspend () -> Unit) -> Unit = { failed, action ->
+        scope.launch {
+            try {
+                action()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: failed, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    if (showRename) {
+        RenameChatDialog(chat.title, onDismiss = { showRename = false }) { title ->
+            showRename = false
+            chatAction(res.getString(R.string.chats_rename_this_failed)) { vm.rename(title) }
+        }
+    }
+    if (showMode) {
+        ChatModeDialog(chat.mode, vm.defaultMode, computerName, onDismiss = { showMode = false }) { mode ->
+            showMode = false
+            scope.launch {
+                try {
+                    vm.setMode(mode)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if ((e as? RelayException)?.refusal?.asksForStepUp == true) {
+                        modeStepUp = PendingStepUp(res.getString(R.string.chats_mode_step_up, computerName, res.getString(modeTitleRes(mode)))) { proof -> vm.setMode(mode, proof) }
+                    } else {
+                        android.widget.Toast.makeText(context, e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_mode_failed), android.widget.Toast.LENGTH_LONG).show()
                     }
-                    pane?.actions?.invoke(this)
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                title = {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
-                            if (pane != null) {
-                                PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+                }
+            }
+        }
+    }
+    modeStepUp?.let { pending ->
+        StepUpSheet(vm.repo, pending, onDone = { modeStepUp = null }, onDismiss = { modeStepUp = null })
+    }
+
+    if (showModelEffort) {
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onDismiss = { showModelEffort = false })
+    }
+    val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
+    terminals?.let { t ->
+        val online by vm.online.collectAsStateWithLifecycle()
+        TerminalsDialog(t, online, vm.computerName, onDismiss = vm::closeTerminals)
+    }
+    val preview by vm.previewOpen.collectAsStateWithLifecycle()
+    preview?.let { o -> PreviewWindow(o.link, vm.sessionId, vm.repo.previews, onDismiss = vm::closePreview) }
+    val files by vm.filesOpen.collectAsStateWithLifecycle()
+    files?.let { f -> FilesDialog(f, vm.repo, onDismiss = vm::closeFiles) }
+    val git by vm.gitOpen.collectAsStateWithLifecycle()
+    git?.let { o -> GitDialog(o.git, onDismiss = { vm.closeGit(); prReads++ }, pr = o.pr) }
+    if (showPrs) {
+        PrSheet(
+            prs, onDismiss = { showPrs = false; prReads++ },
+            onGit = { pr -> showPrs = false; vm.openGit(pr) },
+            onAsk = { text -> vm.send(text) },
+        )
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = p.paper,
+            topBar = {
+                Column(Modifier.onGloballyPositioned { barBottom = it.boundsInRoot().bottom }) {
+                    CenterAlignedTopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                        // A little shorter than the default, so the mode pill sits right under the title.
+                        expandedHeight = 56.dp,
+                        actions = {
+                            if (changesAllowed && simple.shown("changes", changes = changedFiles > 0)) {
+                                val filesChanged = if (changedFiles == 1) stringResource(R.string.simple_files_changed_one) else stringResource(R.string.simple_files_changed_other, changedFiles)
+                                IconButton(onClick = { vm.loadChanges(); showChanges = true }, modifier = Modifier.testTag("chat.changes")) {
+                                    BadgedBox(badge = { Badge(containerColor = p.accent, contentColor = p.accentInk) { Text("$changedFiles") } }) {
+                                        Icon(Icons.Filled.Difference, contentDescription = filesChanged)
+                                    }
+                                }
                             }
-                            Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
-                            Text(
-                                chat.subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = p.inkFaint,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        val transcript: @Composable (Modifier) -> Unit = { transcriptModifier ->
-            Box(transcriptModifier) {
-                when {
-                    !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
-                    keyed.isEmpty() && chat.error == null -> Text(
-                        "Ask your computer to do something. It can use its folders, tools and models.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = p.inkSoft,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp, vertical = 32.dp),
-                    )
-                    else -> LazyColumn(
-                        state = list,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (chat.omittedMessages > 0) {
-                            item(key = "omitted") {
-                                Text(
-                                    if (chat.omittedMessages == 1) "1 earlier message is on the computer."
-                                    else "${chat.omittedMessages} earlier messages are on the computer.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = p.inkFaint,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                )
+                            Box {
+                                IconButton(onClick = { showMenu = true }, modifier = Modifier.testTag("chat.more")) {
+                                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_more))
+                                }
+                                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                    if (showGit) DropdownMenuItem(
+                                        text = { Text("Git") },
+                                        leadingIcon = { Icon(Icons.Filled.AccountTree, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.openGit() },
+                                        enabled = chat.savedAt == null,
+                                        modifier = Modifier.testTag("chat.git"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chats_files)) },
+                                        leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.openFiles() },
+                                        enabled = chat.savedAt == null,
+                                        modifier = Modifier.testTag("chat.files"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chats_terminals)) },
+                                        leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.openTerminals() },
+                                        enabled = chat.savedAt == null,
+                                        modifier = Modifier.testTag("chat.terminals"),
+                                    )
+                                    HorizontalDivider()
+                                    if (simple.expert && simple.shown("asks")) DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chats_chat_mode)) },
+                                        leadingIcon = { Icon(Icons.Filled.Shield, contentDescription = null) },
+                                        onClick = { showMenu = false; showMode = true },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.toolMode"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chats_rename)) },
+                                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                                        onClick = { showMenu = false; showRename = true },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.rename"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(if (pinned) R.string.chats_unpin else R.string.chats_pin)) },
+                                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+                                        onClick = { showMenu = false; chatAction(res.getString(R.string.chats_change_this_failed)) { vm.setPinned(!pinned) } },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.pin"),
+                                    )
+                                    if (completedAt == null) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.chats_complete)) },
+                                            leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
+                                            onClick = { showMenu = false; chatAction(res.getString(R.string.chats_complete_this_failed)) { vm.complete() } },
+                                            enabled = online,
+                                            modifier = Modifier.testTag("chat.complete"),
+                                        )
+                                    }
+                                }
                             }
-                        }
-                        itemsIndexed(keyed, key = { _, (k, _) -> k }) { _, (_, block) ->
-                            // In a pane a message can be dragged into the other pane's message box.
-                            if (pane == null) BlockView(block) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block) }
-                        }
-                        item(key = "footer") {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                chat.error?.let { Notice(it, Tone.DANGER) }
-                                val rate = chat.rate
-                                if (!chat.running && rate != null) {
+                            pane?.actions?.invoke(this)
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back))
+                            }
+                        },
+                        title = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    // In a pane: the status dot, pulsing for a pending approval or question while the other pane has the keyboard.
+                                    if (pane != null) {
+                                        PaneStatusDot(waiting = chat.approval != null || chat.question != null, running = chat.running, pulse = !pane.focused)
+                                    }
+                                    Text(chat.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                if (simple.shown("ph-subtitle")) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Icon(Icons.Filled.Computer, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(12.dp))
                                     Text(
-                                        String.format(Locale.US, "%.1f tokens/s", rate),
+                                        chat.subtitle,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = p.inkFaint,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
+                                }
+                            }
+                        },
+                    )
+                }
+            },
+        ) { padding ->
+            val transcript: @Composable (Modifier) -> Unit = { transcriptModifier ->
+                Box(transcriptModifier.onGloballyPositioned { floor = it.boundsInRoot().bottom }) {
+                    when {
+                        !chat.ready -> CircularProgressIndicator(color = p.accent, modifier = Modifier.align(Alignment.Center))
+                        keyed.isEmpty() && chat.error == null -> Text(
+                            stringResource(R.string.chats_chat_empty),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = p.inkSoft,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.align(Alignment.Center).padding(horizontal = 24.dp, vertical = 32.dp),
+                        )
+                        else -> LazyColumn(
+                            state = list,
+                            modifier = Modifier.fillMaxSize().nestedScroll(pill.scroll),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp, top = pill.topInset(simple.pill, otherwise = 16.dp)),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (chat.omittedMessages > 0) {
+                                item(key = "omitted") {
+                                    Text(
+                                        if (chat.omittedMessages == 1) stringResource(R.string.chats_omitted_one)
+                                        else stringResource(R.string.chats_omitted_other, chat.omittedMessages),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = p.inkFaint,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    )
+                                }
+                            }
+                            itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
+                                val run = (row as? TranscriptRow.Run)?.run
+                                // Watch chips and subagent rows read the chat's watches and child chats.
+                                CompositionLocalProvider(LocalAgentContext provides agentContext) {
+                                    when {
+                                        row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
+                                            openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
+                                        }
+                                        run is PurposeRun.Single -> {
+                                            val block = run.item.second
+                                            // Long press: Copy, and fork the chat from a saved message.
+                                            val fork = forkAction(block)
+                                            // In a pane a message can be dragged into the other pane's message box.
+                                            // A reply's links to files and loopback pages open previews from the computer (AN-35).
+                                            CompositionLocalProvider(LocalChatPreviews provides vm.previews) {
+                                                val reasoning = (row as TranscriptRow.Run).stepsOpen
+                                                val voice = voices[run.item.first]
+                                                if (pane == null) BlockView(block, fork, voice, reasoning) else Box(Modifier.messageDragSource(block, vm.sessionId)) { BlockView(block, fork, voice, reasoning) }
+                                            }
+                                        }
+                                        run is PurposeRun.Group -> {
+                                            val blocks = run.items.map { it.second }
+                                            // Consecutive delegations read as one group, as on the desktop.
+                                            if (allSubagents(blocks)) SubagentGroup(blocks.filterIsInstance<Block.Tool>(), agentContext)
+                                            else PurposeGroupCard(run.purpose, blocks, run.calls)
+                                        }
+                                    }
+                                }
+                            }
+                            item(key = "footer") {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    chat.error?.let { Notice(it, Tone.DANGER) }
+                                    val rate = chat.rate
+                                    if (!chat.running && rate != null) {
+                                        Text(
+                                            stringResource(R.string.chats_tokens_per_second, String.format(Locale.US, "%.1f", rate)),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = p.inkFaint,
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
-        }
-        val controls: @Composable () -> Unit = {
-            chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
-            chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
-            // A completed chat reads like the desktop's: no message box until it is restored.
-            if (completedAt != null && !chat.running) CompletedBar(
-                restoring = restoring,
-                error = restoreError,
-                onRestore = {
-                    restoring = true
-                    restoreError = null
-                    scope.launch {
-                        try {
-                            vm.restore()
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            restoreError = e.message?.takeIf { it.isNotBlank() } ?: "Couldn’t restore this chat."
-                        } finally {
-                            restoring = false
+            val controls: @Composable () -> Unit = {
+                chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
+                chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
+                prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
+                // A completed chat reads like the desktop's: no message box until it is restored.
+                if (completedAt != null && !chat.running) CompletedBar(
+                    restoring = restoring,
+                    error = restoreError,
+                    onRestore = {
+                        restoring = true
+                        restoreError = null
+                        scope.launch {
+                            try {
+                                vm.restore()
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                restoreError = e.message?.takeIf { it.isNotBlank() } ?: res.getString(R.string.chats_restore_this_failed)
+                            } finally {
+                                restoring = false
+                            }
                         }
+                    },
+                    modifier = Modifier.navigationBarsPadding(),
+                ) else Column(Modifier.navigationBarsPadding()) {
+                    if (!simple.expert && savings != null && !longChatDismissed) {
+                        LongChatNudge(
+                            savings,
+                            onStartFresh = onStartFresh?.let { go -> { go(chat.providerId?.let { pr -> chat.modelId?.let { ModelPick(pr, it) } }) } },
+                            onDismiss = { longChatDismissed = true },
+                        )
                     }
-                },
-                modifier = Modifier.navigationBarsPadding(),
-            ) else Composer(
-                initialText = initialDraft,
-                running = chat.running,
-                blocked = chat.blocked,
-                queued = chat.queued,
-                onSend = { text, skill, images -> vm.send(text, skill, images) },
-                onStop = vm::stop,
-                // In a pane, text dragged from the other pane lands here (never sent by itself).
-                modifier = Modifier.navigationBarsPadding().then(if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote)),
-                mic = mic,
-                skills = chat.skills,
-                insert = insert,
-                onInserted = vm::inserted,
-                attach = attach,
-            )
+                    val waiting by vm.waiting.collectAsStateWithLifecycle()
+                    val sendingId by vm.sendingId.collectAsStateWithLifecycle()
+                    val refusal by vm.refusal.collectAsStateWithLifecycle()
+                    val restore by vm.restore.collectAsStateWithLifecycle()
+                    Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // The phone's saved copy (OF-5): read-only until the computer answers.
+                        chat.savedAt?.let { at ->
+                            Text(
+                                savedCopyNote(at, computerName, template = stringResource(R.string.chats_saved_copy_note)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = p.inkSoft,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp).testTag("chat.savedCopy"),
+                            )
+                        }
+                        WaitingList(waiting, sendingId, online, onEdit = vm::editWaiting, onDelete = vm::deleteWaiting, onSendNow = vm::sendWaitingNow)
+                        refusal?.let { RefusalNote(it, onDismiss = vm::dismissRefusal) }
+                    }
+                    Composer(
+                        restore = restore,
+                        onRestored = vm::restored,
+                        sendsLater = chat.sendsLater,
+                        offerSubagent = chat.offersSubagent,
+                        // A fork's prompt, else what was typed here last time (the saved draft).
+                        initialText = initialDraft ?: vm.savedDraft.text.ifEmpty { null },
+                        initialSkillName = vm.savedDraft.skill?.name.takeIf { initialDraft == null },
+                        onDraftChange = vm::draftChanged,
+                        running = chat.running,
+                        blocked = chat.blocked,
+                        queued = chat.queued,
+                        onSend = { text, skill, images -> vm.send(text, skill, images) },
+                        onStop = vm::stop,
+                        // In a pane, text dragged from the other pane lands here (never sent by itself).
+                        modifier = if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote),
+                        mic = mic,
+                        skills = chat.skills,
+                        insert = insert,
+                        onInserted = vm::inserted,
+                        attach = attach,
+                        prompts = prompts,
+                        queuedPrompts = chat.queuedPrompts,
+                        onEditQueued = vm::editQueued,
+                        onInterrupt = vm::interruptQueued,
+                        onNewAgent = onNewChat,
+                        onTerminal = vm::openTerminals,
+                        footer = { ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }, asks = chat.mode ?: vm.defaultMode, onOpenAsks = { showMode = true }) },
+                    )
+                }
+            }
+            ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
         }
-        ChatColumns(top = padding.calculateTopPadding(), tabletop = pane?.tabletop, transcript = transcript, controls = controls)
+        // The mode pill floats over the chat; tapping its gauges opens the agent's details.
+        ModePill(
+            pill, barBottom, floor,
+            gauges = if (showHardware) { vertical, open -> MiniMonitor(hardware, onOpen = open, compact = pane != null, vertical = vertical, modelName = vm::modelName) } else null,
+            details = { AgentDetails(hardware, chat, computerName, vm::modelName, vm.hardware::unload) },
+        )
     }
 }
 
@@ -360,12 +753,12 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = p.success, modifier = Modifier.size(16.dp))
             Text(
-                "This chat is completed. Restore it to keep going.",
+                stringResource(R.string.chats_completed_bar),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.inkSoft,
                 modifier = Modifier.weight(1f),
             )
-            Button(onClick = onRestore, enabled = !restoring) { Text(if (restoring) "Restoring…" else "Restore") }
+            Button(onClick = onRestore, enabled = !restoring) { Text(stringResource(if (restoring) R.string.chats_restoring else R.string.chats_restore)) }
         }
     }
 }
@@ -408,6 +801,7 @@ private fun rememberMic(d: DictationController?): MicUi? {
 @Composable
 private fun rememberAttach(vm: ChatViewModel): AttachUi {
     val context = LocalContext.current
+    val res = LocalResources.current
     val lock = LocalAppLock.current
     val state by vm.photos.state.collectAsStateWithLifecycle()
     // Where the camera app was asked to write; survives the activity being recreated meanwhile.
@@ -447,7 +841,7 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
                     lock?.returned()
                     shot = null
                     vm.photos.begin(1)
-                    vm.photos.failed("No camera app on this phone.")
+                    vm.photos.failed(res.getString(R.string.chats_no_camera))
                 }
             }
         },
@@ -460,3 +854,42 @@ private fun rememberAttach(vm: ChatViewModel): AttachUi {
 
 private fun cameraUri(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
+
+/** A transcript row: a message or a purpose group, or (Simple) one turn's folded steps. */
+private sealed interface TranscriptRow {
+    /** [stepsOpen] when its turn's steps show, so a reply's reasoning shows too. */
+    data class Run(val run: PurposeRun<Pair<String, Block>>, val stepsOpen: Boolean) : TranscriptRow
+    data class Steps(val steps: TurnSteps.Row.Summary<Pair<String, Block>>) : TranscriptRow
+}
+
+private fun transcriptRows(keyed: List<Pair<String, Block>>, showSteps: Boolean, running: Boolean, open: Set<String>): List<TranscriptRow> {
+    if (showSteps) return Purpose.group(keyed) { Purpose.role(it.second) }.map { TranscriptRow.Run(it, stepsOpen = true) }
+    val out = mutableListOf<TranscriptRow>()
+    val pending = mutableListOf<Pair<String, Block>>()
+    var pendingOpen = false
+    fun flush() {
+        Purpose.group(pending.toList()) { Purpose.role(it.second) }.forEach { out += TranscriptRow.Run(it, pendingOpen) }
+        pending.clear()
+    }
+    TurnSteps.fold(keyed, { it.second }, { it.first }, running, open).forEach { r ->
+        when (r) {
+            is TurnSteps.Row.Summary -> { flush(); out += TranscriptRow.Steps(r) }
+            is TurnSteps.Row.Item -> {
+                if (r.stepsOpen != pendingOpen) flush()
+                pendingOpen = r.stepsOpen
+                pending += r.item
+            }
+        }
+    }
+    flush()
+    return out
+}
+
+/** A list key for a transcript row: the block's own key, its first block's for a purpose group, or its turn's for folded steps. */
+private fun rowKey(row: TranscriptRow): String = when (row) {
+    is TranscriptRow.Steps -> "steps:" + row.steps.turn
+    is TranscriptRow.Run -> when (val run = row.run) {
+        is PurposeRun.Single -> run.item.first
+        is PurposeRun.Group -> "purpose:" + run.items.first().first
+    }
+}

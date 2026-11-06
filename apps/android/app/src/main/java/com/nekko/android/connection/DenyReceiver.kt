@@ -30,7 +30,6 @@ class DenyReceiver : BroadcastReceiver() {
                 withTimeout(TIMEOUT_MS) {
                     app.computers.caller.call(Channels.TOOL_APPROVE, JsonPrimitive(sessionId), JsonPrimitive(callId), JsonPrimitive(false))
                 }
-                app.connection.notices.clear(sessionId)
             } catch (e: Exception) {
                 // Offline or already answered: the notification stays, and opening it shows the chat.
                 Log.w(TAG, "deny from the notification failed: ${e.message}")

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   apiServerBindHost,
-  apiServerClientUrl,
   apiServerMcpConfig,
   apiServerRefusal,
   apiServerUrl,
@@ -30,13 +29,6 @@ describe('api server addresses', () => {
     expect(apiServerUrl({ ...base, bind: 'custom', host: '::1' })).toBe('http://[::1]:1439');
     // An empty custom host falls back to loopback rather than binding everything.
     expect(apiServerBindHost({ ...base, bind: 'custom', host: '' })).toBe('127.0.0.1');
-  });
-
-  it('hands clients the advertised address when there is one', () => {
-    expect(apiServerClientUrl(base)).toBe('http://127.0.0.1:1439');
-    expect(apiServerClientUrl({ ...base, advertisedUrl: 'http://nekko.tail.ts.net:9000/' })).toBe(
-      'http://nekko.tail.ts.net:9000',
-    );
   });
 
   it('refuses what it cannot serve safely', () => {

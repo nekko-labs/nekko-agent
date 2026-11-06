@@ -7,7 +7,7 @@ async fn settings_are_the_daemons_to_write_when_it_knows_the_data_dir() {
     let data = std::env::temp_dir().join(format!("nekkod-settings-{}", std::process::id()));
     std::fs::create_dir_all(&data).unwrap();
     std::fs::write(data.join("settings.json"), r#"{"theme":"dark","maxSteps":3}"#).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (status, got) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -48,7 +48,7 @@ async fn tokens_are_the_daemons_to_read_renew_and_forget() {
         r#"{"openrouter:k":{"provider":"openrouter","accessToken":"sk-or","obtainedAt":1}}"#,
     )
     .unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (_, status) = post(d.port, "oauth:status", json!(["or"]), Some(TOKEN)).await;
     assert_eq!(
@@ -63,8 +63,11 @@ async fn tokens_are_the_daemons_to_read_renew_and_forget() {
     let (status_code, missing) = post(d.port, "oauth:fresh", json!(["claude:none", false]), Some(TOKEN)).await;
     assert_ne!(status_code, 200, "{missing}");
     post(d.port, "oauth:signout", json!(["or"]), Some(TOKEN)).await;
-    let tokens: Value = serde_json::from_str(&std::fs::read_to_string(data.join("tokens.json")).unwrap()).unwrap();
-    assert_eq!(tokens, json!({}));
+    // Kept in the keystore (here its file stand-in), tokens.json moved there.
+    assert!(!data.join("tokens.json").exists());
+    let kept: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("tokens-keystore.json")).unwrap()).unwrap();
+    assert_eq!(kept, json!({ "tokens": "{}" }));
     drop(d);
     std::fs::remove_dir_all(data).ok();
 }
@@ -87,7 +90,7 @@ async fn providers_are_listed_saved_tested_and_asked_for_models_by_the_daemon() 
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}/v1", l.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     // The model server's own entry, added at launch.
     boot_settled(&data);
     let read =
@@ -158,7 +161,7 @@ async fn a_cloud_catalog_is_reused_until_the_key_changes_or_the_update_check_run
     let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", l.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     boot_settled(&data);
     let ids = |models: &Value| -> Vec<String> {
         models.as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap().to_string()).collect()
@@ -211,7 +214,7 @@ async fn adds_and_revokes_folders_through_the_daemons_settings() {
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src").join("x.rs"), "pub fn x() {}\n").unwrap();
     let path = project.to_string_lossy().into_owned();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (_, added) = post(d.port, "workspace:addByPath", json!([path]), Some(TOKEN)).await;
     let folder = added[0].clone();
     assert_eq!((folder["name"].clone(), folder["path"].clone()), (json!("My Project"), json!(path)));
@@ -274,7 +277,7 @@ async fn the_daemon_keeps_and_reads_connectors() {
     let data = std::env::temp_dir().join(format!("nekkod-connectors-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (_, missing) = post(d.port, "connector:fetch", json!(["teams"]), Some(TOKEN)).await;
     assert_eq!(missing["error"], "Connector not connected", "{missing}");
     let hook = json!({ "webhookUrl": "https://acme.webhook.office.com/x" });
@@ -291,6 +294,39 @@ async fn the_daemon_keeps_and_reads_connectors() {
     assert_eq!(list, json!([]));
     let (_, list) = post(d.port, "connectors:list", json!([]), Some(TOKEN)).await;
     assert_eq!(list, json!([]));
+    drop(d);
+    let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn api_keys_and_sign_ins_move_to_the_keystore_and_a_wipe_deletes_them() {
+    let data = std::env::temp_dir().join(format!("nekkod-keystore-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    // An older build's files, keys in plain JSON.
+    let provider = json!({ "id": "p1", "kind": "openai", "label": "OpenAI", "apiKey": "sk-old-key", "enabled": true });
+    std::fs::write(data.join("settings.json"), json!({ "providers": [provider], "hfToken": "hf_old" }).to_string())
+        .unwrap();
+    std::fs::write(data.join("tokens.json"), r#"{"chatgpt:a":{"provider":"chatgpt","accessToken":"at-old"}}"#).unwrap();
+    // NEKKO_CLOUD_URL: ending a Cloud session goes to a closed port.
+    let d = start_with_env(&data, json!({}), &[("NEKKO_CLOUD_URL", Some("http://127.0.0.1:9"))]);
+
+    let (_, got) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    assert_eq!((got["providers"][0]["apiKey"].clone(), got["hfToken"].clone()), (json!("sk-old-key"), json!("hf_old")));
+    let file = std::fs::read_to_string(data.join("settings.json")).unwrap();
+    assert!(!file.contains("sk-old-key") && !file.contains("hf_old"), "{file}");
+    let keystore = std::fs::read_to_string(data.join("settings-keystore.json")).unwrap();
+    assert!(keystore.contains("sk-old-key"), "{keystore}");
+    // Read at startup (the Claude sign-in cleanup), so moved already.
+    assert!(!data.join("tokens.json").exists());
+    assert!(std::fs::read_to_string(data.join("tokens-keystore.json")).unwrap().contains("at-old"));
+
+    let (status, _) = post(d.port, "data:wipe", json!([]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    for f in ["settings-keystore.json", "tokens-keystore.json"] {
+        let left = std::fs::read_to_string(data.join(f)).unwrap_or_default();
+        assert!(!left.contains("sk-old-key") && !left.contains("hf_old") && !left.contains("at-old"), "{f}: {left}");
+    }
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
 }

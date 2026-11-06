@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import '../tests/browserGlobals.js';
 import { cssRule, stylesheet } from '../tests/css.js';
 import { liveStore } from '../tests/liveStore.js';
-import { chatSession, renderChatPane, withProvider } from '../tests/renderChatPane.js';
+import { chatSession, composerBox, renderChatPane, withProvider } from '../tests/renderChatPane.js';
 import { loadWall, summary, windowTag } from '../tests/renderWall.js';
 import { renderWallComposer } from '../tests/renderWallComposer.js';
 import { agentSummary, renderSidebar } from '../tests/renderSidebar.js';
@@ -31,6 +31,17 @@ describe('agent status from events', () => {
     expect(statusFromEvent('text')).toBe('working');
     expect(statusFromEvent('done', 'input')).toBeNull();
     expect(statusFromEvent('error')).toBe('error');
+    expect(statusFromEvent('session_meta')).toBeUndefined();
+    expect(statusFromEvent('session_meta', 'input')).toBeUndefined();
+  });
+  it('does not call a finished chat working again for news about the chat', () => {
+    // After `done` the card has no status, and no second `done` would clear one.
+    expect(statusFromEvent('done', 'working')).toBeNull();
+    expect(statusFromEvent('claude_code_background')).toBeUndefined();
+    expect(statusFromEvent('compaction')).toBeUndefined();
+    // A chat that is working stays working through them.
+    expect(statusFromEvent('claude_code_background', 'working')).toBeUndefined();
+    expect(statusFromEvent('compaction', 'working')).toBeUndefined();
   });
   // Source pin, pending an agents-panel e2e journey: the seeding is a mount effect
   // waiting on a host promise, which a server render never runs.
@@ -40,6 +51,15 @@ describe('agent status from events', () => {
 });
 
 describe('agent window indicators', () => {
+  it('shows a done check without watches and idle only for a watched sidebar chat', () => {
+    const html = renderSidebar({ sessions: [agentSummary('done', { activeWatchCount: 0 }), agentSummary('watched', { activeWatchCount: 1 })] });
+    expect(html).toContain('aria-label="Done"');
+    expect(html).toContain('aria-label="Idle, watching"');
+    const afterCancel = renderSidebar({ sessions: [agentSummary('watched', { activeWatchCount: 0 })] });
+    expect(afterCancel).toContain('aria-label="Done"');
+    expect(afterCancel).not.toContain('aria-label="Idle, watching"');
+  });
+
   const two = { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid' as const, cols: 2, rows: 1 } };
 
   it('wears the warm attention ring when waiting on you', async () => {
@@ -60,6 +80,12 @@ describe('agent window indicators', () => {
     const footer = html.slice(html.indexOf('data-agent-footer-controls'));
     const order = [...footer.matchAll(/(class="ctl-menu-label">(Tools|MCP)<|class="agent-internet-toggle)/g)].map((m) => m[2] ?? 'internet');
     expect(order).toEqual(['Tools', 'MCP', 'internet']);
+    // That footer is the message box's own bottom row; nothing renders under the box.
+    const box = composerBox(html);
+    for (const marker of ['data-composer-details', 'data-agent-footer-controls', 'aria-haspopup="listbox"']) expect(box, marker).toContain(marker);
+    expect(box.indexOf('data-agent-footer-controls')).toBeGreaterThan(box.indexOf('composer-bar'));
+    const after = html.slice(html.indexOf(box) + box.length);
+    expect(after.slice(0, after.indexOf('</section>'))).not.toMatch(/<button/);
     // The controls strip at the top of the composer no longer carries them.
     const top = html.slice(html.indexOf('class="composer relative"'), html.indexOf('composer-editing-body'));
     expect(top).not.toMatch(/>Tools</);
@@ -83,10 +109,10 @@ describe('agent window indicators', () => {
     expect(html.match(/<button[^>]*data-tool-name="read_file"[^>]*>/)![0]).not.toContain('disabled=""');
   });
 
-  it('drops the Continue work box from the wall composer', () => {
+  it('drops the Continue work box from every composer', () => {
     withProvider();
-    // The same chat with work to resume: the full chat offers it, the wall composer does not.
-    expect(renderChatPane(chatSession(), { surface: 'full' })).toContain('>Continue work</button>');
+    // Recovery remains in the error banner, never a suggested-response row.
+    expect(renderChatPane(chatSession(), { surface: 'full' })).not.toContain('>Continue work</button>');
     expect(renderWallComposer()).not.toContain('Continue work');
   });
 });

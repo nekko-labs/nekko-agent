@@ -66,7 +66,7 @@ async fn start_mcp(port: u16, script: &std::path::Path, pids: &std::path::Path) 
 async fn sigterm_shuts_down_gracefully_and_ends_children() {
     let data = scratch("sigterm");
     let (script, pids) = shell_mcp(&data);
-    let mut d = start_with(Some(&data));
+    let mut d = start_with(&data);
     let (server, grandchild) = start_mcp(d.port, &script, &pids).await;
 
     // SAFETY: signalling our own child.
@@ -90,7 +90,7 @@ async fn sigterm_shuts_down_gracefully_and_ends_children() {
 async fn the_next_daemon_ends_what_a_killed_one_left_running() {
     let data = scratch("sigkill");
     let (script, pids) = shell_mcp(&data);
-    let mut d = start_with(Some(&data));
+    let mut d = start_with(&data);
     let (server, grandchild) = start_mcp(d.port, &script, &pids).await;
     let record = data.join("run").join("children.json");
     until("the child record to list the MCP server", Duration::from_secs(10), || async {
@@ -104,7 +104,7 @@ async fn the_next_daemon_ends_what_a_killed_one_left_running() {
     d.child.wait().unwrap();
     assert!(alive(grandchild), "a SIGKILL leaves the grandchild running");
 
-    let next = start_with(Some(&data));
+    let next = start_with(&data);
     until("the leftovers to be ended", Duration::from_secs(10), || async {
         (!alive(server) && !alive(grandchild)).then_some(())
     })
@@ -116,7 +116,7 @@ async fn the_next_daemon_ends_what_a_killed_one_left_running() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_second_daemon_on_the_same_data_directory_exits_with_code_3() {
     let data = scratch("lock");
-    let first = start_with(Some(&data));
+    let first = start_with(&data);
     let config = json!({ "token": TOKEN, "allowedOrigins": ["null"], "dataDir": data });
     let mut second = Command::new(env!("CARGO_BIN_EXE_nekkod"))
         .arg("--config-stdin")
@@ -134,7 +134,7 @@ async fn a_second_daemon_on_the_same_data_directory_exits_with_code_3() {
 
     // Once the first is gone, the directory is free again.
     drop(first);
-    let again = start_with(Some(&data));
+    let again = start_with(&data);
     let (status, _) = post(again.port, "daemon:info", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     std::fs::remove_dir_all(data).ok();

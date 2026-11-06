@@ -1,20 +1,22 @@
 // First, so every module below sees the real packaging state in dev.
 import './devRuntime.js';
 import { NOTIFICATION_VISIBILITY_CHANNEL, visibleNotificationSession, visibleNotificationView, notificationWindowContext, trustedNotificationReporter } from '../notificationVisibility.js';
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, screen, shell, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, powerMonitor, screen, shell, systemPreferences } from 'electron';
 import { fileURLToPath } from 'url';
 import { join, resolve, sep } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { defaultUserDataDir, legacyUserDataDirs, migrateUserData, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, IpcChannels, IpcEvents, type ApiServerStatus, type AppSettings } from '@nekko-agent/shared';
 import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
-import { initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
+import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
 import { EngineProcess } from './engine-process.js';
 import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
 import { createTrayCompanion } from './trayCompanion.js';
+import { createMemoryWatch } from './memoryWatch.js';
+import { createForegroundGuard, holdNotices, type ForegroundGuard } from './foregroundGuard.js';
 import { startAgentBrowser } from './agentBrowser.js';
 import { guardSession } from './connectionsGuard.js';
 import { registerArtifactPreview } from './artifactPreview.js';
@@ -36,19 +38,40 @@ let desktopTray: ReturnType<typeof createDesktopTray> | null = null;
 let quitting = false;
 let mainWindow: BrowserWindow | null = null;
 let trayCompanion: ReturnType<typeof createTrayCompanion> | undefined;
+let memoryWatch: ReturnType<typeof createMemoryWatch> | undefined;
 let stopNotifications: (() => void) | undefined;
 let nativeNotifications: ReturnType<typeof createNativeNotificationPoster> | undefined;
 const notificationSessions = new Map<number, string | null>();
 /** Each window's view on screen, so a workflow run notice stays quiet on the Workflows view. */
 const notificationViews = new Map<number, string | null>();
 
+/** Holds native notices while an exclusive-fullscreen game is in front (foregroundGuard.ts). */
+let foreground: ForegroundGuard | undefined;
+
+/** Restore, show and focus `win`. */
+function raise(win: BrowserWindow): void {
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
 function showWindow(): void {
   trayCompanion?.dismiss();
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win) { createWindow(); return; }
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
+  raise(win);
+}
+
+/**
+ * Show the window in answer to a notification click. Windows can refuse a
+ * background app the foreground and only flash its taskbar button; a moment
+ * always-on-top puts the window in front either way.
+ */
+function showWindowOverOthers(): void {
+  const win = process.platform === 'win32' && mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  win?.setAlwaysOnTop(true);
+  showWindow();
+  win?.setAlwaysOnTop(false);
 }
 
 /** The engine (nekkod); set once the app is ready. */
@@ -59,12 +82,15 @@ const webviewGuests = new Set<number>();
 // Opt-in crash reports (telemetry.rs drops them while reports are off). A
 // monitor only: Node still crashes the way it did.
 process.on('uncaughtExceptionMonitor', (err) => {
-  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: String(err?.message ?? err), stack: String(err?.stack ?? '') }).catch(() => {});
+  // The class and message; nekkod keeps only the first line and the frames' names.
+  void engine?.call(IpcChannels.telemetryCapture, 'error', { source: 'main', message: `${err?.name || 'Error'}: ${String(err?.message ?? err)}`, stack: String(err?.stack ?? '') }).catch(() => {});
 });
 let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
 import {
+  PAGE_RELOADING_EVENT,
+  RELOAD_FADE_MS,
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
   type TitleBarOverlayTheme,
@@ -81,6 +107,14 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
 
 app.setName('Nekko Agent');
 registerDevLaunch(app);
+// Scripted demos (scripts/demo): the runner finds elements over this local
+// debugging port and moves the real cursor to them. Dev builds only, and only
+// when asked for: an installed app never opens it.
+const demoPort = process.env.NEKKO_DEMO_DEBUG_PORT;
+if (!app.isPackaged && demoPort && /^\d+$/.test(demoPort)) {
+  app.commandLine.appendSwitch('remote-debugging-port', demoPort);
+  app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1');
+}
 const previousProfile = app.getPath('userData');
 preservePackagedProfile(app);
 
@@ -129,9 +163,7 @@ function deliverLink(url: string): void {
     if (!win) createWindow();
     return;
   }
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
+  raise(win);
   win.webContents.send(IpcEvents.deepLink, url);
 }
 
@@ -174,6 +206,17 @@ function resolveWindowIcon(): string | undefined {
     join(__dirname, '../../src/renderer/public/icon-512.png'),
   ];
   return candidates.find((path) => existsSync(path));
+}
+
+/** A Windows toast loads its image itself, so a packaged icon has to leave app.asar. */
+function toastIconFile(): string | undefined {
+  const icon = resolveWindowIcon();
+  if (!icon) return undefined;
+  try {
+    const file = join(app.getPath('userData'), 'notification-icon.png');
+    writeFileSync(file, readFileSync(icon));
+    return file;
+  } catch { return undefined; }
 }
 
 /**
@@ -221,6 +264,7 @@ function wireAppWindow(win: BrowserWindow): void {
   // shortcuts people reach for shouldn't be, so bind the two that were worth
   // keeping directly. Everything else in that menu duplicated a shortcut the
   // app already owns (see `shortcuts.ts`) or a gesture Chromium handles itself.
+  let reloading = false;
   win.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
     const mod = input.control || input.meta;
@@ -230,7 +274,14 @@ function wireAppWindow(win: BrowserWindow): void {
       win.webContents.toggleDevTools();
     } else if (mod && key === 'r') {
       event.preventDefault();
-      win.webContents.reload();
+      if (reloading || input.isAutoRepeat) return;
+      reloading = true;
+      // The page fades its cover in first. The timer is here, not there, so a stuck page still reloads.
+      win.webContents.send(PAGE_RELOADING_EVENT, RELOAD_FADE_MS);
+      setTimeout(() => {
+        reloading = false;
+        if (!win.isDestroyed()) win.webContents.reload();
+      }, RELOAD_FADE_MS);
     }
   });
 
@@ -306,7 +357,8 @@ function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) { showWindow(); return; }
   // A first launch is sized to the screen before the window exists, so it
   // appears at that size rather than visibly growing into it.
-  const { maximized, ...bounds } = loadWindowBounds() ?? initialWindowBounds(screen.getPrimaryDisplay().workArea);
+  const area = screen.getPrimaryDisplay().workArea;
+  const { maximized, ...bounds } = fixedWindowBounds(process.env.NEKKO_WINDOW_SIZE, area) ?? loadWindowBounds() ?? initialWindowBounds(area);
   const win = newAppWindow(bounds);
 
   mainWindow = win;
@@ -494,9 +546,7 @@ function claimSingleInstance(): boolean {
     // window they already have rather than doing nothing at all.
     const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
     if (win) {
-      if (win.isMinimized()) win.restore();
-      win.show();
-      win.focus();
+      raise(win);
     } else {
       createWindow();
     }
@@ -621,11 +671,17 @@ app.whenReady().then(async () => {
     mainDir: __dirname,
   });
   engine.start();
+  const nekkod = engine;
+  foreground = createForegroundGuard({
+    ask: () => nekkod.running ? nekkod.call<{ quiet?: unknown }>('activity:fullscreen') : Promise.resolve(null),
+    ownFocus: () => BrowserWindow.getFocusedWindow() != null,
+  });
   nativeNotifications = createNativeNotificationPoster({
     isSupported: () => Notification.isSupported(),
     create: options => new Notification(options),
-  }, url => { showWindow(); deliverLink(url); }, resolveWindowIcon());
-  stopNotifications = startMainNotifications(engine, nativeNotifications.post, undefined, () => {
+    ...(process.platform === 'win32' ? { windowsToast: { icon: toastIconFile() } } : {}),
+  }, url => { showWindowOverOthers(); deliverLink(url); }, resolveWindowIcon());
+  stopNotifications = startMainNotifications(engine, holdNotices(foreground, nativeNotifications.post), undefined, () => {
     const focused = BrowserWindow.getFocusedWindow();
     const owned = focused && applicationWindows.has(focused.webContents.id) ? focused : null;
     const id = owned?.webContents.id;
@@ -644,7 +700,13 @@ app.whenReady().then(async () => {
   // (Windows/Linux); park it so the first load replays it.
   pendingLink = linkFromArgv(process.argv);
   createWindow();
+  // After the window: a click that launched the app is replayed here at once.
+  if (process.platform === 'win32') Notification.handleActivation(details => nativeNotifications?.activated(details.arguments));
   registerDisplayWindows(dataDir);
+  // Always-on dictation never keeps listening behind a locked screen or through sleep.
+  const stopVoice = () => { for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IpcEvents.voiceLockStop); };
+  powerMonitor.on('lock-screen', stopVoice);
+  powerMonitor.on('suspend', stopVoice);
   const iconPath = resolveWindowIcon();
   if (iconPath) {
     desktopTray = createDesktopTray({
@@ -669,6 +731,7 @@ app.whenReady().then(async () => {
       quit: () => app.quit(),
       onError: message => dialog.showErrorBox('Nekko Agent', message),
     });
+    memoryWatch = createMemoryWatch({ tray: desktopTray.tray, engine: service, quiet: async () => (await foreground?.quiet()) === true, onError: message => dialog.showErrorBox('Nekko Agent', message) });
   }
 
   // Under `npm run dev`, hand the launcher what it needs for its banner.
@@ -695,8 +758,10 @@ app.on('before-quit', (event) => {
   quitting = true;
   displayWindows?.dispose();
   trayCompanion?.dispose();
+  memoryWatch?.dispose();
   stopNotifications?.();
   stopNotifications = undefined;
+  foreground?.dispose();
   nativeNotifications?.dispose();
   if (engineStopped || !engine) { desktopTray?.dispose(); desktopTray = null; return; }
   event.preventDefault();
@@ -704,6 +769,11 @@ app.on('before-quit', (event) => {
   engine = null;
   void stopping.stop().finally(() => {
     engineStopped = true;
-    app.quit();
+    // Not from inside this handler: with no daemon running, stop() is already
+    // settled and this runs as a microtask of the same emit. Electron then sets
+    // its quitting flag from the nested quit and clears it again when the outer
+    // one sees this preventDefault, so the windows close but the app never
+    // quits (macOS keeps it running with no window).
+    setImmediate(() => app.quit());
   });
 });

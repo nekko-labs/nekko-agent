@@ -8,7 +8,7 @@ split-from: SPEC.md (2026-10-22)
 
 - Hosting/runtime for Cloud: **the relay now runs on Fly.io** (`nekko-agent-relay.fly.dev`, Nekko Labs org, single machine since rooms are per-machine memory); the Cloud app's host is still open (Fly.io is the natural default now). Relay scaling beyond one machine needs sticky routing (fly-replay by room) when it matters.
 - E2E key-management UX (recovery vs zero-knowledge trade-offs).
-- ~~Mobile: PWA first, or native shells later?~~ Resolved 2026-10-03: a purpose-built native app (Expo + llama.cpp), with the PWA kept for the full app in a phone browser. Revised 2026-10-07: platform-native SwiftUI (apps/ios) and Kotlin/Compose (apps/android); Expo stays as the reference until parity.
+- ~~Mobile: PWA first, or native shells later?~~ Resolved 2026-10-03: a purpose-built native app (Expo + llama.cpp), with the PWA kept for the full app in a phone browser. Revised 2026-10-07: platform-native SwiftUI (apps/ios) and Kotlin/Compose (apps/android); Expo was subsequently retired and removed, along with its dedicated CI; native gaps remain tracked separately.
 - Phone model storage: models live in the app's Documents folder, which iOS includes in device backups. Exclude them from backup (needs a native flag), or move them somewhere the OS may purge?
 - Exact ZDR boundary for cloud-configured (non-local) providers without ZDR tiers, likely "not allowed in ZDR workspaces."
 - Do desktop + local web share one data dir by default, or separate? (Lean: share, so the web UI sees your desktop sessions.)

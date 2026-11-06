@@ -23,9 +23,16 @@ describe('wallDropTargetAt', () => {
     expect(wallDropTargetAt(rects, 'a', 960, 300, stage, true)).toEqual({ kind: 'beside', paneId: 'b', side: 'right' });
   });
 
-  it('docks along a board edge from inside or just outside it', () => {
-    expect(wallDropTargetAt(rects, 'a', 750, 590, stage, true)).toEqual({ kind: 'edge', side: 'down' });
-    expect(wallDropTargetAt(rects, 'a', 1010, 300, stage, true)).toEqual({ kind: 'edge', side: 'right' });
+  it('fits the row or column at a board edge, from inside or just outside it', () => {
+    expect(wallDropTargetAt(rects, 'a', 750, 590, stage, true)).toEqual({ kind: 'beside', paneId: 'b', side: 'down', atEdge: true });
+    expect(wallDropTargetAt(rects, 'a', 1010, 300, stage, true)).toEqual({ kind: 'beside', paneId: 'b', side: 'right', atEdge: true });
+    // The held zone's own row at that edge is where it already is.
+    expect(wallDropTargetAt(rects, 'b', 250, 590, stage, true)).toEqual({ kind: 'beside', paneId: 'a', side: 'down', atEdge: true });
+  });
+
+  it('spans the whole side at an edge with Shift held', () => {
+    expect(wallDropTargetAt(rects, 'a', 750, 590, stage, true, 8, true)).toEqual({ kind: 'edge', side: 'down' });
+    expect(wallDropTargetAt(rects, 'a', 1010, 300, stage, true, 8, true)).toEqual({ kind: 'edge', side: 'right' });
   });
 
   it('swaps into a slot on the fixed grid, which has no edges to split', () => {

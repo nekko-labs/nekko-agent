@@ -45,6 +45,23 @@ final class ConnectionLogTests: XCTestCase {
                                            detail: "TLS certificate not trusted", tailscaleOn: false)
         XCTAssertTrue(cert.contains { $0.contains("certificate") })
     }
+
+    func testARefusedPairingKeySaysPairAgainWhileThePhoneKeepsTrying() {
+        for state in [RelayState.offline, .connecting] {
+            let advice = ConnectionAdvice.advise(route: .internet, relayHost: "h", computer: "Studio", state: state, denied: nil,
+                                                 detail: RelayStatus.badPairingKey, tailscaleOn: true)
+            XCTAssertEqual(advice, ConnectionAdvice.advise(route: .internet, relayHost: "h", computer: "Studio", state: .denied, denied: .badKey,
+                                                           detail: nil, tailscaleOn: true))
+        }
+    }
+
+    func testAGoneRelayNameSaysPairAgainNotCheckTheInternet() {
+        let gone = ConnectionAdvice.advise(route: .internet, relayHost: "relay.example", computer: "Studio", state: .connecting,
+                                           denied: nil, detail: RelayStatus.hostNotFound, tailscaleOn: false)
+        XCTAssertTrue(gone.first?.contains("relay.example doesn’t exist") == true)
+        XCTAssertTrue(gone.contains { $0.contains("pair this iPhone again") })
+        XCTAssertFalse(gone.contains { $0.hasPrefix("Check this iPhone is online") })
+    }
 }
 
 final class TailscaleAppTests: XCTestCase {

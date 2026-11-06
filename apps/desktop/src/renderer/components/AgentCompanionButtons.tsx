@@ -2,6 +2,7 @@ import React from 'react';
 import { useStore } from '../store.js';
 import { useWallLogs } from '../wallLogs.js';
 import { DiffIcon, FolderIcon, GlobeIcon } from '../icons.js';
+import { useExpertMode, useShown } from '../simpleMode.js';
 
 export type CompanionKind = 'diff' | 'browser' | 'files';
 
@@ -25,8 +26,8 @@ export function openAgentCompanion(sessionId: string, kind: CompanionKind, comma
 
 /**
  * Changes, Files and Browser for one agent, in its own header next to Logs.
- * Changes carries the count when there is one, so it doubles as the
- * "N changes" chip it replaces.
+ * Changes shows only while the agent has changed files, and says how many:
+ * "3 files changed", with the lines added and removed in Expert.
  */
 export function AgentCompanionButtons({ sessionId, changeCount, added = 0, removed = 0, commandCenter, compact }: {
   sessionId: string;
@@ -37,15 +38,18 @@ export function AgentCompanionButtons({ sessionId, changeCount, added = 0, remov
   compact: boolean;
 }) {
   const open = useWallLogs((s) => commandCenter && s.sessionId === sessionId && !s.closing ? s.kind : null);
+  // An open drawer keeps its button, so the way to close it never disappears.
+  const showChanges = useShown('changes', { changes: changeCount > 0 || open === 'diff' });
+  const [expert] = useExpertMode();
   return (
     <span className="contents" role="group" aria-label="Agent companions">
-      {KINDS.map(({ kind, label, title, Icon }) => {
+      {KINDS.filter((k) => k.kind !== 'diff' || showChanges).map(({ kind, label, title, Icon }) => {
         const count = kind === 'diff' && changeCount > 0 ? changeCount : 0;
         return (
           <button
             key={kind}
             type="button"
-            className={`btn btn-ghost shrink-0 gap-1 px-1.5 py-1 text-[11px] ${count || open === kind ? 'font-medium text-accent' : ''} ${count ? 'agent-changes-pending' : ''}`}
+            className={`btn btn-ghost shrink-0 gap-1 px-2 py-1 text-2xs ${count || open === kind ? 'font-medium text-accent' : ''} ${count ? 'agent-changes-pending' : ''}`}
             aria-label={count ? `${label} (${count})` : label}
             title={count ? `${title} (${count} changed file${count === 1 ? '' : 's'})` : title}
             data-agent-companion={kind}
@@ -53,7 +57,7 @@ export function AgentCompanionButtons({ sessionId, changeCount, added = 0, remov
             onClick={() => openAgentCompanion(sessionId, kind, commandCenter)}
           >
             <Icon className="h-3.5 w-3.5" />
-            {count > 0 && <span className="agent-change-summary"><span className="text-success">+{added}</span><span className="text-danger">−{removed}</span><span>{count} file{count === 1 ? '' : 's'}</span></span>}
+            {count > 0 && <span className="agent-change-summary">{expert && <><span className="text-success">+{added}</span><span className="text-danger">−{removed}</span></>}<span>{count} file{count === 1 ? '' : 's'} changed</span></span>}
           </button>
         );
       })}

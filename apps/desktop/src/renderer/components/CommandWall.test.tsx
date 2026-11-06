@@ -8,7 +8,7 @@ import { type WbPane, type WbSplit } from '../layout.js';
 import type { Workspace } from '../store.js';
 
 const fixture = vi.hoisted(() => ({ workspaces: [] as Workspace[] }));
-vi.mock('../store.js', () => ({ useStore: (select: (s: { workspaces: Workspace[] }) => unknown) => select(fixture) }));
+vi.mock('../store.js', () => ({ useStore: (select: (s: never) => unknown) => select({ computers: [], ...fixture } as never) }));
 vi.mock('./ChatPane.js', () => ({ ChatPane: ({ sessionId, surface }: { sessionId: string; surface: string }) => <textarea data-surface={surface} defaultValue={`draft:${sessionId}`} /> }));
 vi.mock('./TerminalPane.js', () => ({ TerminalPane: ({ terminalId }: { terminalId: string }) => <div data-terminal={terminalId} /> }));
 vi.mock('./FilePane.js', () => ({ FilePane: ({ path }: { path: string }) => <div data-file={path} /> }));
@@ -34,6 +34,21 @@ const layout = (mode: 'grid' | 'focus' | 'fixed', cols = 2, rows = 1) => ({ mode
 function wall(s: CommandWallState, addContent?: React.ReactNode) {
   return <CommandWall state={s} setState={vi.fn()} sessions={[]} terminals={[]} running={new Set()} pending={{}} childrenOf={new Map()} projects={[]} flash={null} selectedId={null} onSelect={vi.fn()} onAspect={vi.fn()} onOpenChat={vi.fn()} onOpenTerminal={vi.fn()} onNewChat={vi.fn()} onNewTerminal={vi.fn()} onAddWindow={vi.fn()} addContent={addContent} />;
 }
+
+describe('empty zone', () => {
+  it('shows the sleeping Nekko and the plus menu options, Agent in the accent colour', () => {
+    const z: WbPane = { id: 'z', kind: 'zone', refId: 'z', zone: 'Zone 1' };
+    const html = renderToStaticMarkup(wall(state({ root: z, layout: layout('grid', 1, 1) })));
+    expect(html).toContain('wall-zone-art pixel-sleeping');
+    expect([...html.matchAll(/data-zone-create="(\w+)"/g)].map((m) => m[1])).toEqual(['chat', 'image', 'terminal']);
+    expect(html).toMatch(/class="btn btn-ghost wall-zone-option text-accent" data-zone-create="chat"/);
+    // Named by the label alone, so "Agent" stays "Agent" with its shortcut beside it (#1310 broke the e2e lookup).
+    expect(html).toMatch(/data-zone-create="chat" aria-label="Agent" title="Agent \([^)]+\)"/);
+    expect(html.match(/wall-zone-plus/g)).toHaveLength(3);
+    expect([...html.matchAll(/<kbd class="kbd wall-zone-kbd">([^<]+)<\/kbd>/g)]).toHaveLength(3);
+    expect(html).toContain('Drag in an agent chat or start a new one below.');
+  });
+});
 
 describe('command wall geometry', () => {
   it('nests creation details inside the Add tile without a pane-stage offset', () => {
@@ -230,9 +245,11 @@ describe('workspace companions and stable bodies', () => {
       const html = renderToStaticMarkup(wall(state({ folded: { 'chat-a': true }, filter: 'chat' })));
       expect(html).not.toContain('Expand companions');
     expect(html).toContain('title="Zen: focus this window (Ctrl+Shift+1)"');
-      // The focus action wears the target ring: outer ring, inner ring, centre dot.
+      // The actual wall action must use the animated Gentleface focus export.
       const focus = html.slice(html.indexOf('agent-zen-action'));
-      expect(focus.slice(0, focus.indexOf('</button>'))).toMatch(/<circle cx="12" cy="12" r="9"><\/circle><circle cx="12" cy="12" r="5"><\/circle><circle cx="12" cy="12" r="1.5" fill="currentColor"><\/circle>/);
+      const action = focus.slice(0, focus.indexOf('</button>'));
+      expect(action).toContain('data-gf-icon="focus"');
+      expect(action).toContain('gf-icon-motion');
       expect(html).not.toContain('Collapse Chat');
       expect(html).not.toContain('command-wall-folded');
       expect(html).toContain('draft:chat-a');
@@ -258,8 +275,8 @@ describe('workspace companions and stable bodies', () => {
       expect(stage).toContain('draft:chat-a');
       expect(stage).toContain('draft:chat-b');
       expect(stage).toContain('data-terminal="term"');
-      // Only the Focus hero is the full chat; every other chat window shows its transcript.
-      expect(stage.match(/data-surface="full"/g)?.length ?? 0, mode).toBe(mode === 'focus' ? 1 : 0);
+      // Tiled, every chat window is the full chat with its own composer; in Focus only the hero is.
+      expect(stage.match(/data-surface="full"/g)?.length ?? 0, mode).toBe(mode === 'focus' ? 1 : 2);
     }
   });
 
@@ -273,12 +290,12 @@ describe('workspace companions and stable bodies', () => {
     } finally { fixture.workspaces = []; }
   });
 
-  it('slides windows by position only, in step with the push timing, and stops under reduced motion', () => {
+  it('slides windows on a transform, never a layout transition, in step with the push timing', () => {
     const css = stylesheet('components/commandWallLayouts.css');
-    const move = cssRule(css, '.command-wall-window').transition;
-    expect(move).toBe(cssValue('left var(--wall-push-ms) var(--wall-push-ease), top var(--wall-push-ms) var(--wall-push-ease)'));
-    expect(move).not.toMatch(/width|height/);
-    expect(cssRule(css, '.command-wall-layout')).toMatchObject({ '--wall-push-ms': '280ms', '--wall-push-ease': cssValue('cubic-bezier(.22, 1, .36, 1)') });
+    // wallMotion.slideWindow animates the transform; the box itself never tweens.
+    expect(cssRule(css, '.command-wall-window').transition).toBeUndefined();
+    expect(cssRule(css, '.command-wall-layout')).toMatchObject({ '--wall-push-ms': '220ms', '--wall-push-ease': cssValue('cubic-bezier(.23, 1, .32, 1)') });
+    expect(css.toString()).not.toMatch(/cubic-bezier\(\.2, \.9, \.3, 1\.2\)|cubic-bezier\(\.34, 1\.56/);
     for (const selector of ['.command-wall-window', '.command-wall-add']) {
       expect(cssRule(css, selector, { media: 'prefers-reduced-motion: reduce' }).transition, selector).toBe('none');
     }

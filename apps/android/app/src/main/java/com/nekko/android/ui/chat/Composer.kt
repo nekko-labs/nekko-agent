@@ -1,5 +1,10 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
+import com.nekko.protocol.Draft
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -11,7 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.semantics.selected
+import androidx.compose.material.icons.filled.TextFormat
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Schedule
@@ -56,8 +66,23 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.font.FontWeight
 import com.nekko.android.chat.SkillMenu
 import com.nekko.protocol.SkillSummary
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import com.nekko.protocol.QueuedPrompt
+import com.nekko.protocol.Session
+import com.nekko.protocol.SavedPrompt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.filled.AddComment
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -70,11 +95,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Prompt box: **+** on the left (dictation, an image from files, a photo from
- * the camera), the text, and Send on the right. While a run is going, sending
+ * Prompt box: the text across the full width, and inside the box below it **+**
+ * on the left (a new agent, a terminal, dictation, an image from files, a photo
+ * from the camera) and Send on the right. While a run is going, sending
  * queues the prompt on the computer and an empty box turns Send into Stop.
  * Typing `/` offers the computer's skills; a picked skill shows as a chip and
  * the box becomes its input. Photos show as thumbnails above the box.
+ * Nothing goes below the box: a [footer] row is its last row, inside it.
  */
 @Composable
 fun Composer(
@@ -95,6 +122,31 @@ fun Composer(
     onInserted: () -> Unit = {},
     /** Photos from files or the camera (the **+** menu); null leaves them out. */
     attach: AttachUi? = null,
+    /** The computer's saved prompts, offered by `/` beside its skills (AN-29). */
+    prompts: List<SavedPrompt> = emptyList(),
+    /** The queue as the computer holds it, for Edit and Remove; same order as [queued]. */
+    queuedPrompts: List<QueuedPrompt> = emptyList(),
+    /** Change ([text]) or remove (null) the queued prompt at an index, checked against what was shown. */
+    onEditQueued: (suspend (index: Int, expect: String, text: String?) -> Unit)? = null,
+    /** Stop the reply and start a queued prompt. */
+    onInterrupt: (suspend (index: Int) -> Unit)? = null,
+    /** **+** → New agent, as on the desktop; null leaves it out. */
+    onNewAgent: (() -> Unit)? = null,
+    /** **+** → Terminal: the chat's terminals; null leaves it out. */
+    onTerminal: (() -> Unit)? = null,
+    /** The skill armed in the saved draft, by name. */
+    initialSkillName: String? = null,
+    /** What the box holds changed (text, armed skill's name): the chat keeps it as its draft. */
+    onDraftChange: ((text: String, skillName: String?) -> Unit)? = null,
+    /** A prompt back from the outbox (Edit or refused), already merged with what was typed: replaces the box once. */
+    restore: Draft? = null,
+    onRestored: () -> Unit = {},
+    /** The computer is out of reach: what is sent waits on the phone (offline mode); said under the box. */
+    sendsLater: String? = null,
+    /** This chat can hand a typed follow-up to a sub-agent (`ChatUi.offersSubagent`). */
+    offerSubagent: Boolean = false,
+    /** The box's bottom row (the chat's model and context), inside the box. */
+    footer: (@Composable () -> Unit)? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -102,16 +154,40 @@ fun Composer(
     var sending by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     // The armed skill, by name: it survives rotation and is dropped if the computer no longer has it.
-    var skillName by rememberSaveable { mutableStateOf<String?>(null) }
+    var skillName by rememberSaveable { mutableStateOf(initialSkillName) }
     val skill = skillName?.let { n -> skills.firstOrNull { it.name == n } }
-    val menu = if (skill == null) SkillMenu.query(text)?.let { SkillMenu.match(skills, it) }.orEmpty() else emptyList()
+    // The armed saved prompt, by id: it sends its text, then what was typed.
+    var promptId by rememberSaveable { mutableStateOf<String?>(null) }
+    val prompt = promptId?.let { id -> prompts.firstOrNull { it.id == id } }
+    val armedNone = skill == null && prompt == null
+    val menu = if (armedNone) SkillMenu.query(text)?.let { SkillMenu.match(skills, it) }.orEmpty() else emptyList()
+    val promptMenu = if (armedNone) SkillMenu.query(text)?.let { SkillMenu.matchPrompts(prompts, it) }.orEmpty() else emptyList()
     val photos = attach?.state?.photos.orEmpty()
     val addingPhotos = attach?.state?.busy == true
-    val hasContent = text.isNotBlank() || skill != null || photos.isNotEmpty()
+    val hasContent = text.isNotBlank() || skill != null || prompt != null || photos.isNotEmpty()
     // Send waits for photos still being read, so none are left behind.
     val canSend = hasContent && blocked == null && !sending && !addingPhotos
     val showStop = running && !hasContent && !addingPhotos
     var plusOpen by remember { mutableStateOf(false) }
+    // The Markdown editing (MD-6): the selection the toolbar acts on, and the formatting toolbar's switch (*Aa*).
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val draft = remember { MarkdownDraft() }
+    val setText: (String) -> Unit = {
+        text = it
+        error = null
+    }
+    var focused by remember { mutableStateOf(false) }
+    var toolbarOn by remember { mutableStateOf(ToolbarPref.get(context)) }
+    LaunchedEffect(restore) {
+        if (restore != null) {
+            text = restore.text
+            skillName = restore.skill?.name
+            error = null
+            onRestored()
+        }
+    }
+    LaunchedEffect(text, skillName) { onDraftChange?.invoke(text, skillName) }
     LaunchedEffect(insert) {
         if (insert != null) {
             text += (if (text.isEmpty() || text.endsWith("\n")) "" else "\n\n") + insert
@@ -124,25 +200,31 @@ fun Composer(
         error = null
     }
 
-    val send = {
+    fun send(wrap: (String) -> String = { it }) {
         if (canSend) {
             // `/name rest` typed out in full runs that skill too, as on the desktop.
-            val (armed, value) = skill?.let { it to text.trim() } ?: SkillMenu.typed(text, skills) ?: (null to text.trim())
+            val typedText = text
+            val armedPrompt = prompt
+            var (armed, value) = skill?.let { it to text.trim() } ?: SkillMenu.typed(text, skills) ?: (null to text.trim())
+            // A saved prompt sends its text, then what was typed: an ordinary prompt the computer runs.
+            if (armed == null) value = armedPrompt?.text(text) ?: SkillMenu.typedPrompt(text, prompts) ?: value
             val sentPhotos = attach?.take?.invoke().orEmpty()
             sending = true
             text = ""
             skillName = null
+            promptId = null
             error = null
             scope.launch {
                 try {
-                    onSend(value, armed, sentPhotos.map { it.dataUrl })
+                    onSend(wrap(value), armed, sentPhotos.map { it.dataUrl })
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    text = value // keep what they typed if it didn't go
+                    text = if (armed == null) typedText.trim() else value // keep what they typed if it didn't go
                     skillName = armed?.name
+                    promptId = armedPrompt?.id
                     attach?.restore?.invoke(sentPhotos)
-                    error = e.message ?: "Couldn’t send that."
+                    error = e.message ?: resources.getString(R.string.chat_send_failed)
                 } finally {
                     sending = false
                 }
@@ -154,23 +236,17 @@ fun Composer(
         HorizontalDivider(color = p.line)
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (queued.isNotEmpty()) {
-                Text(
-                    if (queued.size == 1) "1 prompt queued after this run" else "${queued.size} prompts queued after this run",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = p.inkFaint,
-                )
-                queued.takeLast(3).forEach { q ->
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
-                        Text(q, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+                QueueList(queued, queuedPrompts, onEditQueued, if (running) onInterrupt else null) { error = it }
+            }
+            // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
+            if (offerSubagent && armedNone && text.isNotBlank() && !text.trimStart().startsWith("/")) {
+                WorkPlace(canSend, onHere = { send() }, onSubagent = { send(Session.Companion::inSubagent) })
             }
             mic?.let { m ->
                 when (val st = m.state) {
                     is MicState.Recording -> RecordingBar(st)
                     is MicState.Transcribing -> Text(
-                        if (st.engine == Engine.COMPUTER) "Transcribing on ${m.computerName}…" else "Transcribing…",
+                        if (st.engine == Engine.COMPUTER) stringResource(R.string.chat_transcribing_on, m.computerName) else stringResource(R.string.chat_transcribing),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkSoft,
                         modifier = Modifier.padding(horizontal = 4.dp),
@@ -178,12 +254,22 @@ fun Composer(
                     MicState.Idle -> Unit
                 }
             }
-            if (menu.isNotEmpty()) SkillList(menu) { picked ->
+            if (menu.isNotEmpty() || promptMenu.isNotEmpty()) SkillList(menu, promptMenu, onPickPrompt = { picked ->
+                // After existing text the prompt's text replaces the `/query`; alone it becomes the chip.
+                if (SkillMenu.trigger(text)?.start == 0) {
+                    promptId = picked.id
+                    text = ""
+                } else {
+                    text = SkillMenu.textAfterPrompt(text, picked.text(""))
+                }
+                error = null
+            }) { picked ->
                 skillName = picked.name
                 text = SkillMenu.afterPick(text)
                 error = null
             }
-            skill?.let { SkillChip(it) { skillName = null } }
+            skill?.let { SkillChip("/${it.name}", Icons.Filled.Extension, stringResource(R.string.chat_remove_skill, it.name)) { skillName = null } }
+            prompt?.let { SkillChip("/${it.name}", Icons.Filled.Bookmark, stringResource(R.string.chat_remove_saved_prompt, it.name)) { promptId = null } }
             if (attach != null && (photos.isNotEmpty() || addingPhotos)) PhotoStrip(photos, attach.state.adding, attach.onRemove)
             val note = blocked ?: error ?: mic?.error ?: attach?.state?.error
             if (note != null) {
@@ -193,56 +279,48 @@ fun Composer(
                     color = if (blocked != null) p.warning else p.danger,
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
+            } else if (sendsLater != null) {
+                Text(sendsLater, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.padding(horizontal = 4.dp).testTag("composer.sendsLater"))
             }
-            Row(
+            // One box the width of the screen: the message on top, + and Send inside it below.
+            Column(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(p.surface)
                     .border(1.dp, p.line, RoundedCornerShape(16.dp))
-                    .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(6.dp),
             ) {
-                val recording = mic?.state is MicState.Recording
-                val transcribing = mic?.state is MicState.Transcribing
-                if (mic != null && (recording || transcribing)) {
-                    // Dictating: + becomes the way to finish (■), as the mic button was.
-                    MicButton(mic, onText = dictated)
-                } else if (mic != null || attach != null) {
-                    Box {
-                        PlusButton(open = plusOpen) { plusOpen = true }
-                        PlusMenu(
-                            open = plusOpen,
-                            onDismiss = { plusOpen = false },
-                            onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
-                            attach = attach,
-                            onPicked = { plusOpen = false; attach?.clearError?.invoke() },
-                        )
-                    }
-                }
+                // The toolbar sits inside the card, above the text, while the box is in use.
+                if (focused && toolbarOn) MarkdownToolbar(draft, text, setText)
+                PastedChip(draft, text, setText)
+                val fieldValue = draft.valueFor(text)
+                val messageLabel = stringResource(R.string.chat_message)
                 BasicTextField(
-                    value = text,
-                    onValueChange = {
-                        text = it
-                        error = null
-                    },
+                    value = fieldValue,
+                    // Against the current value, not this composition's: a paste or a toolbar edit may have just replaced it.
+                    onValueChange = { draft.changed(draft.valueFor(text), it, setText) },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = p.ink),
                     cursorBrush = SolidColor(p.accent),
                     maxLines = 6,
+                    // The source with light styling; what is sent is exactly what was typed.
+                    visualTransformation = remember(p) { MarkdownStyling(p.inkFaint, p.accent, p.code) },
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxWidth()
                         .heightIn(min = 48.dp)
-                        .padding(start = if (mic != null || attach != null) 0.dp else 8.dp, top = 12.dp, bottom = 12.dp)
-                        .semantics { contentDescription = "Message" },
+                        .padding(horizontal = 8.dp, vertical = 12.dp)
+                        .onFocusChanged { focused = it.hasFocus }
+                        .markdownKeys(draft, { text }, setText)
+                        .markdownPaste(context, draft, { text }, setText)
+                        .semantics { contentDescription = messageLabel },
                     decorationBox = { inner ->
                         if (text.isEmpty()) {
                             Text(
                                 when {
-                                    skill != null -> "Add details for /${skill.name} (optional)"
-                                    running -> "Queue a follow-up…"
-                                    skills.isNotEmpty() -> "Message, / for skills"
-                                    else -> "Message your computer"
+                                    skill != null -> stringResource(R.string.chat_add_details_for, skill.name)
+                                    running -> stringResource(R.string.chat_queue_follow_up)
+                                    skills.isNotEmpty() -> stringResource(R.string.chat_message_slash_skills)
+                                    else -> stringResource(R.string.chat_message_your_computer)
                                 },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = p.inkFaint,
@@ -254,33 +332,100 @@ fun Composer(
                         inner()
                     },
                 )
-                FilledIconButton(
-                    onClick = { if (showStop) onStop() else send() },
-                    enabled = showStop || canSend,
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = if (showStop) p.danger else p.accent,
-                        contentColor = p.accentInk,
-                        disabledContainerColor = p.surface2,
-                        disabledContentColor = p.inkFaint,
-                    ),
-                    modifier = Modifier.size(48.dp),
-                ) {
-                    if (showStop) {
-                        Icon(Icons.Filled.Stop, contentDescription = "Stop")
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    val recording = mic?.state is MicState.Recording
+                    val transcribing = mic?.state is MicState.Transcribing
+                    if (mic != null && (recording || transcribing)) {
+                        // Dictating: + becomes the way to finish (■), as the mic button was.
+                        MicButton(mic, onText = dictated)
                     } else {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = if (running) "Queue" else "Send")
+                        Box {
+                            PlusButton(open = plusOpen) { plusOpen = true }
+                            PlusMenu(
+                                open = plusOpen,
+                                onDismiss = { plusOpen = false },
+                                onNewAgent = onNewAgent?.let { go -> { plusOpen = false; go() } },
+                                onTerminal = onTerminal?.let { go -> { plusOpen = false; go() } },
+                                onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
+                                attach = attach,
+                                onPicked = { plusOpen = false; attach?.clearError?.invoke() },
+                                prompts = prompts,
+                                onPrompt = { picked ->
+                                    plusOpen = false
+                                    // Armed like a skill: it sends its text, then what is typed.
+                                    promptId = picked.id
+                                    skillName = null
+                                    error = null
+                                },
+                            )
+                        }
+                    }
+                    // *Aa*: show or hide the formatting toolbar, remembered.
+                    IconButton(
+                        onClick = {
+                            toolbarOn = !toolbarOn
+                            ToolbarPref.set(context, toolbarOn)
+                        },
+                        modifier = Modifier.semantics { selected = toolbarOn }.testTag("composer.formatting"),
+                    ) {
+                        Icon(
+                            Icons.Filled.TextFormat,
+                            contentDescription = if (toolbarOn) stringResource(R.string.chat_hide_formatting) else stringResource(R.string.chat_show_formatting),
+                            tint = if (toolbarOn) p.accent else p.inkSoft,
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    FilledIconButton(
+                        onClick = { if (showStop) onStop() else send() },
+                        enabled = showStop || canSend,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = if (showStop) p.danger else p.accent,
+                            contentColor = p.accentInk,
+                            disabledContainerColor = p.surface2,
+                            disabledContentColor = p.inkFaint,
+                        ),
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        if (showStop) {
+                            Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.chat_stop))
+                        } else {
+                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = when {
+                                sendsLater != null -> stringResource(R.string.chat_send_when_online)
+                                running -> stringResource(R.string.chat_queue)
+                                else -> stringResource(R.string.chat_send)
+                            })
+                        }
                     }
                 }
+                footer?.invoke()
             }
         }
     }
 }
 
+/** Where a typed follow-up runs: in this chat, or in a subagent that reports back. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WorkPlace(enabled: Boolean, onHere: () -> Unit, onSubagent: () -> Unit) {
+    val p = Nekko.palette
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        val colors = ButtonDefaults.outlinedButtonColors(contentColor = p.accent, disabledContentColor = p.inkFaint)
+        val border = BorderStroke(1.dp, p.line)
+        OutlinedButton(onClick = onHere, enabled = enabled, colors = colors, border = border, modifier = Modifier.testTag("composer.doItHere")) { Text(stringResource(R.string.chat_do_it_here)) }
+        OutlinedButton(onClick = onSubagent, enabled = enabled, colors = colors, border = border, modifier = Modifier.testTag("composer.inSubagent")) { Text(stringResource(R.string.chat_in_a_subagent)) }
+        Text(stringResource(R.string.chat_here_uses_more_context), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+    }
+}
+
 /** The `/` menu: the computer's skills matching what's typed after the slash. */
 @Composable
-private fun SkillList(skills: List<SkillSummary>, onPick: (SkillSummary) -> Unit) {
+private fun SkillList(skills: List<SkillSummary>, prompts: List<SavedPrompt>, onPickPrompt: (SavedPrompt) -> Unit, onPick: (SkillSummary) -> Unit) {
     val p = Nekko.palette
+    val menuLabel = stringResource(R.string.chat_saved_prompts_and_skills)
     Column(
         Modifier
             .fillMaxWidth()
@@ -289,8 +434,19 @@ private fun SkillList(skills: List<SkillSummary>, onPick: (SkillSummary) -> Unit
             .background(p.surface)
             .border(1.dp, p.line, RoundedCornerShape(12.dp))
             .verticalScroll(rememberScrollState())
-            .semantics { contentDescription = "Skills on your computer" },
+            .semantics { contentDescription = menuLabel },
     ) {
+        prompts.forEach { pr ->
+            Column(Modifier.fillMaxWidth().clickable { onPickPrompt(pr) }.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("/${pr.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
+                    Text(stringResource(R.string.chat_saved_prompt), style = MaterialTheme.typography.labelSmall, color = p.inkFaint)
+                }
+                if (pr.body.isNotBlank()) {
+                    Text(pr.body, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
         skills.forEach { s ->
             Column(
                 Modifier
@@ -312,7 +468,7 @@ private fun SkillList(skills: List<SkillSummary>, onPick: (SkillSummary) -> Unit
 
 /** The armed skill, above the message box; ✕ disarms it. */
 @Composable
-private fun SkillChip(skill: SkillSummary, onClear: () -> Unit) {
+private fun SkillChip(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, clearLabel: String, onClear: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -322,11 +478,83 @@ private fun SkillChip(skill: SkillSummary, onClear: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Icons.Filled.Extension, contentDescription = null, tint = p.accent, modifier = Modifier.size(16.dp))
-        Text("/${skill.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
+        Icon(icon, contentDescription = null, tint = p.accent, modifier = Modifier.size(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
         IconButton(onClick = onClear, modifier = Modifier.size(36.dp)) {
-            Icon(Icons.Filled.Close, contentDescription = "Remove skill /${skill.name}", tint = p.inkSoft, modifier = Modifier.size(16.dp))
+            Icon(Icons.Filled.Close, contentDescription = clearLabel, tint = p.inkSoft, modifier = Modifier.size(16.dp))
         }
+    }
+}
+
+/**
+ * The prompts waiting for this run, oldest first (AN-29, the iPhone's
+ * IO-22): **Edit** changes one before it runs (not a skill's, whose text is
+ * its instructions), ✕ removes it. The computer refuses an edit once that
+ * prompt started or the queue moved, and the queue is read again.
+ */
+@Composable
+private fun QueueList(
+    queued: List<String>,
+    prompts: List<QueuedPrompt>,
+    onEdit: (suspend (Int, String, String?) -> Unit)?,
+    onInterrupt: (suspend (Int) -> Unit)?,
+    onError: (String?) -> Unit,
+) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
+    var editing by remember { mutableStateOf<Int?>(null) }
+    var draft by remember { mutableStateOf("") }
+    fun run(work: suspend () -> Unit) {
+        scope.launch {
+            try {
+                work()
+                onError(null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                onError(e.message ?: resources.getString(R.string.chat_queue_change_failed))
+            }
+        }
+    }
+    fun act(index: Int, text: String?) {
+        val q = prompts.getOrNull(index) ?: return
+        val edit = onEdit ?: return
+        run { edit(index, q.text, text) }
+    }
+    Text(
+        if (queued.size == 1) stringResource(R.string.chat_queued_one) else stringResource(R.string.chat_queued_other, queued.size),
+        style = MaterialTheme.typography.bodySmall,
+        color = p.inkFaint,
+    )
+    queued.forEachIndexed { i, q ->
+        val editable = prompts.getOrNull(i)?.editable == true && onEdit != null
+        Row(Modifier.testTag("queue.row.$i"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(14.dp))
+            Text(q, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            if (editable) {
+                TextButton(onClick = { draft = prompts[i].text; editing = i }, modifier = Modifier.heightIn(min = 36.dp)) { Text(stringResource(R.string.chat_edit)) }
+            }
+            if (onEdit != null && prompts.getOrNull(i) != null) {
+                IconButton(onClick = { act(i, null) }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_remove_queued), tint = p.inkSoft, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+        if (onInterrupt != null && prompts.getOrNull(i) != null) {
+            TextButton(onClick = { run { onInterrupt(i) } }, modifier = Modifier.padding(start = 20.dp).heightIn(min = 36.dp).testTag("queue.interrupt.$i")) { Text(stringResource(R.string.chat_interrupt_send_now)) }
+        }
+    }
+    editing?.let { i ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text(stringResource(R.string.chat_edit_queued)) },
+            text = { OutlinedTextField(draft, { draft = it }, minLines = 2, maxLines = 8, modifier = Modifier.fillMaxWidth().testTag("queue.edit")) },
+            confirmButton = {
+                TextButton(onClick = { editing = null; act(i, draft) }, enabled = draft.isNotBlank()) { Text(stringResource(R.string.chat_save)) }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text(stringResource(R.string.chat_cancel)) } },
+        )
     }
 }
 
@@ -355,18 +583,22 @@ private fun PlusButton(open: Boolean, onClick: () -> Unit) {
         ),
         modifier = Modifier.size(48.dp),
     ) {
-        Icon(Icons.Filled.Add, contentDescription = "Add")
+        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.chat_add))
     }
 }
 
-/** The **+** menu: dictation, an image from the phone's files, a photo from the camera. */
+/** The **+** menu: a new agent or a terminal (as on the desktop), dictation, an image from the phone's files, a photo from the camera, the saved prompts. */
 @Composable
 private fun PlusMenu(
     open: Boolean,
     onDismiss: () -> Unit,
+    onNewAgent: (() -> Unit)?,
+    onTerminal: (() -> Unit)?,
     onDictate: (() -> Unit)?,
     attach: AttachUi?,
     onPicked: () -> Unit,
+    prompts: List<SavedPrompt> = emptyList(),
+    onPrompt: (SavedPrompt) -> Unit = {},
 ) {
     val p = Nekko.palette
     val full = attach != null && attach.state.room == 0
@@ -376,19 +608,36 @@ private fun PlusMenu(
         containerColor = p.surface,
         shape = RoundedCornerShape(14.dp),
     ) {
+        if (onNewAgent != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_new_agent), color = p.ink) },
+                leadingIcon = { Icon(Icons.Filled.AddComment, contentDescription = null, tint = p.inkSoft) },
+                onClick = onNewAgent,
+                modifier = Modifier.testTag("composer.newAgent"),
+            )
+        }
+        if (onTerminal != null) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.chat_terminal), color = p.ink) },
+                leadingIcon = { Icon(Icons.Filled.Terminal, contentDescription = null, tint = p.inkSoft) },
+                onClick = onTerminal,
+                modifier = Modifier.testTag("composer.terminal"),
+            )
+        }
+        if ((onNewAgent != null || onTerminal != null) && (onDictate != null || attach != null)) HorizontalDivider(color = p.line)
         if (onDictate != null) {
             DropdownMenuItem(
-                text = { Text("Dictate", color = p.ink) },
+                text = { Text(stringResource(R.string.chat_dictate), color = p.ink) },
                 leadingIcon = { Icon(Icons.Filled.Mic, contentDescription = null, tint = p.inkSoft) },
                 onClick = onDictate,
             )
         }
         if (attach != null) {
             val hint: @Composable (() -> Unit)? = if (full) {
-                { Text("${PhotoTray.MAX_PHOTOS} max", style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
+                { Text(stringResource(R.string.chat_photos_max, PhotoTray.MAX_PHOTOS), style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
             } else null
             DropdownMenuItem(
-                text = { Text("Image from files", color = if (full) p.inkFaint else p.ink) },
+                text = { Text(stringResource(R.string.chat_image_from_files), color = if (full) p.inkFaint else p.ink) },
                 leadingIcon = { Icon(Icons.Filled.AttachFile, contentDescription = null, tint = if (full) p.inkFaint else p.inkSoft) },
                 trailingIcon = hint,
                 enabled = !full,
@@ -396,10 +645,20 @@ private fun PlusMenu(
             )
             attach.onTakePhoto?.let { take ->
                 DropdownMenuItem(
-                    text = { Text("Take photo", color = if (full) p.inkFaint else p.ink) },
+                    text = { Text(stringResource(R.string.chat_take_photo), color = if (full) p.inkFaint else p.ink) },
                     leadingIcon = { Icon(Icons.Filled.PhotoCamera, contentDescription = null, tint = if (full) p.inkFaint else p.inkSoft) },
                     enabled = !full,
                     onClick = { onPicked(); take() },
+                )
+            }
+        }
+        if (prompts.isNotEmpty()) {
+            if (onNewAgent != null || onTerminal != null || onDictate != null || attach != null) HorizontalDivider(color = p.line)
+            prompts.forEach { pr ->
+                DropdownMenuItem(
+                    text = { Text("/${pr.name}", color = p.ink) },
+                    leadingIcon = { Icon(Icons.Filled.Bookmark, contentDescription = null, tint = p.inkSoft) },
+                    onClick = { onPrompt(pr) },
                 )
             }
         }
@@ -415,10 +674,11 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         photos.forEachIndexed { i, photo ->
+            val removeLabel = stringResource(R.string.chat_remove_photo, i + 1)
             Box(Modifier.size(64.dp)) {
                 Image(
                     photo.preview,
-                    contentDescription = "Photo ${i + 1}",
+                    contentDescription = stringResource(R.string.chat_photo_n, i + 1),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, p.line, RoundedCornerShape(10.dp)),
                 )
@@ -428,7 +688,7 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
                         .size(40.dp)
                         .clip(CircleShape)
                         .clickable { onRemove(photo.id) }
-                        .semantics { contentDescription = "Remove photo ${i + 1}" },
+                        .semantics { contentDescription = removeLabel },
                     contentAlignment = Alignment.TopEnd,
                 ) {
                     Box(Modifier.padding(3.dp).size(20.dp).clip(CircleShape).background(p.ink.copy(alpha = 0.72f)), contentAlignment = Alignment.Center) {
@@ -437,9 +697,10 @@ private fun PhotoStrip(photos: List<PhotoTray.Photo<ImageBitmap>>, adding: Int, 
                 }
             }
         }
+        val addingLabel = stringResource(R.string.chat_adding_photo)
         repeat(adding) {
             Box(
-                Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(p.surface2).semantics { contentDescription = "Adding photo" },
+                Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(p.surface2).semantics { contentDescription = addingLabel },
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(20.dp))
@@ -476,8 +737,8 @@ private fun MicButton(mic: MicUi, onText: (String) -> Unit) {
     ) {
         when {
             busy -> CircularProgressIndicator(strokeWidth = 2.dp, color = p.accent, modifier = Modifier.size(20.dp))
-            recording -> Icon(Icons.Filled.Stop, contentDescription = "Stop dictating")
-            else -> Icon(Icons.Filled.Mic, contentDescription = "Dictate")
+            recording -> Icon(Icons.Filled.Stop, contentDescription = stringResource(R.string.chat_stop_dictating))
+            else -> Icon(Icons.Filled.Mic, contentDescription = stringResource(R.string.chat_dictate))
         }
     }
 }
@@ -492,7 +753,7 @@ private fun RecordingBar(st: MicState.Recording) {
     ) {
         Box(Modifier.size(10.dp).clip(CircleShape).background(p.danger))
         Text(
-            if (st.engine == Engine.COMPUTER) "Listening · ${Dictation.clock(st.samples)}" else "Listening…",
+            if (st.engine == Engine.COMPUTER) stringResource(R.string.chat_listening_clock, Dictation.clock(st.samples)) else stringResource(R.string.chat_listening),
             style = MaterialTheme.typography.bodySmall,
             color = p.ink,
         )
@@ -502,6 +763,6 @@ private fun RecordingBar(st: MicState.Recording) {
             trackColor = p.surface2,
             modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)),
         )
-        Text("Tap ■ when done", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+        Text(stringResource(R.string.chat_tap_when_done), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
     }
 }

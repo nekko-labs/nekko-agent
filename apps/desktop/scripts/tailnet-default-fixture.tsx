@@ -17,6 +17,14 @@ const scenarios: Record<string, { relay: any; remote: any }> = {
     remote: { enabled: false },
     relay: { available: true, running: true, enabled: true, port: 4400, tailnetIp: IP, tailnetName: NAME, url: `ws://${NAME}:4400` },
   },
+  // Remote access left on Nekko Cloud while the managed relay is down.
+  'cloud-gone': {
+    remote: {
+      enabled: true, online: false, relayUrl: 'wss://nekko-agent-relay.fly.dev', room: 'fixture-room', connected: [],
+      devices: [{ id: 'd1', name: 'iPhone', platform: 'ios', pairedAt: Date.now() - 864e5, lastSeenAt: Date.now() - 864e5 }],
+    },
+    relay: { available: true, running: false, enabled: false, port: 4400, tailnetIp: IP, tailnetName: NAME, url: `ws://${NAME}:4400` },
+  },
   'no-tailscale': {
     remote: { enabled: false },
     relay: { available: true, running: false, enabled: false, port: 4400, error: "Tailscale isn't connected on this computer." },
@@ -36,6 +44,11 @@ const bridge: any = {
   enableRemote: async (url: string) => {
     calls.push('remote:enable ' + url);
     return { enabled: true, relayUrl: url, room: 'fixture-room', online: true, devices: [] };
+  },
+  disableRemote: async () => {
+    calls.push('remote:disable');
+    current = { ...current, remote: { enabled: false } };
+    return current.remote;
   },
   networkVisibilityStatus: async () => ({ available: true, enabled: false, advertising: false }),
   getPhoneChanges: async () => false,

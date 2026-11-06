@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class ChatStatusTests: XCTestCase {
     func testStatusShapesAndMascotGreeting() {
         let app = XCUIApplication()
@@ -10,6 +11,7 @@ final class ChatStatusTests: XCTestCase {
         XCTAssertEqual(mascot.value as? String, "Working")
         XCTAssertGreaterThanOrEqual(mascot.frame.width, 44)
         XCTAssertGreaterThanOrEqual(mascot.frame.height, 44)
+        XCTAssertEqual(mascot.frame.midX, app.frame.midX, accuracy: 2, "Nekko is centered on the screen")
         let before = XCTAttachment(screenshot: app.screenshot())
         before.name = "chat-status-after"
         before.lifetime = .keepAlways
@@ -23,7 +25,7 @@ final class ChatStatusTests: XCTestCase {
         let returned = NSPredicate(format: "value == %@", "Working")
         expectation(for: returned, evaluatedWith: mascot)
         waitForExpectations(timeout: 4)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Idle")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Watching")).firstMatch.exists)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Done")).firstMatch.exists)
     }
 }

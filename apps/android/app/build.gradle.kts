@@ -4,6 +4,10 @@ plugins {
 }
 
 android {
+    // The app's languages (values-<lang>/) as Android's per-app language list (Settings → Apps → Language).
+    androidResources {
+        generateLocaleConfig = true
+    }
     namespace = "com.nekko.android"
     // Current AndroidX (core 1.19, Compose 1.12, lifecycle 2.11) requires compiling
     // against API 37.2. targetSdk stays 36, so runtime behaviour is unchanged.
@@ -15,8 +19,12 @@ android {
         applicationId = "com.nekko.native.android"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Nightly builds pass -PnekkoVersionName=MAJOR.MINOR.BUILD and
+        // -PnekkoVersionCode=MAJOR*10000000+MINOR*10000+BUILD
+        // (scripts/nightly-version.mjs, docs/decisions/0055); a local build
+        // keeps these defaults.
+        versionCode = providers.gradleProperty("nekkoVersionCode").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("nekkoVersionName").orElse("0.1.0").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -42,6 +50,16 @@ android {
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
+
+    // Mermaid for chat diagrams (MM-4): the desktop's and the iPhone's bundled copy, pinned by
+    // scripts/vendor-mermaid.mjs, packaged as is (mermaid.min.js, pin.json, its LICENSE).
+    sourceSets["main"].assets.directories += "../../../vendor/mermaid"
+
+    // The computer's log redaction cases, checked on a device too: Android's
+    // regex (ICU) is not the JVM's the unit tests run on (LogShareDeviceTest).
+    sourceSets["androidTest"].assets.directories += "../../../crates/nekkod/tests/golden"
+    // And the sealed box's vectors: the provider key is sealed by Android's own crypto providers (SealedBoxDeviceTest).
+    sourceSets["androidTest"].assets.directories += "../../../crates/nekko-sync/tests/golden"
 }
 
 kotlin {

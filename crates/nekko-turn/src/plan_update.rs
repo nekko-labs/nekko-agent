@@ -6,6 +6,8 @@ use nekko_js as js;
 use serde_json::{Map, Value, json};
 
 const VALID: &[&str] = &["pending", "active", "done", "skipped"];
+/// `PLAN_STEP_KINDS`: the step's place in the work loop. Looking is part of `build`.
+const KINDS: &[&str] = &["build", "verify", "ship"];
 
 pub enum PlanOutcome {
     /// `{ plan, replaced, finished, skippedNow }`.
@@ -42,6 +44,35 @@ fn set_note(step: &mut Value, note: &str, has_slot: bool) {
     *obj = next;
 }
 
+// Keep this sanitizer aligned with the shared TS contract.
+fn verification(value: Option<&Value>) -> Option<Value> {
+    let v = value?.as_object()?;
+    let st = v.get("status")?.as_str()?;
+    if !["pending", "active", "passed", "failed", "blocked", "unknown"].contains(&st) {
+        return None;
+    }
+    let mut result = Map::new();
+    result.insert("status".into(), json!(st));
+    for (key, cap) in [("device", 160), ("detail", 1000)] {
+        if let Some(text) = v.get(key).and_then(Value::as_str).map(js::trim).filter(|s| !s.is_empty()) {
+            result.insert(key.into(), json!(js::slice16(text, cap)));
+        }
+    }
+    if let Some(link) = v.get("evidenceUrl").and_then(Value::as_str).map(js::trim) {
+        let lower = link.to_ascii_lowercase();
+        if link.encode_utf16().count() <= 2048
+            && (lower.starts_with("https://") || lower.starts_with("http://"))
+            && let Ok(url) = url::Url::parse(link)
+            && matches!(url.scheme(), "http" | "https")
+            && url.username().is_empty()
+            && url.password().is_none()
+        {
+            result.insert("evidenceUrl".into(), json!(link));
+        }
+    }
+    Some(Value::Object(result))
+}
+
 /// `applyPlanUpdate(current, input)` at time `now`.
 pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> PlanOutcome {
     let raw: Vec<Value> = input.get("steps").and_then(Value::as_array).cloned().unwrap_or_default();
@@ -73,6 +104,14 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             Some(n) if !n.is_empty() => Some(js::slice16(n, 240).to_string()),
             _ => None,
         };
+        // `planStepKind`: `explore`, from older models, is `build` now.
+        let kind = r
+            .get("kind")
+            .and_then(Value::as_str)
+            .map(|k| if k == "explore" { "build" } else { k })
+            .filter(|k| KINDS.contains(k))
+            .map(str::to_string);
+        let verification = verification(r.get("verification"));
         let mut found = if id.is_empty() {
             None
         } else {
@@ -95,8 +134,19 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             {
                 step["status"] = json!(st);
             }
+            if let Some(k) = &kind {
+                step["kind"] = json!(k);
+            }
+            // A finished step picked up again is another pass through the loop.
+            if was == "done" && status(step) == "active" {
+                let pass = step.get("pass").and_then(Value::as_u64).unwrap_or(1) + 1;
+                step["pass"] = json!(pass);
+            }
             if let Some(n) = &note {
                 set_note(step, n, note_slots.contains(&i));
+            }
+            if let Some(v) = verification {
+                step["verification"] = v;
             }
             step["updatedAt"] = json!(now);
             let now_status = status(step);
@@ -119,6 +169,9 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             step.insert("id".into(), json!(new_id));
             step.insert("title".into(), json!(t));
             step.insert("status".into(), json!(st.unwrap_or_else(|| "pending".into())));
+            if let Some(k) = kind {
+                step.insert("kind".into(), json!(k));
+            }
             match note {
                 Some(n) => {
                     step.insert("note".into(), json!(n));
@@ -127,6 +180,9 @@ pub fn apply_plan_update(current: Option<&Value>, input: &Value, now: u64) -> Pl
             }
             step.insert("createdAt".into(), json!(now));
             step.insert("updatedAt".into(), json!(now));
+            if let Some(v) = verification {
+                step.insert("verification".into(), v);
+            }
             next.push(Value::Object(step));
         }
     }
@@ -157,4 +213,121 @@ pub fn plan_echo(plan: &[Value]) -> String {
         .collect();
     let skipped_part = if skipped > 0 { format!(", {skipped} skipped") } else { String::new() };
     format!("Plan saved ({done}/{} done{skipped_part}):\n{}", plan.len(), lines.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn apply(current: Option<&Value>, input: Value, now: u64) -> Vec<Value> {
+        match apply_plan_update(current, &input, now) {
+            PlanOutcome::Applied { plan, .. } => plan,
+            _ => panic!("expected applied plan"),
+        }
+    }
+
+    #[test]
+    fn verification_is_explicit_persisted_and_independent() {
+        for st in ["pending", "active", "passed", "failed", "blocked", "unknown"] {
+            let plan = apply(
+                None,
+                json!({"steps":[{"title":"Inspect", "status":"done", "verification":{"status":st, "device":" phone ", "detail":" inspecting "}}]}),
+                10,
+            );
+            assert_eq!(plan[0]["verification"], json!({"status":st,"device":"phone","detail":"inspecting"}));
+            let current = json!(plan);
+            let updated = apply(
+                Some(&current),
+                json!({"steps":[{"id":"step_1", "verification":{"status":"passed","evidenceUrl":"https://example.com/proof"}}]}),
+                20,
+            );
+            assert_eq!(updated[0]["status"], "done");
+            assert_eq!(updated[0]["createdAt"], 10);
+            assert_eq!(updated[0]["updatedAt"], 20);
+            assert_eq!(updated[0]["verification"]["status"], "passed");
+            let current = json!(updated);
+            for invalid in [Value::Null, json!([]), json!("passed"), json!({}), json!({"status":"done"})] {
+                let next = apply(Some(&current), json!({"steps":[{"id":"step_1","verification":invalid}]}), 30);
+                assert_eq!(next[0]["verification"], current[0]["verification"]);
+            }
+            let next = apply(Some(&current), json!({"replace":true,"steps":[{"title":"Next"}]}), 40);
+            assert_eq!(next[0], current[0]);
+        }
+        let plain = apply(None, json!({"steps":[{"title":"Build","status":"done"}]}), 10);
+        assert!(plain[0].get("verification").is_none());
+        assert_eq!(plan_echo(&plain), "Plan saved (1/1 done):\n1. [done] step_1: Build");
+    }
+
+    #[test]
+    fn steps_carry_a_loop_kind_and_count_passes_when_reopened() {
+        let plan = apply(
+            None,
+            json!({"steps":[{"title":"Look","kind":"explore","status":"done"},{"title":"Make","kind":"build","status":"done"},{"title":"Check","kind":"verify","status":"active"},{"title":"Odd","kind":"deploy"}]}),
+            10,
+        );
+        assert_eq!(plan[0]["kind"], "build", "explore is build now");
+        assert_eq!(plan[2]["kind"], "verify");
+        assert!(plan[3].get("kind").is_none());
+        // Key order matches the TS object: id, title, status, kind, note slot, createdAt.
+        let keys: Vec<&String> = plan[1].as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["id", "title", "status", "kind", "createdAt", "updatedAt"]);
+        // Verify fails: Build is picked up again (pass 2), then again (pass 3).
+        let current = json!(plan);
+        let again = apply(
+            Some(&current),
+            json!({"steps":[{"id":"step_2","status":"active"},{"id":"step_3","status":"pending"}]}),
+            20,
+        );
+        assert_eq!(again[1]["pass"], 2);
+        assert!(again[2].get("pass").is_none());
+        let current = json!(again);
+        let done = apply(Some(&current), json!({"steps":[{"id":"step_2","status":"done"}]}), 30);
+        assert_eq!(done[1]["pass"], 2);
+        let current = json!(done);
+        let third = apply(Some(&current), json!({"steps":[{"id":"step_2","status":"active","kind":"build"}]}), 40);
+        assert_eq!(third[1]["pass"], 3);
+        // Re-planning keeps finished history as it was: no new pass.
+        let current = json!(done);
+        let replanned = apply(Some(&current), json!({"replace":true,"steps":[{"title":"Make","status":"active"}]}), 50);
+        assert!(replanned[1].get("pass").is_some_and(|p| p == 2));
+    }
+
+    #[test]
+    fn catalog_exposes_independent_verification_contract() {
+        let catalog: Value = serde_json::from_str(include_str!("catalog.json")).unwrap();
+        let tool = &catalog["tools"]["updatePlan"];
+        let properties = &tool["parameters"]["properties"]["steps"]["items"]["properties"];
+        assert_eq!(properties["status"]["enum"], json!(["pending", "active", "done", "skipped"]));
+        assert_eq!(properties["kind"]["enum"], json!(["build", "verify", "ship"]));
+        assert_eq!(
+            properties["verification"]["properties"]["status"]["enum"],
+            json!(["pending", "active", "passed", "failed", "blocked", "unknown"])
+        );
+        assert_eq!(properties["verification"]["required"], json!(["status"]));
+        let description = tool["description"].as_str().unwrap();
+        assert!(description.contains("tool return is not proof"));
+        assert!(description.contains("counts only verification.status passed"));
+    }
+
+    #[test]
+    fn verification_sanitizes_optional_fields() {
+        for link in [
+            json!("file:///tmp/proof"),
+            json!("javascript:alert(1)"),
+            json!("https://user:secret@example.com"),
+            json!(format!("https://example.com/{}", "a".repeat(2048))),
+            json!("https://"),
+            json!(123),
+        ] {
+            let plan = apply(
+                None,
+                json!({"steps":[{"title":"Inspect", "verification":{"status":"unknown","device":"x".repeat(200),"detail":"y".repeat(1100),"evidenceUrl":link}}]}),
+                10,
+            );
+            assert_eq!(
+                plan[0]["verification"],
+                json!({"status":"unknown","device":"x".repeat(160),"detail":"y".repeat(1000)})
+            );
+        }
+    }
 }

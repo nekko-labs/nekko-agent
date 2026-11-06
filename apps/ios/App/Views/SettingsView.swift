@@ -2,7 +2,8 @@ import NekkoKit
 import NekkoProtocol
 import SwiftUI
 
-/// Paired computers: rename, switch, forget, and how each is reached.
+/// Paired computers: rename, forget, and how each is reached. Every one stays
+/// connected on its own (2026-11-04); one that can't be reached offers Reconnect.
 struct ComputersView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
@@ -18,9 +19,10 @@ struct ComputersView: View {
                     // A tap opens the computer's page (2026-10-24); the actions stay on swipe and touch-and-hold.
                     NavigationLink(value: Route.computer(c.id)) {
                         HStack(spacing: 10) {
-                            Circle().fill(c.id == store.activeId ? dot : palette.inkFaint.opacity(0.5)).frame(width: 8, height: 8)
+                            Circle().fill(dot(store.state(of: c.id))).frame(width: 8, height: 8)
                             VStack(alignment: .leading, spacing: 3) {
                                 HStack(spacing: 6) {
+                                    ComputerGlyph(icon: c.icon).foregroundStyle(palette.inkSoft)
                                     Text(c.name).font(.body.weight(.medium)).foregroundStyle(palette.ink)
                                     if c.id == app.prefs.defaultComputer {
                                         Image(systemName: "star.fill").font(.caption2).foregroundStyle(palette.warning)
@@ -38,7 +40,9 @@ struct ComputersView: View {
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                     }
                     .contextMenu {
-                        if c.id != store.activeId { Button { store.connect(c.id) } label: { Label("Connect", systemImage: "bolt.horizontal") } }
+                        if canReconnect(c.id) {
+                            Button { store.reconnect(computer: c.id) } label: { Label("Reconnect", systemImage: "arrow.clockwise") }
+                        }
                         Button { app.prefs.defaultComputer = c.id } label: { Label("Open at launch", systemImage: "star") }
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
@@ -50,6 +54,7 @@ struct ComputersView: View {
             }
             Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus") } }
         }
+        .appBackground()
         .navigationTitle("Computers")
         .alert("Rename computer", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Name", text: $name)
@@ -60,12 +65,16 @@ struct ComputersView: View {
     }
 
     private func subtitle(_ c: Computer) -> String {
-        let where_ = "\(routeName(c.route)) · \(c.relayHost)"
-        return c.id == store.activeId ? "\(stateName(store.conn)) · \(where_)" : where_
+        "\(stateName(store.state(of: c.id))) · \(routeName(c.route)) · \(c.relayHost)"
     }
 
-    private var dot: Color {
-        switch store.conn {
+    /// Not reachable now: offer to dial at once rather than wait for the next try.
+    private func canReconnect(_ id: String) -> Bool {
+        ([.offline, .denied, .idle] as [RelayState]).contains(store.state(of: id))
+    }
+
+    private func dot(_ state: RelayState) -> Color {
+        switch state {
         case .online: return palette.success
         case .connecting: return palette.running
         case .offline: return palette.warning
@@ -84,12 +93,17 @@ struct SettingsView: View {
     @State private var testing = false
     @State private var testResult: (text: String, ok: Bool)?
     @State private var sendingFeedback = false
+    @State private var voiceIntro = VoiceIntroGate()
 
     var body: some View {
         @Bindable var prefs = app.prefs
         Form {
             Section {
                 ThemePicker(selection: $prefs.theme)
+                NavigationLink(value: Route.simpleMode) {
+                    LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Detailed") : String(localized: "Simple"))
+                }
+                .accessibilityIdentifier("settings.simpleMode")
                 Button {
                     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                 } label: {
@@ -118,7 +132,7 @@ struct SettingsView: View {
                     UntestedHardwareNote()
                 }
             } header: { SectionHeader("Security") } footer: {
-                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications and the Lock Screen free of chat details.")
+                Text("Asks on every open and every return, covers the app switcher preview, and keeps notifications free of chat details. What the Lock Screen shows is set in Live Activities below.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
@@ -162,26 +176,34 @@ struct SettingsView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
-                Toggle("Live Activities", isOn: $prefs.liveActivities)
+                NavigationLink(value: Route.liveActivities) {
+                    LabeledContent("Live Activities", value: prefs.liveActivityLevel.label)
+                }
+                .accessibilityIdentifier("settings.liveActivities")
                 Toggle("Vibrate for approvals and questions", isOn: $prefs.hapticNeedsYou)
                 Toggle("Vibrate when a reply finishes", isOn: $prefs.hapticDone)
             } header: { SectionHeader("While a chat runs") } footer: {
-                Text("Running chats show on the Lock Screen and in the Dynamic Island, with Allow / Deny for approvals.")
+                Text("One card on the Lock Screen and in the Dynamic Island shows every running chat, with Allow / Deny for approvals.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
                 // Inline: both choices are short rows with a checkmark, never cut off.
                 Picker("Microphone", selection: $prefs.dictationHold) {
-                    Text("Tap to start and stop").tag(false)
+                    Text("Tap to keep listening").tag(false)
                     Text("Hold to talk").tag(true)
                 }
                 .pickerStyle(.inline)
                 Toggle("Use Whisper on the computer when available", isOn: $prefs.dictationOnComputer)
             } header: { SectionHeader("Dictation") } footer: {
-                Text(prefs.dictationHold
-                     ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
-                     : "Tap the microphone to start and tap stop when you’re done.")
-                    .foregroundStyle(palette.inkSoft)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(prefs.dictationHold
+                         ? "Hold the microphone while you speak and let go to stop. With VoiceOver, double-tap starts and double-tap again stops."
+                         : "Tap the microphone and talk: it keeps listening through pauses until you tap stop, lock the phone, or leave the chat, and the screen stays on while it listens. Start with “Nekko” for a command, like “Nekko, send it”. Without Whisper on the computer, speech is turned into text on this iPhone only, never on a server.")
+                        .foregroundStyle(palette.inkSoft)
+                    Button("Watch how voice works") { voiceIntro.replay() }
+                        .font(.footnote)
+                        .accessibilityIdentifier("settings.voiceIntro")
+                }
             }
             if store.active != nil {
                 Section {
@@ -216,10 +238,16 @@ struct SettingsView: View {
                 NavigationLink(value: Route.cloud) { Label("Nekko Cloud sync", systemImage: "lock.icloud") }
                     .accessibilityIdentifier("settings.cloud")
                 NavigationLink(value: Route.computers) { Label("Paired computers", systemImage: "desktopcomputer") }
+                // Chats that run on this iPhone, on its own cloud providers (decision 0050).
+                NavigationLink(value: Route.phoneModels) { Label("Models on \(ChatPlace.phoneName)", systemImage: "iphone") }
+                    .accessibilityIdentifier("settings.phoneModels")
+                // GitHub, Linear, Jira and the rest, on this iPhone itself (decision 0058).
+                NavigationLink(value: Route.connectors) { Label("Connectors", systemImage: "point.3.connected.trianglepath.dotted") }
+                    .accessibilityIdentifier("settings.connectors")
                 NavigationLink(value: Route.connection) { Label("Connection", systemImage: "antenna.radiowaves.left.and.right") }
                 Picker("Open at launch", selection: $prefs.defaultComputer) {
                     Text("The one used last").tag(String?.none)
-                    ForEach(store.computers) { Text($0.name).tag(Optional($0.id)) }
+                    ForEach(store.computers) { ComputerLabel(c: $0).tag(Optional($0.id)) }
                 }
             } header: { SectionHeader("Computers") }
             Section {
@@ -236,8 +264,10 @@ struct SettingsView: View {
                 Button("Forget everything on this iPhone", role: .destructive) { confirmWipe = true }
             }
         }
+        .appBackground()
         .navigationTitle("Settings")
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
+        .sheet(isPresented: $voiceIntro.showing, onDismiss: { voiceIntro.closed(app.prefs) {} }) { VoiceIntroView() }
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Forget everything", role: .destructive) { app.forgetEverything() }
         }
@@ -318,6 +348,7 @@ private struct ThemeList: View {
                 }
             } header: { SectionHeader("Experimental") }
         }
+        .appBackground()
         .navigationTitle("Theme")
         .navigationBarTitleDisplayMode(.inline)
     }

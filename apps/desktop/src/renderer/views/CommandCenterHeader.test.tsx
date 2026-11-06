@@ -34,9 +34,9 @@ describe('Agents header placement', () => {
     expect(title.indexOf('data-version')).toBeLessThan(title.indexOf('id="command-titlebar-slot"'));
     expect(title.match(/<h1/g)).toHaveLength(1);
     expect(toolbar()).not.toContain('<h1');
-    expect(title).not.toContain('pr-[150px]');
+    expect(title).not.toContain('pr-38');
   });
-  it.each([['settings', 'Settings'], ['models', 'Model Providers'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
+  it.each([['settings', 'Settings'], ['models', 'Models'], ['modelserver', 'Models'], ['skills', 'Skills']])('names the %s view in the title bar, not Agents', (view, label) => {
     state.view = view;
     const title = renderToStaticMarkup(<TitleBar />);
     expect(title).toContain('>' + label + '</h1>');
@@ -65,7 +65,8 @@ describe('Agents header placement', () => {
     // Adding lives in the toolbar's icon bar in every layout: agent, terminal,
     // without an overflow button. An agent's Changes/Files/Browser moved into
     // its own window header beside Logs.
-    for (const label of ['New agent', 'New image session', 'New terminal']) expect(html).toContain(`aria-label="${label}"`);
+    expect(html).toContain('aria-label="Create new"');
+    for (const label of ['New agent', 'New image session', 'New terminal']) expect(html).not.toContain(`aria-label="${label}"`);
     for (const label of ['Add window', 'Changes', 'Browser', 'Files']) expect(html).not.toContain(`aria-label="${label}"`);
     // The add bar leads the controls, left of the layout switcher.
     expect(html.indexOf('aria-label="Add to the wall"')).toBeLessThan(html.indexOf('aria-label="Wall layout"'));

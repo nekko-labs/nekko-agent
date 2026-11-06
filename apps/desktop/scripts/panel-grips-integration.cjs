@@ -7,20 +7,23 @@ const path = require('node:path');
 const cp = require('node:child_process');
 const repo = path.resolve(__dirname, '../../..');
 const modules = process.env.NEKKO_TEST_MODULES || path.join(repo, 'node_modules');
-const out = path.join(repo, '.shots/panel-grips', process.env.NEKKO_TEST_REVISION ? 'before' : 'after');
+const out = path.join(repo, '.shots/panel-grips', process.env.NEKKO_TEST_LABEL || (process.env.NEKKO_TEST_REVISION ? 'before' : 'after'));
 async function main() {
   fs.mkdirSync(out, { recursive: true });
   let entry = path.join(__dirname, 'wall-controls-fixture.tsx');
+  let sidebar = path.join(__dirname, 'store-sidebar.tsx');
   let shared = path.join(repo, 'packages/shared/src/index.ts');
   let companion = path.join(repo, 'apps/desktop/src/main/trayCompanion.ts');
   if (process.env.NEKKO_TEST_REVISION) {
     const source = path.join(out, 'base-source'); fs.mkdirSync(source, { recursive: true });
     const zip = path.join(out, 'base.zip');
-    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src/renderer', 'apps/desktop/src/main/trayCompanion.ts', 'packages/shared/src'], { cwd: repo });
+    cp.execFileSync('git', ['archive', '--format=zip', `--output=${zip}`, process.env.NEKKO_TEST_REVISION, 'apps/desktop/src/renderer', 'apps/desktop/src/displayWindows.ts', 'apps/desktop/src/main/trayCompanion.ts', 'packages/shared/src'], { cwd: repo });
     if (process.platform === 'win32') cp.execFileSync('tar', ['-xf', zip, '-C', source]);
     else cp.execFileSync('python3', ['-c', 'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', zip, source]);
     entry = path.join(out, 'base-fixture.tsx');
     fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, 'wall-controls-fixture.tsx'), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/')));
+    sidebar = path.join(out, 'store-sidebar.tsx');
+    fs.writeFileSync(sidebar, fs.readFileSync(path.join(__dirname, 'store-sidebar.tsx'), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/')));
     shared = path.join(source, 'packages/shared/src/index.ts');
     companion = path.join(source, 'apps/desktop/src/main/trayCompanion.ts');
   }
@@ -33,7 +36,7 @@ async function main() {
   fs.writeFileSync(path.join(out, 'styled.css'), css.css);
   fs.writeFileSync(path.join(out, 'index.html'), '<!doctype html><html data-theme="dark"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' data: blob:; script-src \'self\'; style-src \'self\' \'unsafe-inline\'; connect-src \'none\'"><link rel="stylesheet" href="styled.css"></head><body><div id="root"></div><script src="fixture.js"></script></body></html>');
   const env = { ...process.env, NEKKO_INTEGRATION_OUT: out }; delete env.ELECTRON_RUN_AS_NODE;
-  const result = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, 'panel-grips-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
+  const result = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, path.basename(process.env.NEKKO_PANEL_SANDBOX || 'panel-grips-sandbox.cjs'))], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
   if (result.error) throw result.error;
   process.exitCode = result.status || 0;
 }

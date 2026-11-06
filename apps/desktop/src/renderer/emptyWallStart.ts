@@ -1,4 +1,4 @@
-import type { SessionSummary } from '@nekko-agent/shared';
+import type { SessionSummary, WallLayout, WallLayoutMode } from '@nekko-agent/shared';
 
 /**
  * An emptied Agents wall opens the Focused new-chat screen instead of the
@@ -21,16 +21,24 @@ export function reusableEmptyChat(sessions: SessionSummary[]): string | null {
 /**
  * Whether this wall should open the new-chat screen now. Only once the
  * session lists have loaded (the empty lists a view mounts with are not an
- * empty wall), only on the main window (screen windows may be empty on
- * purpose), only with a usable provider (otherwise the empty state's setup
- * path applies), and not while a completed chat is being read.
+ * empty wall), only with a usable provider (otherwise the empty state's setup
+ * path applies), and not while a completed chat is being read. A second
+ * window (another screen or desktop) opens on its new-chat screen too.
  */
 export function shouldStartFromEmptyWall(opts: {
   listsReady: boolean;
   hasWindows: boolean;
-  screenWindow: boolean;
   readingCompleted: boolean;
   providerReady: boolean;
 }): boolean {
-  return opts.listsReady && !opts.hasWindows && !opts.screenWindow && !opts.readingCompleted && opts.providerReady;
+  return opts.listsReady && !opts.hasWindows && !opts.readingCompleted && opts.providerReady;
+}
+
+/**
+ * A newly opened second window's layout: the mode of the window that opened
+ * it, and in Dynamic the default two panes side by side rather than the
+ * opener's grid size.
+ */
+export function newScreenLayout(layout: WallLayout, mode: WallLayoutMode): WallLayout {
+  return { ...layout, mode, cols: 2, rows: 1, fixedGrid: false };
 }

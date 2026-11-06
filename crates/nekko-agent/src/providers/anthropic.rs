@@ -23,8 +23,9 @@ use std::sync::Arc;
 
 /// The shipped Claude catalog, served when `GET /v1/models` can't be reached.
 /// Newest first within a family, the previous generation included so a chat
-/// pinned to it still has a name for it.
-const CLAUDE_MODELS: &[(&str, &str)] = &[
+/// pinned to it still has a name for it. `pub(crate)` so the Claude Code
+/// provider can reuse the same list rather than copy its own stale shadow.
+pub(crate) const CLAUDE_MODELS: &[(&str, &str)] = &[
     ("claude-opus-5-5", "Claude Opus 5.5"),
     ("claude-opus-5", "Claude Opus 5"),
     ("claude-opus-4-8", "Claude Opus 4.8"),
@@ -151,8 +152,13 @@ impl AnthropicProvider {
         body.insert("stream".into(), json!(true));
         match shape {
             SamplingShape::Effort => {
-                let effort = anthropic_effort(&req.model, req.effort);
-                body.insert("output_config".into(), json!({ "effort": effort.as_str() }));
+                // Admission uses explicit `normal` when live metadata has no
+                // supported saved rung or published default. Do not turn that
+                // API-default sentinel back into a model-id guess.
+                if req.effort != Some(EffortLevel::Normal) {
+                    let effort = anthropic_effort(&req.model, req.effort.clone());
+                    body.insert("output_config".into(), json!({ "effort": effort.as_str() }));
+                }
             }
             SamplingShape::Temperature => {
                 body.insert("temperature".into(), json!(req.temperature.unwrap_or(0.7)));
@@ -296,6 +302,7 @@ impl AnthropicProvider {
                     provider_id: self.config.id.clone(),
                     name: name.to_string(),
                     context_length: Some(api_window.or_else(|| claude_context_window(id)).unwrap_or(200_000)),
+                    effort: super::effort::anthropic(m),
                     ..Default::default()
                 })
             })
@@ -589,6 +596,9 @@ impl EventParser {
                         output_ms: self.decode.elapsed(),
                     });
                 }
+                if ev.pointer("/delta/stop_reason").and_then(Value::as_str) == Some("max_tokens") {
+                    out.push(ProviderChunk::OutputLimit);
+                }
             }
             Some("message_stop") => return (out, Some(End::Stop)),
             _ => {}
@@ -601,6 +611,19 @@ impl EventParser {
 mod platform_tests {
     use super::*;
 
+    #[test]
+    fn resolved_provider_default_does_not_reintroduce_guessed_effort() {
+        let mut req = request("claude-opus-5-5");
+        req.effort = Some(EffortLevel::Normal);
+        let body =
+            provider("anthropic", "https://example.test").chat_request(&req, SamplingShape::Effort).body.unwrap();
+        assert!(body.get("output_config").is_none(), "{body}");
+        req.effort = Some(EffortLevel::Custom("ultra".into()));
+        let body =
+            provider("anthropic", "https://example.test").chat_request(&req, SamplingShape::Effort).body.unwrap();
+        assert_eq!(body["output_config"]["effort"], "ultra");
+    }
+
     fn provider(kind: &str, base: &str) -> AnthropicProvider {
         let config: ProviderConfig = serde_json::from_value(json!({
             "id": "p", "kind": kind, "label": "p", "baseUrl": base, "apiKey": "secret", "enabled": true
@@ -611,6 +634,20 @@ mod platform_tests {
 
     fn request(model: &str) -> ChatRequest {
         ChatRequest { model: model.into(), ..Default::default() }
+    }
+
+    #[test]
+    fn a_reply_stopped_at_max_tokens_says_so() {
+        let mut parser = EventParser::new(DecodeClock::new(Arc::new(|| 0)));
+        let delta = |reason: &str| {
+            format!(
+                r#"{{"type":"message_delta","delta":{{"stop_reason":"{reason}"}},"usage":{{"output_tokens":128000}}}}"#
+            )
+        };
+        let (chunks, _) = parser.event(&delta("max_tokens"));
+        assert_eq!(chunks.last(), Some(&ProviderChunk::OutputLimit));
+        let (chunks, _) = parser.event(&delta("end_turn"));
+        assert!(!chunks.contains(&ProviderChunk::OutputLimit));
     }
 
     #[test]

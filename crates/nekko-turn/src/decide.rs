@@ -9,14 +9,6 @@ use serde_json::{Map, Value, json};
 const MAX_STATE_CHARS: usize = 50_000;
 const MAX_QUESTIONS: usize = 64;
 
-/// A canonical array index (`"0"`, `"12"`, not `"012"`).
-fn array_index(k: &str) -> Option<u32> {
-    if k.is_empty() || (k.len() > 1 && k.starts_with('0')) || !k.bytes().all(|b| b.is_ascii_digit()) {
-        return None;
-    }
-    k.parse::<u32>().ok().filter(|&n| n != u32::MAX)
-}
-
 /// An object built key by key as JavaScript builds one: a repeated key keeps
 /// its first place and takes the last value; integer-like keys come first.
 fn js_object(entries: Vec<(String, Value)>) -> Map<String, Value> {
@@ -27,8 +19,9 @@ fn js_object(entries: Vec<(String, Value)>) -> Map<String, Value> {
             None => order.push((k, v)),
         }
     }
-    let (mut indexed, rest): (Vec<_>, Vec<_>) = order.into_iter().partition(|(k, _)| array_index(k).is_some());
-    indexed.sort_by_key(|(k, _)| array_index(k));
+    let (mut indexed, rest): (Vec<_>, Vec<_>) =
+        order.into_iter().partition(|(k, _)| nekko_js::array_index(k).is_some());
+    indexed.sort_by_key(|(k, _)| nekko_js::array_index(k));
     indexed.into_iter().chain(rest).collect()
 }
 

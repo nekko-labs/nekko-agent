@@ -1,4 +1,5 @@
 import React, { forwardRef } from 'react';
+import { composerCodeTokens, composerFenceAfter, type ComposerFence } from './composerCode.js';
 
 /** Markdown styling for the single-surface draft editor. Markup stays in the draft. */
 
@@ -59,15 +60,16 @@ function inlineNodes(text: string, keyBase: string): React.ReactNode[] {
  */
 export function composerMarkdownNodes(text: string): React.ReactNode[] {
   const out: React.ReactNode[] = [];
-  let inCode = false;
+  let fence: ComposerFence = null;
   const lines = text.split('\n');
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const key = `l${i}`;
     if (i > 0) out.push('\n');
 
-    if (/^\s*```/.test(line)) {
-      inCode = !inCode;
+    const nextFence = composerFenceAfter(line, fence);
+    if (nextFence !== fence) {
+      fence = nextFence;
       out.push(
         <span key={key} style={{ color: INK_FAINT }}>
           {line}
@@ -75,12 +77,20 @@ export function composerMarkdownNodes(text: string): React.ReactNode[] {
       );
       continue;
     }
-    if (inCode) {
+    if (fence) {
+      // Tokenize the whole block so multiline comments stay one token. Keep every
+      // character, including newlines, for the editor's textContent and offsets.
+      let end = i + 1;
+      while (end < lines.length && composerFenceAfter(lines[end], fence) === fence) end += 1;
+      const code = lines.slice(i, end).join('\n');
       out.push(
-        <span key={key} style={{ color: INK_SOFT }}>
-          {line}
+        <span key={key} data-composer-code style={{ color: INK_SOFT, background: 'var(--surface-2)', fontFamily: 'var(--font-mono)', borderRadius: 3 }}>
+          {composerCodeTokens(code).map((token, index) => (
+            <span key={index} style={token.color ? { color: token.color } : undefined}>{token.text}</span>
+          ))}
         </span>,
       );
+      i = end - 1;
       continue;
     }
 
@@ -135,7 +145,7 @@ export const ComposerHighlight = forwardRef<HTMLDivElement, { text: string }>(fu
     <div
       ref={ref}
       aria-hidden
-      className="pointer-events-none absolute inset-0 overflow-hidden px-3.5 pt-3 text-sm [scrollbar-gutter:stable]"
+      className="pointer-events-none absolute inset-0 overflow-hidden px-4 pt-3 text-sm [scrollbar-gutter:stable]"
     >
       {/* A trailing newline keeps the last empty line's height honest, matching
           the line the textarea always leaves open under the caret. */}

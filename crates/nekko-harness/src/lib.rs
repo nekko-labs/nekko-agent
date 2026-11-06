@@ -26,21 +26,29 @@
 //! - [`Session`]: one long-lived child per chat (`-p` stream-json).
 //! - [`Mapper`]: Claude Code's stream-json, line by line, as Nekko's agent
 //!   events and transcript messages.
+//! - [`plan_call`]: Claude Code's own plan (`TodoWrite`, `TaskCreate`,
+//!   `TaskUpdate`) as changes to the chat's plan, for the plan sheet.
 //! - [`run_turn`]: one Nekko turn over a session, with Stop (the stream-json
 //!   interrupt, a process-tree kill only as the fallback) and Steer
 //!   (interrupt, then send).
 
 mod account;
 mod auth;
+mod host_env;
 mod locate;
 mod map;
+mod plan;
 mod session;
 mod turn;
 
 pub use account::{MAX_ACCOUNT_LEN, account_config_dir, is_account_name};
 pub use auth::{AuthStatus, auth_status, parse_auth_status};
+pub use host_env::host_session_vars;
 pub use locate::{ClaudeBin, MIN_VERSION, locate, parse_version, pick_windows_candidate};
-pub use map::{Init, Mapped, Mapper, Outcome, ReportedContext, StopKind, TurnEnd, USER_STOPPED, user_content};
+pub use map::{
+    Init, Mapped, Mapper, Outcome, ReportedContext, StopKind, Subagent, TurnEnd, USER_STOPPED, user_content,
+};
+pub use plan::{PLAN_TOOLS, PlanCall, plan_call};
 pub use session::{
     LaunchSpec, PermissionMode, Session, SessionStart, control_error_line, interrupt_line, is_passive, launch_args,
     new_session_id, user_line,

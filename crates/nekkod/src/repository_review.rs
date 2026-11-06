@@ -65,7 +65,7 @@ pub async fn review(ctx: &Ctx, input: &Value) -> Result<Value, String> {
     let request: ChatRequest = serde_json::from_value(json!({
         "model": model,
         "system": POLICY,
-        "messages": [{ "id": "repository-review", "role": "user", "content": content, "createdAt": now_ms() }],
+        "messages": [{ "id": "repository-review", "role": "user", "content": content, "createdAt": nekko_js::now_ms() }],
         "maxOutputTokens": 2000,
         "promptCaching": settings.get("promptCaching") != Some(&json!(false)),
     }))
@@ -94,10 +94,6 @@ async fn read(provider: impl Provider, request: ChatRequest) -> Result<String, S
         }
     }
     Err("Incomplete review response".into())
-}
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 #[cfg(test)]

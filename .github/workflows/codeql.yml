@@ -3,9 +3,9 @@ name: CodeQL
 # Advanced setup, replacing GitHub's default setup. Default setup analysed Swift
 # on a macOS runner for every PR, whatever it changed, and could not be told
 # otherwise; the Team plan's 5 macOS runners are shared by every workflow (see
-# ci.yml). Here a PR or queue group analyses only the languages its files are in
+# ci.yml). Here a PR analyses only the languages its files are in
 # (scripts/ci-scope.mjs, codeqlLanguages); Swift (apps/ios) needs macOS, so it
-# runs on the weekly schedule and on a PR that changes Swift and carries `ci:macos`.
+# runs on the weekly schedule and on a PR that changes Swift and carries `deploy:ios`.
 #
 # Swift needs a build for CodeQL to trace; the protocol package is a plain
 # SwiftPM package, so `swift build` covers it. The app targets need Xcode and
@@ -14,7 +14,6 @@ name: CodeQL
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
-  merge_group:
   schedule:
     - cron: '27 4 * * 1'
   workflow_dispatch:
@@ -38,22 +37,15 @@ jobs:
         with:
           sparse-checkout: scripts
       - name: Changed files
-        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
-          BASE: ${{ github.event.merge_group.base_sha }}
-          HEAD: ${{ github.event.merge_group.head_sha }}
         # Failure leaves the list empty, which ci-scope treats as "every language".
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
-          else
-            gh api "repos/$GITHUB_REPOSITORY/compare/$BASE...$HEAD" --jq '.files[].filename' > "$RUNNER_TEMP/changed.txt" || true
-          fi
+        run: gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed.txt" || true
       - id: scope
         env:
-          CI_CHANGED_FILES: ${{ (github.event_name == 'pull_request' || github.event_name == 'merge_group') && format('{0}/changed.txt', runner.temp) || '' }}
+          CI_CHANGED_FILES: ${{ github.event_name == 'pull_request' && format('{0}/changed.txt', runner.temp) || '' }}
           CI_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: node scripts/ci-scope.mjs
 
@@ -73,6 +65,10 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.language == 'swift' && 'manual' || 'none' }}
+          # Third-party bundles pinned by hash (vendor/mermaid: scripts/vendor-mermaid.mjs) are not our source.
+          config: |
+            paths-ignore:
+              - vendor/mermaid
       - name: Build the Swift protocol package
         if: matrix.language == 'swift'
         working-directory: apps/ios/Protocol

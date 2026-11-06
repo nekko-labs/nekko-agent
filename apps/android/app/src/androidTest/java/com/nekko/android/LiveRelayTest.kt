@@ -3,6 +3,7 @@ package com.nekko.android
 import android.Manifest
 import android.graphics.Bitmap
 import android.os.Build
+import android.view.KeyEvent
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
@@ -29,6 +30,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.theme.ThemeChoice
 import java.io.File
 import org.junit.Assume.assumeTrue
@@ -66,10 +68,17 @@ class LiveRelayTest {
             // A test device has no enrolled biometrics; the lock is covered by unit tests.
             app.appLock.setEnabled(false)
             app.themePrefs.set(if (theme == "dark") ThemeChoice.DARK else ThemeChoice.LIGHT)
+            // A fresh install starts in Simple; the shots want every Expert-only control on screen.
+            app.phonePrefs.set(EXPERT_MODE, true)
         }
 
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            // First run, step 1: what the app does; step 2 is pairing.
+            waitFor(hasText("Step 1 of 3"))
+            shot("0-first-run")
+            tap(hasText("Continue"))
             waitFor(hasText("Pair a computer"))
+            waitFor(hasText("Step 2 of 3"))
             shot("0-welcome")
             tap(hasText("Pair a computer"))
 
@@ -82,6 +91,11 @@ class LiveRelayTest {
             // touch at its old centre can miss; click it through its semantics.
             click(hasText("Pair"))
 
+            // Step 3, right after the first pairing: notifications (granted above, so nothing is asked).
+            waitFor(hasText("Step 3 of 3"), 30_000)
+            shot("1a-first-run-notifications")
+            tap(hasText("Allow notifications"))
+
             waitFor(hasText("New chat"), 30_000)
             shot("2-chats")
             tap(hasText("New chat"))
@@ -93,6 +107,26 @@ class LiveRelayTest {
             send("Say hello")
             waitFor(hasText("Hello from your computer."), 30_000)
             shot("4-reply")
+
+            // More work for this chat: a typed follow-up can go to a subagent, as a plain message.
+            val box = hasContentDescription("Message")
+            compose.onNode(box).performClick()
+            compose.onNode(box).performTextInput("Fix the tests")
+            waitFor(hasText("Here uses more context"))
+            shot("4-subagent-choice")
+            tap(hasText("In a subagent"))
+            waitFor(hasText("Do this in a subagent, then report back:", substring = true), 30_000)
+            Thread.sleep(3_000)
+            waitGone(hasContentDescription("Stop"), 30_000)
+            shot("4-subagent-sent")
+
+            // + sits inside the message box and offers another agent or a terminal, as on the desktop.
+            tap(hasContentDescription("Add"))
+            waitFor(hasText("New agent"))
+            waitFor(hasText("Terminal"))
+            screenShot("4a-plus-menu")
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK)
+            waitGone(hasText("New agent"), 5_000)
 
             // A Markdown reply: heading, lists, a code block with its Copy button, a link.
             send("show me markdown")
@@ -122,7 +156,8 @@ class LiveRelayTest {
             send("write a note")
             Thread.sleep(3_000)
             waitGone(hasContentDescription("Stop"), 30_000)
-            tap(hasContentDescription("Changes"))
+            // The button says how many files changed, and only shows once there are some.
+            tap(hasContentDescription("1 file changed"))
             waitFor(hasContentDescription("nekko-itest-note.txt, new file, 2 added", substring = true), 45_000)
             waitFor(hasText("Read only", substring = true))
             shot("8-changes")
@@ -198,6 +233,14 @@ class LiveRelayTest {
 
     private fun waitGone(matcher: SemanticsMatcher, timeoutMs: Long) {
         compose.waitUntil(timeoutMs) { compose.onAllNodes(matcher, useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+    }
+
+    /** The whole screen, popups included (a menu is its own window, outside [shot]'s root). */
+    private fun screenShot(name: String) {
+        compose.waitForIdle()
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
+        File(dir, "$theme-$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     private fun shot(name: String) {

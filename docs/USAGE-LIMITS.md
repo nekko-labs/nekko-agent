@@ -6,7 +6,9 @@ This page explains where Nekko Agent's usage numbers come from and what they mea
 
 The app does not guess your usage. It asks the provider:
 
-- **Claude (Anthropic API key)** - Every response on an API key carries the standard `anthropic-ratelimit-requests-*`, `-input-tokens-*` and `-output-tokens-*` headers: that key's own per-minute limits. The engine daemon reads them after each turn. Nekko Agent shows no Claude plan (Pro/Max) limits: Anthropic does not let third-party apps offer them, and there is no sanctioned source to read them from. Check a plan's usage in Claude Code itself.
+- **Claude (Anthropic API key)** - Every response on an API key carries the standard `anthropic-ratelimit-requests-*`, `-input-tokens-*` and `-output-tokens-*` headers: that key's own per-minute limits. The engine daemon reads them after each turn. Nekko Agent never reads Claude plan (Pro/Max) limits with your login.
+
+- **Claude plan (your Claude Code)** - The usage your own Claude Code prints in its stream while it works (`rate_limit_event`) or for `/usage` (its `usage_report`). Nekko shows the latest one per account and never asks for it on its own, so it is only as fresh as Claude Code's last report.
 
 - **ChatGPT (Codex subscription)** - The host polls `GET https://chatgpt.com/backend-api/wham/usage` with the current Bearer token and `ChatGPT-Account-Id`. The endpoint returns optional `primary_window` and `secondary_window` usage, plus plan type and credits. These are slots, not fixed periods: a primary window can be weekly, and either slot can be absent or null. Each window's `limit_window_seconds` determines its identity and label. Reported durations of 18,000 and 604,800 seconds become `5-hour` and `7-day`, respectively, regardless of slot; other positive integer durations get explicit duration labels. Missing or invalid durations retain the usage/reset data under neutral `Primary usage` or `Secondary usage` labels; neither the slot nor time until reset is used to guess a period.
 
@@ -17,6 +19,12 @@ All of these are normalized into the same `SubscriptionLimits` shape in `package
 ## Live reads, not estimates
 
 The numbers in the chat header chip and the Models card are live reads from the provider. They update after each subscription response and on a throttled poll. Nekko Agent does not extrapolate or predict your usage locally; if a provider does not return a window, that window is simply not shown.
+
+## Limits in the model picker
+
+The desktop and web model dropdown shows reported usage windows beneath the corresponding provider/account heading. Each meter names its window and percent used; Warning and Limited are labeled, and hovering reveals the reported reset time. A stale snapshot says so. While loading it says **Reading usage limits…**; if nothing is reported, it says **Usage limits not reported**, never 0% or unlimited. Local models and providers without a supported usage read have no quota meter.
+
+Provider groups have dividers and more breathing room. The dropdown has 12px inner padding and a 500px maximum height (up from 384px), still constrained to the space above or below the composer. Search, source filters, favorites and defaults work as before; pinning all of an account's models does not hide its usage.
 
 ## Utilization and Budget on the Agents wall
 
@@ -37,6 +45,10 @@ The ChatGPT usage endpoint used here is reverse-engineered from the Codex CLI's 
 `MODEL_PRICING` in `packages/shared/src/limits.ts` is a table of published list prices, matched by model id substring. The per-model labels (`$X/$Y per MTok`) and the session total in the chat header are estimates only.
 
 Your actual provider bill may differ because of taxes, discounts, cached-token pricing, batch pricing, enterprise agreements, image or tool-token costs, or mid-rate changes. Local models (Ollama, LM Studio, vLLM) and subscription providers are shown as `Free` or `Included in plan` because they are not metered through an API key in Nekko Agent.
+
+## On the iPhone
+
+The iPhone's **Usage and limits** reads every paired computer that is online (its usage summary, its providers and each enabled provider's limits) and adds the chats that run on the iPhone itself. Each computer's numbers come from that computer, so its prices are the estimates above. The iPhone's own chats use your API keys straight from the phone: it counts the tokens each provider reports at the end of a reply (Anthropic's `message_start` and `message_delta` usage, OpenAI's and OpenRouter's `stream_options.include_usage`) and keeps that count on the phone. It has no price table, so it shows tokens only. An OpenAI-compatible server is not asked for usage, because some turn down fields they don't know.
 
 ## Limits are provider-side
 

@@ -1,0 +1,508 @@
+{
+  "name": "burst-code-edit-lm-studio-mlx-vs-mlx-lm-vs-llama-server-qwen3-8b",
+  "valid": true,
+  "problems": [],
+  "notes": "Code edit. LM Studio 0.4.16 with its MLX engine (mlx-llm runtime 1.13.1), lms load defaults (its default repeat penalty), against mlx-lm 0.32.2 (MLX 0.32.4) on the same MLX 4-bit files. Reference and thermometer: llama-server b11224, GGUF Q4_K_M. 3 warmup requests per server. Both MLX servers stream Qwen3's empty think block; llama-server hides it.",
+  "settings": {
+    "targets": {
+      "lm-studio-mlx": "http://127.0.0.1:1234/v1",
+      "mlx-lm": "http://127.0.0.1:8091/v1",
+      "llama-server-default": "http://127.0.0.1:8090/v1"
+    },
+    "model": "qwen3-8b-mlx",
+    "target_models": {
+      "lm-studio-mlx": "qwen3-8b-mlx",
+      "mlx-lm": "~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit",
+      "llama-server-default": "qwen3-8b-mlx"
+    },
+    "target_weights_sha256": {
+      "lm-studio-mlx": "a4ff938f55ffbba1c35f8ff5d905a2e4cbd0941bdb3474f83507df2035b7a719",
+      "mlx-lm": "a4ff938f55ffbba1c35f8ff5d905a2e4cbd0941bdb3474f83507df2035b7a719",
+      "llama-server-default": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "runs": 8,
+    "warmup": 3,
+    "max_tokens": 4096,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": false,
+    "scenario": "burst",
+    "pause_s": 20.0,
+    "preheat_s": 0,
+    "max_drift_pct": 3.0,
+    "workload": "code-edit",
+    "prompt_sha256": "47fc8d1b5ff09d27752af1de65f85be4d6682aaa20918000f77e93afbee63ef3",
+    "script_sha256": "193a8d3ce1f33b0976d4ee12bba78c0f1d7150bdd80dec2f895bb0e98117c955"
+  },
+  "summary": {
+    "lm-studio-mlx": {
+      "ttft_ms": {
+        "median": 480.51489549834514,
+        "min": 464.37733399216086,
+        "max": 486.4767909893999,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 111.71900089686284,
+        "min": 107.24260702867852,
+        "max": 111.81510744308336,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 2656.5408286898446,
+        "min": 2629.107952711908,
+        "max": 2754.2257263176216,
+        "n": 8
+      },
+      "server_decode_tok_s_median": null,
+      "server_prefill_tok_s_median": null,
+      "decode_drift_pct": 0.1,
+      "decode_all_tokens_tok_s": 111.07441611089195,
+      "drafts": null
+    },
+    "mlx-lm": {
+      "ttft_ms": {
+        "median": 451.55583349696826,
+        "min": 441.76920800236985,
+        "max": 467.9775830009021,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 102.9604332805458,
+        "min": 102.77549596710239,
+        "max": 103.00320503802733,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 2829.1075525399524,
+        "min": 2733.0368941999827,
+        "max": 2892.913260702281,
+        "n": 8
+      },
+      "server_decode_tok_s_median": null,
+      "server_prefill_tok_s_median": null,
+      "decode_drift_pct": -0.0,
+      "decode_all_tokens_tok_s": 102.93630800292864,
+      "drafts": null
+    },
+    "llama-server-default": {
+      "ttft_ms": {
+        "median": 604.6070000011241,
+        "min": 597.5622090045363,
+        "max": 616.5265419986099,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 92.21556586281542,
+        "min": 91.75654827869849,
+        "max": 92.70548158069971,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 2113.776117458471,
+        "min": 2074.5254467939576,
+        "max": 2137.015997258799,
+        "n": 8
+      },
+      "server_decode_tok_s_median": 91.83202697913077,
+      "server_prefill_tok_s_median": 2478.3580287524446,
+      "decode_drift_pct": 0.0,
+      "decode_all_tokens_tok_s": 92.23644162741788,
+      "drafts": null
+    }
+  },
+  "replies": {
+    "lm-studio-mlx": {
+      "completion_tokens": [
+        1216
+      ],
+      "same_as_most_common_reply": 8,
+      "of": 8,
+      "correct_edit": 8
+    },
+    "mlx-lm": {
+      "completion_tokens": [
+        1216
+      ],
+      "same_as_most_common_reply": 8,
+      "of": 8,
+      "correct_edit": 8
+    },
+    "llama-server-default": {
+      "completion_tokens": [
+        1216
+      ],
+      "same_as_most_common_reply": 0,
+      "of": 8,
+      "correct_edit": 8
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-10-29T17:59:18.165147+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 1234,
+        "pid": 18417,
+        "processes": [
+          {
+            "pid": 18417,
+            "command": "/Applications/LM Studio.app/Contents/MacOS/LM Studio --run-as-service",
+            "version": null
+          },
+          {
+            "pid": 18445,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (GPU).app/Contents/MacOS/LM Studio Helper (GPU) --type=gpu-process --user-data-dir=~/Library/Application Support/LM Studio --gpu-preferences=SAAAAAAAAAAgAAAIAAAAAAAAAAAAAGAAAwAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18446,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper.app/Contents/MacOS/LM Studio Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --user-data-dir=~/Library/Application Support/LM Studio --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18447,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js /Applications/LM Studio.app/Contents/Resources/app/.webpack/bin/liblmstudio/metal/liblmstudio_bindings.node",
+            "version": null
+          },
+          {
+            "pid": 65058,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+            "version": null
+          }
+        ]
+      },
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8091,
+        "pid": 62157,
+        "processes": [
+          {
+            "pid": 62157,
+            "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+            "version": "mlx-lm 0.32.2 mlx 0.32.4"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "LM Studio engine",
+        "pid": 65058,
+        "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+        "part_of_target": true
+      },
+      {
+        "kind": "mlx_lm.server",
+        "pid": 62157,
+        "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 4.7,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 373,
+        "cpu": 0.4,
+        "command": "opendirectoryd"
+      },
+      {
+        "pid": 753,
+        "cpu": 0.3,
+        "command": "Siri.app"
+      },
+      {
+        "pid": 57118,
+        "cpu": 0.3,
+        "command": "nekkod"
+      },
+      {
+        "pid": 398,
+        "cpu": 0.2,
+        "command": "notifyd"
+      },
+      {
+        "pid": 57116,
+        "cpu": 0.2,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.1,
+        "command": "logd"
+      },
+      {
+        "pid": 670,
+        "cpu": 0.1,
+        "command": "com.apple.hiservices-xpcse"
+      }
+    ],
+    "scripts": {
+      "commit": "78113c4f352814ad52711b63c55ba46743ca825d",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+      "bytes": 5027783488,
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    },
+    "target_model_files": {
+      "lm-studio-mlx": {
+        "path": "~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit",
+        "bytes": 4367856304,
+        "sha256": "a4ff938f55ffbba1c35f8ff5d905a2e4cbd0941bdb3474f83507df2035b7a719",
+        "files": {
+          "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+          "README.md": "3b04e47152072c7419f2c24c955bed26e7921f998d722c88cc2142f201ea84a5",
+          "config.json": "eb21fe151c8d2b761794129a0f92a8b719a76d97705dda758ed6746c829a7720",
+          "merges.txt": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+          "model.safetensors": "fcc83d7537bee76cc143be3e25f8954b816798f93528103db1cddb02977c5617",
+          "model.safetensors.index.json": "5d1f86d9f3e5edc70a4a99e8d4223f061b138c85066819fc6a128579c7ddb5e8",
+          "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "tokenizer_config.json": "f45a828b27bfe1ae2080246d6de51c29370a0978f15b3299123830d5ba9e08a1",
+          "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      },
+      "mlx-lm": {
+        "path": "~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit",
+        "bytes": 4367856304,
+        "sha256": "a4ff938f55ffbba1c35f8ff5d905a2e4cbd0941bdb3474f83507df2035b7a719",
+        "files": {
+          "LICENSE": "832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e",
+          "README.md": "3b04e47152072c7419f2c24c955bed26e7921f998d722c88cc2142f201ea84a5",
+          "config.json": "eb21fe151c8d2b761794129a0f92a8b719a76d97705dda758ed6746c829a7720",
+          "merges.txt": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+          "model.safetensors": "fcc83d7537bee76cc143be3e25f8954b816798f93528103db1cddb02977c5617",
+          "model.safetensors.index.json": "5d1f86d9f3e5edc70a4a99e8d4223f061b138c85066819fc6a128579c7ddb5e8",
+          "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4",
+          "tokenizer_config.json": "f45a828b27bfe1ae2080246d6de51c29370a0978f15b3299123830d5ba9e08a1",
+          "vocab.json": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+        }
+      },
+      "llama-server-default": {
+        "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+        "bytes": 5027783488,
+        "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+      }
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-10-29T18:14:17.952253+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 1234,
+        "pid": 18417,
+        "processes": [
+          {
+            "pid": 18417,
+            "command": "/Applications/LM Studio.app/Contents/MacOS/LM Studio --run-as-service",
+            "version": null
+          },
+          {
+            "pid": 18445,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (GPU).app/Contents/MacOS/LM Studio Helper (GPU) --type=gpu-process --user-data-dir=~/Library/Application Support/LM Studio --gpu-preferences=SAAAAAAAAAAgAAAIAAAAAAAAAAAAAGAAAwAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18446,
+            "command": "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper.app/Contents/MacOS/LM Studio Helper --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=network --user-data-dir=~/Library/Application Support/LM Studio --shared-files --field-trial-handle=1718379636,r,14564997247548921919,5808143420293055966,262144 --enable-features=PdfUseShowSaveFilePicker,ScreenCaptureKitPickerScreen,ScreenCaptureKitStreamPickerSonoma --disable-features=MacWebContentsOcclusion,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TimeoutHangingVideoCaptureStarts,TraceSiteInstanceGetProcessCreation --variations-seed-version --seatbelt-client=30",
+            "version": null
+          },
+          {
+            "pid": 18447,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/systemresourcesworker.js /Applications/LM Studio.app/Contents/Resources/app/.webpack/bin/liblmstudio/metal/liblmstudio_bindings.node",
+            "version": null
+          },
+          {
+            "pid": 65058,
+            "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+            "version": null
+          }
+        ]
+      },
+      {
+        "port": 8090,
+        "pid": 68120,
+        "processes": [
+          {
+            "pid": 68120,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 8091,
+        "pid": 62157,
+        "processes": [
+          {
+            "pid": 62157,
+            "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+            "version": "mlx-lm 0.32.2 mlx 0.32.4"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "LM Studio engine",
+        "pid": 65058,
+        "command": "~/.lmstudio/.internal/utils/node -e \\012function connectPort(port) {\\012  const handlersMap = new Map();\\012  return {\\012    postMessage: data => process.send({ port: port, data }),\\012    on: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = payload => {\\012        if (payload.port === port) {\\012          handler({ data: payload.data });\\012        }\\012      }\\012      handlersMap.set(handler, innerHandler);\\012      process.on('message', innerHandler);\\012    },\\012    off: (event, handler) => {\\012      if (event !== \"message\") {\\012        throw new Error(\"Unsupported event: \" + event);\\012      }\\012      const innerHandler = handlersMap.get(handler);\\012      if (innerHandler) {\\012        process.off('message', innerHandler);\\012        handlersMap.delete(handler);\\012      }\\012    },\\012  };\\012}\\012process.parentPort = connectPort(0);\\012process.rcPort = connectPort(1);\\012process.resourcesPath = \"/Applications/LM Studio.app/Contents/Resources\";\\012require(\"/Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js\"); /Applications/LM Studio.app/Contents/Resources/app/.webpack/lib/llmworker.js",
+        "part_of_target": true
+      },
+      {
+        "kind": "mlx_lm.server",
+        "pid": 62157,
+        "command": "~/.local/share/uv/tools/mlx-lm/bin/python ~/.local/bin/mlx_lm.server --model ~/.lmstudio/models/Qwen/Qwen3-8B-MLX-4bit --port 8091",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 68120,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 7.3,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 57115,
+        "cpu": 0.1,
+        "command": "Nekko Agent.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.0,
+        "command": "UserEventAgent"
+      },
+      {
+        "pid": 336,
+        "cpu": 0.0,
+        "command": "fseventsd"
+      },
+      {
+        "pid": 337,
+        "cpu": 0.0,
+        "command": "mediaremoted"
+      },
+      {
+        "pid": 340,
+        "cpu": 0.0,
+        "command": "systemstats"
+      }
+    ],
+    "scripts": {
+      "commit": "78113c4f352814ad52711b63c55ba46743ca825d",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 894.7,
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 6.1,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 820,
+        "cpu": 1.8,
+        "command": "mediaanalysisd"
+      },
+      {
+        "pid": 57118,
+        "cpu": 1.0,
+        "command": "nekkod"
+      },
+      {
+        "pid": 70530,
+        "cpu": 0.7,
+        "command": "textunderstandingd"
+      },
+      {
+        "pid": 711,
+        "cpu": 0.4,
+        "command": "NotificationCenter.app"
+      },
+      {
+        "pid": 35800,
+        "cpu": 0.3,
+        "command": "tsc"
+      },
+      {
+        "pid": 380,
+        "cpu": 0.2,
+        "command": "locationd"
+      },
+      {
+        "pid": 598,
+        "cpu": 0.2,
+        "command": "AppleCentauriAlpha"
+      }
+    ]
+  }
+}

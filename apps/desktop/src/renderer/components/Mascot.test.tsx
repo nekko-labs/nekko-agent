@@ -49,14 +49,15 @@ describe('Pixel Nekko', () => {
     expect(renderToStaticMarkup(<NekkoAvatar />)).not.toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<MiniNekko />)).not.toContain('orange-wizard-hat');
   });
-  it('puts the Spooky wizard hat on the corner mascot only', async () => {
+  it('puts the Spooky wizard hat on an enabled mascot only', async () => {
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled wizardHat />)).toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled />)).not.toContain('orange-wizard-hat');
-    // In the app: the Spooky (autumn) preset dresses the corner mascot, and nothing else.
+    // Each chat window hosts its own Nekko now (ChatMascot), so the app shell
+    // itself (nav rail, overlays) shouldn't carry a `pixel-mascot` button and
+    // the autumn preset shouldn't paint a wizard hat on anything but a chat.
     const spooky = await renderApp({ themePreset: 'autumn' } as never);
-    expect(spooky.match(/orange-wizard-hat/g)).toHaveLength(1);
-    const mascot = spooky.slice(spooky.indexOf('class="pixel-mascot'));
-    expect(mascot.slice(0, mascot.indexOf('</button>'))).toContain('orange-wizard-hat');
+    expect(spooky).not.toContain('pixel-mascot');
+    expect(spooky).not.toContain('orange-wizard-hat');
     expect(await renderApp({})).not.toContain('orange-wizard-hat');
   });
   it('wears the wizard hat smaller and higher, on the crown', () => {
@@ -68,9 +69,19 @@ describe('Pixel Nekko', () => {
     expect(eyeless).not.toContain('pixel-eyes');
     // Its use on the Agents rail button is rendered in viewEnabled.test.ts.
   });
+  it('translates both pixel eyes when a pupil offset is set', () => {
+    // The per-chat mascot (ChatMascot) feeds a bounded gaze vector in here so
+    // the pupils translate without new path geometry.
+    const watching = renderToStaticMarkup(<NekkoAvatar pupilOffset={{ x: 1.5, y: -0.5 }} />);
+    expect(watching).toContain('data-part="pixel-eyes"');
+    expect(watching).toContain('transform="translate(1.5 -0.5)"');
+    const resting = renderToStaticMarkup(<NekkoAvatar />);
+    expect(resting).toContain('data-part="pixel-eyes"');
+    expect(resting).not.toMatch(/<g[^>]*data-part="pixel-eyes"[^>]*transform=/);
+  });
   it('keeps working feedback, greeting, and the visibility setting', () => {
     expect(renderToStaticMarkup(<MiniNekko size={16} />)).toContain('pixel-working');
-    const working = renderToStaticMarkup(<Mascot mood="thinking" enabled />);
+    const working = renderToStaticMarkup(<Mascot mood="thinking" working enabled />);
     expect(working).toContain('data-mascot-pose="working"');
     expect(working).toContain('Nekko is working');
     expect(working).toContain('<button type="button"');
@@ -78,15 +89,22 @@ describe('Pixel Nekko', () => {
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled={false} />)).toBe('');
   });
 
-  it('uses matching head and eye geometry on marketing and mobile', () => {
+  it('ignores stale per-chat thinking mood and uses a steady aggregate working pose', () => {
+    expect(renderToStaticMarkup(<Mascot mood="thinking" enabled />)).toContain('data-mascot-pose="idle"');
+    const active = renderToStaticMarkup(<Mascot mood="idle" working enabled />);
+    expect(active).toContain('data-mascot-pose="working"');
+    expect(active).toContain('pixel-stationary');
+    expect(active).not.toContain('pixel-quiet');
+    expect(cssRule(stylesheet('styles.css'), '.pixel-mascot[data-mascot-pose="working"] [data-part="pixel-head"] > path:first-child')).toMatchObject({ fill: 'var(--accent)', stroke: 'var(--accent)' });
+  });
+
+  it('uses matching head and eye geometry on marketing', () => {
     const desktop = source('./Mascot.tsx');
     const website = source('../../../../../apps/website/index.html');
-    const mobile = source('../../../../../apps/mobile/src/ui/Mascot.tsx');
     const paths = [...desktop.matchAll(/d="([^"]+)"/g)].map((match) => match[1]);
     expect(paths).toHaveLength(5);
     for (const path of paths) {
       expect(website).toContain(path);
-      expect(mobile).toContain(path);
     }
   });
 
@@ -100,15 +118,8 @@ describe('Pixel Nekko', () => {
     }
   });
 
-  // Source pins: the mobile app's screens are not unit-rendered (its vitest
-  // config covers src/lib only and react-native is not installed here), and the
-  // desktop pause needs a client render to fire visibilitychange.
-  it('pauses with the page and honours reduced motion on mobile (source pin)', () => {
+  it('pauses desktop motion with page visibility', () => {
     expect(source('./Mascot.tsx')).toMatch(/document\.addEventListener\('visibilitychange'/);
-    const mobile = source('../../../../../apps/mobile/src/ui/Mascot.tsx');
-    expect(mobile).toMatch(/AccessibilityInfo\.isReduceMotionEnabled\(\)/);
-    expect(mobile).toMatch(/clearInterval\(timer\)/);
-    expect(mobile).toMatch(/AppState\.addEventListener\('change'/);
   });
 
   it('keeps navigation still and limits the quiet face to the corner mascot', () => {

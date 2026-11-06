@@ -24,3 +24,25 @@ User intent: find the QR code that links a phone without hunting through one lon
 - Privacy and safety: layout only. No setting, pairing secret or relay behavior changes.
 
 Status: implemented. The animated jump `[2026-10-23]` was checked in the same hidden renderer at 1280 and 640 wide: clicking System passes through intermediate scroll positions and lands on the section in about 195ms, with System highlighted. Checked in a hidden renderer of the full app with a stub bridge (dark theme, 1280×900 and 640×900): clicking Phone pairing highlights it and brings the card into view, Pair a device shows the QR fully on screen, no horizontal overflow. Not yet checked: light theme, the installed app, and the Local Web UI.
+
+## Optional sidebar shortcuts (issue #1178)
+
+Implemented. Skills and Connectors are rows at the very top of the Settings rail, before the section navigation, and wrap in a narrow window. Both sidebar shortcuts are hidden by default, including for existing settings with no saved preference. General > View settings independently opts each shortcut into the left rail. Hiding a shortcut does not disable its view or change access through Settings, the command palette or chat skill menus. Preferences persist through the existing settings API as `sidebarViews`; no credentials, permissions or remote calls are added.
+
+Acceptance: both chips navigate to their views, each toggle saves independently, and both desktop and narrow layouts keep them legible. Verified with focused navigation tests and hidden, network-blocked Electron fixture interaction checks and matching screenshots. Packaged apps and native phone clients are not verified.
+
+## Panel layout and return navigation (issue #1220)
+
+Implemented, verified in a hidden, network-blocked Electron fixture at 1440×900 and 600×900. Skills and Connectors include a persistent **Back to Settings** button, including when opened through optional rail shortcuts.
+
+Acceptance: both back buttons return to Settings; all section content remains available; narrow layouts do not overflow horizontally. No settings, credentials, permissions, or external connections change. Packaged desktop apps, Local Web UI hosting, and native phone clients have not been exercised.
+
+## Page shell shared with Artifacts and Scheduled Tasks
+
+User intent: Settings, Skills, Connectors and Models should feel like the same app as Artifacts and Scheduled Tasks, which are the reference. This replaces the 80% width, the floating paper panel and the accent-underlined section links from issue #1220.
+
+All four run edge to edge on the app background, with content centred and capped at the width of the Scheduled Tasks list, in standard bordered cards. Settings has a 240px left rail behind a hairline divider that stays put while the content scrolls. Its rows are shaped like the Scheduled Tasks category rows (rounded, the current one filled, with a visible keyboard focus outline) at 16px, larger than that page's on request. In a narrow window the rail becomes wrapping rows above the page. Models has no side menu ([decision 0057](../../docs/decisions/0057-models-is-one-page-without-a-side-menu.md)). The Skills tabs use the Scheduled Tasks filter buttons.
+
+Search within Settings covers the page, so it no longer matches the Skills and Connectors rows, which are in the rail. No setting, credential or permission changes.
+
+Status: implemented, not yet landed. Checked in a hidden renderer of the full app with a stub bridge (dark theme, 1440×900 and 600×900). Not yet checked: light theme, the installed app, and the Local Web UI.

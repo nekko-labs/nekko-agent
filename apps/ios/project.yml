@@ -11,7 +11,9 @@ packages:
     path: Protocol
 settings:
   base:
-    SWIFT_VERSION: "5.0"
+    # The Swift 6 language mode on every target: data races are compile errors, and
+    # isolation is also checked at run time (#1412).
+    SWIFT_VERSION: "6.0"
     TARGETED_DEVICE_FAMILY: "1,2"
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -24,6 +26,10 @@ targets:
     sources:
       - path: App
         excludes: ["*.entitlements"]
+      # Mermaid for diagrams in chats (MM-1): the pinned copy, its license and pin, as the bundle's mermaid/ folder.
+      - path: ../../vendor/mermaid
+        type: folder
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent
@@ -96,6 +102,8 @@ targets:
       - path: Widgets
         excludes: ["Info.plist", "*.entitlements"]
       - path: App/Shared
+      # The card's words (App/Shared) are translated in the app's catalog.
+      - path: App/Localizable.xcstrings
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.nekkolabs.nekkoagent.widgets
@@ -103,6 +111,9 @@ targets:
         INFOPLIST_FILE: Widgets/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES
         CODE_SIGN_ENTITLEMENTS: Widgets/NekkoWidgets.entitlements
+    dependencies:
+      - package: NekkoProtocol
+        product: NekkoProtocol
   NekkoShare:
     type: app-extension
     platform: iOS

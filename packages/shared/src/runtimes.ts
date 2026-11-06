@@ -18,11 +18,6 @@ export function isRuntimeKind(kind: ProviderKind): kind is RuntimeKind {
   return kind === 'ollama' || kind === 'lmstudio' || kind === 'vllm' || kind === 'llamacpp';
 }
 
-/** The one runtime Nekko Agent runs itself, rather than connects to. */
-export function isManagedRuntime(kind: ProviderKind): boolean {
-  return kind === 'llamacpp';
-}
-
 /**
  * What a runtime can actually do.
  *
@@ -116,17 +111,6 @@ export const RUNTIME_CAPABILITIES: Record<RuntimeKind, RuntimeCapabilities> = {
   },
 };
 
-export interface RuntimeDetection {
-  kind: RuntimeKind;
-  /** The server answered a health probe. */
-  running: boolean;
-  /** A CLI or binary we could start it with was found. */
-  installed: boolean;
-  version?: string;
-  /** Why we cannot start it, when `installed` is false. */
-  reason?: string;
-}
-
 export interface ResidentModel {
   id: string;
   sizeBytes?: number;
@@ -143,6 +127,8 @@ export interface ResidentModel {
    * `gpu+cpu` split. Absent means the runtime cannot say.
    */
   loadedOn?: 'gpu' | 'gpu+cpu' | 'cpu';
+  /** The settings it was loaded with. Nekko's own Model Server only. */
+  params?: LoadParams;
   /** When it last served a request: the field LRU eviction reads. */
   lastUsedAt?: number;
   /** When it was loaded. */
@@ -185,6 +171,8 @@ export interface RuntimeMetrics {
  * serves every runtime, and `canSetCompute` says whose controls to draw.
  */
 export interface LoadParams {
+  /** Local model reasoning. Default on; configurable only under Expert. */
+  thinking?: boolean;
   contextTokens?: number;
   gpuLayers?: number;
   kvCacheDtype?: KvCacheDtype;

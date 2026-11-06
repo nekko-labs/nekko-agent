@@ -62,5 +62,8 @@ if (process.argv[2] === 'open') {
   const packed = new Uint8Array(12 + ct.length);
   packed.set(iv);
   packed.set(ct, 12);
-  console.log(JSON.stringify({ secret, room, keyHex: hex(bits), ivHex: hex(iv), plaintext, sealed: Buffer.from(packed).toString('base64') }, null, 2));
+  // The relay credential (decision 0036): HMAC-SHA256 keyed with the secret over "nekko-relay-auth:" + room.
+  const mac = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const relayAuth = hex(new Uint8Array(await crypto.subtle.sign('HMAC', mac, enc.encode(`nekko-relay-auth:${room}`))));
+  console.log(JSON.stringify({ secret, room, keyHex: hex(bits), relayAuth, ivHex: hex(iv), plaintext, sealed: Buffer.from(packed).toString('base64') }, null, 2));
 }

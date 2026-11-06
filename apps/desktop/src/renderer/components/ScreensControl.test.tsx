@@ -38,9 +38,9 @@ describe('Screens dropdown', () => {
     expect(html).not.toContain('role="dialog"');
   });
 
-  it('ends the wall toolbar, after the layout and snap controls, in Dynamic mode only', () => {
+  it('ends the wall toolbar, after the layout and snap controls, in both modes', () => {
     const view = readFileSync(new URL('../views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    const screens = view.indexOf("wall.layout.mode === 'grid' && <ScreensControl />");
+    const screens = view.indexOf('<ScreensControl mode={wall.layout.mode} />');
     expect(screens).toBeGreaterThan(-1);
     expect(view.indexOf('className="wall-snap-toggle"')).toBeGreaterThan(-1);
     expect(view.indexOf('className="wall-snap-toggle"')).toBeLessThan(screens);

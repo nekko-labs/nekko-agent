@@ -1,0 +1,327 @@
+{
+  "name": "sustained-ollama-vs-llama-server-default-qwen3-8b",
+  "valid": true,
+  "problems": [],
+  "notes": "Ollama 0.40.11 (brew, ollama serve, all defaults), GGUF imported with a FROM-only Modelfile, blob sha256 d98cdcbd...5785. It ran its bundled llama-server build 11845 with -c 40960 -np 1 --flash-attn auto -b 2048 -ub 2048 --context-shift --keep 4. Reference: llama-server b11224 with only -m and --port.",
+  "settings": {
+    "targets": {
+      "ollama": "http://127.0.0.1:11434/v1",
+      "llama-server-default": "http://127.0.0.1:8090/v1"
+    },
+    "model": "qwen3-8b-q4km",
+    "runs": 8,
+    "warmup": 1,
+    "max_tokens": 512,
+    "temperature": 0,
+    "seed": 42,
+    "stream": true,
+    "speculative_expected": false,
+    "scenario": "sustained",
+    "pause_s": 0,
+    "preheat_s": 240.0,
+    "max_drift_pct": 3.0,
+    "prompt_sha256": "6e41cfca89c4d2b3d5904ad0cf7f7edb0f86dc007a230720614e89d874ed292c",
+    "script_sha256": "498fd56b449d096a914dcdc3da0be3891335db43a80ede779faebbe425c8adfe"
+  },
+  "summary": {
+    "ollama": {
+      "ttft_ms": {
+        "median": 295.9448754991172,
+        "min": 290.8042500021111,
+        "max": 299.53875000137486,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 85.52002590063037,
+        "min": 85.24987587362213,
+        "max": 85.79980908342333,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 1538.0857604043285,
+        "min": 1522.3405986634684,
+        "max": 1568.0651159558008,
+        "n": 8
+      },
+      "server_decode_tok_s_median": 85.30490783921829,
+      "server_prefill_tok_s_median": 1777.34375,
+      "decode_drift_pct": -0.5
+    },
+    "llama-server-default": {
+      "ttft_ms": {
+        "median": 294.47691699897405,
+        "min": 291.77537500072503,
+        "max": 296.9074590000673,
+        "n": 8
+      },
+      "decode_tok_s": {
+        "median": 86.2007100743902,
+        "min": 85.67819884258827,
+        "max": 86.41784401639737,
+        "n": 8
+      },
+      "prefill_tok_s_est": {
+        "median": 1544.5155708770712,
+        "min": 1532.4640261055106,
+        "max": 1562.8460763656524,
+        "n": 8
+      },
+      "server_decode_tok_s_median": 85.80713114831329,
+      "server_prefill_tok_s_median": 1765.1825426128894,
+      "decode_drift_pct": -0.3
+    }
+  },
+  "conditions_before": {
+    "taken_at": "2026-10-28T14:44:00.264449+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 52976,
+        "processes": [
+          {
+            "pid": 52976,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11434,
+        "pid": 52870,
+        "processes": [
+          {
+            "pid": 52870,
+            "command": "ollama serve",
+            "version": "ollama version is 0.40.11"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 52976,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 3.2,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 641,
+        "cpu": 0.4,
+        "command": "ControlCenter.app"
+      },
+      {
+        "pid": 373,
+        "cpu": 0.2,
+        "command": "opendirectoryd"
+      },
+      {
+        "pid": 35796,
+        "cpu": 0.2,
+        "command": "Visual Studio Code.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.1,
+        "command": "logd"
+      },
+      {
+        "pid": 753,
+        "cpu": 0.1,
+        "command": "Siri.app"
+      },
+      {
+        "pid": 35405,
+        "cpu": 0.1,
+        "command": "Visual Studio Code.app"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      }
+    ],
+    "scripts": {
+      "commit": "baa084014f65a4c95c24a318c20df74da40f9394",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+      "bytes": 5027783488,
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-10-28T14:49:56.877321+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t100%; charged; 0:00 remaining present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [
+      {
+        "port": 8090,
+        "pid": 52976,
+        "processes": [
+          {
+            "pid": 52976,
+            "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+            "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+          }
+        ]
+      },
+      {
+        "port": 11434,
+        "pid": 52870,
+        "processes": [
+          {
+            "pid": 1304,
+            "command": "/opt/homebrew/Cellar/ollama/0.40.11/libexec/lib/ollama/llama-server --model ~/.ollama/models/blobs/sha256-d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785 --port 56338 --host 127.0.0.1 --no-webui --offline -c 40960 -np 1 --log-verbosity 4 --no-log-prefix --no-log-timestamps --flash-attn auto -b 2048 -ub 2048 --context-shift --keep 4",
+            "version": "version: 0.7.0-dev (build 11845, commit 9ff0d7e90)\nbuilt with AppleClang 21.0.0.21000334 for Darwin arm64"
+          },
+          {
+            "pid": 52870,
+            "command": "ollama serve",
+            "version": "ollama version is 0.40.11"
+          }
+        ]
+      }
+    ],
+    "inference_processes": [
+      {
+        "kind": "llama-server",
+        "pid": 52976,
+        "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf --port 8090",
+        "part_of_target": true
+      },
+      {
+        "kind": "llama-server",
+        "pid": 1304,
+        "command": "/opt/homebrew/Cellar/ollama/0.40.11/libexec/lib/ollama/llama-server --model ~/.ollama/models/blobs/sha256-d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785 --port 56338 --host 127.0.0.1 --no-webui --offline -c 40960 -np 1 --log-verbosity 4 --no-log-prefix --no-log-timestamps --flash-attn auto -b 2048 -ub 2048 --context-shift --keep 4",
+        "part_of_target": true
+      }
+    ],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 13.3,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 400,
+        "cpu": 0.1,
+        "command": "corebrightnessd"
+      },
+      {
+        "pid": 35796,
+        "cpu": 0.1,
+        "command": "Visual Studio Code.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.0,
+        "command": "UserEventAgent"
+      },
+      {
+        "pid": 336,
+        "cpu": 0.0,
+        "command": "fseventsd"
+      },
+      {
+        "pid": 337,
+        "cpu": 0.0,
+        "command": "mediaremoted"
+      }
+    ],
+    "scripts": {
+      "commit": "baa084014f65a4c95c24a318c20df74da40f9394",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 354.8,
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 17.2,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 431,
+        "cpu": 0.7,
+        "command": "mobileassetd"
+      },
+      {
+        "pid": 627,
+        "cpu": 0.3,
+        "command": "deleted"
+      },
+      {
+        "pid": 35411,
+        "cpu": 0.3,
+        "command": "Visual Studio Code.app"
+      },
+      {
+        "pid": 361,
+        "cpu": 0.2,
+        "command": "mds"
+      },
+      {
+        "pid": 430,
+        "cpu": 0.2,
+        "command": "airportd"
+      },
+      {
+        "pid": 598,
+        "cpu": 0.2,
+        "command": "AppleCentauriAlpha"
+      },
+      {
+        "pid": 695,
+        "cpu": 0.2,
+        "command": "cloudd"
+      }
+    ]
+  }
+}

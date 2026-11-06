@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon, SearchIcon } from '../icons.js';
+import { zoomOf } from '../textScale.js';
 
 /**
  * Search within Settings. The search icon in the Appearance header turns into
@@ -76,7 +77,7 @@ function reveal(range: Range, root: HTMLElement) {
   if (!sc) return;
   const box = sc.getBoundingClientRect();
   const r = range.getBoundingClientRect();
-  const top = sc.scrollTop + (r.top - box.top) - sc.clientHeight / 3;
+  const top = sc.scrollTop + (r.top - box.top) / zoomOf(sc) - sc.clientHeight / 3;
   sc.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
 }
 
@@ -172,7 +173,7 @@ export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | n
             onKeyDown={onKey}
           />
           {query.trim() && (
-            <span className="shrink-0 text-[11px] tabular-nums text-ink-faint" aria-live="polite">
+            <span className="shrink-0 text-2xs tabular-nums text-ink-faint" aria-live="polite">
               {pending ? '…' : total ? `${shown} of ${total}` : 'No results'}
             </span>
           )}

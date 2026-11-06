@@ -19,130 +19,153 @@ export function pixelWaveFor(presetId: string | undefined): PixelWave | null {
     : preset.wave;
 }
 
-const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+/** Nominal pitch between dots, in CSS pixels. */
+export const DOT_CELL = 9;
 
-/** Grid pitch in CSS pixels: one dot per cell. */
-const CELL = 9;
-/** Frame interval while the window is in front (~10 fps) and while it is not (~4 fps). The wave drifts slowly, so 10 fps reads as smooth; every frame costs a full-window composite. */
-const ACTIVE_MS = 100;
-const BACKGROUND_MS = 250;
-
-/**
- * The wave's brightness for every cell at time `t`, written into `out` (one
- * value per cell, row-major). The wave is sin(x/110 - 1.4t + 1.6 sin(y/150 + 0.5t)):
- * the column part and the row part are each worked out once, and the angle-sum
- * identity combines them, so the per-cell work is two multiplies and an add
- * instead of two sines.
- */
-export function waveField(cols: number, rows: number, t: number, peak: number, out: Float32Array, colSin: Float32Array, colCos: Float32Array): void {
-  for (let r = 0; r < rows; r++) {
-    const b = Math.sin((r * CELL) / 150 + t * 0.5) * 1.6 - t * 1.4;
-    const sb = Math.sin(b), cb = Math.cos(b);
-    const row = r * cols;
-    for (let c = 0; c < cols; c++) {
-      const wave = colSin[c] * cb + colCos[c] * sb; // sin(a + b)
-      out[row + c] = wave > 0 ? wave * wave * wave * peak : 0;
-    }
-  }
+/** A row's phase offset at time `t`: the inner sine that makes rows crest at different moments. */
+export function wavePhase(row: number, t: number): number {
+  return Math.sin((row * DOT_CELL) / 150 + t * 0.5) * 1.6;
 }
 
 /**
- * The marketing site's dot-matrix swell (nekkoagent.com), for the presets in
- * `pixelWaveFor`: a fine grid of pixel dots that mostly sits invisible, with
- * a soft wave of brightness drifting through it. Decorative only: it never
- * takes input, runs at ~10 fps while Nekko is the active window and ~4 fps
- * behind other windows, stops while hidden, and holds one still frame for
- * reduced motion. Settings → Appearance can turn it off entirely.
- *
- * Cost matters because it runs all the time: colours are built once per
- * column (opacity goes through globalAlpha, not a new colour string per dot),
- * the trigonometry is precomputed per row and column, and the canvas is drawn
- * at one pixel per CSS pixel with crisp scaling rather than at device
- * resolution.
+ * One dot's opacity in Travis's swell, `sin(x/110 - t*1.4 + phase)` cubed and
+ * scaled to `peak`; troughs and near-invisible dots are 0.
  */
-export function PixelWaveBackground({ wave: { from, to, peak, speed = 0.8 } }: { wave: PixelWave }) {
-  const ref = useRef<HTMLCanvasElement>(null);
+export function dotOpacity(col: number, t: number, phase: number, peak: number): number {
+  const amp = Math.sin((col * DOT_CELL) / 110 - t * 1.4 + phase);
+  if (amp <= 0) return 0;
+  const a = amp ** 3 * peak;
+  return a < 0.02 ? 0 : a;
+}
 
+/** `#rgb`, `#rrggbb` or `rgb()/rgba()` as channels, after the canvas has normalised it. */
+function channels(color: string): [number, number, number] {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color);
+  if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16)) as [number, number, number];
+  const rgb = color.match(/[\d.]+/g)?.map(Number) ?? [255, 255, 255];
+  return [rgb[0] ?? 255, rgb[1] ?? 255, rgb[2] ?? 255];
+}
+
+/**
+ * The colour of every dot column, blending `from` to `to` across the pane.
+ * Painting each column in its own colour replaces a full-canvas tint pass per
+ * frame, which was most of the wave's raster cost.
+ */
+export function columnColors(ctx: Pick<CanvasRenderingContext2D, 'fillStyle'>, from: string, to: string, cols: number, pitch: number, width: number): string[] {
+  ctx.fillStyle = from;
+  const a = channels(String(ctx.fillStyle));
+  ctx.fillStyle = to;
+  const b = channels(String(ctx.fillStyle));
+  return Array.from({ length: cols }, (_, col) => {
+    const k = Math.min(1, (col * pitch) / Math.max(width - 1, 1));
+    return `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * k)).join(',')})`;
+  });
+}
+
+/** Eligibility is deliberately independent of a welcome screen's model/setup UI. */
+export function showEmptyAgentWave({ loaded, messages, running, composer, enabled, readOnly = false }: { loaded: boolean; messages: number; running: boolean; composer: boolean; enabled: boolean; readOnly?: boolean }): boolean {
+  return loaded && messages === 0 && !running && !composer && enabled && !readOnly;
+}
+
+/**
+ * Empty-agent decoration. A fine grid of pixel dots with a soft wave of
+ * brightness drifting through it: every dot's opacity is recomputed each frame
+ * from `sin(x/110 - t*1.4 + sin(y/150 + t*0.5) * 1.6)`, so rows phase against
+ * each other and the pattern flows like water rather than sliding as one block.
+ * Pane visibility, app focus and reduced motion hold it still.
+ */
+export function PixelWaveBackground({ wave, visible = true }: { wave: PixelWave; visible?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [intersecting, setIntersecting] = React.useState(false);
+  // The wave's clock and step count outlive a pause, so it resumes where it stopped.
+  const clock = useRef({ t: 0, step: 0 });
   useEffect(() => {
-    const canvas = ref.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const [r0, g0, b0] = rgb(from), [r1, g1, b1] = rgb(to);
-    let w = 0, h = 0, cols = 0, rows = 0, t = 0, last = 0, raf = 0;
-    let colColor: string[] = [], colSin = new Float32Array(0), colCos = new Float32Array(0), field = new Float32Array(0);
-    let focused = document.hasFocus();
+    const element = ref.current, canvas = canvasRef.current;
+    if (!element || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const speed = wave.speed ?? 0.8;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let last = 0, raf = 0;
 
-    const size = () => {
-      w = canvas.clientWidth; h = canvas.clientHeight;
-      canvas.width = w; canvas.height = h;
-      ctx.imageSmoothingEnabled = false;
-      cols = Math.ceil(w / CELL); rows = Math.ceil(h / CELL);
-      colColor = []; colSin = new Float32Array(cols); colCos = new Float32Array(cols);
-      for (let c = 0; c < cols; c++) {
-        const x = c * CELL, k = x / Math.max(w, 1); // 0 = the `from` colour, 1 = the `to` colour
-        colColor.push(`rgb(${Math.round(r0 + (r1 - r0) * k)},${Math.round(g0 + (g1 - g0) * k)},${Math.round(b0 + (b1 - b0) * k)})`);
-        colSin[c] = Math.sin(x / 110); colCos[c] = Math.cos(x / 110);
-      }
-      field = new Float32Array(cols * rows);
-    };
+    // Dots land on whole device pixels, so they stay crisp at fractional display
+    // scaling. Each column is painted in its slice of the gradient, so a frame
+    // touches only the dots themselves: no full-canvas tint pass.
+    let colors: string[] = [], colorsKey = '';
+    let phases = new Float64Array(0);
     const draw = () => {
-      ctx.clearRect(0, 0, w, h);
-      waveField(cols, rows, t, peak, field, colSin, colCos);
-      const big = peak * 0.55;
-      // Column by column so the fill colour is set once per column.
-      for (let c = 0; c < cols; c++) {
-        ctx.fillStyle = colColor[c];
-        const x = c * CELL;
-        for (let r = 0; r < rows; r++) {
-          const a = field[r * cols + c];
-          if (a < 0.02) continue;
-          const s = a > big ? 3 : 2, o = (CELL - s) >> 1;
+      const scale = window.devicePixelRatio || 1;
+      const width = Math.round(element.clientWidth * scale), height = Math.round(element.clientHeight * scale);
+      if (!width || !height) return;
+      if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+      const pitch = Math.max(1, Math.round(DOT_CELL * scale));
+      const inset = Math.round(3 * scale);
+      const small = Math.max(1, Math.round(2 * scale)), large = Math.max(1, Math.round(3 * scale));
+      const cols = Math.ceil(width / pitch), rows = Math.ceil(height / pitch);
+      const key = `${width}|${pitch}|${wave.from}|${wave.to}`;
+      if (key !== colorsKey) { colors = columnColors(ctx, wave.from, wave.to, cols, pitch, width); colorsKey = key; }
+      if (phases.length !== rows) phases = new Float64Array(rows);
+      const { t } = clock.current;
+      for (let row = 0; row < rows; row++) phases[row] = wavePhase(row, t);
+      const bright = wave.peak * 0.55;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, width, height);
+      for (let col = 0; col < cols; col++) {
+        ctx.fillStyle = colors[col];
+        for (let row = 0; row < rows; row++) {
+          const a = dotOpacity(col, t, phases[row], wave.peak);
+          if (!a) continue;
           ctx.globalAlpha = a;
-          ctx.fillRect(x + o, r * CELL + o, s, s);
+          const s = a > bright ? large : small;
+          ctx.fillRect(col * pitch + inset, row * pitch + inset, s, s);
         }
       }
       ctx.globalAlpha = 1;
+      canvas.dataset.step = String(clock.current.step);
     };
-    // A timer waits between frames and asks for one animation frame only when it
-    // is time to draw. Requesting a frame every vsync (and skipping most of them)
-    // keeps the compositor and GPU process producing 60 frames a second for 15
-    // drawn ones; that idle churn cost more than the drawing itself.
-    let timer = 0;
-    const frame = (now: number) => {
-      raf = 0;
-      t += (Math.min(now - last, 250) / 1000) * speed;
+    const still = () => !visible || !intersecting || document.hidden || !document.hasFocus() || reduced.matches;
+    // Travis's original pace: 15 frames a second reads as a continuous flow.
+    const FRAME_MS = 66;
+    const loop = (now: number) => {
+      // Re-checked per frame too: a media query's change event can arrive late.
+      if (still()) { raf = 0; return; }
+      raf = requestAnimationFrame(loop);
+      if (now - last < FRAME_MS) return;
+      clock.current.t += (Math.min(now - last, 250) / 1000) * speed;
+      clock.current.step += 1;
       last = now;
       draw();
-      schedule();
     };
-    const schedule = () => {
-      timer = window.setTimeout(() => { timer = 0; raf = requestAnimationFrame(frame); }, focused ? ACTIVE_MS : BACKGROUND_MS);
-    };
-    const start = () => {
-      if (timer || raf || reduced || document.hidden) return;
+    const sync = () => {
+      if (still()) { cancelAnimationFrame(raf); raf = 0; return; }
+      if (raf) return;
       last = performance.now();
-      schedule();
+      raf = requestAnimationFrame(loop);
     };
-    const stop = () => { window.clearTimeout(timer); cancelAnimationFrame(raf); timer = 0; raf = 0; };
-    const onResize = () => { size(); draw(); };
-    const onVisibility = () => (document.hidden ? stop() : start());
-    const onFocus = () => { focused = true; };
-    const onBlur = () => { focused = false; };
 
-    size(); draw(); start();
-    window.addEventListener('resize', onResize);
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('blur', onBlur);
-    document.addEventListener('visibilitychange', onVisibility);
+    draw();
+    sync();
+    const resize = new ResizeObserver(() => draw());
+    resize.observe(element);
+    const observer = new IntersectionObserver(([entry]) => setIntersecting(entry.isIntersecting));
+    observer.observe(element);
+    window.addEventListener('focus', sync);
+    window.addEventListener('blur', sync);
+    document.addEventListener('visibilitychange', sync);
+    reduced.addEventListener('change', sync);
     return () => {
-      stop();
-      window.removeEventListener('resize', onResize);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('blur', onBlur);
-      document.removeEventListener('visibilitychange', onVisibility);
+      cancelAnimationFrame(raf);
+      resize.disconnect();
+      observer.disconnect();
+      window.removeEventListener('focus', sync);
+      window.removeEventListener('blur', sync);
+      document.removeEventListener('visibilitychange', sync);
+      reduced.removeEventListener('change', sync);
     };
-  }, [from, to, peak, speed]);
-
-  return <canvas ref={ref} className="pixel-wave-background" aria-hidden="true" />;
+  }, [wave.from, wave.to, wave.peak, wave.speed, visible, intersecting]);
+  return <div ref={ref} className="pixel-wave-background" data-wave-paused={!visible || !intersecting || undefined} aria-hidden="true">
+    <canvas ref={canvasRef} className="pixel-wave-canvas" />
+  </div>;
 }

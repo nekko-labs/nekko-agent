@@ -128,10 +128,6 @@ describe('staged product identity', () => {
     expect(builder.match(/artifactName: NekkoAgent-\$\{version\}-\$\{arch\}\.\$\{ext\}/g)).toHaveLength(3);
     expect(builder).toContain('repo: nekko-agent');
     expect(pkg.name).toBe('@nekko-agent/desktop');
-    const mobile = JSON.parse(readFileSync(join(root, '../mobile/app.json'), 'utf8')).expo;
-    expect(mobile.name).toBe('Nekko Agent');
-    expect(mobile.ios.bundleIdentifier).toBe('dev.nekkolabs.nekkoagent');
-    expect(mobile.android.package).toBe('dev.nekkolabs.nekkoagent');
     const manifest = JSON.parse(readFileSync(join(root, 'src/renderer/public/manifest.webmanifest'), 'utf8'));
     expect(manifest.name).toBe('Nekko Agent');
     expect(manifest.short_name).toBe('Nekko Agent');

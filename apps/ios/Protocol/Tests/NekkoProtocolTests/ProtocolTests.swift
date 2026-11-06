@@ -4,13 +4,19 @@ import XCTest
 
 final class E2ETests: XCTestCase {
     struct Vector: Decodable {
-        let secret, room, keyHex, ivHex, plaintext, sealed: String
+        let secret, room, keyHex, relayAuth, ivHex, plaintext, sealed: String
     }
 
     /// The fixture was produced by WebCrypto (the agent's API), shared with Android.
     func vector() throws -> Vector {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "e2e-vector", withExtension: "json", subdirectory: "Fixtures"))
         return try JSONDecoder().decode(Vector.self, from: Data(contentsOf: url))
+    }
+
+    func testDerivesTheRelayCredentialTheComputerDerives() throws {
+        let v = try vector()
+        XCTAssertEqual(E2E.relayAuth(secret: v.secret, room: v.room), v.relayAuth)
+        XCTAssertNotEqual(E2E.relayAuth(secret: v.secret, room: "another-room"), v.relayAuth)
     }
 
     func testDerivesTheSameKeyAsWebCrypto() throws {
@@ -107,6 +113,18 @@ final class PairingTests: XCTestCase {
         XCTAssertNil(Pairing.parse("relay=wss://x&room=\(room)&key=short"))
         XCTAssertNil(Pairing.parse("relay=wss://x&room=\(room)"))
         XCTAssertNil(Pairing.parse("relay=wss://x&room=%ZZ&key=\(key)"))
+    }
+
+    func testPinsOnlyAWellFormedHostKey() {
+        let good = String(repeating: "A", count: 87) + "="
+        let parsed = { (host: String) in Pairing.parse("relay=wss://x&room=\(self.room)&key=\(self.key)&host=\(host)") }
+        XCTAssertEqual(parsed(good)?.hostKey, good)
+        XCTAssertNil(Pairing.parse("relay=wss://x&room=\(room)&key=\(key)")?.hostKey)
+        for bad in [String(good.dropLast()), String(repeating: "A", count: 88), good + "=", "A" + good, "not-a-key"] {
+            let link = parsed(bad)
+            XCTAssertNotNil(link, "a bad key loses the key, not the link: \(bad)")
+            XCTAssertNil(link?.hostKey, bad)
+        }
     }
 
     func testNeverPrintsTheSecret() {
@@ -411,5 +429,14 @@ final class BeyondWireTests: XCTestCase {
         let edited = try XCTUnwrap(try result(cases, "chat:editQueued"))
         XCTAssertEqual(QueuedPrompt.list(edited["queue"]).map(\.shown), ["sooner", "with a photo", "/review now"])
         XCTAssertEqual(try result(cases, "session:fork")?.str("id"), "s_fork")
+    }
+}
+
+final class ActiveWatchSummaryTests: XCTestCase {
+    func testMissingAndExplicitCounts() throws {
+        for (field, expected): (String, Int64) in [("", 0), (",\"activeWatchCount\":0", 0), (",\"activeWatchCount\":2", 2)] {
+            let summary = try XCTUnwrap(SessionSummary.from(JSONValue.parse("{\"id\":\"chat\"\(field)}")))
+            XCTAssertEqual(summary.activeWatchCount, expected)
+        }
     }
 }

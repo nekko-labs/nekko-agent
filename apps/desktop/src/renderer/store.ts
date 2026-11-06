@@ -1,13 +1,15 @@
+import { resolveThemeAppearance } from './themeMode.js';
 import { confirmDeletion } from './components/DeleteConfirmation.js';
 import { needsProviderSetup } from './components/providers/providerSetup.js';
 import { create } from 'zustand';
 import { rememberSplashColours } from './splash.js';
-import type { AppSettings, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
-import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession, THEME_PRESETS, currentPresetAccent } from '@nekko-agent/shared';
+import type { AppSettings, ComputerCatalog, ComputerStatus, Session, SessionSummary, ProviderConfig, ProviderKind, ModelInfo, TerminalInfo, InstalledSkillRecord, SkillDef, PrInfo, HypergateInfo } from '@nekko-agent/shared';
+import { AUTO_COMPLETE_CHOICES, agentsToAutoComplete, autoCompleteDays, DEFAULT_IMAGE_CHAT_PARAMS, isArchived, getMarketSkill, marketToSkillDef, normalizeInstallTarget, summarizeSession } from '@nekko-agent/shared';
 import type { MascotMood } from './components/Mascot.js';
-import { syncTitleBarOverlay } from './chrome.js';
+import { setPageZoom, syncTitleBarOverlay } from './chrome.js';
 import { isScreenWindow } from './displays.js';
 import { putCachedSession } from './sessionCache.js';
+import { autoDismisses, overflowToasts, TOAST_EXIT_MS, TOAST_MS } from './toastQueue.js';
 import { loadLayout, maxIdSeq, pruneLayout, saveLayout } from './workspacePersist.js';
 import {
   allPanes,
@@ -102,6 +104,8 @@ export interface Toast {
   id: string;
   kind: 'info' | 'error' | 'success';
   message: string;
+  /** Dismissed and playing its exit; removed once that ends. */
+  leaving?: boolean;
 }
 
 /**
@@ -167,10 +171,13 @@ const restored = loadLayout(typeof window === 'undefined' ? undefined : window.l
 let wsSeq = maxIdSeq(restored.workspaces);
 reserveIdSeq(wsSeq);
 const newWorkspaceId = () => `ws_${(++wsSeq).toString(36)}`;
+/** Makes toast ids unique even when several arrive in the same millisecond. */
+let toastSeq = 0;
 
 interface UiState {
   completionTipSessionId: string | null;
   /** A workflow run to show when the Workflows view opens (a notification click). */
+  ciRunnersFocus: boolean;
   workflowFocus: { workflowId: string; runId: string } | null;
   /** A memory note's title to open when the Memory view shows (a chat's memory card). */
   memoryFocus: string | null;
@@ -197,6 +204,8 @@ interface UiState {
   onboardingOpen: boolean;
   /** True after the first settings load has finished. */
   settingsLoaded: boolean;
+  /** True once the first load can say whether a provider is set up. Until then an empty `providers` means unknown, not none. */
+  providersLoaded: boolean;
   settingsError: string | null;
   mascotMood: MascotMood;
   toasts: Toast[];
@@ -285,14 +294,19 @@ interface UiState {
   pushToast: (kind: Toast['kind'], message: string) => void;
   dismissToast: (id: string) => void;
   setPaletteOpen: (open: boolean) => void;
+  chatFinderOpen: boolean;
   newChat: (workspaceId?: string) => Promise<void>;
   /** A new Image chat on this image model, starting from its family's tuned steps and CFG. */
-  newImageChat: (modelId: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
+  newImageChat: (modelId?: string, defaults?: { steps: number; cfgScale: number }) => Promise<void>;
   setMascotMood: (m: MascotMood) => void;
   setView: (v: View) => void;
   setOnboardingOpen: (open: boolean) => void;
   refreshSettings: (autoOpenOnboarding?: boolean) => Promise<void>;
   refreshSessions: () => Promise<void>;
+  /** Computers this one is connected to. Empty for almost everyone: nothing below reads it then. */
+  computers: ComputerStatus[];
+  computerCatalogs: Record<string, ComputerCatalog>;
+  refreshComputers: () => Promise<void>;
   setActiveSession: (id: string | null) => void;
   refreshProviders: () => Promise<void>;
   selectProvider: (id: string) => Promise<void>;
@@ -301,8 +315,10 @@ interface UiState {
   selectModel: (id: string) => void;
   rememberModel: (providerId: string, modelId: string) => void;
   toggleContextPanel: () => void;
-  togglePlanRail: (sessionId: string) => void;
+  setPlanRail: (sessionId: string, open: boolean) => void;
   applyTheme: () => void;
+  /** The preset whose colours `applyTheme` applied: System resolves to Nekko Dark or Lilac. */
+  resolvedPreset: string | undefined;
   /** Settings > Style: the user's fonts folder and the families loaded from it. */
   customFonts: { dir: string; families: string[] } | null;
   loadCustomFonts: () => Promise<void>;
@@ -593,6 +609,7 @@ export const textScaleOf = (v: number | undefined): number =>
 
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
+  ciRunnersFocus: false,
   workflowFocus: null,
   memoryFocus: null,
   settings: null,
@@ -612,6 +629,8 @@ export const useStore = create<UiState>((set, get) => ({
   }),
   activeSessionId: null,
   providers: [],
+  computers: [],
+  computerCatalogs: {},
   models: [],
   activeProviderId: null,
   activeModelId: null,
@@ -621,6 +640,7 @@ export const useStore = create<UiState>((set, get) => ({
   planRailOpenBySession: readPlanRailSessions(),
   onboardingOpen: false,
   settingsLoaded: false,
+  providersLoaded: false,
   settingsError: null,
   mascotMood: 'waving',
   toasts: [],
@@ -650,11 +670,18 @@ export const useStore = create<UiState>((set, get) => ({
     set({ activeProjectId: id });
   },
   pushToast: (kind, message) => {
-    const id = `t_${Date.now().toString(36)}_${Math.floor(performance.now())}`;
+    const id = `t_${Date.now().toString(36)}_${(toastSeq++).toString(36)}`;
     set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }));
-    setTimeout(() => get().dismissToast(id), 5000);
+    // At most a few on screen: older ones leave as a new one arrives.
+    for (const old of overflowToasts(get().toasts)) get().dismissToast(old);
+    if (autoDismisses(kind)) setTimeout(() => get().dismissToast(id), TOAST_MS);
   },
-  dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismissToast: (id) => {
+    if (!get().toasts.some((t) => t.id === id && !t.leaving)) return;
+    // Mark it leaving so it plays its exit, then drop it.
+    set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t)) }));
+    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), TOAST_EXIT_MS);
+  },
   setPaletteOpen: (open) => set({ paletteOpen: open }),
   monitorDockRect: null,
   setMonitorDockRect: (r) =>
@@ -669,6 +696,7 @@ export const useStore = create<UiState>((set, get) => ({
   openLocalModelSettings: (modelId) =>
     set((s) => (viewEnabled('modelserver', s.settings) ? { view: 'modelserver', localModelFocus: modelId } : { view: 'command' })),
   clearLocalModelFocus: () => set({ localModelFocus: null }),
+  chatFinderOpen: false,
   newChat: async (workspaceId) => {
     await get().refreshProviders();
     if (needsProviderSetup(get().providers, get().activeModelId ?? get().models[0]?.id)) {
@@ -693,7 +721,7 @@ export const useStore = create<UiState>((set, get) => ({
     const created = await window.nekko.createSession(defaultChatFolder(get()));
     const s = (await window.nekko.setSessionOptions(created.id, {
       chatType: 'image',
-      imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, modelId, ...(defaults ?? {}) },
+      imageParams: { ...DEFAULT_IMAGE_CHAT_PARAMS, ...(modelId ? { modelId } : {}), ...(defaults ?? {}) },
     })) ?? created;
     putCachedSession(s);
     addCreatedSession(s);
@@ -726,6 +754,17 @@ export const useStore = create<UiState>((set, get) => ({
       set({ settingsLoaded: true, settingsError });
       get().pushToast('error', `Could not load settings: ${settingsError}`);
       get().applyTheme();
+    }
+  },
+
+  refreshComputers: async () => {
+    const computers = (await window.nekko.listComputers()) ?? [];
+    set({ computers });
+    // shortcut: read once per run, so a provider added over there shows after a restart; refresh from Settings if that bites.
+    for (const c of computers) {
+      if (get().computerCatalogs[c.id]) continue;
+      const catalog = await window.nekko.computerCatalog(c.id);
+      if (catalog) set((s) => ({ computerCatalogs: { ...s.computerCatalogs, [c.id]: catalog } }));
     }
   },
 
@@ -792,15 +831,22 @@ export const useStore = create<UiState>((set, get) => ({
   setActiveSession: (id) => set({ activeSessionId: id }),
 
   refreshProviders: async () => {
-    const providers = await window.nekko.listProviders();
-    set({ providers });
-    const active = get().activeProviderId ?? providers[0]?.id ?? null;
-    if (active) {
-      set({ activeProviderId: active });
-      // Always populate models for the active provider on startup, guards a
-      // race where a saved default provider is already active and would
-      // otherwise never have its model list fetched.
-      if (get().models.length === 0) await get().selectProvider(active);
+    try {
+      const providers = await window.nekko.listProviders();
+      set({ providers });
+      // Known as soon as the list is, because the model list below can be a
+      // network call to the provider. Only a local setup needs it to tell.
+      if (!needsProviderSetup(providers, get().activeModelId)) set({ providersLoaded: true });
+      const active = get().activeProviderId ?? providers[0]?.id ?? null;
+      if (active) {
+        set({ activeProviderId: active });
+        // Always populate models for the active provider on startup, guards a
+        // race where a saved default provider is already active and would
+        // otherwise never have its model list fetched.
+        if (get().models.length === 0) await get().selectProvider(active);
+      }
+    } finally {
+      set({ providersLoaded: true });
     }
   },
 
@@ -848,39 +894,34 @@ export const useStore = create<UiState>((set, get) => ({
 
   toggleContextPanel: () => set((s) => ({ contextPanelOpen: !s.contextPanelOpen })),
 
-  togglePlanRail: (sessionId) =>
+  setPlanRail: (sessionId, open) =>
     set((s) => {
-      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: !(s.planRailOpenBySession[sessionId] ?? s.planRailOpen) };
+      const planRailOpenBySession = { ...s.planRailOpenBySession, [sessionId]: open };
       try { localStorage.setItem(PLAN_RAIL_SESSIONS_KEY, JSON.stringify(planRailOpenBySession)); } catch { /* private mode */ }
       return { planRailOpenBySession };
     }),
 
+  resolvedPreset: undefined,
   applyTheme: () => {
     const settings = get().settings;
-    const theme = settings?.theme ?? 'system';
-    const resolved =
-      theme === 'system'
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches
-          ? 'dark'
-          : 'light'
-        : theme;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const { mode: resolved, presetId, preset, accent, accent2 } = resolveThemeAppearance(settings, prefersDark);
     const root = document.documentElement;
     root.setAttribute('data-theme', resolved);
 
-    const presetId = settings?.themePreset;
     if (presetId) root.setAttribute('data-preset', presetId);
     else root.removeAttribute('data-preset');
-    const preset = presetId ? THEME_PRESETS.find((p) => p.id === presetId) : undefined;
+    // A phone's status bar (and an installed PWA's title bar) takes the app's
+    // own paper, light or dark, whichever theme is on rather than the OS's.
+    const metas = typeof document.querySelectorAll === 'function' ? document.querySelectorAll('meta[name="theme-color"]') : [];
+    if (metas.length && typeof getComputedStyle === 'function') {
+      const paper = getComputedStyle(root).getPropertyValue('--paper').trim();
+      if (paper) metas.forEach((m) => { m.setAttribute('content', paper); m.removeAttribute('media'); });
+    }
+    if (get().resolvedPreset !== presetId) set({ resolvedPreset: presetId });
 
-    const accent = currentPresetAccent(presetId, settings?.accent);
-    const accent2 = currentPresetAccent(presetId, settings?.accent2);
-    if (accent) root.style.setProperty('--accent', accent);
-    else if (preset) root.style.setProperty('--accent', preset.accent);
-    else root.style.removeProperty('--accent');
-
-    if (accent2) root.style.setProperty('--accent-2', accent2);
-    else if (preset?.accent2) root.style.setProperty('--accent-2', preset.accent2);
-    else root.style.removeProperty('--accent-2');
+    root.style.setProperty('--accent', accent);
+    root.style.setProperty('--accent-2', accent2);
 
     // Settings > Style. A chosen family falls back to the bundled one.
     const family = (name: string | undefined, fallback: string) =>
@@ -892,7 +933,8 @@ export const useStore = create<UiState>((set, get) => ({
     if (mono) root.style.setProperty('--font-mono', mono);
     else root.style.removeProperty('--font-mono');
     const scale = textScaleOf(settings?.textScale);
-    root.style.zoom = scale === 100 ? '' : `${scale}%`;
+    // A browser tab has no page zoom to set, so it falls back to CSS zoom.
+    root.style.zoom = setPageZoom(scale / 100) || scale === 100 ? '' : `${scale}%`;
 
     // The native window buttons sit in our title bar, so they have to follow
     // the theme with everything else.
@@ -928,7 +970,7 @@ export const useStore = create<UiState>((set, get) => ({
   refreshTerminals: async () => {
     try {
       const terminals = await window.nekko.listTerminals();
-      set({ terminals });
+      if (JSON.stringify(get().terminals) !== JSON.stringify(terminals)) set({ terminals });
       // Shells do not outlive the app's backend, so a restored terminal window
       // usually points at nothing; drop it instead of showing a dead pane.
       const ids = new Set(terminals.map((t) => t.id));
@@ -1243,7 +1285,7 @@ export const useStore = create<UiState>((set, get) => ({
         } catch { /* Leave the tip eligible if its seen state could not be saved. */ }
         finally { completionTipPending = false; }
       }
-      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel for 60 days.');
+      get().pushToast('success', 'Chat completed. Find it under Show completed in the left panel until you delete it.');
     } catch (e) {
       get().pushToast('error', `Could not complete the chat: ${(e as Error).message}`);
     }

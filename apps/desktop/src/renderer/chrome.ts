@@ -18,6 +18,9 @@ interface WindowChrome {
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: { color: string; symbolColor: string }) => void;
+  /** Absent on a preload older than this page, as in a dev reload. */
+  setPageZoom?: (factor: number) => void;
+  onPageReloading: (listener: (fadeMs: number) => void) => void;
 }
 
 /** The bridge, or `undefined` when this isn't the desktop shell. */
@@ -32,6 +35,17 @@ export const hasAppChrome = Boolean(windowChrome);
 export const isMacChrome = windowChrome?.platform === 'darwin';
 
 /**
+ * Zoom the whole page, as a browser's own zoom does, and say whether that was
+ * possible. Page zoom scales every coordinate alike, so a rect, a click, the
+ * window size and `scrollTop` all still agree; CSS `zoom` on the root does not.
+ */
+export function setPageZoom(factor: number): boolean {
+  if (!windowChrome?.setPageZoom) return false;
+  windowChrome.setPageZoom(factor);
+  return true;
+}
+
+/**
  * Repaint the native buttons to match the theme that is on screen right now.
  *
  * Called from `applyTheme`, because the theme is the renderer's to resolve
@@ -41,7 +55,8 @@ export const isMacChrome = windowChrome?.platform === 'darwin';
 export function syncTitleBarOverlay(): void {
   if (!windowChrome) return;
   const css = getComputedStyle(document.documentElement);
-  const color = css.getPropertyValue('--paper').trim();
+  // A theme whose title bar shows the field behind it sets its own overlay colour.
+  const color = (css.getPropertyValue('--titlebar-overlay') || css.getPropertyValue('--paper')).trim();
   const symbolColor = css.getPropertyValue('--ink-soft').trim();
   if (color && symbolColor) windowChrome.setTitleBarOverlay({ color, symbolColor });
 }

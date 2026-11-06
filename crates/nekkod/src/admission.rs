@@ -225,26 +225,20 @@ fn clamp_max_output_tokens(n: Option<&Value>) -> f64 {
     }
 }
 
-fn effort_name(e: nekko_agent::EffortLevel) -> &'static str {
-    use nekko_agent::EffortLevel::*;
-    match e {
-        Low => "low",
-        Medium => "medium",
-        Normal => "normal",
-        High => "high",
-        Xhigh => "xhigh",
-        Max => "max",
-    }
+fn effort_name(e: &nekko_agent::EffortLevel) -> &str {
+    e.as_str()
 }
 
 /// `EFFORT_TEMPERATURE`.
-fn effort_temperature(e: nekko_agent::EffortLevel) -> f64 {
+fn effort_temperature(e: &nekko_agent::EffortLevel) -> f64 {
     use nekko_agent::EffortLevel::*;
     match e {
         Low => 0.2,
         Medium => 0.5,
         Normal => 0.7,
         High | Xhigh | Max => 1.0,
+        // Native API-only levels do not define a sampling temperature.
+        Custom(_) => 0.7,
     }
 }
 
@@ -282,6 +276,15 @@ pub(crate) fn host_provider_config(ctx: &Ctx, config: &Value) -> Value {
     Value::Object(out)
 }
 
+/// Thinking is on unless this is our local model with an explicit Expert override.
+/// Legacy per-chat flags are deliberately not an input, including after Auto routing.
+fn effective_thinking(provider: &Value, model: &Value) -> bool {
+    !(s(provider, "kind") == "llamacpp"
+        && provider.get("managedCachePrompt") == Some(&json!(true))
+        && s(model, "format") != "mlx"
+        && model.pointer("/preset/thinking") == Some(&json!(false)))
+}
+
 /// `/[a-z0-9_]{4,}/g` over the lowercased prompt: whether the index has anything to search for.
 fn has_index_words(text: &str) -> bool {
     let lower = text.to_lowercase();
@@ -316,7 +319,7 @@ async fn ended(ctx: &Ctx, session_id: &str, message: &str) -> Result<Admit, Stri
 /// parent's `spawn` callback): admitted like any chat's, never with the
 /// browser. `None` when it cannot start; its chat was told why.
 pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String> {
-    let adm = ctx.admission.clone().ok_or("Sub-agents need the daemon to admit turns.")?;
+    let adm = ctx.admission.clone();
     let pending = adm.begin(s(&opts, "sessionId"))?;
     match admit(ctx, &adm, opts, None, false, &pending.cancel).await? {
         Admit::Spec(mut spec) => {
@@ -326,6 +329,9 @@ pub async fn admit_child(ctx: &Ctx, opts: Value) -> Result<Option<Value>, String
         Admit::Ended => Ok(None),
     }
 }
+
+/// A Claude Code sub-agent's chat is a copy to watch: Claude Code holds the real one.
+const SUBAGENT_READ_ONLY: &str = "This subagent runs inside its parent chat. Send your message there.";
 
 /// `chat:send`.
 pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<Value, String> {
@@ -341,7 +347,8 @@ pub async fn send(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>) -> Result<V
         },
         None => None,
     };
-    if let (Some(cid), Some(store)) = (&client_id, ctx.sessions.clone()) {
+    if let Some(cid) = &client_id {
+        let store = ctx.sessions.clone();
         let id = s(&opts, "sessionId").to_string();
         let session = tokio::task::spawn_blocking(move || store.get(&id)).await.map_err(|e| e.to_string())?;
         let ids = session.as_ref().and_then(|v| v.get("clientMessageIds"));
@@ -402,13 +409,9 @@ pub async fn interrupt_queued(ctx: &Ctx, adm: &Arc<Admission>, args: Vec<Value>)
     let session_id = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     let index = args.get(1).cloned().unwrap_or(Value::Null);
     let brain = args.get(2).cloned().unwrap_or(Value::Null);
-    let store = ctx.sessions.clone().ok_or("Session not found.")?;
-    let (st, id) = (store.clone(), session_id.clone());
+    let (st, id) = (ctx.sessions.clone(), session_id.clone());
     let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
     let session = session.ok_or("Session not found.")?;
-    if crate::worktrees::execution_mode(&session) == "sandbox" && ctx.sandboxes.is_none() {
-        return Err(NO_SANDBOXES.into());
-    }
     let index = nekko_turn::variants::queued_index_valid(&session, &index).ok_or("Queued prompt not found.")?;
     if adm.interrupting(&session_id) {
         return Err("A queued prompt is already starting.".into());
@@ -458,9 +461,6 @@ pub async fn admit_queued(ctx: &Ctx, adm: &Arc<Admission>, payload: &Value) -> O
     }
 }
 
-/// A sandbox chat on a daemon with no containers (no data directory).
-const NO_SANDBOXES: &str = "Sandbox chats need the daemon to know the data directory.";
-
 /// `admitTurn` and `buildDaemonTurn`: check, provision and describe a turn.
 async fn admit(
     ctx: &Ctx,
@@ -471,15 +471,12 @@ async fn admit(
     cancel: &Cancel,
 ) -> Result<Admit, String> {
     let session_id = s(&opts, "sessionId").to_string();
-    let store = ctx.sessions.clone().ok_or("chat:send needs the data directory")?;
+    let store = ctx.sessions.clone();
     let session = {
         let (st, id) = (store.clone(), session_id.clone());
         tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?
     };
     let sandbox = session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox");
-    if sandbox && ctx.sandboxes.is_none() {
-        return Err(NO_SANDBOXES.into());
-    }
     // A chained queued prompt was admitted by the host without this check; so it stays.
     if !chained && adm.is_compacting(&session_id) {
         return ended(ctx, &session_id, "This chat is being compacted. Wait or move to a new chat.").await;
@@ -500,6 +497,9 @@ async fn admit(
         return ended(ctx, &session_id, refusal.message).await;
     }
     let Some(mut session) = session else { return ended(ctx, &session_id, "Session not found.").await };
+    if nekko_js::truthy(session.get("claudeCodeSubagent")) {
+        return ended(ctx, &session_id, SUBAGENT_READ_ONLY).await;
+    }
     if sandbox && let Some(refusal) = nekko_turn::variants::sandbox_admission_refusal(&session, &opts) {
         return ended(ctx, &session_id, refusal).await;
     }
@@ -582,16 +582,22 @@ async fn admit(
         _ = cancel.cancelled() => return stopped(ctx, &session_id).await,
         result = crate::providers::resolve(ctx, &provider) => result,
     };
+    let model_id = s(&opts, "modelId");
+    // Claude Code's levels need no catalog snapshot, so a first turn resolves like any other.
+    let metadata = if s(&provider, "kind") == "claude-code" {
+        Some(nekko_agent::providers::claude_code::effort_levels())
+    } else {
+        resolution.as_ref().ok().and_then(|p| crate::providers::cached_effort(p, model_id))
+    };
     let (resolved, provider_error) = match resolution {
         Ok(p) => (Some(host_provider_config(ctx, &p)), None),
         Err(e) => (None, Some(e)),
     };
-    let model_id = s(&opts, "modelId");
     // The chat's own effort wins over the app-wide one (`chatEffort`).
     let effort = nekko_turn::chat_effort(&session, settings.get("effort"));
     let effort_setting: Option<nekko_agent::EffortLevel> =
         effort.as_ref().and_then(|e| serde_json::from_value(e.clone()).ok());
-    let stats_effort = nekko_agent::claude::effective_effort(effort_setting, model_id);
+    let stats_effort = nekko_agent::claude::effective_effort_with_metadata(effort_setting, model_id, metadata.as_ref());
     let kind = s(&provider, "kind");
 
     let mut facts = Map::new();
@@ -623,9 +629,10 @@ async fn admit(
     facts.insert("connectorSnippets".into(), connector_snippets);
     facts.insert("indexSnippets".into(), index_snippets);
     facts.insert("platform".into(), json!(platform()));
-    facts.insert("temperature".into(), json!(effort_temperature(stats_effort)));
-    facts.insert("effort".into(), effort.unwrap_or(json!("normal")));
-    facts.insert("statsEffort".into(), json!(effort_name(stats_effort)));
+    facts.insert("temperature".into(), json!(effort_temperature(&stats_effort)));
+    // Execution and reply stats must describe the same resolved choice.
+    facts.insert("effort".into(), json!(effort_name(&stats_effort)));
+    facts.insert("statsEffort".into(), json!(effort_name(&stats_effort)));
     if is_local(kind) {
         facts.insert(
             "maxOutputTokens".into(),
@@ -633,6 +640,14 @@ async fn admit(
         );
     }
     facts.insert("promptCaching".into(), json!(settings.get("promptCaching") != Some(&json!(false))));
+    let mut thinking = true;
+    if let Some(p) = &resolved
+        && p.get("managedCachePrompt") == Some(&json!(true))
+    {
+        let model = ctx.library.find(model_id).await?.unwrap_or(Value::Null);
+        thinking = effective_thinking(p, &model);
+    }
+    facts.insert("thinking".into(), json!(thinking));
     // The loaded window, for the loop to keep a long run inside (nekko-loop fit.rs).
     facts.insert("contextWindow".into(), json!(crate::providers::context_window_for(ctx, &provider, model_id).await));
     // False for a model the provider lists without image input: pictures go as a note.
@@ -811,6 +826,30 @@ fn terminal_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thinking_is_on_except_for_a_managed_local_expert_override() {
+        let off = json!({ "preset": { "thinking": false } });
+        for kind in [
+            "anthropic",
+            "openai",
+            "openrouter",
+            "chatgpt",
+            "claude-code",
+            "ollama",
+            "lmstudio",
+            "vllm",
+            "openai-compat",
+        ] {
+            assert!(effective_thinking(&json!({ "kind": kind, "thinking": false }), &off), "{kind}");
+        }
+        assert!(effective_thinking(&json!({ "kind": "llamacpp" }), &off));
+        let managed = json!({ "kind": "llamacpp", "managedCachePrompt": true });
+        assert!(!effective_thinking(&managed, &off));
+        assert!(effective_thinking(&managed, &json!({ "preset": { "thinking": true } })));
+        assert!(effective_thinking(&managed, &json!({})));
+        assert!(effective_thinking(&managed, &json!({ "format": "mlx", "preset": { "thinking": false } })));
+    }
 
     #[test]
     fn a_person_s_chat_counts_while_it_runs() {

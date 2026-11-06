@@ -23,6 +23,7 @@
 //!   one that falls [`DROP_AFTER`] bytes behind is disconnected (it reattaches
 //!   from the ring snapshot).
 
+use crate::activity::{Observer, TerminalActivity};
 use crate::ring::Ring;
 use crate::shells::ShellOption;
 use crate::tail::tail_cut;
@@ -34,7 +35,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 use tokio::sync::{Notify, broadcast, mpsc, oneshot};
 
 /// Scrollback retained per terminal for reattach.
@@ -59,6 +60,7 @@ const EXIT_DRAIN: Duration = Duration::from_millis(200);
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalInfo {
+    pub activity: TerminalActivity,
     pub id: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,7 +101,12 @@ pub struct TerminalViewer {
 impl TerminalViewer {
     /// A viewer attaching now.
     pub fn new(id: impl Into<String>, kind: impl Into<String>, name: Option<String>) -> Self {
-        Self { id: id.into(), kind: kind.into(), name: name.filter(|n| !n.trim().is_empty()), since: now_ms() }
+        Self {
+            id: id.into(),
+            kind: kind.into(),
+            name: name.filter(|n| !n.trim().is_empty()),
+            since: nekko_js::now_ms(),
+        }
     }
 }
 
@@ -185,14 +192,10 @@ struct Term {
     killer: Mutex<Option<Box<dyn ChildKiller + Send + Sync>>>,
 }
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 fn new_id() -> String {
     let mut r = [0u8; 4];
     let _ = getrandom::fill(&mut r);
-    format!("term_{}_{}", to_base36(now_ms()), to_base36(u32::from_le_bytes(r) as u64 % 1_000_000))
+    format!("term_{}_{}", to_base36(nekko_js::now_ms()), to_base36(u32::from_le_bytes(r) as u64 % 1_000_000))
 }
 
 fn to_base36(mut n: u64) -> String {
@@ -320,12 +323,13 @@ impl Registry {
         let cols = spec.cols.max(1);
         let rows = spec.rows.max(1);
         let mut info = TerminalInfo {
+            activity: TerminalActivity::default(),
             id: id.clone(),
             title: spec.title.filter(|t| !t.is_empty()).unwrap_or_else(|| spec.shell.label.clone()),
             workspace_id: spec.workspace_id,
             cwd: spec.cwd.to_string_lossy().into_owned(),
             shell: spec.shell.path.clone(),
-            created_at: now_ms(),
+            created_at: nekko_js::now_ms(),
             order: None,
             running: true,
             exit_code: None,
@@ -333,7 +337,10 @@ impl Registry {
             viewers: Vec::new(),
         };
 
-        match spawn_pty(&spec.shell, &spec.cwd, cols, rows, &spec.env) {
+        let mut env = spec.env;
+        env.retain(|(name, _)| name != "NEKKO_TERMINAL_ID");
+        env.push(("NEKKO_TERMINAL_ID".into(), id.clone()));
+        match spawn_pty(&spec.shell, &spec.cwd, cols, rows, &env) {
             Ok(parts) => {
                 let (input_tx, input_rx) = std::sync::mpsc::channel::<Vec<u8>>();
                 let term = Arc::new(Term {
@@ -657,6 +664,7 @@ async fn pump(
     events: broadcast::Sender<RegistryEvent>,
 ) {
     let mut carry = Utf8Carry::default();
+    let mut observer = Observer::default();
     let mut last_flush = Instant::now() - FRAME;
     let mut exit: Option<Option<i32>> = None;
     let mut startup_query = cfg!(windows);
@@ -715,6 +723,7 @@ async fn pump(
             }
         }
         let bytes = Bytes::from(batch);
+        observer.feed(&bytes, &mut term.info.lock().unwrap().activity);
         term.deliver(&bytes);
         let text = carry.decode(&bytes);
         if !text.is_empty() {

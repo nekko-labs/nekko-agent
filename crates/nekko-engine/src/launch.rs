@@ -114,10 +114,18 @@ pub fn build_args(
     if truthy(p, "contextTokens") {
         push(&mut args, "--ctx-size", text(p.get("contextTokens")));
     }
-    if let Some(g) = defined(p, "gpuLayers") {
-        push(&mut args, "--n-gpu-layers", nekko_js::display(g));
-    }
     let layers = nekko_js::to_number(model.get("layers"));
+    if let Some(g) = defined(p, "gpuLayers") {
+        // `gpuLayers` counts the model's transformer blocks, so asking for all of
+        // them is a full offload here. llama.cpp counts the output layer as one
+        // more and keeps it on the CPU unless asked for more layers than there
+        // are blocks: `-ngl 36` on a 36-block Qwen3-8B left it there and
+        // prefilled at 1531 tok/s against 2762 with it on the GPU (M5 Max,
+        // llama-bench b11224). 999 rather than the count plus one, so a model
+        // whose GGUF counts its blocks differently still loads whole.
+        let full = g.is_number() && layers > 0.0 && nekko_js::to_number(Some(g)) >= layers;
+        push(&mut args, "--n-gpu-layers", if full { "999".into() } else { nekko_js::display(g) });
+    }
     let first_layers = |n: f64| (0..n as u32).map(|i| i.to_string()).collect::<Vec<_>>().join("|");
     if let Some(n) = p.get("cpuMoeLayers").and_then(Value::as_f64).filter(|n| *n >= 1.0) {
         if n >= layers && supports("--cpu-moe") {

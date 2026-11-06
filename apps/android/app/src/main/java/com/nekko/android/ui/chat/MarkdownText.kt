@@ -1,33 +1,63 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import android.content.ClipData
+import android.content.Intent
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.List
+import androidx.compose.material.icons.outlined.AltRoute
+import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,8 +66,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -49,75 +89,444 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import com.nekko.android.previews.ChatPreviews
+import com.nekko.android.previews.LocalChatPreviews
 import com.nekko.android.ui.theme.Nekko
+import com.nekko.protocol.ChatLinks
+import com.nekko.protocol.ChatPreviewLink
 import com.nekko.protocol.Markdown
+import com.nekko.protocol.MarkdownBlock
+import com.nekko.protocol.MarkdownList
+import com.nekko.protocol.MarkdownListItem
+import com.nekko.protocol.MarkdownParser
+import com.nekko.protocol.MarkdownTable
+import com.nekko.protocol.MermaidRules
+import com.nekko.protocol.ReplyTopics
+import com.nekko.protocol.Topic
+import com.nekko.protocol.TopicLine
+import com.nekko.protocol.TopicSection
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * An agent reply as Markdown (AN-8), the same subset as the iPhone app's
- * `MarkdownText`: code blocks that scroll sideways with a Copy button,
- * headings, lists, quotes, rules and inline bold, italic, code and links.
- * Links open in the browser only when tapped; images are never loaded.
+ * Chat Markdown (MD-6, the iPhone's MD-2 `MarkdownText`): the block tree from
+ * `MarkdownParser`, drawn natively. Fenced code (scrollable, copyable),
+ * headings, real nested lists with markers by depth and task checkboxes,
+ * table grids (sideways scroll, Expand, copy actions), quotes, rules, and
+ * inline bold, italic, strikethrough, code and links. Links open only when
+ * tapped (a file or a loopback page in the preview window, AN-35); images are
+ * never loaded. [bubble] draws it inside the user's own bubble, in its ink.
  */
 @Composable
-fun MarkdownText(text: String, color: Color, modifier: Modifier = Modifier) {
-    val p = Nekko.palette
-    val pieces = remember(text) { Markdown.parse(text) }
-    val body = MaterialTheme.typography.bodyLarge.copy(color = color)
+fun MarkdownText(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    bubble: Boolean = false,
+    /** Draw the topics an agent's message names as headers (ReplyTopics). */
+    topics: Boolean = false,
+    /** Give a closing question a header when the message did not. For settled text: a stream ends on one in passing. */
+    askTail: Boolean = false,
+) {
+    // In a chat, links to files and loopback pages open previews (AN-35); paths Markdown can't read as links are made into file: URLs first.
+    val previews = LocalChatPreviews.current
+    val sections = remember(text, topics, askTail) { if (topics) ReplyTopics.sections(text, askTail) else listOf(TopicSection(null, text)) }
+    val blocks = remember(sections, previews != null) { sections.map { MarkdownParser.blocks(if (previews != null) ChatLinks.linkable(it.body) else it.body) } }
+    val cards = remember(text, previews != null) { if (previews != null) ChatLinks.previews(text) else emptyList() }
+    val style = if (bubble) MarkdownStyle.bubble(color) else MarkdownStyle.standard(color)
+    if (sections.size == 1 && sections[0].header == null) return Blocks(blocks[0], style, previews, cards, modifier)
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (piece in pieces) {
-            when (piece) {
-                is Markdown.Piece.Code -> CodeBlock(piece.language, piece.code)
-                is Markdown.Piece.Heading -> Text(
-                    inline(piece.text),
+        sections.forEachIndexed { i, section ->
+            section.header?.let { TopicHeader(it, style, first = i == 0) }
+            if (section.body.isNotBlank()) Blocks(blocks[i], style, previews, cards)
+        }
+    }
+}
+
+/**
+ * A named topic of the agent's message, drawn as a header. The text stays in
+ * ink; the icon carries the colour, and only what asks something of the
+ * reader is loud (spec/chat/thinking-and-replies.md).
+ */
+@Composable
+private fun TopicHeader(line: TopicLine, style: MarkdownStyle, first: Boolean) {
+    val p = Nekko.palette
+    val (icon, tint) = when (line.topic) {
+        Topic.QUESTION -> Icons.AutoMirrored.Outlined.HelpOutline to p.warning
+        Topic.NEXT -> Icons.Outlined.Explore to p.warning
+        Topic.COMMAND -> Icons.Outlined.Terminal to p.warning
+        Topic.DECISION -> Icons.Outlined.AltRoute to p.accent
+        Topic.SUMMARY -> Icons.AutoMirrored.Outlined.List to style.faint
+    }
+    Row(
+        Modifier.padding(top = if (first) 0.dp else 4.dp).semantics(mergeDescendants = true) { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Text(line.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = style.ink)
+    }
+}
+
+/** The colours a Markdown body draws with. */
+internal data class MarkdownStyle(
+    val ink: Color,
+    val soft: Color,
+    val faint: Color,
+    val line: Color,
+    val codeFill: Color,
+    val codeInk: Color,
+    val headerFill: Color,
+    val done: Color,
+    val link: Color,
+) {
+    companion object {
+        @Composable
+        fun standard(ink: Color): MarkdownStyle {
+            val p = Nekko.palette
+            return MarkdownStyle(ink, p.inkSoft, p.inkFaint, p.line, p.code, p.ink, p.code, p.success, p.accent)
+        }
+
+        /** On the accent-coloured bubble every tint is the bubble's own ink, faded. */
+        fun bubble(ink: Color) = MarkdownStyle(
+            ink, ink.copy(alpha = 0.85f), ink.copy(alpha = 0.7f), ink.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.18f), ink,
+            ink.copy(alpha = 0.14f), ink, ink,
+        )
+    }
+}
+
+@Composable
+private fun Blocks(blocks: List<MarkdownBlock>, style: MarkdownStyle, previews: ChatPreviews?, cards: List<ChatPreviewLink>, modifier: Modifier = Modifier) {
+    val body = MaterialTheme.typography.bodyLarge.copy(color = style.ink)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (block in blocks) {
+            when (block) {
+                is MarkdownBlock.Code ->
+                    if (MermaidRules.isMermaid(block.language)) MermaidBlock(block.body, block.closed, style)
+                    else CodeBlock(block.language, block.body, style)
+                is MarkdownBlock.Heading -> Text(
+                    inline(block.text, style, previews, cards),
                     style = when {
-                        piece.level <= 1 -> MaterialTheme.typography.titleLarge
-                        piece.level == 2 -> MaterialTheme.typography.titleMedium
+                        block.level <= 1 -> MaterialTheme.typography.titleLarge
+                        block.level == 2 -> MaterialTheme.typography.titleMedium
                         else -> MaterialTheme.typography.titleSmall
-                    }.copy(color = color, fontWeight = FontWeight.SemiBold),
+                    }.copy(color = style.ink, fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.semantics { heading() },
                 )
-                is Markdown.Piece.Bullet -> Row(
-                    Modifier.padding(start = (piece.indent * 14).dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(piece.marker, style = body.copy(color = p.inkSoft))
-                    Text(inline(piece.text), style = body)
+                is MarkdownBlock.ListBlock -> ListView(block.list, 0, style, previews, cards)
+                is MarkdownBlock.Table -> TableView(block.table, style, previews, cards)
+                is MarkdownBlock.Quote -> Row(Modifier.height(IntrinsicSize.Min)) {
+                    Box(Modifier.width(3.dp).fillMaxHeight().background(style.line))
+                    Blocks(block.blocks, style.copy(ink = style.soft), previews, cards, Modifier.padding(start = 10.dp))
                 }
-                is Markdown.Piece.Quote -> Row(Modifier.height(IntrinsicSize.Min)) {
-                    Box(Modifier.width(3.dp).fillMaxHeight().background(p.line))
-                    Text(inline(piece.text), style = body.copy(color = p.inkSoft), modifier = Modifier.padding(start = 10.dp))
+                MarkdownBlock.Rule -> HorizontalDivider(color = style.line)
+                is MarkdownBlock.Paragraph -> Text(inline(block.text, style, previews, cards), style = body)
+            }
+        }
+    }
+}
+
+// ---- lists ----
+
+/** A list as a tree: the marker on the first line, the item's text and its nested lists hanging beside it. */
+@Composable
+private fun ListView(list: MarkdownList, depth: Int, style: MarkdownStyle, previews: ChatPreviews?, cards: List<ChatPreviewLink>) {
+    val body = MaterialTheme.typography.bodyLarge.copy(color = style.ink)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        list.items.forEachIndexed { i, item ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Marker(list, depth, list.start + i, item, style)
+                Column(Modifier.weight(1f, fill = false), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (item.text.isNotEmpty() || item.children.isEmpty()) {
+                        Text(
+                            inline(item.text, style, previews, cards),
+                            style = if (item.task == MarkdownListItem.Task.DONE) body.copy(color = style.ink.copy(alpha = 0.7f)) else body,
+                        )
+                    }
+                    item.children.forEach { ListView(it, depth + 1, style, previews, cards) }
                 }
-                Markdown.Piece.Rule -> HorizontalDivider(color = p.line)
-                is Markdown.Piece.Paragraph -> Text(inline(piece.text), style = body)
             }
         }
     }
 }
 
 @Composable
-private fun inline(s: String): AnnotatedString {
+private fun Marker(list: MarkdownList, depth: Int, number: Int, item: MarkdownListItem, style: MarkdownStyle) {
+    val task = item.task
+    if (task != null) {
+        val done = task == MarkdownListItem.Task.DONE
+        Icon(
+            if (done) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+            contentDescription = if (done) stringResource(R.string.chat_task_done) else stringResource(R.string.chat_task_not_done),
+            tint = if (done) style.done else style.faint,
+            modifier = Modifier.padding(top = 3.dp).size(18.dp),
+        )
+    } else {
+        // Numbers line up on their dots; bullets get a narrow column. A bullet says nothing to TalkBack.
+        Text(
+            MarkdownParser.marker(list.ordered, depth, number),
+            style = MaterialTheme.typography.bodyLarge.copy(color = style.soft, fontFeatureSettings = "tnum"),
+            textAlign = if (list.ordered) TextAlign.End else TextAlign.Center,
+            modifier = Modifier.widthIn(min = if (list.ordered) 18.dp else 10.dp).then(
+                if (list.ordered) Modifier else Modifier.clearAndSetSemantics {},
+            ),
+        )
+    }
+}
+
+// ---- tables ----
+
+/**
+ * A pipe table as a grid: bold header on a faint fill, hairlines between
+ * rows, columns aligned as the `:---:` markers say. It scrolls sideways
+ * inside its own frame; a long press offers Copy as Markdown, Copy as text
+ * and Share, and a big one also offers Expand.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TableView(table: MarkdownTable, style: MarkdownStyle, previews: ChatPreviews?, cards: List<ChatPreviewLink>) {
+    var menu by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
+    val actions = rememberTableActions(table)
+    val actionsLabel = stringResource(R.string.chat_table_actions)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box {
+            Box(
+                Modifier.horizontalScroll(rememberScrollState())
+                    .combinedClickable(onClick = {}, onLongClick = { menu = true }, onLongClickLabel = actionsLabel)
+                    .testTag("markdown.table"),
+            ) {
+                TableGrid(
+                    table, style, previews, cards, cellCap = 240.dp,
+                    modifier = Modifier.padding(1.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, style.line, RoundedCornerShape(8.dp)),
+                )
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { TableActionItems(actions) { menu = false } }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (table.isLarge) {
+                TextButton(onClick = { expanded = true }, modifier = Modifier.testTag("markdown.table.expand")) {
+                    Icon(Icons.Filled.OpenInFull, contentDescription = null, tint = style.soft, modifier = Modifier.size(16.dp))
+                    Text(stringResource(R.string.chat_expand), style = MaterialTheme.typography.labelMedium, color = style.soft, modifier = Modifier.padding(start = 6.dp))
+                }
+            }
+            actions.note?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = style.faint, modifier = Modifier.padding(start = 8.dp)) }
+        }
+    }
+    if (expanded) TableScreen(table, previews, cards) { expanded = false }
+}
+
+/** Copy as Markdown, Copy as text and Share, with a short note after a copy. */
+private class TableActions(val markdown: () -> Unit, val text: () -> Unit, val share: () -> Unit) {
+    var note by mutableStateOf<String?>(null)
+}
+
+@Composable
+private fun rememberTableActions(table: MarkdownTable): TableActions {
+    val clipboard = LocalClipboard.current
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    lateinit var actions: TableActions
+    fun copy(s: String, note: String) {
+        scope.launch {
+            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Table", s)))
+            actions.note = note
+            delay(1500)
+            actions.note = null
+        }
+    }
+    actions = remember(table) {
+        TableActions(
+            markdown = { copy(table.markdown, resources.getString(R.string.chat_copied_as_markdown)) },
+            text = { copy(table.tabSeparated, resources.getString(R.string.chat_copied_as_text)) },
+            share = {
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, table.markdown)
+                context.startActivity(Intent.createChooser(send, null))
+            },
+        )
+    }
+    return actions
+}
+
+@Composable
+private fun TableActionItems(actions: TableActions, done: () -> Unit) {
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_markdown)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.markdown() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_as_text)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = { done(); actions.text() })
+    DropdownMenuItem(text = { Text(stringResource(R.string.chat_share)) }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = { done(); actions.share() })
+}
+
+/**
+ * The grid itself: each column as wide as its widest cell, but no wider than
+ * [cellCap] (where long cells wrap); each row as tall as its tallest cell.
+ * TalkBack hears it as rows: "Row 2 of 5: Name, Nekko; Status, done".
+ */
+@Composable
+private fun TableGrid(table: MarkdownTable, style: MarkdownStyle, previews: ChatPreviews?, cards: List<ChatPreviewLink>, cellCap: Dp, modifier: Modifier = Modifier) {
+    val columns = table.header.size
+    val text = MaterialTheme.typography.bodyMedium.copy(color = style.ink)
+    val intro = stringResource(R.string.chat_table_spoken, columns, table.rows.size)
+    val spoken = remember(table, intro) {
+        "$intro " + table.rows.indices.joinToString(". ") { table.accessibilityRow(it) }
+    }
+    Layout(
+        content = {
+            (listOf(table.header) + table.rows).forEachIndexed { r, row ->
+                row.forEachIndexed { col, cell ->
+                    val align = when (table.alignments.getOrNull(col)) {
+                        MarkdownTable.Alignment.CENTER -> TextAlign.Center
+                        MarkdownTable.Alignment.TRAILING -> TextAlign.End
+                        else -> TextAlign.Start
+                    }
+                    Box(
+                        Modifier.then(if (r == 0) Modifier.background(style.headerFill) else Modifier).padding(horizontal = 10.dp, vertical = 7.dp),
+                        contentAlignment = when (align) {
+                            TextAlign.Center -> Alignment.TopCenter
+                            TextAlign.End -> Alignment.TopEnd
+                            else -> Alignment.TopStart
+                        },
+                    ) {
+                        Text(
+                            inline(cell, style, previews, cards),
+                            style = if (r == 0) text.copy(fontWeight = FontWeight.SemiBold) else text,
+                            textAlign = align,
+                        )
+                    }
+                }
+            }
+            // The hairlines between rows, laid out after the cells.
+            repeat(table.rows.size) { Box(Modifier.background(style.line)) }
+        },
+        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
+    ) { measurables, _ ->
+        val cap = cellCap.roundToPx()
+        val rowCount = table.rows.size + 1
+        val cells = measurables.subList(0, rowCount * columns)
+        val dividers = measurables.subList(rowCount * columns, measurables.size)
+        val widths = IntArray(columns) { c ->
+            (0 until rowCount).maxOf { r -> minOf(cells[r * columns + c].maxIntrinsicWidth(Constraints.Infinity), cap) }
+        }
+        val heights = IntArray(rowCount) { r ->
+            (0 until columns).maxOf { c -> cells[r * columns + c].minIntrinsicHeight(widths[c]) }
+        }
+        val placeables = cells.mapIndexed { i, m ->
+            val r = i / columns
+            val c = i % columns
+            m.measure(Constraints.fixed(widths[c], heights[r]))
+        }
+        val hairline = maxOf(1, (0.5f * density).toInt())
+        val totalWidth = widths.sum()
+        val totalHeight = heights.sum() + hairline * maxOf(0, rowCount - 1)
+        val lines = dividers.map { it.measure(Constraints.fixed(totalWidth, hairline)) }
+        layout(totalWidth, totalHeight) {
+            var y = 0
+            for (r in 0 until rowCount) {
+                var x = 0
+                for (c in 0 until columns) {
+                    placeables[r * columns + c].place(x, y)
+                    x += widths[c]
+                }
+                y += heights[r]
+                if (r < rowCount - 1) {
+                    lines.getOrNull(r)?.place(0, y)
+                    y += hairline
+                }
+            }
+        }
+    }
+}
+
+/** A big table full screen: pinch to zoom, scroll both ways, the same copy actions. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TableScreen(table: MarkdownTable, previews: ChatPreviews?, cards: List<ChatPreviewLink>, onDismiss: () -> Unit) {
     val p = Nekko.palette
-    val links = TextLinkStyles(SpanStyle(color = p.accent, textDecoration = TextDecoration.Underline))
-    return remember(s, p) {
+    var menu by remember { mutableStateOf(false) }
+    var scale by remember { mutableFloatStateOf(1f) }
+    val actions = rememberTableActions(table)
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        BackHandler(onBack = onDismiss)
+        // The dialog has its own window: its status bar icons follow the app's theme, as the activity's do.
+        val view = LocalView.current
+        val light = p.paper.luminance() > 0.5f
+        LaunchedEffect(light) {
+            (view.parent as? DialogWindowProvider)?.window?.let { w ->
+                WindowCompat.getInsetsController(w, view).apply {
+                    isAppearanceLightStatusBars = light
+                    isAppearanceLightNavigationBars = light
+                }
+            }
+        }
+        Scaffold(
+            containerColor = p.paper,
+            topBar = {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
+                    title = { Text(stringResource(R.string.chat_format_table)) },
+                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("markdown.table.done")) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_done)) } },
+                    actions = {
+                        Box {
+                            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.Share, contentDescription = stringResource(R.string.chat_table_actions)) }
+                            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) { TableActionItems(actions) { menu = false } }
+                        }
+                    },
+                )
+            },
+        ) { padding ->
+            Box(
+                Modifier.fillMaxSize().padding(padding)
+                    .pointerInput(Unit) { detectTransformGestures { _, _, zoom, _ -> scale = (scale * zoom).coerceIn(0.4f, 4f) } }
+                    .verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()),
+            ) {
+                TableGrid(
+                    table, MarkdownStyle.standard(p.ink), previews, cards, cellCap = 320.dp,
+                    modifier = Modifier.padding(16.dp).graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    }.border(1.dp, p.line, RoundedCornerShape(8.dp)),
+                )
+            }
+        }
+    }
+}
+
+// ---- inline ----
+
+@Composable
+private fun inline(s: String, style: MarkdownStyle, previews: ChatPreviews? = null, cards: List<ChatPreviewLink> = emptyList()): AnnotatedString {
+    val links = TextLinkStyles(SpanStyle(color = style.link, textDecoration = TextDecoration.Underline))
+    return remember(s, style, previews, cards) {
         buildAnnotatedString {
             for (span in Markdown.inline(s)) {
-                val style = SpanStyle(
+                val strike = Markdown.Style.STRIKE in span.styles
+                val spanStyle = SpanStyle(
                     fontWeight = if (Markdown.Style.BOLD in span.styles) FontWeight.SemiBold else null,
                     fontStyle = if (Markdown.Style.ITALIC in span.styles) FontStyle.Italic else null,
                     fontFamily = if (Markdown.Style.CODE in span.styles) FontFamily.Monospace else null,
-                    background = if (Markdown.Style.CODE in span.styles) p.code else Color.Unspecified,
+                    background = if (Markdown.Style.CODE in span.styles) style.codeFill else Color.Unspecified,
+                    textDecoration = if (strike) TextDecoration.LineThrough else null,
                 )
                 val url = span.url
-                if (url != null && safeLink(url)) {
-                    withLink(LinkAnnotation.Url(url, links)) { withStyle(style) { append(span.text) } }
+                val preview = if (url != null && previews != null) ChatLinks.preview(url, cards) else null
+                if (preview != null) {
+                    // A file or a loopback page: the preview window, never the phone's browser.
+                    withLink(LinkAnnotation.Clickable("preview", links) { previews!!.open(preview) }) { withStyle(spanStyle) { append(span.text) } }
+                } else if (url != null && safeLink(url)) {
+                    withLink(LinkAnnotation.Url(url, links)) { withStyle(spanStyle) { append(span.text) } }
                 } else {
-                    withStyle(style) { append(span.text) }
+                    withStyle(spanStyle) { append(span.text) }
                 }
             }
         }
@@ -131,8 +540,7 @@ internal fun safeLink(url: String): Boolean {
 }
 
 @Composable
-private fun CodeBlock(language: String, code: String) {
-    val p = Nekko.palette
+internal fun CodeBlock(language: String, code: String, style: MarkdownStyle) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf(false) }
@@ -146,14 +554,14 @@ private fun CodeBlock(language: String, code: String) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(p.code)
-            .border(1.dp, p.line, RoundedCornerShape(10.dp)),
+            .background(style.codeFill)
+            .border(1.dp, style.line, RoundedCornerShape(10.dp)),
     ) {
         Row(Modifier.fillMaxWidth().padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 language.ifEmpty { "code" },
                 style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
-                color = p.inkSoft,
+                color = style.soft,
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = {
@@ -162,15 +570,15 @@ private fun CodeBlock(language: String, code: String) {
             }) {
                 Icon(
                     if (copied) Icons.Filled.Check else Icons.Filled.ContentCopy,
-                    contentDescription = if (copied) "Copied" else "Copy code",
-                    tint = p.inkSoft,
+                    contentDescription = if (copied) stringResource(R.string.chat_copied) else stringResource(R.string.chat_copy_code),
+                    tint = style.soft,
                     modifier = Modifier.size(16.dp),
                 )
             }
         }
         Text(
             code,
-            style = Nekko.mono.merge(TextStyle(color = p.ink)),
+            style = Nekko.mono.merge(TextStyle(color = style.codeInk)),
             softWrap = false,
             modifier = Modifier
                 .horizontalScroll(rememberScrollState())

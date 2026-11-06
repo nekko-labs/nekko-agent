@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class FirstRunTests: XCTestCase {
     /// A fresh install shows the welcome screen with pairing and the Tailscale guide,
     /// and makes no connection before a computer is paired.
@@ -17,7 +18,11 @@ final class FirstRunTests: XCTestCase {
         let window = app.windows.firstMatch.frame
         let barTop = pair.frame.minY - 12
         let bar = CGRect(x: window.minX, y: barTop, width: window.width, height: window.maxY - barTop)
-        auditAccessibility(app, "welcome", covered: bar)
+        // Known false positive: the audit reports the intro paragraph as low contrast on the
+        // coloured ground (AppBackdrop's gradient) even in full ink, measured at 14.5:1 in the
+        // capture; its soft ink measures 5:1 there. PaletteTests checks that ink on the wash.
+        let intro = "Drive Nekko Agent on your computer from this iPhone: follow chats as they stream, approve tools, answer questions and start new work. Everything is end-to-end encrypted between this phone and your computer."
+        auditAccessibility(app, "welcome", ignoring: [intro], covered: bar)
         pair.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
@@ -27,6 +32,20 @@ final class FirstRunTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["That isn’t a Nekko Agent pairing link."].waitForExistence(timeout: 5))
         attach(app, "Pair")
         auditAccessibility(app, "pair")
+    }
+
+    /// A computer too old to prove who it is can't pair: its first-seen key is never trusted.
+    func testRefusesALinkWithNoHostKey() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES"]
+        app.launch()
+        app.buttons["Pair with your computer"].tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff")
+        app.buttons["Pair"].tap()
+        XCTAssertTrue(app.staticTexts["Update Nekko Agent on your computer, then make a new pairing code."].waitForExistence(timeout: 5))
     }
 
     /// A plain ws:// relay on the open internet is refused before anything is dialed.
@@ -138,5 +157,26 @@ extension XCUIApplication {
         return descendants(matching: .any).matching(NSPredicate(
             format: "(elementType == %d OR elementType == %d) AND (label == %@ OR placeholderValue == %@ OR identifier == %@)",
             types[0], types[1], label, label, label)).firstMatch
+    }
+}
+
+extension XCUIElement {
+    /// Taps until `done`, again every `timeout` while the element is still there.
+    /// A menu still settling swallows a tap on its item and stays up with nothing
+    /// done (Settings in run 40418883765, "Ask about this change" in 40382380988),
+    /// and so does a back button while the app is coming back to the front.
+    func tapUntil(timeout: TimeInterval = 20, until done: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(3 * timeout)
+        var taps = 0, lastTap = Date.distantPast
+        while Date() < deadline {
+            if done() { return true }
+            if taps < 3, Date().timeIntervalSince(lastTap) > timeout, exists {
+                tap()
+                taps += 1
+                lastTap = Date()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        return done()
     }
 }

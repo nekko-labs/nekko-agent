@@ -456,59 +456,12 @@ fn backup_file(p: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn temp_name() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
 /// `writeTextAtomic`: a private temp file beside the target, flushed to disk,
 /// then renamed over it.
 fn write_text_atomic(p: &str, content: &str) -> Result<(), String> {
-    use std::io::Write;
-    let dir = path::dirname(p);
-    let temp = path::join(&[&dir, &format!(".{}.{}.tmp", path::basename(p), temp_name())]);
-    let written = (|| -> std::io::Result<()> {
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        let mut f = opts.open(&temp)?;
-        f.write_all(content.as_bytes())?;
-        f.sync_all()?;
-        drop(f);
-        ensure_private(&temp);
-        rename_retrying(&temp, p)
-    })();
-    if let Err(e) = written {
-        let _ = std::fs::remove_file(&temp);
-        return Err(format!("{}: {e}, open '{p}'", nodefs::code_name(&e)));
-    }
-    #[cfg(unix)]
-    if let Ok(d) = std::fs::File::open(&dir) {
-        let _ = d.sync_all();
-    }
-    ensure_private(p);
-    Ok(())
-}
-
-fn rename_retrying(from: &str, to: &str) -> std::io::Result<()> {
-    let mut attempt = 0;
-    loop {
-        match std::fs::rename(from, to) {
-            Ok(()) => return Ok(()),
-            // Windows refuses a rename over a file another process holds open
-            // without delete sharing; that clears in moments.
-            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && attempt < 20 => {
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(5 * attempt));
-            }
-            Err(e) => return Err(e),
-        }
-    }
+    let opts = nekko_js::fs::AtomicWrite { mode: nekko_js::fs::Mode::Private, fsync: true, create_dir: false };
+    nekko_js::fs::atomic_write(std::path::Path::new(p), content.as_bytes(), opts)
+        .map_err(|e| format!("{}: {e}, open '{p}'", nodefs::code_name(&e)))
 }
 
 fn result(ok: bool, message: Option<String>, home: &str) -> Value {

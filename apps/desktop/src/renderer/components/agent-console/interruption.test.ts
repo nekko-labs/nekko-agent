@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, PERSISTED_INTERRUPTION, suggestedReplyClassName } from './interruption.js';
+import { describeInterruption, shouldShowPersistedInterruption, reconcileInterruptionNotice, savedTurnFailure, PERSISTED_INTERRUPTION } from './interruption.js';
 
 describe('describeInterruption', () => {
   it('treats an intentional stop as a pause, not an error', () => {
@@ -36,10 +36,7 @@ describe('describeInterruption', () => {
     expect(result.detail).not.toContain('Retry picks up');
   });
 
-  it('gives suggestions a theme tint and keyboard focus treatment', () => {
-    expect(suggestedReplyClassName).toContain('bg-accent/10');
-    expect(suggestedReplyClassName).toContain('focus-visible:outline-accent');
-  });
+
 });
 
 describe('persisted interruption after completion', () => {
@@ -67,6 +64,13 @@ describe('persisted interruption after completion', () => {
     expect(shouldShowPersistedInterruption(stale, false, false)).toBe(true);
     expect(shouldShowPersistedInterruption([{ id: 'cut', role: 'assistant', content: 'Partial', interrupted: true, createdAt: 1 }], false, false)).toBe(true);
   });
+  it('treats a transcript ending on a tool result as cut off, unless the turn completed', () => {
+    const stats = { providerId: 'p', modelId: 'm', inputTokens: 1, outputTokens: 1, wallMs: 1, calls: 1, stop: 'complete' as const };
+    const result = { id: 'result', role: 'tool' as const, content: '', toolResult: { toolCallId: 'call', output: 'ok' }, createdAt: 2 };
+    expect(shouldShowPersistedInterruption([...stale, result], false, false)).toBe(true);
+    expect(shouldShowPersistedInterruption([...stale, result], true, false)).toBe(false);
+    expect(shouldShowPersistedInterruption([{ ...stale[0], turnStats: stats }, result], false, false)).toBe(false);
+  });
 });
 
 describe('question waits', () => {
@@ -74,5 +78,22 @@ describe('question waits', () => {
     const history = [{ id: 'ask', role: 'assistant' as const, content: '', toolCalls: [{ id: 'q', name: 'ask_user', input: {} }], createdAt: 1 }];
     expect(shouldShowPersistedInterruption(history, false, false, true)).toBe(false);
     expect(shouldShowPersistedInterruption(history, false, false, false)).toBe(true);
+  });
+});
+
+describe('savedTurnFailure', () => {
+  const tool = { id: 't', role: 'tool', content: '', createdAt: 1 } as const;
+  const failure = { message: 'You hit your usage limit.', afterMessageId: 't' };
+
+  it('brings back a failure that left no mark on the transcript', () => {
+    expect(savedTurnFailure({ messages: [tool], turnFailure: failure })).toBe(failure.message);
+  });
+
+  it('retires once the transcript has moved on or the failure was dismissed', () => {
+    const later = { id: 'u', role: 'user', content: 'again', createdAt: 2 } as const;
+    expect(savedTurnFailure({ messages: [tool, later], turnFailure: failure })).toBeNull();
+    expect(savedTurnFailure({ messages: [], turnFailure: failure })).toBeNull();
+    expect(savedTurnFailure({ messages: [tool], turnFailure: null })).toBeNull();
+    expect(savedTurnFailure({ messages: [tool] })).toBeNull();
   });
 });

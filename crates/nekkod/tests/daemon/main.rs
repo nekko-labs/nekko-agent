@@ -7,17 +7,21 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod artifacts;
 mod assist;
 mod automation;
 mod backendless;
 mod claude_code;
 mod claude_policy;
+mod computers;
 mod desktop;
 mod engine;
 mod git;
+mod injection;
 mod lifecycle;
 mod native;
 mod remote;
+mod runner;
 mod sandbox;
 mod sessions;
 mod settings;

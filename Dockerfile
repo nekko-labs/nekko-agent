@@ -38,6 +38,7 @@ RUN npm ci
 
 COPY . .
 RUN npm run build:web
+RUN node scripts/third-party.mjs notices --no-crates
 # Drop dev dependencies so the runtime image stays lean.
 RUN npm prune --omit=dev
 

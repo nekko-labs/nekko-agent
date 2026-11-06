@@ -15,6 +15,7 @@ import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { copyVcRuntime } from '../../../scripts/vc-runtime.mjs';
+import { signDevDaemon } from './dev-signing.cjs';
 
 const local = process.argv.includes('--local');
 const dev = process.argv.includes('--dev');
@@ -53,9 +54,49 @@ function stageSpeechHelper(dirs) {
   console.log(`staged nekko-speech -> ${dirs.join(', ')}`);
 }
 
+// The CI runner VM helper (crates/nekkod/vm/nekko-vm.swift, decision 0022),
+// staged for dev and for packaging. It is the only binary with the
+// virtualization entitlement, so it is ad-hoc signed here on its own; a release
+// signs it again with the same file through scripts/sign-mac.cjs. Apple silicon
+// only: macOS guests need it. Returns true when nekko-vm was staged.
+function stageVmHelper(dirs) {
+  if (process.platform !== 'darwin' || process.arch !== 'arm64') return false;
+  const source = join(repo, 'crates', 'nekkod', 'vm', 'nekko-vm.swift');
+  const entitlements = join(repo, 'crates', 'nekkod', 'vm', 'nekko-vm.entitlements');
+  const out = join(dirs[0], 'nekko-vm');
+  const fresh = existsSync(out) && statSync(out).mtimeMs >= Math.max(statSync(source).mtimeMs, statSync(entitlements).mtimeMs);
+  if (!fresh) {
+    const args = ['-O', '-target', 'arm64-apple-macos14', '-framework', 'Virtualization', source, '-o', out];
+    const built = spawnSync('xcrun', ['swiftc', ...args], { cwd: repo, stdio: 'inherit' });
+    const signed = built.status === 0 && spawnSync('codesign', ['--force', '-s', '-', '--entitlements', entitlements, out], { stdio: 'inherit' }).status === 0;
+    if (!signed) {
+      rmSync(out, { force: true });
+      console.warn('swiftc or codesign failed: CI runner VMs will be unavailable in this build');
+      return false;
+    }
+  }
+  const caps = spawnSync(out, ['capabilities'], { encoding: 'utf8' });
+  if (!caps.stdout?.includes('"firstBoot":true')) {
+    console.warn('nekko-vm was built without the macOS 27 SDK: this build cannot set up a runner image. Build with Xcode 27.');
+  }
+  for (const dir of dirs.slice(1)) copyFileSync(out, join(dir, 'nekko-vm'));
+  // The guest scripts the image builder uploads (crates/nekkod/src/runner/image.rs).
+  for (const dir of dirs) {
+    mkdirSync(join(dir, 'runner-image'), { recursive: true });
+    for (const name of ['provision.sh', 'nekko-runner-boot.sh', 'dev.nekkolabs.runner-boot.plist']) {
+      copyFileSync(join(repo, 'scripts', 'runner-image', name), join(dir, 'runner-image', name));
+    }
+  }
+  console.log(`staged nekko-vm -> ${dirs.join(', ')}`);
+  return true;
+}
+
 if (dev) {
   execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod', '--features', 'dev-tools'], { cwd: repo, stdio: 'inherit' });
+  // A stable signature, so the Keychain keeps its answers across rebuilds.
+  signDevDaemon(join(repo, 'target', 'dev-daemon', exe));
   stageSpeechHelper([join(repo, 'target', 'dev-daemon')]);
+  stageVmHelper([join(repo, 'target', 'dev-daemon')]);
   process.exit(0);
 }
 
@@ -71,6 +112,10 @@ mkdirSync(dest, { recursive: true });
 copyFileSync(built, join(dest, exe));
 console.log(`staged ${exe} -> ${join(dest, exe)}`);
 stageSpeechHelper([dirname(built), dest]);
+if (!stageVmHelper([dirname(built), dest]) && process.platform === 'darwin' && process.arch === 'arm64' && !local) {
+  console.error('nekko-vm could not be built: packaged builds need it for CI runners');
+  process.exit(1);
+}
 
 // The decision-model runtime (ONNX Runtime, statically linked into nekkod) loads the CUDA
 // provider libraries from next to the executable on a Linux build with `--features cuda`. The

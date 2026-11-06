@@ -1,5 +1,8 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -46,7 +49,6 @@ import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.components.toneColor
 import com.nekko.android.ui.theme.Nekko
-import com.nekko.protocol.ASK_OTHER_LABEL
 import com.nekko.protocol.Approval
 import com.nekko.protocol.AskAnswer
 import com.nekko.protocol.AskRequest
@@ -60,6 +62,7 @@ import kotlinx.serialization.json.JsonPrimitive
 fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var busy by remember(approval.call.id) { mutableStateOf<Boolean?>(null) }
     var error by remember(approval.call.id) { mutableStateOf<String?>(null) }
     val tone = when (approval.severity) {
@@ -78,7 +81,7 @@ fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn’t reach your computer."
+                error = e.message ?: resources.getString(R.string.chat_reach_failed)
             } finally {
                 busy = null
             }
@@ -88,11 +91,20 @@ fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit) {
     InputCardFrame(edge) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Filled.Warning, contentDescription = null, tint = edge, modifier = Modifier.size(18.dp))
-            Text("Allow this?", style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.weight(1f))
-            Pill("${approval.severity.name.lowercase()} risk", tone)
+            Text(stringResource(R.string.chat_allow_this), style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.weight(1f))
+            Pill(
+                stringResource(
+                    when (approval.severity) {
+                        Severity.HIGH -> R.string.chat_risk_high
+                        Severity.MEDIUM -> R.string.chat_risk_medium
+                        Severity.LOW -> R.string.chat_risk_low
+                    },
+                ),
+                tone,
+            )
         }
         Text(
-            if (isCommand) "Run this command on your computer:" else Transcript.toolLabel(approval.call),
+            if (isCommand) stringResource(R.string.chat_run_this_command) else Transcript.toolLabel(approval.call),
             style = MaterialTheme.typography.bodyMedium,
             color = p.ink,
         )
@@ -119,13 +131,13 @@ fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit) {
                 onClick = { decide(false) },
                 enabled = busy == null,
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text(if (busy == false) "Denying…" else "Deny") }
+            ) { Text(if (busy == false) stringResource(R.string.chat_denying) else stringResource(R.string.chat_deny)) }
             Button(
                 onClick = { decide(true) },
                 enabled = busy == null,
                 colors = ButtonDefaults.buttonColors(containerColor = edge, contentColor = p.accentInk),
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text(if (busy == true) "Allowing…" else "Allow") }
+            ) { Text(if (busy == true) stringResource(R.string.chat_allowing) else stringResource(R.string.chat_allow)) }
         }
     }
 }
@@ -135,6 +147,7 @@ fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit) {
 fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Unit) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var form by remember(request.callId) { mutableStateOf(AskForm()) }
     var otherOpen by remember(request.callId) { mutableStateOf(emptySet<String>()) }
     var busy by remember(request.callId) { mutableStateOf(false) }
@@ -148,7 +161,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn’t reach your computer."
+                error = e.message ?: resources.getString(R.string.chat_reach_failed)
             } finally {
                 busy = false
             }
@@ -158,7 +171,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
     InputCardFrame(p.accent) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, tint = p.accent, modifier = Modifier.size(18.dp))
-            Text("Nekko has a question", style = MaterialTheme.typography.titleMedium, color = p.ink)
+            Text(stringResource(R.string.chat_nekko_has_question), style = MaterialTheme.typography.titleMedium, color = p.ink)
         }
         Column(
             Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
@@ -169,7 +182,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
                     if (q.header.isNotBlank()) Pill(q.header, Tone.ACCENT)
                     Text(q.question, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = p.ink)
                     if (q.multiSelect) {
-                        Text("Pick any", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                        Text(stringResource(R.string.chat_pick_any), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         q.options.forEach { o ->
@@ -201,7 +214,7 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
                             selected = noteOpen,
                             onClick = { otherOpen = if (q.id in otherOpen) otherOpen - q.id else otherOpen + q.id },
                             leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) },
-                            label = { Text(ASK_OTHER_LABEL) },
+                            label = { Text(stringResource(R.string.chat_something_else)) },
                             modifier = Modifier.heightIn(min = 48.dp),
                         )
                     }
@@ -209,8 +222,8 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
                         OutlinedTextField(
                             value = form.notes[q.id].orEmpty(),
                             onValueChange = { form = form.note(q, it) },
-                            placeholder = { Text("$ASK_OTHER_LABEL — type it here") },
-                            label = { Text(ASK_OTHER_LABEL) },
+                            placeholder = { Text(stringResource(R.string.chat_something_else_placeholder)) },
+                            label = { Text(stringResource(R.string.chat_something_else)) },
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -220,13 +233,13 @@ fun QuestionCard(request: AskRequest, onAnswer: suspend (List<AskAnswer>) -> Uni
         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { submit(emptyList()) }, enabled = !busy, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text("You decide")
+                Text(stringResource(R.string.chat_you_decide))
             }
             Button(
                 onClick = { submit(form.answers(request)) },
                 enabled = !busy && form.complete(request),
                 modifier = Modifier.weight(1f).heightIn(min = 48.dp),
-            ) { Text(if (busy) "Sending…" else "Submit") }
+            ) { Text(if (busy) stringResource(R.string.chat_sending) else stringResource(R.string.chat_submit)) }
         }
     }
 }

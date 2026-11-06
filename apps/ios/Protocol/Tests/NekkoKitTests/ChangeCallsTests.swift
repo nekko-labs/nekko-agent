@@ -13,6 +13,9 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
     var seen: Set<String> = []
     var now: Int64 = 1_760_000_000_000
     var calls: [(String, [JSONValue], JSONValue?)] = []
+    var replies: [String: JSONValue] = [:]
+    private var onStatus: (@Sendable (RelayStatus) -> Void)?
+    func online() { onStatus?(RelayStatus(.online)) }
     let deviceId: String
 
     init(deviceId: String = "phone-1") { self.deviceId = deviceId }
@@ -53,10 +56,11 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
             guard patch?.str(settings ? "defaultChatMode" : "mode") == "yolo" else { return settings ? (patch ?? .null) : .null }
             guard proof != nil else { throw refuse("proof-required", channel) }
         }
+        if !Channels.change.contains(channel), let reply = replies[channel] { return reply }
         guard changeOn else { throw refuse("change-off", channel) }
         guard let key else { throw refuse("key-missing", channel) }
         try check(channel, args, proof, key: key)
-        return ["ok": .string(channel)]
+        return replies[channel] ?? ["ok": .string(channel)]
     }
 
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
@@ -68,13 +72,13 @@ final class ProofComputer: RemoteConnection, ProofCaller, @unchecked Sendable {
 
     // The rest of a connection: unused here.
     func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?,
-                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {}
+                     onWelcome: (@Sendable (WelcomedDevice) -> Void)?) { self.onStatus = onStatus }
     func connect() {}
     func close() {}
     func nudge() {}
     func reconnect() {}
     func registerPush(token: String) async throws {}
-    func registerActivity(tag: String, token: String) async throws {}
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
 }
 
 final class ChangeCallsTests: XCTestCase {
@@ -180,8 +184,8 @@ final class StoreChangeTests: XCTestCase {
         let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
                                    deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
         store.load()
-        _ = await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                                         key: "00112233445566778899aabbccddeeff", pair: "ABCD2345"))
+        _ = try await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
+                                             key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345"))
         do {
             _ = try await store.call(change: "file:write", ["s1"])
             XCTFail("no signer")
@@ -196,19 +200,19 @@ final class StoreChangeTests: XCTestCase {
         XCTAssertEqual(mine, ["device:registerKey", "file:write", "file:write"], "registered once per connection")
     }
 
-    func pairedStore(_ computer: ProofComputer) async -> ComputersStore {
+    static func pairedStore(_ computer: ProofComputer) async -> ComputersStore {
         let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
                                    deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
         store.load()
-        _ = await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                                         key: "00112233445566778899aabbccddeeff", pair: "ABCD2345"))
+        _ = try! await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
+                                          key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345"))
         return store
     }
 
     func testRaisingAChatsModeAsksForFaceIDAndLoweringItDoesNot() async throws {
         let computer = ProofComputer(deviceId: "id-1")
         computer.now = Int64(Date().timeIntervalSince1970 * 1000)
-        let store = await pairedStore(computer)
+        let store = await Self.pairedStore(computer)
         let signer = SoftwareChangeSigner()
         store.changeSigner = signer
 
@@ -234,7 +238,7 @@ final class StoreChangeTests: XCTestCase {
     func testARaiseWithoutFaceIDOrWithChangesOffSaysWhy() async throws {
         let computer = ProofComputer(deviceId: "id-1")
         computer.now = Int64(Date().timeIntervalSince1970 * 1000)
-        let store = await pairedStore(computer)
+        let store = await Self.pairedStore(computer)
         do {
             _ = try await store.call(raising: Channels.sessionSetOptions, ["s1", ["mode": "yolo"]])
             XCTFail("no signer")
@@ -254,7 +258,7 @@ final class StoreChangeTests: XCTestCase {
 
     func testPlainRefusalsReadPlainly() async throws {
         let computer = ProofComputer(deviceId: "id-1")
-        let store = await pairedStore(computer)
+        let store = await Self.pairedStore(computer)
         let raw = RelayError("Not allowed from a paired phone (change-off): chat:send", fromComputer: true)
         XCTAssertEqual(store.readable(raw).localizedDescription,
                        "Changes from this phone are turned off on My computer. Turn them on in Remote access → What phones can do.")

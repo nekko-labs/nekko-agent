@@ -1,7 +1,11 @@
 package com.nekko.protocol
 
+import kotlinx.coroutines.CopyableThrowable
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
@@ -25,6 +29,7 @@ import java.net.URLEncoder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /** Connection state, same meanings as `apps/mobile/src/lib/relayClient.ts`. */
@@ -37,7 +42,7 @@ enum class RelayState {
     ONLINE,
     /** Relay reachable but the computer isn't connected to it. */
     OFFLINE,
-    /** The computer refused this device. Terminal until re-paired. */
+    /** The computer refused this device, in a sealed frame. Terminal until re-paired. */
     DENIED,
 }
 
@@ -52,9 +57,19 @@ enum class DenyReason(val wire: String) {
     }
 }
 
-data class WelcomedDevice(val id: String, val name: String, val platform: String)
+/** [protocol] is the computer's phone protocol version from the welcome (1 when it sends none, IO-32). */
+data class WelcomedDevice(val id: String, val name: String, val platform: String, val protocol: Int = 1)
 
-data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null)
+/** [route] is the relay address in use or being dialed (one of the computer's routes); set on every status but idle. */
+data class RelayStatus(val state: RelayState, val detail: String? = null, val denied: DenyReason? = null, val route: String? = null) {
+    companion object {
+        /**
+         * [detail] while the relay closes on a bad pairing key. A close isn't sealed,
+         * so this is a hint and never a denial: the phone keeps polling, and says to pair again.
+         */
+        const val BAD_KEY = "bad pairing key"
+    }
+}
 
 /**
  * A call failed. [refusal] is set when the computer refused the channel from a phone.
@@ -62,7 +77,38 @@ data class RelayStatus(val state: RelayState, val detail: String? = null, val de
  * the reply never came: the computer may have acted on it (a safety exit that kicks
  * every phone ends exactly that way).
  */
-class RelayException(message: String, val refusal: PhoneRefusal? = null, val afterSend: Boolean = false) : Exception(message)
+@OptIn(ExperimentalCoroutinesApi::class)
+/**
+ * [fromComputer] is set when the computer answered with this error, so the
+ * request was taken and turned down (not lost on the way).
+ */
+class RelayException(
+    message: String,
+    val refusal: PhoneRefusal? = null,
+    val afterSend: Boolean = false,
+    val fromComputer: Boolean = refusal != null,
+) : Exception(message), CopyableThrowable<RelayException> {
+    /**
+     * Never copied for stack-trace recovery: a copy made from the message alone
+     * would lose [fromComputer], [refusal] and [afterSend].
+     */
+    override fun createCopy(): RelayException? = null
+
+    /**
+     * A computer from before exactly-once delivery refuses `clientMessageId`.
+     * The prompt then goes without it (the outbox never resends one without it,
+     * since a resend could run twice).
+     */
+    val refusedClientMessageId: Boolean
+        get() = fromComputer && (refusal?.detail == CLIENT_MESSAGE_ID || message.orEmpty().contains(CLIENT_MESSAGE_ID))
+
+    private companion object {
+        const val CLIENT_MESSAGE_ID = "clientMessageId"
+    }
+}
+
+/** A chat tag in a relay `dismiss` frame: 16 bytes as hex. */
+private val DISMISS_TAG = Regex("^[0-9a-f]{32}$")
 
 /** A minimal WebSocket the client drives; [OkHttpTransport] in production, fakes in tests. */
 interface WsTransport {
@@ -87,61 +133,103 @@ class RelayConfig(
     val room: String,
     /** Pairing secret: relay transport auth (the relay hashes it; never decrypts). */
     val key: String,
-    /** AES key derived from (key, room) with [E2E.deriveKey]. */
+    /** The room key, from (key, room) with [E2E.deriveKey]. It opens the computer's challenge and nothing else. */
     val keyBytes: ByteArray,
+    /** The computer's public key (X9.63 P-256, base64), pinned from the pairing link. */
+    val hostKey: String,
     val deviceId: String,
     val deviceName: String,
     /** One-time enrollment code from the QR; dropped once welcomed. */
     val pairCode: String? = null,
     val platform: String = "android",
     val handshakeTimeoutMs: Long = 15_000,
-    /**
-     * How long an open socket waits for the computer's challenge before taking it
-     * for a computer from before protocol 4 (see [RelayClient]).
-     */
+    /** How long an open socket waits for a challenge the computer signed before this route counts as failed. */
     val challengeWaitMs: Long = 3_000,
     val requestTimeoutMs: Long = 120_000,
     /** Backoff knobs; tests shrink them. */
     val retryBaseMs: Long = 1_000,
     val retryMaxMs: Long = 30_000,
     val offlinePollMs: Long = 15_000,
-)
+    /** Other addresses of the same relay (the pairing link's `alt` routes). */
+    val alts: List<String> = emptyList(),
+    val routeRules: RouteRules = RouteRules(),
+    /** Whether this phone may dial a route at all (see [RouteSupervisor]). */
+    val routeAllowed: (String) -> Boolean = { true },
+    /**
+     * The device key every HELLO is signed with (protocol 5). Without one the
+     * HELLO goes unsigned and the computer asks this phone to pair again.
+     */
+    val helloSigner: HelloSigner? = null,
+) {
+    /** The relay address first, then the alternates. */
+    val routes: List<String> get() = listOf(relayUrl) + alts
+}
 
 /**
  * Relay v2 client: the phone side of the computer's relay agent (`crates/nekko-remote/src/agent.rs`).
  *
  * Connects as `role=client`, then waits for the computer: when the relay
- * announces the connection, the computer seals a `{type:'challenge', challenge}`
- * to it, and the phone answers with the sealed HELLO `{type:'hello', deviceId,
- * name, platform, protocol: 4, challenge, pair?}` (the pairing code only while
- * enrolling). Each challenge is answered once. After the `welcome`, every
- * request is `{type:'req', id, seq, challenge, channel, args}`: `seq` is 1 for
- * the first request after each welcome and goes up by one, and `challenge` is
- * the one the welcomed HELLO answered, so a frame the relay recorded can't be
- * played to the computer again. A challenge while online means the computer
- * reset the handshake (it refused a HELLO or a request): the phone answers it,
- * starts `seq` again at 1, and keeps its calls in flight.
+ * announces the connection, the computer sends `{type:'challenge', challenge,
+ * eph, sig}` under the room key, `sig` being its host key's signature
+ * ([HostKey]). The phone checks that against [RelayConfig.hostKey] and drops a
+ * challenge that fails, silently: anyone who ever held the room secret could
+ * send one, so it is never a denial. It then makes a one-use key ([Ephemeral])
+ * and answers `{eph, enc}`: its half of the exchange beside the HELLO
+ * `{type:'hello', deviceId, name, platform, protocol, challenge, helloKey, sig,
+ * pair?}` (the pairing code only while enrolling), sealed under the key the two
+ * ends derive. Each challenge is answered once.
  *
- * A computer from before protocol 4 never challenges. If none arrives within
- * [RelayConfig.challengeWaitMs] of the socket opening (or of `agent-online`),
- * and this client has never been challenged, it sends the legacy HELLO
- * (`protocol: 3`, no challenge) and its requests carry `seq` only. Once it has
- * seen a challenge it never falls back: a socket without one is dropped and
- * dialed again, so a relay can't downgrade it.
+ * Every frame after that, both ways, is sealed under that key. Under the room
+ * key only a challenge counts: a `welcome`, `denied`, `res` or `event` there is
+ * ignored, which is what keeps a revoked device that kept the secret out.
  *
- * Replies come back as `{type:'res'}` and `{type:'event', channel, payload}`,
- * all E2E-sealed. Reconnects with backoff until closed. A port of the Expo
- * client with the same state machine.
+ * After the `welcome`, every request is `{type:'req', id, seq, challenge,
+ * channel, args}`: `seq` is 1 for the first request after each welcome and goes
+ * up by one, and `challenge` is the one the welcomed HELLO answered, so a frame
+ * the relay recorded can't be played to the computer again. A challenge while
+ * online means the computer reset the handshake (it refused a HELLO or a
+ * request): the phone answers it, starts `seq` again at 1, and keeps its calls
+ * in flight.
+ *
+ * A socket with no genuine challenge within [RelayConfig.challengeWaitMs] of
+ * opening (or of `agent-online`) is dropped as a failed route, so nothing, the
+ * pairing code included, ever goes to a computer that did not prove itself. A
+ * HELLO with no `welcome` within [RelayConfig.handshakeTimeoutMs] goes the same
+ * way, so a replayed challenge can't park the phone.
+ *
+ * Only a sealed `denied` ends the link. Anyone holding the room credential can
+ * take the agent role and kick, so a close is never terminal: a 4001 is a failed
+ * route, and the redial gets the sealed answer if the removal was real. A bad
+ * pairing key is polled like an offline computer, with [RelayStatus.BAD_KEY] as
+ * its detail. On a plain LAN address, before a welcome, nothing unsealed is taken
+ * at its word ([believed]): `agent-offline` and every close just fail the route,
+ * and `agent-online` is ignored.
+ *
+ * Replies come back as `{type:'res'}` and `{type:'event', channel, payload}`.
+ * Reconnects with backoff until closed. A port of the Expo client with the same
+ * state machine.
+ *
+ * Routes (AN-28): a computer can be reached at several addresses of its relay
+ * ([RelayConfig.routes]). A [RouteSupervisor] picks the one to dial, moves to
+ * the next at once when one doesn't open (within [RouteRules.openTimeoutMs]
+ * while there is a fallback) or drops, and while on a worse route probes the
+ * better one ([prober]), moving back only once it answered enough times and
+ * no request is in flight. "Agent offline" is the relay answering on that
+ * route, so it is not a route failure.
  */
 class RelayClient(
     private val config: RelayConfig,
     private val transport: WsTransport,
     private val scope: CoroutineScope,
+    private val prober: RouteProber? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     private val lock = Any()
     private var conn: WsConnection? = null
     private var welcomed = false
-    /** The challenge the last HELLO on this socket answered; null for a legacy HELLO. */
+    /** This connection's key, from the exchange the last genuine challenge started. Null while there is none. */
+    private var session: ByteArray? = null
+    /** The challenge the last HELLO on this socket answered. */
     private var answered: String? = null
     /** The socket the last HELLO went out on. */
     private var helloOn: WsConnection? = null
@@ -149,8 +237,6 @@ class RelayClient(
     private var reqChallenge: String? = null
     /** The last request's seq since the welcome. */
     private var seq = 0L
-    /** This client has been challenged at least once, so it never sends a legacy HELLO. */
-    private var challenged = false
     /** Bumped to cancel the pending challenge wait. */
     private var waitGen = 0L
     private var waitJob: Job? = null
@@ -162,9 +248,22 @@ class RelayClient(
     @Volatile private var pairCode: String? = config.pairCode
     private val nextId = AtomicLong(1)
     private val pending = ConcurrentHashMap<Long, CompletableDeferred<JsonElement>>()
+    private val routes = RouteSupervisor(config.routes, config.routeRules, now = now(), allowed = config.routeAllowed)
+    /** One probe loop at a time; [probeGen] is bumped to stop the running one. */
+    private var probing = false
+    private var probeGen = 0L
+    private var probeJob: Job? = null
 
     private val _status = MutableStateFlow(RelayStatus(RelayState.IDLE))
     val status: StateFlow<RelayStatus> = _status.asStateFlow()
+
+    private val _dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
+    /**
+     * The relay's `dismiss` frames: an approval or a question was answered
+     * somewhere (or its run ended), so that chat's needs-you notification can
+     * go. Each is the chat's [E2E.activityTag]; nothing else is in the frame.
+     */
+    val dismissals: SharedFlow<String> = _dismissals.asSharedFlow()
 
     private val _events = MutableSharedFlow<Pair<String, JsonElement>>(extraBufferCapacity = 512)
     /** Every sealed `event` frame as (channel, payload). */
@@ -174,6 +273,30 @@ class RelayClient(
     val welcome: SharedFlow<WelcomedDevice> = _welcome.asSharedFlow()
 
     val state: RelayState get() = _status.value.state
+
+    /** The address in use (or being dialed). */
+    val route: String get() = synchronized(lock) { routes.url }
+
+    /** Every address of the computer's relay, best first, and which of them this phone may dial. */
+    val allRoutes: List<Pair<String, Boolean>> get() = synchronized(lock) { routes.routes.map { it to config.routeAllowed(it) } }
+
+    /**
+     * The phone moved to another network: start again from the best route for
+     * it (the LAN only on Wi-Fi), and dial a fresh socket now ([reconnect]).
+     */
+    fun networkChanged(path: NetworkPath) {
+        synchronized(lock) { routes.pathChanged(path, now()) }
+        reconnect()
+    }
+
+    /** Where the phone is, without having moved (the first network report, or before connecting): dial again only if that changes the route. */
+    fun setNetworkPath(path: NetworkPath) {
+        val moved = synchronized(lock) {
+            if (path == routes.path) return
+            routes.pathChanged(path, now()) && !stopped
+        }
+        if (moved) reconnect()
+    }
 
     fun connect() {
         synchronized(lock) {
@@ -190,8 +313,9 @@ class RelayClient(
             stopped = true
             retryJob?.cancel(); retryJob = null
             c = conn; conn = null
-            welcomed = false
+            endHandshakeLocked()
             cancelWaitLocked()
+            stopProbesLocked()
         }
         runCatching { c?.close(1000, "closed by app") }
         failPending("disconnected")
@@ -222,7 +346,7 @@ class RelayClient(
             retryJob?.cancel(); retryJob = null
             retry = 0
             c = conn; conn = null
-            welcomed = false
+            endHandshakeLocked()
             cancelWaitLocked()
         }
         // conn is already null, so this socket's late onClosed is ignored.
@@ -240,7 +364,7 @@ class RelayClient(
      * when the whole turn is over, so it gets hours rather than two minutes.
      */
     suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement): JsonElement =
-        send(timeoutMs, channel, JsonArray(args.toList()), stepUp = null)
+        send(timeoutMs, channel, JsonArray(args.toList()), proof = null, stepUp = null)
 
     /**
      * A guarded call again with a step-up (SK-7): `stepUp` rides beside the
@@ -248,9 +372,22 @@ class RelayClient(
      * read nor strip it. The computer checks it after the Change proof.
      */
     suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
-        send(config.requestTimeoutMs, channel, JsonArray(args.toList()), stepUp)
+        send(config.requestTimeoutMs, channel, JsonArray(args.toList()), proof = null, stepUp)
 
-    private suspend fun send(timeoutMs: Long, channel: String, args: JsonArray, stepUp: StepUpProof?): JsonElement {
+    /**
+     * A Change action (AN-32): the signed `proof` ([ChangeProof]) beside the
+     * args, and a step-up beside it when the computer asked for one. Both ride
+     * inside the sealed frame. [args] must be exactly what was signed.
+     */
+    suspend fun callSigned(
+        channel: String,
+        args: JsonArray,
+        proof: JsonObject,
+        stepUp: StepUpProof? = null,
+        timeoutMs: Long = config.requestTimeoutMs,
+    ): JsonElement = send(timeoutMs, channel, args, proof, stepUp)
+
+    private suspend fun send(timeoutMs: Long, channel: String, args: JsonArray, proof: JsonObject?, stepUp: StepUpProof?): JsonElement {
         val id = nextId.getAndIncrement()
         val deferred = CompletableDeferred<JsonElement>()
         // The computer may re-challenge between the welcome and the send: wait for it again.
@@ -259,7 +396,7 @@ class RelayClient(
         while (true) {
             awaitReady()
             pending[id] = deferred
-            sent = sendRequest(id, channel, args, stepUp)
+            sent = sendRequest(id, channel, args, proof, stepUp)
             if (sent == SendResult.SENT) break
             pending.remove(id)
             if (sent == SendResult.FAILED || ++tries >= SEND_ATTEMPTS) break
@@ -303,51 +440,61 @@ class RelayClient(
     private enum class SendResult { SENT, NOT_READY, FAILED }
 
     /** Seal and send one request with the next seq; NOT_READY when the handshake is not done. */
-    private fun sendRequest(id: Long, channel: String, args: JsonArray, stepUp: StepUpProof?): SendResult = synchronized(sendLock) {
+    private fun sendRequest(id: Long, channel: String, args: JsonArray, proof: JsonObject?, stepUp: StepUpProof?): SendResult = synchronized(sendLock) {
         val c: WsConnection
         val n: Long
-        val challenge: String?
+        val challenge: String
+        val key: ByteArray
         synchronized(lock) {
             c = conn ?: return SendResult.NOT_READY
             if (!welcomed) return SendResult.NOT_READY
+            key = session ?: return SendResult.NOT_READY
+            challenge = reqChallenge ?: return SendResult.NOT_READY
             n = ++seq
-            challenge = reqChallenge
         }
         val frame = buildJsonObject {
             put("type", "req"); put("id", id); put("seq", n)
-            challenge?.let { put("challenge", it) }
+            put("challenge", challenge)
             put("channel", channel); put("args", args)
+            proof?.let { put("proof", it) }
             stepUp?.let { put("stepUp", it.toJson()) }
         }
-        val env = buildJsonObject { put("enc", E2E.seal(config.keyBytes, frame)) }
+        val env = buildJsonObject { put("enc", E2E.seal(key, frame)) }
         if (c.send(env.toString())) SendResult.SENT else SendResult.FAILED
     }
 
-    private fun dial() {
-        val url = "${config.relayUrl.trimEnd('/')}/relay?role=client" +
-            "&room=${enc(config.room)}&key=${enc(config.key)}"
+    private fun dial(detail: String? = null) {
+        val route: String
+        val early: Boolean
         synchronized(lock) {
             if (stopped) return
-            welcomed = false
+            endHandshakeLocked()
             cancelWaitLocked()
+            stopProbesLocked()
+            route = routes.routeToDial(now())
+            early = routes.fallbackExists
         }
-        setStatus(RelayStatus(RelayState.CONNECTING))
+        // The relay checks a credential derived from the secret, never the secret (decision 0036).
+        val url = "${route.trimEnd('/')}/relay?role=client" +
+            "&room=${enc(config.room)}&key=${enc(E2E.relayAuth(config.key, config.room))}"
+        setStatus(RelayStatus(RelayState.CONNECTING, detail, route = route))
         lateinit var self: WsConnection
+        val didOpen = AtomicBoolean(false)
         // The transport may call back (onOpen on its own thread) before open() has
         // returned. Without this wait the socket wasn't current yet, the challenge
-        // wait (or the HELLO) was skipped, and the call failed after the handshake timeout.
+        // wait was skipped, and the call failed after the handshake timeout.
         // Bounded, so a transport that calls back inside open() on the same thread can't hang.
         val opened = CountDownLatch(1)
         fun ready() = opened.await(OPEN_WAIT_MS, TimeUnit.MILLISECONDS)
         val listener = object : WsListener {
-            override fun onOpen() { if (ready() && isCurrent(self)) awaitChallenge(self, afterOpen = true) }
+            override fun onOpen() { didOpen.set(true); if (ready() && isCurrent(self)) awaitChallenge(self, afterOpen = true) }
             override fun onMessage(text: String) { if (ready() && isCurrent(self)) onRaw(self, text) }
             override fun onClosed(code: Int, reason: String) { if (ready()) onSocketClosed(self, code, reason) }
         }
         val c = try {
             transport.open(url, listener)
         } catch (e: Exception) {
-            scheduleRetry(e.message ?: "could not connect")
+            routeFailed(e.message ?: "could not connect")
             return
         }
         self = c
@@ -359,118 +506,200 @@ class RelayClient(
         } finally {
             opened.countDown()
         }
+        // A LAN address on another Wi-Fi doesn't refuse, it hangs: with a
+        // fallback behind it, give it a few seconds, not the transport's own timeout.
+        if (early) scope.launch {
+            delay(config.routeRules.openTimeoutMs)
+            if (didOpen.get()) return@launch
+            synchronized(lock) {
+                if (conn !== c) return@launch
+                conn = null
+            }
+            // conn is already null, so this socket's late onClosed is ignored.
+            runCatching { c.close(1000, "route timed out") }
+            routeFailed("${Pairing.relayHost(route)} didn't answer")
+        }
+    }
+
+    /**
+     * The route in use didn't open or dropped: with another, move to it (at
+     * once when it isn't cooling down); else back off as before.
+     */
+    private fun routeFailed(detail: String?) {
+        val next = synchronized(lock) {
+            if (stopped) return
+            routes.failed(now())
+        }
+        if (next.changed && next.ready) {
+            synchronized(lock) { retryJob?.cancel(); retryJob = null }
+            dial(detail)
+        } else {
+            scheduleRetry(detail)
+        }
     }
 
     private fun isCurrent(c: WsConnection) = synchronized(lock) { conn === c }
 
     private fun onSocketClosed(c: WsConnection, code: Int, reason: String) {
+        val wasWelcomed: Boolean
         synchronized(lock) {
             if (conn !== c) return
+            wasWelcomed = welcomed
             conn = null
-            welcomed = false
+            endHandshakeLocked()
             cancelWaitLocked()
         }
         failPending("connection lost")
         if (synchronized(lock) { stopped } || state == RelayState.DENIED) return
+        // A close isn't sealed, so it never ends the link: a kick falls through to a failed route.
+        val believed = believed(wasWelcomed)
         when {
-            code == 4001 -> deny(DenyReason.KICKED)
-            code == 1008 && reason.contains("bad pairing key", ignoreCase = true) -> deny(DenyReason.BAD_KEY)
-            code == 1008 && reason.contains("agent offline", ignoreCase = true) -> {
+            believed && code == 1008 && reason.contains(RelayStatus.BAD_KEY, ignoreCase = true) -> {
+                // Maybe the computer rotated its pairing: say so, and keep polling.
+                setStatus(RelayStatus(RelayState.OFFLINE, RelayStatus.BAD_KEY))
+                scheduleRetry(RelayStatus.BAD_KEY, offline = true)
+            }
+            believed && code == 1008 && reason.contains("agent offline", ignoreCase = true) -> {
+                // The relay answered on this route: the computer is away, not the path.
                 setStatus(RelayStatus(RelayState.OFFLINE))
                 scheduleRetry(null, offline = true)
             }
-            else -> scheduleRetry(reason.ifBlank { "closed ($code)" })
+            else -> routeFailed(reason.ifBlank { "closed ($code)" })
         }
     }
 
     /**
-     * Wait for the computer's challenge on [c]. Without one in time: the legacy
-     * HELLO for a computer that has never challenged this client, else drop the
-     * socket and dial again.
+     * Whether something unsealed on this route can be taken at its word: on a
+     * plain LAN address, before the computer has answered, anyone can send it.
      */
+    private fun believed(wasWelcomed: Boolean): Boolean {
+        val url = route
+        return wasWelcomed || url.startsWith("wss://") || RelayRoute.of(url) != RelayRoute.LAN
+    }
+
+    /** Wait for the computer's challenge on [c]. Without a genuine one in time, drop the socket as a failed route. */
     private fun awaitChallenge(c: WsConnection, afterOpen: Boolean) {
-        val gen: Long
         synchronized(lock) {
             if (conn !== c || stopped) return
             // The challenge beat onOpen here and is already answered.
             if (afterOpen && helloOn === c) return
-            cancelWaitLocked()
-            gen = waitGen
-            waitJob = scope.launch {
-                delay(config.challengeWaitMs)
-                onChallengeTimeout(c, gen)
-            }
+            armWaitLocked(c, config.challengeWaitMs, "no challenge from the computer")
         }
     }
 
-    private fun onChallengeTimeout(c: WsConnection, gen: Long) {
-        val legacy: Boolean
+    /** Give [c] [ms] to reach its welcome, else drop it as a failed route. Call with [lock] held. */
+    private fun armWaitLocked(c: WsConnection, ms: Long, detail: String) {
+        cancelWaitLocked()
+        val gen = waitGen
+        waitJob = scope.launch {
+            delay(ms)
+            dropRoute(c, detail, gen)
+        }
+    }
+
+    /** Give up on [c] and count its route as failed; with [gen], only while that wait is still the current one. */
+    private fun dropRoute(c: WsConnection, detail: String, gen: Long? = null) {
         synchronized(lock) {
-            if (conn !== c || waitGen != gen || welcomed || stopped) return
-            waitJob = null
-            legacy = !challenged
-            if (!legacy) {
-                // Seen a challenge before: no fallback. A fresh socket gets a fresh challenge.
-                conn = null
-                welcomed = false
-            }
+            if (conn !== c || stopped || (gen != null && (waitGen != gen || welcomed))) return
+            conn = null
+            endHandshakeLocked()
+            cancelWaitLocked()
         }
-        if (legacy) {
-            hello(c, null)
-            return
-        }
-        runCatching { c.close(1000, "no challenge") }
+        // conn is already null, so this socket's late onClosed is ignored.
+        runCatching { c.close(1000, detail) }
         failPending("connection lost")
-        scheduleRetry("no challenge from the computer")
+        routeFailed(detail)
     }
 
-    /** Stop waiting for a challenge. Call with [lock] held. */
+    /** Stop the wait on this socket. Call with [lock] held. */
     private fun cancelWaitLocked() {
         waitGen++
         waitJob?.cancel(); waitJob = null
     }
 
-    /** The sealed HELLO on [c], answering [challenge]; null sends the legacy (protocol 3) one. */
-    private fun hello(c: WsConnection, challenge: String?) {
+    /** Stop trusting this handshake: nothing more opens under its key. Call with [lock] held. */
+    private fun endHandshakeLocked() {
+        welcomed = false
+        session = null
+    }
+
+    /**
+     * A challenge under the room key, which proves nothing: only the pinned key's
+     * signature does, and one without it is dropped without a word. Answered with
+     * this phone's half of the exchange and a HELLO only the signer can read.
+     */
+    private fun onChallenge(c: WsConnection, frame: JsonObject) {
+        fun text(k: String) = frame.str(k)?.takeIf { it.isNotBlank() }
+        val challenge = text("challenge") ?: return
+        val hostEph = text("eph") ?: return
+        val sig = text("sig") ?: return
+        if (!HostKey.verify(config.hostKey, config.room, challenge, hostEph, sig)) return
+        val ours = Ephemeral()
+        val key = ours.sessionKey(hostEph, E2E.sessionInfo(config.room, challenge, hostEph, ours.public)) ?: return
+        val wasOnline: Boolean
         synchronized(lock) {
             if (conn !== c) return
+            armWaitLocked(c, config.handshakeTimeoutMs, "no welcome from the computer")
+            wasOnline = welcomed
+            // A new handshake: requests wait for its welcome; calls in flight stay pending.
+            welcomed = false
+            session = key
             answered = challenge
             helloOn = c
+            reqChallenge = null
+            seq = 0
         }
-        sendSealed(c, buildJsonObject {
+        if (wasOnline) setStatus(RelayStatus(RelayState.CONNECTING))
+        val hello = buildJsonObject {
             put("type", "hello")
             put("deviceId", config.deviceId)
             put("name", config.deviceName)
             put("platform", config.platform)
-            put("protocol", if (challenge != null) PhoneProtocol.VERSION else PhoneProtocol.LEGACY)
-            challenge?.let { put("challenge", it) }
+            put("protocol", PhoneProtocol.VERSION)
+            put("challenge", challenge)
+            // Signed with the device key, for this one exchange only (decision 0036).
+            config.helloSigner?.let { signer ->
+                val (helloKey, helloSig) = HelloKey.proof(signer, config.deviceId, config.room, challenge, hostEph, ours.public)
+                put("helloKey", helloKey)
+                put("sig", helloSig)
+            }
             pairCode?.let { put("pair", it) }
-        })
-    }
-
-    private fun sendSealed(c: WsConnection, frame: JsonObject): Boolean = synchronized(sendLock) {
-        val env = buildJsonObject { put("enc", E2E.seal(config.keyBytes, frame)) }
-        c.send(env.toString())
+        }
+        val env = buildJsonObject { put("eph", ours.public); put("enc", E2E.seal(key, hello)) }
+        synchronized(sendLock) { c.send(env.toString()) }
     }
 
     private fun onRaw(c: WsConnection, raw: String) {
         val env = runCatching { WireJson.parseToJsonElement(raw) }.getOrNull().obj() ?: return
         val enc = env.str("enc")
         if (enc != null) {
-            // Wrong key or tampered: drop silently, like the agent does.
-            val frame = runCatching { E2E.open(config.keyBytes, enc) }.getOrNull().obj() ?: return
-            onFrame(c, frame)
+            val key = synchronized(lock) { session }
+            val frame = key?.let { k -> runCatching { E2E.open(k, enc) }.getOrNull().obj() }
+            if (frame != null) {
+                onFrame(c, frame)
+                return
+            }
+            // Under the room key only a challenge counts: anyone ever paired could
+            // have sealed this. Wrong key or tampered: dropped, like the agent does.
+            val sealed = runCatching { E2E.open(config.keyBytes, enc) }.getOrNull().obj() ?: return
+            if (sealed.str("type") == "challenge") onChallenge(c, sealed)
             return
         }
         when (env.str("type")) {
             "agent-offline" -> {
-                synchronized(lock) {
-                    welcomed = false
-                    cancelWaitLocked()
+                val away = synchronized(lock) {
+                    believed(welcomed).also {
+                        if (it) {
+                            endHandshakeLocked()
+                            cancelWaitLocked()
+                        }
+                    }
                 }
-                setStatus(RelayStatus(RelayState.OFFLINE))
+                if (away) setStatus(RelayStatus(RelayState.OFFLINE)) else dropRoute(c, "agent offline")
             }
-            "agent-online" -> if (!synchronized(lock) { welcomed }) {
+            "dismiss" -> env.str("tag")?.takeIf { DISMISS_TAG.matches(it) }?.let { _dismissals.tryEmit(it) }
+            // Not on a route where a stranger could resend it to keep restarting the wait.
+            "agent-online" -> if (synchronized(lock) { !welcomed && believed(false) }) {
                 // The computer (re)joined after us: it challenges this socket again.
                 setStatus(RelayStatus(RelayState.CONNECTING))
                 awaitChallenge(c, afterOpen = false)
@@ -480,22 +709,6 @@ class RelayClient(
 
     private fun onFrame(c: WsConnection, frame: JsonObject) {
         when (frame.str("type")) {
-            "challenge" -> {
-                val challenge = frame.str("challenge")?.takeIf { it.isNotBlank() } ?: return
-                val wasOnline: Boolean
-                synchronized(lock) {
-                    if (conn !== c) return
-                    challenged = true
-                    cancelWaitLocked()
-                    wasOnline = welcomed
-                    // A new handshake: requests wait for its welcome; calls in flight stay pending.
-                    welcomed = false
-                    reqChallenge = null
-                    seq = 0
-                }
-                if (wasOnline) setStatus(RelayStatus(RelayState.CONNECTING))
-                hello(c, challenge)
-            }
             "welcome" -> {
                 synchronized(lock) {
                     if (conn !== c) return
@@ -508,7 +721,13 @@ class RelayClient(
                 pairCode = null // enrollment done; never resend the code
                 val d = frame["device"].obj()
                 setStatus(RelayStatus(RelayState.ONLINE))
-                _welcome.tryEmit(WelcomedDevice(d?.str("id") ?: config.deviceId, d?.str("name") ?: config.deviceName, d?.str("platform") ?: config.platform))
+                startProbes()
+                _welcome.tryEmit(
+                    WelcomedDevice(
+                        d?.str("id") ?: config.deviceId, d?.str("name") ?: config.deviceName, d?.str("platform") ?: config.platform,
+                        PhoneProtocol.of(frame),
+                    ),
+                )
             }
             "denied" -> deny(DenyReason.parse(frame.str("reason")))
             "res" -> {
@@ -517,7 +736,7 @@ class RelayClient(
                 val err = frame["error"]
                 if (err != null && err !is JsonNull) {
                     val text = (err as? JsonPrimitive)?.content ?: err.toString()
-                    p.completeExceptionally(RelayException(text, PhoneRefusal.parse(text)))
+                    p.completeExceptionally(RelayException(text, PhoneRefusal.parse(text), fromComputer = true))
                 } else {
                     p.complete(frame["result"] ?: JsonNull)
                 }
@@ -532,10 +751,11 @@ class RelayClient(
     private fun deny(reason: DenyReason) {
         val c: WsConnection?
         synchronized(lock) {
-            welcomed = false
+            endHandshakeLocked()
             stopped = true
             retryJob?.cancel(); retryJob = null
             cancelWaitLocked()
+            stopProbesLocked()
             c = conn; conn = null
         }
         failPending(if (reason == DenyReason.UPDATE_REQUIRED) UPDATE_MESSAGE else "This phone is no longer paired.")
@@ -554,7 +774,8 @@ class RelayClient(
             retryJob = scope.launch {
                 delay(delayMs)
                 synchronized(lock) { retryJob = null }
-                dial()
+                // What an offline poll is about stays said while it dials again.
+                dial(detail.takeIf { offline })
             }
         }
         if (!offline) setStatus(RelayStatus(RelayState.CONNECTING, detail))
@@ -567,10 +788,79 @@ class RelayClient(
     }
 
     private fun setStatus(s: RelayStatus) {
-        _status.value = s
+        // Every status but idle names the route it is about.
+        _status.value = if (s.route == null && s.state != RelayState.IDLE) s.copy(route = route) else s
     }
 
-    private fun enc(s: String) = URLEncoder.encode(s, Charsets.UTF_8)
+    /**
+     * While online on a worse route, probe the better one every
+     * [RouteRules.probeIntervalMs]; move back once the supervisor's hysteresis
+     * allows and no request is in flight (a running turn is never cut to change route).
+     */
+    private fun startProbes() {
+        val p = prober ?: return
+        val job = synchronized(lock) {
+            if (probing || stopped || routes.onBest) return
+            probing = true
+            val gen = ++probeGen
+            scope.launch(start = CoroutineStart.LAZY) { probeLoop(p, gen) }.also { probeJob = it }
+        }
+        job.start()
+    }
+
+    private suspend fun probeLoop(p: RouteProber, gen: Long) {
+        val timeout = config.routeRules.probeIntervalMs.coerceIn(500, 3_000)
+        while (true) {
+            delay(config.routeRules.probeIntervalMs)
+            val target = synchronized(lock) {
+                if (probeGen != gen || stopped || !welcomed || routes.onBest) {
+                    if (probeGen == gen) { probing = false; probeJob = null }
+                    return
+                }
+                // The better route may still be cooling down: wait it out.
+                routes.probeTarget(now())?.let { it to routes.routes[it] }
+            } ?: continue
+            val ok = p.reachable(target.second, timeout)
+            val move = synchronized(lock) {
+                if (probeGen != gen || stopped) return
+                routes.probed(target.first, ok, now())
+                if (!welcomed || pending.isNotEmpty() || !routes.shouldMoveBack(now())) return@synchronized false
+                routes.moveBack(now())
+                probing = false; probeJob = null
+                true
+            }
+            if (move) {
+                moveRoute("Moving to ${Pairing.relayHost(target.second)}")
+                return
+            }
+        }
+    }
+
+    /** Stop the probe loop. Call with [lock] held. */
+    private fun stopProbesLocked() {
+        probeGen++
+        probing = false
+        probeJob?.cancel(); probeJob = null
+    }
+
+    /** The supervisor chose another route: drop this socket and dial it. */
+    private fun moveRoute(detail: String) {
+        val old: WsConnection?
+        synchronized(lock) {
+            retryJob?.cancel(); retryJob = null
+            retry = 0
+            old = conn; conn = null
+            endHandshakeLocked()
+            cancelWaitLocked()
+        }
+        // conn is already null, so this socket's late onClosed is ignored.
+        runCatching { old?.close(1000, "route changed") }
+        failPending("connection lost")
+        dial(detail)
+    }
+
+    // By name: the Charset overload only exists from Android 13, and the app runs from Android 9.
+    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 }
 
 /** How long a socket callback waits for [RelayClient] to finish opening that socket. */

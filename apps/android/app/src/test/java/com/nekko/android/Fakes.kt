@@ -15,7 +15,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.CopyOnWriteArrayList
+
+/** A computer's host key, as a pairing link names it: every pairing needs one (decision 0041). */
+const val TEST_HOST_KEY = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
 
 class FakeStore : SecureStore {
     val map = LinkedHashMap<String, String>()
@@ -25,7 +29,14 @@ class FakeStore : SecureStore {
     }
 }
 
-data class Call(val channel: String, val args: List<JsonElement>, val timeoutMs: Long?, val stepUp: StepUpProof? = null)
+data class Call(
+    val channel: String,
+    val args: List<JsonElement>,
+    val timeoutMs: Long?,
+    val stepUp: StepUpProof? = null,
+    /** The signed Change proof (`callSigned`), null for a plain call. */
+    val proof: JsonObject? = null,
+)
 
 /** Records every call; [handler] answers (or throws, or suspends). */
 open class FakeCaller(
@@ -51,6 +62,7 @@ open class FakeCaller(
 class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement) : FakeCaller(handler), Remote {
     override val status = MutableStateFlow(RelayStatus(RelayState.IDLE))
     override val events = MutableSharedFlow<Pair<String, JsonElement>>(extraBufferCapacity = 64)
+    override val dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
     override val welcome = MutableSharedFlow<WelcomedDevice>(replay = 1, extraBufferCapacity = 1)
     var connected = false
     var closed = false
@@ -59,6 +71,12 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
 
     override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement {
         val c = Call(channel, args.toList(), null, stepUp)
+        calls += c
+        return handler(c)
+    }
+
+    override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?): JsonElement {
+        val c = Call(channel, args.toList(), timeoutMs, stepUp, proof)
         calls += c
         return handler(c)
     }
@@ -81,12 +99,16 @@ class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement
         reconnects++
     }
 
+    val paths = CopyOnWriteArrayList<Pair<String, com.nekko.protocol.NetworkPath>>()
+    override fun networkChanged(path: com.nekko.protocol.NetworkPath) { paths += "changed" to path }
+    override fun setNetworkPath(path: com.nekko.protocol.NetworkPath) { paths += "same" to path }
+
     fun goOnline() {
         status.value = RelayStatus(RelayState.ONLINE)
     }
 
-    fun sayWelcome() {
-        welcome.tryEmit(WelcomedDevice(config.deviceId, config.deviceName, "android"))
+    fun sayWelcome(protocol: Int = com.nekko.protocol.PhoneProtocol.VERSION) {
+        welcome.tryEmit(WelcomedDevice(config.deviceId, config.deviceName, "android", protocol))
         goOnline()
     }
 }

@@ -105,7 +105,7 @@ app.whenReady().then(async () => {
     await run("integration.route('status')"); await sleep(500);
     for (const t of ['dark', 'light']) {
       await theme(t); await sleep(200);
-      await check(`stats on the line after the sleeping label (${t})`, "(()=>{const s=document.querySelector('[role=status]');const label=[...s.querySelectorAll('span')].find(x=>x.textContent.startsWith('Sleeping'));const rate=[...s.querySelectorAll('span')].find(x=>x.textContent.includes('tok/s'));return label&&rate&&rate.getBoundingClientRect().top>label.getBoundingClientRect().bottom-2})()");
+      await check(`stats on the line after the sleeping label (${t})`, "(()=>{const s=document.querySelector('[role=status]');const label=[...s.querySelectorAll('span')].find(x=>x.textContent.startsWith('Sleeping'));const total=[...s.querySelectorAll('span')].find(x=>x.textContent.includes('total tokens'));return label&&total&&total.getBoundingClientRect().top>label.getBoundingClientRect().bottom-2})()");
       await capture(`status-${t}`, { x: 0, y: 0, width: 600, height: 170 });
     }
     // Short motion strip: Add window opening from the composer button.

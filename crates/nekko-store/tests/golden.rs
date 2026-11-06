@@ -302,7 +302,7 @@ fn a_fork_is_the_file_the_ts_host_would_write() {
 }
 
 #[test]
-fn archive_purge_deletes_what_the_ts_host_deletes() {
+fn archive_purge_is_a_compatibility_no_op() {
     let c: Value = serde_json::from_str(&std::fs::read_to_string(golden().join("purge.json")).unwrap()).unwrap();
     let data = std::env::temp_dir().join(format!("nekko-purge-{}", std::process::id()));
     std::fs::create_dir_all(data.join("sessions")).unwrap();
@@ -344,16 +344,14 @@ fn archive_purge_deletes_what_the_ts_host_deletes() {
 }
 
 #[test]
-fn a_failed_purge_callback_keeps_the_chat() {
-    let data = std::env::temp_dir().join(format!("nekko-purge-fail-{}", std::process::id()));
+fn archive_purge_never_calls_cleanup_or_removes_the_chat() {
+    let data = std::env::temp_dir().join(format!("nekko-purge-noop-{}", std::process::id()));
     std::fs::create_dir_all(data.join("sessions")).unwrap();
     let file = data.join("sessions/s_old.json");
     std::fs::write(&file, serde_json::json!({ "id": "s_old", "messages": [], "archivedAt": 1 }).to_string()).unwrap();
     let store = SessionStore::new(&data);
-    assert!(store.purge_archived(|_| Err("log busy".into())).is_err());
+    assert_eq!(store.purge_archived(|_| Err("must not run".into())).unwrap(), 0);
     assert!(file.exists());
-    assert_eq!(store.purge_archived(|_| Ok(())).unwrap(), 1);
-    assert!(!file.exists());
     std::fs::remove_dir_all(&data).ok();
 }
 
@@ -392,4 +390,20 @@ fn every_new_chat_is_the_one_create_session_makes() {
         );
         std::fs::remove_dir_all(&data).ok();
     }
+}
+
+#[test]
+fn a_fork_keeps_what_protects_its_transcript() {
+    let data = std::env::temp_dir().join(format!("nekko-fork-protect-{}", std::process::id()));
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    let chat = serde_json::json!({
+        "id": "s1", "title": "Private", "offline": true, "privacy": { "mode": "redact" },
+        "messages": [], "createdAt": 1, "updatedAt": 1,
+    });
+    std::fs::write(data.join("sessions/s1.json"), chat.to_string()).unwrap();
+    let store = nekko_store::SessionStore::new(&data);
+    let fork = store.fork("s1", &Value::Null).unwrap().unwrap();
+    assert_eq!(fork["offline"], true);
+    assert_eq!(fork["privacy"]["mode"], "redact");
+    let _ = std::fs::remove_dir_all(data);
 }

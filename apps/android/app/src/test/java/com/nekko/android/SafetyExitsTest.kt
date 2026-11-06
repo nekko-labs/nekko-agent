@@ -35,7 +35,7 @@ import org.junit.Test
 class SafetyExitsTest {
     private val room = "a1b2c3d4e5f60718"
     private val key = "00112233445566778899aabbccddeeff"
-    private val link = PairingLink("wss://relay.example.dev", room, key)
+    private val link = PairingLink("wss://relay.example.dev", room, key, hostKey = TEST_HOST_KEY)
     private val derived = ByteArray(32) { it.toByte() }
     private var clock = 1_000L
 
@@ -49,6 +49,7 @@ class SafetyExitsTest {
             deriveKey = { _, _ -> derived },
             newId = { "id-${++n}" },
             now = { clock },
+            changeSigner = com.nekko.protocol.SoftwareChangeSigner.generate(),
         )
     }
 
@@ -97,7 +98,7 @@ class SafetyExitsTest {
 
     @Test fun `a computer that already refuses the phone counts as signed out`() = runTest {
         val store = FakeStore()
-        SignOutOutbox(store).add(PendingSignOut("wss://r", room, key, "00", "dev", clock))
+        SignOutOutbox(store).add(PendingSignOut("wss://r", room, key, "00", TEST_HOST_KEY, "dev", clock))
         val later = FakeRemotes()
         repo(store, later).load()
         runCurrent()
@@ -109,7 +110,7 @@ class SafetyExitsTest {
 
     @Test fun `an unreachable computer keeps the sign-out for later, then gives up after a month`() = runTest {
         val store = FakeStore()
-        SignOutOutbox(store).add(PendingSignOut("wss://r", room, key, "00", "dev", clock))
+        SignOutOutbox(store).add(PendingSignOut("wss://r", room, key, "00", TEST_HOST_KEY, "dev", clock))
         repo(store, FakeRemotes()).load()
         runCurrent()
         testScheduler.advanceTimeBy(25_000)
@@ -206,6 +207,7 @@ class SafetyExitsTest {
             when (c.channel) {
                 Channels.SECURITY_CHALLENGE -> Json.parseToJsonElement("""{"challenge":"BwcHBwcHBwcHBwcHBwcHBwcH","expiresAt":2000,"required":true,"methods":["security-key","totp"]}""")
                 Channels.SETTINGS_UPDATE -> buildJsonObject { put("defaultChatMode", "yolo") }
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
                 else -> FakeRemotes.defaultAnswer(c)
             }
         }
@@ -219,6 +221,7 @@ class SafetyExitsTest {
         val call = remotes.last.calls.last()
         assertEquals(Channels.SETTINGS_UPDATE, call.channel)
         assertEquals(StepUpProof.Totp("123456"), call.stepUp)
+        assertTrue("signed: the computer checks the proof before the step-up", call.proof != null)
         assertEquals(listOf(patch), call.args)
         assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
         repo.updatePcSettings(patch)
@@ -239,10 +242,30 @@ class SafetyExitsTest {
     }
 
     @Test fun `the outbox never prints a secret and reads back what it wrote`() {
-        val p = PendingSignOut("wss://r", room, key, "aa", "dev", 5)
+        val p = PendingSignOut("wss://r", room, key, "aa", TEST_HOST_KEY, "dev", 5)
         assertFalse(p.toString().contains(key))
         assertEquals(listOf(p), SignOutOutbox.decode(SignOutOutbox.encode(listOf(p))))
         assertTrue(SignOutOutbox.decode("not json").isEmpty())
         assertTrue(SignOutOutbox.decode("""[{"room":"x"}]""").isEmpty())
+    }
+
+    @Test fun `a sign-out queued before host keys is never dialed`() = runTest {
+        val store = FakeStore()
+        store.map[SignOutOutbox.KEY] = """[{"relayUrl":"wss://r","room":"$room","key":"$key","keyHex":"00","deviceId":"dev","at":$clock}]"""
+        val later = FakeRemotes()
+        repo(store, later).load()
+        runCurrent()
+        assertTrue(later.created.isEmpty())
+    }
+
+    @Test fun `a pairing with no host key has nothing to queue`() = runTest {
+        val store = FakeStore()
+        val repo = repo(store, FakeRemotes())
+        val id = repo.pair(link)
+        runCurrent()
+        val saved = Json.parseToJsonElement(store.map.getValue(ComputersRepository.secretKey(id))) as kotlinx.serialization.json.JsonObject
+        store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(saved - "hostKey").toString()
+        assertEquals(ComputersRepository.SignOutResult.SENT, repo.signOutThisPhone())
+        assertNull(store.map[SignOutOutbox.KEY])
     }
 }

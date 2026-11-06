@@ -22763,9 +22763,6 @@
         "model": "claude-opus-5",
         "max_tokens": 64000,
         "stream": true,
-        "output_config": {
-          "effort": "high"
-        },
         "messages": [
           {
             "role": "user",
@@ -22786,9 +22783,6 @@
         "model": "claude-opus-5-5",
         "max_tokens": 64000,
         "stream": true,
-        "output_config": {
-          "effort": "medium"
-        },
         "messages": [
           {
             "role": "user",
@@ -22966,9 +22960,6 @@
         "model": "claude-fable-5-1",
         "max_tokens": 64000,
         "stream": true,
-        "output_config": {
-          "effort": "high"
-        },
         "messages": [
           {
             "role": "user",
@@ -22990,7 +22981,7 @@
         "max_tokens": 32000,
         "stream": true,
         "output_config": {
-          "effort": "high"
+          "effort": "xhigh"
         },
         "messages": [
           {
@@ -23012,9 +23003,6 @@
         "model": "anthropic/Claude-Opus-5",
         "max_tokens": 64000,
         "stream": true,
-        "output_config": {
-          "effort": "high"
-        },
         "messages": [
           {
             "role": "user",
@@ -25827,7 +25815,10 @@
         "store": false,
         "include": [
           "reasoning.encrypted_content"
-        ]
+        ],
+        "reasoning": {
+          "summary": "auto"
+        }
       }
     },
     "opus-5-normal": {
@@ -25861,7 +25852,6 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
           "summary": "auto"
         }
       }
@@ -25897,7 +25887,6 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "medium",
           "summary": "auto"
         }
       }
@@ -25933,7 +25922,6 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "medium",
           "summary": "auto"
         }
       }
@@ -26041,7 +26029,7 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
+          "effort": "xhigh",
           "summary": "auto"
         }
       }
@@ -26077,7 +26065,7 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
+          "effort": "max",
           "summary": "auto"
         }
       }
@@ -26149,7 +26137,7 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
+          "effort": "max",
           "summary": "auto"
         }
       }
@@ -26185,7 +26173,6 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
           "summary": "auto"
         }
       }
@@ -26221,7 +26208,7 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
+          "effort": "xhigh",
           "summary": "auto"
         }
       }
@@ -26257,7 +26244,6 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
           "summary": "auto"
         }
       }
@@ -26553,7 +26539,7 @@
           "reasoning.encrypted_content"
         ],
         "reasoning": {
-          "effort": "high",
+          "effort": "xhigh",
           "summary": "auto"
         }
       }

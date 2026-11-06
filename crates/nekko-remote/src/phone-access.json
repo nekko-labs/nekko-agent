@@ -1,15 +1,21 @@
 {
  "channels": [
+  "activity:state",
   "app:info",
   "app:quit",
+  "artifact:read",
   "changes:list",
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
+  "chat:interruptQueued",
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "chat:steer",
+  "context:preview",
   "device:signOut",
+  "engine:status",
   "files:list",
   "files:read",
   "files:search",
@@ -26,10 +32,16 @@
   "git:stage",
   "git:switch",
   "git:unstage",
+  "gpu:stats",
   "limits:get",
   "logs:list",
   "logs:read",
   "machine:summary",
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load",
+  "model:unload",
   "models:list",
   "monitor:summary",
   "pr:action",
@@ -37,6 +49,7 @@
   "pr:create",
   "pr:diff",
   "pr:sessionList",
+  "preview:fetch",
   "providers:list",
   "providers:saveSealed",
   "providers:sealKey",
@@ -47,7 +60,9 @@
   "session:delete",
   "session:fork",
   "session:get",
+  "session:photo",
   "session:setOptions",
+  "session:setSupportingWorkspaces",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -55,6 +70,7 @@
   "skills:runnable",
   "ssh:hosts",
   "ssh:open",
+  "system:stats",
   "task:runNow",
   "tasks:list",
   "terminal:close",
@@ -70,8 +86,10 @@
   "voice:transcribe",
   "workflow:run",
   "workflows:list",
+  "workspace:addByPath",
   "workspace:gitStatus",
-  "workspace:list"
+  "workspace:list",
+  "workspace:remove"
  ],
  "alwaysDenied": {
   "channels": [
@@ -85,6 +103,7 @@
    "file:read",
    "file:write",
    "image:fetch",
+   "memory:closeApp",
    "pr:continueStack",
    "pr:linkStack",
    "providers:importCliAuth",
@@ -103,9 +122,7 @@
    "workflow:delete",
    "workflow:duplicate",
    "workflow:event",
-   "workflow:update",
-   "workspace:addByPath",
-   "workspace:remove"
+   "workflow:update"
   ],
   "prefixes": [
    "cloud:",
@@ -144,6 +161,7 @@
   "providers:list",
   "providers:sealKey",
   "session:get",
+  "session:photo",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -153,6 +171,11 @@
   "voice:status",
   "workflows:list",
   "workspace:list",
+  "context:preview",
+  "engine:status",
+  "gpu:stats",
+  "system:stats",
+  "activity:state",
   "git:branches",
   "git:compare",
   "git:diff",
@@ -169,9 +192,14 @@
   "ssh:hosts",
   "terminal:tail",
   "terminals:list",
+  "artifact:read",
+  "preview:fetch",
   "security:challenge"
  ],
  "changeChannels": [
+  "session:setSupportingWorkspaces",
+  "workspace:addByPath",
+  "workspace:remove",
   "providers:saveSealed",
   "providers:setEnabled",
   "git:commit",
@@ -196,8 +224,15 @@
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
+  "chat:interruptQueued",
   "chat:queue",
   "chat:send",
+  "chat:steer",
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load",
+  "model:unload",
   "session:create",
   "session:delete",
   "session:fork",
@@ -258,6 +293,8 @@
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
+  "machineIcon",
   "skipDeleteConfirmation",
   "voice.enabled",
   "voice.language"
@@ -268,9 +305,13 @@
   "automationsPaused",
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
   "defaultModelId",
   "defaultProviderId",
+  "machineIcon",
   "favoriteModels",
+  "orchestration.strategy",
+  "effort",
   "phoneChanges",
   "prompts",
   "skipDeleteConfirmation",
@@ -352,25 +393,140 @@
  ],
  "sessionOptionKeys": [
   "archivedAt",
+  "autoModel",
+  "autoProviderSwitch",
+  "autoQuality",
+  "chatType",
+  "cloudOnly",
+  "disabledConnectors",
+  "disabledMcpServers",
+  "disabledTools",
   "effort",
+  "executionMode",
+  "gitIsolation",
+  "guidance",
+  "imageParams",
+  "incognito",
+  "memory",
   "mode",
   "modelId",
+  "offline",
+  "order",
   "pinned",
+  "privacy",
   "providerId",
   "tags",
   "thinking",
-  "title"
+  "title",
+  "toolApproach",
+  "workMode"
+ ],
+ "guardedOptionKeys": [
+  "cloudOnly",
+  "disabledConnectors",
+  "disabledMcpServers",
+  "disabledTools",
+  "executionMode",
+  "gitIsolation",
+  "guidance",
+  "incognito",
+  "memory",
+  "offline",
+  "privacy"
+ ],
+ "optionValues": {
+  "autoQuality": [
+   "cheap",
+   "normal",
+   "quality"
+  ],
+  "chatType": [
+   "image",
+   "multimodal"
+  ],
+  "executionMode": [
+   "sandbox",
+   "unified",
+   "worktree"
+  ],
+  "guidance": [
+   "off",
+   "root",
+   "rules"
+  ],
+  "memory": [
+   "all",
+   "off",
+   "project"
+  ],
+  "toolApproach": [
+   "code",
+   "list"
+  ],
+  "workMode": [
+   "best-output",
+   "better-review",
+   "default",
+   "design"
+  ]
+ },
+ "optionSwitches": [
+  "autoModel",
+  "autoProviderSwitch",
+  "cloudOnly",
+  "gitIsolation",
+  "incognito",
+  "offline"
+ ],
+ "engineKeys": [
+  "autoStart",
+  "autoload",
+  "idleTtlSeconds",
+  "jitLoad",
+  "maxLoaded"
+ ],
+ "modelServerView": [
+  "autoStart",
+  "autoload",
+  "idleTtlSeconds",
+  "jitLoad",
+  "maxLoaded",
+  "clientModelSettings",
+  "shareWithComputers"
+ ],
+ "activityView": [
+  "chatActive",
+  "headless",
+  "strain",
+  "userActive"
+ ],
+ "modelSettingChannels": [
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load"
+ ],
+ "presetPathKeys": [
+  "clip_g",
+  "clip_l",
+  "llm",
+  "t5xxl",
+  "taesd",
+  "vae"
  ],
  "chatSendKeys": [
   "clientMessageId",
   "images",
+  "maxHistoryTurns",
   "modelId",
+  "noTools",
   "providerId",
   "regenerate",
   "resume",
   "sessionId",
   "skill",
-  "text"
+  "text",
+  "videos"
  ],
  "chatModes": [
   "ask",
@@ -390,7 +546,9 @@
   "textChars": 4000,
   "images": 40,
   "thumbSide": 384,
-  "thumbChars": 98304
+  "thumbChars": 98304,
+  "photoSide": 2048,
+  "photoChars": 6291456
  },
  "changesView": {
   "files": 50,
@@ -487,6 +645,144 @@
   "expect",
   "text"
  ],
+ "brainKeys": [
+  "modelId",
+  "providerId"
+ ],
+ "computerAccess": {
+  "icons": [
+   "laptop",
+   "desktop",
+   "tower",
+   "mini",
+   "server",
+   "rack",
+   "cloud",
+   "gpu",
+   "chip",
+   "home",
+   "office",
+   "lab",
+   "bolt",
+   "moon",
+   "sun",
+   "star",
+   "flame",
+   "leaf",
+   "globe",
+   "cube",
+   "rocket",
+   "shield",
+   "terminal",
+   "cat"
+  ],
+  "refused": [
+   "providers:saveSealed",
+   "providers:setEnabled",
+   "ssh:open",
+   "terminal:close",
+   "terminal:create",
+   "terminal:open",
+   "terminal:signal",
+   "workspace:addByPath"
+  ],
+  "read": [
+   "agent:replay",
+   "chat:running",
+   "model:cancel",
+   "model:next",
+   "session:images",
+   "session:page"
+  ],
+  "agent": [
+   "attachment:import",
+   "changes:accept",
+   "changes:acceptAll",
+   "chat:cancelCompaction",
+   "chat:compact",
+   "chat:dequeue",
+   "model:open",
+   "session:setAttachments",
+   "session:truncate"
+  ],
+  "sendKeys": [
+   "clientMessageId",
+   "images",
+   "maxHistoryTurns",
+   "modelId",
+   "noTools",
+   "providerId",
+   "regenerate",
+   "resume",
+   "sessionId",
+   "skill",
+   "text",
+   "videos"
+  ]
+ },
+ "expertMonitor": {
+  "systemView": [
+   "cpuCores",
+   "cpuPct",
+   "memTotalMB",
+   "memUsedMB",
+   "temps"
+  ],
+  "tempsView": [
+   "cpuC",
+   "gpuC",
+   "memoryC"
+  ],
+  "gpuView": [
+   "freeMB",
+   "source",
+   "totalMB",
+   "unified",
+   "usedMB"
+  ],
+  "gpuDeviceView": [
+   "memoryFreeMB",
+   "memoryTotalMB",
+   "memoryUsedMB",
+   "temperatureC",
+   "utilizationPct"
+  ],
+  "engineView": [
+   "running"
+  ],
+  "residentView": [
+   "contextLength",
+   "expiresAt",
+   "gpuLayers",
+   "id",
+   "lastUsedAt",
+   "loadedOn",
+   "sizeBytes",
+   "startedAt",
+   "totalLayers",
+   "vramBytes"
+  ],
+  "loadingView": [
+   "id",
+   "phase",
+   "progress",
+   "startedAt"
+  ],
+  "engineMemoryView": [
+   "budgetBytes",
+   "kind"
+  ],
+  "contextSources": [
+   "attached-file",
+   "connector",
+   "conversation",
+   "guideline",
+   "index-snippet",
+   "memory",
+   "skill",
+   "system"
+  ]
+ },
  "files": {
   "view": {
    "entries": 500,
@@ -540,6 +836,96 @@
    "size",
    "title",
    "updatedAt"
+  ]
+ },
+ "artifacts": {
+  "view": {
+   "textBytes": 1048576,
+   "binaryBytes": 4194304,
+   "previewBytes": 4194304,
+   "pathChars": 4096,
+   "urlChars": 2048,
+   "idChars": 200,
+   "redirects": 5,
+   "timeoutMs": 15000
+  },
+  "artifactView": [
+   "kind",
+   "mime",
+   "mtime",
+   "name",
+   "path",
+   "size",
+   "truncated"
+  ],
+  "previewView": [
+   "contentType",
+   "status",
+   "truncated",
+   "url"
+  ],
+  "previewHeaders": [
+   "cache-control",
+   "content-length",
+   "content-type",
+   "etag",
+   "last-modified"
+  ],
+  "previewMethods": [
+   "GET",
+   "HEAD"
+  ],
+  "linkExt": [
+   "csv",
+   "doc",
+   "docx",
+   "gif",
+   "htm",
+   "html",
+   "jpeg",
+   "jpg",
+   "json",
+   "markdown",
+   "md",
+   "pdf",
+   "png",
+   "ppt",
+   "pptx",
+   "svg",
+   "txt",
+   "webp",
+   "xls",
+   "xlsx"
+  ],
+  "assetExt": [
+   "avif",
+   "css",
+   "csv",
+   "gif",
+   "htm",
+   "html",
+   "ico",
+   "jpeg",
+   "jpg",
+   "js",
+   "json",
+   "map",
+   "md",
+   "mjs",
+   "otf",
+   "png",
+   "svg",
+   "ttf",
+   "txt",
+   "webp",
+   "woff",
+   "woff2"
+  ],
+  "loopbackHosts": [
+   "localhost",
+   "127.0.0.1",
+   "0.0.0.0",
+   "[::1]"
   ]
  },
  "git": {
@@ -655,6 +1041,7 @@
    ],
    "pairing": [
     "remote:pair",
+    "remote:pairComputer",
     "remote:rotate"
    ],
    "phoneAccess": [

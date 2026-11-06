@@ -58,7 +58,7 @@ fn canonical(p: &Path) -> Option<PathBuf> {
 /// Where a path really is: its deepest existing ancestor canonicalized (links
 /// followed), with the part that does not exist yet appended as given. A path
 /// with no existing ancestor at all is returned as is.
-pub(crate) fn real_location(p: &str) -> String {
+pub fn real_location(p: &str) -> String {
     let mut existing = Path::new(p);
     let mut rest: Vec<&std::ffi::OsStr> = Vec::new();
     loop {
@@ -84,10 +84,13 @@ pub fn assert_in_jail(target: &str, ctx: &ToolContext) -> Result<(), String> {
     if ctx.sandbox_mode != SandboxMode::WorkspaceJail {
         return Ok(());
     }
-    let roots: Vec<String> = ctx.workspaces.iter().map(|w| native::resolve(&[&w.path])).collect();
+    let mut roots: Vec<String> = ctx.workspaces.iter().map(|w| native::resolve(&[&w.path])).collect();
     // Nothing to jail against yet.
     if roots.is_empty() {
         return Ok(());
+    }
+    if let Some(root) = &ctx.app_data_root {
+        roots.push(native::resolve(&[root]));
     }
     let outside = || {
         Err(format!(

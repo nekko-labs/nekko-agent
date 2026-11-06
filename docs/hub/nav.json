@@ -22,6 +22,18 @@
       "title": "Using Nekko Agent",
       "pages": [
         {
+          "slug": "chat-progress",
+          "title": "Verification and PR progress",
+          "source": "docs/chat-progress.md",
+          "description": "Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat."
+        },
+        {
+          "slug": "simple-and-expert",
+          "title": "Simple and Detailed",
+          "source": "docs/simple-and-expert.md",
+          "description": "Switch between the everyday app and every control, and choose what Simple shows."
+        },
+        {
           "slug": "fonts-and-text",
           "title": "Fonts and text",
           "source": "docs/fonts-and-text.md",
@@ -44,6 +56,12 @@
           "title": "Usage and crash reports",
           "source": "docs/usage-reports.md",
           "description": "Opt in to anonymous usage and crash reports, what they contain, and how to see each send."
+        },
+        {
+          "slug": "voice",
+          "title": "Voice",
+          "source": "docs/voice.md",
+          "description": "Tap the mic once and talk: dictation that stays on, \"Nekko\" commands, and speech that never leaves your computer."
         },
         {
           "slug": "privacy-shield",
@@ -125,15 +143,33 @@
         },
         {
           "slug": "workflows",
-          "title": "Workflow runs",
+          "title": "Scheduled task runs",
           "source": "docs/workflows.md",
-          "description": "Pick a workflow's model, keep it on local models, and control what its unattended runs may do."
+          "description": "Pick a scheduled task's model, keep it on local models, and control what its unattended runs may do."
         },
         {
           "slug": "local-ci-runner",
           "title": "Local CI runner",
           "source": "docs/git-runner.md",
           "description": "Run a GitHub or GitLab repo's builds and tests on your own machine."
+        },
+        {
+          "slug": "ci-runners",
+          "title": "CI runners on your Mac",
+          "source": "docs/ci-runners.md",
+          "description": "Run your GitHub Actions jobs on this Mac, each in a throwaway VM, without getting in your way."
+        },
+        {
+          "slug": "ci-runners-image",
+          "title": "Bring your own CI runner image",
+          "source": "docs/ci-runners-image.md",
+          "description": "What Nekko's image build does, and how to build the macOS image yourself on macOS 26."
+        },
+        {
+          "slug": "ci-runner-performance",
+          "title": "CI runner performance",
+          "source": "docs/ci-runner-performance.md",
+          "description": "How fast a job runs on your Mac compared with GitHub's hosted Macs, measured on our own iOS CI."
         },
         {
           "slug": "decision-models",
@@ -145,7 +181,7 @@
           "slug": "benchmarks",
           "title": "Local inference benchmarks",
           "source": "docs/benchmarks.md",
-          "description": "How fast the engine runs a model compared with Ollama and LM Studio."
+          "description": "How fast Nekko Agent runs a model compared with llama.cpp, Ollama, LM Studio and MLX, and the runner to check it yourself."
         },
         {
           "slug": "floop",
@@ -169,6 +205,12 @@
           "title": "Contributing",
           "source": "CONTRIBUTING.md",
           "description": "Set up a development checkout, the project layout, and what a pull request needs."
+        },
+        {
+          "slug": "credits",
+          "title": "Credits",
+          "source": "ASSETS.md",
+          "description": "The projects, assets and runtimes Nekko Agent is built on, and their licenses."
         },
         {
           "slug": "architecture",

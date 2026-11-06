@@ -15,33 +15,57 @@ import { StatusIcon, agentStatusOfLane } from './WorkspaceCard.js';
 describe('agent status glyphs', () => {
   it('maps board lanes to the sidebar glyphs', () => {
     expect(agentStatusOfLane('working')).toBe('working');
-    expect(agentStatusOfLane('idle')).toBeUndefined();
+    expect(agentStatusOfLane('idle')).toBe('done');
+    expect(agentStatusOfLane('idle', undefined, 1)).toBe('idle');
+    for (const count of [0, 1, 3]) {
+      expect(agentStatusOfLane('working', undefined, count)).toBe('working');
+      expect(agentStatusOfLane('needs-you', 'question', count)).toBe('input');
+      expect(agentStatusOfLane('needs-you', 'approval', count)).toBe('input');
+      expect(agentStatusOfLane('needs-you', 'interrupted', count)).toBe('error');
+    }
     expect(agentStatusOfLane('needs-you', 'question')).toBe('input');
     expect(agentStatusOfLane('needs-you', 'approval')).toBe('input');
     expect(agentStatusOfLane('needs-you', 'interrupted')).toBe('error');
   });
 
-  it('draws a green rocket while working and Zz when idle, never a bare dot', () => {
+  it('draws a gray check when done and Zz only when idle with a watch', () => {
     const working = renderToStaticMarkup(<StatusIcon status="working" />);
     expect(working).toContain('status-rocket');
     expect(working).toContain('rocket-flame');
-    const idle = renderToStaticMarkup(<StatusIcon status={undefined} />);
-    expect(idle).toContain('aria-label="Done, idle"');
+    const done = renderToStaticMarkup(<StatusIcon status={undefined} />);
+    expect(done).toContain('aria-label="Done"');
+    expect(done).toContain('text-ink-faint');
+    expect(done).not.toContain('>Zz<');
+    const idle = renderToStaticMarkup(<StatusIcon status="idle" />);
+    expect(idle).toContain('aria-label="Idle, watching"');
     expect(idle).not.toContain('rounded-full');
   });
 
-  it('uses the glyphs in wall window strips, before the numbered agent icon', async () => {
+  it('puts the window number, then Nekko with its status badge, as the agent icon in wall window strips', async () => {
     const wall = (await loadWall()).render(
       { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid', cols: 2, rows: 1 } },
       { sessions: [summary('a'), summary('b')], running: ['a'] },
     );
-    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon="true"><span data-agent-status="true"><span class="status-rocket[^]*?<\/span><\/span><span class="numbered-agent-icon"/);
-    expect(windowBody(wall, 'b')).toMatch(/data-agent-status="true"><span[^>]*aria-label="Done, idle"/);
+    expect(windowBody(wall, 'a')).toMatch(/data-frame-icon="true"><span class="wall-number" title="Agent window 1: Ctrl\+1 selects it" aria-label="Window 1">1<\/span><span data-agent-status="true"><span class="wall-mascot" role="img" aria-label="Working"/);
+    // Nekko is the agent's icon now: no robot head.
+    expect(windowBody(wall, 'a')).not.toContain('numbered-agent-icon');
+    expect(windowBody(wall, 'a')).toContain('pixel-nekko');
+    expect(windowBody(wall, 'a')).toContain('style="background:#4dc28a"');
+    expect(windowBody(wall, 'b')).toMatch(/data-agent-status="true"><span class="wall-mascot pixel-happy"[^>]*aria-label="Done"/);
     // The window passes the status to the chat as a value, and the chat draws no footer copy of it.
     expect(windowBody(wall, 'a')).toContain('data-status="working"');
-    expect(windowBody(wall, 'b')).toContain('data-status="idle"');
+    expect(windowBody(wall, 'b')).toContain('data-status="done"');
     withProvider();
     expect(renderChatPane(chatSession(), { commandCenter: true, status: 'working' })).not.toContain('agent-footer-status');
+  });
+
+  it('forwards watch counts to real wall strips without hiding working or input', async () => {
+    const wall = (await loadWall()).render(
+      { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never, layout: { mode: 'grid', cols: 2, rows: 1 } },
+      { sessions: [summary('a', { activeWatchCount: 1 }), summary('b', { activeWatchCount: 0 })] },
+    );
+    expect(windowBody(wall, 'a')).toMatch(/class="wall-mascot pixel-sleeping"[^>]*aria-label="Watching"/);
+    expect(windowBody(wall, 'b')).toMatch(/class="wall-mascot pixel-happy"[^>]*aria-label="Done"/);
   });
 
   it('uses the glyph in the wall composer, not a pulsing dot', () => {
@@ -64,7 +88,8 @@ describe('wall chat chrome', () => {
   it('draws no empty strip under the wall composer', () => {
     withProvider();
     const html = renderChatPane(chatSession(), { surface: 'composer', commandCenter: true });
-    expect(html).toMatch(/<div class="shrink-0" aria-label="Chat actions and information"><\/div>/);
-    expect(html).not.toMatch(/border-t border-line bg-surface px-3 py-1\.5" aria-label="Chat actions and information"/);
+    // The chat's details live inside the agent window's composer, not the wall's.
+    expect(html).not.toContain('data-composer-details');
+    expect(html).not.toContain('aria-label="Chat actions and information"');
   });
 });

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.nekko.android.chat.PhoneEvent
@@ -20,6 +21,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
+import com.nekko.protocol.LiveCard
+import com.nekko.protocol.LiveCardState
+import com.nekko.protocol.LiveLevel
 
 /**
  * Keeps the relay connection healthy while the app is out of sight:
@@ -46,11 +52,33 @@ class ConnectionKeeper(
     /** What the keep-alive notification says while the service should run, else null. */
     val status: StateFlow<KeepAlive.Status?> = _status.asStateFlow()
 
+    // The Lock Screen card (LiveCards): what each run is doing, the chat Next brought up, and the card.
+    private val runs = MutableStateFlow<Map<String, LiveCards.Run>>(emptyMap())
+    private val pinned = MutableStateFlow<String?>(null)
+    private val _card = MutableStateFlow<LiveCardState?>(null)
+    /** The card the keep-alive notification draws, else null (level None, or nothing to show). */
+    val card: StateFlow<LiveCardState?> = _card.asStateFlow()
+    /** Settings → Connection → Lock Screen card. */
+    val level: StateFlow<LiveLevel?> get() = prefs.flow(LiveCards.LEVEL)
+
     fun start() {
+        // The first level, once: Minimal with the app lock on, Standard with it off (as on the iPhone).
+        if (prefs.get(LiveCards.LEVEL) == null) prefs.set(LiveCards.LEVEL, LiveCards.firstLevel(lock.enabled.value))
         watchNetwork()
+        // Relay dismissals are hints only; a fresh full pending read owns cancellation.
+        // Actual pending inputs, including reconnect snapshots, own both alerts and badges.
+        // Foreground attention still has a silent notification so opening a chat cannot clear its badge.
+        scope.launch {
+            combine(repo.state, prefs.flow(Notices.NEEDS_YOU), lock.enabled, foreground) { s, enabled, hidden, visible ->
+                AttentionNotices.update(s, enabled, hidden, visible)
+            }.distinctUntilChanged().collect { update ->
+                if (update != null) notices.syncAttention(update.computer, update.waiting, update.silent, update.authoritative, update.resolved)
+            }
+        }
         scope.launch {
             repo.events.collect { e ->
                 lastEventAt.value = now()
+                runs.update { m -> LiveCards.next(m[e.sessionId], e, seconds())?.let { m + (e.sessionId to it) } ?: m }
                 onEvent(e.sessionId, PhoneEvent.of(e) ?: return@collect, (e as? AgentEvent.ApprovalRequired)?.approval?.call?.id)
             }
         }
@@ -70,7 +98,25 @@ class ConnectionKeeper(
                 if (line != null && !foreground.value) startService()
             }
         }
+        // Another computer: its runs are not this one's.
+        scope.launch { repo.state.map { it.activeId }.distinctUntilChanged().collect { runs.value = emptyMap(); pinned.value = null } }
+        scope.launch {
+            combine(prefs.flow(LiveCards.LEVEL), repo.state, runs, pinned, tick) { level, s, r, pin, _ ->
+                val built = LiveCard.build(LiveCards.chats(s.summaries, s.activity, r, seconds()), _card.value, pin, level ?: LiveLevel.MINIMAL, seconds())
+                // Next holds its chat until another newly needs you, which takes the card.
+                if (pin != null && built?.focusId != pin) pinned.value = null
+                built
+            }.distinctUntilChanged().collect { _card.value = it }
+        }
     }
+
+    /** The card's Next: bring up the chat after the one it shows. */
+    fun nextOnCard() {
+        val c = _card.value ?: return
+        pinned.value = LiveCards.after(c.chats.map { it.id }, c.focusId)
+    }
+
+    private fun seconds(): Double = now() / 1000.0
 
     fun onForeground(visible: Boolean) {
         foreground.value = visible
@@ -80,7 +126,8 @@ class ConnectionKeeper(
 
     private fun onEvent(sessionId: String, event: PhoneEvent, callId: String?) {
         // In the app the chat itself shows it (and A6's haptics react).
-        if (foreground.value || !prefs.get(Notices.ENABLED)) return
+        if (event == PhoneEvent.APPROVAL || event == PhoneEvent.NEEDS_INPUT) return // Reconciled above, in every app state.
+        if (foreground.value || !Notices.wants(prefs, event)) return
         val s = repo.state.value
         // Only the chats the phone lists: not subagents, tasks or training runs.
         val chat = s.summaries.firstOrNull { it.id == sessionId } ?: return
@@ -108,10 +155,13 @@ class ConnectionKeeper(
 
     private fun watchNetwork() {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
-        val changes = NetworkChanges(repo::reconnect)
+        val changes = NetworkChanges(same = repo::setNetworkPath, changed = repo::networkChanged)
         try {
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = changes.onAvailable(network)
+                override fun onAvailable(network: Network) =
+                    changes.onAvailable(network, RoutePolicy.path(cm.getNetworkCapabilities(network)))
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) =
+                    changes.onPath(network, RoutePolicy.path(caps))
                 override fun onLost(network: Network) = changes.onLost(network)
             })
         } catch (e: RuntimeException) {

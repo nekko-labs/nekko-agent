@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FitPlan } from '@nekko-agent/shared';
-import { formatBytes, formatTokens, verdictNotes, verdictSentence } from './verdict.js';
+import { formatBytes, formatCount, formatTokens, verdictNotes, verdictSentence } from './verdict.js';
 
 const GB = 1024 ** 3;
 
@@ -106,7 +106,17 @@ describe('formatting', () => {
     expect(formatBytes(4.93 * GB)).toBe('4.9 GB');
     expect(formatBytes(23 * GB)).toBe('23.0 GB');
     expect(formatBytes(400 * GB)).toBe('400 GB');
-    expect(formatBytes(0)).toBe('0 GB');
+    expect(formatBytes(0)).toBe('0 B');
+    expect(formatBytes(400 * 1024)).toBe('400 KB');
+    expect(formatBytes(512)).toBe('512 B');
+    expect(formatBytes(Number.NaN)).toBe('0 B');
+  });
+
+  it('compacts large counts without "1000k"', () => {
+    expect(formatCount(999_600)).toBe(new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(999_600));
+    expect(formatCount(999_600)).not.toMatch(/1000/);
+    expect(formatCount(42)).toBe('42');
+    expect(formatCount(Number.NaN)).toBe('0');
   });
 
   it('shows context in the units people think in', () => {

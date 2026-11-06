@@ -9,6 +9,9 @@
  *
  * Everything is drawn in one full-window SVG on a 120 BPM beat (B = 500ms),
  * animating only transform and opacity.
+ *
+ * A reload is not a launch: it gets a quiet cover in the app's own background
+ * colour instead, so it never lights up a dark screen (`playReloadCover`).
  */
 import { BRAND_HEAD } from './components/BrandMark.js';
 import { CHUNKY_CELLS, CHUNKY_SIZE, FINE_PATH, MID_PATH } from './splashCells.js';
@@ -17,22 +20,24 @@ const KEY = 'nekko.splash';
 const B = 500;
 const OUT = 'cubic-bezier(.2,.8,.2,1)';
 const NS = 'http://www.w3.org/2000/svg';
-/** The website's own pairing, for a first launch with nothing stored yet. */
-const DEFAULT = { bg: '#9d8ce6', fg: '#ffffff' };
+/** The brand plum (the app icon's tile), for a first launch with nothing stored yet. */
+const DEFAULT = { bg: '#190019', fg: '#ffffff', paper: '#0c0c11' };
+const RELOAD_FADE_OUT = 180;
 
-type Colours = { bg: string; fg: string };
+type Colours = { bg: string; fg: string; paper: string };
 
 /**
  * Store the current theme's splash colours. The ground is always a solid colour
  * from the theme, never a pale one, so the splash can't flash white: the first
- * of `candidates` that is dark enough, else the website's lavender.
+ * of `candidates` that is dark enough, else the brand plum.
  */
 export function rememberSplashColours(candidates: (string | undefined)[]): void {
   try {
     // With no preset colours, the theme's accent as the stylesheet resolves it.
     if (!candidates.some(Boolean)) candidates = [getComputedStyle(document.documentElement).getPropertyValue('--accent')];
     const bg = candidates.map((c) => (c ? toHex(c) : null)).find((c): c is string => !!c && luminance(c) < 0.6) ?? DEFAULT.bg;
-    localStorage.setItem(KEY, JSON.stringify({ bg, fg: readableOn(bg) }));
+    const paper = toHex(getComputedStyle(document.documentElement).getPropertyValue('--paper')) ?? DEFAULT.paper;
+    localStorage.setItem(KEY, JSON.stringify({ bg, fg: readableOn(bg), paper }));
   } catch {
     /* storage blocked: the default colours are used */
   }
@@ -58,7 +63,7 @@ function luminance(hex: string): number {
 function storedColours(): Colours {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Colours> | null;
-    if (v && typeof v.bg === 'string' && typeof v.fg === 'string') return { bg: v.bg, fg: v.fg };
+    if (v && typeof v.bg === 'string' && typeof v.fg === 'string') return { bg: v.bg, fg: v.fg, paper: typeof v.paper === 'string' ? v.paper : DEFAULT.paper };
   } catch {
     /* fall through */
   }
@@ -85,6 +90,49 @@ const pivot = <T extends SVGElement>(n: T, x: number, y: number): T => {
   return n;
 };
 
+/** Logo units: the mark spans roughly x 2..22. Keep it small and central, a little under a tenth of the window. */
+function logoPlacement(W: number, H: number) {
+  const k = Math.max(40, Math.max(W, H) * 0.085) / 20;
+  const ox = W / 2 - 12 * k, oy = H / 2 - 9 * k;
+  return { k, ox, oy, place: `translate(${ox} ${oy}) scale(${k})` };
+}
+
+// The app's first render is heavy; animating during it drops most of the frames.
+const idle = (timeout: number) => new Promise<void>((r) => (window.requestIdleCallback ? window.requestIdleCallback(() => r(), { timeout }) : setTimeout(r, 200)));
+/** `ready` and a quiet moment after it, or 6 seconds, whichever comes first. */
+const settled = (ready: Promise<unknown>, quiet: number) => Promise.race([ready.then(() => idle(quiet)), new Promise((r) => setTimeout(r, 6000))]);
+
+/** Whether this page load came from a reload rather than a launch. */
+export const pageWasReloaded = () =>
+  (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type === 'reload';
+
+/** A solid cover in the app's own background, with a faint logo so a slow load doesn't read as a hang. */
+function reloadCover(): HTMLDivElement {
+  const { paper } = storedColours();
+  const W = window.innerWidth, H = window.innerHeight;
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = `position:fixed;inset:0;z-index:2147483646;pointer-events:none;background:${paper}`;
+  const svg = el('svg', { width: '100%', height: '100%', viewBox: `0 0 ${W} ${H}` }, host);
+  el('path', { d: BRAND_HEAD, fill: readableOn(paper), 'fill-rule': 'evenodd', opacity: 0.16, transform: logoPlacement(W, H).place }, svg);
+  document.body.appendChild(host);
+  return host;
+}
+
+/** The old page's half of a reload: settle into the cover the new page starts on. */
+export function fadeInReloadCover(duration: number): void {
+  reloadCover().animate([{ opacity: 0 }, { opacity: 1 }], { duration, easing: 'ease-out', fill: 'forwards' });
+}
+
+/** The new page's half: hold the cover until the app is ready, then fade it away. */
+export function playReloadCover(ready: Promise<unknown>): void {
+  const host = reloadCover();
+  // A fade runs on the compositor, so unlike the zoom it needn't wait long for quiet.
+  void settled(ready, 200)
+    .then(() => host.animate([{ opacity: 1 }, { opacity: 0 }], { duration: RELOAD_FADE_OUT, easing: 'ease-in-out', fill: 'forwards' }).finished)
+    .finally(() => host.remove());
+}
+
 /**
  * Show the splash over the app and play it. `ready` resolves when the app
  * behind is worth revealing; the zoom waits for it (up to a cap) so the window
@@ -107,10 +155,7 @@ export function playSplash(ready: Promise<unknown>): void {
     return;
   }
 
-  // Logo units: the mark spans roughly x 2..22. Keep it small and central, a little under a tenth of the window.
-  const k = Math.max(40, Math.max(W, H) * 0.085) / 20;
-  const ox = W / 2 - 12 * k, oy = H / 2 - 9 * k;
-  const place = `translate(${ox} ${oy}) scale(${k})`;
+  const { k, ox, oy, place } = logoPlacement(W, H);
   const INNER = BRAND_HEAD.slice(BRAND_HEAD.indexOf('ZM') + 1); // the window inside the cat
 
   const defs = el('defs', {}, svg);
@@ -177,9 +222,7 @@ export function playSplash(ready: Promise<unknown>): void {
     const seen = () => { if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', seen); resolve(); } };
     document.addEventListener('visibilitychange', seen);
   }).then(frame).then(frame);
-  // The app's first render is heavy; zooming during it drops most of the zoom's frames.
-  const idle = () => new Promise<void>((r) => (window.requestIdleCallback ? window.requestIdleCallback(() => r(), { timeout: 700 }) : setTimeout(r, 200)));
-  const capped = Promise.race([ready.then(idle), new Promise((r) => setTimeout(r, 6000))]);
+  const capped = settled(ready, 700);
   void onScreen.then(() => {
     for (const a of timeline) a.play();
     const built = new Promise((r) => setTimeout(r, 2.5 * B));

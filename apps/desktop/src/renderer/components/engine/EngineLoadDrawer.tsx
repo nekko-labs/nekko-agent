@@ -3,12 +3,16 @@ import type { GpuFit, LoadParams, LocalModel, PlacementPlan, Recommendation, Spl
 import { Toggle } from '../primitives/index.js';
 import { formatBytes, formatTokens } from '../runtimes/verdict.js';
 import { useStore } from '../../store.js';
+import { Shown } from '../ModeViews.js';
+import { PixelSkeleton } from '../PixelSkeleton.js';
 import {
   KEEP_LABELS,
   PRECISIONS,
   SESSION_STOPS,
   contextPerSession,
   contextStops,
+  differsFromLoaded,
+  differsFromSaved,
   expertCacheMiB,
   fromPreset,
   fromRecommendation,
@@ -46,6 +50,7 @@ const LIVE_REFRESH_MS = 5000;
 export function EngineLoadDrawer({
   providerId,
   model,
+  loadedParams,
   autoloaded = false,
   onToggleAutoload,
   onFetchCompanions,
@@ -55,6 +60,8 @@ export function EngineLoadDrawer({
 }: {
   providerId: string;
   model: LocalModel & { loaded: boolean; gpuFit?: GpuFit };
+  /** What the running copy was loaded with, when the engine says. */
+  loadedParams?: LoadParams;
   /** In the list loaded when the engine starts. */
   autoloaded?: boolean;
   onToggleAutoload?: (on: boolean) => void;
@@ -135,6 +142,10 @@ export function EngineLoadDrawer({
   const unified = plan?.unified ?? false;
   const noGpu = model.gpuFit === 'cpu' || (plan !== null && plan.deviceName === null);
   const matches = matchesRecommendation(params, rec?.request, layers);
+  // A load from chat or at engine start uses the saved settings, not these.
+  const unsaved = differsFromSaved(params, saved.params);
+  // Save as default does not touch the running copy; only a reload does.
+  const stale = !unsaved && model.loaded && !!loadedParams && differsFromLoaded(params, loadedParams);
 
   const setRunOn = (r: RunOn) => {
     setSplit('custom');
@@ -202,8 +213,8 @@ export function EngineLoadDrawer({
     <div className="mt-2 rounded-xl border p-4" style={{ borderColor: 'var(--line)' }} data-engine-load-drawer>
       <div className="flex flex-wrap items-start gap-2">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-medium">{model.name}</p>
-          <p className="text-[11.5px] text-ink-faint">
+          <p className="truncate text-sm font-medium">{model.name}</p>
+          <p className="text-xs text-ink-faint">
             {[
               model.parameterSize,
               model.quantization,
@@ -221,7 +232,7 @@ export function EngineLoadDrawer({
 
       <div className="mt-3">
         <button
-          className="btn btn-primary flex min-h-[52px] w-full items-center justify-center gap-2 text-[15px] font-semibold"
+          className="btn btn-primary flex min-h-[52px] w-full items-center justify-center gap-2 text-base font-semibold"
           onClick={() => rec && applyRecommendation(rec)}
           disabled={!rec}
           data-recommend
@@ -229,15 +240,15 @@ export function EngineLoadDrawer({
           <BoltIcon />
           Use recommended settings
         </button>
-        <p className="mt-1.5 text-center text-[11.5px] text-ink-faint">
+        <p className="mt-1 text-center text-xs text-ink-faint">
           Picks the fastest setup that fits this model on this machine. GPU first, always.
         </p>
         {applied && rec && (
-          <div className="mt-2 rounded-lg border px-3 py-2.5" style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)', background: 'var(--accent-soft)' }}>
-            <p className="text-[12px] font-medium">What this chose</p>
-            <div className="mt-1.5 space-y-1.5">
+          <div className="mt-2 rounded-lg border px-3 py-2" style={{ borderColor: 'color-mix(in srgb, var(--accent) 35%, transparent)', background: 'var(--accent-soft)' }}>
+            <p className="text-xs font-medium">What this chose</p>
+            <div className="mt-1 space-y-1">
               {rec.why.map((w) => (
-                <div key={w.field} className="flex gap-3 text-[12px]">
+                <div key={w.field} className="flex gap-3 text-xs">
                   <span className="w-32 shrink-0 text-ink-faint">{w.field}</span>
                   <span className="min-w-0 flex-1">
                     <span className="font-medium">{w.value}.</span> {w.sentence}
@@ -284,8 +295,8 @@ export function EngineLoadDrawer({
 
       {runOn === 'hybrid' && !unified && !mlx && (
         <div className="mt-3 rounded-lg border p-3" style={{ borderColor: 'var(--line)' }} data-split>
-          <p className="text-[12.5px] font-medium">How to split it</p>
-          <p className="text-[11.5px] text-ink-faint">
+          <p className="text-xs font-medium">How to split it</p>
+          <p className="text-xs text-ink-faint">
             Ready-made ways to share the work between the graphics card and system memory. Custom lets you set it by hand.
           </p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -303,16 +314,16 @@ export function EngineLoadDrawer({
                 data-preset={p.id === 'custom' ? undefined : p.id}
                 data-split-option={p.id}
               >
-                <span className="text-[12.5px] font-medium">{p.label}</span>
-                <span className="text-[11.5px] text-ink-faint">{p.hint}</span>
+                <span className="text-xs font-medium">{p.label}</span>
+                <span className="text-xs text-ink-faint">{p.hint}</span>
               </button>
             ))}
           </div>
           {split === 'custom' && layers ? (
             <div className="mt-3">
-              <div className="flex items-center justify-between text-[12px]">
+              <div className="flex items-center justify-between text-xs">
                 <label htmlFor="engine-gpu-layers">Layers on the graphics card</label>
-                <span className="font-mono text-[11px] text-ink-faint">
+                <span className="font-mono text-2xs text-ink-faint">
                   {params.gpuLayers ?? layers} of {layers}
                 </span>
               </div>
@@ -325,7 +336,7 @@ export function EngineLoadDrawer({
                 value={params.gpuLayers ?? layers}
                 onChange={(e) => patchCustom({ gpuLayers: Number(e.target.value) })}
               />
-              <p className="text-[11.5px] text-ink-faint">
+              <p className="text-xs text-ink-faint">
                 A model is a stack of layers. Each one on the graphics card makes it faster and uses more graphics memory.
               </p>
             </div>
@@ -335,10 +346,10 @@ export function EngineLoadDrawer({
 
       <div className="mt-4">
         <div className="flex items-baseline justify-between gap-3">
-          <label htmlFor="engine-ctx" className="text-[13px] font-medium">
+          <label htmlFor="engine-ctx" className="text-sm font-medium">
             Context {matches.context && <RecommendedTag />}
           </label>
-          <span className="font-mono text-[12px]" data-context-label>
+          <span className="font-mono text-xs" data-context-label>
             {formatTokens(perSession)} per session{sessions > 1 ? ` · ${formatTokens(perSession * sessions)} total` : ''}
           </span>
         </div>
@@ -352,11 +363,11 @@ export function EngineLoadDrawer({
           value={ctxIndex}
           onChange={(e) => setContext(stops[Number(e.target.value)])}
         />
-        <div className="flex justify-between text-[10.5px] text-ink-faint">
+        <div className="flex justify-between text-2xs text-ink-faint">
           <span>{formatTokens(stops[0])}</span>
           <span>{formatTokens(stops[stops.length - 1])} (model max)</span>
         </div>
-        <p className="mt-1 text-[11.5px] text-ink-faint">
+        <p className="mt-1 text-xs text-ink-faint">
           How much the model can keep in mind at once: your messages, its replies and any files it reads.{' '}
           {formatTokens(perSession)} is roughly {pagesOf(perSession)} pages of text. More context uses more memory, and the meter
           above shows how much.
@@ -406,7 +417,7 @@ export function EngineLoadDrawer({
               } This uses system memory, but it does not move the work off your graphics card: the GPU still does the thinking.`}
             />
 
-            <div className="rounded-lg border" style={{ borderColor: 'var(--line)' }}>
+            <Shown id="engine"><div className="rounded-lg border" style={{ borderColor: 'var(--line)' }}>
               <Fold label="Expert" open={expert} onToggle={() => setExpert((v) => !v)} id="expert" />
               {expert && (
                 <ExpertControls
@@ -418,18 +429,18 @@ export function EngineLoadDrawer({
                   onChangePlacement={patchCustom}
                 />
               )}
-            </div>
+            </div></Shown>
           </div>
         )}
       </div>
 
       {(onToggleAutoload || (model.modality === 'vision' && !model.hasProjector && onFetchCompanions)) && (
-        <div className="mt-3 space-y-2 rounded-lg border px-3 py-2.5" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-3 space-y-2 rounded-lg border px-3 py-2" style={{ borderColor: 'var(--line)' }}>
           {onToggleAutoload && (
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[12px]">Load when the engine starts</p>
-                <p className="text-[11px] text-ink-faint">Comes up with these saved settings every time the engine does.</p>
+                <p className="text-xs">Load when the engine starts</p>
+                <p className="text-2xs text-ink-faint">Comes up with these saved settings every time the engine does.</p>
               </div>
               <Toggle value={autoloaded} onChange={onToggleAutoload} label="Load when the engine starts" />
             </div>
@@ -437,12 +448,12 @@ export function EngineLoadDrawer({
           {model.modality === 'vision' && !model.hasProjector && onFetchCompanions && (
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[12px]">Projector file missing</p>
-                <p className="text-[11px] text-ink-faint">
+                <p className="text-xs">Projector file missing</p>
+                <p className="text-2xs text-ink-faint">
                   This model can read images only with its mmproj-*.gguf beside it. Text works either way.
                 </p>
               </div>
-              <button className="btn btn-outline shrink-0 py-1 text-[11.5px]" onClick={onFetchCompanions}>
+              <button className="btn btn-outline shrink-0 py-1 text-xs" onClick={onFetchCompanions}>
                 Fetch it
               </button>
             </div>
@@ -450,14 +461,24 @@ export function EngineLoadDrawer({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button className="btn btn-primary py-1.5 text-[12px]" onClick={load} disabled={loading} data-load>
+      {unsaved && (
+        <p className="mt-4 text-2xs text-ink-faint" data-unsaved>
+          These settings apply to this load only. Save as default to keep them.
+        </p>
+      )}
+      {stale && (
+        <p className="mt-4 text-2xs text-ink-faint" data-stale>
+          The loaded model still runs with its earlier settings. Reload to use these now.
+        </p>
+      )}
+      <div className={`${unsaved || stale ? 'mt-2' : 'mt-4'} flex flex-wrap items-center gap-2`}>
+        <button className="btn btn-primary py-1 text-xs" onClick={load} disabled={loading} data-load>
           {loading ? 'Loading…' : model.loaded ? 'Reload with these settings' : 'Load model'}
         </button>
-        <button className="btn btn-outline py-1.5 text-[12px]" onClick={saveDefault} title="Use these settings every time this model loads">
+        <button className="btn btn-outline py-1 text-xs" onClick={saveDefault} title="Use these settings every time this model loads">
           Save as default
         </button>
-        <button className="btn btn-ghost py-1.5 text-[12px]" onClick={onClose}>
+        <button className="btn btn-ghost py-1 text-xs" onClick={onClose}>
           Close
         </button>
       </div>
@@ -498,7 +519,7 @@ function VerdictChip({ plan }: { plan: PlacementPlan }) {
   const v = VERDICTS[plan.verdict];
   return (
     <span
-      className="whitespace-nowrap rounded-full px-2.5 py-0.5 text-[11.5px]"
+      className="whitespace-nowrap rounded-full px-3 py-0.5 text-xs"
       style={{ color: v.color, border: `1px solid color-mix(in srgb, ${v.color} 45%, transparent)` }}
       data-verdict={plan.verdict}
     >
@@ -522,10 +543,10 @@ const SEG = {
  * from the SSD.
  */
 function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
-  if (!plan) return <div className="mt-3 h-24 animate-pulse rounded-lg bg-[color-mix(in_srgb,var(--ink-faint)_10%,transparent)]" />;
+  if (!plan) return <PixelSkeleton className="mt-3 h-24 rounded-lg" label="Loading placement plan" />;
   if (plan.verdict === 'unknown') {
     return (
-      <p className="mt-3 rounded-lg border px-3 py-2.5 text-[12px] text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+      <p className="mt-3 rounded-lg border px-3 py-2 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
         This file does not describe its layers, so we cannot say how much memory it needs. Load it and we will measure it.
       </p>
     );
@@ -556,9 +577,9 @@ function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
         const pct = (b: number) => `${(b / scale) * 100}%`;
         return (
           <div key={title} data-meter-bar>
-            <div className="flex justify-between gap-3 text-[12px]">
+            <div className="flex justify-between gap-3 text-xs">
               <span className="font-medium">{title}</span>
-              <span className="font-mono text-[11px] text-ink-faint">
+              <span className="font-mono text-2xs text-ink-faint">
                 {formatBytes(pool.otherBytes + mine)} of {formatBytes(pool.totalBytes)}
               </span>
             </div>
@@ -571,7 +592,7 @@ function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
                 <div key={p.label} style={{ width: pct(p.bytes), background: p.color }} title={`${p.label} ${formatBytes(p.bytes)}`} />
               ))}
             </div>
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink-faint">
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-2xs text-ink-faint">
               <Legend color={SEG.other} text={`Other apps ${formatBytes(pool.otherBytes)}`} />
               {parts.map((p) => (
                 <Legend key={p.label} color={p.color} text={`${p.label} ${formatBytes(p.bytes)}`} />
@@ -584,11 +605,11 @@ function MemoryMeter({ plan }: { plan: PlacementPlan | null }) {
         );
       })}
       {disk.length > 0 && (
-        <p className="text-[11.5px]" style={{ color: 'var(--warning)' }} data-meter-disk>
+        <p className="text-xs" style={{ color: 'var(--warning)' }} data-meter-disk>
           {disk.join(' ')}
         </p>
       )}
-      <p className="text-[12px]">{expectation(plan)}</p>
+      <p className="text-xs">{expectation(plan)}</p>
     </section>
   );
 }
@@ -608,7 +629,7 @@ function expectation(plan: PlacementPlan): string {
 
 function Legend({ color, text }: { color: string; text: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5">
+    <span className="inline-flex items-center gap-2">
       <span className="h-2 w-2 rounded-sm" style={{ background: color }} />
       {text}
     </span>
@@ -616,7 +637,7 @@ function Legend({ color, text }: { color: string; text: string }) {
 }
 
 function RecommendedTag() {
-  return <span className="ml-1.5 text-[10.5px] font-normal" style={{ color: 'var(--accent)' }}>Recommended</span>;
+  return <span className="ml-2 text-2xs font-normal" style={{ color: 'var(--accent)' }}>Recommended</span>;
 }
 
 function BoltIcon() {
@@ -631,19 +652,19 @@ function Section({ title, hint, control, recommended }: { title: string; hint: s
   return (
     <div className="mt-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px] font-medium">
+        <span className="text-sm font-medium">
           {title} {recommended && <RecommendedTag />}
         </span>
         {control}
       </div>
-      <p className="mt-1 text-[11.5px] text-ink-faint">{hint}</p>
+      <p className="mt-1 text-xs text-ink-faint">{hint}</p>
     </div>
   );
 }
 
 function Fold({ label, open, onToggle, id }: { label: string; open: boolean; onToggle: () => void; id: string }) {
   return (
-    <button className="flex min-h-[40px] w-full items-center justify-between px-3 text-[12.5px] font-medium" onClick={onToggle} aria-expanded={open} data-fold={id}>
+    <button className="flex min-h-[40px] w-full items-center justify-between px-3 text-xs font-medium" onClick={onToggle} aria-expanded={open} data-fold={id}>
       {label}
       <span className="font-mono text-ink-faint">{open ? '−' : '+'}</span>
     </button>
@@ -674,18 +695,18 @@ function Slider({
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-[12.5px] font-medium">
+        <label htmlFor={id} className="text-xs font-medium">
           {label} {recommended && <RecommendedTag />}
         </label>
-        <span className="font-mono text-[11.5px]">{readout}</span>
+        <span className="font-mono text-xs">{readout}</span>
       </div>
       <input id={id} type="range" className="mt-1 w-full" min={0} max={max} step={1} value={value} onChange={(e) => onChange(Number(e.target.value))} />
-      <div className="flex justify-between text-[10.5px] text-ink-faint">
+      <div className="flex justify-between text-2xs text-ink-faint">
         {ends.map((e, i) => (
           <span key={i}>{e}</span>
         ))}
       </div>
-      <p className="mt-1 text-[11.5px] text-ink-faint">{hint}</p>
+      <p className="mt-1 text-xs text-ink-faint">{hint}</p>
     </div>
   );
 }
@@ -705,11 +726,11 @@ function SegTabs<T extends string>({
   data?: string;
 }) {
   return (
-    <div className="flex rounded-full border p-0.5 text-[12px]" style={{ borderColor: 'var(--line)' }} role="group" aria-label={label}>
+    <div className="flex rounded-full border p-0.5 text-xs" style={{ borderColor: 'var(--line)' }} role="group" aria-label={label}>
       {options.map((o) => (
         <button
           key={o.id}
-          className="min-h-[32px] rounded-full px-3.5 disabled:opacity-40"
+          className="min-h-[32px] rounded-full px-4 disabled:opacity-40"
           disabled={o.disabled}
           title={o.title}
           aria-pressed={value === o.id}
@@ -725,7 +746,7 @@ function SegTabs<T extends string>({
 }
 
 /** Every remaining flag, grouped, each with a sentence and the flag it sets. */
-function ExpertControls({
+export function ExpertControls({
   model,
   params,
   runOn,
@@ -781,15 +802,23 @@ function ExpertControls({
             <Toggle value={params.lazyTables !== false} onChange={(v) => onChange({ lazyTables: v })} disabled={params.mmap === false} label="Lookup table on disk" />
           </Row>
         )}
-        <p className="text-[11px] text-ink-faint">
+        <p className="text-2xs text-ink-faint">
           We work out where everything goes before loading and pass it to llama.cpp as is (<span className="font-mono">--fit off</span>), so the meter above is what you get.
         </p>
       </Group>
 
+      {model.format !== 'mlx' && (
+        <Group title="Reasoning">
+          <Row label="Thinking" flag="chat_template_kwargs.enable_thinking" hint="On by default. Lets reasoning-capable local models think before answering. Applies to this model, not individual chats; models without reasoning may ignore it.">
+            <Toggle value={params.thinking !== false} onChange={(v) => onChange({ thinking: v })} label="Thinking" />
+          </Row>
+        </Group>
+      )}
+
       <Group title="Speed">
         <Row label="Flash attention" flag="--flash-attn" hint="A faster, leaner way to do the attention math. The smaller memory precisions need it. Auto turns it on where this engine supports it.">
           <select
-            className="input w-24 py-1 text-[12px]"
+            className="input w-24 py-1 text-xs"
             value={params.flashAttention === undefined ? 'auto' : params.flashAttention ? 'on' : 'off'}
             onChange={(e) => onChange({ flashAttention: e.target.value === 'auto' ? undefined : e.target.value === 'on' })}
           >
@@ -844,7 +873,7 @@ function ExpertControls({
       </Group>
 
       {model.architecture && (
-        <p className="text-[11px] text-ink-faint">
+        <p className="text-2xs text-ink-faint">
           {model.architecture} · {layers ?? '?'} layers · {model.kvHeads ?? '?'} KV heads
           {moe && model.weightLayout ? ` · experts ${Math.round(model.weightLayout.expertShare * 100)}% of the file` : ''}
           {model.sizeBytes ? ` · ${formatBytes(model.sizeBytes)} on disk` : ''}
@@ -857,7 +886,7 @@ function ExpertControls({
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <p className="border-t pt-2 text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+      <p className="border-t pt-2 text-xs font-medium text-ink-soft" style={{ borderColor: 'var(--line)' }}>
         {title}
       </p>
       {children}
@@ -869,11 +898,11 @@ function Row({ label, hint, flag, children }: { label: string; hint: string; fla
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <label className="text-[12px]">{label}</label>
+        <label className="text-xs">{label}</label>
         {children}
       </div>
-      <p className="mt-0.5 text-[11px] text-ink-faint">{hint}</p>
-      {flag && <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">{flag}</p>}
+      <p className="mt-0.5 text-2xs text-ink-faint">{hint}</p>
+      {flag && <p className="mt-0.5 font-mono text-2xs text-ink-faint">{flag}</p>}
     </div>
   );
 }
@@ -897,7 +926,7 @@ function NumberInput({
   return (
     <input
       type="number"
-      className="input w-24 py-1 text-[12px]"
+      className="input w-24 py-1 text-xs"
       min={min}
       max={max}
       step={step}
@@ -942,7 +971,7 @@ function DraftModelRow({ model, value, onChange }: { model: LocalModel; value?: 
   if (candidates.length === 0 && !value) return null;
   return (
     <Row label="Draft model" flag="--spec-draft-model" hint="A small model from the same family that guesses ahead. Optional; the guessing above needs none.">
-      <select className="input w-40 py-1 text-[12px]" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+      <select className="input w-40 py-1 text-xs" value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
         <option value="">None</option>
         {candidates.map((m) => (
           <option key={m.id} value={m.id}>

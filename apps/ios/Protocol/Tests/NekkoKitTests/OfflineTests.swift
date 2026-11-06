@@ -265,6 +265,42 @@ final class OutboxTests: XCTestCase {
         XCTAssertEqual(sendB?.str("modelId"), "m", "the computer's default model")
     }
 
+    /// The Live Activity mic: through the outbox (one `session:get`, then queue or send), waiting for the answer.
+    func testSendWaitingSaysDeliveredAndQueuesMidRun() async throws {
+        let pc = FakeComputer(chats: ["a"])
+        pc.set { $0.chats["a"]?.running = true }
+        let o = outbox(pc, drafts: drafts())
+        let delivered = try await o.sendWaiting(chatId: "a", text: "Fix it.", wait: 2)
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(pc.chat("a").queued, ["Fix it."])
+        XCTAssertEqual(pc.count(Channels.chatSend), 0)
+        XCTAssertTrue(o.items.isEmpty)
+    }
+
+    func testSendWaitingThrowsARefusalAndParksTheWords() async {
+        let pc = FakeComputer(chats: ["a"])
+        pc.refuseSend = "Model gone."
+        let d = drafts()
+        let o = outbox(pc, drafts: d)
+        do {
+            _ = try await o.sendWaiting(chatId: "a", text: "Fix it.", wait: 2)
+            XCTFail("a refusal is said")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Model gone.")
+        }
+        XCTAssertEqual(d.draft("a").text, "Fix it.", "the words wait in the chat's draft")
+        XCTAssertEqual(d.draft("a").refusal, "Model gone.")
+    }
+
+    func testSendWaitingTimesOutLeavingItInTheOutbox() async throws {
+        let pc = FakeComputer(chats: ["a"])
+        pc.unreachable = true
+        let o = outbox(pc, drafts: drafts())
+        let delivered = try await o.sendWaiting(chatId: "a", text: "Fix it.", wait: 0.2)
+        XCTAssertFalse(delivered)
+        XCTAssertEqual(o.items.map(\.text), ["Fix it."], "the outbox delivers it later")
+    }
+
     func testNothingGetsThroughSoItWaitsThenGoesOnce() async {
         let pc = FakeComputer(chats: ["a"])
         pc.unreachable = true
@@ -434,7 +470,7 @@ final class OfflineStoreTests: XCTestCase {
         }, deviceName: { "iPhone" }, deriveKey: { _, _ in Data(repeating: 1, count: 32) },
            offlineFiles: files, draftDebounce: 0, outboxPoll: 0.01, outboxConfirmTimeout: 0.5)
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff"))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff", hostKey: testHostKey))
         conns[0].online()
         await settleOffline()
         return (s, conns[0])

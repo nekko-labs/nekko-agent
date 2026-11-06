@@ -3,11 +3,11 @@ package com.nekko.android.connection
 import com.nekko.android.chat.PhoneEvent
 
 /**
- * A local notification about one computer chat. One per chat at a time: the
- * notification is tagged with the session id, so a newer event replaces the
- * older one. Push notifications (FCM, AN-6) must use the same [tag] so a push
- * that arrives while the relay is also connected replaces this one instead of
- * showing twice.
+ * A local notification about one computer chat. One awaiting-input notification
+ * and one non-badging reply per chat: a stable [tag] deduplicates events while
+ * separate notification IDs prevent a racing resolution from canceling a reply.
+ * Native FCM registration is not implemented (AN-6). Any future push must match
+ * both the tag and category ID to replace a local alert rather than show twice.
  */
 data class EventNotice(
     val sessionId: String,

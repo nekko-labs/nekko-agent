@@ -25,7 +25,7 @@ use serde_json::{Map, Value, json};
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 /// One piece of a streamed model response (`ProviderChunk`).
 #[derive(Clone, Debug, PartialEq)]
@@ -44,6 +44,8 @@ pub enum Chunk {
         output_tokens: f64,
         output_ms: Option<f64>,
     },
+    /// The response stopped at the output cap (`ProviderChunk::OutputLimit`).
+    OutputLimit,
     Done,
 }
 
@@ -130,6 +132,12 @@ pub trait ModelClient: Sync {
 pub trait ToolRunner: Sync {
     /// Run one call and return its `ToolResult`; an `Err` becomes an error result.
     fn run(&self, call: &Value) -> impl Future<Output = Result<Value, String>> + Send;
+
+    /// The step boundary, just before the steering inbox is read: the host's
+    /// chance to put in what the user left waiting.
+    fn before_step(&self) -> impl Future<Output = ()> + Send {
+        async {}
+    }
 }
 
 pub struct RunOptions<'a> {
@@ -168,12 +176,13 @@ const RUNAWAY_KEEP_CHARS: usize = 4_000;
 const EMPTY_NUDGE: &str = "Please continue and give your answer.";
 const STALLED: &str =
     "_The model returned an empty response and stopped. It may have run out of steam: try again, or rephrase._";
+/// An empty reply that hit the output cap: the model spent it all thinking.
+/// Asking again does the same, so this replaces the nudge rather than following it.
+const OUTPUT_LIMIT_EMPTY: &str = "_The model used its whole output budget thinking and stopped before answering. Try a lower effort level, or ask for something smaller._";
+/// Appended to a reply cut off at the output cap.
+const OUTPUT_LIMIT_NOTE: &str = "_Cut off: the reply reached the model's output limit._";
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
 
 fn base36(mut n: u64) -> String {
     const D: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
@@ -192,7 +201,7 @@ fn base36(mut n: u64) -> String {
 /// `id(prefix)`: `<prefix>_<time base36>_<counter>`.
 fn id(prefix: &str) -> String {
     let n = COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
-    format!("{prefix}_{}_{n}", base36(now_ms()))
+    format!("{prefix}_{}_{n}", base36(nekko_js::now_ms()))
 }
 
 /// A JavaScript number as JSON: whole numbers as integers.
@@ -209,13 +218,15 @@ fn trim_runaway(s: &str) -> String {
 }
 
 /// What a background turn's model call ends with when it steps aside for the
-/// person at the computer (nekko-chat's `YieldingClient`). The loop sends it
+/// person at the computer (nekkod's `chat_client::YieldingClient`). The loop sends it
 /// again from where it stood, at once and without spending an attempt: the
 /// client holds the next call until it may run.
 pub const YIELDED: &str = "Paused while someone uses this computer";
+/// A connectivity gate holds only the same model call, never tools or a new turn.
+pub const INTERNET_PAUSED: &str = "Paused until internet connectivity returns";
 
 pub fn is_yield(message: &str) -> bool {
-    message == YIELDED
+    message == YIELDED || message == INTERNET_PAUSED
 }
 
 /// Attempts a model call gets before the reply ends as interrupted
@@ -335,7 +346,7 @@ pub fn is_network_error(message: &str) -> bool {
 /// (`retryDelayMs`).
 pub fn retry_delay(attempt: u32) -> Duration {
     let base = (1_000u64 << attempt.saturating_sub(1).min(5)).min(30_000);
-    let jitter = (now_ms() % 1_000).min(base);
+    let jitter = (nekko_js::now_ms() % 1_000).min(base);
     Duration::from_millis(base + jitter)
 }
 
@@ -349,6 +360,8 @@ struct Turn {
     calls: Vec<Value>,
     carry: Vec<Value>,
     runaway: bool,
+    /// The response stopped at the output cap rather than finishing.
+    output_limit: bool,
 }
 
 impl Turn {
@@ -370,7 +383,7 @@ fn drop_carry_before_last_prompt(history: &mut [Value]) {
 }
 
 fn user_nudge(content: &str) -> Value {
-    json!({ "id": id("nudge"), "role": "user", "content": content, "createdAt": now_ms() })
+    json!({ "id": id("nudge"), "role": "user", "content": content, "createdAt": nekko_js::now_ms() })
 }
 
 /// `{ reasoning, reasoningSeconds }` when there is reasoning (an absent
@@ -496,6 +509,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     }
                     self.event("usage", f);
                 }
+                Chunk::OutputLimit => turn.output_limit = true,
                 Chunk::Done => {}
             }
             // Cut a degenerate stream off rather than waiting out the output cap;
@@ -526,6 +540,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 calls: turn.calls.clone(),
                 carry: turn.carry.clone(),
                 runaway: turn.runaway,
+                output_limit: turn.output_limit,
             };
             match self.stream(turn, extra.clone(), send_tools).await {
                 Ok(()) => return Ok(()),
@@ -645,7 +660,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                 put_reasoning(&mut m, reasoning, turn.reasoning_seconds);
             }
             m.insert("interrupted".into(), json!(true));
-            m.insert("createdAt".into(), json!(now_ms()));
+            m.insert("createdAt".into(), json!(nekko_js::now_ms()));
             self.opts.history.push(Value::Object(m));
         }
         // A stop the user asked for is not a failure, and doesn't read as one.
@@ -682,6 +697,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             if !first_call {
                 // Steering joins the transcript at the step boundary (never
                 // mid-stream), so the next call sees it without a restart.
+                self.tools.before_step().await;
                 let steered: Vec<Value> =
                     std::mem::take(&mut *self.opts.steering.lock().unwrap_or_else(|e| e.into_inner()));
                 for m in steered {
@@ -693,8 +709,9 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             let first = if first_call { std::mem::take(&mut resume_extra) } else { std::mem::take(&mut loop_extra) };
             let mut result = self.stream_with_retry(&mut turn, first, true).await;
             // An empty response gets one retry with a nudge, so the turn does not
-            // silently stall (common with some local models mid-loop).
-            if result.is_ok() && turn.is_empty() && !self.opts.cancel.is_cancelled() {
+            // silently stall (common with some local models mid-loop). Not one
+            // that hit the output cap: asked again, it spends the cap again.
+            if result.is_ok() && turn.is_empty() && !turn.output_limit && !self.opts.cancel.is_cancelled() {
                 result = self.stream_with_retry(&mut turn, vec![nudge.clone()], true).await;
             }
             if let Err(e) = result {
@@ -721,7 +738,15 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     put_reasoning(&mut m, trim_runaway(&turn.reasoning), turn.reasoning_seconds);
                 }
             } else {
-                m.insert("content".into(), json!(if stalled { STALLED.to_string() } else { turn.text.clone() }));
+                let content = match (stalled, turn.output_limit) {
+                    (true, true) => OUTPUT_LIMIT_EMPTY.to_string(),
+                    (true, false) => STALLED.to_string(),
+                    (false, true) if turn.calls.is_empty() && !js::trim(&turn.text).is_empty() => {
+                        format!("{}\n\n{OUTPUT_LIMIT_NOTE}", js::trim(&turn.text))
+                    }
+                    (false, _) => turn.text.clone(),
+                };
+                m.insert("content".into(), json!(content));
                 if !turn.reasoning.is_empty() {
                     put_reasoning(&mut m, turn.reasoning.clone(), turn.reasoning_seconds);
                 }
@@ -732,7 +757,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                     m.insert("carry".into(), json!({ "model": self.opts.model, "items": turn.carry }));
                 }
             }
-            m.insert("createdAt".into(), json!(now_ms()));
+            m.insert("createdAt".into(), json!(nekko_js::now_ms()));
             let message_id = m["id"].clone();
             self.opts.history.push(Value::Object(m));
 
@@ -758,7 +783,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
                         json!({ "toolCallId": call.get("id").cloned().unwrap_or(Value::Null), "output": format!("Error: {e}"), "isError": true })
                     }
                 };
-                self.opts.history.push(json!({ "id": id("msg"), "role": "tool", "content": "", "toolResult": result, "createdAt": now_ms() }));
+                self.opts.history.push(json!({ "id": id("msg"), "role": "tool", "content": "", "toolResult": result, "createdAt": nekko_js::now_ms() }));
                 self.event("tool_result", json!({ "result": result }));
                 if tripped.is_none() {
                     tripped = loops.push(call, &result);
@@ -799,7 +824,7 @@ impl<C: ModelClient, T: ToolRunner, E: FnMut(Value, &[Value]) + Send> Loop<'_, '
             let r = if wrap.runaway { trim_runaway(&wrap.reasoning) } else { wrap.reasoning.clone() };
             put_reasoning(&mut m, r, wrap.reasoning_seconds);
         }
-        m.insert("createdAt".into(), json!(now_ms()));
+        m.insert("createdAt".into(), json!(nekko_js::now_ms()));
         let message_id = m["id"].clone();
         self.opts.history.push(Value::Object(m));
         self.event("done", json!({ "messageId": message_id, "stop": "loop", "steps": steps }));

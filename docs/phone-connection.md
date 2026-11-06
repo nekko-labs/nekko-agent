@@ -20,21 +20,39 @@ Both native apps reach the computer the same way: relay v2 over a WebSocket, end
 
 | | Android | iOS |
 | --- | --- | --- |
-| **Plain `ws://`** | Only to `*.ts.net` in release builds (`network_security_config.xml`, which can't express an IP range). Debug builds also allow the emulator's loopback for `adb reverse`. | To Tailscale (`*.ts.net`, `100.64.0.0/10`, `fd7a:115c:a1e0::/48`), the LAN (RFC 1918, link-local, `.local`, ULA), and loopback in the simulator (`RelayRoute.swift`; ATS `NSAllowsLocalNetworking` plus a `ts.net` exception). The same rule as the desktop's `relay-route.ts`. |
+| **Plain `ws://`** | The iPhone's rule: Tailscale (`*.ts.net`, `100.64.0.0/10`, `fd7a:115c:a1e0::/48`) and the LAN, never the open internet; loopback only in debug builds (`adb reverse`). The network config permits cleartext app-wide, since it can't express an IP range, so the app refuses public `ws://` before dialing (`RelayRoute.publicCleartext` in `OkHttpTransport` and `HealthProber`; [decision 0034](decisions/0034-android-permits-cleartext-and-refuses-public-ws-in-the-app.md)). | To Tailscale (`*.ts.net`, `100.64.0.0/10`, `fd7a:115c:a1e0::/48`), the LAN (RFC 1918, link-local, `.local`, ULA), and loopback in the simulator (`RelayRoute.swift`; ATS `NSAllowsLocalNetworking` plus a `ts.net` exception). The same rule as the desktop's `relay-route.ts`. |
 | **A link that breaks the rule** | Warned about on the confirm card and in the connection banner (`RelayHint.kt`) | Refused before it's dialed, with the reason (`AppModel.pair`) |
 | **Is Tailscale on this phone?** | Read from the interface addresses, 100.64/10 (`TailnetStatus.kt`, `Tailnet.kt`). Drives the confirm card's "turn Tailscale on" hint for a tailnet relay. | Read from the interface addresses, 100.64/10 (`Tailnet.swift`). Drives the pairing guide's status line and the "turn Tailscale on" hint when a tailnet relay can't be reached. |
-| **Relay on this computer by tailnet IP only** (no MagicDNS name) | Refused by the network config (`RelayHint` TAILSCALE_IP) | Accepted |
+| **Relay on this computer by tailnet IP only** (no MagicDNS name) | Accepted (since 2026-10-31) | Accepted |
 | **QR scanning** | Google code scanner in Play services: no camera permission | AVFoundation: asks for the camera, with an Open Settings link if it's off |
 | **Paste a link** | Paste button and text field | Text field, plus the system Paste button (no paste prompt) |
-| **Push** | Not built yet (FCM needs the service account on the relay) | APNs token registered on every connect (`register-push`), plus ActivityKit tokens per running chat (`register-activity`) for Live Activities while suspended |
-| **More than one route** (a pairing link with `alt=` addresses, IO-20) | Parsed (`Pairing.kt`, same fixture as the computer) but not dialed: one route (AN-28) | Every route kept; LAN on Wi-Fi first, else the tailnet; immediate fallback, back after 3 `/healthz` probes and a 30 s dwell, never mid-request (`RouteSupervisor.swift`) |
+| **Push** | Not built yet (FCM needs the service account on the relay) | APNs token registered on every connect (`register-push`). The one Live Activity card registers no token yet, so it changes only while the app runs; its token arrives with `register-card` |
+| **More than one route** (a pairing link with `alt=` addresses, IO-20) | Every route kept and dialed, LAN included, by a port of the iPhone's `RouteSupervisor` (AN-28) | Every route kept; LAN on Wi-Fi first, else the tailnet; immediate fallback, back after 3 `/healthz` probes and a 30 s dwell, never mid-request (`RouteSupervisor.swift`) |
 | **Route checks** (IO-21) | No | *Check routes*: DNS, TCP and relay hello per route, timed; *Share diagnostics* as redacted text (`Diagnostics.swift`) |
 | **Finding a computer on this Wi-Fi** | *On this network* on the Pair screen: the system NSD service (`NsdManager`), no permission or multicast lock, one resolve at a time (`NearbyBrowser.kt`) | *On this network* on the Pair screen: `NWBrowser`, which shows iOS's local network prompt on the first tap (`NearbyBrowser.swift`, `NSBonjourServices`) |
 | **While in the background** | A foreground service (type remoteMessaging) keeps the connection while a chat is running, with the setting on, for up to 30 minutes after the last event (`KeepAlive.kt`) | A healthy socket is kept 30 s after an app switch, inside the short background task, then closed and reopened on return. After that, Live Activity pushes and notifications. iOS doesn't allow a long-lived socket. |
 
 ## Next steps
 
-- **Android: route failover** (AN-28): keep the `alt` routes, port `RouteSupervisor`, and allow plain `ws://` to private LAN ranges in the network config.
 - **Android: FCM push** (PH6), once the FCM service account is on the relay. The relay already sends FCM.
-- **Android: tailnet IPs.** Either keep requiring the MagicDNS name (the desktop shows it when the Tailscale CLI is present), or route `ws://100.x` through a small cleartext-permitted proxy. Today the network config can't allow an IP range, so the name stays the recommended route.
 - **Both: pair from a listing.** Both apps already list computers whose desktop has *Visible on this network* on (`_nekko-agent._tcp`, parsed by `NearbyComputer` with the same rules), for 30 seconds per tap. A listing carries no secrets, so pairing still takes the QR code or link. Tap-to-pair waits on the owner's choice in [reports/phone-discovery-pairing-proposal.md](../reports/phone-discovery-pairing-proposal.md).
+
+### Saved computer folders on iPhone
+
+From **Chats**, open the computer menu (**Computers and settings**) and choose
+**Files**. Each saved folder shows its name and full path on that computer; tap
+it to browse its files. Project headings in Chats and the new-chat folder chooser
+also show the path when the computer provides it. Chats without a folder remain
+visible without a General heading; choose **No folder** when starting one.
+
+Choose **Add computer folder** and type an absolute path on the computer, for
+example `/Users/me/projects/app` or `C:\Users\me\projects\app`. This is not a
+folder picker for the iPhone. The computer must be online, and changes from this
+phone must be allowed; Face ID or the passcode confirms changes when needed.
+
+Swipe a folder, or touch and hold it, and choose **Remove saved folder**. Confirm
+to remove only the saved entry. **The folder and its files are never deleted from
+disk.** The chat list refreshes after removal. Add/remove are unavailable offline;
+errors from the computer are shown rather than silently queued. If offline chat
+lists are enabled, saved folder names and paths are kept with the list on the
+phone until refreshed or cleared.

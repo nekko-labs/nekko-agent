@@ -41,7 +41,7 @@ impl Desk {
         let mut all: Vec<(&str, Option<&str>)> =
             vec![("USERPROFILE", Some(&home)), ("HOME", Some(&home)), ("NEKKO_DATA_DIR", Some(&link))];
         all.extend_from_slice(env);
-        start_with_env(Some(&self.data), json!({ "native": native, "edition": "desktop" }), &all)
+        start_with_env(&self.data, json!({ "native": native, "edition": "desktop" }), &all)
     }
 
     fn link(&self) -> Value {
@@ -207,7 +207,9 @@ async fn serves_the_local_api_server_and_its_link_with_no_backend() {
     let (s, _, _) = api(port, reqwest::Method::GET, "/api/health", Some(&fresh), None).await;
     assert_eq!(s, 200);
     assert_eq!(desk.link()["token"], fresh.as_str());
-    assert_eq!(desk.saved()["apiServer"]["token"], fresh.as_str());
+    assert!(desk.saved()["apiServer"].get("token").is_none(), "the token is in the keystore");
+    let (_, settings) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    assert_eq!(settings["apiServer"]["token"], fresh.as_str());
 
     // A port something else holds: said, not claimed to be serving.
     let held = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();

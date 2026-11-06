@@ -41,7 +41,7 @@
       const a = Math.min(0.9, 0.15 + (1 - st.z) * 0.9);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(226, 238, 248, ${a})`;
+      ctx.fillStyle = `rgba(243, 232, 238, ${a})`;
       ctx.fill();
     }
     if (!reduced) requestAnimationFrame(frame);
@@ -69,13 +69,25 @@
     );
     reveals.forEach((el) => io.observe(el));
   }
-  window.addEventListener('scroll', showInView, { passive: true });
+  // The viewport check reads layout, so once a frame at most, and not at all
+  // once everything has been revealed.
+  let pending = 0;
+  const onScroll = () => {
+    if (pending) return;
+    pending = requestAnimationFrame(() => {
+      pending = 0;
+      showInView();
+      if (reveals.every((el) => el.classList.contains('in'))) window.removeEventListener('scroll', onScroll);
+    });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
   showInView();
   window.addEventListener('load', showInView);
 
   // ---- smart download: default to the visitor's machine, menu for everything else ----
   const RELEASES = 'https://github.com/nekko-labs/nekko-agent/releases/latest';
-  const API = 'https://api.github.com/repos/nekko-labs/nekko-agent/releases/latest';
+  // Written by scripts/build-docs.mjs at deploy time, so loading the page asks GitHub nothing.
+  const RELEASE = '/release.json';
 
   // Each build we publish, with the pattern that finds it in a release's assets.
   // `pick` is what the primary button chooses for a detected os+arch.
@@ -135,7 +147,7 @@
     return null; // unknown, keep the default
   }
 
-  let assets = null; // name -> browser_download_url, once the API answers
+  let assets = null; // name -> browser_download_url, once release.json answers
   let version = '';
 
   function urlFor(build) {
@@ -370,19 +382,85 @@
       }
     }
 
-    fetch(API, { headers: { Accept: 'application/vnd.github+json' } })
+    fetch(RELEASE)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((rel) => {
-        assets = Object.fromEntries(
-          (rel.assets || []).map((a) => [a.name, a.browser_download_url]),
-        );
-        version = rel.tag_name || '';
+        assets = rel.assets || {};
+        version = rel.version || '';
         render();
       })
       .catch(() => {
-        /* offline or rate-limited: the static links to /releases/latest still work */
+        /* no release.json (local preview, or GitHub was down at build): the static links to /releases/latest still work */
       });
   }
+})();
+
+// ---- panel videos: loop only while on screen, so five looping demos cost
+//      nothing until scrolled to. preload="none" keeps the page load light;
+//      with reduced motion they stay on their poster (the lightbox still plays). ----
+(() => {
+  const videos = document.querySelectorAll('video[data-autoplay]');
+  if (!videos.length || !('IntersectionObserver' in window)) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(({ target, isIntersecting }) => {
+      if (isIntersecting) target.play().catch(() => { /* autoplay blocked: the poster stays */ });
+      else target.pause();
+    });
+  }, { threshold: 0.4 });
+  videos.forEach((v) => io.observe(v));
+})();
+
+// ---- panel videos with a light version: each <source> carries data-src-light
+//      (and the video data-poster-light). The file and poster follow the look,
+//      switching with the theme; dark keeps the sources as written. ----
+(() => {
+  const toned = [...document.querySelectorAll('video[data-autoplay]')].filter((v) => v.querySelector('source[data-src-light]'));
+  if (!toned.length) return;
+  toned.forEach((v) => {
+    v.dataset.posterDark = v.getAttribute('poster');
+    v.querySelectorAll('source').forEach((s) => { s.dataset.srcDark = s.getAttribute('src'); });
+  });
+  const apply = () => {
+    const key = document.documentElement.dataset.theme === 'dark' ? 'Dark' : 'Light';
+    toned.forEach((v) => {
+      if (v.dataset.tone === key) return;
+      const first = v.dataset.tone === undefined;
+      v.dataset.tone = key;
+      if (first && key === 'Dark') return; // already as written
+      const wasPlaying = !v.paused;
+      v.poster = v.dataset[`poster${key}`] || v.dataset.posterDark;
+      v.querySelectorAll('source').forEach((s) => { s.src = s.dataset[`src${key}`] || s.dataset.srcDark; });
+      if (v.readyState > 0 || v.networkState !== HTMLMediaElement.NETWORK_EMPTY) v.load();
+      if (wasPlaying) v.play().catch(() => {});
+    });
+  };
+  apply();
+  new MutationObserver(apply).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+
+// ---- the hero's speed replay: its file and end-frame poster follow the look
+//      (dark files for Dark, light for White), switching with the theme. It
+//      autoplays muted and loops; with reduced motion only the poster loads. ----
+(() => {
+  const video = document.querySelector('video[data-replay]');
+  if (!video) return;
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const key = () => (document.documentElement.dataset.theme === 'dark' ? 'Dark' : 'Light');
+  let loaded = null;
+  const load = () => {
+    const k = key();
+    if (k === loaded) return;
+    loaded = k;
+    video.poster = video.dataset[`poster${k}`];
+    if (reduced) return; // poster only
+    video.autoplay = true;
+    video.preload = 'auto';
+    video.src = video.dataset[`src${k}`];
+    video.play().catch(() => { /* autoplay blocked: the poster stays */ });
+  };
+  load();
+  new MutationObserver(load).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
 
 // ---- media slots: click a feature GIF or product image to see it large ----
@@ -399,10 +477,12 @@
   document.querySelectorAll('.media').forEach((el) => {
     el.addEventListener('click', () => {
       opener = el;
-      const src = el.querySelector('img, video');
+      // the visible one: the hero holds a dark and a light shot, one hidden per look
+      const src = [...el.querySelectorAll('img, video')].find((m) => m.getClientRects().length);
       let big;
       if (src) {
         big = src.cloneNode(true);
+        if (big.tagName === 'IMG' && big.srcset) big.sizes = '100vw';
         if (big.tagName === 'VIDEO') { big.controls = true; big.autoplay = true; big.muted = true; big.loop = true; }
       } else {
         big = document.createElement('div');
@@ -419,27 +499,37 @@
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) shut(); });
 })();
 
-// ---- look switch: Dark by default, then White, then Colourful. The choice is
-//      remembered once made; the icon shows where the next click goes. ----
+// ---- look switch: Dark or White. Until the visitor picks one the page follows
+//      the system's light or dark setting (the inline script in <head> applies
+//      it before first paint); a pick is remembered. The icon shows where the
+//      next click goes. ----
 (() => {
   const btn = document.querySelector('.theme-toggle');
   if (!btn) return;
   const root = document.documentElement;
-  const LOOKS = ['dark', 'white', 'colour'];
-  const NAME = { dark: 'Dark', white: 'White', colour: 'Colourful' };
-  const THEME_COLOR = { dark: '#0d0b18', white: '#f3effe', colour: '#9d8ce6' };
-  const current = () => (LOOKS.includes(root.dataset.theme) ? root.dataset.theme : 'dark');
+  const NAME = { dark: 'Dark', white: 'White' };
+  const THEME_COLOR = { dark: '#0c0c11', white: '#fbf6f8' };
+  const system = window.matchMedia('(prefers-color-scheme: dark)');
+  const saved = () => { try { return localStorage.getItem('nekko-theme'); } catch (e) { return null; } };
+  const current = () => (root.dataset.theme === 'dark' ? 'dark' : 'white');
   const sync = () => {
     const now = current();
-    const next = LOOKS[(LOOKS.indexOf(now) + 1) % LOOKS.length];
+    const next = now === 'dark' ? 'white' : 'dark';
     btn.setAttribute('aria-label', `${NAME[now]} look. Switch to the ${NAME[next]} look`);
     btn.title = `Switch to the ${NAME[next]} look`;
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = THEME_COLOR[now];
   };
   sync();
+  // No pick yet: keep following the system if it changes while the page is open.
+  system.addEventListener('change', () => {
+    const pick = saved();
+    if (pick === 'dark' || pick === 'white') return;
+    root.dataset.theme = system.matches ? 'dark' : 'white';
+    sync();
+  });
   btn.addEventListener('click', () => {
-    const next = LOOKS[(LOOKS.indexOf(current()) + 1) % LOOKS.length];
+    const next = current() === 'dark' ? 'white' : 'dark';
     root.dataset.theme = next;
     sync();
     try { localStorage.setItem('nekko-theme', next); } catch (e) { /* private mode: the choice lasts this page only */ }
@@ -475,7 +565,7 @@
   const peek = stage.querySelector('.nekko-peek');
   const look = stage.querySelector('.np-look');
   const bubble = stage.querySelector('[data-bubble]');
-  const note = form.querySelector('.beta-note');
+  const note = form.querySelector('#beta-note');
   const lines = {
     idle: "Psst… want to see what's next?",
     watching: 'Ooh, keep going…',
@@ -500,6 +590,11 @@
   input.addEventListener('blur', () => { look.removeAttribute('transform'); if (mood === 'watching') setMood('idle'); });
   button.addEventListener('mouseenter', () => { if (mood !== 'confused') setMood('eager'); });
   button.addEventListener('mouseleave', () => { if (mood === 'eager') setMood(document.activeElement === input ? 'watching' : 'idle'); });
+  // The API's machine sleeps when idle; wake it once someone starts on the form
+  // (not on page load, so just reading the page contacts nothing but this site).
+  input.addEventListener('focus', () => {
+    if (form.dataset.endpoint) fetch(new URL('/healthz', form.dataset.endpoint), { mode: 'no-cors' }).catch(() => {});
+  }, { once: true });
   // idle blink every few seconds
   setInterval(() => {
     if (mood !== 'idle') return;
@@ -512,36 +607,123 @@
     if (!input.checkValidity()) { setMood('confused'); input.focus(); return; }
     const endpoint = form.dataset.endpoint;
     if (!endpoint) {
-      // No sign-up service connected yet: say so rather than claim a sign-up that went nowhere.
+      // No sign-up service connected: say so rather than claim a sign-up that went nowhere.
       note.textContent = "Beta sign-ups aren't open yet. Follow along on GitHub to hear about the first builds.";
       setMood('idle'); // sets the idle line, so the bubble's own text goes after it
       bubble.textContent = 'Almost ready! Check back soon.';
       return;
     }
-    {
-      try {
-        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ email: input.value }) });
-        if (!res.ok) throw new Error(String(res.status));
-      } catch (err) {
+    // What the API keeps: the page path (never the full URL) and any utm_* tags.
+    const params = new URLSearchParams(location.search);
+    const utm = {};
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content']) {
+      const v = params.get(key);
+      if (v) utm[key] = v;
+    }
+    const body = {
+      email: input.value.trim(),
+      list: 'beta',
+      source: location.pathname,
+      utm,
+      website: form.elements.website?.value || '',
+      // Product updates are their own unticked choice; the API records which policy text was agreed to.
+      marketing: Boolean(form.elements.marketing?.checked),
+      policyVersion: '2026-11-03',
+    };
+    const name = form.elements.name?.value.trim();
+    if (name) body.name = name;
+    button.disabled = true;
+    let res;
+    try {
+      res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) });
+    } catch (err) {
+      res = null;
+    }
+    button.disabled = false;
+    if (!res || !res.ok) {
+      if (res && res.status === 429) {
+        note.textContent = "That's a lot of sign-ups from here in a short time. Please try again in an hour.";
+        bubble.textContent = 'Whoa, slow down! Try again later.';
+      } else if (res && res.status === 400) {
+        note.textContent = 'Please check your email address and try again.';
+        bubble.textContent = lines.confused;
+      } else {
         note.textContent = "That didn't go through. Please try again in a moment.";
-        setMood('confused');
         bubble.textContent = 'Oops, something went wrong. Try again?';
-        return;
       }
+      peek.dataset.mood = mood = 'confused';
+      return;
     }
     look.removeAttribute('transform');
     setMood('celebrate');
     form.querySelector('.beta-ask').hidden = true;
     form.querySelector('.beta-done').hidden = false;
   });
+
+  // ---- the tour video beside the form. Its file follows the look (dark files
+  //      for Dark, light for White) and nothing, poster included,
+  //      loads until the section nears the screen. It plays while at least half
+  //      of it is in view, never on its own with reduced motion, and when it
+  //      ends it hands over to the form. ----
+  const tour = document.querySelector('[data-tour]');
+  if (!tour) return;
+  const video = tour.querySelector('video');
+  const end = tour.querySelector('[data-tour-end]');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tone = () => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+  let loaded = null; // the tone whose file is in the player
+  let inView = false;
+  const load = () => {
+    const t = tone();
+    if (t === loaded) return;
+    const at = video.currentTime;
+    const wasPlaying = !video.paused;
+    const key = t === 'dark' ? 'Dark' : 'Light';
+    video.poster = video.dataset[`poster${key}`];
+    video.src = video.dataset[`src${key}`];
+    loaded = t;
+    if (at > 0) {
+      video.addEventListener('loadedmetadata', () => {
+        video.currentTime = at;
+        if (wasPlaying) video.play().catch(() => {});
+      }, { once: true });
+      video.load();
+    }
+  };
+  new MutationObserver(() => { if (loaded !== null) load(); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  new IntersectionObserver(([e], io) => {
+    if (e.isIntersecting) { load(); io.disconnect(); }
+  }, { rootMargin: '200px 0px' }).observe(tour);
+  if (!reduced) {
+    new IntersectionObserver(([e]) => {
+      inView = e.intersectionRatio >= 0.5;
+      if (inView && end.hidden) { load(); video.play().catch(() => {}); } else if (!inView) video.pause();
+    }, { threshold: [0, 0.5] }).observe(video);
+  }
+  video.addEventListener('ended', () => {
+    end.hidden = false;
+    setMood('eager');
+    if (mood === 'eager') bubble.textContent = 'Liked the tour? Pop your email in!';
+  });
+  video.addEventListener('play', () => { end.hidden = true; });
+  tour.querySelector('[data-tour-join]').addEventListener('click', () => {
+    stage.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
+    input.focus({ preventScroll: true });
+  });
+  tour.querySelector('[data-tour-again]').addEventListener('click', () => {
+    end.hidden = true;
+    video.currentTime = 0;
+    video.play().catch(() => {});
+  });
 })();
 
 // ---- dot-matrix swell background: a fine grid of pixel dots that mostly
 //      sits invisible, with a soft wave of brightness drifting through it.
 //      The grid is fixed to the screen and ignores scrolling, so the wave
-//      keeps one steady pace however the page moves. Brand gradient (indigo to
-//      lavender, left to right) on the white version, white on the colourful
-//      one, and lavender to aqua on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
+//      keeps one steady pace however the page moves. Brand gradient (plum to
+//      light plum, left to right) on the white version,
+//      and light plum to rose on the dark one. ~20 fps, pauses when the tab is hidden, and holds still for
 //      reduced-motion visitors. ----
 (() => {
   const c = document.getElementById('pixelwave');
@@ -568,13 +750,12 @@
         if (a < 0.025) continue;
         const s = a > 0.18 ? 3 : 2;
         const k = x / W;
-        if (theme === 'colour') ctx.fillStyle = `rgba(255,255,255,${(a * 1.6).toFixed(3)})`;
-        else if (theme === 'dark') {
-          // 0 = lavender #9D8CE6, 1 = aqua #8AE4F2: glowing dots on the dark ground
-          ctx.fillStyle = `rgba(${Math.round(157 - 19 * k)},${Math.round(140 + 88 * k)},${Math.round(230 + 12 * k)},${(a * 1.1).toFixed(3)})`;
+        if (theme === 'dark') {
+          // 0 = light plum #c084b5, 1 = rose #854f6c: glowing on the dark ground
+          ctx.fillStyle = `rgba(${Math.round(192 - 59 * k)},${Math.round(132 - 53 * k)},${Math.round(181 - 73 * k)},${(a * 1.1).toFixed(3)})`;
         } else {
-          // 0 = indigo #453A92, 1 = lavender #9D8CE6
-          ctx.fillStyle = `rgba(${Math.round(69 + 88 * k)},${Math.round(58 + 82 * k)},${Math.round(146 + 84 * k)},${a.toFixed(3)})`;
+          // 0 = plum #5a2352, 1 = light plum #c084b5
+          ctx.fillStyle = `rgba(${Math.round(90 + 102 * k)},${Math.round(35 + 97 * k)},${Math.round(82 + 99 * k)},${a.toFixed(3)})`;
         }
         ctx.fillRect(Math.round(x + (CELL - s) / 2), Math.round(y + (CELL - s) / 2), s, s);
       }
@@ -587,10 +768,21 @@
     last = now;
     draw();
   };
-  const start = () => { if (!raf && !reduced) { last = performance.now(); raf = requestAnimationFrame(loop); } };
+  // The wave keeps moving down the whole page; the panels over it are solid,
+  // so redrawing behind them stays cheap. Only a hidden tab stops it.
+  const start = () => { if (!raf && !reduced && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(loop); } };
   const stop = () => { cancelAnimationFrame(raf); raf = 0; };
   size(); draw();
-  window.addEventListener('resize', () => { size(); draw(); });
+  // A phone's URL bar showing or hiding fires resize with only the height
+  // changed a little: keep the canvas rather than reallocating it.
+  let resizeTimer = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (window.innerWidth === W && Math.abs(window.innerHeight - H) < 120) return;
+      size(); draw();
+    }, 150);
+  });
   document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
   new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   start();

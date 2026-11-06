@@ -1,3 +1,4 @@
+import { ActiveWatchChips } from './components/ActiveWatchChips.js';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +39,8 @@ describe('user PR watch continuation', () => {
   it('shows real scheduler state, never an optimistic active claim', () => {
     __setAgentWatches('s', [watch]);
     const html = renderToStaticMarkup(<PrWatchContinuation sessionId="s" replyId="reply" prs={[pr]} eligible onContinue={vi.fn()} />);
-    expect(html).toContain('Watcher active');
+    expect(html).toBe('');
+    expect(renderToStaticMarkup(<ActiveWatchChips sessionId="s" />)).toContain('PR watcher');
     expect(html).not.toContain('Watch CI and merge when passing');
   });
 });

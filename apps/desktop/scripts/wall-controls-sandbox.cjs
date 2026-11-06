@@ -32,8 +32,12 @@ app.whenReady().then(async () => {
     await run('window.integration.reset()');
     // Reset remounts cold ChatPanes. Hidden macOS rendering can finish loading
     // later than a fixed sleep; wait for the controls the next step needs.
+    // That is the Mode button, not any .ctl-menu: the model chip renders as
+    // soon as the composer mounts ("No model · No provider"), while Mode
+    // waits for the chat session to load. Waiting on the chip let the next
+    // step race the session load, and lose it on the macOS runner (#1458).
     for (let attempt = 0; attempt < 50; attempt++) {
-      if (await run("!!document.querySelector('[data-wall-composer] .ctl-menu')")) return;
+      if (await run("!!document.querySelector('[data-wall-composer] [data-chat-mode-button]')")) return;
       await sleep(100);
     }
     throw Error('Reset did not finish mounting shared composer controls');
@@ -58,14 +62,14 @@ app.whenReady().then(async () => {
         await sleep(700);
         await check('focused wall mounted', "!!document.querySelector('[data-wall-layout=focus]')");
         if (current) await check('focused frame has no ring', "(()=>{const p=document.querySelector('.command-wall-window > .panel');return getComputedStyle(p).boxShadow==='none' && getComputedStyle(p).borderTopWidth==='0px' && getComputedStyle(p,'::after').display==='none'})()");
-        if (current) await check('focused title strips hidden', "[...document.querySelectorAll('[data-pane-title-strip]')].every(e=>getComputedStyle(e).display==='none')");
+        if (current) await check('focused hero keeps its title strip', "(()=>{const e=document.querySelector('.command-wall-window[data-wall-hero] [data-pane-title-strip]');return !!e && getComputedStyle(e).display!=='none' && e.getBoundingClientRect().height>0 && !e.draggable})()");
         await capture(`focused-motion-${tag}-${theme}-${width}`);
       }
       win.setContentSize(1400, 900);
       await sleep(400);
       if (current && process.env.NEKKO_FOCUS_SURFACES) {
         await check('focus has rounded translucent surface', "(()=>{const s=getComputedStyle(document.querySelector('.command-wall-window > .panel'));return s.borderTopLeftRadius==='24px' && s.backgroundColor!=='transparent'})()");
-        await check('navigation is 90% height without SVG morph', "(()=>{const r=document.querySelector('.rail'),p=r.parentElement;return Math.abs(r.getBoundingClientRect().height/p.getBoundingClientRect().height-.9)<.01 && !r.querySelector('svg.rail-backdrop')})()");
+        await check('navigation is 90% height without SVG morph', "(()=>{const r=document.querySelector('.rail'),p=r.parentElement;return Math.abs(r.getBoundingClientRect().height/p.getBoundingClientRect().height-.9)<.01 && !!r.querySelector('svg.rail-backdrop') && getComputedStyle(r.querySelector('.rail-backdrop path')).transitionDuration==='0s'})()");
         const before = await run("document.querySelector('.wall-agents-presence').getBoundingClientRect().width");
         await run("document.querySelector('[aria-label=\"Hide the agent panel\"], [aria-label=\"Show the agent panel\"]').click(); document.querySelector('.wall-agents-presence')?.getBoundingClientRect()");
         await sleep(100);
@@ -649,7 +653,7 @@ app.whenReady().then(async () => {
       await run("document.querySelector('[data-wall-composer] [contenteditable]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,clientX:150,clientY:150}))");
       await check('editor excludes transcript actions', "![...document.querySelectorAll('[role=menu]')].some(m=>m.textContent.includes('Copy chat')||m.textContent.includes('Export as Markdown'))");
       await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
-      await check('transcript exposes subtle inline reply measurements', "(()=>{const e=document.querySelector('.command-wall-window [data-chat-surface] [role=status]');return e?.classList.contains('text-ink-faint') && e.textContent.includes('tok/s') && e.textContent.includes('total tokens') && e.textContent.includes('Time unavailable')})()");
+      await check('transcript exposes subtle inline reply measurements', "(()=>{const e=document.querySelector('.command-wall-window [data-chat-surface] [role=status]');return e?.classList.contains('text-ink-faint') && /\\d+s$/.test(e.textContent)})()");
       await check('fixed footer excludes reply measurements', "!document.querySelector('.command-wall-window [aria-label=\"Chat actions and information\"] [role=status]')");
     }
       }

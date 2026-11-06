@@ -12,6 +12,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.rememberSimpleView
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.fragment.app.FragmentActivity
@@ -35,6 +37,9 @@ import kotlinx.coroutines.launch
  * A FragmentActivity because the system authentication prompt (app lock) is a fragment.
  */
 class MainActivity : FragmentActivity() {
+    /** The system prompt for the app lock and for confirming Changes (AN-32). */
+    private lateinit var authenticator: Authenticator
+
     /** The latest link opened from outside the app; the nav host consumes it. */
     private val incomingLink = MutableStateFlow<DeepLink?>(null)
 
@@ -45,7 +50,8 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) handle(intent)
         val app = application as NekkoApp
         val repo = app.computers
-        val authenticator = Authenticator(this)
+        authenticator = Authenticator(this)
+        app.ownerCheck.attach(authenticator)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.CREATED) { app.appLock.enabled.collect(::privateRecents) }
         }
@@ -58,8 +64,8 @@ class MainActivity : FragmentActivity() {
                 val bars = if (look.dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
             }
-            NekkoTheme(dark = look.dark, accent = look.accent) {
-                CompositionLocalProvider(LocalAuthenticator provides authenticator, LocalAppLock provides app.appLock) {
+            NekkoTheme(dark = look.dark, accent = look.accent, preset = look.preset) {
+                CompositionLocalProvider(LocalAuthenticator provides authenticator, LocalAppLock provides app.appLock, LocalSimple provides rememberSimpleView(app.phonePrefs)) {
                     LockGate(app.appLock, authenticator) {
                         NekkoNavHost(
                             repo = repo,
@@ -178,6 +184,11 @@ class MainActivity : FragmentActivity() {
                 incomingLink.value = DeepLink.Share
             }
         }
+    }
+
+    override fun onDestroy() {
+        (application as NekkoApp).ownerCheck.detach(authenticator)
+        super.onDestroy()
     }
 }
 

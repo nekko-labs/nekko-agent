@@ -41,8 +41,8 @@ import UIKit
 /// needs Apple's web-browser credential entitlement, which this app does not
 /// qualify for. Real-hardware checks are SK-12.
 ///
-/// Not actor-isolated as a type, so a view can hold one in `@State`; every
-/// ceremony runs on the main actor.
+/// Main-actor isolated: every ceremony runs there, and a view holds one in `@State`.
+@MainActor
 final class SecurityKeys: NSObject {
     enum Kind: Sendable {
         /// A FIDO2 key over NFC, Lightning or USB-C.

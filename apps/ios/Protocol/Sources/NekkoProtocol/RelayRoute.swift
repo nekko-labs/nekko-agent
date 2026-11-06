@@ -21,7 +21,7 @@ public enum RelayRoute: Equatable, Sendable {
 
     public static func of(_ relayUrl: String) -> RelayRoute {
         let h = host(relayUrl)
-        if h == "localhost" || h == "127.0.0.1" || h == "::1" || h.hasPrefix("127.") { return .loopback }
+        if h == "localhost" || h == "::1" || ipv4(h)?.first == 127 { return .loopback }
         if h == "ts.net" || h.hasSuffix(".ts.net") || isTailscaleIPv4(h) || isTailscaleIPv6(h) { return .tailscale }
         if h.hasSuffix(".local") || isPrivateIPv4(h) || isPrivateIPv6(h) { return .lan }
         return .internet

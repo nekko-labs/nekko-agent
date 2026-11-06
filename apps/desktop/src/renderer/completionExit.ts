@@ -1,3 +1,5 @@
+import { EASE_OUT } from './easing.js';
+
 /** The row folds shut toward its left edge. */
 export const ROW_CLOSE_MS = 260;
 /** Then the space it held closes, sliding the rows below it up. */
@@ -14,11 +16,11 @@ export function findCompletionRow(sessionId: string): HTMLElement | null {
 }
 
 /**
- * Plays the completion exit on a sidebar row, then runs `complete`, which
- * removes the row from the list once the engine has saved the completion.
- * The row closes to the left, stardust drifts out of where it vanished, and
- * its height collapses so the rows below slide up into its place. If
- * `complete` reports failure the row is put back as it was.
+ * Plays the completion exit on a sidebar row while `complete` runs in parallel,
+ * so the engine work overlaps the animation instead of waiting for it. The row
+ * closes to the left, stardust drifts out of where it vanished, and its height
+ * collapses so the rows below slide up into its place. If `complete` reports
+ * failure the row is put back as it was.
  */
 export async function completeWithExit(row: HTMLElement | null, complete: () => Promise<boolean>): Promise<void> {
   if (!row || row.dataset.completing || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -30,12 +32,15 @@ export async function completeWithExit(row: HTMLElement | null, complete: () => 
   const rect = row.getBoundingClientRect();
   const computed = getComputedStyle(row);
 
+  // Kick the engine work off immediately; the animation plays over it, not before it.
+  const completion = complete();
+
   const close = row.animate(
     [
       { clipPath: 'inset(0 0 0 0 round 8px)', opacity: 1 },
       { clipPath: 'inset(0 100% 0 0 round 8px)', opacity: 0.6 },
     ],
-    { duration: ROW_CLOSE_MS, easing: 'cubic-bezier(.55, 0, .8, .25)', fill: 'forwards' },
+    { duration: ROW_CLOSE_MS, easing: EASE_OUT, fill: 'forwards' },
   );
   await settled(close, ROW_CLOSE_MS);
   scatterStardust(rect);
@@ -45,13 +50,13 @@ export async function completeWithExit(row: HTMLElement | null, complete: () => 
       { height: `${rect.height}px`, marginTop: computed.marginTop, marginBottom: computed.marginBottom, overflow: 'hidden' },
       { height: '0px', marginTop: '0px', marginBottom: '0px', overflow: 'hidden' },
     ],
-    { duration: ROW_COLLAPSE_MS, delay: 60, easing: 'cubic-bezier(.3, 0, .2, 1)', fill: 'forwards' },
+    { duration: ROW_COLLAPSE_MS, delay: 60, easing: EASE_OUT, fill: 'forwards' },
   );
   await settled(collapse, ROW_COLLAPSE_MS + 60);
 
   let done = false;
   try {
-    done = await complete();
+    done = await completion;
   } finally {
     // Completed rows are unmounted by now; a failed one comes back.
     if (!done) {

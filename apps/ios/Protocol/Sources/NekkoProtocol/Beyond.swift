@@ -7,6 +7,32 @@ import Foundation
 // Run now on an automation the owner already set up.
 
 /// One prompt waiting in a chat's queue on the computer.
+/// A run setting a phone shows for a chat, sent to the computer running it. No
+/// `values` means on or off. The computer checks every one, and asks for Face ID
+/// for those that change what an agent may touch.
+public struct RunOption: Sendable, Identifiable, Equatable {
+    public let key: String
+    public let values: [String]
+    public var id: String { key }
+
+    public static let all = [
+        RunOption(key: "autoModel", values: []),
+        RunOption(key: "offline", values: []),
+        RunOption(key: "cloudOnly", values: []),
+        RunOption(key: "incognito", values: []),
+        RunOption(key: "gitIsolation", values: []),
+        RunOption(key: "workMode", values: ["default", "better-review", "design", "best-output"]),
+        RunOption(key: "toolApproach", values: ["list", "code"]),
+    ]
+
+    /// A chat's run settings, as the computer holds them.
+    public static func values(of v: JSONValue?) -> [String: JSONValue] {
+        var out: [String: JSONValue] = [:]
+        for o in all { if let value = v?[o.key], !value.isNull { out[o.key] = value } }
+        return out
+    }
+}
+
 public struct QueuedPrompt: Equatable, Sendable {
     /// The text the computer holds: what an edit is checked against (`expect`).
     public let text: String
@@ -29,6 +55,7 @@ public struct QueuedPrompt: Equatable, Sendable {
 
     /// A skill's text is its instructions: it can be removed, not edited.
     public var editable: Bool { skillName == nil }
+
 
     public static func list(_ v: JSONValue?) -> [QueuedPrompt] {
         (v?.array ?? []).compactMap { q in
@@ -232,6 +259,14 @@ public struct UsageSummary: Equatable, Sendable {
         public let subscription: Bool
         public var id: String { model }
         public var tokens: Int64 { input + output }
+
+        public init(model: String, input: Int64, output: Int64, cost: Double = 0, subscription: Bool = false) {
+            self.model = model
+            self.input = input
+            self.output = output
+            self.cost = cost
+            self.subscription = subscription
+        }
     }
 
     public struct Day: Equatable, Sendable, Identifiable {
@@ -239,13 +274,28 @@ public struct UsageSummary: Equatable, Sendable {
         public let tokens: Int64
         public let cost: Double
         public var id: String { date }
+
+        public init(date: String, tokens: Int64, cost: Double = 0) {
+            self.date = date
+            self.tokens = tokens
+            self.cost = cost
+        }
     }
 
     public let totalInput: Int64
     public let totalOutput: Int64
+    /// What the pay-per-token models cost: the computer counts a subscription's models at zero.
     public let totalCost: Double
     public let models: [Model]
     public let days: [Day]
+
+    public init(totalInput: Int64, totalOutput: Int64, totalCost: Double, models: [Model], days: [Day]) {
+        self.totalInput = totalInput
+        self.totalOutput = totalOutput
+        self.totalCost = totalCost
+        self.models = models
+        self.days = days
+    }
 
     public var totalTokens: Int64 { totalInput + totalOutput }
 
@@ -289,6 +339,111 @@ public struct ProviderLimits: Equatable, Sendable {
                           resetAt: w.long("resetAt"), status: w.str("status") ?? "allowed")
         }
         return ProviderLimits(planType: v.str("planType"), windows: windows, updatedAt: v.long("updatedAt"))
+    }
+}
+
+/// Usage from one place it came from (#1773): a paired computer, or this iPhone's
+/// own chats. Within a place, subscriptions (plans, with their limits, and the
+/// models that bill to them) come before pay-per-token API use.
+public struct UsagePlace: Equatable, Sendable, Identifiable {
+    public enum Kind: Equatable, Sendable { case computer, phone }
+
+    /// A subscription plan: an enabled provider that reported limits.
+    public struct Plan: Equatable, Sendable, Identifiable {
+        public let providerId: String
+        public let label: String
+        public let limits: ProviderLimits
+        public var id: String { providerId }
+
+        public init(providerId: String, label: String, limits: ProviderLimits) {
+            self.providerId = providerId
+            self.label = label
+            self.limits = limits
+        }
+
+        /// The heading: `Claude · Max`.
+        public var title: String {
+            [label, limits.planType.flatMap { $0.isEmpty ? nil : $0.capitalized }].compactMap { $0 }.joined(separator: " · ")
+        }
+    }
+
+    /// Pay-per-token models, under the provider they bill to when the place knows it
+    /// (this iPhone does; a computer's summary names only the model).
+    public struct ApiGroup: Equatable, Sendable, Identifiable {
+        public let label: String?
+        public let models: [UsageSummary.Model]
+        public var id: String { label ?? "" }
+        public var tokens: Int64 { models.reduce(0) { $0 + $1.tokens } }
+
+        public init(label: String?, models: [UsageSummary.Model]) {
+            self.label = label
+            self.models = models
+        }
+    }
+
+    public let id: String
+    public let kind: Kind
+    /// The computer's name; empty for this iPhone (the app names it).
+    public let name: String
+    /// The place answered this time. An offline computer keeps the numbers it last gave.
+    public var online: Bool
+    public var summary: UsageSummary?
+    public var plans: [Plan]
+    /// This iPhone's API use by provider; a computer's comes from its summary.
+    public var phoneGroups: [ApiGroup]
+    /// Why the place could not be read, when it could not.
+    public var error: String?
+
+    public init(id: String, kind: Kind, name: String, online: Bool, summary: UsageSummary? = nil, plans: [Plan] = [],
+                phoneGroups: [ApiGroup] = [], error: String? = nil) {
+        self.id = id
+        self.kind = kind
+        self.name = name
+        self.online = online
+        self.summary = summary
+        self.plans = plans
+        self.phoneGroups = phoneGroups
+        self.error = error
+    }
+
+    /// The place has prices: a computer does. This iPhone has no price table, so it shows tokens only.
+    public var priced: Bool { kind == .computer }
+
+    /// The models that bill to a subscription, busiest first.
+    public var subscriptionModels: [UsageSummary.Model] { (summary?.models ?? []).filter(\.subscription) }
+
+    /// Pay-per-token use, grouped by provider where the place knows it.
+    public var apiGroups: [ApiGroup] {
+        if kind == .phone { return phoneGroups.filter { !$0.models.isEmpty } }
+        let models = (summary?.models ?? []).filter { !$0.subscription }
+        return models.isEmpty ? [] : [ApiGroup(label: nil, models: models)]
+    }
+
+    public var totalTokens: Int64 { summary?.totalTokens ?? 0 }
+    /// Tokens on a subscription, from the models listed (the computer sends its busiest only).
+    public var subscriptionTokens: Int64 { subscriptionModels.reduce(0) { $0 + $1.tokens } }
+    public var apiTokens: Int64 { max(0, totalTokens - subscriptionTokens) }
+    /// Estimated API spend; nil where the place has no prices.
+    public var apiCost: Double? { priced ? summary?.totalCost ?? 0 : nil }
+    public var isEmpty: Bool { totalTokens == 0 && plans.isEmpty }
+}
+
+/// Every place's usage added up: the All places total at the top.
+public struct UsageTotals: Equatable, Sendable {
+    public let tokens: Int64
+    public let subscriptionTokens: Int64
+    public let apiTokens: Int64
+    /// Estimated API spend across the computers (this iPhone has no prices).
+    public let apiCost: Double
+    /// Places whose numbers are not live this time.
+    public let offline: Int
+
+    public init(_ places: [UsagePlace]) {
+        tokens = places.reduce(0) { $0 + $1.totalTokens }
+        subscriptionTokens = places.reduce(0) { $0 + $1.subscriptionTokens }
+        apiTokens = places.reduce(0) { $0 + $1.apiTokens }
+        apiCost = places.reduce(0) { $0 + ($1.apiCost ?? 0) }
+        offline = places.filter { !$0.online }.count
     }
 }
 

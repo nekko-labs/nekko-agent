@@ -11,6 +11,7 @@
 //
 // Usage: node scripts/itest-small-services.mjs [path/to/nekkod]
 // Needs `npm run build:web` (or `npm run build`).
+import { randomPort } from './itest-ports.mjs';
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,7 +25,7 @@ const targetDir = process.env.CARGO_TARGET_DIR ?? 'target';
 const nekkod = resolve(process.argv[2] ?? join(targetDir, 'debug', `nekkod${exe}`));
 if (!existsSync(nekkod)) throw new Error(`missing ${nekkod}: cargo build -p nekkod`);
 
-const SERVER_PORT = 6300 + Math.floor(Math.random() * 400);
+const SERVER_PORT = randomPort(6300, 400);
 const TOKEN = randomBytes(24).toString('hex');
 const root = mkdtempSync(join(tmpdir(), 'nekko-small-services-'));
 const dataDir = join(root, 'data');
@@ -201,12 +202,12 @@ try {
   };
   console.log(`medians through the public server (ms): ${JSON.stringify(median)}`);
 
-  // data:wipe: chats, memory, usage gone; sign-ins kept; settings reset.
+  // data:wipe: chats, memory, usage and sign-ins gone; settings reset.
   await api('settings:update', { theme: 'light' });
   const next = await api('data:wipe');
   const left = readdirSync(join(dataDir, 'sessions')).filter((f) => f.endsWith('.json'));
   check('data:wipe clears chats, memory and usage and resets settings', left.length === 0 && !existsSync(join(dataDir, 'memory', 'note.md')) && !existsSync(join(dataDir, 'usage.jsonl')) && next.theme !== 'light' && (await api('settings:get')).theme !== 'light', JSON.stringify({ left, theme: next.theme }));
-  check('data:wipe keeps sign-ins', existsSync(join(dataDir, 'tokens.json')));
+  check('data:wipe deletes sign-ins', !existsSync(join(dataDir, 'tokens.json')));
   check('the folder itself is untouched', existsSync(join(clone, 'a.txt')));
 } catch (e) {
   check('run', false, `${e.message}\n${serverOut.slice(-4000)}`);

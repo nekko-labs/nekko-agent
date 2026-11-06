@@ -21,11 +21,11 @@ app.whenReady().then(async () => {
     await win.loadURL('about:blank');
     win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Page.enable');
-    await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('nekko.commandWall', JSON.stringify({ root: { id: 'gradient-pane', kind: 'chat', refId: 'd' }, hero: 'd', watermark: 1, autoAdd: false, layout: { mode: 'focus' }, dock: { show: false }, agentPanel: { show: false } }));` });
+    await win.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: `localStorage.setItem('nekko.commandWall', JSON.stringify({ root: { id: 'gradient-pane', kind: 'chat', refId: 'd' }, hero: 'd', watermark: 1, zonesIntro: true, autoAdd: false, layout: { mode: 'focus' }, dock: { show: false }, agentPanel: { show: false } }));` });
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 60 && !await run('!!document.querySelector("[data-clean-start] .clean-start")'); i++) await sleep(100);
     if (!await run('!!document.querySelector("[data-clean-start] .clean-start")')) throw Error('New chat did not mount');
-    for (const width of [1440, 900]) {
+    for (const width of [1440, 900, 460]) {
       win.setContentSize(width, 900); await sleep(700);
       const file = path.join(out, `new-chat-${width}.png`);
       fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG());

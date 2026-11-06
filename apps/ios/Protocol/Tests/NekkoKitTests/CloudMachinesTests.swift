@@ -17,8 +17,11 @@ final class CloudMachinesTests: XCTestCase {
         var machines: [JSONValue] = []
         var calls: [(String, String, JSONValue)] = []
         let lock = NSLock()
-
         func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+            reply(method, url, headers: headers, body: body)
+        }
+
+        private func reply(_ method: String, _ url: URL, headers: [String: String], body: Data?) -> (Int, Data) {
             lock.lock(); defer { lock.unlock() }
             let b = body.flatMap { try? JSONValue.parse($0) } ?? .null
             calls.append((method, url.path, b))
@@ -32,7 +35,7 @@ final class CloudMachinesTests: XCTestCase {
                                             "state": .string("running"), "room": .string("abcdef0123456789abcd"), "scope": b["scope"] ?? .object([:]),
                                             "hoursUsed": .double(0), "hoursIncluded": .int(40)])
                 machines.append(m)
-                answer = (201, .object(["machine": m, "pairingLink": .string("nekko-agent-pair:?relay=wss%3A%2F%2Frelay.test&room=abcdef0123456789abcd&key=0123456789abcdef0123456789abcdef&pair=ABCD2345"), "pairingCode": .string("ABCD2345")]))
+                answer = (201, .object(["machine": m, "pairingLink": .string("nekko-agent-pair:?relay=wss%3A%2F%2Frelay.test&room=abcdef0123456789abcd&key=0123456789abcdef0123456789abcdef&host=BJ7go4GGB9flqEQfjn77eO%2BWT5J%2Bxi8WJkMUlZycp%2BJNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE%3D&pair=ABCD2345"), "pairingCode": .string("ABCD2345")]))
             case ("PUT", "/v1/machines/m-1/scope"):
                 var m = machines[0].object ?? [:]
                 m["scope"] = b
@@ -73,6 +76,7 @@ final class CloudMachinesTests: XCTestCase {
         XCTAssertTrue(made.machine.scope.privacyShield)
         XCTAssertEqual(made.link.room, "abcdef0123456789abcd")
         XCTAssertEqual(made.link.pair, "ABCD2345")
+        XCTAssertEqual(made.link.hostKey, testHostKey)
         XCTAssertEqual(made.link.relayUrl, "wss://relay.test")
         let sent = http.calls.first { $0.0 == "POST" && $0.1 == "/v1/machines" }?.2
         XCTAssertEqual(sent?["scope"]?["privacyShield"]?.bool, true)

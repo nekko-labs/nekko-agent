@@ -1,5 +1,7 @@
 package com.nekko.android.data
 
+import com.nekko.protocol.HealthProber
+import com.nekko.protocol.NetworkPath
 import com.nekko.protocol.OkHttpTransport
 import com.nekko.protocol.PhoneRefusal
 import com.nekko.protocol.RelayException
@@ -12,7 +14,12 @@ import com.nekko.protocol.WsTransport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+
+/** The dismissals of a connection that has none. */
+private val NO_DISMISSALS: SharedFlow<String> = kotlinx.coroutines.flow.MutableSharedFlow()
 
 /** Request side of a computer connection: what chat screens need. */
 interface Caller {
@@ -25,17 +32,32 @@ interface Remote : Caller {
     val status: StateFlow<RelayStatus>
     val events: SharedFlow<Pair<String, JsonElement>>
     val welcome: SharedFlow<WelcomedDevice>
+    /** The relay's dismissals (chat tags whose needs-you notification can go); none for connections that don't have them. */
+    val dismissals: SharedFlow<String> get() = NO_DISMISSALS
     fun connect()
     fun close()
     fun nudge()
     /** The phone changed network: drop the socket and dial again now. */
     fun reconnect()
 
+    /** The phone moved to another network of kind [path]: pick the best route for it and dial again now. */
+    fun networkChanged(path: NetworkPath) = reconnect()
+
+    /** Where the phone is, without having moved: dial again only if that changes the route. */
+    fun setNetworkPath(path: NetworkPath) {}
+
     /**
      * A guarded call again with a step-up beside it in the sealed request
      * (SK-7). Connections that can't carry one refuse plainly.
      */
     suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
+        throw RelayException("This connection can’t send a confirmation.")
+
+    /**
+     * A Change action with its signed proof beside the args (AN-32), and a
+     * step-up beside that when the computer asked for one. Use [ChangeCalls].
+     */
+    suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof? = null, timeoutMs: Long? = null): JsonElement =
         throw RelayException("This connection can’t send a confirmation.")
 }
 
@@ -47,21 +69,29 @@ class RelayRemote(private val client: RelayClient) : Remote {
     override val status get() = client.status
     override val events get() = client.events
     override val welcome get() = client.welcome
+    override val dismissals get() = client.dismissals
     override fun connect() = client.connect()
     override fun close() = client.close()
     override fun nudge() = client.nudge()
     override fun reconnect() = client.reconnect()
+    override fun networkChanged(path: NetworkPath) = client.networkChanged(path)
+    override fun setNetworkPath(path: NetworkPath) = client.setNetworkPath(path)
     override suspend fun call(channel: String, vararg args: JsonElement) = client.call(channel, *args)
     override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) =
         client.callWithTimeout(timeoutMs, channel, *args)
     override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement) =
         client.callWithStepUp(stepUp, channel, *args)
+    override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?) =
+        if (timeoutMs == null) client.callSigned(channel, args, proof, stepUp) else client.callSigned(channel, args, proof, stepUp, timeoutMs)
 }
 
-/** Production factory: one OkHttp transport shared by every connection. */
-class RelayRemoteFactory(private val transport: WsTransport = OkHttpTransport()) : RemoteFactory {
+/** Production factory: one OkHttp transport shared by every connection; the better route is probed at its `/healthz`. */
+class RelayRemoteFactory(
+    private val transport: WsTransport = OkHttpTransport(),
+    private val prober: HealthProber = HealthProber(),
+) : RemoteFactory {
     override fun create(config: RelayConfig, scope: CoroutineScope): Remote =
-        RelayRemote(RelayClient(config, transport, scope))
+        RelayRemote(RelayClient(config, transport, scope, prober))
 }
 
 /**
@@ -80,6 +110,9 @@ class PlainRefusals(private val inner: Remote, private val computer: () -> Strin
     override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement): JsonElement =
         plain { inner.callWithStepUp(stepUp, channel, *args) }
 
+    override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?): JsonElement =
+        plain { inner.callSigned(channel, args, proof, stepUp, timeoutMs) }
+
     private inline fun plain(block: () -> JsonElement): JsonElement = try {
         block()
     } catch (e: RelayException) {
@@ -91,7 +124,7 @@ class PlainRefusals(private val inner: Remote, private val computer: () -> Strin
         fun reword(e: RelayException, computer: String): RelayException {
             val refusal = e.refusal ?: PhoneRefusal.parse(e.message) ?: return e
             val text = refusal.message(computer) ?: return e
-            return RelayException(text, refusal)
+            return RelayException(text, refusal, fromComputer = true)
         }
     }
 }

@@ -95,6 +95,8 @@ export function sessionArtifacts(session: Pick<Session, 'id' | 'title' | 'messag
   for (const m of session.messages) {
     if (m.role !== 'assistant') continue;
     for (const a of chatArtifacts(m.content, basePath)) {
+      // A localhost preview server is not a file the chat produced.
+      if (a.live) continue;
       const kind = artifactKind(a.path);
       if (kind) put({ path: a.path, title: a.title, filename: a.filename, kind, sessionId: session.id, sessionTitle: session.title, at: m.createdAt, source: 'linked' });
     }

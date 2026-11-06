@@ -100,10 +100,9 @@ pub fn machine_candidates() -> Vec<Candidate> {
     known_candidates(os, &home_dir(), &|k| std::env::var(k).ok())
 }
 
-/// `os.homedir()`: libuv reads `USERPROFILE` on Windows and `HOME` elsewhere.
+/// `os.homedir()`, `.` when it is unset.
 pub fn home_dir() -> String {
-    let var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
-    std::env::var(var).ok().filter(|h| !h.is_empty()).unwrap_or_else(|| ".".into())
+    Some(nekko_js::home_dir_string()).filter(|h| !h.is_empty()).unwrap_or_else(|| ".".into())
 }
 
 /// A stable id for a folder row (`folderId`).

@@ -10,9 +10,11 @@ struct ChatView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var displayScale
     @State private var chat: ChatModel?
     @State private var showModels = false
     @State private var showChanges = false
+    @State private var changedFiles = 0
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
@@ -24,7 +26,19 @@ struct ChatView: View {
     @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
+    @State private var pull = PawPull()
+    /// The transcript's rows between renders (a streamed token patches only the last one).
+    @State private var rowCache = TranscriptRowCache()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(Prefs.self) private var prefs
+    /// Expert mode's hardware and loaded models, read while the chat is on screen.
+    @State private var monitor: HardwareMonitorModel?
+    /// The pill opened into the agent's details.
+    @State private var showPanel = false
+    /// The pill scrolled away.
+    @State private var pillHidden = false
+    /// Simple: the turns whose folded steps were opened here (not saved).
+    @State private var openSteps: Set<String> = []
     /// Tabletop (FD-6): the hinge in window points, from the pane host; nil elsewhere.
     @Environment(\.paneHinge) private var paneHinge
     /// In the pane host: messages can be dragged to the other pane.
@@ -42,14 +56,17 @@ struct ChatView: View {
                 ProgressView()
             }
         }
-        .background(palette.paper)
+        .background { AppBackdrop() }
         .navigationBarTitleDisplayMode(.inline)
         // No keyboard toolbar here: on iOS 26 its Done floats over the
         // composer's send button. Scrolling or tapping the transcript puts
-        // the keyboard away, and the message box has a VoiceOver action for it.
+        // the keyboard away; the in-card toolbar has a hide-keyboard button too.
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
+            // A chat on another computer makes that computer active first, over the
+            // link the phone already holds to it, so the model talks to the right one.
+            store.focus(chat: sessionId)
             if chat?.sessionId != sessionId {
                 chat?.stop()
                 chat = ChatModel(sessionId: sessionId, store: store)
@@ -58,14 +75,22 @@ struct ChatView: View {
             app.notifier.clear(sessionId: sessionId)
             if let first = app.firstMessages.removeValue(forKey: sessionId), let chat {
                 await chat.reload()
-                do { try await chat.send(first) } catch {
-                    chat.handBack(UnsentPrompt(text: first, skill: nil, images: []))
+                do { try await chat.send(first.text, images: first.images) } catch {
+                    chat.handBack(first)
                     actionError = error.localizedDescription
                 }
             }
         }
         .onDisappear { chat?.stop() }
         .onChange(of: store.conn) { _, s in chat?.connectionChanged(s) }
+    }
+
+    /// The room the transcript leaves at its top for the pill in its standard place.
+    private var pillRoom: CGFloat { AgentPillLayer.room(prefs.pillPlacement, gauges: gauges) }
+
+    /// The readings the floating pill shows, while the hardware shows; no pill otherwise.
+    private var gauges: HardwareMonitorModel? {
+        prefs.shows("hardware", localModelLoaded: monitor?.localModelLoaded ?? false) ? monitor : nil
     }
 
     @ViewBuilder private func content(_ chat: ChatModel) -> some View {
@@ -78,6 +103,11 @@ struct ChatView: View {
           // a short transcript then moves up when an approval or question card
           // grows the bar, instead of staying pinned where the card now covers it.
           GeometryReader { geo in
+            // Round inward in window coordinates: a fractional viewport origin
+            // must not let Text's pixel rounding consume the 16pt gutters.
+            let bounds = geo.frame(in: .global)
+            let left = ceil((bounds.minX + 16) * displayScale) / displayScale
+            let right = floor((bounds.maxX - 16) * displayScale) / displayScale
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     if let n = chat.session?.omittedMessages, n > 0 {
@@ -85,11 +115,26 @@ struct ChatView: View {
                             .font(.footnote).foregroundStyle(palette.inkFaint).frame(maxWidth: .infinity)
                     }
                     if !chat.ready { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
-                    ForEach(TranscriptRow.of(chat.blocks)) { row in
+                    // Simple folds each turn's reasoning and tool steps to one line, unless chosen in Settings.
+                    let rows = rowCache.rows(chat)
+                    let footers = chat.turnDetails
+                    let items = prefs.shows("thinking") ? TranscriptRow.detailed(rows, footers: footers)
+                        : TranscriptRow.folded(rows, open: openSteps, running: chat.turn.running, footers: footers)
+                    ForEach(items) { item in
+                        switch item {
+                        case .details(let details):
+                            TurnDetailsView(details: details)
+                        case .summary(let turn, let steps, let thought, let running):
+                            StepsSummaryRow(text: StepFold.summary(steps: steps, thought: thought, running: running),
+                                            open: openSteps.contains(turn)) {
+                                if openSteps.contains(turn) { openSteps.remove(turn) } else { openSteps.insert(turn) }
+                            }
+                            .id("steps-\(turn)")
+                        case .row(let row, let reasoning):
                         switch row {
                         case .block(let b):
-                            BlockView(block: b, chat: chat, photos: b.isPrompt ? chat.photos(b.id) : []) { i in
-                                viewing = PhotoSet(photos: chat.photos(b.id), index: i)
+                            BlockView(block: b, chat: chat, voice: rowCache.voices[b.id], photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: reasoning) { i in
+                                viewing = PhotoSet(photos: chat.photos(b.id), index: i, messageId: b.id)
                             }
                             .id(b.id)
                             // Drag a message to the other pane's composer (FD-4); it lands as text, never sent.
@@ -100,6 +145,15 @@ struct ChatView: View {
                             SubagentGroup(blocks: blocks, chat: chat)
                                 .id(row.id)
                                 .contextMenu { if let first = blocks.first { blockMenu(chat, first) } }
+                        case .purpose(let purpose, let blocks, let calls):
+                            // Adjacent calls with one purpose: one row that says the goal, opening to the calls.
+                            PurposeGroupRow(purpose: purpose, blocks: blocks, calls: calls) { b in
+                                BlockView(block: b, chat: chat)
+                                    .id(b.id)
+                                    .contextMenu { blockMenu(chat, b) }
+                            }
+                            .id(row.id)
+                        }
                         }
                     }
                     // Prompts written here that the computer doesn't have yet.
@@ -131,31 +185,60 @@ struct ChatView: View {
                         .onAppear { atBottom = true }
                         .onDisappear { atBottom = false }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .frame(minHeight: geo.size.height, alignment: .bottom)
+                // A vertical ScrollView must propose the viewport's exact column
+                // width. Text's pixel-rounded ideal width can otherwise grow it
+                // by a fraction of a point at accessibility sizes.
+                .frame(width: max(0, right - left), alignment: .leading)
+                .padding(.leading, left - bounds.minX)
+                .padding(.trailing, bounds.maxX - right)
+                .padding(.vertical, 12)
+                .frame(minHeight: max(0, geo.size.height - pillRoom), alignment: .bottom)
+            }
+            .accessibilityIdentifier("chat.transcript")
+            #if DEBUG
+            .modifier(TurnDetailsMeasureFrame(name: "transcript"))
+            #endif
+            .pawRefreshableFromEnd(pull) {
+                await chat.reload()
+                guard !Task.isCancelled else { return }
+                // The gesture starts at the end; retain it after the new transcript lays out.
+                scrollAfterLayout(proxy)
             }
             .scrollDismissesKeyboard(.interactively)
             .simultaneousGesture(TapGesture().onEnded { hideKeyboard() })
             .defaultScrollAnchor(.bottom)
+            .contentMargins(.top, pillRoom, for: .scrollContent)
+            .hidesPillOnScroll($pillHidden)
           }
+            // The bar has no background to hide what scrolls behind it: stop the transcript at the
+            // bar's top edge, and leave the top open so it still runs under the navigation glass.
+            .clipShape(Rectangle().scale(x: 1, y: 2, anchor: .bottom))
             // Follow streamed output only while the reader is at the end, and
             // without animating every token (overlapping animations shudder).
-            .onChange(of: chat.blocks.last) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
+            .onChange(of: chat.blocksRevision) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
             // An approval or question card grows the bottom bar: keep the latest step above it.
             // After the card has been laid out: scrolling in the same update used the old inset.
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
             .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
             .overlay(alignment: .bottomTrailing) {
-                if !atBottom && chat.running {
-                    Button { scrollToEnd(proxy) } label: {
-                        Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
-                            .font(.body.weight(.semibold)).frame(width: 44, height: 44)
-                            .background(.regularMaterial, in: Circle())
+                // Fades in and out (a fade, so also with Reduce Motion) rather than popping:
+                // `atBottom` changes outside any animation, as the end scrolls in or out of view.
+                ZStack {
+                    if !atBottom && chat.running {
+                        Button { scrollToEnd(proxy) } label: {
+                            Label("Jump to latest", systemImage: "arrow.down").labelStyle(.iconOnly)
+                                .font(.body.weight(.semibold)).frame(width: 44, height: 44)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                        .padding(16)
+                        .transition(.opacity)
                     }
-                    .padding(16)
-                    .transition(.opacity)
                 }
+                .animation(.smooth(duration: 0.2), value: !atBottom && chat.running)
             }
+            // The minimal monitor while the hardware shows, floating over the
+            // transcript; tapped, it opens into the agent's details.
+            .agentPill(gauges: gauges, monitor: monitor, chat: chat, hidden: pillHidden, expanded: $showPanel)
             .safeAreaInset(edge: .bottom) {
                 if flex == nil { bottomBar(chat) }
             }
@@ -165,7 +248,6 @@ struct ChatView: View {
               Color.clear.frame(height: CGFloat(flex.gap)).accessibilityHidden(true)
               ScrollView { bottomBar(chat) }
                   .scrollBounceBehavior(.basedOnSize)
-                  .background(.bar)
                   .accessibilityIdentifier("chat.flexLower")
           }
          }
@@ -187,44 +269,66 @@ struct ChatView: View {
                     .padding(6).allowsHitTesting(false).accessibilityHidden(true)
             }
         }
+        .modifier(MonitorFollow(monitor: $monitor, panelOpen: showPanel))
         .toolbar {
             ToolbarItem(placement: .principal) {
-                VStack(spacing: 0) {
-                    Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
-                        .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                HStack(spacing: 6) {
+                    ChatMascot(working: chat.running, pull: pull, refresh: {
+                        Task { await pull.reload { await chat.reload() } }
+                    })
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(chat.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        if prefs.shows("ph-subtitle") {
+                            Text([chat.modelId, store.active?.name].compactMap { $0 }.joined(separator: " · "))
+                                .font(.caption2).foregroundStyle(palette.inkFaint).lineLimit(1)
+                        }
+                    }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    // Simple or Detailed is this phone's own, so it works on a saved copy too.
+                    ModeMenuPicker()
                     // A saved copy is read-only: changing the chat needs the computer.
                     Group {
-                        Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
-                        Menu {
-                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
-                                Button {
-                                    act { try await chat.setOptions(mode: m) }
-                                } label: {
-                                    if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
-                                }
-                            }
-                        } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
-                        if store.pcSettings.phoneChanges {
-                            Button { showChanges = true } label: { Label("Changes", systemImage: "plusminus") }
+                        if ModelEffortButton.parts(prefs, chat).model {
+                            Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
                         }
-                        Button { showGitScreen = true } label: { Label("Git", systemImage: "arrow.triangle.branch") }
-                            .accessibilityIdentifier("chat.git")
+                        // Simple shows this under the message box, in plain words.
+                        if prefs.expertMode && prefs.shows("asks") {
+                            Menu {
+                                ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
+                                    Button {
+                                        act { try await chat.setOptions(mode: m) }
+                                    } label: {
+                                        if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
+                                    }
+                                }
+                            } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
+                        }
+                        if store.pcSettings.phoneChanges && prefs.shows("changes", changes: changedFiles > 0) {
+                            Button { showChanges = true } label: { Label(SimpleMode.filesChanged(changedFiles), systemImage: "plusminus") }
+                        }
+                        if prefs.shows("ph-git") {
+                            Button { showGitScreen = true } label: { Label("Git", systemImage: "arrow.triangle.branch") }
+                                .accessibilityIdentifier("chat.git")
+                        }
                         Button { showFiles = true } label: { Label("Files", systemImage: "folder") }
                             .accessibilityIdentifier("chat.files")
-                        Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
-                        Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
-                            .accessibilityIdentifier("chat.terminals")
+                        if prefs.shows("ph-git") {
+                            Button { showGit = true } label: { Label("Commit or open a PR", systemImage: "arrow.triangle.pull") }
+                        }
+                        if prefs.shows("terminal") {
+                            Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
+                                .accessibilityIdentifier("chat.terminals")
+                        }
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
                     .disabled(chat.savedAt != nil)
-                    Button { Task { await chat.reload() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                    Button { Task { await pull.reload { await chat.reload() } } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
                 } label: { Label("More", systemImage: "ellipsis.circle") }
+                .accessibilityIdentifier("chat.more")
             }
         }
         .sheet(isPresented: $showModels) {
@@ -233,11 +337,18 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
+        // Read with the chat and after each turn: Changes shows only with something in it.
+        .task(id: chat.session?.updatedAt) {
+            guard store.pcSettings.phoneChanges, let c = try? await chat.changes() else { return }
+            changedFiles = c.files.count + c.omittedFiles
+        }
         .sheet(isPresented: $showGit) { PrSheet(chat: chat, initial: []) }
         .sheet(isPresented: $showGitScreen) { GitView(chatId: sessionId) }
         .sheet(isPresented: $showTerminals) { TerminalsView(chatId: sessionId) }
         .sheet(isPresented: $showFiles) { FilesView(root: .chat(sessionId), title: chat.title) }
-        .fullScreenCover(item: $viewing) { set in ImageViewer(photos: set.photos, index: set.index) }
+        .fullScreenCover(item: $viewing) { set in
+            ImageViewer(photos: set.photos, index: set.index, load: set.messageId.map { id -> (Int) async throws -> String? in { i in try await chat.fullPhoto(id, i) } })
+        }
         .alert("Rename chat", isPresented: $renaming) {
             TextField("Title", text: $renameText)
             Button("Cancel", role: .cancel) {}
@@ -259,7 +370,7 @@ struct ChatView: View {
                 QuestionCard(request: q) { answers in try await chat.answer(answers) }.id(q.callId)
             }
             if !chat.queuedPrompts.isEmpty { QueueList(chat: chat) }
-            PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading)
+            if prefs.shows("pr-status", pr: true) { PrChip(chat: chat).frame(maxWidth: .infinity, alignment: .leading) }
             // The phone's saved copy (OF-5): read-only until the computer answers.
             if let at = chat.savedAt {
                 Label(SavedListNote.copy(savedAt: at, computer: store.active?.name ?? "your computer"), systemImage: "clock.arrow.circlepath")
@@ -267,10 +378,9 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                     .accessibilityIdentifier("chat.savedCopy")
             }
-            Composer(chat: chat)
+            Composer(chat: chat, openTerminals: { showTerminals = true })
         }
         .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
-        .background(.bar)
     }
 
     /// Tabletop: where the hinge cuts this chat, when the pane host passes one and it falls inside.
@@ -393,31 +503,168 @@ func modeName(_ m: PcSettings.ChatMode) -> String {
     }
 }
 
-/// The transcript's rows: each block on its own, except a run of delegations,
-/// which is one group with a header and its children.
+/// The transcript's rows: each block on its own, except adjacent calls with one
+/// purpose, which are one row that says the goal (spec/chat/tool-calls-grouped-by-purpose.md).
+/// A run of delegations is the Delegate purpose, drawn as the subagent group.
 enum TranscriptRow: Identifiable {
     case block(Block)
     case agents([Block])
+    case purpose(ToolPurpose, [Block], [PurposeCall])
 
     var id: String {
         switch self {
         case .block(let b): return b.id
         case .agents(let blocks): return "agents-" + (blocks.first?.id ?? "")
+        case .purpose(_, let blocks, _): return "purpose-" + (blocks.first?.id ?? "")
         }
     }
 
-    static func of(_ blocks: [Block]) -> [TranscriptRow] {
-        var out: [TranscriptRow] = []
-        var run: [Block] = []
-        func flush() {
-            if run.count == 1 { out.append(.block(run[0])) } else if !run.isEmpty { out.append(.agents(run)) }
-            run = []
+    /// Simple's transcript: each turn's tool steps and reasoning folded behind one
+    /// summary line at the first of them, unless the turn is in `open`. The
+    /// last turn is the running one while `running`.
+    static func folded(_ rows: [TranscriptRow], open: Set<String>, running: Bool = false, footers: [String: TurnDetails] = [:]) -> [FoldItem] {
+        // Turns start at each prompt; rows before the first one are turn "start".
+        var turnOf: [Int] = []
+        var turnIds: [String] = ["start"]
+        for row in rows {
+            if case .block(let b) = row, b.isPrompt, !row.isWake { turnIds.append(b.id) }
+            turnOf.append(turnIds.count - 1)
         }
-        for b in blocks {
-            if case .tool(_, let name, _, _, _, _) = b, name == AgentRows.subagentTool { run.append(b) } else { flush(); out.append(.block(b)) }
+        var steps = Array(repeating: 0, count: turnIds.count)
+        var thought = Array(repeating: false, count: turnIds.count)
+        var first = Array(repeating: Int?.none, count: turnIds.count)
+        for (i, row) in rows.enumerated() {
+            let t = turnOf[i]
+            if row.isStep {
+                steps[t] += row.stepCount
+                if first[t] == nil { first[t] = i }
+            } else if case .block(.assistant(_, _, let r, _, _)) = row, let r, !r.isEmpty {
+                thought[t] = true
+                if first[t] == nil { first[t] = i }
+            }
         }
-        flush()
+        var out: [FoldItem] = []
+        for (i, row) in rows.enumerated() {
+            let t = turnOf[i]
+            let isOpen = open.contains(turnIds[t])
+            if first[t] == i {
+                out.append(.summary(turn: turnIds[t], steps: steps[t], thought: thought[t], running: running && t == turnIds.count - 1))
+            }
+            if !row.isStep || isOpen { out.append(.row(row, reasoning: isOpen)) }
+            // End-of-turn details stay visible even when Simple folds the tool-only turn.
+            out += row.footerItems(footers)
+        }
         return out
+    }
+
+    /// How many tool calls a step row holds.
+    var stepCount: Int {
+        switch self {
+        case .block(.tool): return 1
+        case .block: return isWake ? 1 : 0
+        case .agents(let blocks), .purpose(_, let blocks, _): return blocks.count
+        }
+    }
+
+    /// A tool step or a group of them, which Simple mode keeps out of sight (`thinking`).
+    var isStep: Bool {
+        switch self {
+        case .block(.tool): return true
+        case .block: return isWake
+        case .agents, .purpose: return true
+        }
+    }
+
+    /// A watch's wake-up arrives as a user block, but it is a step of the run, not a new prompt.
+    var isWake: Bool {
+        if case .block(.user(_, let text, _, 0)) = self { return AgentRows.parseWake(text) != nil }
+        return false
+    }
+
+    static func detailed(_ rows: [TranscriptRow], footers: [String: TurnDetails]) -> [FoldItem] {
+        rows.flatMap { [.row($0, reasoning: true)] + $0.footerItems(footers) }
+    }
+
+    private func footerItems(_ footers: [String: TurnDetails]) -> [FoldItem] {
+        let blocks: [Block]
+        switch self {
+        case .block(let b): blocks = [b]
+        case .agents(let bs), .purpose(_, let bs, _): blocks = bs
+        }
+        return blocks.compactMap { footers[$0.id].map { .details($0) } }
+    }
+
+    static func of(_ blocks: [Block], footers: [String: TurnDetails] = [:]) -> [TranscriptRow] {
+        // A turn footer ends a purpose group. Otherwise two tool-only replies
+        // with the same purpose could put both footers under the second reply.
+        var out: [TranscriptRow] = []
+        var chunk: [Block] = []
+        for b in blocks {
+            chunk.append(b)
+            if footers[b.id] != nil {
+                out += grouped(chunk)
+                chunk = []
+            }
+        }
+        return out + grouped(chunk)
+    }
+
+    private static func grouped(_ blocks: [Block]) -> [TranscriptRow] {
+        Purpose.group(blocks, role: Purpose.role(of:)).map { run in
+            switch run {
+            case .single(let b):
+                return .block(b)
+            case .group(let purpose, let items, let calls):
+                let subagents = items.allSatisfy { b in
+                    if case .tool(_, let name, _, _, _, _) = b { return name == AgentRows.subagentTool }
+                    return false
+                }
+                return purpose == .delegate && subagents ? .agents(items) : .purpose(purpose, items, calls)
+            }
+        }
+    }
+}
+
+/// `TranscriptRow.of`, kept between renders. While a reply streams, each token
+/// changes only the chat's last block (`ChatModel.blocksLayout` stays put), so
+/// only the last row is replaced instead of grouping the whole transcript again.
+/// A plain class in `@State`: reading it in `body` is memoization, not state.
+@MainActor
+final class TranscriptRowCache {
+    private var chat: ObjectIdentifier?
+    private var layout = -1
+    private var rows: [TranscriptRow] = []
+    private var running = false
+    /// How each reply reads in its turn (spec/chat/thinking-and-replies.md), as of the last `rows`.
+    private(set) var voices: [String: Voice] = [:]
+
+    func rows(_ chat: ChatModel) -> [TranscriptRow] {
+        let blocks = chat.blocks
+        // A streaming reply has no voice yet, so growing it changes none.
+        if ObjectIdentifier(chat) == self.chat, chat.blocksLayout == layout, chat.turn.running == running, let last = blocks.last,
+           case .block(let shown)? = rows.last, shown.id == last.id, Self.breaker(shown), Self.breaker(last),
+           Self.streaming(shown), Self.streaming(last) {
+            rows[rows.count - 1] = .block(last)
+            return rows
+        }
+        self.chat = ObjectIdentifier(chat)
+        layout = chat.blocksLayout
+        running = chat.turn.running
+        rows = TranscriptRow.of(blocks, footers: chat.turnDetails)
+        voices = Dictionary(zip(blocks.map(\.id), ReplyTopics.voices(blocks, running: running)).compactMap { id, v in v.map { (id, $0) } }) { a, _ in a }
+        return rows
+    }
+
+    private static func streaming(_ b: Block) -> Bool {
+        if case .assistant(_, _, _, let streaming, _) = b { return streaming }
+        return false
+    }
+
+    /// A reply with text ends any purpose group (`Purpose.role`): its own row
+    /// whatever the text grows to. A reply still blank (reasoning only) may not be.
+    private static func breaker(_ b: Block) -> Bool {
+        if case .assistant(_, let text, _, _, _) = b { return text.contains { !$0.isWhitespace } }
+        return false
     }
 }
 
@@ -425,8 +672,12 @@ struct BlockView: View {
     let block: Block
     /// The chat, for rows that read more than the block (watch chips, subagent children). Nil in previews.
     var chat: ChatModel? = nil
+    /// How a reply reads in its turn: a note, something left for the reader, or the reply.
+    var voice: Voice? = nil
     /// A prompt's photos as the computer sent them (small copies; `""` for one it kept back).
     var photos: [String] = []
+    /// Simple mode hides what the model thought (`thinking`).
+    var reasoning = true
     var openPhoto: (Int) -> Void = { _ in }
     @Environment(\.palette) private var palette
     @State private var showReasoning = false
@@ -441,8 +692,9 @@ struct BlockView: View {
                 HStack {
                     Spacer(minLength: 48)
                     VStack(alignment: .trailing, spacing: 4) {
-                        // No text selection here: touch and hold opens the menu (Copy, Edit in a new chat).
-                        Text(text).foregroundStyle(palette.userInk)
+                        // Markdown, as on the desktop (T101). No text selection here: touch and
+                        // hold opens the menu (Copy, Edit in a new chat); a table keeps its own menu.
+                        MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
                         if photos.contains(where: { !$0.isEmpty }) {
                             PhotoStrip(photos: photos, open: openPhoto)
                         } else if images > 0 {
@@ -457,7 +709,7 @@ struct BlockView: View {
             }
         case .assistant(_, let text, let reasoning, let streaming, let interrupted):
             VStack(alignment: .leading, spacing: 6) {
-                if let reasoning, !reasoning.isEmpty {
+                if self.reasoning, let reasoning, !reasoning.isEmpty {
                     DisclosureGroup(isExpanded: $showReasoning) {
                         Text(reasoning).font(.footnote).foregroundStyle(palette.inkSoft).textSelection(.enabled)
                     } label: {
@@ -465,12 +717,16 @@ struct BlockView: View {
                     }
                 }
                 if !text.isEmpty {
-                    if let chat {
-                        // Links route to the preview window or Safari; linked files and pages get cards (#1095).
-                        AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId)
-                    } else {
-                        MarkdownText(text: text).foregroundStyle(palette.ink)
+                    Group {
+                        if let chat {
+                            // Links route to the preview window or Safari; linked files and pages get cards (#1095).
+                            AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId, voice: voice)
+                        } else {
+                            MarkdownText(text: text, topics: true, askTail: voice == .reply || voice == .attention)
+                                .foregroundStyle(voice == .working ? palette.inkSoft : palette.ink)
+                        }
                     }
+                    .modifier(Voiced(voice: voice))
                 }
                 if interrupted { Label("Interrupted", systemImage: "pause.circle").font(.caption).foregroundStyle(palette.warning) }
             }
@@ -484,6 +740,37 @@ struct BlockView: View {
             default:
                 ToolRow(label: label, status: status, output: output)
             }
+        }
+    }
+}
+
+/// Who a reply's text is for (spec/chat/thinking-and-replies.md). A note is
+/// quiet with the thought icon; a reply, or anything left for the reader
+/// mid-turn, sits on a panel. The icon and the panel's edge live in the
+/// transcript's 16pt side padding, so a block that settles its voice keeps its
+/// width and does not re-wrap.
+private struct Voiced: ViewModifier {
+    let voice: Voice?
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        switch voice {
+        case .working?:
+            content.overlay(alignment: .topLeading) {
+                Image(systemName: "brain").font(.system(size: 9)).foregroundStyle(palette.inkFaint)
+                    .frame(width: 12).offset(x: -14, y: 6).accessibilityHidden(true)
+            }
+        case .reply?, .attention?:
+            let tone = voice == .reply ? palette.accent : palette.warning
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(tone.opacity(0.08))
+                .overlay(alignment: .leading) { tone.frame(width: 2) }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, -10)
+        case nil:
+            content
         }
     }
 }
@@ -514,14 +801,14 @@ struct ApprovalCard: View {
             }
             HStack {
                 Button(role: .destructive) { decide(false) } label: { Text("Deny").frame(maxWidth: .infinity).foregroundStyle(palette.ink) }
-                    .buttonStyle(.bordered).tint(palette.inkSoft)
+                    .buttonStyle(.bordered).tint(palette.inkSoft).buttonBorderShape(.roundedRectangle(radius: 8))
                 // Drawn rather than .borderedProminent, which the audit reports as clipping its label.
                 Button { decide(true) } label: {
                     Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Allow").font(.body.weight(.semibold)) } }
                         .foregroundStyle(palette.onAccent)
                         .frame(maxWidth: .infinity, minHeight: 50)
-                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 12))
-                        .contentShape(RoundedRectangle(cornerRadius: 12))
+                        .background(palette.accent, in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain)
             }
@@ -530,7 +817,7 @@ struct ApprovalCard: View {
         }
         .padding(14)
         // A card, because it needs you; tinted by its risk rather than outlined.
-        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(color.opacity(0.09))) }
+        .background { RoundedRectangle(cornerRadius: 12).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.09))) }
         // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
     }
@@ -583,8 +870,11 @@ struct QuestionCard: View {
                         picked[q.id] = s
                     }
                     if picked[q.id]?.contains(askOtherLabel) == true {
-                        TextField("Your answer", text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }), axis: .vertical)
-                            .textFieldStyle(.roundedBorder)
+                        TextField("Your answer", text: Binding(get: { notes[q.id] ?? "" }, set: { notes[q.id] = $0 }),
+                                  prompt: Text("Your answer").foregroundStyle(palette.inkFaint), axis: .vertical)
+                            .font(.subheadline).foregroundStyle(palette.ink)
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
             }
@@ -592,15 +882,19 @@ struct QuestionCard: View {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
             }
             Button(action: send) {
-                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer") } }
-                    .frame(maxWidth: .infinity).foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer").font(.footnote.weight(.semibold)) } }
+                    .foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(ready ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
+                    .frame(minHeight: 44).contentShape(Rectangle())
             }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.plain)
                 .disabled(!ready || busy)
         }
         .padding(14)
-        .background { RoundedRectangle(cornerRadius: 16).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 16).fill(palette.accent.opacity(0.07))) }
+        // The message box's own surface and edge, so the two read as one panel.
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
     }
 
     private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
@@ -625,7 +919,7 @@ struct FlowOptions: View {
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack { chips }
-            VStack(alignment: .leading) { chips }
+            VStack(alignment: .leading, spacing: 0) { chips }
         }
     }
 
@@ -633,15 +927,15 @@ struct FlowOptions: View {
         ForEach(options, id: \.self) { o in
             let on = selected.contains(o)
             Button { tap(o) } label: {
-                // A checkmark as well as the colour, and a 44 pt target.
+                // A checkmark as well as the colour, and a 44 pt target around the slim chip.
                 HStack(spacing: 5) {
                     if on { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                     Text(o)
                 }
-                .font(.footnote).padding(.horizontal, 14).frame(minHeight: 44)
-                .background(on ? palette.accent : palette.surface2, in: Capsule())
+                .font(.footnote).padding(.horizontal, 12).frame(minHeight: 36)
+                .background(on ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                 .foregroundStyle(on ? palette.onAccent : palette.ink)
-                .contentShape(Capsule())
+                .frame(minHeight: 44).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(on ? .isSelected : [])
@@ -649,48 +943,12 @@ struct FlowOptions: View {
     }
 }
 
-/// The microphone in hold-to-talk mode (IO-28): records while pressed, stops
-/// on release. VoiceOver can't hold, so its double-tap starts and the next one stops.
-struct HoldToTalkButton: View {
-    let dictation: Dictation
-    @Environment(ComputersStore.self) private var store
-    @Environment(\.palette) private var palette
-    @State private var down = false
-
-    var body: some View {
-        Image(systemName: dictation.recording ? "waveform.circle.fill" : "mic.fill")
-            .font(dictation.recording ? .title2 : .title3)
-            .foregroundStyle(dictation.recording ? palette.danger : palette.inkSoft)
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-            .scaleEffect(down ? 1.15 : 1)
-            .animation(.easeOut(duration: 0.12), value: down)
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    guard !down else { return }
-                    down = true
-                    Task { await dictation.press(store: store) }
-                }
-                .onEnded { _ in
-                    down = false
-                    Task { await dictation.letGo(store: store) }
-                })
-            .accessibilityElement()
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(dictation.recording ? "Stop dictation" : "Dictate")
-            .accessibilityHint(dictation.recording ? "" : "Hold to talk, let go to stop")
-            .accessibilityIdentifier("composer.holdToTalk")
-            .accessibilityAction {
-                Task {
-                    if dictation.recording { await dictation.finish(store: store) } else { await dictation.start(store: store) }
-                }
-            }
-    }
-}
-
-/// Text, the computer's skills (`/`), photos, dictation, Send / Stop.
+/// Text, the computer's skills (`/`), photos, dictation, Send / Stop, with + and Send inside the box.
 struct Composer: View {
     let chat: ChatModel
+    /// + → Terminal: the chat's terminals sheet.
+    var openTerminals: () -> Void = {}
+    @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
     @State private var text = ""
@@ -698,12 +956,19 @@ struct Composer: View {
     /// A saved prompt from the computer, run with what's typed after it.
     @State private var prompt: SavedPrompt?
     @State private var photos: [PhotosPickerItem] = []
+    @State private var pickingPhotos = false
     @State private var images: [String] = []
     @State private var loadingPhotos = false
     @State private var error: String?
     @State private var dictation = Dictation()
+    /// "Nekko, ..." commands in what is dictated, and the words for the message box.
+    @State private var voice = VoiceRunner()
+    /// The first tap of the mic shows the how-voice-works video instead of listening.
+    @State private var intro = VoiceIntroGate()
+    @Environment(\.scenePhase) private var phase
     @Environment(Prefs.self) private var prefs
-    @FocusState private var focused: Bool
+    /// The message box has the keyboard (its formatting toolbar shows then).
+    @State private var focused = false
     /// Why the computer turned down the prompt now in the box (it came back from the outbox).
     @State private var refusal: String?
     /// The draft as last saved from here: a different one in the store was handed back (Edit, a refusal).
@@ -711,6 +976,8 @@ struct Composer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
+            if skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
             } else if let note = chat.offlineNote {
@@ -752,11 +1019,12 @@ struct Composer: View {
                     ProgressView().controlSize(.small)
                     Text("Adding photos…").font(.caption)
                 }.foregroundStyle(palette.inkSoft)
-            } else if !images.isEmpty {
-                HStack {
-                    Label(images.count == 1 ? "1 photo" : "\(images.count) photos", systemImage: "photo").font(.caption)
-                    Button { images = []; photos = [] } label: { Image(systemName: "xmark.circle.fill") }.accessibilityLabel("Remove photos")
-                }.foregroundStyle(palette.inkSoft)
+            }
+            if !images.isEmpty {
+                ComposerPhotos(photos: images) { index in
+                    images.remove(at: index)
+                    photos = []
+                }
             }
             if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -787,85 +1055,134 @@ struct Composer: View {
                     }
                 }
             }
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    if !store.pcSettings.prompts.isEmpty {
-                        Menu {
-                            ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
-                        } label: { Label("Saved prompts", systemImage: "text.badge.star") }
-                    }
-                    if !chat.skills.isEmpty {
-                        Menu {
-                            ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
-                        } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
-                    }
-                    PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
-                        Label("Photos", systemImage: "photo.on.rectangle")
-                    }
-                    // Asked for by the user, so iOS shows its paste prompt only then.
-                    Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
-                        .disabled(!UIPasteboard.general.hasImages)
-                } label: {
-                    Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
-                        .frame(width: 44, height: 44).contentShape(Rectangle())
-                }
-                .accessibilityLabel("Add")
-                TextField(chat.running ? "Queue a follow-up" : "Message", text: $text, axis: .vertical)
-                    .lineLimit(1...6)
-                    .accessibilityIdentifier("chat.message")
-                    .focused($focused)
-                    .accessibilityAction(named: "Hide keyboard") { focused = false }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(palette.surface, in: RoundedRectangle(cornerRadius: 20))
-                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(palette.line))
-                if dictation.transcribing {
-                    ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
-                } else if prefs.dictationHold && dictation.available && (text.isEmpty || dictation.recording) {
-                    HoldToTalkButton(dictation: dictation)
-                } else if dictation.available && text.isEmpty && !dictation.recording {
-                    Button { Task { await dictation.start(store: store) } } label: {
-                        Image(systemName: "mic.fill").font(.title3).foregroundStyle(palette.inkSoft)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Dictate")
-                } else if dictation.recording {
-                    Button { Task { await dictation.finish(store: store) } } label: {
-                        Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Stop dictation")
-                }
-                // Stop while running with nothing to queue; a photo or skill alone can be queued.
-                if chat.running && !hasContent {
-                    Button { chat.abort() } label: {
-                        Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                            .background(palette.danger, in: Circle()).foregroundStyle(.white)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("Stop")
-                } else if chat.sendsLater {
-                    // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
-                    Button(action: send) {
-                        Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
-                            .padding(.horizontal, 12).frame(minHeight: 36)
-                            .background(canSend ? palette.accent : palette.surface2, in: Capsule())
-                            .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
-                            .frame(minHeight: 44).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!canSend)
-                    .accessibilityIdentifier("chat.sendLater")
-                } else {
-                    Button(action: send) {
-                        Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
-                            .background(canSend ? palette.accent : palette.surface2, in: Circle())
-                            .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
-                            .frame(width: 44, height: 44).contentShape(Rectangle())
-                    }
-                    .disabled(!canSend)
-                    .accessibilityLabel(chat.running ? "Queue" : "Send")
-                }
+            // Simple: a long chat suggests starting fresh, with what that saves.
+            if !prefs.expertMode, !prefs.longChatDismissed.contains(chat.sessionId),
+               let saving = SimpleMode.longChatSaving(longChatContext, used: chat.contextTokens) {
+                LongChatNote(tokens: saving, startFresh: startFresh, dismiss: { prefs.dismissLongChat(chat.sessionId) })
+            }
+            // Voice and dictation say what they heard above the box, with the other notes.
+            if let pending = voice.pending { voicePending(pending) }
+            if let said = voice.notice {
+                Text(said.text).font(.caption2).foregroundStyle(palette.inkSoft).accessibilityIdentifier("composer.voiceNotice")
             }
             if dictation.recording || dictation.transcribing { Text(dictation.status).font(.caption2).foregroundStyle(palette.inkFaint) }
             else if let n = dictation.notice { Text(n).font(.caption2).foregroundStyle(palette.inkSoft) }
+            // The agent's plan, tucked behind the box's top edge (drawn first, so the box covers its foot).
+            if !PlanSheet.plan(chat, store).isEmpty {
+                PlanSheet(chat: chat).padding(.bottom, -(PlanSheet.tuck + 6))
+            }
+            // One box the width of the screen: the message on top, + and Send below it, then model and context.
+            VStack(alignment: .leading, spacing: 0) {
+                // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
+                // "Hide keyboard" action is on the text view itself.
+                MarkdownComposerField(text: $text, focused: $focused,
+                                      placeholder: chat.running ? "Queue a follow-up" : "Message",
+                                      onPasteImages: pasteImages, boxed: false)
+                    .padding(.horizontal, 12).padding(.top, 10)
+                HStack(alignment: .center, spacing: 4) {
+                    Menu {
+                        // As on the desktop: another agent or a terminal beside this one, or a photo for this message.
+                        Button { app.newChatRequested = true } label: { Label("New agent", systemImage: "plus.bubble") }
+                            .accessibilityIdentifier("composer.newAgent")
+                        if prefs.shows("terminal") {
+                            Button(action: openTerminals) { Label("Terminal", systemImage: "terminal") }
+                                .disabled(chat.savedAt != nil)
+                                .accessibilityIdentifier("composer.terminal")
+                        }
+                        Divider()
+                        if !store.pcSettings.prompts.isEmpty {
+                            Menu {
+                                ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
+                            } label: { Label("Saved prompts", systemImage: "text.badge.star") }
+                        }
+                        if !chat.skills.isEmpty {
+                            Menu {
+                                ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
+                            } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
+                        }
+                        // A PhotosPicker inside a Menu never opens its sheet: the menu closing dismisses it.
+                        Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
+                        // Asked for by the user, so iOS shows its paste prompt only then.
+                        Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
+                            .disabled(!UIPasteboard.general.hasImages)
+                    } label: {
+                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
+                            .frame(width: 44, height: 44).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Add")
+                    .accessibilityIdentifier("composer.add")
+                    Spacer(minLength: 0)
+                    // Listening (tap mode) keeps its stop button while earlier segments are transcribed.
+                    if dictation.recording && !prefs.dictationHold {
+                        Button { dictation.stopListening() } label: {
+                            Image(systemName: "stop.circle.fill").font(.title2).foregroundStyle(palette.danger)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Stop dictation")
+                        .accessibilityIdentifier("composer.stopDictation")
+                    } else if dictation.starting && !prefs.dictationHold {
+                        // Permissions or the computer are being asked; a second tap would open a second microphone.
+                        ProgressView().frame(width: 44, height: 44).accessibilityLabel("Starting dictation")
+                            .accessibilityIdentifier("composer.dictationStarting")
+                    } else if dictation.transcribing {
+                        ProgressView().frame(width: 44, height: 44).accessibilityLabel("Transcribing")
+                    } else {
+                        // One mic: the voice conversation. Dictation into the box is the keyboard's own mic.
+                        VoiceConversationButton(makeTarget: {
+                            guard let id = store.activeId else { throw RelayError("Choose a computer first.") }
+                            return .computer(chat, computerId: id)
+                        })
+                        .disabled(chat.savedAt != nil || chat.sendsLater)
+                    }
+                    // Stop while running with nothing to queue; a photo or skill alone can be queued.
+                    if chat.running && !hasContent {
+                        Button { chat.abort() } label: {
+                            Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
+                                .background(palette.danger, in: Circle()).foregroundStyle(.white)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }.accessibilityLabel("Stop")
+                    } else if chat.sendsLater {
+                        // Offline: the prompt waits on this iPhone (the outbox) and goes when the computer is back.
+                        Button { send() } label: {
+                            Text("Send when online").font(.footnote.weight(.semibold)).lineLimit(1)
+                                .padding(.horizontal, 12).frame(minHeight: 36)
+                                .background(canSend ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
+                                .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                                .frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!canSend)
+                        .accessibilityIdentifier("chat.sendLater")
+                    } else {
+                        Button { send() } label: {
+                            Image(systemName: "arrow.up").font(.body.weight(.bold)).frame(width: 36, height: 36)
+                                .background(canSend ? palette.accent : palette.surface2, in: Circle())
+                                .foregroundStyle(canSend ? palette.onAccent : palette.inkFaint)
+                                .frame(width: 44, height: 44).contentShape(Rectangle())
+                        }
+                        .disabled(!canSend)
+                        .accessibilityLabel(chat.running ? "Queue" : "Send")
+                    }
+                }
+                .padding(.horizontal, 4)
+                // The chat's model and effort, and its context window: the box's bottom row, as Settings > Simple mode says.
+                // Nothing sits below the box (#1599).
+                let parts = ModelEffortButton.parts(prefs, chat)
+                if parts.model || parts.effort || prefs.shows("context") {
+                    HStack(spacing: 0) {
+                        if parts.model || parts.effort { ModelEffortButton(chat: chat) }
+                        if !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
+                        Spacer(minLength: 8)
+                        if prefs.shows("context") { ContextGauge(chat: chat) }
+                    }
+                    .padding(.horizontal, 4).padding(.top, -6)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
         }
+        .photosPicker(isPresented: $pickingPhotos, selection: $photos, maxSelectionCount: 4, matching: .images)
         // Send waits for the photos (it used to send without them, and they came back later).
         .task(id: photos) {
             guard !photos.isEmpty else { return }
@@ -883,8 +1200,29 @@ struct Composer: View {
         .onChange(of: refusal) { _, _ in saveDraft() }
         // Edit on a waiting prompt, or a refusal: the prompt comes back into the box.
         .onChange(of: store.drafts.drafts[chat.sessionId]) { _, d in adopt(d) }
-        // Tapped stop or hit the 30-second limit: the words go into the message, never sent.
-        .onChange(of: dictation.result) { _, r in if let r { text += (text.isEmpty ? "" : " ") + r.text } }
+        .onAppear(perform: bindVoice)
+        // The Live Activity's mic on iOS 17 opens this chat listening (tap mode only: a hold needs
+        // a finger), once the app is unlocked and the chat list has this chat.
+        .onChange(of: app.listenIn, initial: true) { _, _ in takeListen() }
+        .onChange(of: app.lock.locked) { _, _ in takeListen() }
+        .onChange(of: store.summariesLoaded) { _, _ in takeListen() }
+        .sheet(isPresented: $intro.showing, onDismiss: {
+            // Turn on is the one way out that listens: in hold mode there is no hold to start from.
+            intro.closed(prefs) { if !prefs.dictationHold { Task { await dictation.startListening(store: store) } } }
+        }) { VoiceIntroView(onTurnOn: intro.turnOn) }
+        .onChange(of: dictation.recording) { _, on in
+            if on { return voice.started() }
+            let afterHold = dictation.released
+            Task { await voice.stopped(afterHold: afterHold, after: dictation.drain) }
+        }
+        // Listening never outlives the screen: lock, app switch, or leaving the chat stops it, and it never restarts by itself.
+        .onChange(of: phase) { _, p in if Dictation.leavesScreen(p, starting: dictation.starting) { dictation.abort() } }
+        .onDisappear(perform: unbindVoice)
+        .task(id: voice.notice) {
+            guard let said = voice.notice else { return }
+            try? await Task.sleep(for: .seconds(4))
+            voice.clearNotice(said.id)
+        }
         // "Ask about this" in Changes: the quote goes after what's typed, never sent.
         .onChange(of: chat.insert) { _, q in
             guard q != nil, let quote = chat.takeInsert() else { return }
@@ -909,6 +1247,32 @@ struct Composer: View {
 
     private var hasContent: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || skill != nil || prompt != nil || !images.isEmpty
+    }
+
+    /// More work for a chat that has replied: run it here, or hand it to a subagent.
+    private var workPlace: some View {
+        let here = Button { send() } label: { outlined("Do it here") }.accessibilityIdentifier("composer.doItHere")
+        let subagent = Button { send(wrap: Session.inSubagent) } label: { outlined("In a subagent") }.accessibilityIdentifier("composer.inSubagent")
+        let cost = Text("Here uses more context").font(.caption).foregroundStyle(palette.ink)
+        // Side by side when it fits; a large text size or a long translation puts the note below.
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { here; subagent; cost }
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 8) { here; subagent }
+                cost
+            }
+        }
+        .buttonStyle(.plain).disabled(!canSend)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// An outlined action, as the desktop's: accent words on the surface, a 44 pt target.
+    private func outlined(_ title: LocalizedStringKey) -> some View {
+        Text(title).font(.footnote.weight(.semibold)).foregroundStyle(canSend ? palette.accent : palette.inkFaint)
+            .padding(.horizontal, 12).frame(minHeight: 34)
+            .background(palette.surface, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(palette.line))
+            .frame(minHeight: 44).contentShape(Rectangle())
     }
 
     private func slashChip(_ name: String, _ detail: String, saved: Bool) -> some View {
@@ -978,7 +1342,121 @@ struct Composer: View {
         return chat.skills.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
     }
 
-    private func send() {
+    /// A confirm or a choice from a voice command: answered by voice or a tap.
+    private func voicePending(_ p: VoiceRunner.Pending) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(p.message).font(.caption).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+            if p.confirm {
+                HStack {
+                    Button("Confirm") { answer(.yes) }.buttonStyle(.borderedProminent).accessibilityIdentifier("composer.voiceConfirm")
+                    Button("Cancel") { answer(.no) }.buttonStyle(.bordered)
+                }
+                .frame(minHeight: 44)
+            } else {
+                ForEach(Array(p.options.enumerated()), id: \.offset) { i, o in
+                    Button { answer(.pick(i + 1)) } label: {
+                        Text(o.label).font(.footnote).lineLimit(1).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).foregroundStyle(palette.accent)
+                }
+                Button("Cancel") { answer(.no) }.font(.footnote).frame(minHeight: 44)
+            }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityIdentifier("composer.voicePending")
+    }
+
+    /// Each segment once, in order, while this composer is on screen: words into the message, "Nekko, ..." commands run.
+    private func bindVoice() {
+        let store = store, id = chat.sessionId
+        voice.park = nil
+        dictation.park = { Self.park($0, in: id, store.drafts) }
+        dictation.sink = { words in
+            voice.host = voiceHost
+            Task { await voice.hear([words]) }
+        }
+    }
+
+    private func takeListen() {
+        guard app.takeListen(chat.sessionId) else { return }
+        if !prefs.dictationHold, dictation.available, !intro.intercept(prefs) { Task { await dictation.startListening(store: store) } }
+    }
+
+    /// The chat closed: listening stops, and words still on their way go to its saved draft as plain text.
+    private func unbindVoice() {
+        dictation.sink = nil
+        voice.park = dictation.park
+        dictation.stopListening()
+    }
+
+    /// Words for a chat whose composer is not on screen: after its saved draft, which the composer shows when it opens.
+    static func park(_ words: String, in chatId: String, _ drafts: DraftStore) {
+        var d = drafts.draft(chatId)
+        d.text += (d.text.isEmpty || d.text.last?.isWhitespace == true ? "" : " ") + words
+        drafts.set(chatId, d)
+    }
+
+    private func answer(_ intent: VoiceIntent) {
+        voice.host = voiceHost
+        Task { await voice.answer(intent) }
+    }
+
+    /// What voice commands act on: this composer, this chat, and the app's routes.
+    private var voiceHost: VoiceRunner.Host {
+        let chat = chat, store = store, app = app
+        return VoiceRunner.Host(
+            text: $text,
+            send: { canSend ? await send().value : false },
+            toast: { AccessibilityNotification.Announcement($0).post() },
+            tap: { Haptics.tap() },
+            chats: { store.summaries.filter(\.isVisible) },
+            open: { app.openChat = $0 },
+            park: { Self.park($0, in: chat.sessionId, store.drafts) },
+            newChat: { app.newChatRequested = true },
+            openSettings: { app.openSettings = true },
+            status: {
+                let lane = switch store.activity[chat.sessionId] {
+                case .needsYou: "Needs you"
+                case .running: "Working"
+                case .failed: "Error"
+                case nil: chat.running ? "Working" : "Idle"
+                }
+                let watching = chat.watches.contains { $0.kind == .pr && $0.status == .active }
+                return "\(chat.title): \(lane)\(watching ? ", Watching PR" : "")"
+            },
+            ship: { VoiceRunner.ShipFacts(prs: try await chat.pullRequests(refresh: true), running: chat.running, question: chat.turn.question) },
+            merge: { pr in
+                let r = await GitModel(store: store, chatId: chat.sessionId).prAction(pr.url, .merge)
+                if r?.ok == true { return nil }
+                return r.map { $0.message.isEmpty ? "Git refused it." : $0.message } ?? "Couldn’t merge \(VoiceRunner.label(pr))."
+            },
+            answer: { q, note in try await chat.answer(q.questions.map { AskAnswer(questionId: $0.id, labels: [], note: note) }) },
+            complete: { try await store.completeChat(chat.sessionId) },
+            title: { chat.title })
+    }
+
+    /// The chat's context window, or (screenshot captures, `-uiTestLongChat`) a nearly full one.
+    private var longChatContext: ContextUsage? {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestLongChat") {
+            let json = #"{"usedTokens":176000,"contextWindow":200000,"sources":{"system":6000,"conversation":112000,"attached-file":58000}}"#
+            return ContextUsage.from(try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)))
+        }
+        #endif
+        return chat.context
+    }
+
+    /// A new chat on the same computer with this chat's model (the long-chat note's Start fresh).
+    private func startFresh() {
+        if let id = store.activeId, let p = chat.providerId, let m = chat.modelId { prefs.lastModel[id] = "\(p)::\(m)" }
+        app.newChatRequested = true
+    }
+
+    /// Sends what is in the box, through `wrap`; the task says whether the computer took it (a refusal puts the text back).
+    @discardableResult
+    private func send(wrap: (String) -> String = { $0 }) -> Task<Bool, Never> {
         var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = skill
         // "/name rest" typed out in full runs that skill.
@@ -995,7 +1473,7 @@ struct Composer: View {
         if s == nil, let prompt { body = prompt.text(input: body) }
         let sentPrompt = prompt
         let sentImages = images
-        let sentBody = body
+        let sentBody = wrap(body)
         let sentSkill = s
         let saved = text
         text = ""
@@ -1008,16 +1486,19 @@ struct Composer: View {
         // The prompt is on disk in the outbox from here until the computer lists it.
         store.drafts.clear(chat.sessionId)
         lastSaved = nil
-        Task {
+        return Task {
             do {
                 try await chat.send(sentBody, skill: sentSkill, images: sentImages)
                 Haptics.tap()
+                return true
             } catch {
                 self.error = error.localizedDescription
-                text = saved
+                // Words dictated since stay after the refused message.
+                text = text.isEmpty ? saved : saved + " " + text
                 skill = sentSkill
                 prompt = sentPrompt
                 images = sentImages
+                return false
             }
         }
     }
@@ -1047,5 +1528,99 @@ enum ImageAttachments {
         let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
         guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { return nil }
         return "data:image/jpeg;base64," + jpeg.base64EncodedString()
+    }
+}
+
+/// Simple mode's note above the message box once a chat fills 85% of its
+/// window: starting fresh saves about the conversation's tokens.
+struct LongChatNote: View {
+    let tokens: Int64
+    var startFresh: () -> Void
+    var dismiss: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("This chat is getting long. Starting fresh saves about \(MonitorFormat.tokens(tokens)) tokens.")
+                .font(.caption).foregroundStyle(palette.inkSoft)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Start fresh", action: startFresh)
+                .font(.caption.weight(.semibold)).foregroundStyle(palette.accent)
+                .frame(minHeight: 44).contentShape(Rectangle())
+                .accessibilityIdentifier("chat.startFresh")
+            Button(action: dismiss) {
+                Image(systemName: "xmark").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                    .frame(width: 32, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.leading, 12).padding(.trailing, 4)
+        .background(palette.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
+        .accessibilityIdentifier("chat.longChat")
+    }
+}
+
+/// A transcript row as the chat draws it: a row (with or without its reasoning),
+/// or Simple's one-line summary of a turn's steps.
+enum FoldItem: Identifiable {
+    case row(TranscriptRow, reasoning: Bool)
+    case summary(turn: String, steps: Int, thought: Bool, running: Bool)
+    case details(TurnDetails)
+
+    var id: String {
+        switch self {
+        case .row(let row, _): return row.id
+        case .summary(let turn, _, _, _): return "steps-" + turn
+        case .details(let details): return "turn-details-" + details.id
+        }
+    }
+}
+
+/// The words on Simple's folded steps line.
+enum StepFold {
+    static func summary(steps: Int, thought: Bool, running: Bool, seconds: Int? = nil) -> String {
+        var text: String
+        if running {
+            switch steps {
+            case 0: text = String(localized: "Working")
+            case 1: text = String(localized: "Working · 1 step so far")
+            default: text = String(localized: "Working · \(steps) steps so far")
+            }
+            return text
+        }
+        switch steps {
+        case 0: text = thought ? String(localized: "Thought it through") : String(localized: "No steps")
+        case 1: text = String(localized: "Took 1 step")
+        default: text = String(localized: "Took \(steps) steps")
+        }
+        if let seconds, seconds > 0 {
+            text += " · " + Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .narrow))
+        }
+        return text
+    }
+}
+
+/// Simple's one line for a turn's reasoning and tool steps, with Show steps.
+struct StepsSummaryRow: View {
+    let text: String
+    let open: Bool
+    var toggle: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "list.bullet").font(.caption).foregroundStyle(palette.inkFaint).accessibilityHidden(true)
+            Text(text).font(.footnote).foregroundStyle(palette.inkSoft).lineLimit(1)
+            Spacer(minLength: 8)
+            Button(action: toggle) {
+                Text(open ? LocalizedStringKey("Hide steps") : "Show steps").font(.footnote.weight(.semibold)).foregroundStyle(palette.accent)
+                    .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("chat.steps")
+        }
+        .accessibilityElement(children: .contain)
     }
 }

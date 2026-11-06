@@ -6,6 +6,7 @@ vi.hoisted(() => {
   (globalThis as { window?: unknown }).window = { innerWidth: 1280, addEventListener() {} };
 });
 const { useStore } = await import('./store.js');
+const { initialChatBrain } = await import('./components/ChatPane.settings.js');
 const created: Session = { id: 'new_chat', title: 'New chat', createdAt: 1, updatedAt: 1, messages: [], providerId: 'p', modelId: 'm' };
 
 beforeEach(() => {
@@ -47,6 +48,18 @@ it('routes an unconfigured first agent to setup without creating an empty sessio
   await useStore.getState().newChat();
   expect(useStore.getState().view).toBe('models');
   expect(window.nekko.createSession).not.toHaveBeenCalled();
+});
+
+it('opens a new chat on a connected provider when startup made the engine active', async () => {
+  const engine = { id: 'nekko-engine', kind: 'llamacpp', enabled: true };
+  const ollama = { id: 'ollama', kind: 'ollama', enabled: true };
+  window.nekko = { listProviders: vi.fn().mockResolvedValue([engine, ollama]), listModels: vi.fn().mockResolvedValue([]) } as unknown as typeof window.nekko;
+  useStore.setState({ settings: { workspaces: [] } as any });
+
+  await useStore.getState().refreshProviders();
+
+  expect(useStore.getState().activeProviderId).toBe('nekko-engine');
+  expect(initialChatBrain(null, useStore.getState()).providerId).toBe('ollama');
 });
 
 describe('last explicit primary folder', () => {
@@ -92,4 +105,14 @@ it('explicit repository overrides active and saved default folders without chang
   await useStore.getState().newChat('b');
   expect(window.nekko.createSession).toHaveBeenCalledWith('b');
   expect(useStore.getState().activeProjectId).toBe('a');
+});
+
+
+it('creates an unconfigured media session without inventing a model id', async () => {
+  window.nekko = { createSession: vi.fn().mockResolvedValue(created), setSessionOptions: vi.fn().mockResolvedValue({ ...created, chatType: 'image' }) } as unknown as typeof window.nekko;
+  await useStore.getState().newImageChat();
+  expect(window.nekko.setSessionOptions).toHaveBeenCalledWith(created.id, expect.objectContaining({ chatType: 'image' }));
+  const options = vi.mocked(window.nekko.setSessionOptions).mock.calls[0][1];
+  expect(options.imageParams).not.toHaveProperty('modelId');
+  expect(useStore.getState().view).toBe('command');
 });

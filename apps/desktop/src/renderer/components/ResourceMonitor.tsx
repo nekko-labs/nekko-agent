@@ -3,6 +3,7 @@ import type { GpuStats, MonitorKind, SystemStats } from '@nekko-agent/shared';
 import { MONITOR_HINTS, MONITOR_KINDS, MONITOR_LABELS, gpuMemoryLabel, monitorSources, resolveMonitors } from '@nekko-agent/shared';
 import { readBrandKey } from '../brandStorage.js';
 import { useStore } from '../store.js';
+import { useShown } from '../simpleMode.js';
 import { ChevronIcon } from '../icons.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
 
@@ -42,7 +43,24 @@ function publish(next: ResourceSample) {
   for (const l of listeners) l();
 }
 
+/** The connected computer the readings are from; null is this one. */
+let target: string | null = null;
+
+/** Point the readings at a connected computer. What this one read before is dropped, not shown as that one's. */
+export function watchComputer(id: string | null) {
+  target = id;
+  publish({ gpu: null, system: null });
+  poll();
+}
+
 function poll() {
+  if (target) {
+    const asked = target;
+    window.nekko.computerStats(asked).then((s) => {
+      if (target === asked) publish({ gpu: sources.gpu ? s.gpu : null, system: sources.system ? s.system : null });
+    }).catch(() => {});
+    return;
+  }
   if (sources.system) {
     window.nekko.getSystemStats?.().then((s) => {
       if (sources.system) publish({ ...sample, system: s });
@@ -118,7 +136,7 @@ export function useResourceSample(): ResourceSample {
   useEffect(() => {
     setSources({ system: wantSystem, gpu: wantGpu });
   }, [wantSystem, wantGpu]);
-  return useSyncExternalStore(subscribe, () => sample);
+  return useSyncExternalStore(subscribe, () => sample, () => sample);
 }
 
 /* ── Formatting ──────────────────────────────────────────────────────────── */
@@ -138,13 +156,14 @@ function Meter({ label, value, pct, sub }: { label: string; value: string; pct: 
       </div>
       <div className="mt-1 h-1.5 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
         <span
-          className="block h-full rounded-full transition-[width] duration-500"
+          className="block h-full w-full origin-left rounded-full transition-transform duration-200 ease-(--ease-out)"
           // A live-but-idle reading (1% CPU) still gets a visible sliver, so an
           // empty track always means "no data", never "nothing happening".
-          style={{ width: `${Math.min(100, pct)}%`, minWidth: pct > 0 ? 3 : 0, background: loadColor(pct) }}
+          // Scaled, not sized: a width change re-lays the dock out every tick.
+          style={{ transform: `scaleX(${pct > 0 ? Math.max(0.02, Math.min(100, pct) / 100) : 0})`, background: loadColor(pct) }}
         />
       </div>
-      {sub && <div className="mt-0.5 text-[10px] tabular-nums text-ink-faint">{sub}</div>}
+      {sub && <div className="mt-0.5 text-2xs tabular-nums text-ink-faint">{sub}</div>}
     </div>
   );
 }
@@ -208,22 +227,22 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
   const memLabel = gpuMemoryLabel(gpu);
 
   return (
-    <div ref={ref} className={`monitor-absorb shrink-0 border-t border-line px-4 text-[11px] ${open ? 'py-4' : 'py-2'}`}>
+    <div ref={ref} className={`monitor-absorb shrink-0 border-t border-line px-4 text-2xs ${open ? 'py-4' : 'py-2'}`}>
       <button
         className="flex w-full items-center justify-between text-left"
         onClick={toggle}
         aria-expanded={open}
         title={open ? 'Collapse the resource meters' : 'Show the resource meters'}
       >
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+        <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
           <ChevronIcon className={`h-3 w-3 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
           Resources
           {gpu && (monitors.gpu || monitors.vram) && (
-            <span className="chip text-[9px]">{gpu.devices.length} GPU{gpu.devices.length === 1 ? '' : 's'}</span>
+            <span className="chip text-2xs">{gpu.devices.length} GPU{gpu.devices.length === 1 ? '' : 's'}</span>
           )}
         </span>
         {/* Collapsed, the header still carries the numbers worth glancing at. */}
-        <span className="flex shrink-0 items-center gap-2 text-[10px] tabular-nums text-ink-faint">
+        <span className="flex shrink-0 items-center gap-2 text-2xs tabular-nums text-ink-faint">
           {!open && monitors.cpu && system && <span>CPU {system.cpuPct}%</span>}
           {!open && monitors.vram && gpu && <span>{memLabel} {Math.round(pctOf(gpu.usedMB, gpu.totalMB))}%</span>}
           {open && 'live'}
@@ -232,7 +251,7 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
 
       {!open ? null : (
       <>
-      <div className="mt-2.5 space-y-2.5">
+      <div className="mt-2 space-y-2">
         {monitors.cpu && (
           <Meter
             label="CPU"
@@ -263,19 +282,19 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
       </div>
 
       {monitors.vram && gpu && gpu.devices.length > 0 && (
-        <div className="mt-2.5 max-h-32 space-y-2 overflow-y-auto border-t border-line pt-2.5">
+        <div className="mt-2 max-h-32 space-y-2 overflow-y-auto border-t border-line pt-2">
           {gpu.devices.map((d, i) => {
             const dp = pctOf(d.memoryUsedMB, d.memoryTotalMB);
             return (
               <div key={i}>
-                <div className="flex items-center justify-between text-[10.5px] text-ink-faint">
+                <div className="flex items-center justify-between text-2xs text-ink-faint">
                   <span className="min-w-0 truncate" title={d.name}>{d.name}</span>
                   {d.utilizationPct != null && <span className="shrink-0 tabular-nums">{d.utilizationPct}% util</span>}
                 </div>
                 <div className="mt-1 h-1 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
                   <span className="block h-full rounded-full" style={{ width: `${dp}%`, background: loadColor(dp) }} />
                 </div>
-                <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-ink-faint">
+                <div className="mt-0.5 flex justify-between text-2xs tabular-nums text-ink-faint">
                   <span>{GB(d.memoryUsedMB)} GB used</span>
                   <span>{GB(d.memoryFreeMB)} GB free</span>
                 </div>
@@ -286,10 +305,10 @@ export function ResourceDock({ standalone = false }: { standalone?: boolean } = 
       )}
 
       {(monitors.gpu || monitors.vram) && !gpu && (
-        <p className="mt-2 text-[10px] text-ink-faint">No GPU stats available on this machine.</p>
+        <p className="mt-2 text-2xs text-ink-faint">No GPU stats available on this machine.</p>
       )}
       {/* Name the probes, so a number can be checked against the tool it came from. */}
-      <p className="mt-2 text-right text-[10px] text-ink-faint">
+      <p className="mt-2 text-right text-2xs text-ink-faint">
         {(monitors.gpu || monitors.vram) && gpu ? `os + ${gpu.source}` : 'os'}
       </p>
       </>
@@ -365,7 +384,7 @@ export function ResourceHud() {
     >
       {open && (
         <div
-          className="absolute bottom-full right-0 mb-2 w-72 rounded-xl border border-line p-3 text-[11px]"
+          className="absolute bottom-full right-0 mb-2 w-72 rounded-xl border border-line p-3 text-2xs"
           style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-md)' }}
         >
           <div className="mb-2 flex items-center justify-between font-semibold text-ink">
@@ -378,12 +397,12 @@ export function ResourceHud() {
                 key={kind}
                 role="switch"
                 aria-checked={monitors[kind]}
-                className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-surface-2"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-surface-2"
                 title={MONITOR_HINTS[kind]}
                 onClick={() => setMonitor(monitors, kind, !monitors[kind])}
               >
                 <span
-                  className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border text-[8px] font-bold"
+                  className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[4px] border text-2xs font-bold"
                   style={
                     monitors[kind]
                       ? { background: 'var(--accent)', borderColor: 'var(--accent)', color: 'var(--surface)' }
@@ -406,7 +425,7 @@ export function ResourceHud() {
             ))}
           </div>
           {(monitors.gpu || monitors.vram) && gpu && (
-            <div className="mt-2 space-y-1.5 border-t border-line pt-2">
+            <div className="mt-2 space-y-1 border-t border-line pt-2">
               {gpu.devices.map((d, i) => {
                 const dp = pctOf(d.memoryUsedMB, d.memoryTotalMB);
                 return (
@@ -434,7 +453,7 @@ export function ResourceHud() {
       )}
 
       <button
-        className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[11px] tabular-nums text-ink-faint"
+        className="flex items-center gap-2 rounded-full border border-line px-3 py-1 text-2xs tabular-nums text-ink-faint"
         style={{ background: 'var(--surface)', boxShadow: 'var(--shadow-sm)' }}
         aria-label="Resource monitors"
         aria-expanded={open}
@@ -461,11 +480,11 @@ export function ResourceHud() {
           </span>
         )}
         {monitors.vram && (
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-2">
             <span className="h-1.5 w-10 overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
               <span
-                className="block h-full rounded-full transition-[width] duration-500"
-                style={{ width: `${vramPct}%`, background: loadColor(vramPct) }}
+                className="block h-full w-full origin-left rounded-full transition-transform duration-200 ease-(--ease-out)"
+                style={{ transform: `scaleX(${Math.min(100, Math.max(0, vramPct)) / 100})`, background: loadColor(vramPct) }}
               />
             </span>
             {gpu ? `${GB(gpu.usedMB)}/${GB(gpu.totalMB)} GB` : '—'}
@@ -473,5 +492,23 @@ export function ResourceHud() {
         )}
       </button>
     </div>
+  );
+}
+
+/** Which computer the Hardware monitor reads. Absent with none connected. */
+export function MonitorComputerSwitch() {
+  const computers = useStore((s) => s.computers) ?? [];
+  const [chosen, setChosen] = useState('');
+  if (!useShown('computers', { computers: computers.length > 0 })) return null;
+  return (
+    <select
+      className="input w-auto max-w-[110px] py-0.5 text-2xs"
+      aria-label="Computer the hardware readings are from"
+      value={chosen}
+      onChange={(e) => { setChosen(e.target.value); watchComputer(e.target.value || null); }}
+    >
+      <option value="">This computer</option>
+      {computers.map((c) => <option key={c.id} value={c.id} disabled={c.state !== 'online'}>{c.name}</option>)}
+    </select>
   );
 }

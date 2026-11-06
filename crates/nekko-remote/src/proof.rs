@@ -19,8 +19,9 @@
 //! vector is `tests/golden/change-proof.json`, also read by the iPhone's
 //! NekkoProtocol tests.
 
-use p256::ecdsa::signature::Verifier;
-use p256::ecdsa::{Signature, VerifyingKey};
+use base64::Engine;
+use p256::ecdsa::signature::{Signer, Verifier};
+use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -120,7 +121,7 @@ pub fn payload(device_id: &str, channel: &str, args: &Value, ts: i64) -> Option<
     Some(format!("{VERSION}\n{device_id}\n{channel}\n{hex}\n{ts}"))
 }
 
-fn b64(s: &str) -> Option<Vec<u8>> {
+pub(crate) fn b64(s: &str) -> Option<Vec<u8>> {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.decode(s.trim()).ok()
 }
@@ -149,6 +150,39 @@ pub fn verify(key: &VerifyingKey, payload: &str, sig: &[u8]) -> bool {
         Ok(sig) => key.verify(payload.as_bytes(), &sig).is_ok(),
         Err(_) => false,
     }
+}
+
+/// A signature as a proof carries it: the raw 64-byte r||s in base64.
+pub fn sign(key: &SigningKey, payload: &str) -> String {
+    let sig: Signature = key.sign(payload.as_bytes());
+    base64::engine::general_purpose::STANDARD.encode(sig.to_bytes())
+}
+
+/// A device key's public half as [`parse_key`] reads it: X9.63 P-256 in base64.
+pub fn public_key(key: &SigningKey) -> String {
+    base64::engine::general_purpose::STANDARD.encode(key.verifying_key().to_encoded_point(false).as_bytes())
+}
+
+/// A new key from `random`.
+pub fn new_key(random: &crate::hello::Random) -> SigningKey {
+    loop {
+        let mut bytes = [0u8; 32];
+        random(&mut bytes);
+        // Zero or past the curve's order: about one draw in 2^32.
+        if let Ok(key) = SigningKey::from_slice(&bytes) {
+            return key;
+        }
+    }
+}
+
+/// A key as it is stored: its private scalar in base64.
+pub fn key_text(key: &SigningKey) -> String {
+    base64::engine::general_purpose::STANDARD.encode(key.to_bytes())
+}
+
+/// A stored key ([`key_text`]).
+pub fn parse_key_text(text: &str) -> Option<SigningKey> {
+    SigningKey::from_slice(&b64(text)?).ok()
 }
 
 /// What a replay check remembers of a proof: sha256 of the signed text. Not

@@ -1,7 +1,9 @@
 //! `map_event` and `run_turn` against recorded Claude Code stream-json
 //! (tests/fixtures, see its README).
 
-use nekko_harness::{Mapped, Mapper, Outcome, ReportedContext, StopKind, Transport, TurnExit, TurnInput, run_turn};
+use nekko_harness::{
+    Mapped, Mapper, Outcome, ReportedContext, StopKind, Subagent, Transport, TurnExit, TurnInput, run_turn,
+};
 use nekko_loop::{Cancel, INTERRUPTED_NOTE, Steering};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -203,8 +205,6 @@ fn tools_subagents_and_retries() {
             "step",
             "tool_result",
             "tool_call",
-            "tool_call",
-            "tool_result",
             "step",
             "tool_result",
             "text",
@@ -218,11 +218,26 @@ fn tools_subagents_and_retries() {
     // Thinking and text streamed once each, though each also came whole.
     assert_eq!(text_of(&ev, "reasoning"), "List the files.");
     assert_eq!(text_of(&ev, "text"), "Checking.Two files; a.txt says hello.");
-    // The sub-agent's own steps hang under the Task call and stay out of the transcript.
-    let sub_call = &ev[7]["call"];
-    assert_eq!((sub_call["name"].as_str(), sub_call["parentToolCallId"].as_str()), (Some("Read"), Some("toolu_task")));
-    assert_eq!(ev[8]["result"]["parentToolCallId"], "toolu_task");
-    assert_eq!(ev[8]["result"]["output"], "hello");
+    // A Task call reads as a delegation; the sub-agent's own lines stay out
+    // of the chat, each handed up for its child chat, and its end follows the call's result.
+    assert_eq!(ev[6]["call"]["name"], "spawn_agent");
+    assert_eq!(ev[6]["call"]["input"]["title"], "Read a");
+    assert_eq!(ev[6]["call"]["input"]["task"], "Read a.txt");
+    let sub: Vec<&Subagent> =
+        items.iter().filter_map(|m| if let Mapped::Subagent(s) = m { Some(s) } else { None }).collect();
+    assert_eq!(
+        sub[0],
+        &Subagent::Started {
+            call_id: "toolu_task".into(),
+            title: "Read a".into(),
+            task: "Read a.txt".into(),
+            background: false
+        }
+    );
+    assert_eq!(sub.iter().filter(|s| matches!(s, Subagent::Line { .. })).count(), 3);
+    let Subagent::Line { line, .. } = sub[2] else { panic!("an assistant line") };
+    assert_eq!(line["parent_tool_use_id"], Value::Null);
+    assert_eq!(sub[4], &Subagent::Ended { call_id: "toolu_task".into(), outcome: Outcome::Completed });
     let msgs = messages(&items);
     let shape: Vec<(String, usize)> = msgs
         .iter()
@@ -297,6 +312,31 @@ fn a_sub_agents_calls_are_not_the_chats_context() {
     sub["message"]["usage"] = json!({ "input_tokens": 90_000, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "output_tokens": 9 });
     lines.insert(at, sub.to_string());
     assert_eq!(contexts(&map_all(&lines)), [reported(20_240, Some(1_000_000))]);
+}
+
+#[test]
+fn a_background_sub_agent_ends_at_its_notification_not_its_call() {
+    let mut m = Mapper::new("s");
+    let call = |id: &str, input: Value| {
+        json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "id": format!("m{id}"), "content": [
+            { "type": "tool_use", "id": id, "name": "Agent", "input": input }] } })
+    };
+    let result = |id: &str| {
+        json!({ "type": "user", "parent_tool_use_id": null, "message": { "content": [
+            { "type": "tool_result", "tool_use_id": id, "content": "Async agent launched" }] } })
+    };
+    let ended = |items: &[Mapped]| items.iter().any(|m| matches!(m, Mapped::Subagent(Subagent::Ended { .. })));
+    // Said in the call, or only by Claude Code once the call started.
+    m.map(&call("a", json!({ "description": "d", "prompt": "p", "run_in_background": true })));
+    assert!(!ended(&m.map(&result("a"))));
+    m.map(&call("b", json!({ "description": "d", "prompt": "p" })));
+    m.map(&json!({ "type": "system", "subtype": "task_started", "tool_use_id": "b", "is_backgrounded": true }));
+    assert!(!ended(&m.map(&result("b"))));
+    let note = json!({ "type": "system", "subtype": "task_notification", "tool_use_id": "a", "status": "failed", "summary": "It broke" });
+    assert_eq!(
+        m.map(&note),
+        [Mapped::Subagent(Subagent::Ended { call_id: "a".into(), outcome: Outcome::Failed("It broke".into()) })]
+    );
 }
 
 // ---- run_turn over a scripted Claude Code ----

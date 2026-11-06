@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { displaysBridge, prefersReducedMotion, useDisplays, type DesktopInfo, type DisplayInfo, type DisplayPlacement, type DisplaysState, type SpacesMode } from '../displays.js';
+import type { WallLayoutMode } from '@nekko-agent/shared';
+import { displaysBridge, prefersReducedMotion, rememberOpenerMode, useDisplays, type DesktopInfo, type DisplayInfo, type DisplayPlacement, type DisplaysState, type SpacesMode } from '../displays.js';
 import { useStore } from '../store.js';
 
 /** Two screens side by side: the toolbar button's glyph. */
@@ -85,9 +86,10 @@ function ScreenTile({ display, scale, busy, onToggle }: { display: DisplayInfo; 
  * dropdown like the grid-size picker, with every connected screen in a row.
  * Turning a screen on opens a full Nekko window there that swipes in from the
  * left; turning it off shrinks it into the right edge. Below a divider, the
- * view options choose where new agent windows open.
+ * view options choose where new agent windows open. A window switched on
+ * opens in `mode`, the opener's Focused or Dynamic.
  */
-export function ScreensControl() {
+export function ScreensControl({ mode = 'grid' }: { mode?: WallLayoutMode }) {
   const [state, setState] = useDisplays();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -111,6 +113,7 @@ export function ScreensControl() {
     onToggleOpen={() => { clearTimeout(closeTimer.current); setOpen(true); }}
     onToggle={async (d) => {
       setBusy(true);
+      if (!d.enabled) rememberOpenerMode(mode);
       try { setState(await displaysBridge!.toggle(d.id, !d.enabled, prefersReducedMotion())); }
       catch (e) { useStore.getState().pushToast('error', `Could not change screens: ${(e as Error).message}`); }
       finally { setBusy(false); }
@@ -119,10 +122,11 @@ export function ScreensControl() {
       try { setState(await displaysBridge!.setPlacement(p)); }
       catch (e) { useStore.getState().pushToast('error', `Could not save the view option: ${(e as Error).message}`); }
     }}
-    onToggleDesktop={async (d, mode) => {
+    onToggleDesktop={async (d, spacesMode) => {
       setBusy(true);
       try {
-        if (mode) setState(await displaysBridge!.setSpacesMode(mode));
+        if (spacesMode) setState(await displaysBridge!.setSpacesMode(spacesMode));
+        if (!d.enabled) rememberOpenerMode(mode);
         setState(await displaysBridge!.toggleDesktop(d.id, !d.enabled));
       } catch (e) { useStore.getState().pushToast('error', `Could not change desktops: ${(e as Error).message}`); }
       finally { setBusy(false); }
@@ -163,7 +167,7 @@ export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onTog
   // Fit the row: the widest screen is drawn 96px wide, the rest to scale.
   const scale = 96 / Math.max(1, ...state.displays.map((d) => d.bounds.width));
   return <div className="screens-control" ref={rootRef} onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)}>
-    <button type="button" className="btn btn-outline gap-1.5 py-1 text-[12px]" aria-haspopup="dialog" aria-expanded={open}
+    <button type="button" className="btn btn-outline gap-2 py-1 text-xs" aria-haspopup="dialog" aria-expanded={open}
       aria-label={state.displays.length < 2 && state.spaces ? `Desktops: ${state.spaces.desktops.filter((d) => d.enabled).length} of ${state.spaces.desktops.length} on` : `Screens: ${on} of ${state.displays.length} on`} title="Screens" data-screens-button onClick={onToggleOpen}>
       <MultiMonitorIcon className="h-4 w-4" />{state.displays.length > 1
         ? <span className="tabular-nums">{on}/{state.displays.length}</span>
@@ -188,8 +192,8 @@ export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onTog
           <p className="spaces-ask__lead">Jump to Desktop {askingDesktop.label} and open Nekko there?</p>
           <p className="spaces-ask__body">macOS only lets an app change desktops by pressing its shortcuts for you, which needs the <strong>Accessibility</strong> permission (macOS also asks once to let Nekko control System Events). It also lets you say &ldquo;Nekko, switch to desktop 2&rdquo;. Without it, the window opens the next time you go to that desktop yourself.</p>
           <div className="spaces-ask__actions">
-            <button type="button" className="btn btn-primary py-1 text-[12px]" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'switch'); }}>Allow and switch</button>
-            <button type="button" className="btn btn-outline py-1 text-[12px]" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'arrive'); }}>Open when I get there</button>
+            <button type="button" className="btn btn-primary py-1 text-xs" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'switch'); }}>Allow and switch</button>
+            <button type="button" className="btn btn-outline py-1 text-xs" onClick={() => { setAsking(null); onToggleDesktop?.(askingDesktop, 'arrive'); }}>Open when I get there</button>
           </div>
         </div>}
         {spaces.mode === 'switch' && !spaces.access && <p className="screens-picker__note">Accessibility is off for Nekko in System Settings, so desktop windows open when you get there.</p>}

@@ -268,7 +268,7 @@ struct SecuritySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: store.activeId) { await load() }
         .onChange(of: store.conn) { _, s in if s == .online { Task { await load() } } }
-        .refreshable { await load() }
+        .pawRefreshable { await load() }
     }
 
     static func icon(_ kind: StepUpMethodKind) -> String {

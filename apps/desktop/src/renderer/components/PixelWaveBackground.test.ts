@@ -1,22 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { THEME_PRESETS } from '@nekko-agent/shared';
-import { pixelWaveFor, waveField } from './PixelWaveBackground.js';
+import { pixelWaveFor, showEmptyAgentWave, DOT_CELL, dotOpacity, wavePhase, columnColors } from './PixelWaveBackground.js';
 
 describe('pixel wave', () => {
-  it('draws the same wave as the original per-cell formula', () => {
-    // The original drew, for every cell, sin(x/110 - 1.4t + 1.6 sin(y/150 + 0.5t)), cubed and scaled by peak.
-    const CELL = 9, cols = 40, rows = 25, peak = 0.3;
-    const colSin = new Float32Array(cols), colCos = new Float32Array(cols);
-    for (let c = 0; c < cols; c++) { colSin[c] = Math.sin((c * CELL) / 110); colCos[c] = Math.cos((c * CELL) / 110); }
-    const out = new Float32Array(cols * rows);
-    for (const t of [0, 1.7, 42.3]) {
-      waveField(cols, rows, t, peak, out, colSin, colCos);
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const w = Math.sin((c * CELL) / 110 - t * 1.4 + Math.sin((r * CELL) / 150 + t * 0.5) * 1.6);
-          expect(out[r * cols + c]).toBeCloseTo(Math.max(0, w) ** 3 * peak, 5);
-        }
-      }
+  const field = (t: number, cols = 80, rows = 40, peak = 0.26) =>
+    Array.from({ length: rows }, (_, row) => Array.from({ length: cols }, (_, col) => dotOpacity(col, t, wavePhase(row, t), peak)));
+
+  it('keeps dots faint and leaves troughs empty', () => {
+    const dots = field(1.3).flat();
+    expect(Math.max(...dots)).toBeLessThanOrEqual(0.26);
+    expect(dots.filter((d) => d === 0).length).toBeGreaterThan(dots.length / 3);
+    expect(dots.every((d) => d === 0 || d >= 0.02)).toBe(true);
+  });
+
+  it('flows: rows crest at different moments and the field changes over time', () => {
+    const a = field(0), b = field(0.4);
+    expect(a[0].join()).not.toBe(a[10].join());
+    expect(a[5].join()).not.toBe(b[5].join());
+  });
+
+  it('paints each column in its slice of the gradient, whatever form the colours take', () => {
+    const ctx = { _v: '', get fillStyle() { return this._v; }, set fillStyle(v: string) { this._v = v === 'white' ? '#ffffff' : v; } };
+    expect(columnColors(ctx as never, '#453a92', '#9d8ce6', 3, 10, 21)).toEqual(['rgb(69,58,146)', 'rgb(113,99,188)', 'rgb(157,140,230)']);
+    expect(columnColors(ctx as never, 'white', 'rgba(0, 0, 0, 0.5)', 2, 10, 11)).toEqual(['rgb(255,255,255)', 'rgb(0,0,0)']);
+  });
+
+  it('keeps the same 9-pixel grid the marketing site uses', () => {
+    expect(DOT_CELL).toBe(9);
+  });
+
+  it('only decorates loaded empty agent windows, never running turns or the shared composer', () => {
+    const empty = { loaded: true, messages: 0, running: false, composer: false, enabled: true };
+    expect(showEmptyAgentWave(empty)).toBe(true);
+    for (const patch of [{ loaded: false }, { messages: 1 }, { running: true }, { composer: true }, { enabled: false }, { readOnly: true }]) {
+      expect(showEmptyAgentWave({ ...empty, ...patch })).toBe(false);
     }
   });
 

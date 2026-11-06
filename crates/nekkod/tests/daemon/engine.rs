@@ -59,7 +59,7 @@ async fn serves_the_model_library_and_its_folders_itself() {
     let local = home.join("local").to_string_lossy().to_string();
     let roaming = home.join("roaming").to_string_lossy().to_string();
     let d = start_with_env(
-        Some(&data),
+        &data,
         json!({}),
         &[
             ("HOME", Some(&h)),
@@ -215,7 +215,7 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
     let hf = fake_hugging_face(tiny_gguf("llama", "Tiny")).await;
     let h = home.to_string_lossy().to_string();
     let d = start_with_env(
-        Some(&data),
+        &data,
         json!({ "huggingFaceUrl": format!("http://127.0.0.1:{hf}") }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
     );
@@ -311,13 +311,13 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
 /// system's own tar (bsdtar on Windows and macOS writes zip from the name).
 fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
     let (build, name, exe) = if cfg!(windows) {
-        ("win-x64-cpu", "llama-b11224-bin-win-cpu-x64.zip", "llama-server.exe")
+        ("win-x64-cpu", "llama-b12004-bin-win-cpu-x64.zip", "llama-server.exe")
     } else if cfg!(target_os = "macos") {
-        ("macos-arm64-metal", "llama-b11224-bin-macos-arm64.tar.gz", "llama-server")
+        ("macos-arm64-metal", "llama-b12004-bin-macos-arm64.tar.gz", "llama-server")
     } else if cfg!(target_arch = "aarch64") {
-        ("linux-arm64-cpu", "llama-b11224-bin-ubuntu-arm64.tar.gz", "llama-server")
+        ("linux-arm64-cpu", "llama-b12004-bin-ubuntu-arm64.tar.gz", "llama-server")
     } else {
-        ("linux-x64-cpu", "llama-b11224-bin-ubuntu-x64.tar.gz", "llama-server")
+        ("linux-x64-cpu", "llama-b12004-bin-ubuntu-x64.tar.gz", "llama-server")
     };
     let src = dir.join("archive-src/build/bin");
     std::fs::create_dir_all(&src).unwrap();
@@ -354,11 +354,11 @@ async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
     let release = json!({
-        "tag_name": "b11224",
+        "tag_name": "b12004",
         "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
     });
     let app = axum::Router::new()
-        .route("/repos/ggml-org/llama.cpp/releases/tags/b11224", get(move || async move { axum::Json(release) }))
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b12004", get(move || async move { axum::Json(release) }))
         .route(&format!("/dl/{name}"), get(move || async move { archive }));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -375,17 +375,17 @@ async fn installs_and_removes_the_engine_itself() {
     std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
     let (build, name, archive) = engine_archive(&root);
     let gh = fake_github(name, archive).await;
-    let d = start_with_env(Some(&data), json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }), &[]);
+    let d = start_with_env(&data, json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }), &[]);
 
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
         (preview["version"].clone(), preview["files"][0]["name"].clone()),
-        (json!("b11224"), json!(name)),
+        (json!("b12004"), json!(name)),
         "{preview}"
     );
     let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["message"], "Downloading llama.cpp b11224.", "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b12004.", "{started}");
     let job =
         job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
     assert_eq!(job["state"], "done", "{job}");
@@ -395,7 +395,7 @@ async fn installs_and_removes_the_engine_itself() {
     assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
     let record: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
-    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b11224")));
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12004")));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,7 +405,7 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(
         (detected["source"].clone(), detected["version"].clone()),
-        (json!("managed"), json!("b11224")),
+        (json!("managed"), json!("b12004")),
         "{detected}"
     );
     assert!(
@@ -414,8 +414,17 @@ async fn installs_and_removes_the_engine_itself() {
     );
     let (_, installed) = post(d.port, "engine:installedBin", json!([]), Some(TOKEN)).await;
     assert_eq!(installed, detected["binPath"]);
+    let (_, installed) = post(d.port, "engine:installedBin", json!(["llama"]), Some(TOKEN)).await;
+    assert_eq!(installed, detected["binPath"]);
     let (_, sd) = post(d.port, "engine:detect", json!(["diffusion"]), Some(TOKEN)).await;
     assert!(sd["available"].is_array(), "{sd}");
+    // The tray's question, per runtime: the same answer `detect` gives.
+    let (_, sd_bin) = post(d.port, "engine:installedBin", json!(["diffusion"]), Some(TOKEN)).await;
+    assert_eq!(sd_bin, sd.get("binPath").cloned().unwrap_or(Value::Null), "{sd}");
+    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        let (_, mlx_bin) = post(d.port, "engine:installedBin", json!(["mlx"]), Some(TOKEN)).await;
+        assert_eq!(mlx_bin, Value::Null);
+    }
     let (_, mlx) = post(d.port, "engine:detect", json!(["mlx"]), Some(TOKEN)).await;
     if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         assert_eq!(mlx["reason"], "MLX runs on Apple Silicon Macs only.");
@@ -466,7 +475,7 @@ async fn runs_the_model_server_itself() {
         "engine": { "port": port, "modelFolders": [], "maxLoaded": 1 },
     });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with_env(Some(&data), json!({}), &[]);
+    let d = start_with_env(&data, json!({}), &[]);
 
     let (status, s) = post(d.port, "engine:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{s}");
@@ -634,7 +643,7 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     .unwrap();
     let session = json!({ "id": "s_img", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
-    let d = start_with_env(Some(&data), json!({}), &[]);
+    let d = start_with_env(&data, json!({}), &[]);
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
     let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().expect("an image row");
     let id = row["id"].as_str().unwrap().to_string();
@@ -794,7 +803,7 @@ async fn downloads_a_decision_model_from_its_release_through_the_queue_and_check
 
     let (release, seen) = fake_decision_release(false).await;
     let d = start_with_env(
-        Some(&data),
+        &data,
         json!({ "decisionModelsUrl": release }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
     );
@@ -856,7 +865,7 @@ async fn downloads_a_decision_model_from_its_release_through_the_queue_and_check
     let _ = std::fs::remove_dir_all(&dir);
     let (tampered, _) = fake_decision_release(true).await;
     let d = start_with_env(
-        Some(&data),
+        &data,
         json!({ "decisionModelsUrl": tampered }),
         &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
     );

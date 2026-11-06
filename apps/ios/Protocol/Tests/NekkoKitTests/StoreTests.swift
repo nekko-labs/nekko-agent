@@ -3,6 +3,10 @@ import XCTest
 @testable import NekkoKit
 @testable import NekkoProtocol
 
+/// A computer's public key as a pairing link carries it.
+let otherTestHostKey = String(repeating: "A", count: 87) + "="
+let testHostKey = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+
 final class MemoryStore: SecureStore, @unchecked Sendable {
     let lock = NSLock()
     var values: [String: String] = [:]
@@ -17,6 +21,8 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     let lock = NSLock()
     var calls: [(String, [JSONValue])] = []
     var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
+    var summariesReply: (@MainActor () async throws -> JSONValue)?
+    var pendingReply: (@MainActor () async throws -> JSONValue)?
     var connected = false
     var closed = false
     var pushTokens: [String] = []
@@ -49,21 +55,32 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func registerPush(token: String) async throws { try await registerPush(token: token, kinds: nil) }
     var pushKinds: [[String]?] = []
     func registerPush(token: String, kinds: [String]?) async throws {
-        lock.lock(); pushTokens.append(token); pushKinds.append(kinds); lock.unlock()
+        lock.withLock { pushTokens.append(token); pushKinds.append(kinds) }
+    }
+    var badgeManifests: [[String]?] = []
+    func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws {
+        lock.withLock { pushTokens.append(token); pushKinds.append(kinds); badgeManifests.append(badgeRooms) }
     }
     private var onControl: (@Sendable (RelayControl) -> Void)?
     func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) { onControl = f }
     func control(_ c: RelayControl) { onControl?(c) }
     /// The computer's protocol version in its welcome.
     var welcomeProtocol = 1
-    var activities: [(String, String)] = []
-    func registerActivity(tag: String, token: String) async throws { lock.lock(); activities.append((tag, token)); lock.unlock() }
+    var cards: [JSONValue] = []
+    func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {
+        lock.withLock {
+            cards.append(["token": token.map(JSONValue.string) ?? .null, "startToken": startToken.map(JSONValue.string) ?? .null,
+                          "level": .string(level.rawValue), "computerId": .string(computerId), "computerName": .string(computerName)])
+        }
+    }
 
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
-        lock.lock()
-        calls.append((channel, args))
-        let r = replies[channel]
-        lock.unlock()
+        let r = lock.withLock {
+            calls.append((channel, args))
+            return replies[channel]
+        }
+        if channel == Channels.sessionsSummaries, let summariesReply { return try await summariesReply() }
+        if channel == Channels.chatPending, let pendingReply { return try await pendingReply() }
         guard let r else { return .null }
         return try r(args)
     }
@@ -113,7 +130,7 @@ final class StoreTests: XCTestCase {
             Channels.providersList: { _ in [["id": "p", "kind": "openai", "label": "P", "enabled": true, "apiKey": "sk-x"], ["id": "off", "label": "Off", "enabled": false]] },
             Channels.settingsGet: { _ in ["defaultProviderId": "p", "defaultModelId": "m", "theme": "dark", "defaultChatMode": "ask"] },
             Channels.workspaceList: { _ in [["id": "w", "name": "App"]] },
-            Channels.appInfo: { _ in ["version": "0.9.0", "platform": "darwin"] },
+            Channels.appInfo: { _ in ["version": "0.9.0", "platform": "darwin", "hostname": "Studio Mac"] },
             Channels.chatPending: { _ in ["s1": ["question": ["callId": "q", "questions": []]]] },
             Channels.modelsList: { args in args.first == "p" ? [["id": "m", "providerId": "p", "name": "Model M"]] : [] },
         ]
@@ -130,13 +147,14 @@ final class StoreTests: XCTestCase {
         s.load()
         XCTAssertTrue(s.ready)
         XCTAssertNil(s.activeId)
-        let id = await s.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: room, key: key, pair: "ABCD2345"))
+        let id = try await s.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: room, key: key, hostKey: testHostKey, pair: "ABCD2345"))
         XCTAssertEqual(id, "id-1")
         let c = try XCTUnwrap(connections.last)
         XCTAssertEqual(c.config.pairCode, "ABCD2345")
         XCTAssertEqual(c.config.deviceName, "Philip’s iPhone")
         XCTAssertEqual(c.config.platform, "ios")
         XCTAssertEqual(c.config.keyBytes, Data(repeating: 7, count: 32))
+        XCTAssertEqual(c.config.hostKey, testHostKey)
         XCTAssertTrue(c.connected)
         XCTAssertEqual(s.conn, .connecting)
         // Secrets only in the secure store, and not in the index.
@@ -154,7 +172,7 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.pcSettings.effectiveMode, .ask)
         XCTAssertEqual(s.workspaces.map(\.name), ["App"])
         XCTAssertEqual(s.activity["s1"], .needsYou)
-        XCTAssertEqual(s.active?.name, "Mac", "named after its OS on first contact")
+        XCTAssertEqual(s.active?.name, "Studio Mac", "named after the actual computer on first contact")
         XCTAssertEqual(s.hostVersion, "0.9.0")
         XCTAssertEqual(s.active?.route, .tailscale)
 
@@ -164,12 +182,13 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s2.activeId, id)
         XCTAssertNil(connections.last?.config.pairCode)
         XCTAssertEqual(connections.last?.config.deviceId, c.config.deviceId, "same device id")
+        XCTAssertEqual(connections.last?.config.hostKey, testHostKey, "the pin is kept with the secret")
     }
 
     func testVersionPushKindsDismissalsAndTheTestNotification() async throws {
         let s = makeStore()
         s.load()
-        _ = await s.pair(PairingLink(relayUrl: "wss://relay.example", room: room, key: key, pair: nil))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://relay.example", room: room, key: key, hostKey: testHostKey, pair: nil))
         let c = try XCTUnwrap(connections.last)
         XCTAssertEqual(s.protocolCheck, .same, "unknown until welcomed")
         c.welcomeProtocol = 1
@@ -191,7 +210,12 @@ final class StoreTests: XCTestCase {
         c.control(.dismiss(tag: E2E.activityTag("s1")))
         await settle()
         XCTAssertEqual(s.relayDelivers, true)
-        XCTAssertEqual(dismissed, [E2E.activityTag("s1")])
+        XCTAssertTrue(dismissed.isEmpty, "a legacy dismiss cannot clear the question still returned by chat:pending")
+        XCTAssertEqual(s.attentionCount, 1)
+        c.replies[Channels.chatPending] = { _ in [:] }
+        await s.refreshAttention()
+        XCTAssertEqual(dismissed, [E2E.activityTag("s1")], "only a fresh empty snapshot proves the chat-wide dismissal")
+        XCTAssertEqual(s.attentionCount, 0)
 
         // The computer answers push:test and the relay can push: the relay path.
         c.replies[Channels.pushTest] = { _ in ["ok": true] }
@@ -220,20 +244,61 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(s.relayDelivers)
     }
 
-    func testRepairingAKnownComputerKeepsItsIdAndName() async {
+    func testRepairingAKnownComputerKeepsItsIdAndName() async throws {
         let s = makeStore()
         s.load()
-        let id = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, pair: "AAAA2222"))
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey, pair: "AAAA2222"))
         s.rename(id, to: "  Studio  ")
-        let again = await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, pair: "BBBB3333"))
+        let again = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey, pair: "BBBB3333"))
         XCTAssertEqual(again, id)
         XCTAssertEqual(s.computers.map(\.name), ["Studio"])
+    }
+
+    func testRepairAcrossRelayAndRoomChangesKeepsIdentityAndRoutes() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://old", room: room, key: key, hostKey: testHostKey))
+        s.rename(id, to: "Studio")
+        let pairedAt = s.active?.pairedAt
+        let again = try await s.pair(PairingLink(relayUrl: "wss://new", room: "new-room", key: key, hostKey: testHostKey, pair: "NEW", alts: ["ws://192.168.1.2:4400"]))
+        XCTAssertEqual(again, id)
+        XCTAssertEqual(s.computers.count, 1)
+        XCTAssertEqual(s.active?.name, "Studio")
+        XCTAssertEqual(s.active?.pairedAt, pairedAt)
+        XCTAssertEqual(s.active?.relayUrl, "wss://new")
+        XCTAssertEqual(connections.last?.config.room, "new-room")
+        XCTAssertEqual(connections.last?.config.pairCode, "NEW")
+        XCTAssertEqual(s.active?.alts, ["ws://192.168.1.2:4400"])
+    }
+
+    func testNamesLearnTheHostNameAndKeepPhoneNicknames() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        s.learnPlatform("darwin", for: id)
+        XCTAssertEqual(s.active?.name, "Mac")
+        s.learnPlatform("darwin", for: id, name: "Philip’s MacBook Pro")
+        XCTAssertEqual(s.active?.name, "Philip’s MacBook Pro")
+        s.learnPlatform("darwin", for: id, name: "Studio Mac")
+        XCTAssertEqual(s.active?.name, "Studio Mac")
+        s.learnPlatform(nil, for: id)
+        XCTAssertEqual(s.active?.name, "Studio Mac", "a failed info read keeps the learned name")
+        s.rename(id, to: "Mac") // Even an explicitly chosen generic name is a nickname.
+        s.learnPlatform("darwin", for: id, name: "Work Mac")
+        XCTAssertEqual(s.active?.name, "Mac")
+        let reloaded = makeStore()
+        reloaded.load()
+        reloaded.learnPlatform("darwin", for: id, name: "New name")
+        XCTAssertEqual(reloaded.active?.name, "Mac")
+        let info = AppInfo.from(["hostname": "system", "computerName": "custom"])
+        XCTAssertEqual(info.hostname, "system")
+        XCTAssertEqual(info.computerName, "custom")
     }
 
     func testEventsTrackActivityAppearanceAndRefreshTheList() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.online()
         await settle()
@@ -253,11 +318,174 @@ final class StoreTests: XCTestCase {
         s.unsubscribe(sub)
     }
 
+    func testSummaryInvalidationsDuringPendingCallReadFinalWatchCount() async throws {
+        let s = makeStore()
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let c = try XCTUnwrap(connections.last)
+        c.online()
+        await settle()
+        var pending: CheckedContinuation<JSONValue, Error>?
+        var requests = 0
+        c.summariesReply = {
+            requests += 1
+            if requests == 1 {
+                return try await withCheckedThrowingContinuation { pending = $0 }
+            }
+            return [["id": "s1", "activeWatchCount": 0]]
+        }
+        c.event(["type": "session_meta", "sessionId": "s1"])
+        c.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        XCTAssertEqual(requests, 1, "debounce notifications coalesce")
+        XCTAssertNotNil(pending)
+        c.event(["type": "session_meta", "sessionId": "s1"])
+        c.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        pending?.resume(returning: [["id": "s1", "activeWatchCount": 1]])
+        for _ in 0..<20 { await Task.yield() }
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 1)
+        await settle()
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 0)
+        XCTAssertEqual(requests, 2)
+        await settle()
+        XCTAssertEqual(requests, 2)
+        s.disconnect()
+    }
+
+    func testSummaryReconnectDiscardsPendingReplyAndDirtyRetry() async throws {
+        let s = makeStore()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let old = try XCTUnwrap(connections.last)
+        old.online()
+        await settle()
+        var pending: CheckedContinuation<JSONValue, Error>?
+        var requests = 0
+        old.summariesReply = {
+            requests += 1
+            return try await withCheckedThrowingContinuation { pending = $0 }
+        }
+        old.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        old.event(["type": "session_meta", "sessionId": "s1"])
+        await settle()
+        s.connect(id)
+        let fresh = try XCTUnwrap(connections.last)
+        fresh.online()
+        await settle()
+        var freshPending: CheckedContinuation<JSONValue, Error>?
+        var freshRequests = 0
+        fresh.summariesReply = {
+            freshRequests += 1
+            if freshRequests == 1 {
+                return try await withCheckedThrowingContinuation { freshPending = $0 }
+            }
+            return [["id": "s1", "activeWatchCount": 0]]
+        }
+        fresh.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        pending?.resume(returning: [["id": "s1", "activeWatchCount": 99]])
+        await settle()
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(s.summaries.first?.activeWatchCount, 0)
+        fresh.event(["type": "session_meta", "sessionId": "s1"])
+        await settle()
+        XCTAssertEqual(freshRequests, 1, "old cleanup must not clear the new task")
+        freshPending?.resume(throwing: RelayError("failed"))
+        await settle()
+        XCTAssertEqual(freshRequests, 2, "a pending invalidation survives failure")
+        fresh.summariesReply = { freshRequests += 1; throw RelayError("failed") }
+        fresh.event(["type": "done", "sessionId": "s1"])
+        await settle()
+        await settle()
+        XCTAssertEqual(freshRequests, 3, "failure alone must not loop")
+        s.disconnect()
+    }
+
+    /// A pairing saved by an older app predates the derived relay credential (decision 0036)
+    /// or the host key (decision 0041): the computer no longer answers on it and a key first
+    /// seen now could be anyone's, so the phone asks for a fresh QR instead of dialing.
+    func testAPairingFromAnOlderVersionIsNotDialed() async throws {
+        let stale: [(String, ([String: Any]) -> [String: Any])] = [
+            ("no version", { $0.filter { $0.key != "v" } }),
+            ("version 2", { $0.filter { $0.key != "hostKey" }.merging(["v": 2]) { $1 } }),
+            ("version 2 with a key", { $0.merging(["v": 2]) { $1 } }),
+            ("no host key", { $0.filter { $0.key != "hostKey" } }),
+        ]
+        for (name, change) in stale {
+            let s = makeStore()
+            s.load()
+            let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+            let saved = try XCTUnwrap(secure.get(ComputersStore.secretKey(id)))
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(saved.utf8)) as? [String: Any])
+            XCTAssertEqual(object["v"] as? Int, E2E.pairingVersion)
+            secure.set(ComputersStore.secretKey(id), String(decoding: try JSONSerialization.data(withJSONObject: change(object)), as: UTF8.self))
+
+            let before = connections.count
+            let again = makeStore()
+            again.load()
+            await settle()
+            await again.runChecks()
+            XCTAssertEqual(connections.count, before, "\(name): no connection on the old pairing")
+            XCTAssertEqual(again.conn, .denied, name)
+            XCTAssertEqual(again.denied, .badKey, name)
+        }
+    }
+
+    func testALinkCanNotReplaceAPin() async throws {
+        let s = makeStore()
+        s.load()
+        let id = try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let saved = secure.get(ComputersStore.secretKey(id))
+        let before = connections.count
+        let other = String(repeating: "A", count: 87) + "="
+        do {
+            try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: other))
+            XCTFail("a link replaced the pin")
+        } catch {
+            XCTAssertEqual(error as? PairingRefusal, .differentComputer)
+            XCTAssertEqual(error.localizedDescription, "This link names a different computer than the one you paired with. Forget that computer first if it was reset.")
+        }
+        XCTAssertEqual(secure.get(ComputersStore.secretKey(id)), saved)
+        XCTAssertEqual(connections.count, before)
+        // The same computer again is fine, and a rotated pairing is another room.
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: "ffffffff", key: key, hostKey: other))
+        XCTAssertEqual(s.computers.count, 2)
+    }
+
+    /// The relay's refusal isn't sealed: the phone stays paired and keeps its prompts, and the words reach the UI.
+    func testARefusedPairingKeyIsNotADenial() async throws {
+        let s = makeStore()
+        s.load()
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
+        let c = try XCTUnwrap(connections.last)
+        c.status(RelayStatus(.offline, detail: RelayStatus.badPairingKey))
+        await settle()
+        XCTAssertEqual(s.conn, .offline)
+        XCTAssertEqual(s.connDetail, RelayStatus.badPairingKey)
+        XCTAssertNil(s.denied)
+    }
+
+    func testALinkWithoutAHostKeyCanNotPair() async throws {
+        let s = makeStore()
+        s.load()
+        let link = try XCTUnwrap(Pairing.parse("relay=wss://relay.example.com&room=\(room)&key=\(key)&pair=ABCD2345"))
+        do {
+            try await s.pair(link)
+            XCTFail("paired with a computer that can't prove itself")
+        } catch {
+            XCTAssertEqual(error as? PairingRefusal, .noHostKey)
+            XCTAssertEqual(error.localizedDescription, "Update Nekko Agent on your computer, then make a new pairing code.")
+        }
+        XCTAssertTrue(s.computers.isEmpty)
+        XCTAssertTrue(connections.isEmpty)
+    }
+
     func testDenialAndForget() async throws {
         let s = makeStore()
         s.load()
-        let a = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
-        let b = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        let a = try await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key, hostKey: testHostKey))
+        let b = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: otherTestHostKey))
         XCTAssertEqual(s.activeId, b)
         connections.last!.status(RelayStatus(.denied, detail: "revoked", denied: .revoked))
         await settle()
@@ -272,10 +500,28 @@ final class StoreTests: XCTestCase {
         XCTAssertTrue(s.computers.isEmpty)
     }
 
+    /// The computer left behind must not start a second card on this phone.
+    func testSwitchingComputersTellsTheOldOneToStopTheCard() async throws {
+        let s = makeStore()
+        s.load()
+        _ = try await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key, hostKey: testHostKey))
+        let first = try XCTUnwrap(connections.last)
+        first.online()
+        s.cardLevel = .standard
+        await settle()
+        XCTAssertEqual(first.cards.last?.str("level"), "standard")
+        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: otherTestHostKey))
+        XCTAssertFalse(connections.last === first, "the switch did not wait")
+        await settle()
+        XCTAssertEqual(first.cards.last?.str("level"), "none")
+        XCTAssertEqual(first.callsTo(Channels.cardSet).last, [["level": "none"]])
+        XCTAssertTrue(first.closed, "closed once it has said so")
+    }
+
     func testTheConnectionLogFollowsTheActiveComputer() async throws {
         let s = makeStore()
         s.load()
-        let a = await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key))
+        let a = try await s.pair(PairingLink(relayUrl: "wss://a", room: room, key: key, hostKey: testHostKey))
         connections.last!.status(RelayStatus(.connecting, detail: "handshake timed out"))
         connections.last!.status(RelayStatus(.connecting, detail: "handshake timed out"))
         connections.last!.status(RelayStatus(.online))
@@ -284,7 +530,7 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.connectionLog.entries[1].repeats, 2)
         s.connect(a)
         XCTAssertEqual(s.connectionLog.entries.count, 4, "reconnecting the same computer keeps its history")
-        _ = await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key))
+        _ = try await s.pair(PairingLink(relayUrl: "wss://b", room: "ffffffff", key: key, hostKey: otherTestHostKey))
         XCTAssertEqual(s.connectionLog.entries.map(\.state), [.connecting], "another computer starts its own")
         XCTAssertFalse(s.connectionLog.text(relayHost: "b", route: .internet).contains(room))
     }
@@ -292,7 +538,7 @@ final class StoreTests: XCTestCase {
     func testChatOperationsCallTheComputerWithPhoneKeysOnly() async throws {
         let s = makeStore()
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: room, key: key, hostKey: testHostKey))
         let c = try XCTUnwrap(connections.last)
         c.replies[Channels.sessionCreate] = { _ in ["id": "new", "title": ""] }
         c.replies[Channels.settingsUpdate] = { _ in ["defaultChatMode": "yolo"] }
@@ -305,10 +551,10 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(s.summaries.first?.archived, false)
         try await s.renameChat("s1", to: " New name ")
         XCTAssertEqual(s.summaries.first?.title, "New name")
-        let id = try await s.createChat(providerId: "p", modelId: "m", workspaceId: "w", mode: .guardrails)
+        let id = try await s.createChat(providerId: "p", modelId: "m", workspaceId: "w", mode: .guardrails, effort: .high)
         XCTAssertEqual(id, "new")
         XCTAssertEqual(c.callsTo(Channels.sessionCreate).last, ["w"])
-        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["new", ["providerId": "p", "modelId": "m", "mode": "guardrails"]])
+        XCTAssertEqual(c.callsTo(Channels.sessionSetOptions).last, ["new", ["providerId": "p", "modelId": "m", "mode": "guardrails", "effort": "high"]])
         try await s.updatePcSettings(PcSettings.patch(mode: .yolo))
         XCTAssertEqual(s.pcSettings.effectiveMode, .yolo)
         try await s.deleteChat("s1")
@@ -319,15 +565,33 @@ final class StoreTests: XCTestCase {
         s.setPushToken("apns-token")
         await settle()
         XCTAssertEqual(c.pushTokens.last, "apns-token")
-        await s.registerActivity(sessionId: "s1", token: "abcd")
-        XCTAssertEqual(c.activities.last?.0, E2E.activityTag("s1"))
-        XCTAssertEqual(c.activities.last?.1, "abcd")
+        // The Live Activity card: its tokens and level go to the relay, the level to the computer.
+        s.cardLevel = .standard
+        s.cardStartToken = "cd34"
+        s.cardToken = "ab12"
+        await settle()
+        let name = try XCTUnwrap(s.active?.name)
+        XCTAssertEqual(c.cards.last, ["token": "ab12", "startToken": "cd34", "level": "standard", "computerId": .string(s.activeId ?? ""),
+                                      "computerName": .string(name)])
+        XCTAssertEqual(c.callsTo(Channels.cardSet).last, [["level": "standard"]])
+        await s.cardAction(focus: "s1")
+        await s.cardAction(dismiss: "s2")
+        XCTAssertEqual(c.callsTo(Channels.cardSet).suffix(2), [[["focus": "s1"]], [["dismiss": "s2"]]])
+        let before = (c.cards.count, c.callsTo(Channels.cardSet).count)
+        s.cardToken = "ab12"
+        await settle()
+        XCTAssertEqual(c.cards.count, before.0, "nothing changed: not sent again")
+        // Every connect registers again (a relay restart forgets).
+        c.online()
+        await settle()
+        XCTAssertEqual(c.cards.count, before.0 + 1)
+        XCTAssertEqual(c.callsTo(Channels.cardSet).count, before.1 + 1)
     }
 }
 
 @MainActor
 final class ChatModelTests: XCTestCase {
-    func makeOnline() async throws -> (ComputersStore, FakeConnection) {
+    static func makeOnline() async throws -> (ComputersStore, FakeConnection) {
         var conns: [FakeConnection] = []
         let s = ComputersStore(store: MemoryStore(), makeConnection: { cfg in
             let c = FakeConnection(config: cfg)
@@ -341,7 +605,7 @@ final class ChatModelTests: XCTestCase {
             return c
         }, deviceName: { "iPhone" }, deriveKey: { _, _ in Data(repeating: 1, count: 32) })
         s.load()
-        await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff"))
+        try await s.pair(PairingLink(relayUrl: "wss://r", room: "a1b2c3d4e5f60718", key: "00112233445566778899aabbccddeeff", hostKey: testHostKey))
         conns[0].online()
         for _ in 0..<50 { await Task.yield() }
         try await Task.sleep(nanoseconds: 30_000_000)
@@ -355,10 +619,9 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testStreamsATurnAndReReadsWhenItEnds() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s, now: { 42 })
-        chat.start()
-        await settle()
+        await chat.start()?.value
         XCTAssertEqual(chat.title, "T")
         XCTAssertEqual(chat.skills.map(\.name), ["review"])
         XCTAssertNil(chat.blocked)
@@ -396,11 +659,28 @@ final class ChatModelTests: XCTestCase {
         chat.stop()
     }
 
-    func testApprovalsQuestionsAndStop() async throws {
-        let (s, c) = try await makeOnline()
+    /// A Send tapped just as a reply finishes goes as a new turn: the re-read that
+    /// still says "running" is stale until the debounced reload after `done`.
+    func testASendRightAfterDoneStartsATurnNotAQueue() async throws {
+        let (s, c) = try await Self.makeOnline()
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": [], "activeRun": ["startedAt": 1]] }
         let chat = ChatModel(sessionId: "s", store: s)
-        chat.start()
+        await chat.start()?.value
+        c.event(["type": "text", "sessionId": "s", "delta": "Hi"])
+        c.event(["type": "done", "sessionId": "s"])
+        for _ in 0..<20 { await Task.yield() }
+        c.replies[Channels.sessionGet] = { _ in ["id": "s", "title": "T", "messages": [], "queue": []] }
+        try await chat.send("next")
         await settle()
+        XCTAssertEqual(c.callsTo(Channels.chatSend).first?.first?.str("text"), "next", "a new turn")
+        XCTAssertTrue(c.callsTo(Channels.chatQueue).isEmpty, "an idle chat's queue never runs")
+        chat.stop()
+    }
+
+    func testApprovalsQuestionsAndStop() async throws {
+        let (s, c) = try await Self.makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s)
+        await chat.start()?.value
         c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
         await settle()
         XCTAssertEqual(chat.turn.approval?.severity, .high)
@@ -418,11 +698,43 @@ final class ChatModelTests: XCTestCase {
         XCTAssertEqual(c.callsTo(Channels.chatAbort).last, ["s"])
     }
 
-    func testAFailedAnswerKeepsTheCardSoItCanBeRetried() async throws {
-        let (s, c) = try await makeOnline()
+    func testAReReadInFlightKeepsACardThatArrivedMeanwhile() async throws {
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
-        chat.start()
+        await chat.start()?.value
+        // The computer answers "nothing pending" from before the approval, and the
+        // approval's event reaches the phone before that answer does.
+        c.replies[Channels.chatPending] = { _ in
+            c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
+            Thread.sleep(forTimeInterval: 0.3)
+            return [:]
+        }
+        await chat.reload()
+        XCTAssertEqual(chat.turn.approval?.call.id, "t", "the computer still waits on it, so the card stays")
+        // With no events in flight the re-read is the authority: an approval answered elsewhere goes.
+        c.replies[Channels.chatPending] = { _ in [:] }
+        await chat.reload()
+        XCTAssertNil(chat.turn.approval)
+
+        // The other way round: a re-read from before an answer doesn't bring the answered card back.
+        c.event(["type": "question", "sessionId": "s", "request": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]])
         await settle()
+        c.replies[Channels.chatPending] = { _ in
+            Thread.sleep(forTimeInterval: 0.3)
+            return ["s": ["question": ["callId": "q", "questions": [["id": "x", "question": "Which?", "options": [["label": "A"]]]]]]]
+        }
+        async let stale: Void = chat.reload()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        try await chat.answer([AskAnswer(questionId: "x", labels: ["A"])])
+        await stale
+        XCTAssertNil(chat.turn.question, "answered, so the card stays down")
+        chat.stop()
+    }
+
+    func testAFailedAnswerKeepsTheCardSoItCanBeRetried() async throws {
+        let (s, c) = try await Self.makeOnline()
+        let chat = ChatModel(sessionId: "s", store: s)
+        await chat.start()?.value
         c.event(["type": "tool_approval_required", "sessionId": "s", "call": ["id": "t", "name": "bash", "input": ["command": "rm x"]], "reason": "r", "severity": "high"])
         await settle()
         c.replies[Channels.toolApprove] = { _ in throw RelayError("offline") }
@@ -438,15 +750,14 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testAPromptThatNeverStartedComesBackToTheComposer() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s, now: { 7 })
-        chat.start()
-        await settle()
+        await chat.start()?.value
         // The computer answered with a refusal (not a dropped connection, which goes to the outbox).
         c.replies[Channels.chatSend] = { _ in throw RelayError("The computer went offline.", fromComputer: true) }
         try await chat.send("draft", skill: SkillSummary(name: "review"), images: ["data:image/jpeg;base64,AA"])
         XCTAssertTrue(chat.running)
-        await settle()
+        await chat.sendTask?.value
         XCTAssertFalse(chat.running)
         XCTAssertEqual(chat.error, "The computer went offline.")
         XCTAssertFalse(chat.blocks.contains { $0.id == "pending-7" }, "no bubble for a prompt that was never delivered")
@@ -459,7 +770,7 @@ final class ChatModelTests: XCTestCase {
     }
 
     func testBlockedReasons() async throws {
-        let (s, c) = try await makeOnline()
+        let (s, c) = try await Self.makeOnline()
         let chat = ChatModel(sessionId: "s", store: s)
         c.status(RelayStatus(.offline))
         await settle()

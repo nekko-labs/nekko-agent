@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A computer's icon, and interrupting from the queue. -->
+<resources>
+    <string name="computer_icon">Icono</string>
+    <string name="computer_icon_none">Ninguno</string>
+    <string name="computer_icon_shown">Se muestra en todos los dispositivos</string>
+    <string name="computer_icon_connect">Conéctate para cambiar esto.</string>
+    <string name="computer_icon_change">Cambiar el icono</string>
+    <string name="chat_interrupt_send_now">Interrumpir y enviar ahora</string>
+    <string name="computer_icon_name_laptop">Portátil</string>
+    <string name="computer_icon_name_desktop">Escritorio</string>
+    <string name="computer_icon_name_tower">Torre</string>
+    <string name="computer_icon_name_mini">Mini</string>
+    <string name="computer_icon_name_server">Servidor</string>
+    <string name="computer_icon_name_rack">Rack</string>
+    <string name="computer_icon_name_cloud">Nube</string>
+    <string name="computer_icon_name_gpu">GPU</string>
+    <string name="computer_icon_name_chip">Chip</string>
+    <string name="computer_icon_name_home">Casa</string>
+    <string name="computer_icon_name_office">Oficina</string>
+    <string name="computer_icon_name_lab">Laboratorio</string>
+    <string name="computer_icon_name_bolt">Rayo</string>
+    <string name="computer_icon_name_moon">Luna</string>
+    <string name="computer_icon_name_sun">Sol</string>
+    <string name="computer_icon_name_star">Estrella</string>
+    <string name="computer_icon_name_flame">Llama</string>
+    <string name="computer_icon_name_leaf">Hoja</string>
+    <string name="computer_icon_name_globe">Globo</string>
+    <string name="computer_icon_name_cube">Cubo</string>
+    <string name="computer_icon_name_rocket">Cohete</string>
+    <string name="computer_icon_name_shield">Escudo</string>
+    <string name="computer_icon_name_terminal">Terminal</string>
+    <string name="computer_icon_name_cat">Gato</string>
+</resources>

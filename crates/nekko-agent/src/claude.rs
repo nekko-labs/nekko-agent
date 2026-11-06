@@ -186,17 +186,8 @@ pub fn uses_native_effort(model: &str) -> bool {
     }
 }
 
-const TEMPERATURE_LEVELS: &[EffortLevel] = &[EffortLevel::Low, EffortLevel::Normal, EffortLevel::High];
-const CLAUDE_LEVELS: &[EffortLevel] =
-    &[EffortLevel::Low, EffortLevel::Medium, EffortLevel::High, EffortLevel::Xhigh, EffortLevel::Max];
-
-/// The effort levels a model offers, lowest first.
-pub fn model_effort_levels(model: &str) -> &'static [EffortLevel] {
-    if uses_native_effort(model) { CLAUDE_LEVELS } else { TEMPERATURE_LEVELS }
-}
-
-/// The rung a model runs at when no effort is sent: `high`, except Opus 5.5
-/// onwards at `medium`.
+/// Historical default used only to interpret legacy `normal` settings.
+/// This model-id compatibility rule is not API-derived effort metadata.
 pub fn model_default_effort(model: &str) -> EffortLevel {
     if !uses_native_effort(model) {
         return EffortLevel::Normal;
@@ -248,10 +239,7 @@ pub fn effective_effort(setting: Option<EffortLevel>, model: &str) -> EffortLeve
         return if level == EffortLevel::Normal { model_default_effort(model) } else { level };
     }
     if is_openai_reasoning(model) {
-        return match level {
-            EffortLevel::Xhigh | EffortLevel::Max => EffortLevel::High,
-            l => l,
-        };
+        return level;
     }
     match level {
         EffortLevel::Medium => EffortLevel::Normal,
@@ -260,15 +248,60 @@ pub fn effective_effort(setting: Option<EffortLevel>, model: &str) -> EffortLeve
     }
 }
 
-/// The rung the Anthropic provider sends (`anthropicEffort`). A rung the
-/// model does not have is never sent: a model that reached the effort shape
-/// only by retry falls back to `high` rather than a 400 on `xhigh`.
-pub fn anthropic_effort(model: &str, setting: Option<EffortLevel>) -> EffortLevel {
-    let level = effective_effort(setting, model);
-    if model_effort_levels(model).contains(&level) && level != EffortLevel::Normal {
+/// Resolve a saved choice using provider-owned metadata when available.
+/// `Normal` means leave the provider default unspecified, not a guessed rung.
+/// Missing metadata retains the legacy compatibility rules above.
+pub fn effective_effort_with_metadata(
+    setting: Option<EffortLevel>,
+    model: &str,
+    metadata: Option<&crate::types::ModelEffort>,
+) -> EffortLevel {
+    let Some(metadata) = metadata else { return effective_effort(setting, model) };
+    let level = setting.unwrap_or(EffortLevel::Normal);
+    if metadata.levels.iter().any(|option| option.effort == level.as_str()) {
         return level;
     }
-    if level == EffortLevel::Low { EffortLevel::Low } else { EffortLevel::High }
+    metadata
+        .default
+        .as_ref()
+        .and_then(|value| serde_json::from_value(serde_json::Value::String(value.clone())).ok())
+        .unwrap_or(EffortLevel::Normal)
+}
+
+#[cfg(test)]
+mod catalog_effort_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn catalog_resolution_matches_shared_and_never_clamps_native_rungs() {
+        let metadata = serde_json::from_value(json!({
+            "levels": [{"effort":"medium"}, {"effort":"ultra"}], "default":"medium"
+        }))
+        .unwrap();
+        let resolve = |saved, metadata| effective_effort_with_metadata(saved, "gpt-5", metadata);
+        assert_eq!(resolve(Some(EffortLevel::Custom("ultra".into())), Some(&metadata)).as_str(), "ultra");
+        for saved in [None, Some(EffortLevel::Normal), Some(EffortLevel::Max), Some(EffortLevel::Custom("old".into()))]
+        {
+            assert_eq!(resolve(saved, Some(&metadata)), EffortLevel::Medium);
+        }
+        let unsupported = crate::types::ModelEffort { levels: vec![], default: None };
+        assert_eq!(resolve(Some(EffortLevel::Custom("ultra".into())), Some(&unsupported)), EffortLevel::Normal);
+        let no_default = crate::types::ModelEffort { default: None, ..metadata.clone() };
+        assert_eq!(resolve(Some(EffortLevel::Max), Some(&no_default)), EffortLevel::Normal);
+        assert_eq!(resolve(Some(EffortLevel::Custom("ultra".into())), None).as_str(), "ultra");
+        assert_eq!(effective_effort_with_metadata(None, "claude-opus-5-5", None), EffortLevel::Medium);
+    }
+}
+
+/// Preserve an explicitly chosen API rung. Only legacy `normal`/unset needs
+/// a compatibility default; model-id heuristics must not clamp live metadata.
+pub fn anthropic_effort(model: &str, setting: Option<EffortLevel>) -> EffortLevel {
+    match setting {
+        Some(level) if level != EffortLevel::Normal && !level.as_str().trim().is_empty() => level,
+        _ if uses_native_effort(model) => model_default_effort(model),
+        _ => EffortLevel::High,
+    }
 }
 
 /// Which sampling knob a request carries.
@@ -467,7 +500,7 @@ mod tests {
         }
         // An OpenAI reasoning model keeps `medium`, as effectiveEffort does.
         assert_eq!(effective_effort(Some(EffortLevel::Medium), "gpt-5"), EffortLevel::Medium);
-        assert_eq!(effective_effort(Some(EffortLevel::Max), "gpt-5"), EffortLevel::High);
+        assert_eq!(effective_effort(Some(EffortLevel::Max), "gpt-5"), EffortLevel::Max);
         assert_eq!(effective_effort(Some(EffortLevel::Medium), "gemma"), EffortLevel::Normal);
     }
     use EffortLevel::*;
@@ -555,7 +588,7 @@ mod tests {
         assert_eq!(anthropic_effort("claude-opus-5-5", Some(Normal)), Medium);
         assert_eq!(anthropic_effort("claude-opus-5", Some(Xhigh)), Xhigh);
         // A temperature model that reached the effort shape by retry.
-        assert_eq!(anthropic_effort("claude-opus-4-6", Some(Xhigh)), High);
+        assert_eq!(anthropic_effort("claude-opus-4-6", Some(Xhigh)), Xhigh);
         assert_eq!(anthropic_effort("claude-opus-4-6", Some(Low)), Low);
         assert_eq!(anthropic_effort("claude-opus-4-6", None), High);
     }

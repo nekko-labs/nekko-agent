@@ -18,7 +18,7 @@ export interface Shortcut {
   matches: (e: KeyboardEvent) => boolean;
 }
 
-export const SHORTCUTS: Record<'palette' | 'newAgent' | 'newTerminal' | 'contextPanel' | 'findInChat', Shortcut> = {
+export const SHORTCUTS: Record<'palette' | 'newAgent' | 'newTerminal' | 'newMedia' | 'searchChats' | 'contextPanel' | 'findInChat', Shortcut> = {
   // Handled by the chat window that has focus (or the one the user is
   // driving), not by App: it opens that chat's own search bar.
   findInChat: {
@@ -41,6 +41,14 @@ export const SHORTCUTS: Record<'palette' | 'newAgent' | 'newTerminal' | 'context
   newTerminal: {
     label: `${MOD}Shift+T`,
     matches: (e) => mod(e) && !e.altKey && ((e.shiftKey && e.key.toLowerCase() === 't') || e.key === '`' || e.key === '~' || e.key.toLowerCase() === 'j'),
+  },
+  newMedia: {
+    label: `${MOD}Shift+I`,
+    matches: (e) => mod(e) && !e.altKey && e.shiftKey && e.key.toLowerCase() === 'i',
+  },
+  searchChats: {
+    label: `${MOD}Shift+F`,
+    matches: (e) => mod(e) && !e.altKey && e.shiftKey && e.key.toLowerCase() === 'f',
   },
   contextPanel: {
     label: `${MOD}\\`,

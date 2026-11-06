@@ -1,0 +1,20 @@
+[
+  "off",
+  "pausedAll",
+  "schedule",
+  "onBattery",
+  "lowPowerMode",
+  "network",
+  "hotspot",
+  "vpnCarriesAllTraffic",
+  "memoryWarning",
+  "memoryCritical",
+  "thermalSerious",
+  "thermalCritical",
+  "diskFloor",
+  "securityUpdate",
+  "memoryHeadroom",
+  "hostStateUnknown",
+  "userActive",
+  "userBusy"
+]

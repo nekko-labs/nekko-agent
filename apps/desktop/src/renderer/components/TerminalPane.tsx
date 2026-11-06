@@ -1,3 +1,4 @@
+import { TerminalContext } from './TerminalContext.js';
 import React, { useEffect, useRef, useState } from 'react';
 import type { TerminalEvent, TerminalInfo, TerminalStream, TerminalRenderer } from '@nekko-agent/shared';
 import '@xterm/xterm/css/xterm.css';
@@ -60,13 +61,13 @@ function readTheme(): Record<string, string> {
   const cs = getComputedStyle(document.documentElement);
   const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
   const ink = v('--ink', '#17171d');
-  const accent = v('--accent', '#6d5efc');
+  const accent = v('--accent', '#5a2352');
   return {
     background: v('--surface-2', '#f2f2f7'),
     foreground: ink,
     cursor: accent,
     cursorAccent: v('--paper', '#fafaf8'),
-    selectionBackground: resolveColor('var(--ring)') ?? 'rgba(109,94,252,0.35)',
+    selectionBackground: resolveColor('var(--ring)') ?? 'rgba(90,35,82,0.35)',
   };
 }
 
@@ -213,7 +214,7 @@ function MenuRow({ label, hint }: { label: string; hint?: string }) {
   return (
     <span className="flex items-center justify-between gap-3">
       <span>{label}</span>
-      {hint && <span className="text-[11px] text-ink-faint">{hint}</span>}
+      {hint && <span className="text-2xs text-ink-faint">{hint}</span>}
     </span>
   );
 }
@@ -221,6 +222,7 @@ function MenuRow({ label, hint }: { label: string; hint?: string }) {
 export function TerminalPane({ terminalId }: { terminalId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [info, setInfo] = useState<TerminalInfo | null>(null);
+  const liveInfo = useStore((s) => s.terminals.find((t) => t.id === terminalId));
   const prefer = useStore((s) => s.settings?.terminal?.renderer) ?? 'xterm';
   const termRef = useRef<TermSurface | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; selection: boolean; canPaste: boolean } | null>(null);
@@ -387,7 +389,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
     term.focus();
   };
   const status = (
-    <span className="flex items-center gap-2 text-[11px] text-ink-faint">
+    <span className="flex items-center gap-2 text-2xs text-ink-faint">
       <TerminalViewersBadge terminalId={terminalId} initial={info?.viewers} />
       <span className="max-w-[26ch] truncate font-mono">{info?.cwd ?? ''}</span>
       {info && !info.running && (
@@ -398,10 +400,10 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--surface-2)' }}>
-      {framed ? (
+      {!terminalId.startsWith('agent_') && (liveInfo || info) ? <TerminalContext terminal={liveInfo || info!} /> : framed ? (
         <PaneActions>{status}</PaneActions>
       ) : (
-        <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1.5">{status}</div>
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-3 py-1">{status}</div>
       )}
       <div
         ref={hostRef}

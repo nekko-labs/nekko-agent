@@ -135,9 +135,12 @@ test('chat finder', async ({ scenario, shot }) => {
   });
 
   await test.step('the popup fits a narrow window', async () => {
+    // Desktop search must not latch the mobile overlay open before resizing.
+    await expect(page.getByLabel('Open agent list')).toHaveAttribute('aria-expanded', 'false');
     await scenario.resize(360, 640);
     // Below 768 px the agent list is collapsed; the finder is reached through it.
     await page.getByLabel('Open agent list').click();
+    await expect(page.getByLabel('Open agent list')).toHaveAttribute('aria-expanded', 'true');
     await open();
     const fits = await finder.evaluate((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= window.innerWidth; });
     expect(fits).toBe(true);

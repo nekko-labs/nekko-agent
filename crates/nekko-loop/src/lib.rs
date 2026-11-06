@@ -23,7 +23,8 @@ pub use history::{
 pub use progress::LoopDetector;
 pub use resume::{INTERRUPTED_NOTE, INTERRUPTED_TOOL_OUTPUT, RESUME_PROMPT, repair_interrupted_history};
 pub use run::{
-    Cancel, ChatRequest, Chunk, ChunkStream, MAX_NETWORK_STREAM_ATTEMPTS, MAX_STREAM_ATTEMPTS, ModelClient, RunOptions,
-    Steering, ToolRunner, YIELDED, is_network_error, is_transient_error, is_yield, retry_delay, run_agent,
+    Cancel, ChatRequest, Chunk, ChunkStream, INTERNET_PAUSED, MAX_NETWORK_STREAM_ATTEMPTS, MAX_STREAM_ATTEMPTS,
+    ModelClient, RunOptions, Steering, ToolRunner, YIELDED, is_network_error, is_transient_error, is_yield,
+    retry_delay, run_agent,
 };
 pub use runaway::{RUNAWAY_NOTE, RunawayGuard, RunawayOptions};

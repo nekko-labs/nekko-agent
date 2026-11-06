@@ -9,6 +9,7 @@ import { ScheduleTaskModal } from '../src/renderer/components/ScheduleTaskModal'
 import { AppNotices } from '../src/renderer/components/AppNotices';
 import { ModelsView } from '../src/renderer/views/ModelsView';
 import { ProviderLimitsDock } from '../src/renderer/components/ProviderLimitsDock';
+import { ClaudePlanFeaturesSection } from '../src/renderer/views/SettingsView';
 import { CLAUDE_POLICY } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
 
@@ -72,6 +73,7 @@ const bridge: Record<string, unknown> = {
   getSettings: async () => ({ notices: [notice], providers }),
   saveProvider: async (p: unknown) => {
     calls.push({ method: 'saveProvider', p });
+    providers = [p as never];
   },
 };
 Object.assign(window, {
@@ -103,6 +105,8 @@ function Fixture() {
         setScene(name);
       },
       calls,
+      // What the usual login's checks answer from now on (a mid-sign-in miss, say).
+      setCodeStatus: (name: string) => { codeStatus = statuses[name]; },
     },
   });
   return (
@@ -116,6 +120,9 @@ function Fixture() {
         {scene === 'connected' && <ClaudeSetup initialChoice="subscription" apiOpen={false} connected={{ title: 'Claude is connected', detail: 'Using your Claude subscription through Claude Code 2.1.284, signed in as me@example.com · Max plan.' }} onChoice={() => {}} onConnectApi={() => {}} onConnected={() => {}} onDone={() => {}} />}
         {(scene === 'retired' || scene === 'connect') && <ModelsView />}
         {scene === 'limits' && <ProviderLimitsDock standalone />}
+        {(scene === 'planOff' || scene === 'planOn') && (
+          <ClaudePlanFeaturesSection settings={{ claudePlanFeaturesApproved: scene === 'planOn' } as never} update={() => {}} />
+        )}
         {scene === 'schedule' && (
           <ScheduleTaskModal providerId="claude-agent" initialPrompt="Run the test suite each night." onClose={() => {}} />
         )}

@@ -96,11 +96,12 @@ Object.assign(window, { nekko: new Proxy(bridge, { get(target, key: string) { if
 
 function Fixture() {
   const [epoch, setEpoch] = useState(0);
-  const reset = (opts: { scenario?: Scenario; preset?: any } = {}) => {
+  const reset = (opts: { scenario?: Scenario; preset?: any; loaded?: any } = {}) => {
     scenario = opts.scenario ?? 'moe8';
     loads.length = 0;
     useStore.setState({ toasts: [] } as any);
     (window as any).__preset = opts.preset;
+    (window as any).__loaded = opts.loaded;
     setEpoch((e) => e + 1);
   };
   Object.assign(window, { integration: { reset, loads: () => loads, place, data } });
@@ -109,12 +110,12 @@ function Fixture() {
     ...MODELS[scenario],
     path: '/fixture/model.gguf', file: '/fixture/model.gguf', format: 'gguf', modality: 'chat', readable: true, addedAt: 0,
     sizeBytes: d.facts.weightsBytes, layers: d.facts.layers, maxContext: d.facts.maxContext, kvHeads: 8,
-    weightLayout: d.facts.weightLayout, loaded: false, preset: (window as any).__preset,
+    weightLayout: d.facts.weightLayout, loaded: !!(window as any).__loaded, preset: (window as any).__preset,
   };
   return (
     <div className="bg-paper" style={{ minHeight: '100vh', padding: 24, boxSizing: 'border-box' }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }} className="rounded-xl" key={epoch}>
-        <EngineLoadDrawer providerId="nekko-engine" model={model} onDone={() => {}} onClose={() => {}} onToggleAutoload={() => {}} />
+        <EngineLoadDrawer providerId="nekko-engine" model={model} loadedParams={(window as any).__loaded} onDone={() => {}} onClose={() => {}} onToggleAutoload={() => {}} />
       </div>
     </div>
   );

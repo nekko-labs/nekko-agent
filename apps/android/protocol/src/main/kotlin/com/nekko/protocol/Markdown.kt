@@ -17,7 +17,7 @@ object Markdown {
         data class Paragraph(val text: String) : Piece
     }
 
-    enum class Style { BOLD, ITALIC, CODE, LINK }
+    enum class Style { BOLD, ITALIC, CODE, LINK, STRIKE }
 
     /** A run of inline text; [url] is set for [Style.LINK]. */
     data class Span(val text: String, val styles: Set<Style> = emptySet(), val url: String? = null)
@@ -149,6 +149,18 @@ object Markdown {
                         emit(styles + Style.LINK)
                         for (k in before until out.size) out[k] = out[k].copy(styles = out[k].styles + Style.LINK, url = url)
                         i = next
+                        continue
+                    }
+                }
+                if (c == '~' && i + 1 < s.length && s[i + 1] == '~') {
+                    // ~~strikethrough~~, as the desktop and the iPhone draw it.
+                    val start = i + 2
+                    val end = if (start < s.length && !s[start].isWhitespace()) s.indexOf("~~", start) else -1
+                    if (end > start && !s[end - 1].isWhitespace()) {
+                        emit(styles)
+                        walk(s.substring(start, end), styles + Style.STRIKE)
+                        emit(styles + Style.STRIKE)
+                        i = end + 2
                         continue
                     }
                 }

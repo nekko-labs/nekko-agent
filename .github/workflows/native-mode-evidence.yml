@@ -1,0 +1,241 @@
+name: Native mode label evidence
+# Manual evidence only. Does not replace or change Native iOS/Android checks.
+# Dispatch at the feature commit: both app revisions use that exact test harness.
+# Use full commit SHAs for both inputs so a moving branch cannot change the comparison.
+on:
+  workflow_call:
+    inputs:
+      baseline_ref:
+        required: true
+        type: string
+      source_ref:
+        required: true
+        type: string
+      harness_ref:
+        required: false
+        type: string
+        default: ''
+      ios_test_file:
+        required: false
+        type: string
+        default: apps/ios/UITests/ThemeLanguageTests.swift
+      ios_only_testing:
+        required: false
+        type: string
+        default: NekkoNativeUITests/ThemeLanguageTests/testSimpleModeLabelEvidence
+      android_test_file:
+        required: false
+        type: string
+        default: apps/android/app/src/androidTest/java/com/nekko/android/ChatModesTest.kt
+      android_test_class:
+        required: false
+        type: string
+        default: com.nekko.android.ChatModesTest
+      android_expect:
+        required: false
+        type: string
+        default: settings-simple-mode
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Before app commit (full SHA, normally the PR merge base)'
+        required: true
+        type: string
+      source_ref:
+        description: 'After app commit (full SHA, normally the pushed PR head)'
+        required: true
+        type: string
+      harness_ref:
+        description: 'Commit whose evidence test files run on both revisions (default: this workflow run''s commit)'
+        required: false
+        type: string
+        default: ''
+      ios_test_file:
+        description: 'iOS UI test file to overlay'
+        required: false
+        type: string
+        default: apps/ios/UITests/ThemeLanguageTests.swift
+      ios_only_testing:
+        description: 'xcodebuild -only-testing identifier'
+        required: false
+        type: string
+        default: NekkoNativeUITests/ThemeLanguageTests/testSimpleModeLabelEvidence
+      android_test_file:
+        description: 'Android instrumentation test file to overlay'
+        required: false
+        type: string
+        default: apps/android/app/src/androidTest/java/com/nekko/android/ChatModesTest.kt
+      android_test_class:
+        description: 'Instrumentation class to run'
+        required: false
+        type: string
+        default: com.nekko.android.ChatModesTest
+      android_expect:
+        description: 'A screenshot name the run must produce'
+        required: false
+        type: string
+        default: settings-simple-mode
+permissions:
+  contents: read
+jobs:
+  ios:
+    # The existing ios-native.yml hosted image, never the owner-runner picker.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.harness_ref || github.sha }}
+          path: .evidence-harness
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.ios_test_file }}
+          sparse-checkout-cone-mode: false
+      - name: Overlay tests only and record revisions
+        env:
+          BASELINE: ${{ inputs.baseline_ref }}
+          SOURCE: ${{ inputs.source_ref }}
+          IOS_TEST_FILE: ${{ inputs.ios_test_file }}
+        run: |
+          set -euo pipefail
+          [[ "$BASELINE" =~ ^[0-9a-fA-F]{40}$ && "$SOURCE" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$IOS_TEST_FILE" =~ ^apps/ios/UITests/[A-Za-z0-9_]+\.swift$ ]]
+          mkdir -p apps/ios/evidence
+          {
+            echo "app=$(git rev-parse HEAD)"
+            echo "harness=$(git -C .evidence-harness rev-parse HEAD)"
+            xcodebuild -version
+            xcrun simctl list runtimes -j
+          } > apps/ios/evidence/revisions.txt
+          mkdir -p "$(dirname "$IOS_TEST_FILE")"
+          cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+      - run: brew install xcodegen
+      - name: Generate project and create simulator (same selection as Native iOS)
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          DEVICE=$(xcrun simctl create Nekko-Mode-Evidence "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
+      - name: Build and capture the evidence test
+        working-directory: apps/ios
+        env:
+          ONLY_TESTING: ${{ inputs.ios_only_testing }}
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl ui "$DEVICE" appearance light
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
+          COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
+          xcodebuild "${COMMON[@]}" build-for-testing
+          xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
+            "-only-testing:$ONLY_TESTING"
+      - name: Export attachments and clean up owned simulator
+        if: always()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -n "${DEVICE:-}" ]; then
+            xcrun simctl shutdown "$DEVICE" || true
+            xcrun simctl delete "$DEVICE" || true
+          fi
+          if [ -d evidence/mode-label.xcresult ]; then
+            xcrun xcresulttool export attachments --path evidence/mode-label.xcresult --output-path evidence/shots
+          fi
+          test -n "$(find evidence/shots -name '*.png' -print -quit)"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: native-mode-label-ios-${{ matrix.revision }}
+          path: apps/ios/evidence/**
+          if-no-files-found: error
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.harness_ref || github.sha }}
+          path: .evidence-harness
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.android_test_file }}
+          sparse-checkout-cone-mode: false
+      # The capture script always comes from this workflow's own commit.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .evidence-workflow
+          persist-credentials: false
+          sparse-checkout: apps/android/scripts/mode-evidence.sh
+          sparse-checkout-cone-mode: false
+      - name: Overlay tests only and record revisions
+        env:
+          BASELINE: ${{ inputs.baseline_ref }}
+          SOURCE: ${{ inputs.source_ref }}
+          ANDROID_TEST_FILE: ${{ inputs.android_test_file }}
+        run: |
+          set -euo pipefail
+          [[ "$BASELINE" =~ ^[0-9a-fA-F]{40}$ && "$SOURCE" =~ ^[0-9a-fA-F]{40}$ ]]
+          mkdir -p apps/android/evidence
+          {
+            echo "app=$(git rev-parse HEAD)"
+            echo "harness=$(git -C .evidence-harness rev-parse HEAD)"
+          } > apps/android/evidence/revisions.txt
+          [[ "$ANDROID_TEST_FILE" =~ ^apps/android/app/src/androidTest/java/[A-Za-z0-9_/]+\.kt$ ]]
+          mkdir -p "$(dirname "$ANDROID_TEST_FILE")"
+          cp ".evidence-harness/$ANDROID_TEST_FILE" "$ANDROID_TEST_FILE"
+          cp .evidence-workflow/apps/android/scripts/mode-evidence.sh apps/android/scripts/
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.2" "build-tools;36.0.0"
+      - name: Build app and test harness
+        working-directory: apps/android
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --console=plain
+      - name: Capture the evidence test
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          NEKKO_EVIDENCE_CLASS: ${{ inputs.android_test_class }}
+          NEKKO_EVIDENCE_EXPECT: ${{ inputs.android_expect }}
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash apps/android/scripts/mode-evidence.sh
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: native-mode-label-android-${{ matrix.revision }}
+          path: apps/android/evidence/**
+          if-no-files-found: error

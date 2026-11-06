@@ -25,6 +25,11 @@ pub fn fake_claude() {
         let mut log =
             std::fs::OpenOptions::new().create(true).append(true).open(dir.join("fake-launches.log")).unwrap();
         let _ = writeln!(log, "{how} {session}");
+        if !session.is_empty() {
+            let mut efforts =
+                std::fs::OpenOptions::new().create(true).append(true).open(dir.join("fake-efforts.log")).unwrap();
+            let _ = writeln!(efforts, "{}", flag("--effort").unwrap_or_else(|| "none".into()));
+        }
     }
     let (token, url) = flag("--mcp-config")
         .and_then(|p| std::fs::read_to_string(p).ok())
@@ -105,14 +110,16 @@ pub fn fake_claude() {
             out(lifecycle("started"));
         }
         out(init());
-        if text == "background" {
+        if text == "background" || text == "background-slow" {
             // Start a background command, end the turn, then wake when it
             // finishes, with nothing written: a turn of Claude Code's own
-            // whose command needs a person to approve it.
+            // whose command needs a person to approve it. The slow one gives
+            // a test time to change the chat between the two.
             out(assistant("m_bg", json!([{ "type": "text", "text": "started" }])));
             out(result("started", "completed"));
             out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [{ "task_id": "b1" }] }));
-            std::thread::sleep(std::time::Duration::from_millis(300));
+            let wait = if text == "background" { 300 } else { 2_000 };
+            std::thread::sleep(std::time::Duration::from_millis(wait));
             out(
                 json!({ "type": "system", "subtype": "task_updated", "task_id": "b1", "patch": { "status": "completed" } }),
             );
@@ -132,6 +139,61 @@ pub fn fake_claude() {
             let reply = format!("woke: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m_w2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "plan" {
+            // Claude Code's own plan: two tasks, the first started.
+            let tool = |id: &str, name: &str, input: Value, output: &str| {
+                out(assistant(
+                    &format!("m_{id}"),
+                    json!([{ "type": "tool_use", "id": id, "name": name, "input": input }]),
+                ));
+                out(json!({ "type": "user", "message": { "role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": id, "content": output,
+                }] }, "parent_tool_use_id": null }));
+            };
+            let created = |n: u8, subject: &str| format!("Task #{n} created successfully: {subject}");
+            tool(
+                "toolu_t1",
+                "TaskCreate",
+                json!({ "subject": "Read the code", "description": "Find the parser" }),
+                &created(1, "Read the code"),
+            );
+            tool("toolu_t2", "TaskCreate", json!({ "subject": "Fix it", "description": "" }), &created(2, "Fix it"));
+            tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
+            out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
+            out(result("planned", "completed"));
+        } else if text == "background later" || text == "watch later" {
+            // A background task that finishes only once the test says so (a
+            // `wake-now` file in the workspace), so the chat can change first.
+            if text == "watch later" {
+                let input = json!({ "command": "gh pr checks 1 --watch", "description": "Watch the PR" });
+                out(assistant(
+                    "m_mon",
+                    json!([{ "type": "tool_use", "id": "toolu_mon", "name": "Monitor", "input": input }]),
+                ));
+                out(json!({ "type": "user", "message": { "role": "user", "content": [{
+                    "type": "tool_result", "tool_use_id": "toolu_mon", "content": "Monitor started",
+                }] }, "parent_tool_use_id": null }));
+            }
+            out(assistant("m_bl", json!([{ "type": "text", "text": "started" }])));
+            out(result("started", "completed"));
+            out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [{ "task_id": "b2" }] }));
+            while !Path::new("wake-now").exists() {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            out(
+                json!({ "type": "system", "subtype": "task_notification", "task_id": "b2", "tool_use_id": "toolu_mon", "status": "completed" }),
+            );
+            out(json!({ "type": "system", "subtype": "background_tasks_changed", "tasks": [] }));
+            out(init());
+            out(assistant("m_bl2", json!([{ "type": "text", "text": "woke later" }])));
+            out(result("woke later", "completed"));
+        } else if text == "usage" {
+            // Plan usage Claude Code reports on its own while it works.
+            out(json!({ "type": "rate_limit_event", "rate_limit_info": {
+                "status": "allowed_warning", "resetsAt": 1_761_231_600, "utilization": 0.62,
+            } }));
+            out(assistant("m_u", json!([{ "type": "text", "text": "used" }])));
+            out(result("used", "completed"));
         } else if text == "run rm" {
             // A prompt only a person may answer in guardrails mode, through the bridge.
             out(assistant(
@@ -147,6 +209,64 @@ pub fn fake_claude() {
             let reply = format!("done: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "delegate" || text == "delegate and stop" || text == "delegate in the background" {
+            let background = text.ends_with("background");
+            let sub = |content: Value, role: &str| {
+                let id = if role == "user" { "" } else { "m_sub" };
+                json!({ "type": role, "message": { "id": id, "role": role, "model": "claude-haiku-5-5", "content": content }, "parent_tool_use_id": "toolu_agent", "session_id": session })
+            };
+            let input = json!({ "description": "Read the notes", "prompt": "Read notes.txt and report back", "run_in_background": background });
+            out(assistant(
+                "m_d1",
+                json!([{ "type": "tool_use", "id": "toolu_agent", "name": "Agent", "input": input }]),
+            ));
+            let notes = json!([{ "type": "tool_use", "id": "toolu_read", "name": "Read", "input": { "file_path": "notes.txt" } }]);
+            let read = json!([{ "type": "tool_result", "tool_use_id": "toolu_read", "content": "hello" }]);
+            let answer = json!([{ "type": "text", "text": "The notes say hello." }]);
+            let delegated = |output: &str| {
+                json!({ "type": "user", "message": { "role": "user", "content": [{
+                "type": "tool_result", "tool_use_id": "toolu_agent", "content": output }] }, "parent_tool_use_id": null, "session_id": session })
+            };
+            if background {
+                out(delegated("Async agent launched"));
+                out(assistant("m_d2", json!([{ "type": "text", "text": "started it" }])));
+                out(result("started it", "completed"));
+            }
+            out(sub(notes, "assistant"));
+            out(sub(read, "user"));
+            // A test watches the child run, until it says to go on.
+            let gate = std::env::current_dir().unwrap().join("go-on");
+            while text == "delegate" && !gate.exists() {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            if text == "delegate and stop" {
+                for line in lines.by_ref() {
+                    let Ok(m) = serde_json::from_str::<Value>(&line.unwrap_or_default()) else { continue };
+                    if m["type"] == "control_request" {
+                        out(
+                            json!({ "type": "control_response", "response": { "subtype": "success", "request_id": m["request_id"], "response": { "still_queued": [] } } }),
+                        );
+                        break;
+                    }
+                }
+                out(result("", "aborted_streaming"));
+                continue;
+            }
+            let mut sub_answer = sub(answer, "assistant");
+            sub_answer["message"]["id"] = json!("m_sub2");
+            out(sub_answer);
+            if background {
+                out(
+                    json!({ "type": "system", "subtype": "task_notification", "task_id": "a1", "tool_use_id": "toolu_agent", "status": "completed", "summary": "" }),
+                );
+                out(init());
+            } else {
+                out(delegated("The notes say hello."));
+            }
+            out(assistant("m_d3", json!([{ "type": "text", "text": "They say hello." }])));
+            out(result("They say hello.", "completed"));
+        } else if text == "out of tokens" {
+            out(result("You've hit your usage limit.", "model_error"));
         } else if text == "hang" {
             out(
                 json!({ "type": "stream_event", "event": { "type": "message_start", "message": { "id": "m_h" } }, "parent_tool_use_id": null }),
@@ -265,7 +385,7 @@ fn rig_env(name: &str, mode: &str, cli: bool, extra: &[(&str, Option<&str>)]) ->
     let mut env: Vec<(&str, Option<&str>)> =
         vec![("PATH", Some(&path)), ("CLAUDE_CONFIG_DIR", Some(&config)), ("ANTHROPIC_API_KEY", None)];
     env.extend_from_slice(extra);
-    let d = start_with_env(Some(&data), json!({}), &env);
+    let d = start_with_env(&data, json!({}), &env);
     let events = record_events(d.port);
     Rig { t: TurnRig { data, workspace, d, events }, bin }
 }
@@ -342,6 +462,61 @@ async fn runs_turns_on_one_claude_code_process_and_keeps_its_session() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn claude_codes_own_plan_is_the_chats_plan() {
+    let rig = rig("plan", "guardrails", true);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cp1", "plan")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (events, end) = turn_record(&rig, "cp1", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    assert!(kinds(&events).contains(&"session_meta".into()), "the plan sheet hears of each change");
+    let plan = saved(&rig)["agentPlan"].clone();
+    let steps: Vec<_> = plan
+        .as_array()
+        .expect("the plan is saved")
+        .iter()
+        .map(|s| (s["id"].clone(), s["title"].clone(), s["status"].clone()))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            (json!("task_1"), json!("Read the code"), json!("active")),
+            (json!("task_2"), json!("Fix it"), json!("pending")),
+        ]
+    );
+    assert_eq!(plan[0]["note"], "Find the parser");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn plan_usage_claude_code_printed_is_its_limits() {
+    let rig = rig("usage", "guardrails", true);
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    // `cc` has a sign-in nekkod has not read yet (`unknown`), which fails closed.
+    let settings = json!({ "providers": [
+        provider("cc", json!({})),
+        provider("cc_key", json!({ "authSource": "nekko-anthropic-key" })),
+    ] });
+    write_settings(&rig, settings).await;
+    let port = rig.d.port;
+    let read = |id: &'static str| async move {
+        post(port, "limits:get", json!([format!("claude-code:{id}")]), Some(TOKEN)).await.1
+    };
+    assert_eq!(read("cc_key").await, Value::Null, "nothing until Claude Code reports");
+
+    for (turn, id) in [("cu1", "cc"), ("cu2", "cc_key")] {
+        let spec = spec_on(&rig, turn, "usage", provider(id, json!({})));
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+    }
+    let limits = read("cc_key").await;
+    let window = &limits["windows"][0];
+    assert_eq!((window["id"].clone(), window["status"].clone()), (json!("session"), json!("warning")), "{limits}");
+    assert_eq!(window["usedPercent"].as_f64(), Some(62.0));
+    assert_eq!(read("cc").await, Value::Null, "an unread sign-in shows no plan usage");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn permission_prompts_reach_nekko_approvals() {
     let rig = rig("approve", "guardrails", true);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccA", "run rm")]), Some(TOKEN)).await;
@@ -394,6 +569,122 @@ async fn stop_interrupts_claude_code_and_keeps_the_partial_reply() {
     assert!(last["content"].as_str().unwrap().starts_with("1\n2"));
 }
 
+/// The chats on disk that are not `s_cc`, for what a sub-agent left.
+fn children(rig: &Rig) -> Vec<Value> {
+    std::fs::read_dir(rig.data.join("sessions"))
+        .unwrap()
+        .filter_map(|f| serde_json::from_str::<Value>(&std::fs::read_to_string(f.ok()?.path()).ok()?).ok())
+        .filter(|s| s["id"] != "s_cc")
+        .collect()
+}
+
+async fn the_child_starts(rig: &Rig) -> Value {
+    until("the sub-agent's child chat", Duration::from_secs(30), || async {
+        children(rig).into_iter().find(|c| c["messages"].as_array().is_some_and(|m| m.len() >= 3))
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sub_agent_is_a_child_chat_to_watch() {
+    let rig = rig("subagent", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "delegate")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let child = the_child_starts(&rig).await;
+    let id = child["id"].as_str().unwrap().to_string();
+    assert_eq!(child["parentSessionId"], "s_cc");
+    assert_eq!(child["title"], "Read the notes");
+    assert_eq!(child["modelId"], "claude-haiku-5-5", "what it runs on, not the parent's model");
+    assert_eq!(child["spawnCallId"], "toolu_agent");
+    assert_eq!(child["messages"][0]["content"], "Read notes.txt and report back");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert!(running.as_array().unwrap().contains(&json!(id)), "listed as running: {running}");
+    std::fs::write(rig.workspace.join("go-on"), "").unwrap();
+    let (_, end) = turn_record(&rig, "ccD", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+
+    let done = until("the child to end", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == json!(id) && e["type"] == "done").cloned()
+    })
+    .await;
+    assert_eq!(done["stop"], "complete");
+    let child = children(&rig).remove(0);
+    assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "The notes say hello.");
+    let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert_eq!(running, json!([]));
+    // In the parent it is a delegation, with none of the sub-agent's steps.
+    let parent = saved(&rig);
+    let calls: Vec<&Value> = parent["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|m| m["toolCalls"].as_array().into_iter().flatten())
+        .collect();
+    assert_eq!(calls.iter().map(|c| c["name"].clone()).collect::<Vec<_>>(), [json!("spawn_agent")]);
+    assert_eq!(assistant_texts(&parent).last().unwrap(), "They say hello.");
+    // Claude Code holds the real chat, so a message here could only go astray.
+    let mut send = spec(&rig, "ccD2", "more");
+    write_settings(&rig, send["settings"].clone()).await;
+    send["opts"]["sessionId"] = json!(id);
+    let (_, body) = post(rig.d.port, "chat:send", json!([send["opts"]]), Some(TOKEN)).await;
+    let refused = until("the refusal", Duration::from_secs(10), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == json!(id) && e["type"] == "error").cloned()
+    })
+    .await;
+    assert!(refused["message"].as_str().unwrap().contains("parent chat"), "{refused} {body}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stopping_the_chat_stops_its_sub_agent() {
+    let rig = rig("substop", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "delegate and stop")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let id = the_child_starts(&rig).await["id"].clone();
+    post(rig.d.port, "chat:abort", json!(["s_cc"]), Some(TOKEN)).await;
+    turn_record(&rig, "ccD", "s_cc").await;
+    let stopped = until("the child to stop", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == id && e["type"] == "error").cloned()
+    })
+    .await;
+    assert_eq!(stopped["message"], "Stopped");
+    assert_eq!(saved(&rig)["turnFailure"]["message"], "Stopped", "a reopened chat still offers Retry");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_sub_agent_outlives_the_turn_that_started_it() {
+    let rig = rig("subbg", "guardrails", true);
+    let (status, _) =
+        post(rig.d.port, "chat:turn", json!([spec(&rig, "ccD", "delegate in the background")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccD", "s_cc").await;
+    let id = the_child_starts(&rig).await["id"].clone();
+    let done = until("the child to end", Duration::from_secs(30), || async {
+        rig.events.lock().unwrap().iter().find(|e| e["sessionId"] == id && e["type"] == "done").cloned()
+    })
+    .await;
+    assert_eq!(done["stop"], "complete");
+    let child = children(&rig).remove(0);
+    assert_eq!(child["messages"].as_array().unwrap().last().unwrap()["content"], "The notes say hello.");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_turn_is_saved_until_the_next_turn_starts() {
+    let rig = rig("failed", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccF", "out of tokens")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    let (events, _) = turn_record(&rig, "ccF", "s_cc").await;
+    assert!(events.iter().any(|e| e["type"] == "error"), "{events:?}");
+
+    let session = saved(&rig);
+    assert_eq!(session["turnFailure"]["message"], "You've hit your usage limit.", "{session}");
+    assert_eq!(session["turnFailure"]["afterMessageId"], session["messages"].as_array().unwrap().last().unwrap()["id"]);
+
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccF2", "usage")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccF2", "s_cc").await;
+    assert!(saved(&rig).get("turnFailure").is_none());
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn without_the_bridge_claude_code_never_starts() {
     let rig = rig("nobridge", "guardrails", false);
@@ -444,6 +735,7 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     let s = saved(&rig);
     let users = s["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").count();
     assert_eq!(users, 1, "a wake-up adds no user message");
+    until_turn_end_heard(&rig.events, "s_cc").await;
     let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
     assert_eq!(kinds(&events).iter().filter(|k| *k == "done").count(), 2, "{:?}", kinds(&events));
 
@@ -453,6 +745,35 @@ async fn a_wake_up_after_the_turn_is_a_turn_its_prompts_can_wait_in() {
     turn_record(&rig, "ccW2", "s_cc").await;
     let replies = assistant_texts(&saved(&rig));
     assert!(replies.last().unwrap().ends_with(": again"), "{replies:?}");
+}
+
+/// A chat whose mode changed after its turn still shows the wake-up: the
+/// child that woke is read as it is, not dropped as out of date over and
+/// over while its work goes unseen (#1408).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_wake_up_after_a_mode_change_still_reaches_the_chat() {
+    let rig = rig("wake-mode", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccM", "background-slow")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccM", "s_cc").await;
+    let (status, body) = post(rig.d.port, "session:setOptions", json!(["s_cc", { "mode": "plan" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(saved(&rig)["mode"], "plan");
+
+    let approval = wait_pending(rig.d.port, "s_cc", "approval", "toolu_wake").await;
+    assert_eq!(approval["call"]["executedBy"], "claude-code");
+    let (status, body) = post(rig.d.port, "tool:approve", json!(["s_cc", "toolu_wake", true]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    until("the wake-up to reach the chat", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        let last = assistant_texts(&saved(&rig)).last().cloned();
+        (running == json!([]) && last.as_deref() == Some("woke: allow")).then_some(())
+    })
+    .await;
+    // One wake-up, not a turn started again and again.
+    let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
+    let metas = kinds(&events).iter().filter(|k| *k == "session_meta").count();
+    assert!(metas < 10, "{metas} session_meta events: {:?}", kinds(&events));
 }
 
 /// A Claude Agent on a second Claude Code account runs with that account's
@@ -499,4 +820,97 @@ async fn a_second_account_runs_in_its_own_folder_and_a_switch_starts_afresh() {
     assert!(log.lines().all(|l| l.starts_with("new ")), "{log}");
     drop(rig);
     let _ = std::fs::remove_dir_all(&home);
+}
+
+/// The effort the chat resolves to is what Claude Code launches with: nothing
+/// until one is chosen, a relaunch when it changes, and no flag for a level
+/// Claude Code has no name for (a value saved on another provider).
+#[tokio::test]
+async fn the_chats_effort_reaches_claude_code() {
+    let rig = rig("effort", "guardrails", true);
+    let provider =
+        json!({ "id": "cc", "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true });
+    let workspace = json!({ "id": "w1", "name": "project", "path": rig.workspace.to_string_lossy() });
+    write_settings(
+        &rig,
+        json!({ "providers": [provider], "workspaces": [workspace], "defaultChatMode": "guardrails" }),
+    )
+    .await;
+    let chat = json!({ "id": "s_cc", "title": "cc", "workspaceId": "w1", "messages": [], "mode": "guardrails", "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(rig.data.join("sessions/s_cc.json"), chat.to_string()).unwrap();
+    let log = rig.data.join("claude-config/fake-efforts.log");
+    for (choice, expected) in
+        [(None, vec!["none"]), (Some("xhigh"), vec!["none", "xhigh"]), (Some("ultra"), vec!["none", "xhigh", "none"])]
+    {
+        if let Some(choice) = choice {
+            let (status, body) =
+                post(rig.d.port, "session:setOptions", json!(["s_cc", { "effort": choice }]), Some(TOKEN)).await;
+            assert_eq!(status, 200, "{body}");
+        }
+        let opts = json!({ "sessionId": "s_cc", "providerId": "cc", "modelId": "opus", "text": "hello" });
+        let (status, body) = post(rig.d.port, "chat:send", json!([opts]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let launches = std::fs::read_to_string(&log).unwrap_or_else(|_| panic!("no launch: {}", saved(&rig)));
+        assert_eq!(launches.lines().collect::<Vec<_>>(), expected);
+    }
+}
+
+/// After a turn's Done the chat can tell Claude Code still runs background
+/// tasks: the count is published as it changes and kept for
+/// `claude:backgroundTasks`, also when the chat's mode changed meanwhile.
+#[tokio::test(flavor = "multi_thread")]
+async fn background_tasks_are_counted_after_done() {
+    let rig = rig("wakemode", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccM", "background later")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccM", "s_cc").await;
+    let (status, body) = post(rig.d.port, "session:setOptions", json!(["s_cc", { "mode": "yolo" }]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(saved(&rig)["mode"], "yolo");
+    // After the turn's Done the chat can tell Claude Code still works.
+    let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
+    assert_eq!(tasks, json!({ "s_cc": 1 }));
+    // A task that is not watching anything leaves the chat out of Watching.
+    let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    assert_eq!(summaries[0]["backgroundWatchCount"], 0);
+    std::fs::write(rig.workspace.join("wake-now"), "").unwrap();
+    until("the wake-up turn to land", Duration::from_secs(30), || async {
+        let (_, running) = post(rig.d.port, "chat:running", json!([]), Some(TOKEN)).await;
+        let s = saved(&rig);
+        let last = assistant_texts(&s).last().cloned();
+        (running == json!([]) && last.as_deref() == Some("woke later")).then_some(())
+    })
+    .await;
+    // One turn for the message and one for the wake-up, not a stream of empty ones.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let events: Vec<Value> = rig.events.lock().unwrap().iter().filter(|e| e["sessionId"] == "s_cc").cloned().collect();
+    assert_eq!(kinds(&events).iter().filter(|k| *k == "done").count(), 2, "{:?}", kinds(&events));
+    let counts: Vec<&Value> =
+        events.iter().filter(|e| e["type"] == "claude_code_background").map(|e| &e["tasks"]).collect();
+    assert_eq!(counts, [&json!(1), &json!(0)]);
+    let (_, tasks) = post(rig.d.port, "claude:backgroundTasks", json!([]), Some(TOKEN)).await;
+    assert_eq!(tasks, json!({}));
+}
+
+/// A chat whose agent was asked to watch something, with no Nekko watch armed:
+/// its summary counts the background watcher until the task ends.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_background_watcher_is_in_the_chat_summary_until_it_ends() {
+    let rig = rig("watchlater", "guardrails", true);
+    let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccW", "watch later")]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    turn_record(&rig, "ccW", "s_cc").await;
+    until("the watcher to be counted", Duration::from_secs(30), || async {
+        let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+        (summaries[0]["backgroundWatchCount"] == 1).then_some(())
+    })
+    .await;
+    let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+    assert_eq!(summaries[0]["activeWatchCount"], 0);
+    std::fs::write(rig.workspace.join("wake-now"), "").unwrap();
+    until("the watcher to end", Duration::from_secs(30), || async {
+        let (_, summaries) = post(rig.d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
+        (summaries[0]["backgroundWatchCount"] == 0).then_some(())
+    })
+    .await;
 }

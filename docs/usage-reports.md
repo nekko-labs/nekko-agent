@@ -5,7 +5,7 @@ Nekko Agent can send anonymous reports of which features get used and what goes 
 ## Turning it on or off
 
 - During setup, the **Help improve Nekko Agent?** step asks once. Skipping it leaves reports off.
-- Any time: **Settings > System > Help improve Nekko Agent**.
+- Any time: **Settings > General > Help improve Nekko Agent** (the first card).
 
 Each time you turn it on, Nekko Agent makes a new random id, so reports from before and after are not linked.
 
@@ -22,7 +22,7 @@ Each time you turn it on, Nekko Agent makes a new random id, so reports from bef
 - **App started:** the app version, edition, OS and CPU type.
 - **A chat turn started:** the kind of provider (for example `ollama` or `openai`), whether it ran locally, offline or in a sandbox, and the chat mode. Not the model, the prompt or the reply.
 - **A screen opened:** its name, such as `models` or `settings`.
-- **An error:** where it happened, the message and the stack trace. Secrets, emails, phone and card numbers, IP addresses, your user name and folder paths are removed first.
+- **An error:** where it happened, the kind of error and the first line of its message (at most 200 characters), and the names of the functions and files it passed through. Never the rest of the message, which could repeat something you typed. Secrets, emails, phone and card numbers, IP addresses, your user name and folder paths are removed first.
 
 ## Seeing what is sent
 

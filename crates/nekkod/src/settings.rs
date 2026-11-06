@@ -8,7 +8,7 @@ use nekko_settings::SettingsStore;
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-/// The channels served here while the daemon knows the data directory.
+/// The channels served here.
 pub const CHANNELS: &[&str] = &["settings:get", "settings:update", "settings:reset", "fonts:list"];
 
 /// The settings store, and the hub a change is announced on.
@@ -21,7 +21,8 @@ pub struct Settings {
 
 impl Settings {
     pub fn new(dir: std::path::PathBuf, hub: crate::hub::Hub) -> Arc<Self> {
-        Arc::new(Settings { store: Arc::new(SettingsStore::new(dir.clone())), dir, hub })
+        let store = SettingsStore::with_vault(dir.clone(), crate::keys::keystore(&dir, "settings"));
+        Arc::new(Settings { store: Arc::new(store), dir, hub })
     }
 
     fn changed(&self, settings: &Value, patch: &Value) {
@@ -133,17 +134,15 @@ fn list_fonts(dir: &std::path::Path) -> Value {
     json!({ "dir": dir.display().to_string(), "fonts": fonts })
 }
 
-/// The current settings, or `null` without a data directory.
+/// The current settings.
 pub async fn current(ctx: &Ctx) -> Value {
-    let Some(s) = &ctx.settings else { return Value::Null };
-    let store = s.store.clone();
+    let store = ctx.settings.store.clone();
     blocking(move || store.get()).await.unwrap_or(Value::Null)
 }
 
 /// Save a patch as `saveSettings` would, from a daemon service.
 pub async fn update(ctx: &Ctx, patch: Value) -> Result<Value, String> {
-    let s = ctx.settings.as_ref().ok_or("settings need the daemon to know the data directory")?;
-    route(s, "settings:update", &[patch]).await
+    route(&ctx.settings, "settings:update", &[patch]).await
 }
 
 #[cfg(test)]

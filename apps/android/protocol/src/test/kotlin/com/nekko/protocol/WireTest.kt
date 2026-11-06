@@ -6,8 +6,15 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import kotlinx.serialization.json.jsonObject
 
 class WireTest {
+    @Test fun `active watch count defaults to zero for older hosts`() {
+        assertEquals(0L, SessionSummary.from(json("""{"id":"chat"}"""))!!.activeWatchCount)
+        assertEquals(0L, SessionSummary.from(json("""{"id":"chat","activeWatchCount":0}"""))!!.activeWatchCount)
+        assertEquals(2L, SessionSummary.from(json("""{"id":"chat","activeWatchCount":2}"""))!!.activeWatchCount)
+    }
+
     private fun json(s: String) = WireJson.parseToJsonElement(s)
 
     /** Every channel the phone calls must exist in the shared IPC contract. */
@@ -118,6 +125,12 @@ class WireTest {
         assertNull(Session.from(json("null")))
     }
 
+    @Test fun `a chat's own mode decodes, and no mode follows the computer`() {
+        assertEquals(PcSettings.ChatMode.YOLO, Session.from(json("""{"id":"s","mode":"yolo","messages":[]}"""))!!.mode)
+        assertNull(Session.from(json("""{"id":"s","messages":[]}"""))!!.mode)
+        assertNull("an unknown mode isn't guessed", Session.from(json("""{"id":"s","mode":"turbo","messages":[]}"""))!!.mode)
+    }
+
     @Test fun `defaults read only the model fields`() {
         assertEquals(RemoteDefaults("p", "m"), RemoteDefaults.from(json("""{"defaultProviderId":"p","defaultModelId":"m","providers":[{"apiKey":"sk"}]}""")))
     }
@@ -218,5 +231,17 @@ class WireTest {
 
     @Test fun `the wav goes as unsigned byte values, like the desktop`() {
         assertEquals("[82,73,255,0,128]", wavArg(byteArrayOf(82, 73, -1, 0, -128)).toString())
+    }
+
+    @Test fun `the protocol check names the side to update`() {
+        assertEquals(ProtocolCheck.SAME, ProtocolCheck.compare(null))
+        assertEquals(ProtocolCheck.SAME, ProtocolCheck.compare(PhoneProtocol.VERSION))
+        assertEquals(ProtocolCheck.UPDATE_COMPUTER, ProtocolCheck.compare(3, phone = 4))
+        assertEquals(ProtocolCheck.UPDATE_PHONE, ProtocolCheck.compare(5, phone = 4))
+        assertNull(ProtocolCheck.SAME.message("Studio"))
+        assertEquals("Nekko Agent on Studio is older than this app. Update it on the computer to use everything here.", ProtocolCheck.UPDATE_COMPUTER.message("Studio"))
+        assertEquals(1, PhoneProtocol.of(json("""{"type":"welcome"}""").jsonObject))
+        assertEquals(1, PhoneProtocol.of(json("""{"protocol":0}""").jsonObject))
+        assertEquals(4, PhoneProtocol.of(json("""{"protocol":4}""").jsonObject))
     }
 }

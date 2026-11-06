@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ClaudeCapability, ClaudeCapabilityStatus, ClaudeCodeStatus, ClaudePolicy } from '@nekko-agent/shared';
 import { CLAUDE_PLAN_SHEET, CLAUDE_POLICY, claudeComparisonTable } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
@@ -11,16 +11,22 @@ import { Modal } from '../primitives/index.js';
  * nekkod's `claude:*` routes, so what the UI says is what the daemon enforces.
  */
 
-/** How the user's Claude Code is set up, re-read whenever the window regains focus. */
+/**
+ * How the user's Claude Code is set up, re-read whenever the window regains
+ * focus. A check that fails, or misses a Claude Code already found (its
+ * auto-update swaps the binary under a running sign-in), keeps the last
+ * answer instead of flipping the panel back to "not installed".
+ */
 export function useClaudeCodeStatus(providerId?: string, account?: string): { status: ClaudeCodeStatus | null; checking: boolean; refresh: () => void } {
   const [status, setStatus] = useState<ClaudeCodeStatus | null>(null);
   const [checking, setChecking] = useState(false);
+  const misses = useRef(0);
   const refresh = useCallback(() => {
     setChecking(true);
     window.nekko
       .getClaudeCodeStatus(providerId, account)
-      .then(setStatus)
-      .catch((e) => setStatus({ installed: false, message: String(e) }))
+      .then((next) => setStatus((prev) => keepFound(prev, next, misses)))
+      .catch((e) => setStatus((prev) => keepFound(prev, { installed: false, message: String(e) }, misses)))
       .finally(() => setChecking(false));
   }, [providerId, account]);
   useEffect(() => {
@@ -29,6 +35,18 @@ export function useClaudeCodeStatus(providerId?: string, account?: string): { st
     return () => window.removeEventListener('focus', refresh);
   }, [refresh]);
   return { status, checking, refresh };
+}
+
+/** Checks in a row that must miss a found Claude Code before it reads as uninstalled. */
+const MISSES_TO_UNINSTALL = 3;
+
+function keepFound(prev: ClaudeCodeStatus | null, next: ClaudeCodeStatus, misses: { current: number }): ClaudeCodeStatus {
+  if (next.installed || !prev?.installed) {
+    misses.current = 0;
+    return next;
+  }
+  misses.current += 1;
+  return misses.current >= MISSES_TO_UNINSTALL ? next : prev;
 }
 
 /** One provider's row for a Claude capability; `null` until read or when there is no provider. */
@@ -127,13 +145,13 @@ export function ClaudePlanSheet() {
   return (
     <Modal title={CLAUDE_PLAN_SHEET.title} labelledBy={titleId} onClose={close} overlayClassName="p-4" className="card claude-sheet w-full max-w-2xl p-5">
       <div className="flex items-start justify-between gap-3">
-        <h2 id={titleId} className="text-[16px] font-semibold">{CLAUDE_PLAN_SHEET.title}</h2>
+        <h2 id={titleId} className="text-base font-semibold">{CLAUDE_PLAN_SHEET.title}</h2>
         <button className="rounded-sm p-1 text-ink-faint hover:text-ink" onClick={close} aria-label="Close">
           <CloseIcon className="h-4 w-4" />
         </button>
       </div>
       {CLAUDE_PLAN_SHEET.paragraphs.map((p) => (
-        <p key={p} className="mt-3 text-[13px] leading-relaxed text-ink-soft">{p}</p>
+        <p key={p} className="mt-3 text-sm leading-relaxed text-ink-soft">{p}</p>
       ))}
       <div className="mt-4">
         <ClaudeComparison />

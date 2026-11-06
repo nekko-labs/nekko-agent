@@ -7,7 +7,7 @@ import { isRunningTool, watchToolElapsed } from './toolProgress.js';
 import type { Activity } from './transcript.js';
 import { RowKeyContext, RowMemoryContext } from './rowState.js';
 
-vi.mock('../Markdown.js', () => ({ Markdown: () => null }));
+vi.mock('../Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => <p>{text}</p> }));
 afterEach(() => vi.useRealTimers());
 const tool = (id: string, endedAt?: number): Activity => ({ kind: 'tool', call: { id, name: 'read_file', input: { path: `${id}.ts` } }, startedAt: 0, endedAt });
 const render = (items: Activity[], props: Partial<React.ComponentProps<typeof ActivityGroup>> = {}, memory = new Map<string, unknown>()) => renderToStaticMarkup(
@@ -61,15 +61,15 @@ describe('tool timing and model continuation', () => {
   it('shows only existing public reasoning text even when the activity group is folded', () => {
     const html = render([tool('done', 100), { kind: 'reasoning', text: 'Public summary <script>alert(1)</script>', duration: null }], {}, new Map([['row:group-open', false]]));
     expect(html).not.toContain('<ol');
-    expect(html).toContain('data-public-reasoning');
+    expect(html).toContain('data-chat-thought');
     expect(html).toContain('Public summary &lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>');
   });
 
-  it('hides the model continuation when a new tool starts or the turn is held', () => {
+  it('keeps thoughts visible when a new tool starts or the turn is held', () => {
     const items: Activity[] = [tool('done', 100), { kind: 'reasoning', text: 'Public model summary', duration: null }];
-    expect(render([...items, tool('next')])).not.toContain('data-public-reasoning');
-    expect(render(items, { streaming: false })).not.toContain('data-public-reasoning');
+    expect(render([...items, tool('next')])).toContain('data-chat-thought');
+    expect(render(items, { streaming: false })).toContain('data-chat-thought');
   });
 
   it('does not mislabel retry backoff or a paused turn as model work', () => {

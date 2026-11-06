@@ -27,7 +27,18 @@ const LAST_REPLY_CHARS = 200;
 /** A session's own fields, which a summary and a full session both carry. */
 export type SessionMeta = Omit<Session, 'messages'>;
 
+/**
+ * Where a chat is in the agent loop, as the Agents panel groups it. Reading and
+ * changing are one phase, `building`; engines from before that still send
+ * `exploring`, which the panel files under Building.
+ */
+export type LoopPhase = 'building' | 'verifying' | 'shipping';
+
 export interface SessionSummary extends SessionMeta {
+  /** Armed watches, including ones due while the chat is busy. Supplied by the host. */
+  activeWatchCount?: number;
+  /** Background tasks of its Claude Code that are watching something for the chat. Supplied by the host. */
+  backgroundWatchCount?: number;
   /** Messages in the transcript, every role included. */
   messageCount: number;
   /** User and assistant messages only: the exchange a card counts. */
@@ -48,6 +59,8 @@ export interface SessionSummary extends SessionMeta {
   prUrls: string[];
   /** Pictures an image chat has made. */
   imageCount: number;
+  /** Named by the chat's latest telling tool call. Supplied by the engine (`phase.rs`). */
+  phase?: LoopPhase;
 }
 
 const cap = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);

@@ -18,7 +18,7 @@ it('keeps chat and rail identical across working, waiting, failure and completio
   foldSubagentActivity({ type: 'tool_call', sessionId: 'p', call }, 100);
   const check = () => {
     const sentence = activitySentence(childActivity(child));
-    const rail = renderToStaticMarkup(<PlanRail sessionId="p" session={null} streaming={false} />);
+    const rail = renderToStaticMarkup(<PlanRail sessionId="p" session={null} />);
     const chat = renderToStaticMarkup(<SubagentParentContext.Provider value={[child]}><ActivityGroup items={[{ kind: 'tool', call }]} streaming /></SubagentParentContext.Provider>);
     expect(rail).toContain(sentence);
     expect(chat).toContain(sentence);
@@ -71,6 +71,13 @@ it('falls back to the title for missing or blank tasks', () => {
     expect(delegationActivity({ ...call, input: { title: 'Integration checks', task } })).toEqual({ status: 'waiting', detail: 'Integration checks' });
   }
   expect(activitySentence(delegationActivity(call))).toBe('Subagent waiting · Inspect the files.');
+});
+
+it('finds a child by the call that started it, even one this window never saw start', () => {
+  const call = { id: 'call_7', name: 'spawn_agent', input: { title: 'Elsewhere' } } as ToolCall;
+  expect(delegationChild(call, [child])).toBeUndefined();
+  const named = { ...child, id: 'n', title: 'Another title', spawnCallId: 'call_7' };
+  expect(delegationChild(call, [child, named])).toBe(named);
 });
 
 it('associates only a unique observed child in the parent and spawn time scope', () => {

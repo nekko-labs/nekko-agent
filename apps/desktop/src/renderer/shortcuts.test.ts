@@ -25,3 +25,18 @@ describe('new wall window shortcuts', () => {
     for (const value of ['`', '~', 'j']) expect(SHORTCUTS.newTerminal.matches(key(value, { ctrlKey: true }))).toBe(true);
   });
 });
+
+
+describe('media creation and chat search', () => {
+  for (const modifier of ['ctrlKey', 'metaKey']) {
+    it(`requires Shift and ${modifier}, without colliding with chat search`, () => {
+      for (const [shortcut, value] of [[SHORTCUTS.newMedia, 'i'], [SHORTCUTS.searchChats, 'f']] as const) {
+        expect(shortcut.matches(key(value.toUpperCase(), { [modifier]: true, shiftKey: true }))).toBe(true);
+        expect(shortcut.matches(key(value, { [modifier]: true }))).toBe(false);
+        expect(shortcut.matches(key(value, { shiftKey: true }))).toBe(false);
+        expect(shortcut.matches(key(value, { [modifier]: true, shiftKey: true, altKey: true }))).toBe(false);
+      }
+      expect(SHORTCUTS.findInChat.matches(key('f', { [modifier]: true, shiftKey: true }))).toBe(false);
+    });
+  }
+});

@@ -5,9 +5,8 @@ phone: pair with the QR code from **Settings → Remote access** on the computer
 then run chats there, on the computer's models, files and tools. Everything goes
 through the end-to-end encrypted relay; the relay only ever sees ciphertext.
 
-This replaces the Android half of the Expo app in `apps/mobile` (the 2026-10-07
-native decision in [the spec](../../spec/README.md)). Expo stays as the behaviour
-reference until this app reaches parity.
+This is the supported Android implementation. The former Expo app and its dedicated
+CI have been removed. Remaining native feature gaps below stay tracked separately.
 
 ## What works
 
@@ -76,10 +75,24 @@ reference until this app reaches parity.
   transcript above the hinge and the message box below it. Remembered per
   computer on the phone. A message dragged to the other pane lands in its
   message box, unsent.
-- **Monitors:** the computer's hardware load and temperatures, running chats,
-  what needs you (Allow / Deny / answer) and the next automations, from
-  `monitor:summary` every 10 s while on screen; a pane when open, the last row
-  of the chat list on any phone.
+- **Monitors:** the computer's hardware load and temperatures, running chats and
+  what needs you (Allow / Deny / answer; each group only while it holds something)
+  and the next automations, from `monitor:summary` every 10 s while on screen; a
+  pane when open, the last row of the chat list on any phone. Flat rows with
+  hairline dividers under accented headings, as in the chat list.
+- **The computer menu:** the pill at the top left of Chats (its dot, its name, and
+  *N paired* under it once several are paired) switches computers and holds
+  *Search chats* (a field in place of the slim row), *Computers* (pairing lives
+  there) and *Sign out or disconnect* (the safety exits).
+- **Simple and Expert:** a two-segment switch in the slim row under the header, which
+  slides down from behind it. Model, effort and the context ring (`12.3k / 128k`, tap for
+  the breakdown) sit under the message box; model and effort open a short sheet with the
+  model list and an effort slider that snaps to the model's levels. The minimal gauges (CPU,
+  memory, GPU, loaded models) show in Expert, and in Simple while a local model is loaded;
+  tap for the agent panel, long-press or hover for a reading in full (`system:stats`,
+  `gpu:stats`, `engine:status`, `context:preview`, `model:unload`).
+- **Logs:** *On this phone* (the connection log), then each paired computer: the
+  connected one's logs, or *Connect to read its logs* for the others.
 - **Send feedback:** *Settings → Feedback* copies a prompt for your own coding
   agent to file a GitHub issue, sends a quick note to Nekko Labs through Nekko
   Cloud (app, version, OS and CPU type only when *Include app info* is on), or
@@ -100,14 +113,15 @@ apps/android/
 
 | Piece | Kotlin | Mirrors |
 |---|---|---|
-| Crypto | `protocol/.../E2E.kt` | `packages/shared/src/e2e.ts`, `apps/mobile/src/lib/e2e.ts` |
-| Relay client | `protocol/.../RelayClient.kt` | `apps/mobile/src/lib/relayClient.ts` ↔ the computer's side in `crates/nekko-remote` |
-| Pairing links | `protocol/.../Pairing.kt` | `apps/mobile/src/lib/pairing.ts` |
-| Transcript | `protocol/.../Transcript.kt` | `apps/mobile/src/lib/transcript.ts` |
-| Chat logic | `app/.../chat/ChatController.kt` | `apps/mobile/src/chat/useRemoteChat.ts` |
-| Computers | `app/.../data/ComputersRepository.kt` | `apps/mobile/src/services/computers.ts` |
+| Crypto | `protocol/.../E2E.kt` | `packages/shared/src/e2e.ts` |
+| Relay client | `protocol/.../RelayClient.kt` | The computer's side in `crates/nekko-remote` |
+| Pairing links | `protocol/.../Pairing.kt` | Shared pairing fixtures and native protocol tests |
+| Transcript | `protocol/.../Transcript.kt` | Native transcript tests |
+| Chat logic | `app/.../chat/ChatController.kt` | Native chat controller tests |
+| Computers | `app/.../data/ComputersRepository.kt` | Native computer repository tests |
 | Posture and panes | `protocol/.../Posture.kt`, `protocol/.../Panes.kt` | `apps/ios/Protocol/Sources/NekkoKit/Posture.swift` |
 | Monitors | `protocol/.../MonitorSummary.kt` | `phoneMonitorView` in `packages/shared/src/phone-views.ts` |
+| Expert monitor, context, effort | `protocol/.../HardwareMonitor.kt` | `apps/ios/Protocol/Sources/NekkoProtocol/HardwareMonitor.swift` |
 
 ## Security notes
 
@@ -120,10 +134,16 @@ apps/android/
   disk, and the app opts out of backup and device transfer.
 - `providers:list` and `settings:get` replies carry API keys; they are reduced
   to ids, labels and the default model on arrival and never stored or logged.
-- Release builds allow TLS only (`wss://`). Debug builds also allow `ws://` to
-  `localhost`, `127.0.0.1` and `10.0.2.2` (the emulator's host) for a local relay.
+- `wss://` anywhere; plain `ws://` only to the tailnet or the LAN, never the
+  open internet, as on the iPhone. The network security config permits
+  cleartext app-wide (it can't name IP ranges), so the app refuses public
+  `ws://` before dialing (`RelayRoute.publicCleartext`). Debug builds also
+  dial a loopback relay, for `adb reverse`.
 - The one-time pairing code is dropped from storage once the computer welcomes
   the phone, and is never sent again.
+- The computer proves itself on every connection: its challenge is signed with
+  the host key pinned from the pairing link, and each connection has its own
+  key (decision 0041). A link with no host key can't pair.
 
 ## Build and test
 
@@ -169,4 +189,4 @@ cd apps/android && NEKKO_ITEST=1 ./gradlew :protocol:test --tests '*RelayIntegra
 2. Install the debug APK: `adb install -r app/build/outputs/apk/debug/app-debug.apk`.
 3. For a local relay on a USB phone run `adb reverse tcp:4400 tcp:4400` and pair
    with `ws://localhost:4400`; on the emulator use `ws://10.0.2.2:4400`. Paste the
-   pairing link (`nekko-agent-pair:?relay=…&room=…&key=…&pair=…`) on the Pair screen.
+   pairing link (`nekko-agent-pair:?relay=…&room=…&key=…&host=…&pair=…`) on the Pair screen.

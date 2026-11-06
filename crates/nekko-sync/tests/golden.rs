@@ -67,6 +67,8 @@ fn vectors() -> Value {
         .iter()
         .map(|n| json!([n, padme(*n)]))
         .collect();
+    let proofs: Vec<Value> =
+        [1u32, 2].iter().map(|k| json!({ "keyId": k, "proof": b64_encode(&epoch_proof(&keyring, *k)) })).collect();
     json!({
         "account": ACCOUNT,
         "keyring": b64_encode(&keyring.to_bytes()),
@@ -74,6 +76,7 @@ fn vectors() -> Value {
         "records": records,
         "longRecord": { "collection": "chat-part", "objectId": oid, "revision": 7, "keyId": 2, "plaintext": long, "salt": b64_encode(&seed::<32>("salt-long")), "blob": long_blob },
         "padme": pads,
+        "epochProofs": proofs,
         "device": { "id": device_id, "private": b64_encode(&device.to_bytes()), "public": b64_encode(&device.public()), "fingerprint": fingerprint(&device.public()) },
         "ephemeral": { "private": b64_encode(&eph.to_bytes()), "public": b64_encode(&eph.public()) },
         "sender": { "id": sender_id, "private": b64_encode(&sender.to_bytes()), "public": b64_encode(&sender.public()) },

@@ -16,6 +16,103 @@ worked.
 | macOS | Developer ID codesign + notarization | ✅ live since v0.6.0 | nothing |
 | Windows | Authenticode via Azure Artifact Signing | ✅ secret-gated | Azure identity validation + the secrets below |
 | Linux | none (AppImage/deb are unsigned) | n/a | n/a |
+| Update feed (all) | Ed25519 signature beside each `latest*.yml` | ✅ secret-gated | Philip generating the release key ([below](#the-release-signing-key)) |
+
+## How the app checks an update before installing it
+
+Before anything in the release feed is read, once a real release key is built
+in, the updater fetches `<feed>.sig` beside it (`latest.yml.sig`,
+`latest-mac.yml.sig`, `latest-linux.yml.sig`) and checks it over the feed
+file's exact bytes against the
+[release signing key](#the-release-signing-key). A missing or wrong signature
+refuses the update: the version pill shows the usual update error with the
+reason, and nothing is downloaded. While the built-in key is still the
+all-zero placeholder, no signature is fetched and the feed is read as before.
+
+Besides the SHA-512 from the release feed, the in-app updater checks the
+publisher of what it is about to install against the app that is running, so
+the check does not depend on `publisherName` in `app-update.yml`:
+
+- **macOS:** when the running app is signed by a Developer ID team, the new
+  bundle must pass `codesign --verify --deep --strict` against a requirement
+  anchored to Apple that names the same team, before it replaces the app. If
+  it does not, the update is dropped and the running app is reopened.
+- **Windows:** when the running app is validly Authenticode-signed, the
+  installer must be validly signed with the same certificate subject (and,
+  when `publisherName` is set, by one of those names, as before).
+- A local or unsigned build skips these checks, since it has no publisher to
+  compare against.
+
+## The release signing key
+
+One Ed25519 key signs what a release says about itself: the update feed
+(`latest*.yml`, signed into `latest*.yml.sig`) and the
+[Claude policy override](../spec/product/claude-policy.md)
+(`claude-policy.json`). Its public half is the `RELEASE_SIGNING_KEY` constant
+in `crates/nekko-native/src/release_key.rs`, which both verifiers read. Its
+private half is the `NEKKO_RELEASE_SIGNING_KEY` **repository** secret (not an
+organization secret: only this repo's release workflow signs with it), plus
+one offline copy. Decision:
+[0039](decisions/0039-one-release-signing-key-signs-the-update-feed.md).
+
+**Today the constant is the all-zero placeholder.** Until it is replaced, the
+release workflow's "Sign the update feed" step warns and publishes the feed
+unsigned (or signs it anyway, if the secret is set), the updater checks
+nothing, and every Claude policy override is refused.
+
+### Generating it (Philip, once)
+
+1. On a trusted machine, from the repo root, run
+   `node scripts/release-key.mjs`. It writes nothing to disk; it prints the
+   public key as the Rust constant, and the private key (the base64 of the
+   32-byte Ed25519 seed).
+2. Run `gh secret set NEKKO_RELEASE_SIGNING_KEY --repo nekko-labs/nekko-agent`
+   and paste the private key at the prompt (stdin keeps it out of shell
+   history).
+3. Save the private key in the Nekko Labs password manager as "Nekko Agent
+   release signing key", with the date. That is the only other copy. Then
+   clear the terminal.
+4. In a PR, replace the constant in `crates/nekko-native/src/release_key.rs`
+   with the printed one and drop its TODO. To check the secret and the
+   constant match, `node scripts/release-key.mjs public` with the private key
+   in `$NEKKO_RELEASE_SIGNING_KEY` prints the constant again.
+
+From the first release built with that constant, the signing step fails when
+the secret is missing or does not match the constant, so a release the app
+would refuse is never published. Apps from before it check nothing, so the
+first signed release still reaches every install.
+
+### Custody
+
+- The private key never goes into the repo, an issue, a PR, a log or a chat.
+  CI reads it in one place: the release job's "Sign the update feed" step
+  (`scripts/sign-update-feed.mjs`), which only signs `latest*.yml`.
+- GitHub never shows a secret's value again; only repository admins can
+  replace it.
+- The signature says the feed came from our release job. The SHA-512 in the
+  feed still pins the installer, and Authenticode and Developer ID still pin
+  the publisher; the three checks are independent.
+
+### Rotating it
+
+The app trusts exactly one key, and an installed app always reads the
+**latest** release's feed. So a rotation goes through one bridge release:
+
+1. Generate the new pair with `node scripts/release-key.mjs`; keep the old
+   secret in place for now.
+2. **Bridge release:** set the repository variable
+   `NEKKO_RELEASE_KEY_ROTATION=1`, change the constant to the **new** public
+   key, and release. The feed is signed with the **old** key (the variable
+   lets the secret differ from the constant), so every install updates to it.
+3. Once installs have had time to move to the bridge release, set the new
+   private key as `NEKKO_RELEASE_SIGNING_KEY`, delete the variable, and
+   release as normal. From here the feed is signed with the new key.
+4. Replace the password manager entry; keep the old key only until step 3.
+
+An install that skipped the bridge release refuses later feeds and needs one
+manual download from the releases page. If the key leaks, skip the bridge:
+set the new secret and constant in the same release, and tell users of older
+versions to download that release once.
 
 ## macOS
 
@@ -53,6 +150,66 @@ the short version:
 `NSCameraUsageDescription` is set via `mac.extendInfo`. Without it macOS kills
 the process instead of prompting when the QR scanner opens.
 
+### The VM helper's entitlement
+
+`Contents/Resources/bin/nekko-vm`, the CI runner VM helper, is the only binary
+that carries `com.apple.security.virtualization`. Virtualization.framework
+refuses to create a VM without it. It is never in `build/entitlements.mac.plist`:
+that file is both `entitlements` and `entitlementsInherit`, so the app, its
+helpers, nekkod and everything nekkod starts would hold it too, and any agent
+process could then boot a VM.
+
+- **Release signing:** `mac.sign` in `electron-builder.yml` points at
+  `apps/desktop/scripts/sign-mac.cjs`, the stock osx-sign run (through
+  `app-builder-lib`, pinned to the same version as `electron-builder`) except
+  that `nekko-vm` is signed with `crates/nekkod/vm/nekko-vm.entitlements`, which
+  grants that one entitlement and nothing else.
+- **Unsigned builds:** `after-pack.cjs` ad-hoc signs the app with `--deep`,
+  then signs `nekko-vm` again with its own file and reseals the app.
+- **Staging:** `stage-daemon.mjs` builds `nekko-vm` with `xcrun swiftc` and
+  stages it beside nekkod. On Apple silicon a packaged build fails if it cannot.
+  The image builder's guest scripts go beside it in `runner-image/`. They are
+  text, so they are never signed, and `check-mac-entitlements.sh` skips that folder.
+  Building with the macOS 27 SDK is what gives `nekko-vm` first-boot support, so
+  `release.yml` and `installers.yml` build macOS on the `xcode-27` runner.
+
+`scripts/check-mac-entitlements.sh <app>` reads the entitlements of the app,
+every helper app under `Contents/Frameworks` and every file under
+`Contents/Resources/bin`, and fails if `nekko-vm` is missing, lacks the
+entitlement, anything else has it, or `codesign` cannot read a file. Where it
+runs:
+
+- `release.yml`, step `Check the virtualization entitlement`, right after the
+  build, on every macOS release, signed or not.
+- `installers.yml`, on PRs that touch packaging: the same check on the unsigned
+  build, then `Signed dry-run through the release hook`, which runs
+  `apps/desktop/scripts/sign-mac-dry-run.cjs` on a copy of the app. That is the
+  real `sign-mac.cjs` hook with the ad-hoc identity `-` in place of the
+  Developer ID, followed by `codesign --verify --deep --strict`, the check, and
+  `nekko-vm count-vms`.
+
+By hand, on an Apple silicon Mac, with no credentials (build first: the
+workspace `dist` packages what `npm run build` left, and the root `npm run dist`
+does both):
+
+```bash
+npm run build
+CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist -w @nekko-agent/desktop -- --publish never
+scripts/check-mac-entitlements.sh "apps/desktop/release/mac-arm64/Nekko Agent.app"
+ditto "apps/desktop/release/mac-arm64/Nekko Agent.app" /tmp/dry-run.app
+node apps/desktop/scripts/sign-mac-dry-run.cjs /tmp/dry-run.app
+```
+
+Still needs Philip (Developer ID certificate, a real release):
+
+- [ ] `npm run build`, then
+  `CSC_NAME="Nekko Labs LLC (3HM5598S99)" npm run dist -w @nekko-agent/desktop -- --publish never`,
+  then the check above exits 0 and `codesign --verify --deep --strict --verbose=2`
+  passes on the app; open it, connect a runner and see one VM boot from the
+  signed `nekko-vm`.
+- [ ] On the next tag, `Check the virtualization entitlement` is green on the
+  signed, notarized macOS build and `Verify the signed app` still passes.
+
 ## Secrets
 
 These are **`nekko-labs` organization secrets**, shared with `hypergate` and
@@ -72,6 +229,10 @@ These are **`nekko-labs` organization secrets**, shared with `hypergate` and
 Plus four non-secret **organization variables** (`gh variable set --org`), also
 read by the Windows leg: `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`,
 `AZURE_SIGNING_PROFILE`, `AZURE_SIGNING_PUBLISHER`. See [Windows](#windows).
+
+One more, a **repository** secret rather than an organization one:
+`NEKKO_RELEASE_SIGNING_KEY`, the release signing key that signs the update
+feed. See [The release signing key](#the-release-signing-key).
 
 Certificate: `Developer ID Application: Nekko Labs LLC (3HM5598S99)`.
 
@@ -326,6 +487,30 @@ OIDC, harden the package's Publishing access settings by requiring 2FA and
 disallowing token-based publishing, then revoke the temporary `NPM_TOKEN`
 secret. The release job will continue using OIDC after the token is removed.
 
+### The @nekko-agent scope
+
+`publish-web` publishes the engine as one package per platform
+(`@nekko-agent/nekkod-win32-x64`, `-linux-x64`, `-linux-arm64`,
+`-darwin-arm64`) before `nekko-agent-local-web-ui`, and `publish-cli` pins the
+same packages, so both jobs need the scope. v0.8.1 failed here with
+`404 Not Found - PUT .../@nekko-agent%2fnekkod-darwin-arm64`: npm answers 404,
+not 403, when the scope's organization does not exist or the token cannot
+write to it.
+
+One-time setup, on npmjs.com, signed in as the account that owns
+`nekko-agent`:
+
+1. Create the free organization `nekko-agent` (this is the `@nekko-agent` scope).
+2. Create a granular access token with **Read and write** on packages and on
+   the `@nekko-agent` scope (a token limited to selected packages cannot
+   create new ones), and store it as the repository secret `NPM_TOKEN`.
+3. After the first tagged release publishes them, add the same trusted
+   publisher as above to each `@nekko-agent/nekkod-*` package and to
+   `nekko-agent-local-web-ui`, then harden and revoke the token as above.
+
+Re-running a failed release is safe: each publish skips a version that is
+already on npm.
+
 ## Verifying a release
 
 ## Installer and updater targets
@@ -356,6 +541,43 @@ xcrun stapler validate /Applications/Nekko Agent.app
 ```
 
 `spctl` should say `accepted` with `source=Notarized Developer ID`.
+
+## Development builds: keeping Keychain answers across rebuilds
+
+nekkod keeps API keys and sign-ins in the macOS Keychain, and the Keychain
+remembers an "Always Allow" for a program by its signature. A development
+nekkod is ad-hoc signed by the linker, and an ad-hoc signature is the binary's
+own hash: every rebuild is a new program to the Keychain, so it asks again for
+every item.
+
+Run this once per Mac:
+
+```bash
+apps/desktop/scripts/dev-signing-identity.sh
+```
+
+It creates **Nekko Agent Development**, a self-signed code-signing certificate
+in your login keychain that only your Mac trusts, and asks for your password
+once to trust it. From then on `npm run dev` (`stage-daemon.mjs --dev`) signs
+`target/dev-daemon/nekkod` with it under the identifier `dev.nekkolabs.nekkod`,
+and a local `npm run dist` without `CSC_LINK` signs the app with it instead of
+ad-hoc (`after-pack.cjs`). Answer the Keychain once more with **Always Allow**;
+later rebuilds keep it. The first signing may also ask to let `codesign` use
+the key: Always Allow.
+
+- `NEKKO_DEV_SIGN_IDENTITY="Apple Development: ..."` signs with an identity you
+  already have; `NEKKO_DEV_SIGN_IDENTITY=-` keeps ad-hoc.
+- Without the identity nothing breaks: the build stays ad-hoc, says so, and the
+  Keychain asks after every rebuild as before.
+- A `cargo build -p nekkod` run by hand is not re-signed. The app runs the
+  newest of `target/release`, `target/dev-daemon` and `target/debug`, so that
+  build asks again.
+- Undo: delete "Nekko Agent Development" (certificate and key) in Keychain
+  Access.
+
+Waiting on a Keychain dialog no longer gets nekkod killed either way: it tells
+the app (`NEKKOD_WAITING`), and the app holds its 30-second ready timeout
+until the dialog is answered (`engine-process.ts`).
 
 ## Building signed locally
 

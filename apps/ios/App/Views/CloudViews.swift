@@ -41,9 +41,10 @@ struct CloudView: View {
                         Text("Signing out keeps the synced chats on this iPhone until you forget everything in Settings.").foregroundStyle(palette.inkSoft)
                     }
                 }
-                .refreshable { await run { try await cloud.sync() } }
+                .pawRefreshable { await run { try await cloud.sync() } }
             }
         }
+        .appBackground()
         .navigationTitle("Nekko Cloud")
         .navigationBarTitleDisplayMode(.inline)
         .task { if cloud.signedIn { await run { try await cloud.sync() } } }
@@ -204,7 +205,7 @@ struct CloudSignInView: View {
                 if sent {
                     TextField("123456", text: $code)
                         .textContentType(.oneTimeCode).keyboardType(.numberPad)
-                        .font(.system(size: 30, weight: .semibold, design: .monospaced)).tracking(10)
+                        .font(.system(.title, design: .monospaced).weight(.semibold)).tracking(10)
                         .multilineTextAlignment(.center).padding(.vertical, 12)
                         .background(palette.surface, in: RoundedRectangle(cornerRadius: 14))
                         .overlay(RoundedRectangle(cornerRadius: 14).stroke(codeFocused ? palette.accent : palette.line))
@@ -435,7 +436,7 @@ struct SyncedChatView: View {
             }
             .padding()
         }
-        .background(palette.paper)
+        .background { AppBackdrop() }
         .navigationTitle(chat?.title ?? "Chat")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -483,7 +484,7 @@ struct CloudMachinesSection: View {
         defer { busy = false }
         do {
             let made = try await cloud.createMachine(name: "Nekko Cloud", region: "nrt", scope: CloudSync.MachineScope())
-            let id = await store.pair(made.link)
+            let id = try await store.pair(made.link)
             store.rename(id, to: made.machine.name)
             cloud.link(made.machine, computer: id)
         } catch { self.error = error.localizedDescription }

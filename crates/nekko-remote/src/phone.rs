@@ -52,6 +52,9 @@ pub struct Policy {
     pub session_images: usize,
     pub thumb_side: u32,
     pub thumb_chars: usize,
+    /// `session:photo`: a photo opened full size, its long side and its largest data URL.
+    pub photo_side: u32,
+    pub photo_chars: usize,
     /// `PHONE_MAX_FRAME_BYTES`: the largest sealed reply frame sent to a phone.
     pub max_frame_bytes: usize,
     /// `PHONE_CHANGES_VIEW`: the limits of a phone's Changes view.
@@ -59,6 +62,21 @@ pub struct Policy {
     /// `PHONE_VIEWS` and the views beyond the chat (phone_views.rs).
     pub views: crate::phone_views::Views,
     pub queue_edit_keys: Vec<String>,
+    pub brain_keys: Vec<String>,
+    pub guarded_option_keys: Vec<String>,
+    pub option_values: Vec<(String, Vec<String>)>,
+    pub option_switches: Vec<String>,
+    pub engine_keys: Vec<String>,
+    pub model_server_view: Vec<String>,
+    /// `activity:state`: yes/no answers only, never idle time, battery or temperatures.
+    pub activity_view: Vec<String>,
+    pub model_setting_channels: Vec<String>,
+    pub preset_path_keys: Vec<String>,
+    pub computer_refused: Vec<String>,
+    pub computer_read: Vec<String>,
+    pub computer_agent: Vec<String>,
+    pub computer_send_keys: Vec<String>,
+    pub computer_icons: Vec<String>,
     /// `PHONE_READ_CHANNELS` / `PHONE_CHANGE_CHANNELS` (IO-33).
     pub read_channels: Vec<String>,
     pub change_channels: Vec<String>,
@@ -84,6 +102,8 @@ pub struct Policy {
     pub terminal: crate::phone_terminal::Limits,
     /// Files and logs from a phone (IO-33 FA-1, FA-5): limits and views (phone_files.rs).
     pub files: crate::phone_files::FilesPolicy,
+    /// What the agent linked in a chat, opened on a phone (#1095; phone_artifacts.rs).
+    pub artifacts: crate::phone_artifacts::ArtifactsPolicy,
     /// Git from a phone (IO-33 FA-2): limits, option keys and views (phone_git.rs).
     pub git: crate::phone_git::GitPolicy,
     /// `stepUpPolicy()` (SK-2; step_up.rs).
@@ -123,10 +143,31 @@ pub fn policy() -> &'static Policy {
             session_images: v["sessionView"]["images"].as_u64().unwrap_or(0) as usize,
             thumb_side: v["sessionView"]["thumbSide"].as_u64().unwrap_or(0) as u32,
             thumb_chars: v["sessionView"]["thumbChars"].as_u64().unwrap_or(0) as usize,
+            photo_side: v["sessionView"]["photoSide"].as_u64().unwrap_or(0) as u32,
+            photo_chars: v["sessionView"]["photoChars"].as_u64().unwrap_or(0) as usize,
             max_frame_bytes: v["maxFrameBytes"].as_u64().unwrap_or(9 * 1024 * 1024) as usize,
             changes_view: crate::phone_changes::Limits::from_policy(&v["changesView"]),
             views: crate::phone_views::Views::from_policy(&v),
             queue_edit_keys: strings(&v["queueEditKeys"]),
+            brain_keys: strings(&v["brainKeys"]),
+            guarded_option_keys: strings(&v["guardedOptionKeys"]),
+            option_values: v["optionValues"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(k, list)| (k.clone(), strings(list)))
+                .collect(),
+            option_switches: strings(&v["optionSwitches"]),
+            engine_keys: strings(&v["engineKeys"]),
+            model_server_view: strings(&v["modelServerView"]),
+            activity_view: strings(&v["activityView"]),
+            model_setting_channels: strings(&v["modelSettingChannels"]),
+            preset_path_keys: strings(&v["presetPathKeys"]),
+            computer_refused: strings(&v["computerAccess"]["refused"]),
+            computer_read: strings(&v["computerAccess"]["read"]),
+            computer_agent: strings(&v["computerAccess"]["agent"]),
+            computer_send_keys: strings(&v["computerAccess"]["sendKeys"]),
+            computer_icons: strings(&v["computerAccess"]["icons"]),
             read_channels: strings(&v["readChannels"]),
             change_channels: strings(&v["changeChannels"]),
             agent_channels: strings(&v["agentChannels"]),
@@ -143,6 +184,7 @@ pub fn policy() -> &'static Policy {
             activity_limit: v["activityLimit"].as_u64().unwrap_or(200) as usize,
             terminal: crate::phone_terminal::Limits::from_policy(&v),
             files: crate::phone_files::FilesPolicy::from_policy(&v["files"]),
+            artifacts: crate::phone_artifacts::ArtifactsPolicy::from_policy(&v["artifacts"]),
             git: crate::phone_git::GitPolicy::from_policy(&v["git"]),
             step_up: crate::step_up::Limits::from_policy(&v["stepUp"]),
         }
@@ -199,6 +241,16 @@ fn language_ok(s: &str) -> bool {
 fn setting_value(path: &str, value: &Value) -> Result<(), Denied> {
     let ok = match path {
         "defaultChatMode" => return chat_mode(value, path),
+        "defaultWorkspaceIds" => value.as_array().is_some_and(|ids| {
+            ids.len() <= 100
+                && ids.iter().all(|id| {
+                    id.as_str().is_some_and(|s| {
+                        (1..=256).contains(&s.len())
+                            && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+                    })
+                })
+        }),
+        "machineIcon" => value.as_str().is_some_and(|i| i.is_empty() || has(&policy().computer_icons, i)),
         "chatPaneAction" => matches!(value.as_str(), Some("complete" | "delete")),
         "skipDeleteConfirmation" | "voice.enabled" => value.is_boolean(),
         "voice.language" => value.as_str().is_some_and(language_ok),
@@ -302,12 +354,31 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         let args = crate::phone_files::screen(channel, args, &policy().files)?;
         return Ok(Screened { args: Some(args), ..Screened::default() });
     }
+    if crate::phone_artifacts::is_artifacts(channel) {
+        let args = crate::phone_artifacts::screen(channel, args, &policy().artifacts)?;
+        return Ok(Screened { args: Some(args), ..Screened::default() });
+    }
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let mut out = Screened::default();
     let id = |i: usize, what: &str| -> Result<(), Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
+        "session:setSupportingWorkspaces" => {
+            if args.len() != 2 || args[0].as_str().is_none_or(|s| s.is_empty()) {
+                return Err(denied("value-invalid", "session id"));
+            }
+            setting_value("defaultWorkspaceIds", &args[1])?;
+        }
+        "workspace:addByPath" | "workspace:remove" => {
+            let what = if channel == "workspace:addByPath" { "folder path" } else { "workspace id" };
+            if arg(0).as_str().is_none_or(|s| s.trim().is_empty() || s.contains('\0')) {
+                return Err(denied("value-invalid", what));
+            }
+            if args.len() > 1 {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
         "changes:list" | "session:watches" => id(0, "chat id")?,
         "providers:saveSealed" => {
             crate::phone_providers::screen_save(arg(0)).map_err(|r| denied(r.code, r.detail))?;
@@ -325,6 +396,16 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             id(0, "chat id")?;
             if args.len() > 1 && !arg(1).is_boolean() {
                 return Err(denied("value-invalid", "refresh"));
+            }
+        }
+        "session:photo" => {
+            id(0, "chat id")?;
+            id(1, "message id")?;
+            if !arg(2).as_f64().is_some_and(|i| i.fract() == 0.0 && i >= 0.0) {
+                return Err(denied("value-invalid", "photo index"));
+            }
+            if args.len() > 3 {
+                return Err(denied("option-denied", "extra argument"));
             }
         }
         "session:fork" => {
@@ -345,9 +426,37 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 return Err(denied("value-invalid", "queued prompt edit"));
             }
         }
+        "chat:steer" => {
+            id(0, "chat id")?;
+            if arg(1).as_str().is_none_or(|t| nekko_js::trim(t).is_empty()) {
+                return Err(denied("value-invalid", "message"));
+            }
+        }
+        "chat:interruptQueued" => {
+            id(0, "chat id")?;
+            let index_ok = arg(1).as_f64().is_some_and(|i| i.fract() == 0.0 && i >= 0.0);
+            if !index_ok {
+                return Err(denied("value-invalid", "queue index"));
+            }
+            if !arg(2).is_null() {
+                if !arg(2).is_object() {
+                    return Err(denied("value-invalid", "model"));
+                }
+                keys_within(arg(2), &policy().brain_keys, "model")?;
+            }
+        }
         "task:runNow" => id(0, "task id")?,
         "workflow:run" => id(0, "workflow id")?,
         "limits:get" => id(0, "provider id")?,
+        "context:preview" => id(0, "chat id")?,
+        "model:load" | "model:unload" => {
+            id(0, "provider id")?;
+            id(1, "model id")?;
+            // Passed to a runtime's own CLI on the computer: a leading dash would read as a flag.
+            if arg(1).as_str().is_some_and(|m| m.starts_with('-')) {
+                return Err(denied("value-invalid", "model id"));
+            }
+        }
         "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
@@ -358,6 +467,28 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 && !effort.as_str().is_some_and(|e| has(&policy().effort_levels, e))
             {
                 return Err(denied("value-invalid", "effort"));
+            }
+            for (key, allowed) in &policy().option_values {
+                if arg(1).get(key).is_some_and(|v| !v.as_str().is_some_and(|s| has(allowed, s))) {
+                    return Err(denied("value-invalid", key.clone()));
+                }
+            }
+            for key in &policy().option_switches {
+                if arg(1).get(key).is_some_and(|v| !v.is_boolean()) {
+                    return Err(denied("value-invalid", key.clone()));
+                }
+            }
+        }
+        "engine:settings" => keys_within(arg(0), &policy().engine_keys, "model server settings")?,
+        "engine:saveModelPreset" => {
+            id(0, "model id")?;
+            if !arg(1).is_object() {
+                return Err(denied("value-invalid", "preset"));
+            }
+            for key in &policy().preset_path_keys {
+                if arg(1).get("diffusion").is_some_and(|d| d.get(key).is_some()) {
+                    return Err(denied("option-denied", key.clone()));
+                }
             }
         }
         "chat:send" => {
@@ -479,7 +610,12 @@ pub fn redact(channel: &str, result: Value) -> Value {
             Value::Array(list) => Value::Array(list.iter().map(|s| pick(s, &policy().skill_view)).collect()),
             _ => json!([]),
         },
-        "session:get" => session_view(result),
+        "session:get" | "chat:steer" => session_view(result),
+        // One photo's data URL, nothing else.
+        "session:photo" => match result {
+            Value::String(s) if s.starts_with("data:image/") => Value::String(s),
+            _ => Value::Null,
+        },
         "changes:list" => crate::phone_changes::view(&result, &policy().changes_view),
         "chat:editQueued" => match &result {
             Value::Object(o) => json!({
@@ -514,8 +650,22 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "providers:saveSealed" | "providers:setEnabled" => crate::phone_providers::result_view(&result),
         "usage:summary" => crate::phone_views::usage(&result, &policy().views),
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
+        "system:stats" => crate::phone_views::system(&result, &policy().views),
+        "gpu:stats" => crate::phone_views::gpu(&result, &policy().views),
+        "engine:status" => crate::phone_views::engine(&result, &policy().views),
+        "context:preview" => crate::phone_views::context(&result, &policy().views),
+        "engine:settings" => pick(&result, &policy().model_server_view),
+        "activity:state" => pick(&result, &policy().activity_view),
+        "model:unload" => {
+            if result.is_object() {
+                pick(&result, &["message".into(), "ok".into()])
+            } else {
+                Value::Null
+            }
+        }
         c if policy().terminal.is_terminal(c) => crate::phone_terminal::result(c, &result),
         c if crate::phone_files::is_files(c) => crate::phone_files::view(c, &result, &policy().files),
+        c if crate::phone_artifacts::is_artifacts(c) => crate::phone_artifacts::view(c, &result, &policy().artifacts),
         c if crate::phone_git::is_git(c) => crate::phone_git::view(c, &result, &policy().git, &policy().views.pr),
         _ => result,
     }
@@ -532,21 +682,16 @@ fn cut_text(s: &str, n: usize) -> String {
     crate::hello::cut16(s, n).to_string()
 }
 
-/// Length in UTF-16 units, as JavaScript's `s.length`.
-fn len16(s: &str) -> usize {
-    s.encode_utf16().count()
-}
-
 /// `cutInput`: a tool call's input with long string values cut.
 fn cut_input(input: &Value, n: usize) -> (Value, bool) {
     match input {
-        Value::String(s) if len16(s) > n => (json!(cut_text(s, n)), true),
+        Value::String(s) if nekko_js::len16(s) > n => (json!(cut_text(s, n)), true),
         Value::Object(m) => {
             let mut cut = false;
             let mut out = Map::new();
             for (k, v) in m {
                 match v {
-                    Value::String(s) if len16(s) > n => {
+                    Value::String(s) if nekko_js::len16(s) > n => {
                         out.insert(k.clone(), json!(cut_text(s, n)));
                         cut = true;
                     }
@@ -575,9 +720,9 @@ fn phone_message(m: &Value, n: usize) -> Value {
             }
         }
         if let Some(Value::String(o)) = r.get("output")
-            && len16(o) > n
+            && nekko_js::len16(o) > n
         {
-            let full = len16(o);
+            let full = nekko_js::len16(o);
             let cut = cut_text(o, n);
             r.insert("outputChars".into(), json!(full));
             r.insert("output".into(), json!(cut));
@@ -610,9 +755,41 @@ fn phone_message(m: &Value, n: usize) -> Value {
 /// `phoneSessionView`: the newest messages, tool images dropped, long tool
 /// text cut (`PHONE_SESSION_VIEW`). Not a session object: unchanged.
 pub fn session_view(session: Value) -> Value {
+    session_view_cut(session, policy().session_text_chars)
+}
+
+/// The most files a computer can import into one chat.
+const MAX_COMPUTER_IMPORTS: usize = 256;
+
+/// What a paired computer reads of a chat: the phone's view with tool output
+/// whole, cut only when the chat would not fit in one relay frame.
+pub fn computer_session_view(session: Value) -> Value {
+    let whole = session_view_cut(session.clone(), usize::MAX);
+    if nekko_js::stringify(&whole).len() < policy().max_frame_bytes / 2 {
+        return whole;
+    }
+    session_view_cut(session, COMPUTER_FALLBACK_CHARS)
+}
+
+/// `session:page(sessionId, before, limit)`: up to `limit` messages older than
+/// `before` (a message id; the newest when absent), and how many remain.
+pub fn message_page(session: &Value, before: Option<&str>, limit: Option<f64>) -> Value {
+    let all = session.get("messages").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+    let at = |id: &str| all.iter().position(|m| m.get("id").and_then(Value::as_str) == Some(id));
+    let end = before.and_then(at).unwrap_or(if before.is_some() { 0 } else { all.len() });
+    let limit =
+        limit.filter(|n| *n >= 1.0).map_or(policy().session_messages, |n| n as usize).min(policy().session_messages);
+    let start = end.saturating_sub(limit);
+    json!({ "messages": all[start..end], "omittedMessages": start })
+}
+
+/// Tool text a computer keeps of a chat too large for one relay frame.
+const COMPUTER_FALLBACK_CHARS: usize = 16_000;
+
+fn session_view_cut(session: Value, n: usize) -> Value {
     let Value::Object(mut s) = session else { return session };
     let Some(Value::Array(all)) = s.get("messages") else { return Value::Object(s) };
-    let (keep_n, n) = (policy().session_messages, policy().session_text_chars);
+    let keep_n = policy().session_messages;
     let start = all.len().saturating_sub(keep_n);
     let omitted = start;
     let mut kept: Vec<Value> = all[start..].iter().map(|m| phone_message(m, n)).collect();
@@ -622,7 +799,8 @@ pub fn session_view(session: Value) -> Value {
         let Some(Value::Array(imgs)) = m.get("images") else { continue };
         let mut imgs: Vec<Value> = imgs.iter().map(|v| json!(v.as_str().unwrap_or(""))).collect();
         for v in imgs.iter_mut().rev() {
-            let fits = matches!(v.as_str(), Some(t) if !t.is_empty() && len16(t) <= policy().thumb_chars) && room > 0;
+            let fits = matches!(v.as_str(), Some(t) if !t.is_empty() && nekko_js::len16(t) <= policy().thumb_chars)
+                && room > 0;
             if fits {
                 room -= 1;
             } else {
@@ -675,12 +853,19 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
     let args: Vec<Value> = match channel.as_str() {
         "task:runNow" | "workflow:run" => vec![first.clone()],
         "tasks:list" | "workflows:list" | "usage:summary" => Vec::new(),
+        "system:stats" | "gpu:stats" | "engine:status" => Vec::new(),
+        // The computer's own idle threshold: the phone never sets it.
+        "activity:state" => Vec::new(),
+        // A chat's own context only: the phone never attaches a path.
+        "context:preview" => vec![first.clone(), json!([])],
+        "model:unload" => vec![first.clone(), args[1].clone()],
         "session:fork" => match args.get(1) {
             None | Some(Value::Null) => vec![first.clone()],
             Some(m) => vec![first.clone(), m.clone()],
         },
         "chat:editQueued" => vec![first.clone(), args[1].clone(), pick(&args[2], &policy().queue_edit_keys)],
         "pr:sessionList" => vec![first.clone(), json!(args.get(1) == Some(&Value::Bool(true)))],
+        "session:photo" => args[..3].to_vec(),
         "limits:get" => {
             // The phone names a provider; the computer reads that provider's limits key itself.
             let providers = run("providers:list".to_string(), json!([])).await?;
@@ -723,6 +908,9 @@ pub async fn call(run: &Dispatcher, channel: String, args: Value) -> Result<Valu
     if channel == "session:get" {
         result = crate::phone_thumbs::thumbnail_images(result).await;
     }
+    if channel == "session:photo" {
+        result = crate::phone_thumbs::full_photo(result).await;
+    }
     Ok(redact(&channel, result))
 }
 
@@ -754,6 +942,8 @@ pub struct PhoneDevice {
     pub access: DeviceAccess,
     /// The registered Change key (`changeKey`, base64 X9.63 P-256).
     pub key: Option<String>,
+    /// Enrolled through a computer grant (`kind` on the record), not a phone.
+    pub computer: bool,
 }
 
 /// One change-class call from a phone, allowed or refused (`PhoneActivityEntry`).
@@ -794,6 +984,10 @@ pub trait Devices: Send + Sync {
     fn now(&self) -> f64;
     /// The device's name, for the desktop's *Phone attached* badge (FA-3).
     fn name(&self, _id: &str) -> Option<String> {
+        None
+    }
+    /// Where `attachment:import` keeps a chat's files; `None` when unknown.
+    fn attachments_of(&self, _chat: &str) -> Option<std::path::PathBuf> {
         None
     }
     /// `device:signOut` (SK-3): revoke the device and kick it. A registry
@@ -907,6 +1101,10 @@ impl Gate {
         if channel == policy().key_channel {
             return self.register_key(&who, &channel, &args);
         }
+        // First: a computer's refusals cover the terminal channels answered next.
+        if let Some(out) = self.computer_call(&who, &channel, &args).await {
+            return out;
+        }
         if let Some(out) = self.terminal_call(&who, &channel, &args).await {
             return out;
         }
@@ -953,6 +1151,106 @@ impl Gate {
         }
     }
 
+    /// What a paired computer may do beyond a phone (`COMPUTER_ACCESS`), or
+    /// `None` to fall through to the phone rules, for a phone and for every
+    /// other channel. The switches and the activity list work as for a phone.
+    async fn computer_call(&self, who: &PhoneCall, channel: &str, args: &Value) -> Option<Result<Value, String>> {
+        let device = self.devices.device(&who.device_id).filter(|d| d.computer)?;
+        let p = policy();
+        if channel == "device:access" {
+            return Some(Ok(json!({ "read": device.access.read, "change": device.access.change })));
+        }
+        if has(&p.computer_refused, channel) {
+            return Some(Err(denied("channel-denied", channel).to_string()));
+        }
+        if channel == "session:get" {
+            if !device.access.read {
+                return Some(Err(denied("read-off", channel).to_string()));
+            }
+            let id = args.get(0).and_then(Value::as_str).filter(|id| !id.is_empty());
+            let Some(id) = id else { return Some(Err(denied("value-invalid", "chat id").to_string())) };
+            let chat = (self.run)(channel.to_string(), json!([id])).await;
+            return Some(chat.map(computer_session_view));
+        }
+        if has(&p.computer_read, channel) {
+            if !device.access.read {
+                return Some(Err(denied("read-off", channel).to_string()));
+            }
+            return Some((self.run)(channel.to_string(), args.clone()).await);
+        }
+        let send = channel == "chat:send";
+        if !send && !has(&p.computer_agent, channel) {
+            return None;
+        }
+        if !device.access.change {
+            self.record(who, channel, Err("change-off".to_string()));
+            return Some(Err(denied("change-off", channel).to_string()));
+        }
+        let mut args = args.clone();
+        let checked = match channel {
+            "chat:send" => self.computer_send(&mut args).await,
+            "session:setAttachments" => self.attachments_inside(&args),
+            "attachment:import" => self.room_for_import(&args),
+            "changes:accept" | "changes:acceptAll" => self.changes_allowed(channel).await,
+            _ => Ok(()),
+        };
+        if let Err(d) = checked {
+            self.record(who, channel, Err(d.code.to_string()));
+            return Some(Err(d.to_string()));
+        }
+        let result = (self.run)(channel.to_string(), args).await;
+        self.record(who, channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
+        Some(result)
+    }
+
+    /// A computer's `chat:send`: its keys, and a skill expanded from this
+    /// computer's own, as a phone's is. An unknown skill is refused.
+    async fn computer_send(&self, args: &mut Value) -> Result<(), Denied> {
+        keys_within(args.get(0).unwrap_or(&Value::Null), &policy().computer_send_keys, "chat:send options")?;
+        let Some(skill) = args.get(0).and_then(|o| o.get("skill")).filter(|s| !s.is_null()) else { return Ok(()) };
+        let skill = phone_skill(skill)?;
+        let runnable = (self.run)("skills:runnable".to_string(), json!([])).await;
+        let runnable = runnable.map_err(|_| denied("skill-unknown", skill.name.clone()))?;
+        args[0] = expand_skill(&skill, &runnable, &args[0])?;
+        Ok(())
+    }
+
+    /// The owner's switch for phones and computers alike (Settings → Remote access).
+    async fn changes_allowed(&self, channel: &str) -> Result<(), Denied> {
+        let settings = (self.run)("settings:get".to_string(), json!([])).await;
+        match settings {
+            Ok(s) if s.get("phoneChanges") == Some(&Value::Bool(true)) => Ok(()),
+            _ => Err(denied("turned-off", channel)),
+        }
+    }
+
+    /// One import is capped at 50 MB; this caps how many a chat can pile up.
+    fn room_for_import(&self, args: &Value) -> Result<(), Denied> {
+        let chat = args.get(0).and_then(Value::as_str).unwrap_or_default();
+        let held = self.devices.attachments_of(chat).and_then(|d| std::fs::read_dir(d).ok()).map_or(0, Iterator::count);
+        if held >= MAX_COMPUTER_IMPORTS {
+            return Err(denied("too-many", "attachment:import"));
+        }
+        Ok(())
+    }
+
+    /// A turn reads every attached path as given, with no tool call and no
+    /// approval. So a computer may attach only what it imported into this chat
+    /// (`attachment:import`), never a path on this machine.
+    fn attachments_inside(&self, args: &Value) -> Result<(), Denied> {
+        let chat = args.get(0).and_then(Value::as_str).unwrap_or_default();
+        let paths = args.get(1).and_then(Value::as_array).ok_or_else(|| denied("value-invalid", "attachments"))?;
+        let root = self.devices.attachments_of(chat).and_then(|r| std::fs::canonicalize(r).ok());
+        let inside = |path: &Value| {
+            let real = path.as_str().and_then(|p| std::fs::canonicalize(p).ok());
+            matches!((&real, &root), (Some(p), Some(r)) if p.starts_with(r))
+        };
+        match paths.iter().find(|p| !inside(p)) {
+            Some(_) => Err(denied("path-denied", "session:setAttachments")),
+            None => Ok(()),
+        }
+    }
+
     /// An agent-class call: a known device with Change on, a call the
     /// policy's screen accepts, and a signed proof when it raises a chat's mode.
     async fn check_agent(&self, who: &PhoneCall, channel: &str, args: &Value) -> Result<(), Denied> {
@@ -962,6 +1260,14 @@ impl Gate {
         }
         let list = args.as_array().cloned().unwrap_or_default();
         screen(channel, &list)?;
+        if has(&policy().model_setting_channels, channel) {
+            let settings = (self.run)("settings:get".to_string(), json!([]))
+                .await
+                .map_err(|_| denied("server-locked", channel))?;
+            if settings.pointer("/engine/clientModelSettings") == Some(&Value::Bool(false)) {
+                return Err(denied("server-locked", channel));
+            }
+        }
         if self.mode_raise(channel, &list).await {
             // Said first, so a phone without a registered key learns it must sign.
             if who.proof.is_none() {
@@ -1069,6 +1375,10 @@ impl Gate {
             return false;
         }
         let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
+        // These change what an agent may touch: a proof either way, as a raise needs.
+        if channel == "session:setOptions" && policy().guarded_option_keys.iter().any(|k| arg(1).get(k).is_some()) {
+            return true;
+        }
         let next = match channel {
             "session:setOptions" => arg(1).get("mode"),
             "settings:update" => arg(0).get("defaultChatMode"),
@@ -1358,7 +1668,7 @@ mod tests {
         json!({
             "theme": "dark", "defaultModelId": "m1", "defaultChatMode": "ask", "sandboxMode": "workspace",
             "providers": [{ "id": "p", "apiKey": "sk-secret" }], "hfToken": "hf_secret",
-            "guardrails": [], "hooks": [{ "command": "curl" }],
+            "guardrails": [], "hooks": [{ "command": "curl" }], "phoneChanges": true,
             "voice": { "enabled": true, "language": "en", "modelPath": "/m.bin" },
         })
     }
@@ -1370,7 +1680,7 @@ mod tests {
             .devices
             .lock()
             .unwrap()
-            .insert("phone-1".into(), PhoneDevice { access: DeviceAccess::default(), key: None });
+            .insert("phone-1".into(), PhoneDevice { access: DeviceAccess::default(), key: None, computer: false });
         devices
     }
 
@@ -1388,9 +1698,13 @@ mod tests {
         now: Mutex<f64>,
         /// Safety exits taken: `(channel, device)`.
         exits: Mutex<Vec<(String, String)>>,
+        attachments: Mutex<Option<std::path::PathBuf>>,
     }
 
     impl Devices for MemDevices {
+        fn attachments_of(&self, _chat: &str) -> Option<std::path::PathBuf> {
+            self.attachments.lock().unwrap().clone()
+        }
         fn device(&self, id: &str) -> Option<PhoneDevice> {
             self.devices.lock().unwrap().get(id).cloned()
         }
@@ -1461,7 +1775,11 @@ mod tests {
         fn rig(access: DeviceAccess, key: Option<&SigningKey>) -> Rig {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: key.map(public) });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: key.map(public), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let classes =
                 Classes { read: vec!["tasks:list".into()], change: vec!["task:runNow".into()], ..Classes::default() };
@@ -1589,7 +1907,11 @@ mod tests {
         #[test]
         fn a_classed_channel_off_the_allowlist_is_still_refused() {
             let devices = Arc::new(MemDevices::default());
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access: ON, key: None });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access: ON, key: None, computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let classes =
                 Classes { read: vec!["file:read".into()], change: vec!["file:write".into()], ..Classes::default() };
@@ -1652,12 +1974,66 @@ mod tests {
         }
 
         #[test]
+        fn supporting_folders_require_proof_and_validate_ids() {
+            let k = signer(32);
+            let channel = "session:setSupportingWorkspaces";
+            let args = json!(["chat", ["docs"]]);
+            let r = policy_rig(ON, Some(&k), None, "guardrails");
+            assert_eq!(r.ask(channel, args.clone(), None), refused("proof-required", channel));
+            let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+            assert!(r.ask(channel, args.clone(), Some(p)).is_ok());
+            assert_eq!(*r.calls.lock().unwrap(), vec![(channel.to_string(), args)]);
+            for invalid in [json!(null), json!(["/private"]), json!([""]), json!([3])] {
+                assert!(screen(channel, &[json!("chat"), invalid.clone()]).is_err());
+                assert!(check_settings_patch(&json!({"defaultWorkspaceIds": invalid})).is_err());
+            }
+            assert!(check_settings_patch(&json!({"defaultWorkspaceIds": ["app", "docs"]})).is_ok());
+        }
+
+        #[test]
+        fn saved_folders_require_change_proofs_and_keep_positional_payloads() {
+            let k = signer(31);
+            for (channel, value, detail) in [
+                ("workspace:addByPath", "/Users/me/project", "folder path"),
+                ("workspace:remove", "ws_123", "workspace id"),
+            ] {
+                let r = policy_rig(DeviceAccess { read: false, change: true }, Some(&k), None, "guardrails");
+                let args = json!([value]);
+                assert_eq!(r.ask(channel, args.clone(), None), refused("proof-required", channel));
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert!(r.ask(channel, args.clone(), Some(p.clone())).is_ok());
+                assert_eq!(r.ask(channel, args.clone(), Some(p)), refused("proof-replayed", channel));
+                assert_eq!(*r.calls.lock().unwrap(), vec![(channel.to_string(), args.clone())]);
+                let off = policy_rig(DeviceAccess { read: true, change: false }, Some(&k), None, "guardrails");
+                let p = proof(&k, "phone-1", channel, &args, NOW as i64);
+                assert_eq!(off.ask(channel, args, Some(p)), refused("change-off", channel));
+                assert!(off.calls.lock().unwrap().is_empty());
+                for invalid in [Value::Null, json!(1), json!({}), json!([]), json!(""), json!("  "), json!("a\0b")] {
+                    assert_eq!(screen(channel, &[invalid]).err().unwrap(), denied("value-invalid", detail));
+                }
+                assert_eq!(screen(channel, &[]).err().unwrap(), denied("value-invalid", detail));
+                assert_eq!(
+                    screen(channel, &[json!(value), json!({})]).err().unwrap(),
+                    denied("option-denied", "extra argument")
+                );
+                assert_eq!(
+                    r.log(),
+                    vec![(false, Some("proof-required".into())), (true, None), (false, Some("proof-replayed".into()))]
+                );
+            }
+        }
+
+        #[test]
         fn git_goes_through_the_policy_classes() {
             let k = signer(13);
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
             let access = DeviceAccess { read: false, change: true };
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)) });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let gated = gate(host(calls.clone(), secrets()), devices.clone());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
@@ -1703,7 +2079,11 @@ mod tests {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
             let access = DeviceAccess { read: true, change: true };
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)) });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: Some(public(&k)), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let gated = gate(host(calls.clone(), secrets()), devices.clone());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
@@ -1763,7 +2143,11 @@ mod tests {
         ) -> Rig {
             let devices = Arc::new(MemDevices::default());
             *devices.now.lock().unwrap() = NOW;
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: key.map(public) });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access, key: key.map(public), computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let (seen, mode, default) = (calls.clone(), mode.map(str::to_string), default.to_string());
             let host: Dispatcher = Arc::new(move |channel: String, args: Value| {
@@ -1795,7 +2179,16 @@ mod tests {
             for c in &p.channels {
                 assert!(classes.of(c).is_some() || has(&p.terminal.token_channels, c), "{c} is in no class");
             }
-            for c in ["chat:send", "chat:queue", "tool:approve", "chat:answer", "task:runNow", "workflow:run"] {
+            for c in [
+                "chat:send",
+                "chat:queue",
+                "chat:steer",
+                "chat:interruptQueued",
+                "tool:approve",
+                "chat:answer",
+                "task:runNow",
+                "workflow:run",
+            ] {
                 assert_eq!(classes.of(c), Some(Class::Agent), "{c}");
             }
             for c in ["sessions:summaries", "session:get", "settings:get", "chat:pending", "monitor:summary"] {
@@ -1803,11 +2196,292 @@ mod tests {
             }
         }
 
+        type Calls = Arc<Mutex<Vec<(String, Value)>>>;
+
+        fn with_device(device: PhoneDevice) -> (Arc<MemDevices>, Calls, PhoneDispatcher) {
+            let devices = Arc::new(MemDevices::default());
+            devices.devices.lock().unwrap().insert("d1".into(), device);
+            let calls: Calls = Arc::default();
+            let gated = gate(host(calls.clone(), secrets()), devices.clone());
+            (devices, calls, gated)
+        }
+
+        fn ask(gated: &PhoneDispatcher, channel: &str, args: Value) -> Result<Value, String> {
+            let who = PhoneCall { device_id: "d1".into(), proof: None, step_up: None };
+            let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            rt.block_on(gated(who, channel.to_string(), args))
+        }
+
+        const COMPUTER: PhoneDevice = PhoneDevice { access: ON, key: None, computer: true };
+        const PHONE: PhoneDevice = PhoneDevice { access: ON, key: None, computer: false };
+
+        #[test]
+        fn every_run_setting_is_checked_and_loosening_one_needs_a_proof() {
+            let (_, calls, phone) = with_device(PHONE);
+            let set = |o: Value| ask(&phone, "session:setOptions", json!(["s1", o]));
+            assert!(set(json!({ "workMode": "design", "autoModel": true, "toolApproach": "code" })).is_ok());
+            assert!(set(json!({ "workMode": "nope" })).unwrap_err().contains("value-invalid"));
+            assert!(set(json!({ "autoModel": "yes" })).unwrap_err().contains("value-invalid"));
+            assert!(set(json!({ "unattended": true })).unwrap_err().contains("option-denied"));
+            for guarded in [
+                json!({ "executionMode": "worktree" }),
+                json!({ "gitIsolation": false }),
+                json!({ "disabledTools": [] }),
+                json!({ "disabledMcpServers": [] }),
+                json!({ "disabledConnectors": [] }),
+                json!({ "offline": false }),
+                json!({ "cloudOnly": false }),
+                json!({ "privacy": {} }),
+                json!({ "incognito": true }),
+                json!({ "memory": "all" }),
+                json!({ "guidance": "off" }),
+            ] {
+                assert!(set(guarded.clone()).unwrap_err().contains("proof-required"), "{guarded}");
+            }
+            assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 1);
+        }
+
+        #[test]
+        fn model_settings_follow_the_servers_switch_and_network_keys_never_move() {
+            let (_, _, phone) = with_device(PHONE);
+            let save = |o: Value| ask(&phone, "engine:settings", json!([o]));
+            assert!(save(json!({ "maxLoaded": 3, "idleTtlSeconds": 60 })).is_ok());
+            let preset = |p: Value| ask(&phone, "engine:saveModelPreset", json!(["m1", p]));
+            assert!(preset(json!({ "contextTokens": 8192 })).is_ok());
+            assert!(
+                preset(json!({ "diffusion": { "vae": "/Users/x/.ssh/id_rsa" } }))
+                    .unwrap_err()
+                    .contains("option-denied")
+            );
+            assert!(ask(&phone, "model:load", json!(["lms", "--help"])).unwrap_err().contains("value-invalid"));
+            for key in [
+                "port",
+                "bind",
+                "apiKey",
+                "corsOrigins",
+                "modelsDir",
+                "modelFolders",
+                "shareWithComputers",
+                "clientModelSettings",
+            ] {
+                let mut o = json!({});
+                o[key] = json!("x");
+                assert!(save(o).unwrap_err().contains("option-denied"), "{key}");
+            }
+            let view = redact(
+                "engine:settings",
+                json!({ "maxLoaded": 2, "apiKey": "secret", "bind": "lan", "clientModelSettings": true }),
+            );
+            assert_eq!(view, json!({ "maxLoaded": 2, "clientModelSettings": true }));
+        }
+
+        #[test]
+        fn a_computer_gets_its_class_and_a_phone_does_not() {
+            let (_, calls, computer) = with_device(COMPUTER);
+            let (_, _, phone) = with_device(PHONE);
+            for (channel, args) in [
+                ("agent:replay", json!(["s1"])),
+                ("session:page", json!(["s1", "m1", 50])),
+                ("chat:compact", json!(["s1"])),
+                ("chat:dequeue", json!(["s1", 0])),
+                ("session:truncate", json!(["s1", "m1"])),
+                ("changes:acceptAll", json!(["s1"])),
+            ] {
+                assert!(ask(&computer, channel, args.clone()).is_ok(), "{channel}");
+                assert!(ask(&phone, channel, args).unwrap_err().contains("channel-denied"), "{channel}");
+            }
+            assert!(calls.lock().unwrap().iter().any(|(c, _)| c == "agent:replay"));
+        }
+
+        #[test]
+        fn a_computer_still_cannot_reach_credentials_or_the_machine() {
+            let (_, calls, computer) = with_device(COMPUTER);
+            for c in [
+                "providers:save",
+                "providers:remove",
+                "providers:importCliAuth",
+                "oauth:login",
+                "cloud:signIn",
+                "sync:enable",
+                "remote:pairComputer",
+                "remote:revoke",
+                "data:wipe",
+                "settings:reset",
+                "shell:open",
+                "update:install",
+                "file:read",
+                "file:write",
+                "dir:list",
+                // On a phone these sit behind Face ID; a computer signs with no presence check.
+                "terminal:create",
+                "terminal:open",
+                "ssh:open",
+                "workspace:addByPath",
+                "providers:saveSealed",
+                "providers:setEnabled",
+            ] {
+                assert!(ask(&computer, c, json!([])).unwrap_err().contains("channel-denied"), "{c}");
+            }
+            assert!(calls.lock().unwrap().is_empty());
+        }
+
+        #[test]
+        fn a_computer_attaches_only_what_it_imported_into_the_chat() {
+            let dir = tempfile::tempdir().unwrap();
+            let root = dir.path().join("attachments").join("s1");
+            std::fs::create_dir_all(&root).unwrap();
+            let (inside, outside) = (root.join("notes.txt"), dir.path().join("settings.json"));
+            std::fs::write(&inside, "ok").unwrap();
+            std::fs::write(&outside, "{}").unwrap();
+            #[cfg(unix)]
+            let link = root.join("escape");
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&outside, &link).unwrap();
+
+            let (devices, calls, computer) = with_device(COMPUTER);
+            *devices.attachments.lock().unwrap() = Some(root);
+            let set = |p: &std::path::Path| ask(&computer, "session:setAttachments", json!(["s1", [p]]));
+            assert!(set(&inside).is_ok());
+            assert!(set(&outside).unwrap_err().contains("path-denied"));
+            #[cfg(unix)]
+            assert!(set(&link).unwrap_err().contains("path-denied"), "a link out is refused");
+            assert!(set(std::path::Path::new("/etc/hosts")).unwrap_err().contains("path-denied"));
+            assert!(
+                ask(&computer, "session:setAttachments", json!(["s1", "x"])).unwrap_err().contains("value-invalid")
+            );
+            assert_eq!(calls.lock().unwrap().len(), 1);
+        }
+
+        #[test]
+        fn a_computers_switches_hold_and_its_calls_are_logged() {
+            let off = DeviceAccess { read: false, change: false };
+            let (devices, calls, computer) = with_device(PhoneDevice { access: off, key: None, computer: true });
+            assert!(ask(&computer, "agent:replay", json!(["s1"])).unwrap_err().contains("read-off"));
+            assert!(ask(&computer, "session:get", json!(["s1"])).unwrap_err().contains("read-off"));
+            assert!(ask(&computer, "chat:compact", json!(["s1"])).unwrap_err().contains("change-off"));
+            assert!(
+                ask(&computer, "chat:send", json!([{ "sessionId": "s1", "text": "hi" }]))
+                    .unwrap_err()
+                    .contains("change-off")
+            );
+            assert!(calls.lock().unwrap().is_empty());
+            assert_eq!(ask(&computer, "device:access", json!([])).unwrap(), json!({ "read": false, "change": false }));
+            assert_eq!(devices.log.lock().unwrap().iter().filter(|(_, e)| !e.ok).count(), 2);
+        }
+
+        #[test]
+        fn a_computers_send_takes_more_keys_but_never_unattended_or_paths() {
+            let (_, _, computer) = with_device(COMPUTER);
+            let send = |o: Value| ask(&computer, "chat:send", json!([o]));
+            assert!(send(json!({ "sessionId": "s1", "text": "hi", "videos": ["data:video/mp4;base64,AA"] })).is_ok());
+            for bad in ["unattended", "attachedPaths"] {
+                let mut o = json!({ "sessionId": "s1", "text": "hi" });
+                o[bad] = json!(true);
+                assert!(send(o).unwrap_err().contains("option-denied"), "{bad}");
+            }
+        }
+
+        #[test]
+        fn a_computers_skill_is_expanded_here_and_an_unknown_one_refused() {
+            let (_, calls, computer) = with_device(COMPUTER);
+            let send =
+                |skill: Value| ask(&computer, "chat:send", json!([{ "sessionId": "s1", "text": "x", "skill": skill }]));
+            assert!(send(json!({ "name": "no-such-skill" })).unwrap_err().contains("skill-unknown"));
+            assert!(send(json!({ "name": "x", "template": "instructions" })).unwrap_err().contains("value-invalid"));
+            assert!(!calls.lock().unwrap().iter().any(|(c, _)| c == "chat:send"));
+        }
+
+        #[test]
+        fn accepting_changes_follows_the_owners_switch() {
+            for (on, allowed) in [(json!(true), true), (json!(false), false), (Value::Null, false)] {
+                let devices = Arc::new(MemDevices::default());
+                devices.devices.lock().unwrap().insert("d1".into(), COMPUTER);
+                let host: Dispatcher = Arc::new(move |channel, _| {
+                    let out = if channel == "settings:get" { json!({ "phoneChanges": on }) } else { Value::Null };
+                    Box::pin(std::future::ready(Ok(out)))
+                });
+                let computer = gate(host, devices);
+                let out = ask(&computer, "changes:acceptAll", json!(["s1"]));
+                assert_eq!(out.is_ok(), allowed, "{out:?}");
+            }
+        }
+
+        #[test]
+        fn a_computer_can_only_pile_up_so_many_imports() {
+            let dir = tempfile::tempdir().unwrap();
+            let (devices, _, computer) = with_device(COMPUTER);
+            *devices.attachments.lock().unwrap() = Some(dir.path().to_path_buf());
+            let import = || ask(&computer, "attachment:import", json!(["s1", "a.txt", "data:text/plain;base64,AA"]));
+            assert!(import().is_ok());
+            for i in 0..MAX_COMPUTER_IMPORTS {
+                std::fs::write(dir.path().join(i.to_string()), "x").unwrap();
+            }
+            assert!(import().unwrap_err().contains("too-many"));
+        }
+
+        #[test]
+        fn a_computer_reads_tool_output_whole_and_a_phone_does_not() {
+            let long = "x".repeat(9_000);
+            let chat =
+                json!({ "id": "s1", "messages": [{ "id": "m", "role": "tool", "toolResult": { "output": long } }] });
+            let whole = computer_session_view(chat.clone());
+            assert_eq!(whole["messages"][0]["toolResult"]["output"].as_str().unwrap().len(), 9_000);
+            assert!(session_view(chat)["messages"][0]["toolResult"]["output"].as_str().unwrap().len() < 9_000);
+        }
+
+        #[test]
+        fn a_chat_too_large_for_a_frame_is_cut_rather_than_refused() {
+            let long = "x".repeat(6_000_000);
+            let chat =
+                json!({ "id": "s1", "messages": [{ "id": "m", "role": "tool", "toolResult": { "output": long } }] });
+            let view = computer_session_view(chat);
+            assert!(
+                view["messages"][0]["toolResult"]["output"].as_str().unwrap().len() <= COMPUTER_FALLBACK_CHARS + 16
+            );
+        }
+
+        #[test]
+        fn pages_older_messages_from_a_message_id() {
+            let messages: Vec<Value> = (0..10).map(|i| json!({ "id": format!("m{i}") })).collect();
+            let chat = json!({ "messages": messages });
+            let page = message_page(&chat, Some("m5"), Some(3.0));
+            assert_eq!(
+                page["messages"].as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect::<Vec<_>>(),
+                ["m2", "m3", "m4"]
+            );
+            assert_eq!(page["omittedMessages"], 2);
+            assert_eq!(message_page(&chat, None, Some(2.0))["messages"][1]["id"], "m9");
+            assert_eq!(message_page(&chat, Some("gone"), None)["messages"], json!([]));
+            assert_eq!(message_page(&Value::Null, None, None)["messages"], json!([]));
+        }
+
+        #[test]
+        fn next_step_and_interrupt_check_their_arguments() {
+            let code = |c: &str, a: Value| {
+                let args = a.as_array().cloned().unwrap_or_default();
+                screen(c, &args).err().map(|d| d.code)
+            };
+            assert_eq!(code("chat:steer", json!(["s", "read the tests first"])), None);
+            assert_eq!(code("chat:steer", json!(["", "hi"])), Some("value-invalid"));
+            assert_eq!(code("chat:steer", json!(["s", "   "])), Some("value-invalid"));
+            assert_eq!(code("chat:steer", json!(["s", 5])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0])), None);
+            assert_eq!(code("chat:interruptQueued", json!(["s", 1, { "providerId": "p", "modelId": "m" }])), None);
+            assert_eq!(code("chat:interruptQueued", json!(["s", -1])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 1.5])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0, "p"])), Some("value-invalid"));
+            assert_eq!(code("chat:interruptQueued", json!(["s", 0, { "yolo": true }])), Some("option-denied"));
+        }
+
         #[test]
         fn an_unclassed_channel_fails_closed() {
             // On the allowlist but in no class (a feature PR that forgot to class it): refused.
             let devices = Arc::new(MemDevices::default());
-            devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access: ON, key: None });
+            devices
+                .devices
+                .lock()
+                .unwrap()
+                .insert("phone-1".into(), PhoneDevice { access: ON, key: None, computer: false });
             let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
             let gated = gate_with(host(calls.clone(), secrets()), devices, Classes::default());
             let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
@@ -2044,7 +2718,11 @@ mod tests {
                 );
                 // Another device's challenge is not this one's.
                 let other = PhoneCall { device_id: "phone-2".into(), proof: None, step_up: None };
-                s.r.devices.devices.lock().unwrap().insert("phone-2".into(), PhoneDevice { access: ON, key: None });
+                s.r.devices
+                    .devices
+                    .lock()
+                    .unwrap()
+                    .insert("phone-2".into(), PhoneDevice { access: ON, key: None, computer: false });
                 let theirs = s.r.rt.block_on((s.r.gated)(other, "security:challenge".into(), json!([]))).unwrap();
                 let a = assert_with(&s.fido, theirs["challenge"].as_str().unwrap(), 1);
                 assert_eq!(s.raise(Some(a)), refused("step-up-invalid", YOLO));
@@ -2124,7 +2802,11 @@ mod tests {
             fn exit_rig(access: DeviceAccess, quit_from_phone: Option<bool>) -> Rig {
                 let devices = Arc::new(MemDevices::default());
                 *devices.now.lock().unwrap() = NOW;
-                devices.devices.lock().unwrap().insert("phone-1".into(), PhoneDevice { access, key: None });
+                devices
+                    .devices
+                    .lock()
+                    .unwrap()
+                    .insert("phone-1".into(), PhoneDevice { access, key: None, computer: false });
                 let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
                 let seen = calls.clone();
                 let host: Dispatcher = Arc::new(move |channel: String, args: Value| {
@@ -2250,6 +2932,10 @@ mod tests {
                 assert!(has(&p.read_channels, c), "{c}");
             }
             assert!(has(&p.change_channels, "files:write"));
+            // #1095: what the agent linked in a chat, read only.
+            for c in ["artifact:read", "preview:fetch"] {
+                assert!(has(&p.read_channels, c) && !has(&p.change_channels, c), "{c}");
+            }
             for c in p.read_channels.iter().chain(&p.change_channels) {
                 assert!(!has(&p.read_channels, c) || !has(&p.change_channels, c), "{c} is in both classes");
             }
@@ -2284,8 +2970,6 @@ mod tests {
             "terminal:snapshot",
             "terminals:list:native",
             "file:write",
-            "workspace:addByPath",
-            "workspace:remove",
             "voice:install",
             "connector:connect",
             "mcp:status",
@@ -2368,5 +3052,130 @@ mod tests {
             calls.last().unwrap().1,
             json!([{ "voice": { "enabled": true, "language": "it", "modelPath": "/m.bin" } }])
         );
+    }
+
+    /// The Expert monitor's channels (2026-10-24), as phone-monitor.test.ts holds the TS.
+    mod monitor {
+        use super::*;
+
+        fn call_with(results: Value, channel: &str, args: Value) -> (Result<Value, String>, Vec<Value>) {
+            let calls: Arc<Mutex<Vec<Value>>> = Arc::default();
+            let seen = calls.clone();
+            let host: Dispatcher = Arc::new(move |c: String, a: Value| {
+                seen.lock().unwrap().push(json!([c, a]));
+                Box::pin(std::future::ready(Ok(results.get(&c).cloned().unwrap_or(Value::Null))))
+            });
+            let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+            let got = rt.block_on(call(&host, channel.to_string(), args));
+            let calls = calls.lock().unwrap().clone();
+            (got, calls)
+        }
+
+        #[test]
+        fn classes_the_reads_as_read_and_unload_as_agent() {
+            for c in ["system:stats", "gpu:stats", "engine:status", "context:preview"] {
+                assert!(has(&policy().read_channels, c), "{c}");
+            }
+            assert!(has(&policy().agent_channels, "model:unload"));
+            for c in ["engine:install", "engine:deleteModel"] {
+                assert_eq!(screen(c, &[]).err(), Some(denied("channel-denied", c)));
+            }
+        }
+
+        #[test]
+        fn sends_hardware_as_named_numbers() {
+            let results = json!({
+                "system:stats": { "cpuPct": 41, "cpuCores": 16, "cpuModel": "Ryzen", "memUsedMB": 9000, "memTotalMB": 32000, "temps": { "cpuC": 61, "sensorPath": "/sys/x" }, "pid": 7 },
+                "gpu:stats": { "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "name": "RTX", "utilizationPct": 77, "uuid": "GPU-1" }] },
+            });
+            let (got, calls) = call_with(results.clone(), "system:stats", json!(["ignored"]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "cpuPct": 41, "cpuCores": 16, "memUsedMB": 9000, "memTotalMB": 32000, "temps": { "cpuC": 61 } })
+            );
+            assert_eq!(calls, vec![json!(["system:stats", []])]);
+            let (got, _) = call_with(results, "gpu:stats", json!([]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "source": "nvidia-smi", "totalMB": 24000, "usedMB": 8000, "freeMB": 16000, "devices": [{ "utilizationPct": 77 }] })
+            );
+        }
+
+        #[test]
+        fn says_whether_the_computer_is_in_use_and_nothing_more() {
+            assert!(has(&policy().read_channels, "activity:state"));
+            let results = json!({ "activity:state": {
+                "userActive": true, "present": ["input"], "strain": ["battery"], "idleSeconds": 12.5, "headless": false,
+                "idleAfterSeconds": 300, "chatActive": false, "power": { "onBattery": true, "percent": 40 }, "cpuC": 71, "gpuC": 65,
+            }});
+            let (got, calls) = call_with(results, "activity:state", json!([{ "idleAfterSeconds": 1 }]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "userActive": true, "chatActive": false, "headless": false, "strain": ["battery"] })
+            );
+            assert_eq!(calls, vec![json!(["activity:state", []])], "the phone never sets the threshold");
+        }
+
+        #[test]
+        fn sends_the_model_server_without_paths_log_or_settings() {
+            let results = json!({ "engine:status": {
+                "install": { "binPath": "C:/secret/llama-server.exe" }, "running": true, "port": 8080, "log": ["C:/models/x.gguf"],
+                "settings": { "modelsDir": "C:/models" },
+                "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu", "path": "C:/m.gguf" }],
+                "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1, "path": "x" }],
+                "memory": { "budgetBytes": 24, "kind": "vram" },
+            }});
+            let (got, _) = call_with(results, "engine:status", json!([]));
+            assert_eq!(
+                got.unwrap(),
+                json!({
+                    "running": true, "installed": true,
+                    "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu" }],
+                    "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1 }],
+                    "memory": { "budgetBytes": 24, "kind": "vram" },
+                })
+            );
+            let (got, _) =
+                call_with(json!({ "engine:status": { "install": {}, "running": false } }), "engine:status", json!([]));
+            assert_eq!(got.unwrap(), json!({ "running": false, "installed": false, "resident": [], "loading": [] }));
+        }
+
+        #[test]
+        fn sends_a_chat_context_as_totals() {
+            let results = json!({ "context:preview": { "contextWindow": 131072, "items": [
+                { "source": "system", "tokens": 1200, "included": true, "preview": "You are" },
+                { "source": "attached-file", "tokens": 800, "included": true, "origin": "/home/me/secret.txt" },
+                { "source": "conversation", "tokens": 3000, "included": true },
+                { "source": "memory", "tokens": 500, "included": false },
+                { "source": "alien", "tokens": 10, "included": true },
+            ]}});
+            let (got, calls) = call_with(results.clone(), "context:preview", json!(["s1", ["/etc/passwd"]]));
+            assert_eq!(
+                got.unwrap(),
+                json!({ "usedTokens": 5010, "contextWindow": 131072, "sources": { "system": 1200, "attached-file": 800, "conversation": 3000 } })
+            );
+            assert_eq!(calls, vec![json!(["context:preview", ["s1", []]])]);
+            assert_eq!(
+                call_with(results, "context:preview", json!([""])).0.unwrap_err(),
+                denied("value-invalid", "chat id").to_string()
+            );
+        }
+
+        #[test]
+        fn unloads_a_model_by_provider_and_id() {
+            let results = json!({ "model:unload": { "ok": true, "message": "Unloaded.", "extra": 1 } });
+            let (got, calls) =
+                call_with(results.clone(), "model:unload", json!(["nekko-local", "google/gemma-4-e4b", "x"]));
+            assert_eq!(got.unwrap(), json!({ "ok": true, "message": "Unloaded." }));
+            assert_eq!(calls, vec![json!(["model:unload", ["nekko-local", "google/gemma-4-e4b"]])]);
+            assert_eq!(
+                call_with(results.clone(), "model:unload", json!(["nekko-local"])).0.unwrap_err(),
+                denied("value-invalid", "model id").to_string()
+            );
+            assert_eq!(
+                call_with(results, "model:unload", json!([3, "m"])).0.unwrap_err(),
+                denied("value-invalid", "provider id").to_string()
+            );
+        }
     }
 }

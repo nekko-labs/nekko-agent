@@ -160,8 +160,9 @@ function entryFor(sessionId: string): Entry {
 export function refreshAgentWatches(sessionId: string): void {
   const api = typeof window !== 'undefined' ? window.nekko : undefined;
   if (!api?.listAgentWatches) return;
+  const e = entryFor(sessionId);
   void Promise.resolve(api.listAgentWatches(sessionId)).then((views) => {
-    const e = entryFor(sessionId);
+    if (entries.get(sessionId) !== e) return;
     const next = Array.isArray(views) ? views : [];
     if (JSON.stringify(next) === JSON.stringify(e.views)) return;
     e.views = next;
@@ -187,7 +188,7 @@ function subscribe(sessionId: string, fn: () => void): () => void {
   if (e.listeners.size === 1) start(sessionId, e);
   return () => {
     e.listeners.delete(fn);
-    if (!e.listeners.size) { e.stop?.(); e.stop = undefined; }
+    if (!e.listeners.size) { e.stop?.(); entries.delete(sessionId); }
   };
 }
 

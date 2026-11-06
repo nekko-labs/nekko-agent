@@ -68,19 +68,19 @@ export function CloudSignIn({ status, onClose }: { status: CloudStatus | null; o
             {waitingForBrowser ? (
               <div className="mt-6 rounded-xl border border-line p-4 text-center" role="status">
                 <div className="mx-auto mb-3 h-5 w-5 animate-spin rounded-full border-2 border-(--accent) border-t-transparent" />
-                <p className="text-[13px] text-ink">Finish signing in in your browser.</p>
-                <p className="mt-1 text-[12px] text-ink-faint">This window updates by itself when you're done.</p>
-                <button className="btn btn-outline mt-3 py-1! text-[12px]!" onClick={() => void window.nekko.cloudCancelOAuth()}>Cancel</button>
+                <p className="text-sm text-ink">Finish signing in in your browser.</p>
+                <p className="mt-1 text-xs text-ink-faint">This window updates by itself when you're done.</p>
+                <button className="btn btn-outline mt-3 py-1! text-xs!" onClick={() => void window.nekko.cloudCancelOAuth()}>Cancel</button>
               </div>
             ) : (
-              <div className="mt-6 space-y-2.5">
+              <div className="mt-6 space-y-2">
                 <button className="cloud-provider" disabled={!!busy} onClick={() => void oauth('github')} data-testid="cloud-github"><GitHubMark /> Continue with GitHub</button>
                 <button className="cloud-provider" disabled={!!busy} onClick={() => void oauth('google')} data-testid="cloud-google"><GoogleMark /> Continue with Google</button>
                 <button className="cloud-provider" disabled={!!busy} onClick={() => void oauth('apple')} data-testid="cloud-apple"><AppleMark /> Continue with Apple</button>
               </div>
             )}
             <div className="cloud-or">or</div>
-            <form onSubmit={(e) => { e.preventDefault(); void sendCode(); }} className="space-y-2.5">
+            <form onSubmit={(e) => { e.preventDefault(); void sendCode(); }} className="space-y-2">
               <input className="input w-full" type="email" autoComplete="email" placeholder="you@example.com" aria-label="Email"
                 value={email} onChange={(e) => setEmail(e.target.value)} data-testid="cloud-email" />
               <button className="btn btn-primary w-full" type="submit" disabled={!!busy || !/\S+@\S+\.\S+/.test(email)} data-testid="cloud-send-code">
@@ -94,7 +94,7 @@ export function CloudSignIn({ status, onClose }: { status: CloudStatus | null; o
             onResend={() => void sendCode()}
             onBack={() => { setStep('start'); setError(''); }} />
         )}
-        {error && <p role="alert" className="mt-3 text-center text-[12px] text-(--danger)">{error}</p>}
+        {error && <p role="alert" className="mt-3 text-center text-xs text-(--danger)">{error}</p>}
         <p className="cloud-fineprint">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="7" rx="2" stroke="currentColor" strokeWidth="1.5" /><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" stroke="currentColor" strokeWidth="1.5" /></svg>
           <span>Your chats are encrypted on this device before they're uploaded, with keys that never leave your devices. Signing in only tells Nekko Cloud who you are.</span>
@@ -141,7 +141,7 @@ function CodeStep({ email, busy, resendIn, onVerify, onResend, onBack }: {
       <button className="btn btn-primary mt-5 w-full" disabled={busy || code.length < 6} onClick={() => onVerify(code)} data-testid="cloud-verify">
         {busy ? 'Signing in…' : 'Sign in'}
       </button>
-      <div className="mt-3 flex justify-between text-[12px]">
+      <div className="mt-3 flex justify-between text-xs">
         <button className="text-ink-faint hover:text-ink-soft" onClick={onBack}>Use a different email</button>
         <button className="text-ink-faint hover:text-ink-soft disabled:opacity-50" disabled={resendIn > 0} onClick={onResend}>
           {resendIn > 0 ? `Send again in ${resendIn}s` : 'Send a new code'}

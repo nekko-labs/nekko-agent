@@ -56,12 +56,14 @@ describe('Agents panel header', () => {
   it('portals the + menu above the wall and opens the view menu from a group header right-click (source pin)', () => {
     const source = readFileSync(new URL('./WorkspacesView.tsx', import.meta.url), 'utf8');
     expect(source).toMatch(/newMenuOpen && newMenuPos && createPortal\(/);
-    expect(source).toMatch(/className="card fixed z-\[1000\] w-max min-w-48 p-1 shadow-lg"/);
+    expect(source).toMatch(/className="create-menu card fixed z-\[1000\] w-max min-w-48 p-1 shadow-\(--shadow-float\)"/);
     expect(source).toMatch(/onContextMenu=\{\(e\) => \{ e\.preventDefault\(\); e\.stopPropagation\(\); setViewMenu\(\{ x: e\.clientX, y: e\.clientY \}\)/);
     expect(source).toMatch(/<AgentPanelViewMenu x=\{viewMenu\.x\} y=\{viewMenu\.y\}/);
   });
 
   it('offers the view menu from the sliders button, and says so on each group header', () => {
+    expect(renderSidebar()).toMatch(/title="Right-click for view options"/);
+    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project' }));
     const html = renderSidebar();
     expect(tag(header(html), 'Agent panel view options')).toContain('aria-haspopup="menu"');
     expect(header(html)).toMatch(/aria-label="Agent panel view options"[^>]*><svg[^>]*class="h-4 w-4"/);
@@ -71,13 +73,18 @@ describe('Agents panel header', () => {
   it('only drags cards into order where that order is what the panel shows', () => {
     const cards = (html: string) => [...html.matchAll(/<div data-completion-row="[^"]+" draggable="(true|false)"/g)].map((m) => m[1]);
     const sessions = [agentSummary('a'), agentSummary('b')];
+    const byProject = { ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'project' };
+    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify(byProject));
     expect(cards(renderSidebar({ sessions }))).toEqual(['true', 'true']);
-    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, sortBy: 'name' }));
+    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...byProject, sortBy: 'name' }));
     const byName = renderSidebar({ sessions });
-    expect(cards(byName)).toEqual(['false', 'false']);
+    // Still draggable, but only into a zone on the board: the panel does not reorder by name.
+    expect(cards(byName)).toEqual(['true', 'true']);
     // Project headers stay draggable while grouped by project.
     expect(byName).toMatch(/<div class="agent-panel-group-heading group flex items-center[^"]*" draggable="true"/);
-    localStorage.setItem(AGENT_PANEL_VIEW_KEY, JSON.stringify({ ...DEFAULT_AGENT_PANEL_VIEW, groupBy: 'status' }));
+    localStorage.removeItem(AGENT_PANEL_VIEW_KEY);
+    // Activity grouping does not reorder either; the cards still drag into zones.
+    expect(cards(renderSidebar({ sessions }))).toEqual(['true', 'true']);
     expect(renderSidebar({ sessions })).not.toMatch(/<div class="agent-panel-group-heading group flex items-center[^"]*" draggable="true"/);
   });
 
@@ -94,12 +101,12 @@ describe('Agents panel header', () => {
     expect(head).toMatch(/aria-label="Search chats"[^>]*><svg[^>]*class="h-4 w-4"/);
   });
 
-  it('keeps the composer row to the composer alone in either docking position; adding lives in the toolbar', async () => {
+  it('has no shared composer row in either saved docking position; adding lives in the toolbar', async () => {
     const { loadCommandCenter } = await import('../tests/renderCommandCenter.js');
     const page = await loadCommandCenter();
     for (const side of ['top', 'bottom'] as const) {
       const html = page.render({ commandWall: { composer: { side, align: 'center' } } as never });
-      expect(html, side).toMatch(new RegExp(`<div class="wall-composer-row" data-dock="${side}-center"><div data-stub="composer"></div></div>`));
+      expect(html, side).not.toContain('wall-composer-row');
     }
     const html = page.render();
     expect(html).toMatch(/<div class="wall-add-bar" role="group" aria-label="Add to the wall">/);
@@ -113,9 +120,15 @@ describe('Agent group hierarchy', () => {
   it('uses larger primary-color labels and separated vertical groups', () => {
     const layout = stylesheet('components/commandWallLayouts.css');
     expect(renderSidebar()).toContain('agent-panel-group-label');
-    expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': '13px', color: 'var(--accent)' });
-    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('16px');
-    expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('6px');
+    expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-sm)', color: 'var(--accent)' });
+    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('20px');
+    expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('4px');
+    expect(cssRule(layout, '.agent-panel-group + .agent-panel-group::before')).toMatchObject({ content: '""', top: '-10px', height: '1px', 'pointer-events': 'none', background: 'color-mix(in srgb,var(--line)65%,transparent)' });
+    expect(cssRule(layout, '.agent-panel-row')['column-gap']).toBe('24px');
+    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group::before')).toMatchObject({ 'inset-inline-start': '-12px', width: '1px', height: 'auto' });
+    // Reordering still opens its original drop gap, independent of the divider.
+    expect(cssRule(layout, '.agent-panel-group[data-group-gap]')['padding-top']).toBe('36px');
+    expect(cssRule(layout, '.agent-panel-row > .agent-panel-group[data-group-gap]')['padding-left']).toBe('48px');
     expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group')['margin-top']).toBe('0');
   });
 });

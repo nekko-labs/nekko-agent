@@ -1,4 +1,4 @@
-// Synthetic evidence for tool-step elapsed times and swipe-left message times;
+// Synthetic evidence for tool-step elapsed times and swipe-left message and tool times;
 // never connects to the user's host or profile. Launched through
 // chat-search-integration.cjs with NEKKO_SANDBOX=chat-timing-sandbox.cjs
 // (NEKKO_TEST_REVISION=<rev> for "before"). Hidden, non-focusable, off-screen;
@@ -36,9 +36,9 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     await sleep(1500);
     await run('integration.reset()'); await sleep(1500);
-    // Open the last run of working steps so its rows show.
+    // Open the last run of working steps (an activity header, not a row inside one) so its rows show.
     const target = await run(`(()=>{
-      const groups=[...document.querySelectorAll('[data-transcript-scroll] button[aria-expanded="false"]')].filter(b=>/Worked on/.test(b.textContent));
+      const groups=[...document.querySelectorAll('[data-transcript-scroll] button[aria-expanded="false"]')].filter(b=>b.closest('.font-mono')&&!b.closest('li'));
       const g=groups[groups.length-1]; if(!g) return null; g.scrollIntoView({block:'center'});
       const r=g.getBoundingClientRect(); return {x:Math.round(r.left+20),y:Math.round(r.top+r.height/2)};
     })()`);
@@ -51,25 +51,50 @@ app.whenReady().then(async () => {
 
     // A trackpad swipe left: horizontal wheel input over the transcript.
     const mid = await run(`(()=>{const r=document.querySelector('[data-transcript-scroll]').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
-    const swipe = async () => { for (let i = 0; i < 8; i++) { win.webContents.sendInputEvent({ type: 'mouseWheel', x: mid.x, y: mid.y, deltaX: -12, deltaY: 0, canScroll: true }); await sleep(16); } };
-    const reveal = () => run(`(()=>{const s=document.querySelector('[data-transcript-scroll]');const l=s.querySelector('.vt-list');const row=s.querySelector('.vt-row[data-vt-stamp]');return {reveal:s.style.getPropertyValue('--vt-reveal'),opacity:row?getComputedStyle(row,'::after').opacity:null,stamp:row?row.dataset.vtStamp:null,transform:l?l.style.transform:null,scrollLeft:s.scrollLeft}})()`);
+    const swipe = async () => { for (let i = 0; i < 12; i++) { win.webContents.sendInputEvent({ type: 'mouseWheel', x: mid.x, y: mid.y, deltaX: -12, deltaY: 0, canScroll: true }); await sleep(16); } };
+    const reveal = () => run(`(()=>{const s=document.querySelector('[data-transcript-scroll]');const l=s.querySelector('.vt-list');const row=s.querySelector('.vt-row[data-vt-stamp]');return {reveal:s.style.getPropertyValue('--vt-reveal'),opacity:row?getComputedStyle(row,'::after').opacity:null,stamp:row?row.dataset.vtStamp:null,transform:l?getComputedStyle(l).transform:null,scrollLeft:s.scrollLeft}})()`);
     await swipe();
     let during = await reveal();
     // Electron's wheel sign is inverted relative to a DOM WheelEvent on some builds; try the other way once.
     if (!during.reveal || during.reveal === '0px') {
-      for (let i = 0; i < 8; i++) { win.webContents.sendInputEvent({ type: 'mouseWheel', x: mid.x, y: mid.y, deltaX: 12, deltaY: 0, canScroll: true }); await sleep(16); }
+      for (let i = 0; i < 12; i++) { win.webContents.sendInputEvent({ type: 'mouseWheel', x: mid.x, y: mid.y, deltaX: 12, deltaY: 0, canScroll: true }); await sleep(16); }
       during = await reveal();
     }
     report.measures.during = during;
+    // Each opened tool row carries its own time, not only the run's first call.
+    const toolStamps = await run(`[...document.querySelectorAll('[data-tool-elapsed]')].map(e=>{const li=e.closest('li');return li&&li.dataset.vtStamp&&Number(getComputedStyle(li,'::after').opacity)>0?li.dataset.vtStamp:null})`);
+    report.measures.toolStamps = toolStamps;
+    if (!base) check('swiping shows a time beside every opened tool row', toolStamps.length > 0 && toolStamps.every(Boolean));
     await capture('swipe-held');
     await sleep(600);
     const after = await reveal();
     report.measures.after = after;
     await capture('swipe-released');
     if (!base) {
-      check('swiping left slides the rows and shows their times', parseFloat(during.reveal) > 0 && Number(during.opacity) > 0 && !!during.stamp && /translateX\(-/.test(during.transform));
-      check('letting go springs the rows back and hides the times', (after.reveal === '0px' || after.reveal === '') && Number(after.opacity) === 0 && !after.transform);
+      check('swiping left slides the rows and shows their times', parseFloat(during.reveal) > 0 && Number(during.opacity) > 0 && !!during.stamp && during.transform !== 'none' && during.transform.includes('-'));
+      check('letting go springs the rows back and hides the times', (after.reveal === '0px' || after.reveal === '') && Number(after.opacity) === 0 && after.transform === 'none');
       check('the swipe never scrolls the transcript sideways', during.scrollLeft === 0 && after.scrollLeft === 0);
+    }
+    for (const width of [1100, 460]) {
+      win.setContentSize(width, 760); await sleep(400);
+      for (const direction of [-1, 1]) {
+        const frames = [];
+        const frame = async () => frames.push((await win.capturePage(undefined, { stayHidden: true })).resize({ width }).toPNG());
+        const measure = () => run(`(() => { const s=document.querySelector('[data-transcript-scroll]'), l=s.querySelector('.vt-list'), r=l.querySelector('.vt-row[data-vt-stamp]'), child=r.firstElementChild; const a=r.getBoundingClientRect(), b=child.getBoundingClientRect(), p=getComputedStyle(r,'::after'), c=document.createElement('canvas').getContext('2d'); c.font=p.font; return {rowLeft:a.left,childLeft:b.left,width:a.width,stampRight:a.right+parseFloat(p.paddingLeft)+c.measureText(r.dataset.vtStamp).width,clipRight:s.getBoundingClientRect().right,scrollLeft:s.scrollLeft}; })()`);
+        const resting = await measure(); await frame();
+        for (let i=0;i<8;i++) {
+          await run(`document.querySelector('[data-transcript-scroll]').dispatchEvent(new WheelEvent('wheel',{deltaX:${direction*18},deltaY:0,bubbles:true,cancelable:true}))`);
+          await sleep(30); await frame();
+        }
+        const held = await measure();
+        await capture(`swipe-${width}-${direction}-held`);
+        for (let i=0;i<8;i++) { await sleep(60); await frame(); }
+        if (!base) {
+          check(`whole row and child move left together at ${width}, direction ${direction}`, resting.rowLeft-held.rowLeft>100 && Math.abs((resting.rowLeft-held.rowLeft)-(resting.childLeft-held.childLeft))<1 && Math.abs(resting.width-held.width)<1);
+          check(`full timestamp fits at ${width}, direction ${direction}`, held.stampRight<=held.clipRight-4 && held.scrollLeft===0);
+        }
+        require('./evidence-gif.cjs')(path.join(dir, `swipe-${width}-${direction}.gif`), frames);
+      }
     }
     report.success = !report.errors.some(e => /focus/.test(e)) && (base || report.checks.every(c => c.passed));
   } catch (error) {

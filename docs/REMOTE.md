@@ -1,8 +1,24 @@
 # Phone remote control
 
-Drive the Nekko Agent running on your computer from your phone: start and manage chats, watch and steer
+Drive the Nekko Agent running on your computer from your phone: start and manage chats, watch and guide
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
+
+## Groups on iPhone
+
+Chat-list groups start folded. Tap a heading to reveal its chats; its activity icon stays visible while folded, showing attention, working, watching or done. Search reveals matching chats without changing which groups you opened. General and ungrouped chats stay visible, as does the separate Needs you section.
+
+Inside a conversation, related tool calls fold under a purpose heading with an icon for reading, searching, editing, checking, running commands or other work. Running dots and failure text remain visible beside that purpose. Failed groups start open so errors are not hidden; you can fold them yourself.
+
+## From another computer
+
+A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
+
+**Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in YOLO mode, and an agent in YOLO mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
+
+If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.
+
+**Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
 
 ## How it works
 
@@ -12,8 +28,16 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 - Your computer **dials out** to a relay and claims a room. No inbound ports, no port-forwarding.
 - Your phone connects to the same relay with the pairing credentials.
-- Every payload is **end-to-end encrypted** (AES-GCM, key derived from the pairing secret). The
-  relay routes ciphertext; it cannot read prompts, replies, files, or model output.
+- Every payload is **end-to-end encrypted** (AES-GCM) under a key made fresh for that one connection.
+  The relay routes ciphertext; it cannot read prompts, replies, files, or model output. The one
+  exception is the short Lock Screen status, if you turn it on (see [what the relay does see](#what-the-relay-does-see)).
+- Your computer **proves who it is** on every connection, with a key your phone pins when it pairs.
+  Anything that can't prove it gets no prompt and no pairing code
+  ([decision 0041](decisions/0041-a-computer-proves-itself-and-every-connection-has-its-own-key.md)).
+- The relay never receives the pairing secret. Both ends present a room credential derived from it
+  under its own label (HMAC-SHA256 over `nekko-relay-auth:<room>`), which lets the relay match a phone
+  to its computer but gives it nothing the encryption key can be derived from
+  ([decision 0036](decisions/0036-the-relay-sees-a-derived-room-credential-never-the-pairing-secret.md)).
 - On top of the encrypted transport, every device must pass a **handshake against your computer's
   device registry**: new devices enroll only through a **single-use pairing code that expires in
   10 minutes**, and your computer answers each device individually (never broadcast).
@@ -22,13 +46,48 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 
 1. On your computer: **Settings → Phone pairing** (second in the left-hand list), then in **Remote access**
    pick how your phone connects: **Use Tailscale** (free, needs the Tailscale app on both) or
-   **Use Nekko Cloud** (works anywhere, nothing to install). A self-hosted relay goes under **Use your
-   own relay**. Then **Pair a device**. The QR appears right under the button.
+   **Use Nekko Cloud** (works anywhere, nothing to install; shown as *Coming soon* and off until the
+   managed relay is running again). A self-hosted relay goes under **Use your own relay**. Then
+   **Pair a device**. To switch later, click **Change** next to *Connected through*; paired phones
+   keep the old address, so pair them again afterwards. The QR appears right under the button.
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
    what a phone may do (below), so most desktop screens there are unavailable.
 3. The phone shows up under **Paired devices**, with a live connection dot.
+
+**Updating from a version before November 2026:** the first time your computer starts with the
+update, it replaces its pairing secret (the phones it knew stay listed). Each phone then says the
+pairing key changed: pair it again with a fresh QR from **Pair a device**. Pairing also enrolls the
+phone's own device key, which signs every connection from then on, and gives the phone your
+computer's key, which proves your computer on every connection. Phones and the computer
+both need the update: an older app cannot connect to an updated computer, and an updated app
+cannot connect to an older computer.
+
+### Re-pairing and naming your computer
+
+For a phone already listed in **Paired devices**, click **Re-pair** beside its name and scan the
+fresh QR from the phone. You do not need to revoke it first, and your other phones stay paired.
+iPhone and Android update the existing computer when its identity key is unchanged, even after a
+relay address changes, keeping its nickname and saved data.
+
+**Computer name** in the same settings card starts with your computer's system name. Enter a name
+and click **Save name**, or clear it to use the system name again. The phone learns it when it
+connects or refreshes. You can still use **Rename** on the phone for a nickname just on that phone;
+that nickname is kept when the computer's shared name changes or you pair it again.
+
+A full reset or **Sign out all phones** changes the computer's identity key as well as its pairing
+credentials. For safety the phone does not merge different keys just because their names match.
+Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
+to old duplicates that were saved with different identity keys.
+
+## iPhone chat controls
+
+New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
+
+The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
+
+From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
 
 ## The phone app
 
@@ -51,20 +110,123 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > Portuguese, Japanese and Chinese): it follows the iPhone's language, and **Settings → Appearance →
 > Language** opens iOS Settings to pick one for Nekko Agent alone.
 >
+> On the iPhone, **New chat** remembers the last folder selected for each computer, even after
+> starting a chat or relaunching the app. **No folder** is remembered too; unfinished drafts keep
+> their own folder choice. Forgetting a computer removes its remembered folder.
+>
 > On the iPhone, **New chat** also picks the **Effort** (the levels the chosen model takes, or the
-> computer's default) and, when the model is a local one (llama.cpp, Ollama, LM Studio, vLLM),
-> **Run on**: which paired computer the chat and its model run on. Choosing another computer
-> connects to it and shows its models and folders; what you typed stays.
+> computer's default) and **Run on**: which paired computer (or Nekko Cloud machine) the chat
+> runs on, offered whenever there is more than one, each with its connection state. It starts on
+> the computer the chat list was showing, or the one used last when the list shows every
+> computer. Choosing another computer shows its models and folders at once, since every paired
+> computer is already connected; what you typed stays.
+>
+> **Automatic** (iPhone and Android): with a **local model** (Ollama, LM Studio, llama.cpp, vLLM) and more
+> than one paired computer, **Run on** starts on **Automatic**. The phone asks each online
+> computer whether it is in use (a chat replying there, or someone at its keyboard) and starts the
+> chat on a free one, with the same model if that computer has it, else the last one used there,
+> else one it already has loaded. The line under the options says what it picked and why
+> (*Auto picked Studio Mac: MacBook is busy.*). When every computer is busy, or none other can run
+> a local model, the chat stays on the one used last. Choosing a **folder** decides the computer
+> (the folder lives on it), and picking a computer by hand turns Automatic off for that chat;
+> choose **Automatic** again to go back. New chat opened from one computer's list starts on that
+> computer. Chats on cloud models are not moved. A computer tells the phone only yes/no answers
+> (in use, a chat replying, no keyboard, on battery or hot), never how long it has been idle,
+> its battery level or its temperatures.
+>
+> On the iPhone, the model list opens on **All**, with **Cloud** and **Local** beside it at the
+> top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
+> servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
+> filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
+> Local tab says to start the chat on a computer for local models.
+>
+> **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
+> together, each row naming its computer, and the pill above the list filters it to one
+> computer (**Show chats from**). The phone stays connected to every paired computer and
+> reconnects to each by itself, so there is no Connect button: opening a chat on any computer
+> works straight away. A computer that can't be reached gets a line above the list with
+> **Reconnect**, which tries again at once (Computers and the computer's page offer it too).
+> Each row shows where its chat runs: the computer's icon in its colour (as on the desktop) and
+> its name. **View → Group by → Computer** puts a heading over each computer's chats, and
+> **View → Show** turns the computer's name and icon off.
+>
+> **Chats on this iPhone** (iPhone): the phone can run chats itself, with no computer, on a cloud
+> model provider. Add one in **Settings → Models on this iPhone**: the Claude API, OpenAI,
+> OpenRouter, Claude in Amazon Bedrock, Claude in Microsoft Foundry, Claude on Vertex AI, or any
+> OpenAI-compatible server over https, with your own key. The key stays in this iPhone's Keychain
+> and goes only to that provider; it is never sent to your computer, the relay or Nekko Cloud.
+> Then pick **This iPhone** under **New chat → Run on**. These chats sit in the same list as your
+> computers' (marked *This iPhone*), have no tools, and are kept on this iPhone only. The Claude
+> and ChatGPT subscriptions and local model servers still need a computer.
+>
+> **Connectors** (iPhone): **Settings → Connectors** (or **Connectors** in the chat list's menu)
+> connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
+> project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist). Each token stays in this
+> iPhone's Keychain and goes only to its own service; your computers keep their own connectors.
+> Connect checks the token first and says who it signed in as.
+>
+> **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
+> review, opened by you and assigned to you on the selected git provider; **Projects** lists the
+> ones in the repositories your computers' folders hold, plus any you add. Tap one for **Review
+> it**, **Fix the failing checks**, **Address the review comments**, **Summarize it**, **Update
+> from the base branch** or **Ask about it** (also on touch and hold, and swipe right to review).
+> Each opens New chat with the prompt written, on the computer that has that repository and in
+> its folder; nothing is sent until you tap **Start**.
+>
+> **Simple and Detailed** (iPhone and Android): on iPhone the chat's **More** menu (or the chats list's view menu) picks the
+> mode; on Android the switch at the top left of a chat does. The phone remembers it. On an open folding phone each chat pane has its own switch, shown as a dial icon. Both modes show, as the message box's bottom row, one control for the chat's **model
+> and effort** (an effort dial beside the model's name; tap it to change either) and the chat's
+> **context window** (a ring that fills as the window does, with the tokens in use; tap it to see
+> what fills it). **Detailed** adds a monitor under the chat's title: your computer's CPU, memory,
+> GPU and GPU memory as dials (with temperatures where the computer has sensors) and how many
+> models its Model Server holds. Tap it for the whole monitor: each loaded model with where it
+> runs (GPU, GPU + CPU, CPU), its context size and memory, and **Unload**; models still loading;
+> how much of the memory for models they take; and this chat's context. The monitor is read every
+> few seconds only while Detailed mode is on and a chat is open.
+> **The agent's plan** (iPhone): as on the desktop, the agent's plan sits behind the top of the
+> message box. Folded, it shows the step being worked (its kind, such as Build or Verify, and
+> *2 of 4*) and chips for it: sub-agents, its check, the PR it opened with its CI, and the task it
+> is for. Tap it to see every step; tap a finished step to see its note and chips. A Claude Agent
+> chat shows Claude Code's own plan, or the work loop of your latest request.
 >
 > In a chat on the iPhone, what the agent does reads as it does on the desktop: each tool step is
-> one quiet line (a mark, the command or file, a chevron when there is output), subagents are a
+> one quiet line (a mark, the command or file, a chevron when there is output), and adjacent steps
+> with one purpose fold into one row that says the goal (*Read the project's guidance*, *Looked
+> through the code*, *Ran the tests · 1 failed*) and opens to its steps; Android shows the same
+> groups as cards. A step waiting for your approval, a question and a lone step stay on their own,
+> and a group with a failed step starts open. Subagents are a
 > group with one row per child and its model, and an armed watch shows what it watches, what wakes
 > it and a live countdown (*≤ 42 min left*, *overdue*, *triggered*); the wake-up itself is a
 > *Watch triggered* row, not a message from you. Only your own bubbles and an approval or question
 > card keep an outline. The chat list is flat too: project groups with their active and done
-> counts, a glyph beside each chat for what it is doing, and the computer as a pill above the
-> list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
+> counts, a glyph beside each chat for what it is doing, and the computers in view as a pill above
+> the list that opens the computer menu. A chat that needs you has a coloured bar down its left edge
 > and the raised hand.
+>
+> Replies and your own messages on the iPhone render Markdown as the desktop does: nested lists
+> mark each level differently (•, ◦, ▪ and 1., a., i.) with wrapped lines hanging under the text,
+> task items are checkboxes, and tables are a native grid with a bold header that scrolls sideways
+> inside its own frame. A table with more than 4 columns or 12 rows has **Expand**, which opens it
+> full screen to zoom and scroll; touch and hold any table for **Copy as Markdown**, **Copy as
+> text** (tab-separated, so it pastes into Numbers or Sheets as cells) and **Share**.
+>
+> The iPhone message box writes Markdown: what you type is what is sent, shown with light styling
+> (bold looks bold with its `**` dimmed, headings larger, list markers tinted). While it has the
+> keyboard, a formatting bar sits inside the box above the text: bold, italic, strikethrough, inline
+> code, link, heading, bulleted, numbered and task lists, indent and outdent, quote, code block and
+> table. **Aa** hides or shows the bar, and the choice is kept. Return continues a list (the next
+> number, an empty task box) and ends it on an empty item; inside a table the bar adds **+ Row** and
+> **+ Column**, and Tab moves to the next cell. A normal paste stays plain text; after pasting rich
+> text (from Safari, Notes, Mail or Docs) a chip offers **Use formatting** for a few seconds. Touch
+> and hold for **Paste as Markdown** or **Paste as plain text**. Undo takes back any of it.
+>
+> A Mermaid diagram in a reply (or in your own message) draws inline on the iPhone, in the app's
+> light or dark theme. Tap it for full screen, where you can zoom and pan, **Copy source**, **Share
+> image**, **Save to Photos** or **Show source**. While a reply is still streaming the diagram shows
+> as source and is drawn once its fence closes; one Mermaid can't read shows its source with
+> Mermaid's error. The phone draws with its own bundled copy of Mermaid in a locked page that cannot
+> reach the network, so diagram source never leaves the phone. `.mmd` and `.mermaid` files opened
+> from **Files** draw the same way.
 >
 > Tables in a reply show as a grid (it scrolls sideways when wide). When the agent links a file it
 > made on your computer (an HTML prototype, an image, a PDF, Markdown, text, JSON or CSV) or a
@@ -75,6 +237,10 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > sends what the agent linked in that chat (and, for a linked web page, the files in its folder),
 > and the page can't reach the internet or anything else on your phone. Ordinary web links open in
 > Safari.
+> On Android it works the same way: the cards under the reply, the link in the text, the window
+> with **Reload** and **⋮ → Copy path** (or **Copy address**) and **Share**; a PDF shows its pages,
+> and ordinary web links open in the browser. An open preview stays open when you open or fold a
+> folding phone.
 >
 > Each group opens with up to eight chats from the last two weeks (a chat that is working, needs
 > you or is pinned always shows), then **Show N more**. Tap a group's name to fold it. The
@@ -93,9 +259,29 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > free disk) and the connection. The computer sends this as one read, `machine:summary`, built
 > without paths or addresses; an older computer says it cannot.
 >
+> A computer that has an icon shows it beside its name wherever the phone lists or switches
+> computers. Set it from the computer's page, while connected: **Icon** offers None and the same 24
+> icons as the desktop. It is saved on the computer, so every device shows the same one.
+>
 > The Android app's **Settings** also has a **Computers** row, which opens the list of paired
 > computers (rename, switch, forget, pair another), and an **About** section with the installed
-> version and the open-source licenses of the app and the libraries it ships.
+> version, the phone protocol on each side and the open-source licenses of the app and the
+> libraries it ships.
+>
+> **Every computer stays connected** (Android): the app keeps a connection to every paired
+> computer, not only the one you are using, so switching to another (in Computers, or **New chat →
+> Run on**) is instant and needs no new connection. **Run on** shows whether each one is online.
+> The chat list still shows one computer's chats at a time.
+>
+> **Version check** (iPhone and Android): when the app and Nekko Agent on the computer speak
+> different phone protocol versions, the chat list and **Settings → About** show a banner naming
+> the side to update: Nekko Agent on the computer, or the app.
+>
+> **First run** (iPhone and Android): the first time the app opens it shows three steps: what it
+> does, pairing, and, right after the first pairing, what notifications look like with **Allow
+> notifications** or **Not now**. Permission to notify is never asked before a computer is paired.
+> **Skip** on the first two steps ends it. On Android, **Not now** turns the kinds under **Settings →
+> Connection → Notify me about** off; turn them on there later.
 >
 > **New chat defaults** (Android): **Settings → New chats** picks the computer the app connects to
 > when it starts (default: the one used last) and, for each computer, the model New chat opens with
@@ -114,9 +300,15 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
 > before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
-> its Settings. A long-press on a chat in the list then completes or deletes it on the computer.
+> its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
+> and **Rename**; a pinned chat shows a pin beside its time.
 >
-> **Write offline** (iPhone): with no connection to your computer you can still write. What you
+> **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Ask, Guardrails
+> or YOLO; a chat without its own follows the computer's default; switching to a mode that asks less
+> is confirmed with your fingerprint, face or screen lock, and YOLO asks once first), **Rename**,
+> **Pin** / **Unpin** and **Complete**, each saved on the computer.
+>
+> **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
 > the phone closing the app loses nothing. **Send when online** puts a prompt in a queue on the
 > phone, shown in the chat as **Waiting to send** (Edit, Delete, Send now); a new chat started
@@ -129,8 +321,12 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > and are deleted when you forget the computer. Sending prompts written offline needs this version
 > of Nekko Agent on the computer.
 >
-> **Read offline** (iPhone; the chat list on Android too): the phone keeps each computer's chat list
-> and, on iPhone, the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
+> On Android, a new chat started offline uses your default model for that computer from **Settings
+> → New chats** (the computer's models can't be listed offline), and prompts go while the app is
+> open; the widget doesn't count them yet.
+>
+> **Read offline** (iPhone and Android): the phone keeps each computer's chat list
+> and the last 20 chats you opened (up to 5 MB per computer; a very long chat keeps its
 > newest messages). Opening the app or a chat shows them at once, and while the computer can't be
 > reached they stay readable under **Saved list from 10:42** and **Saved copy from 10:42**. When the
 > computer answers, the live list and chat replace them in place. A saved chat can't be changed
@@ -141,16 +337,23 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > backed up, and are deleted when you forget the computer or a chat is deleted on it.
 >
 > **Beyond the chat** (iPhone): the phone is a remote for the agent, not a second desktop.
-> - **Edit the queue:** a follow-up sent while a reply runs waits under **Queued** with Edit and
->   Remove. An edit only lands if that prompt hasn't started yet; otherwise nothing changes.
+> - **Message a running agent:** a message sent while a reply runs waits under **Queued** with Edit
+>   and Remove, and the agent reads it at its next step. A message with photos or a skill, or one
+>   for a Claude Code chat, runs when the reply ends. An edit only lands if that prompt hasn't
+>   started yet; otherwise nothing changes.
+> - **Don't wait:** **Interrupt and send now** stops the reply and starts that message at once.
 > - **Fork:** touch and hold a message. On your prompt, **Edit in a new chat** starts a new chat with
 >   the conversation before it and the prompt in the message box; on a reply, **Fork from here**.
-> - **Photos:** tap a photo in a message to see it full screen; **+ → Paste image** adds one from the clipboard.
+> - **Photos:** selected photos appear as thumbnails in the iPhone's message box and **New chat**, before you send. Tap one to inspect it full screen, or use its **Remove photo** button to remove just that photo. Sent photos stay visible in the message bubble; tap one to open the same viewer. It sharpens as the computer sends the photo at full size (a spinner shows while it loads). **⋯** saves it to Photos, copies it or shares it, and swiping up or down closes the viewer. **+ → Paste image** adds photos from the clipboard. Chats carry small previews; the viewer asks for one full-size photo at a time (`session:photo`). Older or unavailable photos may show a placeholder. Offline saved transcripts keep only photo counts.
 > - **Saved prompts:** the prompts you saved on the computer show in `/` and under **+**, run like skills.
 > - **`/` after what you've typed:** typing `/` after some words (after a space or on a new line)
 >   opens the same menu. Picking a skill keeps your words and adds the skill; picking a saved prompt
 >   puts its text in place of the `/`.
 > - **Search:** finds completed chats too, and shows every match in each group.
+> - **On Android** the queue's Edit and Remove, the fork (touch and hold a message, then **Edit in a
+>   new chat** or **Fork from here**), saved prompts in `/` and under **+**, and **Search chats** at
+>   the top of the chat list work the same way, and **Settings → Automations** and **Settings → Usage
+>   and limits** show the same lists and Run now.
 > - **Automations:** **Computers and settings → Automations** lists the computer's tasks and
 >   workflows with how each last went, and **Run now**. You set them up on the computer.
 > - **Pull requests:** a chip shows the chat's pull request and its checks. **Commit these changes**,
@@ -169,6 +372,18 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   **Merge**, **Close** or **Reopen**. **Abort merge** shows while a merge stopped on a conflict.
 >   Every one of these changes asks for Face ID or your passcode (once per 5 minutes) and shows in
 >   the phone's *Activity* on the computer.
+>   On Android, **⋮ → Git** in a chat has the same status, files and diffs, **Stage** / **Stage all**,
+>   **Write message**, **Commit**, **Push**, **Abort merge**, **History**, **Branches** and
+>   **Compare**, and **Open a pull request**; each change asks for your fingerprint, face or screen
+>   lock (once per 5 minutes). A chat's pull request shows as a chip above the message box, with the
+>   same sheet as on the iPhone: its checks, files, **Approve**, **Merge**, **Close** or **Reopen**,
+>   and the prompts that ask the agent to commit, open a PR or fix failing checks.
+>   **⋮ → Terminals** lists the chat's terminals and the agent's command log, starts a **New
+>   terminal** in the chat's folder, and opens **SSH** to the hosts in your computer's
+>   `~/.ssh/config`. A terminal shows its output in colour with a row of keys (esc, tab, ctrl, ^C,
+>   the arrows, backspace, return, paste) and a line to type or dictate a command; it follows the
+>   phone's size, also when you open or fold a folding phone. Opening asks for your fingerprint,
+>   face or screen lock (once per 5 minutes); typing doesn't.
 > - **Files:** **More → Files** in a chat opens that chat's folder (its worktree when the chat is
 >   isolated); **Computers and settings → Files** lists the computer's saved folders. Tap through
 >   folders, or search by file name. A file opens in monospace with line numbers (Markdown can be
@@ -178,11 +393,23 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 >   opened it, the phone says *Changed on the computer* and you choose **Reload** (your edits are
 >   dropped) or **Save over it**; nothing is overwritten without that choice. Files that may hold
 >   secrets are counted under the list, never shown.
+>   On Android, **⋮ → Files** in a chat and **Settings → Files** work the same way: add a saved folder
+>   by its full path on the computer, or touch and hold one to remove it (its files stay on disk);
+>   saving, adding and removing ask for your fingerprint, face or screen lock (once per 5 minutes).
+>   An open file or an unsaved edit stays open when you open or fold a folding phone.
 > - **Logs:** **Computers and settings → Logs** lists the desktop app's log, the engine's log and
 >   each chat's agent run log. A log opens at its newest lines; **Refresh** reads it again, and the
 >   search field shows the matching lines with their line numbers. Read only, with secrets already
 >   replaced by `[redacted]` on the computer.
+>   On Android it is **Settings → Logs**, with the same list, newest lines, **Refresh** and search;
+>   **Share** sends what the screen shows as text, with secrets removed again on the phone.
 > - **Usage and limits:** what each provider plan has used and when it resets, and recent usage. Read only.
+>   On the iPhone it is grouped by where the usage came from: an **All places** total, then one
+>   section per paired computer (an offline one keeps the last numbers it gave and says so) and
+>   **This iPhone** for chats that run on the phone. Within each, **Subscriptions** (each plan with
+>   its limit bars, and the models that bill to it) come before **API** (pay-per-token models with
+>   their estimated spend). This iPhone counts tokens only, from each provider's replies, and keeps
+>   that count on the phone.
 >
 > **All your chats, grouped like the desktop** (Android): the chat list shows every chat on the
 > computer, completed ones included, in the same groups as the desktop's agent sidebar: **General**
@@ -237,33 +464,35 @@ and tools always execute on **your** machine, under its guardrails; the phone is
 > airplane mode off), instead of waiting out its retry delay. While a chat on your computer is running,
 > **Settings → Connection → Stay connected while a chat runs** (on by default) keeps the app connected
 > after you leave it, with a silent "Staying connected · 1 chat running on Mac" notification that goes
-> away as soon as the reply is done. **Notify me** (on by default; Android 13+ asks for permission)
-> sends a notification when a reply finishes or fails, or a chat waits for your approval or answer,
-> while you're out of the app. Notifications say what happened and in which chat, never the reply, the
+> away as soon as the reply is done. **Notify me about** (each on by default; Android 13+ asks for
+> permission) has a switch for **Approvals and questions**, **Finished replies** and **Failed
+> replies**, and sends that notification while you're out of the app. **Send a test notification**
+> shows one at once. When an approval or a question is answered elsewhere (the desktop, another phone)
+> or its run ends, its notification goes away by itself. Notifications say what happened and in which chat, never the reply, the
 > command or the question; with the app lock on they don't name the chat either, and tapping one opens
 > the chat through the lock. Without push (not built yet), these only arrive while the phone is still
 > connected. If Android restricts Nekko in the background, Settings says so and opens the app's
 > system page.
 
-The iOS and Android app (`apps/mobile`) is built for the phone rather than being the desktop on a
-small screen: your computer's chats with **Working** / **Needs you** badges, new chats on any of the
-computer's models and folders, live replies, **Allow this?** cards for risky commands, the agent's
-questions as tap-to-answer choices, follow-ups that queue while a run is going, and Stop. It can
-pair several computers and talks to one at a time.
+The phone clients are native apps: SwiftUI in `apps/ios` and Kotlin/Jetpack Compose in
+`apps/android`. They drive chats on your computer over the encrypted relay. The former
+Expo app and its dedicated CI have been removed. This does not implement on-phone
+inference or close the native apps' remaining feature and release gaps; see the
+[native iOS spec](../spec/phone/native-ios-app.md) and
+[native Android spec](../spec/phone/native-android-app.md).
 
-It also runs **models on the phone itself** (llama.cpp, curated small GGUF models from Hugging Face
-sized to the phone's memory), so you can keep chatting when the computer is off. Those chats never
-leave the phone and don't use the relay.
-
-**The native iPhone app** (`apps/ios`, SwiftUI) does the same over the same encrypted relay, and
-adds what only iOS can: a **Live Activity** for each running chat on the Lock Screen and in the
-Dynamic Island, with **Allow / Deny** for a waiting tool and **Stop**; notifications with Allow /
+**The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
+adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
+the Dynamic Island, with a chip per chat, **Allow / Deny** for a waiting tool and **Stop**, and a
+level in **Settings → Live Activities** (None, Minimal, Standard, Detailed) that decides how much
+of the chat it shows (at Detailed, a mic sends one spoken message to the chat it shows, after Face ID; see [Voice](voice.md#from-the-lock-screen)); until the relay can push it, the card changes only while the app is running; notifications with Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
 and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
 speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
 the iPhone. If a Tailscale relay can't be reached, the app says which side is the problem:
 Tailscale is off on the phone, or the computer isn't answering. With the app lock on (Face ID or
-passcode, on by default), the Lock Screen and notifications never show chat titles or commands.
+passcode, on by default), notifications never show chat titles or commands, and the card starts
+at Minimal, which shows no chat text.
 
 On the phone, the pairing key and the derived encryption key live in the iOS Keychain / Android
 Keystore. The app drops any provider API keys your computer sends with its settings and never
@@ -275,6 +504,9 @@ relay, tested and kept by the computer, and never written on the phone. The comp
 whether it worked and which models it can now use; it never sends a key back. Each provider's switch
 on the same page turns it on or off on the computer. Both ask for Face ID or the passcode, like every
 change from a phone. Subscriptions (ChatGPT) still sign in on the computer.
+On Android it is **Settings → Providers**: the same list with a switch on each, and **Add a
+provider**; both ask for your fingerprint, face or screen lock. The key field is a password field,
+emptied as soon as the computer answers, and never kept across closing or folding the app.
 
 Manage devices from the same card: **rename** them, **revoke** one instantly (it's kicked live and
 denied from then on), or **Sign out all phones** (formerly *Rotate secret*) to cryptographically reset the room, which unpairs
@@ -294,6 +526,8 @@ changes how the computer itself is set up:
   queued, and stop messages; answer approvals and the agent's questions; pick a model from the
   computer's providers and a folder from its list; voice status and transcription; read a chat's
   pull requests, the computer's automations, its usage and plan limits, and run an automation now;
+  the computer's hardware readings, the Model Server's loaded models and a chat's context size,
+  and unload a model;
   git in a chat's folder and its terminals and SSH (below); a chat's or saved folder's files and the computer's logs (below);
   and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,
@@ -353,23 +587,34 @@ changes how the computer itself is set up:
   it open. SSH hosts arrive as alias, host name and port (no user name); SSH runs on your computer
   with its own keys and config, and nothing about the keys reaches the phone. Running a command
   without typing it, renaming terminals and listing shells stay off.
-- **One chat's options:** a phone can change a chat's model, title, pin and tags, complete it, and
+- **Hardware, loaded models and context, read only:** CPU and GPU load, memory and temperatures
+  arrive as numbers only (no CPU or GPU model names, processes, paths or device ids). The Model Server arrives as whether
+  it is installed and running and, for each loaded model, its id, where it runs, its context size,
+  memory and timing; never its folders, port, log or settings. A chat's context arrives as totals
+  (tokens in use, the window, tokens per kind of source); never the files, memory or guideline
+  text in it, and a phone can't attach a path to it. Reading these needs *Read*. Unloading a model
+  needs *Change* but no signature, like stopping a run: it frees memory and the next reply that
+  uses the model loads it again. Loading, downloading, deleting models and the Model Server's
+  settings stay on the computer.
+- **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, complete it, and
   switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
   default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
-  confirmed on the phone like any other change: Face ID or the passcode on the iPhone. Android can't
-  confirm changes yet, so there you change the mode on the computer.
+  confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
+  fingerprint, face or screen lock on Android (the default for new chats, in **Settings → On
+  <computer>**).
 
 ### What phones can do: Read and Change, per phone
 
-Git, files, logs, terminals and SSH are on the iPhone now (above); task boards are coming.
+Git, files, logs, terminals and SSH are on the iPhone now (above), and Git on Android; task boards are coming.
 *Remote access → What phones can do* on the computer lists each paired phone with two switches:
 
-- **Read:** see your chats and their messages, settings, models, automations, usage and limits, and
-  look at files, git status and history, logs and boards.
+- **Read:** see your chats and their messages, settings, models, automations, usage and limits,
+  the hardware monitor, loaded models and a chat's context size, and look at files, git status and
+  history, logs and boards.
 - **Change:** send and queue prompts, stop a run, approve tools, answer questions, start, fork,
   delete and change chats, change the phone-settable settings, run an automation, transcribe a voice
-  prompt; edit and save files, commit and push, branch and pull request actions, type in a
+  prompt, unload a model; edit and save files, commit and push, branch and pull request actions, type in a
   terminal, edit boards, SSH.
 
 Both are on for every phone, including phones paired before the switches existed. Turn one off and
@@ -381,24 +626,23 @@ request a phone can make is in one of the two; anything else is refused.
 the phone and checked by your computer.** (Sending a prompt or approving a tool needs only the Change
 switch, so it doesn't ask for Face ID each time.) The first time a phone
 makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
-the passcode can use, and gives your computer the public half. Each change after that is signed
+the passcode can use, or in the Android Keystore (StrongBox where the phone has one) that only the
+fingerprint, face or screen lock can use, and gives your computer the public half. Each change after that is signed
 with the key, and your computer checks the signature before doing anything: a change with no
 signature, a wrong one, one more than 5 minutes old, or one it has already seen is refused. One
-Face ID covers 5 minutes, as for *Allow* from the Lock Screen.
+Face ID (or fingerprint) covers 5 minutes, as for *Allow* from the Lock Screen; unlocking the phone
+on its own doesn't count.
 
 Your computer trusts the first key a phone gives it. A phone that later shows up with a different
 key is refused until you remove it and pair it again. *Forget all computers* on the iPhone deletes
-its key too.
+its key too; on Android, forgetting the last paired computer does.
 
 **Activity.** *Activity* under each phone lists every change it made or tried, prompts and approvals
 included, newest first, with why one was refused (Change off, no fresh Face ID or passcode, a changed
 key). Your computer keeps the newest 200 per phone; rotating the secret clears them.
 
-**Older phone apps.** Phone apps from before relay replay protection (below) still connect for one
-release. Your computer writes it to its log, shows *Older app: update it on the phone* next to that
-phone and adds one *Connected with an older app* line to its activity. To refuse them now, set
-`"acceptLegacyPhones": false` in `remote.json` in the data folder; such a phone is then told to
-update its app.
+**Older phone apps.** A phone app too old to check your computer can't connect. It is told to
+update.
 
 **Revoke** a phone to stop all of it at once. Whatever the switches say, a phone can never reach
 provider keys or other credentials, remote access itself (pairing more devices, revoking,
@@ -415,25 +659,39 @@ The logs a phone reads are files you can open yourself: `logs/app.log` and `logs
 
 | Threat | Defense |
 |---|---|
-| Relay operator reads your traffic | Impossible by construction: E2E encryption, relay sees ciphertext only |
-| Stranger connects to your room | Needs the pairing secret (128-bit) for transport auth, then a registered device or a live pairing code |
+| Relay operator reads your traffic | E2E encryption: every connection has its own key, from a key exchange the relay can't take part in, and it sees only ciphertext and a room credential (decisions 0036, 0041), apart from the Lock Screen status described below |
+| Someone records your traffic and steals a key later | Each connection's key is made for that connection and thrown away with it, so a recording stays closed even with every long-term key |
+| Something poses as your computer | Your computer signs every connection with its host key, which your phone pinned from the pairing link. A phone sends nothing, pairing code included, to anything that can't, even if it holds the pairing secret (decision 0041) |
+| Stranger connects to your room | Needs the room credential derived from the pairing secret (128-bit) for transport auth, then a live pairing code, or the private key of a device that enrolled (every HELLO is signed with it, for that connection alone) |
+| Someone copies the pairing secret off a phone | Not enough to connect as that phone, to pose as your computer, or to read anyone's traffic: each phone signs with its own device key (Secure Enclave on iPhone, Android Keystore), which never leaves it, and the secret opens no connection's frames |
 | Leaked/stale pairing link | The one-time code is single-use and expires in 10 min; the link is scrubbed from the phone's URL/history after pairing |
 | Lost/stolen phone | The Android app asks for the phone's fingerprint, face or screen lock every time it opens. Revoke the phone in Settings: kicked immediately, denied afterward, push token dropped |
-| Revoked device replays old creds | The agent refuses its handshake and unicasts nothing to it; it gets back in only with a fresh one-time pairing code from the computer's owner; rotate the secret for a full cryptographic reset |
+| Revoked device replays old creds | The agent refuses its handshake and sends it nothing. It can't read other devices' traffic or pose as your computer. It gets back in only with a fresh one-time pairing code from the computer's owner |
+| Revoked device kept the pairing secret | That still gets it onto the relay, where it can't read or forge anything sealed or register for your notifications. On a relay that lets it connect as the computer too, it can knock your computer offline while it stays, and send content-free notifications or Live Activity text to your phones. **Sign out all phones** shuts it out of the room for good, and every device pairs again |
+| Someone sends a fake "you were removed" | Nothing unsealed ends a device's link. A close from the relay only makes it retry, and a real removal arrives sealed on the next connection |
 | Malicious relay withholding/reordering | Availability only; it still can't read or forge frames (AES-GCM auth) |
 | Phone asks for something dangerous | Your computer only serves the phone allowlist above (no wipe, settings reset, remote-access changes, terminals outside a chat, file writes); tool calls run on your machine under your guardrails/sandbox and chat mode |
 | Someone records the relay's traffic and plays it back | Every connection starts with a fresh random challenge from your computer that the phone's sealed hello must answer, once; every request after it carries that challenge and a number that only goes up. A replayed hello or request is dropped and never runs. (Phone apps from before this are accepted for one release, see *Older phone apps*.) |
 | Someone else picks up the phone, or the relay replays a request, to make a change | Each change must be signed by the phone's Secure Enclave key, which needs Face ID or the passcode (one check lasts 5 minutes); your computer checks the signature, its age and that it was not used before, and logs every attempt in the phone's activity |
 
-What the relay does see: connection metadata (IPs, timing, frame sizes), the room code, and, if you
-enable push, device push tokens plus the content-free fact "a run finished". That's the whole list,
-and it's why relayed local-model use is inherently zero-data-retention for content.
+### What the relay does see
+
+Connection metadata (IPs, timing, frame sizes), the room code, and, if you enable push, device push
+tokens plus the content-free fact "a run finished". If you turn on the iPhone's Live Activity, the
+short status it shows (chat titles, the current step and, at Detailed, reply lines, at the level you
+choose) is the exception: ActivityKit draws only what the push holds, so that text goes through the
+relay and Apple's push service (APNs) as plain text. Lock Screen notifications on both phones also
+pass through Apple's and Google's push services, with generic text. The relay keeps all of this in
+memory only. Everything else (chats, commands, files, model output) is end-to-end encrypted, which is
+why relayed local-model use is zero-data-retention for content.
 
 ## Choosing a relay
 
 How the Android and iOS apps each handle the connection (URL rules, pairing, reconnects, push, background) is compared in [phone-connection.md](phone-connection.md).
 
 ### Nekko Cloud (the managed relay): `wss://nekko-agent-relay.fly.dev`
+
+**Not running right now:** the Fly app is gone and its name no longer resolves, so the desktop shows Nekko Cloud as *Coming soon*. A computer still set to it shows a warning with a **Change** button, and a phone paired through it says it can't find the address instead of "Connecting…". Use Tailscale until it is back.
 
 The app calls this **Nekko Cloud** and never shows the URL. Zero setup; free during beta with per-connection rate limits. When Nekko Cloud launches, the
 managed relay becomes part of the paid plans (it already supports gating via
@@ -464,10 +722,13 @@ on. Without Tailscale on this computer the option links to Tailscale and stays o
   virtual adapters of WSL, Hyper-V, Docker or VMs). Pairing
   codes then carry both routes, and the iPhone app uses the LAN when it is on the same Wi-Fi and
   moves to Tailscale by itself when it leaves, coming back once the LAN answers steadily again.
+  The Android app keeps the LAN route but doesn't use it yet (Android allows unencrypted `ws://`
+  only to Tailscale names); it moves between the other routes the same way.
   Switch **Also on this Wi-Fi** off to keep the relay on the tailnet only; pair the phone again
   after changing it. Phones paired before this keep the one route until they scan a new code.
 
-On the iPhone, **Settings → Connection** shows the route in use. **Check routes** looks up,
+On the iPhone, **Settings → Connection** shows the route in use (on Android, **Settings →
+Connection status**, with the other routes). **Check routes** (iPhone and Android) looks up,
 connects to and says hello on each route with timings, and **Share diagnostics** shares those
 results and the connection log as text, without rooms, keys, codes or messages.
 
@@ -567,13 +828,20 @@ NEKKO_RELAY_URL=wss://your-relay NEKKO_ROOM=myroom NEKKO_PAIR_KEY=<secret> npx n
 It prints a one-time pairing code (10 minutes) at boot and keeps the same persistent device
 registry as the desktop app.
 
-### Chat status on native iOS
+### Chat status on the phone
 
-The icon to the left of each chat reads like desktop: a rocket means working,
-a question mark means the agent needs you, “Zz” means idle, and a checkmark marks
-a completed chat. A clock means a prompt is waiting to send.
+Chat status follows desktop: a rocket (or Working/Running badge) means working,
+and a question mark or Needs you badge means the agent needs your input.
+A quiet gray checkmark means **Done**: no active work and no armed watcher.
+**Zz · Idle** means no active work, but a watcher is armed to wake the chat later.
+Triggered, cancelled and failed watches no longer keep a chat idle. Done does not
+archive the chat; you can still continue it. An older computer that does not send
+watch counts treats inactive chats as Done until it is updated.
 
-Nekko sits at the top-left of the Chats screen beside the computer menu. Tap the
+On native iOS, a clock means a prompt is waiting to send. Running work, input
+requests and waiting prompts take priority over the inactive status.
+
+Nekko sits at the top center of the iOS Chats screen, outside the toolbar chips. Tap the
 pixel cat for a brief greeting. This is a local animation, not a message to an
 agent. The mascot respects Reduce Motion and pauses its animation in the
 background.

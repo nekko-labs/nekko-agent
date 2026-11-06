@@ -1,7 +1,8 @@
+import { CreateMenu } from '../components/CreateMenu.js';
 import { AgentWindowDropdown, defaultFolderIds, type AgentWindowSelection } from '../components/AgentWindowPicker.js';
 import { AgentSidebar } from './WorkspacesView.js';
 import { ChatPane } from '../components/ChatPane.js';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@nekko-agent/shared';
 import type { AgentType } from '@nekko-agent/shared';
@@ -11,38 +12,40 @@ import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { PhotoIcon, TerminalIcon, FocusLayoutIcon, BoltIcon, MagnetIcon } from '../icons.js';
+import { BoltIcon, MagnetIcon } from '../icons.js';
+import { FocusIcon } from '../gentleface-icons.js';
 import { HoverTip } from '../components/HoverTip.js';
-import { NekkoAvatar } from '../components/Mascot.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
-import { WallComposer, type WallAgent } from '../components/WallComposer.js';
-import { agentStatusOfLane } from '../components/WorkspaceCard.js';
-import { BLOCKED_META, LANE_META, sessionLane } from '@nekko-agent/shared';
 import { type Vitals } from '../components/InsightsBox.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { MonitorsDock } from '../components/MonitorsDock.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { hasAppChrome } from '../chrome.js';
-import { claimAgent, displaysBridge, isScreenWindow, useDisplays, wallStorageKey, windowKey } from '../displays.js';
+import { claimAgent, displaysBridge, isScreenWindow, openerMode, useDisplays, wallStorageKey, windowKey } from '../displays.js';
 import { ScreensControl } from '../components/ScreensControl.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
-import { reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
+import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
 
 import { allPanes, type PaneKind } from '../layout.js';
 import {
   applySnap,
   DEFAULT_ASPECT,
   openWallPane,
+  agentZoneTints,
   loadWallState,
   nextAgent,
   reconcileWall,
+  zoneOf,
   readAgentPanel,
   wallAgents,
   saveWallState,
   toWallSetting,
   type CommandWallState,
 } from '../commandWall.js';
+
+// Remotion is only needed for the one-time intro, so it loads with it.
+const ZonesIntro = lazy(() => import('../components/ZonesIntro.js'));
 
 const HOUR = 60 * 60_000;
 
@@ -128,9 +131,11 @@ export function CommandCenterView() {
   const storage = useMemo(() => screenStorage(typeof localStorage === 'undefined' ? undefined : localStorage), []);
   const [wall, setWallState] = useState<CommandWallState>(() => {
     const loaded = loadWallState(storage, isScreenWindow ? null : useStore.getState().settings?.commandWall);
-    // A new screen starts empty (it is where new agents go first), not
-    // seeded with the recent chats the main wall already shows.
-    return isScreenWindow && loaded.watermark === 0 ? { ...loaded, root: null, watermark: Date.now() } : loaded;
+    // A new screen starts blank, not seeded with the recent chats the main
+    // wall already shows, in the mode of the window that opened it.
+    return isScreenWindow && loaded.watermark === 0
+      ? { ...loaded, root: null, watermark: Date.now(), layout: newScreenLayout(loaded.layout, openerMode()) }
+      : loaded;
   });
   // Every change goes through snap: while it is on, the wall stays evenly spaced.
   const setWall = useCallback((update: (s: CommandWallState) => CommandWallState) => setWallState((s) => applySnap(s, update(s))), []);
@@ -167,44 +172,28 @@ export function CommandCenterView() {
   // pointed at a side for: beside the biggest window, along its longer side.
   const aspectRef = useRef(DEFAULT_ASPECT);
   const onAspect = useCallback((a: number) => { aspectRef.current = a; }, []);
-  // Not before both lists have loaded once: reconciling against the empty
-  // lists the view mounts with would seed an empty wall and watermark every
-  // chat that already exists out of it.
+  // Not before both lists have loaded once: seeding against the empty lists
+  // the view mounts with would start two empty zones on a wall with chats.
   const [listsReady, setListsReady] = useState(false);
-  // Multi-monitor: which window owns each chat that appeared since the wall
-  // last looked, resolved before reconciling so a new chat lands on exactly
-  // one screen's wall. With one screen every chat is this window's at once.
+  // Multi-monitor: which window owns each chat this window made, so a new
+  // chat lands on exactly one screen's wall.
   const owners = useRef(new Map<string, string>());
-  const [ownersVersion, setOwnersVersion] = useState(0);
   const [displays] = useDisplays();
   const multiScreen = (displays?.displays.filter((d) => d.enabled).length ?? 1) > 1;
   useEffect(() => {
-    if (!listsReady || !multiScreen || wall.watermark === 0) return;
-    const fresh = sessions.filter((s) => s.createdAt > wall.watermark && !s.parentSessionId && !owners.current.has(s.id));
-    if (!fresh.length) return;
-    let live = true;
-    void Promise.all(fresh.map(async (s) => { owners.current.set(s.id, await claimAgent(s.id, 'auto')); }))
-      .then(() => { if (live) setOwnersVersion((v) => v + 1); });
-    return () => { live = false; };
-  }, [listsReady, multiScreen, sessions, wall.watermark]);
-  useEffect(() => {
     if (!listsReady) return;
-    if (!multiScreen) { setWallState((w) => applySnap(w, reconcileWall(w, sessions, terminals, Date.now(), aspectRef.current))); return; }
-    // A chat whose owner is not known yet is left out (it would move the
-    // watermark past it); it is looked at again once its claim answers.
-    setWallState((w) => {
-      const known = sessions.filter((s) => w.watermark === 0 || s.createdAt <= w.watermark || s.parentSessionId || owners.current.has(s.id));
-      return applySnap(w, reconcileWall(w, known, terminals, Date.now(), aspectRef.current, (id) => owners.current.get(id) === windowKey));
-    });
-  }, [listsReady, sessions, terminals, ownersVersion, multiScreen]);
+    setWallState((w) => applySnap(w, reconcileWall(w, sessions, terminals, Date.now())));
+  }, [listsReady, sessions, terminals]);
   // Main placed a chat made in another window here: open it on this wall.
   useEffect(() => displaysBridge?.onPlaced((id) => {
     owners.current.set(id, windowKey);
-    setWallState((w) => applySnap(w, openWallPane(w, 'chat', id, aspectRef.current)));
+    setWallState((w) => applySnap(w, openWallPane(w, 'chat', id)));
   }), []);
   // Tell main how full this wall is, for "prioritize empty windows".
   const paneCount = useMemo(() => allPanes(wall.root).length, [wall.root]);
-  useEffect(() => { displaysBridge?.report(paneCount); }, [paneCount]);
+  // An untouched new chat does not count, so a fresh screen still reads as empty for placement.
+  const usedPaneCount = useMemo(() => allPanes(wall.root).filter((p) => p.kind !== 'chat' || sessions.some((s) => s.id === p.refId && s.messageCount > 0)).length, [wall.root, sessions]);
+  useEffect(() => { displaysBridge?.report(usedPaneCount); }, [usedPaneCount]);
 
   useEffect(() => {
     window.nekko.getUsageSummary().then(setUsage);
@@ -213,7 +202,15 @@ export function CommandCenterView() {
     window.nekko.pendingInput().then(setPending).catch(() => {});
     window.nekko.runningSessions().then((ids) => setRunning((r) => (ids.every((id) => r.has(id)) ? r : new Set([...r, ...ids])))).catch(() => {});
     const off = window.nekko.onTasksUpdated(setTasks);
-    return off;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      if (disposed) return;
+      await refreshTerminals();
+      if (!disposed) timer = setTimeout(poll, 3000);
+    };
+    timer = setTimeout(poll, 3000);
+    return () => { disposed = true; clearTimeout(timer); off(); };
   }, [refreshSessions, refreshTerminals]);
 
   const refreshPending = () => { window.nekko.pendingInput().then(setPending).catch(() => {}); };
@@ -224,11 +221,26 @@ export function CommandCenterView() {
     return m;
   }, [tasks]);
 
+  const eventVersions = useRef(new Map<string, number>());
+
   // Track running sessions live; a freshly spawned sub-agent re-lists sessions,
   // which is how it reaches the wall.
   useEffect(() => {
-    const known = new Set(sessions.map((s) => s.id));
+    const known = new Set(useStore.getState().sessions.map((s) => s.id));
+    let live = true;
     const off = window.nekko.onAgentEvent((e: AgentEvent) => {
+      const version = (eventVersions.current.get(e.sessionId) ?? 0) + 1;
+      eventVersions.current.set(e.sessionId, version);
+      if (e.type === 'done' && (!e.stop || e.stop === 'complete')) {
+        // Recheck the host: a question can still be pending when a turn ends.
+        // Ignore stale answers if another event/turn arrived or the view left.
+        // The pane stays in its zone when the agent finishes; the Agents panel's
+        // "Done" group lists it on the left (additive), as of 2026-11-03.
+        void window.nekko.pendingInput().then((inputs) => {
+          if (!live || eventVersions.current.get(e.sessionId) !== version) return;
+          setPending(inputs);
+        }).catch(() => {}); // An unavailable input state must not hide a window.
+      }
       if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
       if (e.type === 'done' || e.type === 'error') {
         setRunning((r) => { const n = new Set(r); n.delete(e.sessionId); return n; });
@@ -240,8 +252,8 @@ export function CommandCenterView() {
       }
       if (!known.has(e.sessionId)) { known.add(e.sessionId); refreshSessions(); }
     });
-    return off;
-  }, [sessions, refreshSessions]);
+    return () => { live = false; off(); };
+  }, [refreshSessions]);
 
   // The automation countdowns tick every 30s.
   useEffect(() => {
@@ -312,11 +324,13 @@ export function CommandCenterView() {
     // Folders picked in Add window override the project default: the first is
     // the chat's working folder, any others are supporting folders.
     const [primaryFolder, ...supportingFolders] = selection?.workspaceIds ?? [];
-    let s = unfinishedChat.current ?? await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId);
+    let s = unfinishedChat.current ?? (selection?.computerId
+      ? await window.nekko.createSessionOn(selection.computerId, primaryFolder)
+      : await window.nekko.createSession(selection?.workspaceIds ? primaryFolder : projectId));
     if (unfinishedChat.current && !selection) selection = { kind: 'chat', chatType: 'multimodal' };
     if (selection) {
       try {
-        if (unfinishedChat.current && selection.workspaceIds) {
+        if (unfinishedChat.current && selection.workspaceIds && !selection.computerId) {
           const relocated = await window.nekko.setSessionWorkspace(s.id, primaryFolder);
           if (!relocated) throw new Error('Could not configure the new agent working folder.');
           s = relocated;
@@ -330,7 +344,7 @@ export function CommandCenterView() {
           if (!updated) throw new Error('Could not configure the new agent window.');
           s = updated;
         }
-        if (needs.supporting) {
+        if (needs.supporting && !selection.computerId) {
           const configured = await window.nekko.setSessionSupportingWorkspaces(s.id, supportingFolders);
           if (!configured) throw new Error('Could not configure the new agent folders.');
           s = configured;
@@ -375,15 +389,15 @@ export function CommandCenterView() {
     const ref = refId ?? (kind === 'chat' ? await newChat() : kind === 'terminal' ? await newTerminal() : kind);
     // Placed on another screen: that window opens it; nothing to add here.
     if (fresh && !(await keepNewChat(ref))) return;
-    setWall((w) => openWallPane(w, kind, ref, aspectRef.current));
-    if (kind === 'chat') setSelected(ref);
+    setWall((w) => openWallPane(w, kind, ref));
+    if (kind === 'chat' || kind === 'terminal') setSelected(ref);
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
   const reportAddFailure = (e: unknown) => useStore.getState().pushToast('error', `Could not add the window: ${e instanceof Error ? e.message : String(e)}`);
 
-  // The agent the composer speaks for: the window clicked last, or the first
-  // on the wall. Ctrl+Tab / Ctrl+Shift+Tab walk the windows in reading order;
-  // Ctrl+1…9 (or Alt+1…9) pick one by its number.
+  // The selected window, whose composer is open: the window clicked last, or
+  // the first on the wall. Ctrl+Tab / Ctrl+Shift+Tab walk the windows in
+  // reading order; Ctrl+1…9 (or Alt+1…9) pick one by its number.
   const [addOpen, setAddOpen] = useState(false);
   const [completedId, setCompletedId] = useState<string | null>(null);
   // The reader shows a completed chat only while it stays completed: restoring
@@ -392,10 +406,17 @@ export function CommandCenterView() {
     if (completedId && listsReady && !sessions.some((s) => s.id === completedId && s.archivedAt)) setCompletedId(null);
   }, [completedId, listsReady, sessions]);
   const [selected, setSelected] = useState<string | null>(() => wall.hero);
+  useEffect(() => {
+    if (wall.hero) setSelected(wall.hero);
+  }, [wall.hero]);
   const selectAgent = useCallback((id: string | null) => {
     setCompletedId(null);
     setSelected(id);
-    setWall((w) => w.hero === id ? w : { ...w, hero: id });
+    // The agent's zone becomes the active one too.
+    setWall((w) => {
+      const activeZone = id ? zoneOf(w.root, 'chat', id) ?? zoneOf(w.root, 'terminal', id) ?? w.activeZone : w.activeZone;
+      return w.hero === id && w.activeZone === activeZone ? w : { ...w, hero: id, activeZone };
+    });
   }, [setWall]);
   // Another tab (Artifacts) asked to show a chat here, Focused. Waits for the
   // lists so the chat is known; a completed chat opens read-only, as the
@@ -410,18 +431,21 @@ export function CommandCenterView() {
     if (chat.archivedAt) { setCompletedId(chat.id); return; }
     setCompletedId(null);
     setWall((w) => {
-      const opened = openWallPane(w, 'chat', chat.id, aspectRef.current);
+      const opened = openWallPane(w, 'chat', chat.id);
       return keepLayout || opened.layout.mode === 'focus' ? opened : { ...opened, layout: { ...opened.layout, mode: 'focus' } };
     });
     setSelected(chat.id);
   }, [focusRequest, listsReady, sessions, setWall]);
   const agentsOnWall = useMemo(() => wallAgents(wall.root), [wall.root]);
+  // Zones are drawn everywhere but Focus, so only there do the cards carry no zone colour.
+  const agentTints = useMemo(() => (wall.layout.mode === 'focus' ? undefined : agentZoneTints(wall.root)), [wall.root, wall.layout.mode]);
   const panel = readAgentPanel(wall.agentPanel);
   const agentsPresent = usePanelPresence(panel.show);
   useEffect(() => {
+    if (selected && allPanes(wall.root).some((p) => p.kind === 'terminal' && p.refId === selected)) return;
     if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
     if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
-  }, [agentsOnWall, selected, wall.hero]);
+  }, [agentsOnWall, selected, wall.hero, wall.root]);
   // An empty wall is the new-chat screen: Focused on an untouched chat (reused
   // when one exists, so emptying the wall again never piles up blank chats).
   // One attempt at a time; a failure is reported once and not retried until
@@ -433,22 +457,29 @@ export function CommandCenterView() {
     const { activeModelId, models } = useStore.getState();
     const providerReady = !needsProviderSetup(providers, activeModelId ?? models[0]?.id);
     if (startingEmpty.current || emptyStartFailed.current) return;
-    if (!shouldStartFromEmptyWall({ listsReady, hasWindows: paneCount > 0, screenWindow: isScreenWindow, readingCompleted: !!completedId, providerReady })) return;
+    if (!shouldStartFromEmptyWall({ listsReady, hasWindows: paneCount > 0, readingCompleted: !!completedId, providerReady })) return;
     startingEmpty.current = true;
     void (async () => {
-      const reuse = reusableEmptyChat(sessions);
+      // A screen window cannot see which blank chat another window shows, so it makes its own.
+      const reuse = isScreenWindow ? null : reusableEmptyChat(sessions);
       const id = reuse ?? await newChat();
       // Placed on another screen by the placement preference: that window shows it.
       // Do not try again here, or every session refresh would make another chat.
       if (!reuse && !(await keepNewChat(id))) { emptyStartFailed.current = true; return; }
       setWall((w) => {
-        const opened = openWallPane(w, 'chat', id, aspectRef.current);
-        return { ...opened, hero: id, layout: { ...opened.layout, mode: 'focus' } };
+        const opened = openWallPane(w, 'chat', id);
+        // A screen window keeps the mode it opened in, Focused or Dynamic.
+        return { ...opened, hero: id, layout: isScreenWindow ? opened.layout : { ...opened.layout, mode: 'focus' } };
       });
       setSelected(id);
     })().catch((e) => { emptyStartFailed.current = true; reportAddFailure(e); }).finally(() => { startingEmpty.current = false; });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listsReady, paneCount, completedId, providers, sessions]);
+  // A window picked from the keyboard is ready to type into: its composer opens and takes the caret.
+  const typeInto = useCallback((id: string | null) => {
+    selectAgent(id);
+    if (id) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-grid-cell="chat:${CSS.escape(id)}"] .composer [contenteditable]`)?.focus({ preventScroll: true }));
+  }, [selectAgent]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useStore.getState().view !== 'command' || document.visibilityState === 'hidden' || !viewRef.current?.getClientRects().length || e.defaultPrevented || e.repeat || e.isComposing) return;
@@ -460,7 +491,7 @@ export function CommandCenterView() {
       }
       if (e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
-        selectAgent(nextAgent(wall.root, selected, e.shiftKey ? -1 : 1));
+        typeInto(nextAgent(wall.root, selected, e.shiftKey ? -1 : 1));
         return;
       }
       if ((e.ctrlKey || e.altKey) && !e.shiftKey && !e.metaKey && !(e.ctrlKey && e.altKey) && /^[1-9]$/.test(e.key)) {
@@ -468,81 +499,47 @@ export function CommandCenterView() {
         const pick = agents[Number(e.key) - 1];
         if (!pick) return;
         e.preventDefault();
-        selectAgent(pick.refId);
+        typeInto(pick.refId);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [wall.root, selected, selectAgent, setWall]);
-  const composerRef = useRef<HTMLDivElement>(null);
-  const agentList = useMemo<WallAgent[]>(() => agentsOnWall.flatMap((p, i) => {
-    const session = sessions.find((x) => x.id === p.refId);
-    if (!session) return [];
-    const { lane, blocked } = sessionLane({ running: isRunningSession(session), pending: pending[session.id], stalled: session.stalled });
-    const status = lane === 'needs-you' && blocked ? { label: BLOCKED_META[blocked].label, tone: LANE_META[lane].tone, live: true } : { label: LANE_META[lane].title, tone: LANE_META[lane].tone, live: lane === 'working' };
-    return [{ session, n: i + 1, status, glyph: agentStatusOfLane(lane, blocked) }];
-  }), [agentsOnWall, sessions, pending, isRunningSession]);
-  const selectedAgent = agentList.find((a) => a.session.id === selected) ?? null;
-  // The dragged height is saved with the wall (like the dock and width), so
-  // it is still there after visiting another page or restarting the app.
-  const composerHeight = wall.composer.height ?? null;
-  const setComposerHeight = useCallback((height: number | null) => setWall((w) => {
-    const next = height === null ? undefined : Math.round(height);
-    if (w.composer.height === next) return w;
-    const { height: _old, ...rest } = w.composer;
-    return { ...w, composer: next === undefined ? rest : { ...rest, height: next } };
-  }), [setWall]);
-  const setComposerWidth = useCallback((width: number | null) => setWall((w) => {
-    const next = width === null ? undefined : Math.round(width);
-    if (w.composer.width === next) return w;
-    const { width: _old, ...rest } = w.composer;
-    return { ...w, composer: next === undefined ? rest : { ...rest, width: next } };
-  }), [setWall]);
-  const composerDrag = useRef<{ y: number; height: number } | null>(null);
-  // The composer's natural (unsized) height, remembered whenever it is at its
-  // default so a drag can snap back to it.
-  const composerDefaultH = useRef<number | null>(null);
-  useLayoutEffect(() => { if (composerHeight === null && composerRef.current) composerDefaultH.current = composerRef.current.offsetHeight; });
-  // Two snap points while dragging: the default size and full size (the 70% cap).
-  const snapComposerHeight = (raw: number) => {
-    const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700;
-    const max = available * .7;
-    const h = Math.max(120, Math.min(max, raw));
-    const def = composerDefaultH.current;
-    if (def !== null && Math.abs(h - def) <= 24) return null;
-    if (max - h <= 24) return max;
-    return h;
-  };
-  const composerSplit = <div className="wall-composer-split" role="separator" tabIndex={0} aria-label="Resize composer versus wall" aria-orientation="horizontal" title="Drag to resize composer versus wall; double-click to reset"
-    onPointerDown={(e) => { composerDrag.current = { y: e.clientY, height: composerRef.current?.offsetHeight ?? 240 }; e.currentTarget.setPointerCapture(e.pointerId); }}
-    onPointerMove={(e) => { const drag = composerDrag.current; if (!drag) return; setComposerHeight(snapComposerHeight(drag.height + (e.clientY - drag.y) * (wall.composer.side === 'top' ? 1 : -1))); }}
-    onPointerUp={() => { composerDrag.current = null; }} onPointerCancel={() => { composerDrag.current = null; }}
-    onDoubleClick={() => setComposerHeight(null)}
-    onKeyDown={(e) => { if (e.key === 'Home') { e.preventDefault(); setComposerHeight(null); } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); const available = composerRef.current?.closest('.wall-column')?.clientHeight ?? 700; setComposerHeight(Math.max(120, Math.min(available * .7, (composerHeight ?? composerRef.current?.offsetHeight ?? 240) + (e.key === 'ArrowUp' ? 20 : -20) * (wall.composer.side === 'top' ? -1 : 1)))); } }} />;
-  const composer = (
-    <WallComposer
-      height={composerHeight}
-      resizeHandle={composerSplit}
-      agent={selectedAgent}
-      agents={agentList}
-      dock={wall.composer}
-      onDock={(dock) => setWall((w) => ({ ...w, composer: { ...w.composer, side: dock.side, align: dock.align } }))}
-      onWidth={setComposerWidth}
-      onSelect={selectAgent}
-      onOpen={openChat}
-      onFocus={(id) => {
-        selectAgent(id);
-        setWall((w) => ({ ...w, hero: id, layout: { ...w.layout, mode: 'focus' } }));
-      }}
-      onNewAgent={() => { void addFromToolbar('chat').catch(reportAddFailure); }}
-      panelRef={composerRef}
-    />
-  );
-  // Adding windows lives in the toolbar's icon bar, so the composer row is the composer alone.
-  const composerRow = <div className="wall-composer-row" data-dock={`${wall.composer.side}-${wall.composer.align}`}>{composer}</div>;
+  }, [wall.root, selected, typeInto, setWall]);
+  const chatFinderOpen = useStore((s) => s.chatFinderOpen);
+  const onAgentsView = useStore((s) => s.view) === 'command';
+  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro;
+  useEffect(() => {
+    if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
+  }, [chatFinderOpen, setWall]);
+  // The vertical agent panel spans exactly the wall's windows: from the top of
+  // their panels (below the wall's inset and a zone's name bar) to their
+  // bottom (above a composer docked below and the add-zone rail).
+  const agentWorkspaceRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const workspace = agentWorkspaceRef.current;
+    const column = workspace?.querySelector<HTMLElement>(':scope > .wall-column');
+    if (!workspace || !column) return;
+    const measure = () => {
+      const layout = column.querySelector<HTMLElement>(':scope > .command-wall-layout');
+      if (!layout) { workspace.style.removeProperty('--wall-panes-top'); workspace.style.removeProperty('--wall-panes-bottom'); return; }
+      const style = getComputedStyle(layout);
+      const panel = layout.querySelector<HTMLElement>('.command-wall-window:not([data-wall-parked]) > .panel');
+      const box = workspace.getBoundingClientRect(), wall = layout.getBoundingClientRect();
+      const top = wall.top - box.top + parseFloat(style.paddingTop) + (panel?.offsetTop ?? 0);
+      const bottom = box.bottom - wall.bottom + parseFloat(style.paddingBottom);
+      workspace.style.setProperty('--wall-panes-top', `${Math.max(0, Math.round(top))}px`);
+      workspace.style.setProperty('--wall-panes-bottom', `${Math.max(0, Math.round(bottom))}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    for (const child of column.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [wall.layout.mode, completedId, agentsPresent]);
 
   return (
-    <div ref={viewRef} className="flex h-full min-h-0 flex-col gap-2 pb-0 pl-[3px] pr-px pt-1">
+    <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-1 pr-px pt-0">
+      {showZonesIntro && <Suspense fallback={null}><ZonesIntro onClose={() => setWall((w) => ({ ...w, zonesIntro: true }))} /></Suspense>}
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
@@ -559,7 +556,7 @@ export function CommandCenterView() {
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
         <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
-        <div className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
+        <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
       {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
         <AgentPanelControls show={false} orientation={panel.orientation}
           onToggle={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }))}
@@ -580,10 +577,10 @@ export function CommandCenterView() {
         }
       }} onOpenTerminal={(id) => { setCompletedId(null); void addFromToolbar('terminal', id); }}
         orientation={panel.orientation}
+        zoneTints={agentTints}
         onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))}
         onClosePanel={() => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: false } }))} /></div>}
       <div className="wall-column">
-      {!completedId && wall.layout.mode !== 'focus' && wall.composer.side === 'top' && composerRow}
       {completedId ? <div className="panel panel-ring flex min-h-0 flex-1 flex-col overflow-hidden"><button className="btn btn-ghost self-start" onClick={() => setCompletedId(null)}>Back to active agents</button><ChatPane key={completedId} sessionId={completedId} readOnly /></div> : <CommandWall
         state={wall}
         setState={setWall}
@@ -603,7 +600,6 @@ export function CommandCenterView() {
         onNewTerminal={newTerminal}
         onAddWindow={() => setAddOpen((open) => !open)}
       />}
-      {!completedId && wall.layout.mode !== 'focus' && wall.composer.side === 'bottom' && composerRow}
         </div>
       </div>
       </div>
@@ -612,6 +608,27 @@ export function CommandCenterView() {
 }
 
 /* ---------- toolbar ---------- */
+
+/** Focused / Dynamic. The selected pill slides under whichever one the pointer is over, uncommitted until a click. */
+function LayoutSegments({ mode, onPick }: { mode: 'focus' | 'grid'; onPick: (mode: 'focus' | 'grid') => void }) {
+  const [hover, setHover] = useState<'focus' | 'grid' | null>(null);
+  const buttons = useRef<Partial<Record<'focus' | 'grid', HTMLButtonElement | null>>>({});
+  const [pill, setPill] = useState<{ x: number; width: number } | null>(null);
+  const lit = hover ?? mode;
+  useLayoutEffect(() => {
+    const b = buttons.current[lit];
+    if (b) setPill({ x: b.offsetLeft, width: b.offsetWidth });
+  }, [lit, mode]);
+  return (
+    <div className="wall-layout-segments" role="group" aria-label="Wall layout" data-pill={pill ? '' : undefined} onMouseLeave={() => setHover(null)}>
+      {pill && <span className="wall-layout-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.x}px)` }} />}
+      {(['focus', 'grid'] as const).map((m) => (
+        <button key={m} ref={(el) => { buttons.current[m] = el; }} type="button" title={`${LAYOUT_LABEL[m]} (${layoutShortcutLabel(m)})`} aria-pressed={mode === m} data-lit={lit === m ? '' : undefined}
+          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
+      ))}
+    </div>
+  );
+}
 
 export function WallToolbar({
   wall,
@@ -660,24 +677,18 @@ export function WallToolbar({
 
   const controls = (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${slot ? 'wall-toolbar-titlebar' : ''}`} data-wall-toolbar>
-      {!hasAppChrome && <h1 className="view-title text-gradient">Agents</h1>}
+      {!hasAppChrome && <h1 className="view-title">Agents</h1>}
       <div className={`ml-auto flex flex-wrap items-center ${slot ? 'gap-2' : 'gap-3'}`}>
 
         {/* Adding to the wall, first in the row: an agent, an image session or a
             terminal of its own. An agent's Changes, Files and Browser live in that agent's own
             header beside Logs. The empty wall can still open the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
-          <button type="button" className="wall-add-icon" title="New agent" aria-label="New agent" onClick={() => onAdd('chat')}><NekkoAvatar size={16} stationary eyes={false} /></button>
-          <button type="button" className="wall-add-icon" title="New image session" aria-label="New image session" onClick={() => onAdd('image')}><PhotoIcon className="h-4 w-4" /></button>
-          <button type="button" className="wall-add-icon" title="New terminal" aria-label="New terminal" ref={addButtonRef} onClick={() => onAdd('terminal')}><TerminalIcon className="h-4 w-4" /></button>
+          <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} />
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control">
-          <div className="wall-layout-segments" role="group" aria-label="Wall layout">
-            {(['focus', 'grid'] as const).map((mode) => (
-              <button key={mode} type="button" title={`${LAYOUT_LABEL[mode]} (${layoutShortcutLabel(mode)})`} aria-pressed={wall.layout.mode === mode} onClick={() => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))}>{React.createElement(mode === 'focus' ? FocusLayoutIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[mode]}</button>
-            ))}
-          </div>
+          <LayoutSegments mode={wall.layout.mode} onPick={(mode) => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))} />
           {/* Snap to grid, only in free-form Dynamic (a Fixed grid is already
               even). Its space stays reserved so revealing it never shifts the controls. */}
           <div className="wall-auto-arrange" data-visible={snapAvailable}>
@@ -690,9 +701,9 @@ export function WallToolbar({
             </HoverTip>
           </div>
         </div>
-        {/* Multi-monitor: Dynamic mode only, at the end of the toolbar (the
+        {/* Multi-monitor, in either mode, at the end of the toolbar (the
             Monitors toggle now lives in the panel's own header). */}
-        {wall.layout.mode === 'grid' && <ScreensControl />}
+        <ScreensControl mode={wall.layout.mode} />
       </div>
     </div>
   );

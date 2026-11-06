@@ -1,0 +1,45 @@
+DNS configuration
+
+resolver #1
+  search domain[0] : lan
+  nameserver[0] : 100.100.100.100
+  nameserver[1] : fd7a:115c:a1e0::53
+  if_index : 20 (utun4)
+  flags    : Supplemental, Request A records, Request AAAA records
+  reach    : 0x00000003 (Reachable,Transient Connection)
+  order    : 102400
+
+resolver #2
+  nameserver[0] : 149.112.112.112
+  if_index : 4 (en0)
+  flags    : Request A records, Request AAAA records
+  reach    : 0x00020002 (Reachable,Directly Reachable Address)
+  order    : 200000
+
+resolver #3
+  domain   : local
+  options  : mdns
+  timeout  : 5
+  flags    : Request A records, Request AAAA records
+  reach    : 0x00000000 (Not Reachable)
+  order    : 300000
+
+DNS configuration (for scoped queries)
+
+resolver #1
+  search domain[0] : lan
+  nameserver[0] : 192.168.1.1
+  nameserver[1] : 9.9.9.9
+  nameserver[2] : 2001:db8::53
+  nameserver[3] : 127.0.0.1
+  nameserver[4] : 169.254.1.1
+  if_index : 4 (en0)
+  flags    : Scoped, Request A records, Request AAAA records
+  reach    : 0x00020002 (Reachable,Directly Reachable Address)
+
+resolver #2
+  nameserver[0] : 100.100.100.100
+  nameserver[1] : fd7a:115c:a1e0::53
+  if_index : 20 (utun4)
+  flags    : Scoped, Request A records, Request AAAA records
+  reach    : 0x00000003 (Reachable,Transient Connection)

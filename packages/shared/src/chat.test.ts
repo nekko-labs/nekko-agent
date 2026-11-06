@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage, ToolCall } from './chat.js';
-import { accumulateDecodeMs, decodeRate, formatRate, hasResumableProgress, parseReplySuggestions } from './chat.js';
+import { accumulateDecodeMs, decodeRate, formatRate, hasResumableProgress } from './chat.js';
 
 describe('decodeRate', () => {
   it('does not report buffered output as thousands of tokens per second', () => {
@@ -84,68 +84,5 @@ describe('hasResumableProgress', () => {
 
   it('is false for an empty transcript', () => {
     expect(hasResumableProgress([])).toBe(false);
-  });
-});
-
-describe('parseReplySuggestions', () => {
-  it('reads the JSON object the prompt asks for', () => {
-    const out = parseReplySuggestions(
-      '{"options": ["Try it on the tests", "Explain the diff"], "next": "Run the tests and show me what fails"}',
-    );
-    expect(out).toEqual({
-      options: ['Try it on the tests', 'Explain the diff'],
-      next: 'Run the tests and show me what fails',
-    });
-  });
-
-  it('finds the object inside a markdown fence or prose', () => {
-    const out = parseReplySuggestions(
-      'Here are suggestions:\n```json\n{"options": ["Open the file"], "next": "Open the file you changed"}\n```',
-    );
-    expect(out).toEqual({ options: ['Open the file'], next: 'Open the file you changed' });
-  });
-
-  it('accepts the field names small models reach for instead of "next"', () => {
-    expect(parseReplySuggestions('{"options": [], "suggestion": "Make it faster"}')?.next).toBe('Make it faster');
-    expect(parseReplySuggestions('{"options": [], "draft": "Ship it"}')?.next).toBe('Ship it');
-  });
-
-  it('caps the chips at four and drops repeats', () => {
-    const out = parseReplySuggestions(
-      '{"options": ["One", "Two", "Three", "Four", "Five", "one"], "next": "One"}',
-    );
-    expect(out?.options).toEqual(['One', 'Two', 'Three', 'Four']);
-  });
-
-  it('cleans bullets, quotes, and runs of whitespace', () => {
-    const out = parseReplySuggestions('{"options": ["-  \\"Fix  the   bug\\""], "next": null}');
-    expect(out?.options).toEqual(['Fix the bug']);
-  });
-
-  it('returns null for valid JSON that held nothing usable', () => {
-    expect(parseReplySuggestions('{"options": [], "next": null}')).toBeNull();
-    expect(parseReplySuggestions('{"options": [1, {}], "next": 42}')).toBeNull();
-    // And, importantly, does not fall through to serving the JSON's own
-    // fragments as chips.
-    expect(parseReplySuggestions('{"options": [\n"a",\n"b"\n]}')).toEqual({ options: ['a', 'b'], next: null });
-  });
-
-  it('falls back to bare lines when a small model skipped the JSON', () => {
-    const out = parseReplySuggestions('1. Try it on the tests\n- Explain the diff\nShip it');
-    expect(out).toEqual({
-      options: ['Try it on the tests', 'Explain the diff', 'Ship it'],
-      next: 'Try it on the tests',
-    });
-  });
-
-  it('skips lines that are JSON fragments rather than suggestions', () => {
-    const out = parseReplySuggestions('{\n"options": [\n"first pick",\noptions: ["a"],\n]\n}');
-    expect(out?.options).toEqual(['first pick']);
-  });
-
-  it('returns null for silence or noise', () => {
-    expect(parseReplySuggestions('')).toBeNull();
-    expect(parseReplySuggestions('   \n\n')).toBeNull();
-    expect(parseReplySuggestions('{}')).toBeNull();
   });
 });

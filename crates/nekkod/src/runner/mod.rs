@@ -1,0 +1,927 @@
+//! CI runner VMs: the userspace NAT that is a job VM's only network, the
+//! host networks it keeps the guest away from, the physical interface it
+//! sends from, and [`Runners`], which wires the supervisor, the Mac's
+//! readings, the `nekko-vm` helper, GitHub and GitLab into the daemon (`runner:*`).
+
+pub mod audit;
+pub mod awake;
+pub mod egress;
+pub mod github;
+pub mod github_setup;
+pub mod gitlab;
+pub mod hostnets;
+pub mod image;
+pub mod keychain;
+pub mod lan;
+pub mod linux_image;
+pub mod net;
+pub mod provider;
+pub mod signals;
+pub mod store;
+pub mod supervisor;
+#[cfg(test)]
+pub mod test_http;
+pub mod updates;
+pub mod vm;
+
+use github::{ConnectRequest, GitHub, SecKeySigner};
+use github_setup::{ForkApproval, GithubSetup};
+use gitlab::{GitLab, GitlabConnectRequest};
+use keychain::{key_name, runner_vault, token_key};
+use nekko_cloud::vault::Vault;
+use nekko_connectors::Net;
+use nekko_runner::{HostNets, RunnerSettings};
+use provider::{ByLink, Provider};
+use serde_json::{Value, json};
+use signals::HostSense;
+use signals::Sense;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock, RwLock};
+use std::time::Duration;
+use store::{Link, RunnerRecord, Store, same_scope, same_target};
+use supervisor::{Ask, RunnerState, RunnerView, Supervisor, TICK};
+use vm::HelperVm;
+use vm::Vm;
+
+pub const CHANNELS: &[&str] = &[
+    "runner:list",
+    "runner:connect",
+    "runner:update",
+    "runner:remove",
+    "runner:setEnabled",
+    "runner:jobLog",
+    "runner:vmLog",
+    "runner:liveLog",
+    "runner:job",
+];
+/// Pushed with `RunnerView[]` whenever the views change.
+pub const EVENT: &str = "runner:changed";
+const NO_RUNNER: &str = "No runner with that id.";
+/// The most of a job's log `runner:jobLog` returns: its end, where a failure is.
+const JOB_LOG_TAIL: usize = 256 * 1024;
+/// The most of a running VM's console `runner:liveLog` returns.
+const LIVE_LOG_TAIL: usize = 64 * 1024;
+const FORK_APPROVAL_OPEN: &str = "This public repo doesn't hold outside contributors for approval yet. Turn that on in its Actions settings on GitHub, then choose Connect GitHub to finish.";
+/// How often the router is asked for its public address, and how often the gateway is checked for a change.
+const WAN_EVERY: Duration = Duration::from_secs(300);
+const GATEWAY_EVERY: Duration = Duration::from_secs(30);
+
+/// What connects new runners.
+pub struct Connectors {
+    pub github: GitHub<Net>,
+    pub gitlab: GitLab<Net>,
+    pub setup: Arc<GithubSetup<Net>>,
+}
+
+/// The vault item a record's credential lives in: its GitHub App's key, shared
+/// by every record of that app, or its own GitLab token.
+fn secret_key(r: &RunnerRecord) -> String {
+    match &r.link {
+        Link::Github(g) => key_name(g.app_id),
+        Link::Gitlab(_) => token_key(&r.config.id),
+    }
+}
+
+pub struct Runners<S: Sense = HostSense, V: Vm = HelperVm, P: Provider = ByLink<GitHub<Net>, GitLab<Net>>> {
+    /// `<data>/runners`.
+    dir: PathBuf,
+    store: Store,
+    /// Connects new runners; `None` in tests.
+    connectors: Option<Connectors>,
+    /// The supervisor's runner name prefix, for the connect probe.
+    prefix: String,
+    vault: Arc<dyn Vault>,
+    sup: tokio::sync::Mutex<Supervisor<S, V, P>>,
+    /// Serializes load-change-save of `runners.json`.
+    edit: tokio::sync::Mutex<()>,
+    hub: crate::hub::Hub,
+    wake: tokio::sync::Notify,
+    /// True once the tick loop runs (VM support is there).
+    looping: AtomicBool,
+    pending: std::sync::Mutex<Option<Pending>>,
+    /// What the owner asked of a runner's jobs, by runner id; the next step applies it.
+    asks: std::sync::Mutex<Vec<(String, Ask)>>,
+    /// The views last published; `runner:list` answers from here.
+    views: std::sync::Mutex<Vec<RunnerView>>,
+    /// Vault items a connect is storing, with how many connects are in flight.
+    connecting: std::sync::Mutex<HashMap<String, u32>>,
+    /// Vault items queued registration removals still sign with, as of the last step.
+    queued_keys: std::sync::Mutex<Vec<String>>,
+    /// Vault items to forget once no queued removal needs them.
+    deferred: std::sync::Mutex<Vec<String>>,
+    running_vm_mb: Arc<AtomicU64>,
+    /// Why no VM can run here, shown on every enabled runner.
+    vm_error: Option<String>,
+    /// The image builder; unset in tests.
+    image: OnceLock<Arc<image::ImageJob<image::RealBuildHost>>>,
+    linux_image: OnceLock<Arc<linux_image::LinuxImageJob>>,
+    /// The Mac as of the last tick, for the image builder's gates.
+    mac: Arc<std::sync::Mutex<Option<signals::MacState>>>,
+}
+
+/// The last `max` bytes of `text`, from the start of a line.
+fn tail(text: &str, max: usize) -> &str {
+    if text.len() <= max {
+        return text;
+    }
+    let cut = (text.len() - max..text.len()).find(|&i| text.is_char_boundary(i)).unwrap_or(text.len());
+    let rest = &text[cut..];
+    rest.find('\n').map_or(rest, |n| &rest[n + 1..])
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs())
+}
+
+/// A public repo's runner cannot take a job until GitHub holds outside contributors for approval.
+fn may_enable(r: &RunnerRecord, enabling: bool) -> Result<(), String> {
+    if enabling && r.fork_approval_open() {
+        return Err(FORK_APPROVAL_OPEN.into());
+    }
+    Ok(())
+}
+
+/// The `nekko-vm` helper beside the executable, or the sentence the UI shows.
+fn helper() -> Result<PathBuf, String> {
+    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return Err("VM support unavailable: CI runners need a Mac with Apple silicon.".into());
+    }
+    std::env::current_exe()
+        .ok()
+        .and_then(|e| Some(e.parent()?.join("nekko-vm")))
+        .filter(|h| h.is_file())
+        .ok_or_else(|| "VM support unavailable: the nekko-vm helper is not installed.".into())
+}
+
+/// Reads the host's networks (retrying every 5 s until the first read works),
+/// keeps them fresh, and adds the router's public address, asked again every
+/// `WAN_EVERY` and whenever the default gateway changes.
+fn spawn_host_nets(host: Arc<RwLock<HostNets>>, ok: Arc<AtomicBool>) {
+    tokio::spawn(async move {
+        loop {
+            match hostnets::try_current() {
+                Ok(n) => {
+                    if let Ok(mut h) = host.write() {
+                        *h = n;
+                    }
+                    ok.store(true, Ordering::SeqCst);
+                    break;
+                }
+                Err(e) => eprintln!("runner: cannot read this Mac's networks: {e}"),
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+        let extra = Arc::new(RwLock::new(Vec::new()));
+        hostnets::spawn_refresh(host, Duration::from_secs(5), extra.clone());
+        let mut asked: Option<(std::net::Ipv4Addr, tokio::time::Instant)> = None;
+        loop {
+            let route = signals::output("/sbin/route", &["-n", "get", "default"], Duration::from_secs(5)).await;
+            if let Some(gw) = route.as_deref().and_then(lan::default_gateway)
+                && asked.is_none_or(|(g, at)| g != gw || at.elapsed() >= WAN_EVERY)
+            {
+                let wan = lan::discover_wan(gw).await;
+                if let Ok(mut e) = extra.write() {
+                    *e = wan;
+                }
+                asked = Some((gw, tokio::time::Instant::now()));
+            }
+            tokio::time::sleep(GATEWAY_EVERY).await;
+        }
+    });
+}
+
+impl Runners {
+    /// Call inside the runtime. Without VM support every runner shows why
+    /// and nothing starts (no loop, no helper streams).
+    pub fn start(
+        data_dir: PathBuf,
+        machine: Arc<nekko_machine::Machine>,
+        settings: Box<dyn Fn() -> Value + Send + Sync>,
+        hub: crate::hub::Hub,
+        github_api: Option<String>,
+    ) -> Arc<Runners> {
+        #[cfg(unix)]
+        raise_nofile();
+        let dir = data_dir.join("runners");
+        let helper = helper();
+        let host = Arc::new(RwLock::new(HostNets::default()));
+        let host_ok = Arc::new(AtomicBool::new(false));
+        let running_vm_mb = Arc::new(AtomicU64::new(0));
+        let egress = match &helper {
+            Ok(h) => {
+                spawn_host_nets(host.clone(), host_ok.clone());
+                egress::spawn_watch(h)
+            }
+            Err(_) => Arc::new(RwLock::new(None)),
+        };
+        let vm = helper.clone().map(|h| HelperVm::new(h, host.clone(), egress.clone()));
+        let linux_vm = helper.clone().map(|h| HelperVm::new(h, host.clone(), egress.clone()));
+        let build_vm = helper.clone().map(|h| HelperVm::new(h, host, egress.clone()));
+        let sense = HostSense::new(
+            machine,
+            dir.clone(),
+            settings,
+            helper.as_ref().ok().cloned(),
+            egress,
+            host_ok,
+            running_vm_mb.clone(),
+        );
+        let github = GitHub::new(
+            Net::default(),
+            github_api.unwrap_or_else(|| "https://api.github.com".into()),
+            runner_vault(&data_dir),
+            Box::new(SecKeySigner),
+            now_secs,
+        );
+        let host_name = gethostname::gethostname().to_string_lossy().into_owned();
+        let vault = github.vault();
+        let gitlab = || GitLab::new(Net::default(), vault.clone(), now_secs);
+        let provider = ByLink { github: github.clone(), gitlab: gitlab() };
+        let mut sup =
+            Supervisor::new(dir.clone(), sense, vm, provider, Box::new(awake::Caffeinate::default()), host_name);
+        let building = Arc::new(AtomicBool::new(false));
+        sup.set_building(building.clone());
+        let gh =
+            github_setup::gh_path(std::env::var("NEKKO_GH_PATH").ok(), &["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]);
+        let setup = GithubSetup::new(github.clone(), &dir, hub.clone(), gh);
+        let connectors = Connectors { github, gitlab: gitlab(), setup };
+        let job_vault = vault.clone();
+        let job_hub = hub.clone();
+        let linux_hub = hub.clone();
+        let me = Runners::new(&dir, sup, Some(connectors), vault, hub, helper.as_ref().err().cloned(), running_vm_mb);
+        let images = dir.join("images");
+        let linux = linux_image::LinuxImageJob::new(
+            images.clone(),
+            linux_vm,
+            building.clone(),
+            Box::new(move |v| linux_hub.publish(linux_image::EVENT, json!(v), false)),
+        );
+        let _ = me.linux_image.set(Arc::new(linux));
+        let job = image::ImageJob::new(
+            images.clone(),
+            image::RealBuildHost::new(build_vm, images, me.mac.clone(), Arc::downgrade(&me)),
+            job_vault,
+            building,
+            Box::new(move |v| job_hub.publish(image::EVENT, json!(v), false)),
+        );
+        let _ = me.image.set(Arc::new(job));
+        if helper.is_ok() {
+            me.spawn_loop();
+        }
+        me
+    }
+}
+
+/// Records saved by a channel call, waiting for the loop's next tick.
+struct Pending {
+    records: Vec<RunnerRecord>,
+    /// Reconnected runners whose sticky error clears.
+    reset: Vec<String>,
+}
+
+impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
+    pub fn new(
+        runners_dir: &Path,
+        mut sup: Supervisor<S, V, P>,
+        connectors: Option<Connectors>,
+        vault: Arc<dyn Vault>,
+        hub: crate::hub::Hub,
+        vm_error: Option<String>,
+        running_vm_mb: Arc<AtomicU64>,
+    ) -> Arc<Self> {
+        let store = Store::new(runners_dir);
+        sup.set_records(store.load());
+        let views = sup.views();
+        Arc::new(Runners {
+            dir: runners_dir.to_path_buf(),
+            store,
+            connectors,
+            prefix: sup.prefix(),
+            vault,
+            sup: tokio::sync::Mutex::new(sup),
+            looping: AtomicBool::new(false),
+            pending: std::sync::Mutex::new(None),
+            asks: std::sync::Mutex::default(),
+            views: std::sync::Mutex::new(views),
+            connecting: std::sync::Mutex::new(HashMap::new()),
+            queued_keys: std::sync::Mutex::default(),
+            deferred: std::sync::Mutex::default(),
+            edit: tokio::sync::Mutex::new(()),
+            hub,
+            wake: tokio::sync::Notify::new(),
+            running_vm_mb,
+            vm_error,
+            image: OnceLock::new(),
+            linux_image: OnceLock::new(),
+            mac: Arc::default(),
+        })
+    }
+
+    /// Ticks every `TICK`, and at once after a channel call. Only the loop
+    /// holds the supervisor while it runs; channels never wait for a tick.
+    pub fn spawn_loop(self: &Arc<Self>) {
+        self.looping.store(true, Ordering::SeqCst);
+        let r = self.clone();
+        tokio::spawn(async move {
+            r.sup.lock().await.start().await;
+            // Vault items of removed runners waiting for a readable `runners.json`.
+            let mut forget: Vec<String> = Vec::new();
+            loop {
+                let (views, gone) = {
+                    let mut s = r.sup.lock().await;
+                    let gone = r.step(&mut s, true).await;
+                    r.running_vm_mb.store(s.running_vm_mb(), Ordering::SeqCst);
+                    if let Ok(mut mac) = r.mac.lock() {
+                        *mac = s.mac_state();
+                    }
+                    (s.views(), gone)
+                };
+                forget.extend(gone.iter().map(secret_key));
+                if let (Ok(mut d), Ok(q)) = (r.deferred.lock(), r.queued_keys.lock()) {
+                    let (ready, wait) = std::mem::take(&mut *d).into_iter().partition(|k| !q.contains(k));
+                    *d = wait;
+                    forget.extend::<Vec<String>>(ready);
+                }
+                if !forget.is_empty() {
+                    let _g = r.edit.lock().await;
+                    let saved = r.store.load();
+                    // An unreadable file loads as no runners at all: forgetting now could delete a key in use.
+                    if !r.store.is_unreadable() {
+                        r.forget_keys(&saved, std::mem::take(&mut forget).into_iter());
+                    }
+                }
+                // A change saved during the tick keeps its optimistic view until the next one.
+                if r.pending.lock().is_ok_and(|p| p.is_none()) {
+                    r.publish(views);
+                }
+                tokio::select! {
+                    () = tokio::time::sleep(TICK) => {}
+                    () = r.wake.notified() => {}
+                }
+            }
+        });
+    }
+
+    /// Applies saved records and ticks if asked; returns removed runners whose
+    /// VMs are all cleaned, so their keys can be forgotten.
+    async fn step(&self, s: &mut Supervisor<S, V, P>, tick: bool) -> Vec<RunnerRecord> {
+        if let Some(p) = self.pending.lock().ok().and_then(|mut p| p.take()) {
+            s.set_records(p.records);
+            for id in p.reset {
+                s.reset(&id);
+            }
+        }
+        for (id, ask) in self.asks.lock().map(|mut a| std::mem::take(&mut *a)).unwrap_or_default() {
+            s.ask(&id, ask);
+        }
+        if tick {
+            s.tick().await;
+        }
+        let gone = s.take_gone().await;
+        if let Ok(mut q) = self.queued_keys.lock() {
+            *q = s.queued_removals().map(secret_key).collect();
+        }
+        gone
+    }
+
+    /// Marks a connect storing vault item `key` in progress until the guard drops.
+    fn connect_guard(&self, key: String) -> ConnectGuard<'_> {
+        if let Ok(mut c) = self.connecting.lock() {
+            *c.entry(key.clone()).or_default() += 1;
+        }
+        ConnectGuard { set: &self.connecting, key }
+    }
+
+    /// Deletes each vault item no saved record uses and no connect is adding. One a queued
+    /// removal still signs with is deferred until that removal is done. Call under `edit`.
+    fn forget_keys(&self, saved: &[RunnerRecord], keys: impl Iterator<Item = String>) {
+        let connecting = self.connecting.lock().map(|c| c.clone()).unwrap_or_default();
+        let queued = self.queued_keys.lock().map(|q| q.clone()).unwrap_or_default();
+        for key in keys {
+            if queued.contains(&key) {
+                if let Ok(mut d) = self.deferred.lock() {
+                    d.push(key);
+                }
+                continue;
+            }
+            if !connecting.contains_key(&key) && !saved.iter().any(|r| secret_key(r) == key) {
+                self.vault.delete(&key);
+            }
+        }
+    }
+
+    /// Audits what removed runners leave behind; waits a few seconds at most for a running tick.
+    pub async fn shutdown(&self) {
+        match tokio::time::timeout(Duration::from_secs(5), self.sup.lock()).await {
+            Ok(mut s) => s.shutdown(),
+            Err(_) => eprintln!("runner: a tick is still running; removals left behind are not audited"),
+        }
+    }
+
+    fn publish(&self, views: Vec<RunnerView>) {
+        let Ok(mut last) = self.views.lock() else { return };
+        if *last != views {
+            self.hub.publish(EVENT, json!(views), false);
+            *last = views;
+        }
+    }
+
+    /// What `records` will look like once the supervisor has them: the last
+    /// view of each with its new settings, so the UI shows a change at once.
+    fn optimistic(&self, records: &[RunnerRecord], reset: &[String]) -> Vec<RunnerView> {
+        let old = self.views.lock().map(|v| v.clone()).unwrap_or_default();
+        records
+            .iter()
+            .map(|r| {
+                let mut v = old.iter().find(|v| v.config.id == r.config.id).cloned().unwrap_or_else(|| RunnerView {
+                    config: r.config.clone(),
+                    state: RunnerState::Waiting,
+                    slots: Vec::new(),
+                    reasons: Vec::new(),
+                    available: 0,
+                    limit: None,
+                    linux_available: 0,
+                    linux_error: None,
+                    awake: false,
+                    error: None,
+                    today: Default::default(),
+                    host: Default::default(),
+                    repos: Vec::new(),
+                    fork_approval_open: false,
+                    recent: Vec::new(),
+                    queue: Vec::new(),
+                    accept_why: Vec::new(),
+                    suggested_size: None,
+                });
+                let (was, now) = (&v.config.settings, &r.config.settings);
+                // A new size has no jobs behind it yet; the next tick says so.
+                if (was.cpus_per_vm, was.memory_per_vm_mb) != (now.cpus_per_vm, now.memory_per_vm_mb) {
+                    v.suggested_size = None;
+                }
+                v.config = r.config.clone();
+                v.repos = r.repos().to_vec();
+                v.fork_approval_open = r.fork_approval_open();
+                if reset.contains(&r.config.id) {
+                    v.error = None;
+                }
+                v.state = if !r.config.settings.enabled {
+                    RunnerState::Off
+                } else if let Some(e) = &self.vm_error {
+                    v.error = Some(e.clone());
+                    RunnerState::Error
+                } else if matches!(v.state, RunnerState::Off) || (v.state == RunnerState::Error && v.error.is_none()) {
+                    RunnerState::Waiting
+                } else {
+                    v.state
+                };
+                v
+            })
+            .collect()
+    }
+
+    /// Saves `records` and hands them to the supervisor without waiting for it;
+    /// returns the view of `id`. Call under `edit`.
+    async fn commit(&self, records: Vec<RunnerRecord>, id: Option<&str>) -> Result<Value, String> {
+        self.store.save(&records).map_err(|e| format!("Could not save the runners: {e}"))?;
+        let mut reset = Vec::new();
+        if let Ok(mut p) = self.pending.lock() {
+            reset = p.take().map(|p| p.reset).unwrap_or_default();
+            reset.extend(id.map(str::to_owned));
+            *p = Some(Pending { records: records.clone(), reset: reset.clone() });
+        }
+        let views = if self.looping.load(Ordering::SeqCst) {
+            self.wake.notify_one();
+            self.optimistic(&records, &reset)
+        } else {
+            // No loop (no VM support): nothing else holds the supervisor.
+            let mut s = self.sup.lock().await;
+            let gone = self.step(&mut s, false).await;
+            self.forget_keys(&records, gone.iter().map(secret_key));
+            s.views()
+        };
+        let view = id.map_or(Value::Null, |id| json!(views.iter().find(|v| v.config.id == id)));
+        self.publish(views);
+        Ok(view)
+    }
+
+    pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
+        let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
+        let id = arg(0).as_str().unwrap_or_default().to_string();
+        if channel == "runner:list" {
+            return Ok(json!(*self.views.lock().map_err(|_| "The runner views are unavailable.")?));
+        }
+        if channel == "runner:connect" {
+            return self.connect(arg(0)).await;
+        }
+        if channel == "runner:jobLog" {
+            return self.job_log(&id, arg(1).as_u64()).await;
+        }
+        if channel == "runner:vmLog" {
+            return self.vm_log(&id, arg(1).as_str().unwrap_or_default());
+        }
+        if channel == "runner:liveLog" {
+            return self.live_log(&id, arg(1).as_str().unwrap_or_default());
+        }
+        if channel == "runner:job" {
+            let (action, repo, job_id) = (arg(1), arg(2), arg(3));
+            return self
+                .job_action(
+                    &id,
+                    action.as_str().unwrap_or_default(),
+                    repo.as_str().unwrap_or_default(),
+                    job_id.as_u64(),
+                )
+                .await;
+        }
+        if github_setup::CHANNELS.contains(&channel) {
+            return self.github_setup(channel, arg(0)).await;
+        }
+        let _g = self.edit.lock().await;
+        let mut records = self.store.load();
+        let i = records.iter().position(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+        match channel {
+            "runner:update" => {
+                let Value::Object(patch) = arg(1) else { return Err("The settings must be an object.".into()) };
+                let mut cur = serde_json::to_value(&records[i].config.settings).map_err(|e| e.to_string())?;
+                if let Some(cur) = cur.as_object_mut() {
+                    cur.extend(patch);
+                }
+                let next: RunnerSettings =
+                    serde_json::from_value(cur).map_err(|e| format!("Those settings are not valid: {e}"))?;
+                may_enable(&records[i], next.enabled)?;
+                records[i].config.settings = next.sanitized();
+                self.commit(records, Some(&id)).await
+            }
+            "runner:setEnabled" => {
+                let enabled = arg(1).as_bool().ok_or("Enabled must be true or false.")?;
+                may_enable(&records[i], enabled)?;
+                records[i].config.settings.enabled = enabled;
+                self.commit(records, Some(&id)).await
+            }
+            "runner:remove" => {
+                // Its VMs stop on the next tick; its offline registrations and,
+                // when no other runner uses the app, its key go once they are cleaned.
+                records.remove(i);
+                self.commit(records, None).await
+            }
+            _ => Err(format!("unknown channel {channel}")),
+        }
+    }
+
+    /// The end of the log of a job in the runner's recent list; no other job's, so the
+    /// channel never reads the log of a job this Mac did not run.
+    async fn job_log(&self, id: &str, job_id: Option<u64>) -> Result<Value, String> {
+        const UNKNOWN: &str = "That job is not one of this runner's recent jobs.";
+        let job_id = job_id.ok_or(UNKNOWN)?;
+        let repo = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.recent)
+            .find(|l| l.job_id == Some(job_id))
+            .and_then(|l| l.repo.clone())
+            .ok_or(UNKNOWN)?;
+        let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+        let c = self.connectors.as_ref().ok_or("Job logs are not available here.")?;
+        let text = match rec.link {
+            Link::Github(_) => c.github.job_log(&rec, &repo, job_id).await,
+            Link::Gitlab(_) => c.gitlab.job_log(&rec, &repo, job_id).await,
+        }
+        .map_err(|e| e.to_string())?;
+        Ok(json!(tail(&text, JOB_LOG_TAIL)))
+    }
+
+    /// The end of a running VM's console: the guest's boot log, then the job's output as it runs.
+    fn live_log(&self, id: &str, name: &str) -> Result<Value, String> {
+        let live = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.slots)
+            .any(|s| s.vm == name);
+        // The name comes from our own view, so it is a plain folder name under `vms/`.
+        if !live || name.is_empty() {
+            return Err("That VM is not running for this runner.".into());
+        }
+        let path = self.dir.join("vms").join(name).join(vm::CONSOLE_LOG);
+        match std::fs::read(&path) {
+            Ok(b) => Ok(json!(tail(&String::from_utf8_lossy(&b), LIVE_LOG_TAIL))),
+            // Not written yet: the guest has not booted far enough.
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(json!("")),
+            Err(e) => Err(format!("Couldn't read the live log: {e}")),
+        }
+    }
+
+    /// Acts on one of runner `id`'s jobs: `decline`, `accept` or `undo` a queued one,
+    /// `cancel` or `restart` a running one, `rerun` a recent one. Only jobs the runner's
+    /// view lists, so the channel never touches a job this Mac has nothing to do with.
+    async fn job_action(&self, id: &str, action: &str, repo: &str, job_id: Option<u64>) -> Result<Value, String> {
+        let job_id = job_id.ok_or("Which job?")?;
+        let (queued, running, recent) = {
+            let views = self.views.lock().map_err(|_| "The runner views are unavailable.")?;
+            let v = views.iter().find(|v| v.config.id == id).ok_or(NO_RUNNER)?;
+            let queued = v.queue.iter().any(|q| q.job.repo == repo && q.job.job_id == job_id);
+            let running = v.slots.iter().filter_map(|s| s.job.clone()).find(|j| j.repo == repo && j.job_id == job_id);
+            let recent =
+                v.recent.iter().find(|l| l.repo.as_deref() == Some(repo) && l.job_id == Some(job_id)).map(|l| {
+                    provider::JobRef {
+                        repo: repo.to_string(),
+                        job_id,
+                        workflow: l.workflow.clone().unwrap_or_default(),
+                        job: l.job.clone().unwrap_or_default(),
+                        url: l.url.clone().unwrap_or_default(),
+                        pr: l.pr.clone(),
+                        ..Default::default()
+                    }
+                });
+            (queued, running, recent)
+        };
+        if !self.looping.load(Ordering::SeqCst) {
+            return Err("The runner isn't running on this Mac.".into());
+        }
+        let ask = match action {
+            "decline" | "accept" | "undo" if !queued => return Err("That job is no longer waiting.".into()),
+            "decline" => Ask::Decline(repo.into(), job_id),
+            "accept" => Ask::Accept(repo.into(), job_id),
+            "undo" => Ask::Undo(repo.into(), job_id),
+            "cancel" | "restart" => {
+                let job = running.ok_or("That job is no longer running here.")?;
+                let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+                let c = self.connectors.as_ref().ok_or("Jobs can't be cancelled here.")?;
+                match rec.link {
+                    Link::Github(_) => c.github.cancel(&rec, &job).await,
+                    Link::Gitlab(_) => c.gitlab.cancel(&rec, &job).await,
+                }
+                .map_err(|e| e.to_string())?;
+                if action == "cancel" {
+                    return Ok(Value::Null);
+                }
+                Ask::Rerun(job)
+            }
+            "rerun" => Ask::Rerun(recent.ok_or("That job is not one of this runner's recent jobs.")?),
+            _ => return Err(format!("unknown job action {action}")),
+        };
+        if let Ok(mut a) = self.asks.lock() {
+            a.push((id.to_string(), ask));
+        }
+        self.wake.notify_one();
+        Ok(Value::Null)
+    }
+
+    /// The console log of a VM in the runner's recent list, as the guest wrote it.
+    fn vm_log(&self, id: &str, name: &str) -> Result<Value, String> {
+        let known = self
+            .views
+            .lock()
+            .map_err(|_| "The runner views are unavailable.")?
+            .iter()
+            .filter(|v| v.config.id == id)
+            .flat_map(|v| &v.recent)
+            .any(|l| l.vm.as_deref() == Some(name));
+        if !known {
+            return Err("That VM is not one of this runner's recent jobs.".into());
+        }
+        audit::vm_log(&self.dir, name).map(|t| json!(t)).map_err(|e| format!("Couldn't read the VM log: {e}"))
+    }
+
+    /// A finished image build turns its runner on, with the mode chosen for it.
+    /// A runner removed during the build needs nothing.
+    async fn enable_after_build(&self, id: &str, priority: nekko_runner::Priority) -> Result<(), String> {
+        let _g = self.edit.lock().await;
+        let mut records = self.store.load();
+        let Some(r) = records.iter_mut().find(|r| r.config.id == id) else { return Ok(()) };
+        r.config.settings.priority = priority;
+        // A public repo's runner stays off until its fork approval is settled.
+        r.config.settings.enabled = !r.fork_approval_open();
+        self.commit(records, Some(id)).await.map(drop)
+    }
+
+    /// The click-through GitHub connect. Confirming it is an ordinary `runner:connect`.
+    async fn github_setup(&self, channel: &str, arg: Value) -> Result<Value, String> {
+        let setup = self.connectors.as_ref().map(|c| &c.setup).ok_or("Connecting is not available here.");
+        if channel == "runner:setForkApproval" {
+            let id = arg["runnerId"].as_str().ok_or(NO_RUNNER)?;
+            let rec = self.store.load().into_iter().find(|r| r.config.id == id).ok_or(NO_RUNNER)?;
+            // `confirmed`: the owner says they set it themselves, after following the link.
+            let approval = match arg["confirmed"].as_bool() {
+                Some(true) => ForkApproval { done: true, url: String::new() },
+                _ => setup?.fork_approval(&rec).await?,
+            };
+            if approval.done {
+                self.settle_fork_approval(id).await?;
+            }
+            return Ok(json!(approval));
+        }
+        let setup = setup?;
+        match channel {
+            "runner:githubAccounts" => Ok(setup.accounts().await),
+            "runner:githubStart" => {
+                let req = serde_json::from_value(arg).map_err(|_| "That is not a valid GitHub setup request.")?;
+                setup.start(req, &self.store.load()).await
+            }
+            "runner:githubStatus" => Ok(json!(setup.status().await)),
+            "runner:githubCancel" => Ok(json!(setup.cancel())),
+            _ => Err(format!("unknown channel {channel}")),
+        }
+    }
+
+    async fn settle_fork_approval(&self, id: &str) -> Result<(), String> {
+        let _g = self.edit.lock().await;
+        let mut records = self.store.load();
+        if let Some(Link::Github(g)) = records.iter_mut().find(|r| r.config.id == id).map(|r| &mut r.link) {
+            g.fork_approval_open = false;
+        }
+        self.commit(records, Some(id)).await.map(|_| ())
+    }
+
+    /// Checks and saves a new runner. The provider's checks hold no lock.
+    async fn connect(&self, req: Value) -> Result<Value, String> {
+        // Never echo the request: it holds a private key or an access token.
+        const INVALID: &str = "That is not a valid connect request.";
+        let c = self.connectors.as_ref().ok_or("Connecting is not available here.")?;
+        // Held through the save, so a removed record's cleanup never deletes the token being stored.
+        let _connecting;
+        let (rec, network, previous) = match req["provider"].as_str() {
+            Some("github") => {
+                let req: ConnectRequest = serde_json::from_value(req).map_err(|_| INVALID)?;
+                let app_id = req.app_id;
+                let _connecting = self.connect_guard(key_name(app_id));
+                let network = signals::read_network_id().await;
+                let mut rec = c.github.connect(req, network.clone()).await?;
+                c.setup.stamp(&mut rec);
+                let view = self.save_connected(rec, network).await?;
+                c.setup.connected(app_id);
+                return Ok(view);
+            }
+            Some("gitlab") => {
+                let req: GitlabConnectRequest = serde_json::from_value(req).map_err(|_| INVALID)?;
+                let base = nekko_connectors::connectors::gitlab_base(Some(
+                    &json!({ "site": req.base_url.clone().unwrap_or_default() }),
+                ))?;
+                let existing = self.store.load().into_iter().find(|r| {
+                    r.gitlab().is_some_and(|g| g.base_url.eq_ignore_ascii_case(&base))
+                        && same_scope(&r.config.scope, &req.scope)
+                });
+                _connecting = existing.as_ref().map(|e| self.connect_guard(token_key(&e.config.id)));
+                // Put back if the save fails: the connect overwrites it before the record is saved.
+                let previous = existing.as_ref().and_then(|e| self.vault.get(&token_key(&e.config.id)));
+                // Read now, not from the VM's copy: a Mac without VM support never fills that.
+                let nets = hostnets::try_current().map_err(|e| format!("Cannot read this Mac's networks: {e}"))?;
+                let network = signals::read_network_id().await;
+                let resolve = async |h: &str| Ok(tokio::net::lookup_host((h, 443)).await?.map(|a| a.ip()).collect());
+                let rec =
+                    c.gitlab.connect(req, existing.as_ref(), &self.prefix, network.clone(), &nets, resolve).await?;
+                (rec, network, previous)
+            }
+            _ => return Err("Unknown CI provider.".into()),
+        };
+        self.save_gitlab(rec, network, previous).await
+    }
+
+    /// Saves a GitLab record whose token is stored; a failed save leaves the
+    /// vault as before the connect: the `previous` token back, or none.
+    async fn save_gitlab(
+        &self,
+        rec: RunnerRecord,
+        network: Option<String>,
+        previous: Option<String>,
+    ) -> Result<Value, String> {
+        let key = secret_key(&rec);
+        let saved = self.save_connected(rec, network).await;
+        if saved.is_err() {
+            match previous {
+                Some(p) => {
+                    if let Err(e) = self.vault.set(&key, &p) {
+                        eprintln!("runner: could not put the previous GitLab token back: {e}");
+                    }
+                }
+                None if !self.store.load().iter().any(|r| secret_key(r) == key) && !self.store.is_unreadable() => {
+                    self.vault.delete(&key);
+                }
+                None => {}
+            }
+        }
+        saved
+    }
+
+    /// A record the CI service accepted: a target already saved (same service,
+    /// GitLab instance and scope) keeps its id and settings.
+    async fn save_connected(&self, rec: RunnerRecord, network: Option<String>) -> Result<Value, String> {
+        let _g = self.edit.lock().await;
+        let mut records = self.store.load();
+        let mut replaced = None;
+        // (vault item, what it held) to put back if the save fails.
+        let mut undo = None;
+        let id = match records.iter_mut().find(|r| same_target(r, &rec)) {
+            Some(old) => {
+                // A connect that did not see this record stored its token under its own new id.
+                if rec.gitlab().is_some() && old.config.id != rec.config.id {
+                    let (new, kept) = (token_key(&rec.config.id), token_key(&old.config.id));
+                    let token = self.vault.get(&new).ok_or("The GitLab access token was not stored.")?;
+                    undo = Some((kept.clone(), self.vault.get(&kept)));
+                    self.vault.set(&kept, &token)?;
+                    self.vault.delete(&new);
+                }
+                let before = secret_key(old);
+                // A public repo waiting on fork approval must not come up running. Confirm
+                // always connects off, for a new runner's sake; a working one stays on.
+                old.config.settings.enabled &= !rec.fork_approval_open();
+                old.link = rec.link;
+                old.config.label = rec.config.label;
+                let nets = &mut old.config.settings.trusted_networks;
+                if let Some(n) = network.filter(|n| !nets.contains(n)) {
+                    nets.push(n);
+                }
+                old.config.settings = old.config.settings.clone().sanitized();
+                replaced = Some(before).filter(|k| *k != secret_key(old));
+                old.config.id.clone()
+            }
+            None => {
+                let id = rec.config.id.clone();
+                records.push(rec);
+                id
+            }
+        };
+        let view = match self.commit(records.clone(), Some(&id)).await {
+            Ok(v) => v,
+            Err(e) => {
+                match undo {
+                    Some((key, Some(was))) => {
+                        if let Err(e) = self.vault.set(&key, &was) {
+                            eprintln!("runner: could not put the previous GitLab token back: {e}");
+                        }
+                    }
+                    Some((key, None)) => self.vault.delete(&key),
+                    None => {}
+                }
+                return Err(e);
+            }
+        };
+        // The scope moved to another app: the old app's key goes once nothing uses it.
+        self.forget_keys(&records, replaced.into_iter());
+        Ok(view)
+    }
+}
+
+/// The open-file limit nekkod runs with: the soft limit raised to 10240
+/// (macOS's per-process ceiling for `setrlimit`), capped by the hard limit,
+/// never lowered. Each job's NAT holds a socket per guest flow, and the
+/// default soft limit of 256 runs out under a busy build.
+pub fn nofile_target(soft: u64, hard: u64) -> u64 {
+    soft.max(hard.min(10_240))
+}
+
+/// Applies [`nofile_target`] to this process; a failure is logged, not fatal.
+#[cfg(unix)]
+pub fn raise_nofile() {
+    let mut lim = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    // SAFETY: getrlimit and setrlimit with a valid rlimit struct.
+    let rc = unsafe {
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) != 0 {
+            -1
+        } else {
+            lim.rlim_cur = nofile_target(lim.rlim_cur, lim.rlim_max);
+            libc::setrlimit(libc::RLIMIT_NOFILE, &lim)
+        }
+    };
+    if rc != 0 {
+        eprintln!("nekkod: cannot raise the open-file limit: {}", std::io::Error::last_os_error());
+    }
+}
+
+struct ConnectGuard<'a> {
+    set: &'a std::sync::Mutex<HashMap<String, u32>>,
+    key: String,
+}
+
+impl Drop for ConnectGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut c) = self.set.lock()
+            && let Some(n) = c.get_mut(&self.key)
+        {
+            *n -= 1;
+            if *n == 0 {
+                c.remove(&self.key);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tail;
+
+    #[test]
+    fn tail_keeps_whole_lines_from_the_end() {
+        assert_eq!(tail("a\nb\n", 10), "a\nb\n");
+        assert_eq!(tail("first\nsecond\nthird\n", 9), "third\n");
+        // A cut inside a multi-byte character moves to the next boundary.
+        assert_eq!(tail("ééé\nok\n", 5), "ok\n");
+    }
+}

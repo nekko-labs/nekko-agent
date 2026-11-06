@@ -5,7 +5,7 @@ import { Modal } from './primitives/index.js';
 /**
  * Camera QR scanner using getUserMedia + jsQR (pure JS, no native plugin, works
  * in the Capacitor webview and mobile browsers). Calls onResult with the decoded
- * text. The native app needs a camera usage description (see apps/mobile README).
+ * text. The native app needs a camera usage description (see apps/ios/Info.plist).
  */
 export function QrScanner({ onResult, onClose }: { onResult: (text: string) => void; onClose: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -65,7 +65,7 @@ export function QrScanner({ onResult, onClose }: { onResult: (text: string) => v
     >
       <video ref={videoRef} className="max-h-[70vh] w-full max-w-md rounded-2xl object-cover" muted playsInline />
       <div className="pointer-events-none absolute inset-0 m-auto h-56 w-56 rounded-2xl border-2 border-white/70" style={{ maxHeight: '40vh', maxWidth: '70vw' }} />
-      <p className="mt-4 text-center text-[13px] text-white/80">
+      <p className="mt-4 text-center text-sm text-white/80">
         {error || 'Point at the QR code in Settings → Remote access on your computer.'}
       </p>
       <button className="btn btn-outline mt-4 text-white!" style={{ borderColor: 'rgba(255,255,255,0.4)' }} onClick={onClose}>

@@ -7,7 +7,7 @@ import { type WbPane } from '../layout.js';
 import type { Workspace } from '../store.js';
 
 const fixture = vi.hoisted(() => ({ workspaces: [] as Workspace[], streamItems: 2 }));
-vi.mock('../store.js', () => ({ useStore: (select: (s: { workspaces: Workspace[] }) => unknown) => select(fixture) }));
+vi.mock('../store.js', () => ({ useStore: (select: (s: { workspaces: Workspace[] }) => unknown) => select({ computers: [], ...fixture } as never) }));
 vi.mock('./ChatPane.js', () => ({ ChatPane: () => <ul>{Array.from({ length: fixture.streamItems }, (_, i) => <li key={i}>Stream item {i}</li>)}</ul> }));
 vi.mock('./TerminalPane.js', () => ({ TerminalPane: ({ terminalId }: { terminalId: string }) => <div data-terminal={terminalId} /> }));
 vi.mock('./FilePane.js', () => ({ FilePane: ({ path }: { path: string }) => <div data-file={path} /> }));

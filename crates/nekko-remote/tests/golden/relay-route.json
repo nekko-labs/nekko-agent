@@ -123,5 +123,15 @@
   "url": "ws://y",
   "route": "internet",
   "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "ws://127.evil.example:4400",
+  "route": "internet",
+  "problem": "This relay is not encrypted (ws://) and is on the open internet. Use a wss:// relay, or a relay on your Tailscale network."
+ },
+ {
+  "url": "ws://127.0.0.2:4400",
+  "route": "loopback",
+  "problem": null
  }
 ]

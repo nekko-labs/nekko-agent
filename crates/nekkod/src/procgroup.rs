@@ -354,12 +354,8 @@ mod tracking {
     }
 
     fn write(path: &Path, record: &Record) -> std::io::Result<()> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let tmp = path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec(record)?)?;
-        std::fs::rename(&tmp, path)
+        let opts = nekko_js::fs::AtomicWrite { create_dir: true, ..Default::default() };
+        nekko_js::fs::atomic_write(path, &serde_json::to_vec(record)?, opts)
     }
 
     pub fn start(run_dir: &Path) {

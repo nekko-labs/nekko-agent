@@ -5,6 +5,20 @@ installed, or by driving a server you already run (Ollama, LM Studio, vLLM). Eit
 it loads a model with the settings you choose and tells you honestly whether it will fit
 before you wait through the load. This is what the Models page shows you and why.
 
+## Your first local model
+
+If you have never run a model here, Models > Local model server starts with one question:
+what will you mostly use it for, **Everyday help** or **Writing code**. Each card names the
+model picked for your computer and its download size. Press **Download and set up** and
+Nekko fetches the model, plus the engine that runs it if you do not have it yet. You see
+the download as steps with time left, and when it is done, **Start chatting** opens a chat
+with that model. Nothing downloads until you press the button.
+
+Want a different model, or already use Ollama or LM Studio? **Show all models and
+settings** opens the full page described below. If Nekko finds models from another app on
+this computer, or you have connected your own local server, the full page opens straight
+away.
+
 ## The Nekko engine
 
 The engine is llama.cpp, managed by Nekko Agent. You press one button, a build comes down
@@ -110,6 +124,13 @@ loaded, pin in memory; none of them move the work off the GPU). **Expert** holds
 remaining flag, each with a sentence and the flag it sets. Controls a build does not support
 fall back to `--override-tensor` patterns or are left out. Any of it can be saved as that
 model's default.
+
+**Thinking** is on by default. For a built-in llama.cpp model, open **More controls >
+Expert > Thinking** to turn it off for that model, then load or save the settings.
+The preference applies across chats using that model and is not available for MLX.
+Other connected local servers default to thinking on; models without reasoning may
+ignore the request. There is no per-chat thinking switch in the composer. Cloud
+models keep thinking on, regardless of any old chat-level off preference.
 
 **Seeing what is loaded from anywhere.** The Agents view's **Panels** dock has a **Local
 models** monitor, under Hardware: each model the engine holds in memory, whether it runs on
@@ -322,10 +343,14 @@ The microphone in the message box turns speech into draft text on this computer;
 - **Apple speech** on macOS 26 and later: the recognizer built into the Mac. The language pack for your recognition language is often already installed, so the first click on the microphone just asks which engine to use. It is the default on a Mac that has it.
 - **Whisper Tiny English** (Nekko Voice) on Windows and Linux: a 32 MB model plus the whisper.cpp runtime, downloaded once and loaded on demand.
 
-Say "Nekko, open settings" (or "Nekko, new chat") and the app shows the command for confirmation instead of typing it.
+The microphone stays on until you tap it again, and "Nekko, ..." phrases are commands. See [Voice](voice.md).
 
 ## What is not here yet
 
 Browsing and downloading models from inside the app, and a bundled inference engine so a
 fresh install can run a model with nothing else present, are both planned as separate
 pieces of work. Today Nekko Agent manages the runtimes you already have.
+
+## Models navigation
+
+Open **Models** in the app rail. **Local model server** contains the built-in engine and connected local servers, with discovery and shortcuts for Ollama, LM Studio and vLLM. **Cloud providers** contains subscriptions and API accounts. To add one, use the filled provider icons to the right of your current providers, or **More providers** for the full chooser. Existing provider controls are unchanged.

@@ -28,8 +28,8 @@ final class WatchModel: NSObject, WCSessionDelegate {
         WCSession.default.activate()
     }
 
-    private func take(_ context: [String: Any]) {
-        guard let s = StatusSnapshot(watchContext: context) else { return }
+    private func take(_ received: StatusSnapshot?) {
+        guard let s = received else { return }
         guard s != snapshot else { return }
         snapshot = s
         // Kept in the App Group so the watch face complication shows the same counts.
@@ -38,12 +38,13 @@ final class WatchModel: NSObject, WCSessionDelegate {
     }
 
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        let context = session.receivedApplicationContext
-        Task { @MainActor in self.take(context) }
+        let snapshot = StatusSnapshot(watchContext: session.receivedApplicationContext)
+        Task { @MainActor in self.take(snapshot) }
     }
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        Task { @MainActor in self.take(applicationContext) }
+        let snapshot = StatusSnapshot(watchContext: applicationContext)
+        Task { @MainActor in self.take(snapshot) }
     }
 }
 

@@ -4,7 +4,7 @@ import Foundation
 /// fenced code, headings, bullet and numbered lists, quotes, rules, GitHub
 /// pipe tables and paragraphs. Inline styling inside each block is left to
 /// `AttributedString(markdown:)` in the app.
-public enum MarkdownBlock: Equatable, Sendable {
+public enum LegacyMarkdownBlock: Equatable, Sendable {
     /// Language, then the code as written.
     case code(String, String)
     case heading(Int, String)
@@ -16,33 +16,9 @@ public enum MarkdownBlock: Equatable, Sendable {
     case table(MarkdownTable)
 }
 
-/// A GitHub pipe table: every row has exactly as many cells as the header.
-public struct MarkdownTable: Equatable, Sendable {
-    public enum Alignment: Equatable, Sendable { case leading, center, trailing }
-
-    public let header: [String]
-    public let alignments: [Alignment]
-    public let rows: [[String]]
-
-    public init(header: [String], alignments: [Alignment], rows: [[String]]) {
-        self.header = header
-        self.alignments = alignments
-        self.rows = rows
-    }
-
-    /// What VoiceOver reads for one cell: "Row 2, Name: Nekko". `row` 0 is the header.
-    public func accessibilityLabel(row: Int, column: Int) -> String {
-        let name = header.indices.contains(column) ? header[column] : ""
-        guard row > 0 else { return "Column header: \(name)" }
-        let value = rows.indices.contains(row - 1) && rows[row - 1].indices.contains(column) ? rows[row - 1][column] : ""
-        let shown = value.isEmpty ? "empty" : value
-        return name.isEmpty ? "Row \(row): \(shown)" : "Row \(row), \(name): \(shown)"
-    }
-}
-
 public enum MarkdownBlocks {
-    public static func parse(_ text: String) -> [MarkdownBlock] {
-        var out: [MarkdownBlock] = []
+    public static func parse(_ text: String) -> [LegacyMarkdownBlock] {
+        var out: [LegacyMarkdownBlock] = []
         var para: [String] = []
         var fence: (lang: String, lines: [String])?
         func flush() {

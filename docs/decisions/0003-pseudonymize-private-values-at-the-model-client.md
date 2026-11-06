@@ -7,7 +7,7 @@ date: 2026-10-22
 
 ## Context
 
-Privacy Shield ([spec](../../spec/context/privacy-shield.md), [design](../superpowers/specs/2026-10-22-privacy-shield-design.md)) keeps personal data and secrets from reaching a cloud model. An agent, unlike a chatbot, must still act on those values: write the real email into a file, open the real `/Users/<name>/...` path, show the user real names. The daemon builds every agent turn on one `ModelClient` (`nekko-chat`'s `ProviderClient`), and side calls (titles, suggestions, compaction) are a handful of known call sites. Detection must never call another service, or the detector sees what we are keeping in.
+Privacy Shield ([spec](../../spec/context/privacy-shield.md), [design](../superpowers/specs/2026-10-22-privacy-shield-design.md)) keeps personal data and secrets from reaching a cloud model. An agent, unlike a chatbot, must still act on those values: write the real email into a file, open the real `/Users/<name>/...` path, show the user real names. The daemon builds every agent turn on one `ModelClient` (`ProviderClient` in nekkod's `chat_client.rs`, once the `nekko-chat` crate), and side calls (titles, suggestions, compaction) are a handful of known call sites. Detection must never call another service, or the detector sees what we are keeping in.
 
 ## Options considered
 

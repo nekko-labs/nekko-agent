@@ -1,0 +1,31 @@
+{
+ "machine": "RTX 5090 32 GB (PCIe 5 x16), 47 GB RAM, Windows 11, llama.cpp b11149 CUDA",
+ "server": "~/.nekko-agent/engine/win-x64-cuda/llama-server.exe",
+ "repeats": 2,
+ "args": [
+  "--n-gpu-layers",
+  "999",
+  "--ctx-size",
+  "4096"
+ ],
+ "volumes": [
+  {
+   "name": "HDD (WD 20 TB, SATA 7200 rpm)",
+   "dir": "E:/temp/nekko-switch-bench"
+  }
+ ],
+ "models": [
+  {
+   "name": "Qwen3 8B Q4_K_M",
+   "path": "~/.nekko-agent/models/.companions/image/llm-qwen3-8b-q4_k_m.gguf"
+  },
+  {
+   "name": "Gemma 4 E4B Q4_K_M",
+   "path": "~/.lmstudio/models/lmstudio-community/gemma-4-E4B-it-GGUF/gemma-4-E4B-it-Q4_K_M.gguf"
+  },
+  {
+   "name": "Gemma 4 12B Q4_K_M",
+   "path": "~/.lmstudio/models/lmstudio-community/gemma-4-12B-it-GGUF/gemma-4-12B-it-Q4_K_M.gguf"
+  }
+ ]
+}

@@ -12,6 +12,9 @@ import com.nekko.protocol.Events
 import com.nekko.protocol.PairingLink
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.SavedChatList
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -20,6 +23,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -42,14 +46,27 @@ import org.junit.Test
 class ComputersRepositoryTest {
     private val room = "a1b2c3d4e5f60718"
     private val key = "00112233445566778899aabbccddeeff"
-    private val link = PairingLink("wss://relay.example.dev", room, key, pair = "ABC123")
+    private val link = PairingLink("wss://relay.example.dev", room, key, pair = "ABC123", hostKey = TEST_HOST_KEY)
     private val derived = ByteArray(32) { it.toByte() }
 
     private val forgotten = mutableListOf<String>()
 
-    private fun TestScope.repo(store: FakeStore = FakeStore(), remotes: FakeRemotes = FakeRemotes()): ComputersRepository {
+    private fun TestScope.repo(
+        store: FakeStore = FakeStore(),
+        remotes: FakeRemotes = FakeRemotes(),
+        signer: com.nekko.protocol.ChangeSigner? = null,
+        offline: com.nekko.protocol.OfflineFiles? = null,
+        probe: com.nekko.protocol.ProbeNetwork = object : com.nekko.protocol.ProbeNetwork {
+            override suspend fun resolve(host: String, timeoutMs: Long) = listOf("100.101.102.103")
+            override suspend fun connect(address: String, port: Int, timeoutMs: Long) {}
+        },
+    ): ComputersRepository {
         var n = 0
         return ComputersRepository(
+            probeNetwork = probe,
+            offlineFiles = offline,
+            draftDebounceMs = 0,
+            changeSigner = signer,
             onForget = { forgotten += it },
             store = store,
             remotes = remotes,
@@ -158,9 +175,148 @@ class ComputersRepositoryTest {
         repo.connect(a)
         runCurrent()
         assertTrue("reconnecting the same computer keeps its history", repo.connectionLog.value.size > states.size)
-        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key))
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals("another computer starts its own", listOf(RelayState.CONNECTING), repo.connectionLog.value.map { it.state }.distinct())
+    }
+
+    @Test
+    fun `a pairing saved before derived relay credentials asks to pair again without dialing`() = runTest {
+        val store = FakeStore()
+        val id = repo(store).pair(link)
+        runCurrent()
+        assertEquals(3, secretOf(store, id)["v"]!!.jsonPrimitive.content.toInt())
+        // As an older app saved it: no version.
+        val old = secretOf(store, id).filterKeys { it != "v" }
+        store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(old).toString()
+
+        val remotes = FakeRemotes()
+        val again = repo(store, remotes)
+        again.load()
+        runCurrent()
+        assertTrue("no connection on the old pairing", remotes.created.isEmpty())
+        assertEquals(RelayState.DENIED, again.state.value.conn)
+        assertEquals(com.nekko.protocol.DenyReason.BAD_KEY, again.state.value.denied)
+
+        // Scanning the computer's new QR pairs again and connects.
+        again.pair(link.copy(room = "0123456789abcdef"))
+        runCurrent()
+        assertEquals(1, remotes.created.size)
+        assertEquals(RelayState.CONNECTING, again.state.value.conn)
+    }
+
+    @Test
+    fun `a pairing saved at version 2 is not dialed, with or without a host key`() = runTest {
+        val store = FakeStore()
+        val id = repo(store).pair(link)
+        runCurrent()
+        val saved = secretOf(store, id)
+        for (old in listOf(saved - "hostKey", saved)) {
+            store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(old + ("v" to JsonPrimitive(2))).toString()
+            val remotes = FakeRemotes()
+            val again = repo(store, remotes)
+            again.load()
+            runCurrent()
+            assertTrue("no connection below the pinned version", remotes.created.isEmpty())
+            assertEquals(com.nekko.protocol.DenyReason.BAD_KEY, again.state.value.denied)
+        }
+    }
+
+    @Test
+    fun `a pairing saved with no host key is not dialed, whatever its version`() = runTest {
+        val store = FakeStore()
+        val id = repo(store).pair(link)
+        runCurrent()
+        store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(secretOf(store, id) - "hostKey").toString()
+        val remotes = FakeRemotes()
+        val again = repo(store, remotes)
+        again.load()
+        runCurrent()
+        assertTrue(remotes.created.isEmpty())
+        assertEquals(RelayState.DENIED, again.state.value.conn)
+    }
+
+    @Test
+    fun `a link naming another key can't replace a pin, and changes nothing`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        runCurrent()
+        val saved = store.map.getValue(ComputersRepository.secretKey(id))
+        val other = "BOP1gt+CoYqr5jok7MgkOauZwgSpTkR8Ovnv3COa0MOKvPmEMS6F5LxxwDO04wlYFPkXGCIRdpyrSqvy1UtLGj8="
+        val signOuts = com.nekko.android.data.SignOutOutbox(store)
+        signOuts.add(com.nekko.android.data.PendingSignOut(link.relayUrl, room, key, "00", TEST_HOST_KEY, "dev", 0))
+
+        val e = runCatching { repo.pair(link.copy(hostKey = other, pair = "NEW999")) }.exceptionOrNull()
+        assertEquals("This link names a different computer than the one you paired with. Forget that computer first if it was reset.", e?.message)
+        runCurrent()
+        assertEquals("the pin and the code stay", saved, store.map[ComputersRepository.secretKey(id)])
+        assertEquals("nothing dialed", 1, remotes.created.size)
+        assertEquals("a queued sign-out stays", 1, signOuts.list().size)
+
+        assertEquals("the same key pairs again", id, repo.pair(link.copy(pair = "NEW999")))
+        runCurrent()
+        repo.forget(id)
+        runCurrent()
+        assertTrue("once forgotten, the link is a new pairing", repo.pair(link.copy(hostKey = other)).isNotEmpty())
+        runCurrent()
+        assertTrue("rotating changes the room", repo.pair(link.copy(room = "0123456789abcdef", hostKey = TEST_HOST_KEY)).isNotEmpty())
+    }
+
+    @Test
+    fun `a pairing with no pin yet takes the link's key`() = runTest {
+        val store = FakeStore()
+        val repo = repo(store)
+        val id = repo.pair(link)
+        runCurrent()
+        store.map[ComputersRepository.secretKey(id)] = kotlinx.serialization.json.JsonObject(secretOf(store, id) - "hostKey").toString()
+        assertEquals(id, repo.pair(link))
+        runCurrent()
+        assertEquals(TEST_HOST_KEY, secretOf(store, id)["hostKey"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `a bad pairing key asks to pair again without being a denial`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.OFFLINE, com.nekko.protocol.RelayStatus.BAD_KEY)
+        runCurrent()
+        assertTrue(repo.state.value.badKey)
+        assertNull(repo.state.value.denied)
+        assertEquals(RelayState.OFFLINE, repo.state.value.conn)
+        remotes.last.goOnline()
+        runCurrent()
+        assertFalse(repo.state.value.badKey)
+    }
+
+    @Test
+    fun `a link without a host key can't pair`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val e = runCatching { repo.pair(link.copy(hostKey = null)) }.exceptionOrNull()
+        assertEquals("Update Nekko Agent on your computer, then make a new pairing code.", e?.message)
+        runCurrent()
+        assertTrue("nothing dialed", remotes.created.isEmpty())
+        assertTrue("nothing saved", repo.state.value.computers.isEmpty())
+        assertTrue(store.map.isEmpty())
+    }
+
+    @Test
+    fun `the pinned host key reaches the dial and survives the spent code`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        runCurrent()
+        assertEquals(TEST_HOST_KEY, remotes.last.config.hostKey)
+        remotes.last.sayWelcome()
+        runCurrent()
+        assertNull(secretOf(store, id)["pair"])
+        assertEquals(TEST_HOST_KEY, secretOf(store, id)["hostKey"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -202,6 +358,47 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `the computer's protocol from its welcome names the side to update, and is forgotten on switching`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        assertEquals(com.nekko.protocol.ProtocolCheck.SAME, repo.state.value.protocolCheck)
+        remotes.last.sayWelcome(protocol = com.nekko.protocol.PhoneProtocol.VERSION - 1)
+        runCurrent()
+        assertEquals(com.nekko.protocol.PhoneProtocol.VERSION - 1, repo.state.value.hostProtocol)
+        assertEquals(com.nekko.protocol.ProtocolCheck.UPDATE_COMPUTER, repo.state.value.protocolCheck)
+
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
+        assertNull("another computer hasn't said yet", repo.state.value.hostProtocol)
+        remotes.last.sayWelcome()
+        runCurrent()
+        assertEquals(com.nekko.protocol.ProtocolCheck.SAME, repo.state.value.protocolCheck)
+    }
+
+    @Test
+    fun `the link's routes are kept, given to the connection, and the one in use is shown`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        repo.setNetworkPath(com.nekko.protocol.NetworkPath.LOCAL)
+        val lan = "ws://192.168.1.20:4400"
+        val id = repo.pair(link.copy(alts = listOf(lan)))
+        runCurrent()
+        assertEquals(listOf(lan), remotes.last.config.alts)
+        assertEquals(listOf("wss://relay.example.dev", lan), remotes.last.config.routes)
+        assertEquals("the connection starts from the phone's network", listOf("same" to com.nekko.protocol.NetworkPath.LOCAL), remotes.last.paths)
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.ONLINE, route = lan)
+        runCurrent()
+        assertEquals(lan, repo.state.value.route)
+        repo.networkChanged(com.nekko.protocol.NetworkPath.CELLULAR)
+        assertEquals("changed" to com.nekko.protocol.NetworkPath.CELLULAR, remotes.last.paths.last())
+        // Saved with the computer; a later link with other routes replaces them.
+        assertEquals(listOf(lan), repo(store).also { it.load() }.state.value.computers.single { it.id == id }.alts)
+        repo.pair(link.copy(alts = emptyList()))
+        assertEquals(emptyList<String>(), repo.state.value.computers.single().alts)
+    }
+
+    @Test
     fun `re-pairing the same computer keeps its id and name`() = runTest {
         val store = FakeStore()
         val repo = repo(store)
@@ -215,12 +412,31 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `re-pairing after route and room changes updates one computer`() = runTest {
+        val store = FakeStore()
+        val remotes = FakeRemotes()
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        repo.rename(id, "Studio")
+        val pairedAt = repo.state.value.active?.pairedAt
+        val next = link.copy(relayUrl = "wss://new.example", room = "new-room", pair = "NEW999", alts = listOf("ws://192.168.1.2:4400"))
+        assertEquals(id, repo.pair(next))
+        assertEquals(1, repo.state.value.computers.size)
+        assertEquals("Studio", repo.state.value.active?.name)
+        assertEquals(pairedAt, repo.state.value.active?.pairedAt)
+        assertEquals(next.relayUrl, repo.state.value.active?.relayUrl)
+        assertEquals(next.alts, repo.state.value.active?.alts)
+        assertEquals("new-room", remotes.last.config.room)
+        assertEquals("NEW999", remotes.last.config.pairCode)
+    }
+
+    @Test
     fun `forget removes the secret and switches to the next computer`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()
         val repo = repo(store, remotes)
         val first = repo.pair(link)
-        val second = repo.pair(link.copy(room = "ffeeddccbbaa9988"))
+        val second = repo.pair(link.copy(room = "ffeeddccbbaa9988", hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals(second, repo.state.value.activeId)
         val secondRemote = remotes.last
@@ -249,7 +465,7 @@ class ComputersRepositoryTest {
         val store = FakeStore()
         val remotes = FakeRemotes { c ->
             when (c.channel) {
-                Channels.APP_INFO -> buildJsonObject { put("platform", "darwin"); put("version", "1.2.3") }
+                Channels.APP_INFO -> buildJsonObject { put("platform", "darwin"); put("version", "1.2.3"); put("hostname", "Studio Mac") }
                 Channels.PROVIDERS_LIST -> buildJsonArray {
                     add(buildJsonObject {
                         put("id", "openai"); put("kind", "openai"); put("label", "OpenAI"); put("enabled", true)
@@ -280,15 +496,160 @@ class ComputersRepositoryTest {
         runCurrent()
 
         val s = repo.state.value
-        assertEquals("Mac", s.active?.name)
+        assertEquals("Studio Mac", s.active?.name)
         assertEquals("darwin", s.active?.platform)
-        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"Mac\""))
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"Studio Mac\""))
         assertEquals(listOf("s1"), s.summaries.map { it.id })
         assertEquals("OpenAI", s.providers.single().label)
         assertEquals("gpt", s.defaults.defaultModelId)
         assertEquals(Activity.NEEDS_YOU, s.activity["s1"])
         assertFalse(s.summariesLoading)
         assertEquals(id, s.activeId)
+    }
+
+    private val attentionSnapshot = Json.parseToJsonElement("""{"s1":{"question":{"callId":"ask-1","questions":[],"askedAt":1}}}""")
+
+    @Test
+    fun `reconnect replaces stale attention while a failed pending read preserves it`() = runTest {
+        var pending: JsonElement = attentionSnapshot
+        var fail = false
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.CHAT_PENDING) {
+                if (fail) error("offline") else pending
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        fail = true
+        repo.refresh()
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        fail = false
+        pending = buildJsonObject {}
+        remotes.last.status.value = com.nekko.protocol.RelayStatus(RelayState.CONNECTING)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+        assertNull(repo.state.value.activity["s1"])
+    }
+
+    @Test
+    fun `legacy relay dismissal retains attention until full snapshot and switching resets it`() = runTest {
+        var pending = attentionSnapshot
+        val remotes = FakeRemotes { c -> if (c.channel == Channels.CHAT_PENDING) pending else FakeRemotes.defaultAnswer(c) }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        remotes.last.dismissals.emit(E2E.activityTag("other"))
+        runCurrent()
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        remotes.last.dismissals.emit(E2E.activityTag("s1"))
+        runCurrent()
+        assertFalse(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        pending = buildJsonObject {}
+        remotes.last.dismissals.emit(E2E.activityTag("s1"))
+        runCurrent(); advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+        repo.pair(link.copy(room = "ffffffffffffffff"))
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+    }
+
+    @Test
+    fun `answers on this phone retain attention until fresh pending proves none`() = runTest {
+        var refuse = false
+        var pending = attentionSnapshot
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.CHAT_PENDING -> pending
+                Channels.CHAT_ANSWER -> if (refuse) error("not connected") else kotlinx.serialization.json.JsonNull
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        refuse = true
+        assertTrue(runCatching { repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("ask-1")) }.isFailure)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        refuse = false
+        repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("older"))
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        pending = buildJsonObject {}
+        repo.caller.call(Channels.CHAT_ANSWER, JsonPrimitive("s1"), JsonPrimitive("ask-1"))
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        assertFalse(repo.state.value.attention.known)
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+    }
+
+    @Test
+    fun `resolution elsewhere during refresh cannot be undone by its stale pending response`() = runTest {
+        val remotes = FakeRemotes { c -> if (c.channel == Channels.CHAT_PENDING) attentionSnapshot else FakeRemotes.defaultAnswer(c) }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        runCurrent()
+        remotes.last.goOnline()
+        runCurrent()
+        val pending = CompletableDeferred<JsonElement>()
+        remotes.handler = { c -> if (c.channel == Channels.CHAT_PENDING) pending.await() else FakeRemotes.defaultAnswer(c) }
+        val refresh = launch { repo.refresh() }
+        runCurrent()
+        remotes.last.events.emit(Events.AGENT_EVENT to Json.parseToJsonElement("""{"type":"question_resolved","sessionId":"s1","callId":"ask-1"}"""))
+        runCurrent()
+        assertFalse(repo.state.value.attention.known)
+        assertEquals(setOf("s1"), repo.state.value.attention.pending.keys)
+        // A post-resolution read proves zero before the old request returns.
+        remotes.handler = { c -> if (c.channel == Channels.CHAT_PENDING) buildJsonObject {} else FakeRemotes.defaultAnswer(c) }
+        advanceTimeBy(100); runCurrent()
+        assertTrue(repo.state.value.attention.known)
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+        pending.complete(attentionSnapshot)
+        refresh.join()
+        assertTrue(repo.state.value.attention.known)
+        assertTrue(repo.state.value.attention.pending.isEmpty())
+    }
+
+    @Test
+    fun `shared computer name updates but phone nickname persists`() = runTest {
+        var name = "Studio Mac"
+        val store = FakeStore()
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.APP_INFO) buildJsonObject {
+                put("platform", "darwin"); put("hostname", "system-name"); put("computerName", name)
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(store, remotes)
+        val id = repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals("Studio Mac", repo.state.value.active?.name)
+        name = "Work Mac"
+        repo.refresh()
+        runCurrent()
+        assertEquals("Work Mac", repo.state.value.active?.name)
+        repo.rename(id, "Mac")
+        name = "New name"
+        repo.refresh()
+        runCurrent()
+        assertEquals("Mac", repo.state.value.active?.name)
+        assertTrue(store.map.getValue(ComputersRepository.INDEX_KEY).contains("\"nameIsCustom\":true"))
     }
 
     @Test
@@ -303,6 +664,55 @@ class ComputersRepositoryTest {
         runCurrent()
         assertEquals("Gaming rig", repo.state.value.active?.name)
         assertEquals("win32", repo.state.value.active?.platform)
+    }
+
+    @Test
+    fun `a computer's icon comes from app info, is kept on its record and clears when it goes`() = runTest {
+        var info: JsonElement = buildJsonObject { put("platform", "darwin"); put("machineIcon", "tower") }
+        val remotes = FakeRemotes { c -> if (c.channel == Channels.APP_INFO) info else FakeRemotes.defaultAnswer(c) }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertEquals("tower", repo.state.value.active?.icon)
+        val saved = com.nekko.android.data.StoredJson.encodeIndex(repo.state.value.computers)
+        assertEquals("tower", com.nekko.android.data.StoredJson.decodeIndex(saved).single().icon)
+
+        // One this app doesn't draw, or none from an older computer: no icon.
+        info = buildJsonObject { put("platform", "darwin"); put("machineIcon", "spaceship") }
+        repo.refresh()
+        assertNull(repo.state.value.active?.icon)
+        info = buildJsonObject { put("platform", "darwin"); put("machineIcon", "cat") }
+        repo.refresh()
+        assertEquals("cat", repo.state.value.active?.icon)
+        info = buildJsonObject { put("platform", "darwin") }
+        repo.refresh()
+        assertNull(repo.state.value.active?.icon)
+    }
+
+    @Test
+    fun `the picker sends only the icon and a refused change shows nothing new`() = runTest {
+        var refuse = false
+        val remotes = FakeRemotes { c ->
+            if (c.channel != Channels.SETTINGS_UPDATE) FakeRemotes.defaultAnswer(c)
+            else if (refuse) throw com.nekko.protocol.RelayException("Not allowed from a paired phone (change-off): settings:update")
+            else buildJsonObject { put("chatPaneAction", "complete") }
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        repo.setMachineIcon("cat")
+        assertEquals("cat", repo.state.value.active?.icon)
+        repo.setMachineIcon("")
+        assertNull(repo.state.value.active?.icon)
+        assertEquals(
+            listOf("""{"machineIcon":"cat"}""", """{"machineIcon":""}"""),
+            remotes.last.calls.filter { it.channel == Channels.SETTINGS_UPDATE }.map { it.args.single().toString() },
+        )
+        refuse = true
+        assertTrue(runCatching { repo.setMachineIcon("sun") }.isFailure)
+        assertNull(repo.state.value.active?.icon)
     }
 
     @Test
@@ -346,6 +756,98 @@ class ComputersRepositoryTest {
     }
 
     @Test
+    fun `pending summary invalidations read stale one then final zero without extra requests`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        val remote = remotes.last
+        remote.goOnline()
+        runCurrent()
+        val pending = CompletableDeferred<kotlinx.serialization.json.JsonElement>()
+        var requests = 0
+        remotes.handler = { call ->
+            if (call.channel != Channels.SESSIONS_SUMMARIES) FakeRemotes.defaultAnswer(call)
+            else if (++requests == 1) pending.await()
+            else Json.parseToJsonElement("""[{"id":"s1","activeWatchCount":0}]""")
+        }
+        suspend fun notify(type: String) {
+            remote.events.emit(Events.AGENT_EVENT to buildJsonObject { put("sessionId", "s1"); put("type", type) })
+            runCurrent()
+        }
+        notify("session_meta")
+        notify("done")
+        advanceTimeBy(601); runCurrent()
+        assertEquals(1, requests)
+        notify("session_meta")
+        notify("done")
+        pending.complete(Json.parseToJsonElement("""[{"id":"s1","activeWatchCount":1}]"""))
+        runCurrent()
+        assertEquals(1L, repo.state.value.summaries.single().activeWatchCount)
+        advanceTimeBy(601); runCurrent()
+        assertEquals(0L, repo.state.value.summaries.single().activeWatchCount)
+        assertEquals(2, requests)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals(2, requests)
+    }
+
+    @Test
+    fun `reconnect drops old dirty work and failed summaries only retry on invalidation`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        val id = repo.pair(link)
+        val old = remotes.last
+        old.goOnline(); runCurrent()
+        val pending = CompletableDeferred<kotlinx.serialization.json.JsonElement>()
+        var oldRequests = 0
+        old.handler = { call ->
+            if (call.channel != Channels.SESSIONS_SUMMARIES) FakeRemotes.defaultAnswer(call)
+            else {
+                oldRequests++
+                // Simulate a transport that still returns after cancellation.
+                withContext(NonCancellable) { pending.await() }
+            }
+        }
+        suspend fun notify(remote: FakeRemote, type: String) {
+            remote.events.emit(Events.AGENT_EVENT to buildJsonObject { put("sessionId", "s1"); put("type", type) })
+            runCurrent()
+        }
+        notify(old, "done")
+        advanceTimeBy(601); runCurrent()
+        notify(old, "session_meta")
+        repo.connect(id); runCurrent()
+        val fresh = remotes.last
+        fresh.goOnline(); runCurrent()
+        val freshPending = CompletableDeferred<kotlinx.serialization.json.JsonElement>()
+        var freshRequests = 0
+        fresh.handler = { call ->
+            if (call.channel != Channels.SESSIONS_SUMMARIES) FakeRemotes.defaultAnswer(call)
+            else {
+                freshRequests++
+                if (freshRequests == 1) freshPending.await() else error("failed")
+            }
+        }
+        notify(fresh, "done")
+        advanceTimeBy(601); runCurrent()
+        pending.complete(Json.parseToJsonElement("""[{"id":"s1","activeWatchCount":99}]"""))
+        runCurrent()
+        assertTrue(repo.state.value.summaries.isEmpty())
+        assertEquals(1, oldRequests)
+        notify(fresh, "session_meta")
+        advanceTimeBy(601); runCurrent()
+        assertEquals(1, freshRequests)
+        freshPending.completeExceptionally(IllegalStateException("failed"))
+        runCurrent()
+        advanceTimeBy(601); runCurrent()
+        assertEquals("a pending invalidation survives failure", 2, freshRequests)
+        advanceTimeBy(5_000); runCurrent()
+        assertEquals("failure alone must not loop", 2, freshRequests)
+        notify(fresh, "done")
+        advanceTimeBy(601); runCurrent()
+        assertEquals(3, freshRequests)
+        assertEquals(1, oldRequests)
+    }
+
+    @Test
     fun `load restores the active computer and nudge reaches the client`() = runTest {
         val store = FakeStore()
         val remotes = FakeRemotes()
@@ -368,7 +870,7 @@ class ComputersRepositoryTest {
         val remotes = FakeRemotes()
         val first = repo(store, remotes)
         val a = first.pair(link)
-        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev"))
+        val b = first.pair(link.copy(relayUrl = "wss://other.example.dev", hostKey = "A".repeat(87) + "="))
         runCurrent()
         assertEquals(b, first.state.value.activeId) // the last one paired is the last used
         val second = repo(store, remotes)
@@ -472,7 +974,7 @@ class ComputersRepositoryTest {
     }
 
     @Test
-    fun `raising the mode without a proof is refused in plain words and the old mode stays`() = runTest {
+    fun `raising the mode on a phone that can't sign is refused in plain words and the old mode stays`() = runTest {
         val remotes = FakeRemotes { c ->
             when (c.channel) {
                 Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
@@ -489,12 +991,102 @@ class ComputersRepositoryTest {
         val e = runCatching {
             repo.updatePcSettings(com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO))
         }.exceptionOrNull() as com.nekko.protocol.RelayException
-        assertEquals("Switching to Guardrails or YOLO needs a confirmation this phone can’t give yet. Change the mode on $name.", e.message)
+        assertEquals("Confirm with your fingerprint or screen lock to let chats on $name run with fewer approvals.", e.message)
         assertEquals("proof-required", e.refusal?.code)
         assertEquals(com.nekko.protocol.PcSettings.ChatMode.ASK, repo.state.value.pcSettings.defaultChatMode)
         // A read refused by the computer's switch says where to turn it on, for every caller.
         val read = runCatching { repo.caller.call(Channels.CHANGES_LIST, JsonPrimitive("s1")) }.exceptionOrNull()
         assertEquals("Reading from this phone is turned off on $name. Turn it on in Remote access → What phones can do.", read?.message)
+    }
+
+    @Test
+    fun `raising the mode is sent again signed, after registering this phone's key once`() = runTest {
+        val signer = com.nekko.protocol.SoftwareChangeSigner.generate()
+        val key = java.util.Base64.getEncoder().encodeToString(kotlinx.coroutines.runBlocking { signer.publicKey() })
+        var mode = "ask"
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", mode); put("chatPaneAction", "complete") }
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
+                Channels.SETTINGS_UPDATE ->
+                    if (c.proof == null) throw com.nekko.protocol.RelayException("Not allowed from a paired phone (proof-required): settings:update")
+                    else buildJsonObject { put("defaultChatMode", "yolo"); put("chatPaneAction", "complete") }.also { mode = "yolo" }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes, signer = signer)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        val yolo = com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO)
+        repo.updatePcSettings(yolo)
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
+
+        val sent = remotes.last.calls.filter { it.channel == Channels.SETTINGS_UPDATE || it.channel == com.nekko.protocol.ChangeProof.KEY_CHANNEL }
+        assertEquals(listOf(Channels.SETTINGS_UPDATE, com.nekko.protocol.ChangeProof.KEY_CHANNEL, Channels.SETTINGS_UPDATE), sent.map { it.channel })
+        assertNull("plain first", sent[0].proof)
+        assertEquals(key, sent[1].args.single().jsonPrimitive.content)
+        // Each proof is this phone's signature over what was sent, as the computer checks it.
+        val deviceId = remotes.last.config.deviceId
+        for (c in sent.drop(1)) {
+            val p = c.proof!!
+            val text = com.nekko.protocol.ChangeProof.payload(deviceId, c.channel, kotlinx.serialization.json.JsonArray(c.args), p["ts"]!!.jsonPrimitive.content.toLong())
+            val sig = java.util.Base64.getDecoder().decode(p["sig"]!!.jsonPrimitive.content)
+            assertTrue(com.nekko.protocol.ChangeProof.verify(java.util.Base64.getDecoder().decode(key), text, sig))
+        }
+
+        // A second raise on the same connection signs again without registering again.
+        mode = "guardrails"
+        repo.updatePcSettings(yolo)
+        assertEquals(1, remotes.last.calls.count { it.channel == com.nekko.protocol.ChangeProof.KEY_CHANNEL })
+        assertEquals("the key, then two raises", 3, signer.signatures)
+    }
+
+    @Test
+    fun `a step-up the computer asks for rides beside the proof`() = runTest {
+        val signer = com.nekko.protocol.SoftwareChangeSigner.generate()
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                Channels.SETTINGS_GET -> buildJsonObject { put("defaultChatMode", "ask"); put("chatPaneAction", "complete") }
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
+                Channels.SETTINGS_UPDATE -> when {
+                    c.proof == null -> throw com.nekko.protocol.RelayException("Not allowed from a paired phone (proof-required): settings:update")
+                    c.stepUp == null -> throw com.nekko.protocol.RelayException("Not allowed from a paired phone (step-up-required): settings:update")
+                    else -> buildJsonObject { put("defaultChatMode", "yolo"); put("chatPaneAction", "complete") }
+                }
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes, signer = signer)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        val yolo = com.nekko.protocol.PcSettings.patch(mode = com.nekko.protocol.PcSettings.ChatMode.YOLO)
+        val e = runCatching { repo.updatePcSettings(yolo) }.exceptionOrNull() as com.nekko.protocol.RelayException
+        assertTrue("the step-up sheet takes it from here", e.refusal!!.asksForStepUp)
+        repo.updatePcSettings(yolo, com.nekko.protocol.StepUpProof.Totp("123456"))
+        val last = remotes.last.calls.last()
+        assertEquals(Channels.SETTINGS_UPDATE, last.channel)
+        assertEquals(com.nekko.protocol.StepUpProof.Totp("123456"), last.stepUp)
+        assertTrue(last.proof != null)
+        assertEquals(com.nekko.protocol.PcSettings.ChatMode.YOLO, repo.state.value.pcSettings.defaultChatMode)
+    }
+
+    @Test
+    fun `forgetting the last computer deletes the Change key`() = runTest {
+        var forgot = 0
+        val signer = object : com.nekko.protocol.ChangeSigner {
+            override suspend fun publicKey() = ByteArray(65)
+            override suspend fun sign(message: ByteArray) = ByteArray(64)
+            override suspend fun forget() { forgot++ }
+        }
+        val repo = repo(signer = signer)
+        repo.pair(link)
+        repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
+        repo.forget(repo.state.value.computers.first().id)
+        assertEquals("another computer still knows the key", 0, forgot)
+        repo.forget(repo.state.value.computers.single().id)
+        assertEquals(1, forgot)
     }
 
     @Test
@@ -530,6 +1122,116 @@ class ComputersRepositoryTest {
         repo.deleteChat("s2")
         assertEquals("\"s2\"", remotes.last.calls.last { it.channel == Channels.SESSION_DELETE }.args.single().toString())
         assertEquals(listOf("s1"), repo.state.value.summaries.map { it.id })
+    }
+
+    @Test
+    fun `rename and pin change the chat on the computer and in the list`() = runTest {
+        val remotes = FakeRemotes { c ->
+            if (c.channel == Channels.SESSIONS_SUMMARIES) buildJsonArray {
+                add(buildJsonObject { put("id", "s1"); put("title", "One"); put("updatedAt", 5); put("pinned", true) })
+            } else FakeRemotes.defaultAnswer(c)
+        }
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+        assertTrue(repo.state.value.summaries.single().pinned)
+
+        repo.renameChat("s1", "  Release notes \n")
+        assertEquals("""{"title":"Release notes"}""", remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }.args[1].toString())
+        assertEquals("Release notes", repo.state.value.summaries.single().title)
+        // A blank title changes nothing.
+        val sets = remotes.last.calls.count { it.channel == Channels.SESSION_SET_OPTIONS }
+        repo.renameChat("s1", "   ")
+        assertEquals(sets, remotes.last.calls.count { it.channel == Channels.SESSION_SET_OPTIONS })
+
+        repo.setPinned("s1", false)
+        assertEquals("""{"pinned":false}""", remotes.last.calls.last { it.channel == Channels.SESSION_SET_OPTIONS }.args[1].toString())
+        assertFalse(repo.state.value.summaries.single().pinned)
+    }
+
+    @Test
+    fun `a chat's mode is sent plain to lower it and signed when the computer asks`() = runTest {
+        val signer = com.nekko.protocol.SoftwareChangeSigner.generate()
+        val remotes = FakeRemotes { c ->
+            when (c.channel) {
+                com.nekko.protocol.ChangeProof.KEY_CHANNEL -> buildJsonObject { put("registered", true) }
+                Channels.SESSION_SET_OPTIONS ->
+                    if (c.proof == null && c.args[1].toString().contains("yolo")) throw com.nekko.protocol.RelayException("Not allowed from a paired phone (proof-required): session:setOptions")
+                    else buildJsonObject {}
+                else -> FakeRemotes.defaultAnswer(c)
+            }
+        }
+        val repo = repo(remotes = remotes, signer = signer)
+        repo.pair(link)
+        remotes.last.goOnline()
+        runCurrent()
+
+        repo.setChatMode("s1", com.nekko.protocol.PcSettings.ChatMode.ASK)
+        val lower = remotes.last.calls.filter { it.channel == Channels.SESSION_SET_OPTIONS }
+        assertEquals(1, lower.size)
+        assertNull(lower.single().proof)
+        assertEquals("""{"mode":"ask"}""", lower.single().args[1].toString())
+
+        repo.setChatMode("s1", com.nekko.protocol.PcSettings.ChatMode.YOLO)
+        val raise = remotes.last.calls.filter { it.channel == Channels.SESSION_SET_OPTIONS }.drop(1)
+        assertEquals("plain, then signed", 2, raise.size)
+        assertNull(raise[0].proof)
+        assertNotNull(raise[1].proof)
+        assertEquals("\"s1\"", raise[1].args[0].toString())
+    }
+
+    @Test
+    fun `each computer keeps its own drafts on disk, and forgetting it deletes them`() = runTest {
+        val files = object : com.nekko.protocol.OfflineFiles {
+            val map = HashMap<String, JsonElement>()
+            override fun load(computerId: String, name: String) = map["$computerId/$name"]
+            override fun save(computerId: String, name: String, value: JsonElement) { map["$computerId/$name"] = value }
+            override fun remove(computerId: String) { map.keys.removeAll { it.startsWith("$computerId/") } }
+        }
+        val repo = repo(offline = files)
+        val first = repo.pair(link)
+        repo.drafts.set("s1", com.nekko.protocol.Draft("half a thought"))
+        runCurrent()
+        val second = repo.pair(PairingLink("wss://other.example.dev", "ffffffffffffffff", key, hostKey = "A".repeat(87) + "="))
+        assertTrue("the other computer starts with none", repo.drafts.drafts.value.isEmpty())
+        repo.connect(first)
+        assertEquals("half a thought", repo.drafts.draft("s1").text)
+
+        repo.forget(first)
+        assertTrue(files.map.keys.none { it.startsWith("$first/") })
+        assertEquals(second, repo.state.value.activeId)
+        assertTrue(repo.drafts.drafts.value.isEmpty())
+    }
+
+    @Test
+    fun `check routes says hello on a socket of its own, never with the pairing code, and leaves the live one alone`() = runTest {
+        val remotes = FakeRemotes()
+        val repo = repo(remotes = remotes)
+        repo.pair(link)
+        val live = remotes.last
+        live.goOnline()
+        runCurrent()
+        val job = launch { repo.runChecks() }
+        runCurrent()
+        assertTrue(repo.checking.value)
+        val hello = remotes.created.last()
+        assertTrue("a socket of its own", hello !== live)
+        assertNull("never the pairing code", hello.config.pairCode)
+        assertEquals(link.relayUrl, hello.config.relayUrl)
+        hello.status.value = com.nekko.protocol.RelayStatus(RelayState.OFFLINE)
+        runCurrent()
+        job.join()
+        val report = repo.checks.value.single()
+        assertEquals(true, report.dns?.ok)
+        assertEquals(true, report.tcp?.ok)
+        assertEquals("The relay answered; $DEFAULT_COMPUTER_NAME isn’t connected to it", report.hello?.detail)
+        assertTrue("closed once answered", hello.closed)
+        assertFalse(live.closed)
+        assertFalse(repo.checking.value)
+        val text = repo.diagnosticsText("test")
+        assertFalse(text.contains(link.room))
+        assertFalse(text.contains(key))
     }
 
     @Test

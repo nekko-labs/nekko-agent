@@ -1,5 +1,6 @@
 package com.nekko.protocol
 
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
@@ -26,6 +27,8 @@ sealed interface Block {
         val reasoning: String? = null,
         val streaming: Boolean = false,
         val interrupted: Boolean = false,
+        /** When the computer saved it (ms); null while live. Simple's folded steps time the turn from it. */
+        val at: Long? = null,
     ) : Block
     data class Tool(
         override val id: String,
@@ -33,6 +36,8 @@ sealed interface Block {
         val label: String,
         val status: ToolStatus,
         val output: String? = null,
+        /** The call's arguments, for grouping calls by purpose (ToolPurpose.kt). */
+        val input: JsonObject = JsonObject(emptyMap()),
     ) : Block
 }
 
@@ -62,11 +67,11 @@ object Transcript {
                 )
                 "assistant" -> {
                     if (m.content.isNotBlank() || !m.reasoning.isNullOrBlank()) {
-                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted)
+                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted, at = m.createdAt)
                     }
                     for (call in m.toolCalls) {
                         toolIndex[call.id] = out.size
-                        out += Block.Tool(call.id, call.name, toolLabel(call), ToolStatus.OK)
+                        out += Block.Tool(call.id, call.name, toolLabel(call), ToolStatus.OK, input = call.input)
                     }
                 }
                 "tool" -> {
@@ -86,7 +91,7 @@ object Transcript {
         is AgentEvent.Reasoning -> appendStream(turn) { it.copy(reasoning = (it.reasoning ?: "") + e.delta) }
         is AgentEvent.ToolCallStarted -> turn.copy(
             running = true,
-            blocks = settle(turn.blocks) + Block.Tool(e.call.id, e.call.name, toolLabel(e.call), ToolStatus.RUNNING),
+            blocks = settle(turn.blocks) + Block.Tool(e.call.id, e.call.name, toolLabel(e.call), ToolStatus.RUNNING, input = e.call.input),
         )
         is AgentEvent.ApprovalRequired -> turn.copy(
             running = true,
@@ -136,7 +141,7 @@ object Transcript {
         if (blocks.any { it is Block.Tool && it.id == call.id }) {
             blocks.map { if (it is Block.Tool && it.id == call.id) it.copy(status = status) else it }
         } else {
-            settle(blocks) + Block.Tool(call.id, call.name, toolLabel(call), status)
+            settle(blocks) + Block.Tool(call.id, call.name, toolLabel(call), status, input = call.input)
         }
 
     /**

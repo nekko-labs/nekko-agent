@@ -31,14 +31,18 @@ final class Prefs {
     var notifyNeedsYou: Bool { didSet { d.set(notifyNeedsYou, forKey: "notifyNeedsYou") } }
     var notifyFinished: Bool { didSet { d.set(notifyFinished, forKey: "notifyFinished") } }
     var notifyFailed: Bool { didSet { d.set(notifyFailed, forKey: "notifyFailed") } }
-    /// Show running turns on the Lock Screen and in the Dynamic Island.
-    var liveActivities: Bool { didSet { d.set(liveActivities, forKey: "liveActivities") } }
+    /// What the Live Activity card shows on the Lock Screen and in the Dynamic Island (None starts none).
+    var liveActivityLevel: LiveLevel { didSet { d.set(liveActivityLevel.rawValue, forKey: "liveActivityLevel") } }
     /// The computer to connect to at launch; nil = the one used last.
     var defaultComputer: String? { didSet { d.set(defaultComputer, forKey: "defaultComputer") } }
+    /// The chat list shows one computer's chats; nil = every paired computer's (2026-11-04).
+    var chatsFilter: String? { didSet { d.set(chatsFilter, forKey: "chatsFilter") } }
     /// Dictation: the computer's Whisper when installed, else this iPhone's recognizer.
     var dictationOnComputer: Bool { didSet { d.set(dictationOnComputer, forKey: "dictationOnComputer") } }
     /// Dictation: hold the microphone to talk and let go to stop (IO-28), instead of tap to start and tap to stop.
     var dictationHold: Bool { didSet { d.set(dictationHold, forKey: "dictationHold") } }
+    /// The first-open video for always-on dictation was closed, any way (IO-28); the mic's first tap shows it until then.
+    var voiceIntroSeen: Bool { didSet { d.set(voiceIntroSeen, forKey: "voiceIntroSeen") } }
     /// The first run (IO-31) was finished or skipped; it never shows again.
     var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
@@ -48,8 +52,24 @@ final class Prefs {
     /// Keep the last chats opened (up to 20, 5 MB per computer, no photos) to read
     /// while the computer is unreachable (OF-5). On unless the user turned it off.
     var keepTranscripts: Bool { didSet { d.set(keepTranscripts, forKey: "keepTranscripts") } }
+    /// Expert mode (2026-10-24): every control; Simple (the default) hides the
+    /// ones `simpleChoices` and `SimpleMode` keep to Expert. Saved on this device only.
+    var expertMode: Bool { didSet { d.set(expertMode, forKey: "expertMode") } }
+    /// Settings > Simple mode: per control, Show, Expert only or Hide, where it
+    /// differs from the default. Saved as JSON on this device only.
+    var simpleChoices: [String: SimpleVisibility] { didSet { d.set(SimpleMode.encode(simpleChoices), forKey: "simpleChoices") } }
+    /// Where the floating pill sits: across the top (the default) or wherever it was
+    /// dragged, or docked at a side. Saved on this device only.
+    var pillPlacement: PillPlacement { didSet { d.set(pillPlacement.encoded, forKey: "pillPlacement") } }
+    /// Chats whose "getting long" note was closed in Simple, newest last (at most 200).
+    var longChatDismissed: [String] { didSet { d.set(longChatDismissed, forKey: "longChatDismissed") } }
     /// Per computer, the last model chosen for a new chat: `providerId::modelId`.
     var lastModel: [String: String] { didSet { d.set(lastModel, forKey: "lastModel") } }
+    /// Per computer, concrete last-used choices, never a recommendation marker.
+    var lastEffort: [String: String] { didSet { d.set(lastEffort, forKey: "lastEffort") } }
+    var lastTools: [String: String] { didSet { d.set(lastTools, forKey: "lastTools") } }
+    /// Per computer, the last folder selected for a new chat. No entry means No folder.
+    var lastFolder: [String: String] { didSet { d.set(lastFolder, forKey: "lastFolder") } }
     /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
     var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
     /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
@@ -74,12 +94,29 @@ final class Prefs {
         notifyNeedsYou = flag("notifyNeedsYou", notify)
         notifyFinished = flag("notifyFinished", notify)
         notifyFailed = flag("notifyFailed", notify)
-        liveActivities = flag("liveActivities", true)
+        // Before levels there was one switch, and app lock kept chat text off the Lock Screen.
+        // The first level is stored, so turning app lock off later doesn't change it.
+        if let level = defaults.string(forKey: "liveActivityLevel").flatMap(LiveLevel.init(rawValue:)) {
+            liveActivityLevel = level
+        } else {
+            let first: LiveLevel = !flag("liveActivities", true) ? .none : flag("appLock", true) ? .minimal : .standard
+            liveActivityLevel = first
+            defaults.set(first.rawValue, forKey: "liveActivityLevel")
+        }
         defaultComputer = d.string(forKey: "defaultComputer")
+        chatsFilter = d.string(forKey: "chatsFilter")
         dictationOnComputer = flag("dictationOnComputer", true)
         dictationHold = flag("dictationHold", false)
+        voiceIntroSeen = flag("voiceIntroSeen", false)
         onboarded = flag("onboarded", false)
+        expertMode = flag("expertMode", false)
+        simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))
+        pillPlacement = PillPlacement.parse(d.string(forKey: "pillPlacement"))
+        longChatDismissed = d.stringArray(forKey: "longChatDismissed") ?? []
         lastModel = d.dictionary(forKey: "lastModel") as? [String: String] ?? [:]
+        lastEffort = d.dictionary(forKey: "lastEffort") as? [String: String] ?? [:]
+        lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
+        lastFolder = d.dictionary(forKey: "lastFolder") as? [String: String] ?? [:]
         chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
         groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
         paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
@@ -89,6 +126,29 @@ final class Prefs {
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))
         keepTranscripts = OfflineSetting.isOn(stored: choice("keepTranscripts"))
+    }
+
+    /// Whether a Simple mode control is on screen in the current mode.
+    func shows(_ id: String, localModelLoaded: Bool = false, changes: Bool = false, pr: Bool = false) -> Bool {
+        SimpleMode.shown(id, expert: expertMode, simpleChoices, context: SimpleContext(localModel: localModelLoaded, changes: changes, pr: pr))
+    }
+
+    func dismissLongChat(_ chatId: String) {
+        guard !longChatDismissed.contains(chatId) else { return }
+        longChatDismissed = Array((longChatDismissed + [chatId]).suffix(200))
+    }
+
+    func newChatEffort(computer: String?, model: String, settings: PcSettings) -> Effort {
+        Effort.effective(computer.flatMap { lastEffort[$0] }.flatMap(Effort.init(rawValue:)) ?? settings.effort, for: model)
+    }
+
+    func newChatTools(computer: String?, settings: PcSettings) -> PcSettings.ChatMode {
+        computer.flatMap { lastTools[$0] }.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? settings.effectiveMode
+    }
+
+    /// A saved draft wins, including an explicit No folder, over the fresh-chat default.
+    func newChatFolder(computer: String?, draft: Draft) -> String? {
+        draft.isEmpty ? computer.flatMap { lastFolder[$0] } : draft.workspaceId
     }
 
     func wants(_ kind: PushKind) -> Bool {

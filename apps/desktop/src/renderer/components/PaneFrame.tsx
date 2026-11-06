@@ -1,3 +1,4 @@
+import { CheckCircleIcon } from '../gentleface-icons.js';
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Direction, DropTarget, PaneKind, WbPane } from '../layout.js';
@@ -236,8 +237,8 @@ export function PaneFrame({
       onMouseDown={() => { focusWindow(pane.id); onFocus(); }}
     >
       <div
-        className="flex shrink-0 items-center gap-1.5 border-b border-line px-2 py-1"
-        style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: 'grab', ...stripStyle }}
+        className="flex shrink-0 items-center gap-2 border-b border-line px-2 py-1"
+        style={{ background: isActive ? 'var(--surface-2)' : 'transparent', cursor: locked ? undefined : 'grab', ...stripStyle }}
         draggable={!locked && !onPickUp}
         onDragStart={(e) => {
           e.dataTransfer.effectAllowed = 'move';
@@ -258,24 +259,24 @@ export function PaneFrame({
           setMenu({ x: e.clientX, y: e.clientY });
         }}
         data-pane-title-strip=""
-        title="Drag to move this window"
+        title={locked ? undefined : 'Drag to move this window'}
       >
         {icon}
         {statusIndicator}
-        <span className="min-w-0 max-w-[35%] truncate text-[12px]" style={{ fontWeight: isActive ? 500 : 400 }}>
+        <span className="min-w-0 max-w-[35%] truncate text-xs" style={{ fontWeight: isActive ? 500 : 400 }}>
           {title}
         </span>
         {/* The "/" leads the window's location: the project it belongs to, the
             git branch it is on. It hides when neither has anything to say, and
             it sits between the name and that context, never trailing after. */}
-        <span aria-hidden="true" className="pane-strip-sep text-[14px] text-ink-faint opacity-40">/</span>
+        <span aria-hidden="true" className="pane-strip-sep text-sm text-ink-faint opacity-40">/</span>
         <span className="pane-strip-badge flex min-w-0 items-center gap-1 overflow-hidden">{badge}</span>
         <div ref={setMetadataSlot} className="pane-strip-meta flex min-w-0 items-center gap-1 overflow-hidden" />
         <div className="min-w-0 flex-1" />
         {/* The pane's own actions, portalled in, so there is one bar per window
             rather than the frame's and the pane's stacked on each other. */}
         <div ref={setActionSlot} className="flex shrink-0 items-center gap-0.5" />
-        {!hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
+        {pane.kind !== 'chat' && !hideSplit && <SplitCompass kind={pane.kind} canSplit={canSplit} onSplit={onSplit} onOpen={onAddWindow} addable={addable} />}
         {focusAction}
         {onMinimize && <button
           type="button"
@@ -299,7 +300,7 @@ export function PaneFrame({
 
       {menu && (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}>Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
+          {isChat && <ContextAction onClick={() => { setMenu(null); complete(); }}><CheckCircleIcon className="mr-1 h-3.5 w-3.5" />Complete ({WINDOW_HOTKEYS.complete})</ContextAction>}
           {isChat && <ContextAction onClick={() => { setMenu(null); void deleteWindow(); }}>Delete ({WINDOW_HOTKEYS.delete})</ContextAction>}
           {onMinimize && <ContextAction onClick={() => { setMenu(null); onMinimize(); }}>Minimize ({WINDOW_HOTKEYS.minimize})</ContextAction>}
           <ContextAction onClick={() => { setMenu(null); if (pane.kind === 'terminal') void deleteWindow(); else onClose(); }}>{pane.kind === 'terminal' ? `Close (${WINDOW_HOTKEYS.delete})` : 'Close'}</ContextAction>

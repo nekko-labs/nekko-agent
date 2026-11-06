@@ -99,6 +99,8 @@ impl ChunkStream for Script {
             Chunk::Reasoning(t.into())
         } else if let Some(c) = step.get("call") {
             Chunk::ToolCall(c.clone())
+        } else if step.get("outputLimit") == Some(&json!(true)) {
+            Chunk::OutputLimit
         } else if let Some(u) = step.get("usage").and_then(Value::as_array) {
             Chunk::Usage {
                 input_tokens: u[0].as_f64().unwrap(),
@@ -267,4 +269,59 @@ async fn a_progressing_run_has_no_step_limit() {
     assert_eq!(last["stop"], "complete");
     assert_eq!(last["steps"], 1001);
     assert_eq!(*client.0.lock().unwrap(), 1002);
+}
+
+/// Plays one scripted response per call; returns the transcript and how many calls were made.
+async fn play(responses: Vec<Value>) -> (Vec<Value>, usize) {
+    let mut history = vec![json!({ "id": "u", "role": "user", "content": "summarize", "createdAt": 0 })];
+    let client = Fake { responses, abort_after: None, calls: Mutex::new(0), requests: Mutex::new(Vec::new()) };
+    run_agent(
+        RunOptions {
+            session_id: "s".into(),
+            model: "m".into(),
+            system: "sys".into(),
+            history: &mut history,
+            tools: vec![],
+            temperature: None,
+            effort: None,
+            think: None,
+            prompt_caching: Some(false),
+            max_history_turns: None,
+            context_window: None,
+            max_output_tokens: None,
+            image_input: None,
+            resume: false,
+            cancel: Cancel::default(),
+            steering: Default::default(),
+        },
+        &client,
+        &Tools(json!({})),
+        &mut |_, _| {},
+    )
+    .await;
+    let calls = *client.calls.lock().unwrap();
+    (history, calls)
+}
+
+#[tokio::test]
+async fn an_empty_reply_at_the_output_cap_is_explained_not_retried() {
+    let spent = json!([{ "usage": [100, 128000] }, { "outputLimit": true }, {}]);
+    let (history, calls) = play(vec![spent.clone(), spent]).await;
+    assert_eq!(calls, 1, "the nudge would spend the whole cap again");
+    let reply = history.last().unwrap()["content"].as_str().unwrap();
+    assert!(reply.contains("whole output budget thinking"), "{reply}");
+}
+
+#[tokio::test]
+async fn a_reply_cut_off_at_the_output_cap_says_so() {
+    let (history, calls) = play(vec![json!([{ "text": "Half an answer" }, { "outputLimit": true }, {}])]).await;
+    assert_eq!(calls, 1);
+    let reply = history.last().unwrap()["content"].as_str().unwrap();
+    assert!(reply.starts_with("Half an answer\n\n_Cut off:"), "{reply}");
+}
+
+#[tokio::test]
+async fn an_empty_reply_without_the_cap_is_still_nudged_once() {
+    let (_, calls) = play(vec![json!([{}]), json!([{ "text": "ok" }])]).await;
+    assert_eq!(calls, 2);
 }
