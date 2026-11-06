@@ -613,7 +613,8 @@
   isolation: isolate;
   pointer-events: none;
   z-index: 1;
-  top: 5%; bottom: 5%;
+  /* Lift the whole section without moving it above a short viewport. */
+  top: max(0px, calc(5% - 42px)); bottom: calc(5% + 42px);
   transition: width var(--rail-close-ms) var(--rail-ease) var(--rail-close-delay);
 }
 .rail-feedback { pointer-events: auto; flex-shrink: 0; }
