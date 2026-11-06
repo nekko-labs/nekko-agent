@@ -6,11 +6,12 @@ What to do when a required check is red, on your PR or on `main`, and how long t
 
 The repo's required check is `gate`, which passes when every job its run needed
 passed. CI runs in two tiers (`scripts/ci-scope.mjs`); there is no merge queue
-(decision 0056):
+(decision 0056), so `gate` on the PR also waits for the speed contract and the
+itests (decision 0057):
 
 | Tier | When | Runs |
 | --- | --- | --- |
-| PR | every push to a PR | `build`; `daemon` and `capture` only on the OSes a `deploy:linux` / `deploy:windows` / `deploy:macos` label names, when the change touches what they test; `perf` only with `ci:perf` |
+| PR | every push to a PR | `build`; `perf` when the change touches what the speed contract measures (or with `ci:perf`); the itests whenever it needs `build`; `daemon` and `capture` only on the OSes a `deploy:linux` / `deploy:windows` / `deploy:macos` label names, when the change touches what they test |
 | Full | nightly at 03:17 JST (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included, plus `perf` and the itests |
 
 Every other platform build is nightly too, or on a PR with its label:
@@ -18,8 +19,8 @@ Every other platform build is nightly too, or on a PR with its label:
 `deploy:macos` (dev identity, nekkod darwin, decision-model CoreML, the macOS
 installer), `deploy:windows` (the Windows installer). Add the label to a PR that
 changes that platform's code (`cfg(target_os = ...)`, ConPTY, the dev bundle,
-signing, native capture, the phone apps), and `ci:perf` to one that changes a hot
-path the speed contract measures and wants the numbers before it merges. Labels
+signing, native capture, the phone apps), and `ci:perf` to one whose speed
+matters but that changes no path the speed contract is gated on. Labels
 are read when a run starts: adding one re-runs CI. A skipped job is not a missing
 check. A failed nightly run opens or updates the `ci-scheduled` issue; whoever
 lands the next fix to that area clears it.
@@ -42,19 +43,25 @@ When one of them is red:
 
 This is the policy the "Bound failed-check investigations" rules below apply to.
 
-### `perf` fails nightly after a PR landed
+### `perf` fails on your PR
 
-`perf` is skipped on PR runs unless the PR has `ci:perf`, so a change to a UI
-path the speed contract drives can pass its own CI, merge, and turn the nightly
-run red. Read which phase failed:
+`perf` runs on every PR that touches what the speed contract measures, and `gate`
+waits for it. Read which phase failed:
 
 - A missing selector, a layout the script waits for, or a phase that times out
-  waiting for the UI belongs to the PR that changed what the script drives.
-- Only a timing budget missed, on a PR that does not touch that path, is the
-  known flap on unchanged code (issue #704): add the run there and compare the
-  nightly runs just before and after.
+  waiting for the UI is the PR's: it changed something the script drives.
+- Only **Switch to a cold chat, frame painted** over its 33 ms gate, on a PR that
+  does not touch chat switching or first paint, is the known flake on unchanged
+  code (issue #712: it failed 17 of 35 queue runs on 2026-11-05/06). Re-run the
+  failed jobs once (`gh run rerun <id> --failed`; `queue-sweeper.yml` also does
+  this once by itself) and add the run to #712. Do not raise the budget.
+- Any other timing budget missed on a PR that does not touch that path is the
+  older flap (issue #704): add the run there and compare against the nightly runs.
 
-Run it locally, headless (or add `ci:perf`), before landing a change to such a path:
+The nightly run measures `main` too, so a regression that slipped past a PR (one
+that did not touch a gated path) shows up there and opens the `ci-scheduled` issue.
+
+Run it locally, headless, before pushing a change to such a path:
 
 ```
 npm run build:web

@@ -1,33 +1,35 @@
 // Decides which of ci.yml's slow jobs a run needs. Two tiers:
 //
-// - pull_request (fast tier): `build`, gated by the paths the PR touches. The
+// - pull_request: `build`, gated by the paths the PR touches; the speed
+//   contract (`perf`) when the PR changes what it measures (`ci:perf` forces
+//   it); and `itests`, the loopback end-to-end scripts (Local Web UI + nekkod +
+//   scripted models), whenever the PR needs `build`. `gate` waits for both. The
 //   per-OS jobs (the daemon, capture) run on a PR only with a `deploy:<os>`
 //   label (`deploy:linux`, `deploy:windows`, `deploy:macos`), and only when the
-//   change touches what they test. `ci:perf` opts a PR into the speed contract.
-//   Labels are read when a run starts; adding one re-runs CI.
+//   change touches what they test. Labels are read when a run starts; adding
+//   one re-runs CI.
 // - schedule, push to main, workflow_dispatch (full tier): every job on every
 //   OS, macOS included, plus the speed contract and itests. The schedule is
-//   nightly: platform builds, the speed contract and itests run once a day, not
-//   per change, unless a label asks.
+//   nightly: platform builds run once a day, not per change, unless a
+//   `deploy:<platform>` label asks.
 //
 // There is no merge queue (removed 2026-11-06), so nothing runs between a PR's
-// `gate` and main: a regression the speed contract or itests would catch shows
-// up in the next nightly run.
+// `gate` and main: the PR is the last place to stop a speed or itest
+// regression (decision 0057, superseding 0056's nightly-only runs).
 //
 // Unknown changed files (none listed, or a list at the API's 3,000-file cap) and
 // changes to CI itself fall back to every job of the tier.
-//
-// `itests`, the loopback end-to-end scripts (Local Web UI + nekkod + scripted
-// models), never run on a pull request, and `gate` does not wait for them.
 
 const RUST = [/^crates\//, /^Cargo\.(toml|lock)$/, /^rust-toolchain\.toml$/, /^rustfmt\.toml$/];
 // Shared's contracts feed the engine's golden sets (the phone allowlist, the IPC names).
 const DAEMON = [...RUST, /^packages\/shared\//];
 // Capture is also the job that builds the native browser (and fails on its warnings).
 const CAPTURE = [/^apps\/desktop\//, /^packages\//, /^vendor\/agent-browser\//, /^scripts\/build-agent-browser\.mjs$/];
+// The speed contract measures the Local Web UI: renderer, engine, server, daemon.
+const PERF = [/^scripts\/perf\//, /^apps\/desktop\/src\/renderer\//, /^apps\/local-web-ui\//, /^packages\//, ...RUST];
 // The native phone apps: their own workflows (ios-native.yml, android-native.yml)
 // build and test them, and nothing in `build` reads them. A change only here
-// skips `build` (npm and the cargo build of nekkod).
+// skips `build` (npm and the cargo build of nekkod) and the itests.
 const NATIVE_APPS = [/^apps\/ios\//, /^apps\/android\//];
 // CodeQL's languages, by the files that hold them.
 const CODEQL = {
@@ -61,8 +63,8 @@ export function ciScope({ event, files = [], labels = [] }) {
     build,
     daemon_os: [...(daemon && os('linux') ? ['ubuntu-latest'] : []), ...(daemon && os('windows') ? ['windows-latest'] : []), ...(daemon && os('macos') ? ['macos-latest'] : [])],
     capture_os: [...(capture && os('windows') ? ['windows-latest'] : []), ...(capture && os('macos') ? ['macos-latest'] : [])],
-    perf: labels.includes('ci:perf'),
-    itests: false,
+    perf: labels.includes('ci:perf') || all || touches(files, PERF),
+    itests: build,
     licenses: all || touches(files, LICENSES),
   };
 }

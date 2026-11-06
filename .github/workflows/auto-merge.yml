@@ -1,8 +1,9 @@
 name: Auto-merge
 # Arms GitHub's native auto-merge (squash) on every ready PR into main, so it
 # merges itself once `gate` and the other branch rules pass. There is no merge
-# queue (removed 2026-11-06): the speed contract and itests run nightly, and
-# `gate` on the PR is the last check before main. Then it makes sure the merge
+# queue (removed 2026-11-06): `gate` on the PR, which waits for the speed
+# contract and itests when the PR can affect them (decision 0057), is the last
+# check before main. Then it makes sure the merge
 # actually releases.
 #
 # Draft and `hold` disarm it. With no queue to eject from, this workflow is what

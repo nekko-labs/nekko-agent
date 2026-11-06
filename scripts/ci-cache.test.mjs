@@ -22,7 +22,7 @@ test('CI runs in two tiers: PR and a nightly full run, with no merge queue', () 
 
 test('gate is the single required check and sees every job', () => {
   const gate = read('../.github/workflows/ci.yml').split('\n  gate:')[1];
-  assert.ok(gate.includes('needs: [scope, build, daemon, capture, perf, licenses]'));
+  assert.ok(gate.includes('needs: [scope, build, daemon, capture, perf, itests, licenses]'));
   assert.ok(gate.includes('if: always()'));
   assert.ok(gate.includes('(failure|cancelled)'));
 });
