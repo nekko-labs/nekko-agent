@@ -5,4 +5,9 @@
     <string name="widget_description">How many chats need you and how many are working. Counts only, never what they say.</string>
     <string name="shortcut_new_chat">New chat</string>
     <string name="shortcut_new_chat_long">New chat on your computer</string>
+    <string name="chats_card_details">Card details</string>
+    <string name="chats_showmodel">Model</string>
+    <string name="chats_showcontext">Context window</string>
+    <string name="chats_showpullrequests">Pull requests</string>
+    <string name="chats_showupdated">Last updated</string>
 </resources>

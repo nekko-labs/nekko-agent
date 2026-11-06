@@ -30,7 +30,11 @@ data class ChatListView(
     /** Completed chats, after their group's active ones (in a Completed group when not by project). */
     val showCompleted: Boolean = true,
     /** Project folders with no chats in them. */
-    val showEmptyGroups: Boolean = true,
+    val showEmptyGroups: Boolean = false,
+    val showModel: Boolean = true,
+    val showContext: Boolean = true,
+    val showPullRequests: Boolean = true,
+    val showUpdated: Boolean = true,
 ) {
     enum class GroupBy(val wire: String) { PROJECT("project"), STATUS("status"), DATE("date"), NONE("none") }
 
@@ -53,6 +57,10 @@ data class ChatListView(
         put("showPreviews", showPreviews)
         put("showCompleted", showCompleted)
         put("showEmptyGroups", showEmptyGroups)
+        put("showModel", showModel)
+        put("showContext", showContext)
+        put("showPullRequests", showPullRequests)
+        put("showUpdated", showUpdated)
     }.toString()
 
     companion object {
@@ -69,6 +77,10 @@ data class ChatListView(
                 showPreviews = flag("showPreviews", STANDARD.showPreviews),
                 showCompleted = flag("showCompleted", STANDARD.showCompleted),
                 showEmptyGroups = flag("showEmptyGroups", STANDARD.showEmptyGroups),
+                showModel = flag("showModel", STANDARD.showModel),
+                showContext = flag("showContext", STANDARD.showContext),
+                showPullRequests = flag("showPullRequests", STANDARD.showPullRequests),
+                showUpdated = flag("showUpdated", STANDARD.showUpdated),
             )
         }
     }

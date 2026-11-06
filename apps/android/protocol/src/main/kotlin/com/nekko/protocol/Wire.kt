@@ -349,6 +349,10 @@ data class SessionSummary(
     val activeWatchCount: Long = 0,
     /** Pinned on the computer (the desktop's pin), from here or there. */
     val pinned: Boolean = false,
+    val prUrls: List<String> = emptyList(),
+    val transcriptTokens: Long? = null,
+    val contextUsed: Long? = null,
+    val contextWindow: Long? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -374,6 +378,10 @@ data class SessionSummary(
                 order = o.dbl("order"),
                 activeWatchCount = o.long("activeWatchCount") ?: 0,
                 pinned = o.bool("pinned"),
+                prUrls = o["prUrls"].arr()?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList(),
+                transcriptTokens = o.long("transcriptTokens")?.takeIf { it > 0 },
+                contextUsed = o["claudeCodeContext"].obj()?.takeIf { it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
+                contextWindow = o["claudeCodeContext"].obj()?.takeIf { it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
         }
 
