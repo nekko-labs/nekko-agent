@@ -5,7 +5,7 @@ on:
       source_ref:
         description: Unchanged source revision to compare on one runner
         required: true
-        default: bdd59fa38
+        default: bdd59fa3870f52e5dff3884308a782b14e372db6
 permissions:
   contents: read
 jobs:
