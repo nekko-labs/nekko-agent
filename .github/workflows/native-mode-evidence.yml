@@ -79,7 +79,6 @@ permissions:
   contents: read
 jobs:
   ios:
-    if: ${{ false }} # Owned-branch Android evidence dispatch only.
     # The existing ios-native.yml hosted image, never the owner-runner picker.
     runs-on: xcode-27
     timeout-minutes: 45

@@ -49,6 +49,7 @@ async fn signed_out_end_to_end() {
         cwd: work,
         session: SessionStart::New(id.clone()),
         model: None,
+        effort: None,
         permission_mode: PermissionMode::Default,
         mcp_config: None,
         permission_prompt_tool: None,

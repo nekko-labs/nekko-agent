@@ -67,3 +67,4 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0057](0057-models-is-one-page-without-a-side-menu.md) | Models is one page without a side menu; its section headings carry the structure | accepted |
 | [0058](0058-the-iphone-keeps-its-own-connector-tokens.md) | The iPhone connects to GitHub, GitLab, Linear, Jira, Floop and the rest itself, with tokens in its own Keychain sent only to their service; a computer's connectors stay off-limits to phones | accepted |
 | [0059](0059-speed-contract-and-itests-run-on-every-pr.md) | The speed contract and the loopback itests run on every PR again (path-gated), and `gate` waits for both, since no queue tests a PR before `main` | accepted |
+| [0060](0060-text-size-is-page-zoom-on-the-desktop.md) | Text size is page zoom on the desktop, so every coordinate scales alike; the Local Web UI stays on CSS `zoom` |

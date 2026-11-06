@@ -36,6 +36,12 @@ export interface EngineEndpoint {
   token: string;
 }
 
+interface EndpointWaiter {
+  resolve: (e: EngineEndpoint) => void;
+  reject: (e: Error) => void;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
 export interface EngineOptions {
   browserBridge?: { url: string; token: string };
   dataDir: string;
@@ -63,8 +69,6 @@ const DAEMON_READY = 'NEKKOD_READY ';
 const DAEMON_WAITING = 'NEKKOD_WAITING ';
 const MAX_BACKOFF_MS = 5000;
 const READY_TIMEOUT_MS = 30_000;
-/** How long a call waits for a daemon that is (re)starting. */
-const ENDPOINT_WAIT_MS = 15_000;
 /** After SIGTERM (which also cuts nekkod's own shutdown short), how long before SIGKILL. */
 const KILL_AFTER_TERM_MS = 3000;
 /** nekkod's exit code when another daemon holds the data directory (crates/nekkod/src/datalock.rs). */
@@ -131,7 +135,7 @@ export function nativeConfig(app: EngineOptions['app'], env: NodeJS.ProcessEnv =
 export class EngineProcess {
   private child: ChildProcess | null = null;
   private current: EngineEndpoint | null = null;
-  private waiters: { resolve: (e: EngineEndpoint) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }[] = [];
+  private waiters: EndpointWaiter[] = [];
   private stopping = false;
   private requested = false;
   private restartTimer: ReturnType<typeof setTimeout> | undefined;
@@ -153,18 +157,25 @@ export class EngineProcess {
     if (this.current) return Promise.resolve(this.current);
     if (this.failure) return Promise.reject(new Error(this.failure));
     return new Promise((resolve, reject) => {
-      const waiter = { resolve, reject, timer: undefined as unknown as ReturnType<typeof setTimeout> };
-      const arm = () => {
-        waiter.timer = setTimeout(() => {
-          // A daemon waiting on the user's Keychain answer is not stuck.
-          if (this.waitingOn) { arm(); return; }
-          this.waiters = this.waiters.filter(w => w !== waiter);
-          reject(new Error('Nekko service did not become ready. Try restarting it from the tray.'));
-        }, ENDPOINT_WAIT_MS);
-      };
-      arm();
+      const waiter: EndpointWaiter = { resolve, reject };
       this.waiters.push(waiter);
+      this.armEndpointWaiter(waiter);
     });
+  }
+
+  private armEndpointWaiter(waiter: EndpointWaiter): void {
+    clearTimeout(waiter.timer);
+    // Consent can take as long as the user needs. Resume with a full budget,
+    // not the remainder of a timer that began before the dialog was answered.
+    if (this.waitingOn) return;
+    // A first-load call must outlast the daemon's own startup allowance, with
+    // bounded room for termination and restart backoff, rather than failing
+    // while the supervisor still considers the daemon healthy.
+    const waitMs = (this.opts.readyTimeoutMs ?? READY_TIMEOUT_MS) + KILL_AFTER_TERM_MS + MAX_BACKOFF_MS;
+    waiter.timer = setTimeout(() => {
+      this.waiters = this.waiters.filter(w => w !== waiter);
+      waiter.reject(new Error('Nekko service did not become ready. Try restarting it from the tray.'));
+    }, waitMs);
   }
 
   start(): void {
@@ -234,6 +245,7 @@ export class EngineProcess {
           armReady();
           console.error('engine: nekkod is no longer waiting; ready timeout restarted');
         }
+        this.waiters.forEach(w => this.armEndpointWaiter(w));
         return;
       }
       const at = line.indexOf(marker);
@@ -268,7 +280,9 @@ export class EngineProcess {
     child.on('exit', (code, signal) => {
       clearTimeout(readyTimer);
       if (this.child !== child) return;
+      const wasWaiting = this.waitingOn !== null;
       this.waitingOn = null;
+      if (wasWaiting) this.waiters.forEach(w => this.armEndpointWaiter(w));
       this.current = null;
       this.child = null;
       if (this.stopping) return;

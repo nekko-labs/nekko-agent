@@ -353,7 +353,7 @@ export function runnerSubtitle(v: RunnerView): string {
   return `${scope.kind} scope · label ${label} · ${PRIORITY_LABELS[settings.priority]} · ${KEEP_AWAKE_LABELS[settings.keepAwake]}`;
 }
 
-export interface SlotLine { title: string; text: string; active: boolean; dim: boolean }
+export interface SlotLine { title: string; text: string; active: boolean; dim: boolean; vm?: string }
 
 /** Linux guests have no Apple cap; nekkod clamps the setting to this. */
 export const MAX_LINUX_SLOTS = 8;
@@ -395,7 +395,7 @@ function slotLine(v: RunnerView, title: string, s: SlotView | undefined, nowSecs
     return { title, text, active: false, dim: false };
   }
   const elapsed = Math.max(0, nowSecs - s.since);
-  const line = (text: string, active = true): SlotLine => ({ title, text, active, dim: false });
+  const line = (text: string, active = true): SlotLine => ({ title, text, active, dim: false, ...(s.vm ? { vm: s.vm } : {}) });
   switch (s.state) {
     case 'starting': return line('Starting a VM');
     case 'ready': return line('Ready for a job');

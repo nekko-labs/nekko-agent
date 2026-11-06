@@ -149,6 +149,8 @@ const scenes: Record<string, () => Promise<RunnerView[]>> = {
   }, { macosSlots: 2, linuxSlots: 3 })],
   'settings-linux': async () => [view({ available: 2, linuxAvailable: 2 }, { linuxSlots: 2 })],
   'settings-linux-building': async () => [view({ available: 2, linuxAvailable: 0, linuxError: 'No Linux image yet.' }, { linuxSlots: 2 })],
+  'settings-save': async () => [view()],
+  'missing-logs': async () => [view({ recent: [{ ...audit(600, 'A job', 'finished', 3400), jobId: null, repo: null, workflow: null, job: null, url: null, vm: null }] })],
   'settings-bottom': async () => [view({ limit: 'memory', available: 1 })],
   'settings-suggested': async () => [view(
     { suggestedSize: { jobs: 6, cpus: 4, memoryMb: 8 * GB, reasons: ['The biggest job used 5.4 GB at most and never swapped.'] } },
@@ -235,6 +237,15 @@ const bridge: any = {
   openPath: async (url: string) => { (window as any).opened = [...((window as any).opened ?? []), url]; },
   connectRunner: async () => { if (scene === 'connect-busy') await sleep(1500); return off(); },
   setRunnerEnabled: async () => view({}),
+  updateRunner: async (_id: string, patch: object) => {
+    const test = (window as any).saveTest;
+    test.calls += 1;
+    test.patch = patch;
+    await new Promise<void>((resolve, reject) => { test.resolve = resolve; test.reject = reject; });
+    const kept = view({}, patch);
+    runnersChanged([kept]);
+    return kept;
+  },
   runnerJobLog: async () => JOB_LOG,
   runnerVmLog: async () => VM_LOG,
   runnerLiveLog: async () => LIVE_LOG,
@@ -268,6 +279,7 @@ function Fixture() {
     localStorage.setItem('nekko.chatMode', 'expert');
     scene = next;
     (window as any).opened = [];
+    (window as any).saveTest = { calls: 0 };
     useStore.setState({ view: 'workflows', providers: [], models: [], sessions: [], terminals: [], workspaces: [], settings, settingsLoaded: true, installedSkillDefs: [] } as any);
     setEpoch((e) => e + 1);
   };
