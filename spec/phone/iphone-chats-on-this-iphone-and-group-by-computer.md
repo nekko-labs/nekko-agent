@@ -18,13 +18,42 @@ Philip asked (2026-11-04):
 
 ## What the user sees
 
-- **One list, every place.** The chat list holds every paired computer's chats and this iPhone's own chats. *Show chats from* in the computer pill lists *All computers*, each computer, and **This iPhone** (*Its own models*) once the phone runs chats.
+- **One list, every place.** The chat list holds every paired computer's chats and this iPhone's own chats. *Show chats from* in the computer pill lists *All computers*, each computer, and **This iPhone** (*Its own models*) even before a provider is configured.
 - **Where a chat runs**, on its row when the list shows more than one place: the computer's icon in its colour (the desktop's computer colours, the same order), or a dot when the computer has no icon, then its name; this iPhone's chats show a phone mark and *This iPhone*. The colour is on the mark only, so the name keeps the list's contrast. **View → Show → Computer** and **Computer icons** turn the name and the icon off, as on the desktop.
 - **Group by → Computer** (in the view menu once there is more than one place): a heading per computer, then *This iPhone*, each with its mark, its chats in the chosen order and its own completed chats after them. With headings naming the place, the rows don't repeat it. A computer with no chats in view shows when *Empty groups* is on.
 - **Models on this iPhone** (Settings → Computers, and *Or use a model provider on this iPhone* on the welcome screen before any computer is paired): the phone's providers, each with its models or what went wrong, a switch to turn it off, touch and hold for **Test**, **New key** and **Remove**. **Add a provider** takes the kind, a name, the address where the kind needs one, and the key; it is kept only after the provider answers. The kinds: Claude API (optional workspace ID), OpenAI, OpenRouter, Claude in Amazon Bedrock, Claude in Microsoft Foundry, Claude on Vertex AI (a pasted access token, about an hour), OpenAI-compatible (any https server). The desktop's other kinds are listed under *On a computer only*: the Claude subscription (Claude Code), the ChatGPT subscription and local model servers.
 - **New chat → Run on** lists **This iPhone** (*Its own models, no tools*) beside the computers. On this iPhone the model chip picks among the phone's providers' models; folder, tools, effort, photos and Nekko Cloud step aside, the box asks *Ask anything*, and a line says the chat runs on this iPhone with your own key and has no tools. New chat starts on this iPhone when the list is filtered to it or no computer is paired.
 - **A chat on this iPhone** opens to its conversation: a line on where it runs and with which model, your messages, the reply streaming in with Markdown, **Stop** while it streams, and **Try again** under a reply that failed (the provider's own words: a refused key, a rate limit, an unknown model). Its menu changes the model, renames, pins, completes or restores, and deletes. In the list it swipes and touches and holds like any chat.
 - With no computer paired and a provider on this iPhone, the app opens on the chat list instead of the welcome screen.
+
+## Phone discovery and getting started (2026-11-06)
+
+Implemented in native iOS: **This iPhone** (or **This iPad**) is always a place,
+independent of provider configuration, enabled state and chat history. Computers
+includes a permanent device row that opens its own models page. New chat's Run on
+choice includes the device even before setup; when that device is selected without
+providers, it offers setup instead of implying a usable model already exists.
+
+The empty phone models page and an empty chat list that includes the phone show an
+original static SwiftUI phone-and-cloud illustration, **Connect a cloud provider**,
+and an explanation of the Keychain and no-tools boundaries. The action opens the
+existing secure provider editor. Cancelling saves nothing. Configured providers
+keep their existing list, switches, model loading, validation and removal behavior.
+A computer-only filter does not show the phone setup invitation. Existing chats are
+not hidden by the invitation. The existing first-run welcome and pairing route is
+unchanged; its phone-provider link reaches the same illustrated models page.
+
+Acceptance: a fresh device appears in Computers and in place choices without a
+key or chat. The invitation opens a secure key field and cannot save an empty key.
+It remains usable with accessibility XL text and dark appearance. Configured phone
+providers do not show the invitation. No provider transport, Keychain service,
+HTTPS enforcement, test-before-save or relay behavior changes.
+
+Verification: focused native simulator UI checks cover empty Chats, Computers and
+Models, cancellation, required key, configured-provider suppression, dark mode and
+large text. Native before/after captures use an owned iPhone 17 Pro simulator on
+iOS 26.5 with the default computer theme. Physical-device provider access and
+translations remain unverified; no TestFlight deployment is part of this change.
 
 ## How it works
 

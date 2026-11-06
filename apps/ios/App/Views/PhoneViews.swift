@@ -34,11 +34,11 @@ struct ChatPlace: Equatable {
         return ChatPlace(id: c.id, name: c.name, icon: c.icon, color: Int(ComputerColors.computer(at: i)))
     }
 
-    /// Every place in the list, in order: the paired computers, then this iPhone when it runs chats.
+    /// Every place in the list, in order: the paired computers, then this iPhone, even before provider setup.
     @MainActor
     static func all(store: ComputersStore, phone: PhoneChats) -> [ChatPlace] {
         let computers = store.computers.indices.compactMap { of(store.computers[$0].id, store: store) }
-        return computers + (phone.isSetUp || !phone.chats.isEmpty ? [phonePlace] : [])
+        return computers + [phonePlace]
     }
 }
 
@@ -79,6 +79,75 @@ struct PlaceMark: View {
         .frame(width: size, height: size)
         .foregroundStyle(Color(hex: place.color))
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: Getting started on this device
+
+/// Original, static SwiftUI artwork: a private connection from this device to a cloud.
+/// Decorative only; the adjacent text supplies the meaning at every text size.
+private struct PhoneCloudIllustration: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ZStack {
+            Ellipse().fill(palette.accent.opacity(0.08)).frame(width: 238, height: 112).offset(y: 12)
+            Capsule().stroke(palette.accent.opacity(0.35), style: StrokeStyle(lineWidth: 2, dash: [3, 6]))
+                .frame(width: 110, height: 38).rotationEffect(.degrees(-24)).offset(x: 6, y: -1)
+            ZStack {
+                RoundedRectangle(cornerRadius: 18).fill(palette.surface)
+                RoundedRectangle(cornerRadius: 18).stroke(palette.accent.opacity(0.5), lineWidth: 2)
+                VStack(spacing: 12) {
+                    Capsule().fill(palette.inkFaint).frame(width: 24, height: 4)
+                    Image(systemName: "bubble.left.and.bubble.right.fill")
+                        .font(.system(size: 27)).foregroundStyle(palette.accent)
+                    Capsule().fill(palette.accent.opacity(0.25)).frame(width: 32, height: 4)
+                }
+            }
+            .frame(width: 70, height: 112).rotationEffect(.degrees(-9)).offset(x: -68, y: 8)
+            Image(systemName: "cloud.fill").font(.system(size: 64))
+                .foregroundStyle(palette.accent.opacity(0.18))
+                .overlay(Image(systemName: "cloud").font(.system(size: 64)).foregroundStyle(palette.accent))
+                .offset(x: 66, y: -27)
+            Image(systemName: "lock.fill").font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(palette.accent).padding(10)
+                .background(palette.surface, in: Circle())
+                .overlay(Circle().stroke(palette.line)).offset(x: 32, y: 40)
+        }
+        .frame(height: 156)
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The same setup invitation on the chat list, new chat and the device's models page.
+struct PhoneProviderGettingStarted: View {
+    var connect: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(spacing: 14) {
+            PhoneCloudIllustration()
+            Text("Your next conversation starts here")
+                .font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
+            Text("Connect a cloud provider to chat on \(ChatPlace.phoneName), even without a paired computer.")
+                .font(.subheadline).foregroundStyle(palette.inkSoft)
+            Button(action: connect) {
+                Label("Connect a cloud provider", systemImage: "plus")
+                    .font(.body.weight(.semibold)).foregroundStyle(palette.onAccent)
+                    .frame(maxWidth: .infinity).padding(.vertical, 4)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("phoneSetup.connect")
+            Text("Your API key stays in this device’s Keychain and goes only to your provider. Chats here have no tools or access to your computers or files.")
+                .font(.footnote).foregroundStyle(palette.inkSoft)
+        }
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: 440)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("phoneSetup.intro")
     }
 }
 
@@ -361,6 +430,11 @@ struct PhoneModelsView: View {
 
     var body: some View {
         List {
+            if phone.providers.isEmpty {
+                PhoneProviderGettingStarted { adding = true }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
             Section {
                 Text("Chats can run on \(ChatPlace.phoneName) itself, with no computer: the iPhone calls the provider with your own key. The key stays in this iPhone’s Keychain and is never sent to a computer, the relay or Nekko Cloud. These chats have no tools.")
                     .font(.footnote).foregroundStyle(palette.inkSoft)
@@ -538,3 +612,27 @@ struct AddPhoneProviderSheet: View {
         }
     }
 }
+
+#if DEBUG
+/// Real empty screens in an owned UI-test install, without pairing or network startup.
+struct PhoneSetupFixture: View {
+    @State private var path: [Route] = []
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            Group {
+                if ProcessInfo.processInfo.arguments.contains("-phoneSetupModels") {
+                    PhoneModelsView()
+                } else if ProcessInfo.processInfo.arguments.contains("-phoneSetupComputers") {
+                    ComputersView()
+                } else {
+                    ChatsView(path: $path)
+                }
+            }
+            .navigationDestination(for: Route.self) { route in
+                if route == .phoneModels { PhoneModelsView() }
+            }
+        }
+    }
+}
+#endif

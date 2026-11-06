@@ -5,6 +5,7 @@ import SwiftUI
 /// Paired computers: rename, forget, and how each is reached. Every one stays
 /// connected on its own (2026-11-04); one that can't be reached offers Reconnect.
 struct ComputersView: View {
+    @Environment(PhoneChats.self) private var phone
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -51,6 +52,19 @@ struct ComputersView: View {
             } footer: {
                 Text("Forgetting deletes this iPhone’s pairing keys. To stop the computer accepting this phone, remove it in Settings → Remote access there too.")
                     .foregroundStyle(palette.inkSoft)
+            }
+            Section {
+                NavigationLink(value: Route.phoneModels) {
+                    HStack(spacing: 10) {
+                        PlaceMark(place: .phonePlace, size: 22)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(ChatPlace.phoneName).font(.body.weight(.medium)).foregroundStyle(palette.ink)
+                            Text(phone.providers.isEmpty ? String(localized: "Connect a cloud provider to get started") : String(localized: "Its own models, no tools"))
+                                .font(.caption).foregroundStyle(palette.inkSoft)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("computers.phone")
             }
             Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus") } }
         }

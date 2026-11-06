@@ -22,6 +22,7 @@ struct ChatsView: View {
     @State private var expanded: Set<String> = []
     @State private var reorderingGroups = false
     @State private var sendingFeedback = false
+    @State private var addingPhoneProvider = false
     /// The heading a dragged group is over.
     @State private var dropTarget: String?
     @State private var renaming: SessionSummary?
@@ -85,6 +86,7 @@ struct ChatsView: View {
             ReorderGroupsSheet(groups: sections.filter { $0.key != ChatGroup.general }.map { GroupName(key: $0.key, name: $0.name) }) { setGroupOrder($0) }
         }
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
+        .sheet(isPresented: $addingPhoneProvider) { AddPhoneProviderSheet() }
     }
 
     /// The readings the floating pill shows, while the hardware shows; no pill otherwise.
@@ -131,6 +133,10 @@ struct ChatsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 32)
                 .listRowBackground(Color.clear)
+            } else if phoneInView && phone.providers.isEmpty && listSummaries.isEmpty && query.isEmpty {
+                PhoneProviderGettingStarted { addingPhoneProvider = true }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             } else if listSummaries.isEmpty && scopeLoaded && !store.summariesLoading {
                 // Not ContentUnavailableView: its fixed layout clips at large text sizes.
                 VStack(spacing: 10) {
@@ -357,7 +363,7 @@ struct ChatsView: View {
         prefs.chatsFilter.flatMap { id in places.contains { $0.id == id } ? id : nil }
     }
 
-    /// Every place chats run: the paired computers, and this iPhone when it runs chats (decision 0050).
+    /// Every place chats run: the paired computers, and this iPhone, including before provider setup (decision 0050).
     private var places: [ChatPlace] { ChatPlace.all(store: store, phone: phone) }
     /// The places the list shows now: every one, or the one it is filtered to.
     private var placesInView: [ChatPlace] { filter.map { f in places.filter { $0.id == f } } ?? places }
@@ -823,7 +829,7 @@ struct ComputerMenu: View {
         app.prefs.chatsFilter.flatMap { id in places.contains { $0.id == id } ? id : nil }
     }
 
-    /// The paired computers, and this iPhone when it runs chats.
+    /// The paired computers, and this iPhone, including before provider setup.
     private var places: [ChatPlace] { ChatPlace.all(store: store, phone: phone) }
 
     /// The pill names this iPhone: the list is filtered to it, or it is the only place.

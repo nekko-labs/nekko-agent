@@ -4,6 +4,25 @@ Drive the Nekko Agent running on your computer from your phone: start and manage
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
+## Chat directly from this iPhone or iPad
+
+The native iOS app can also call a cloud model provider directly, without a paired
+computer. **This iPhone** (or **This iPad**) always appears in Computers and the
+chat place choices, even before you configure a provider. Open its row in
+**Computers**, or **Settings → Models on This iPhone**, then choose
+**Connect a cloud provider**. The empty chat list also offers this action when it
+includes the phone. On the first-run welcome screen, use the phone model provider
+link to reach the same setup page. Pairing a computer is still optional for these
+conversations.
+
+Choose a provider and enter your own API key in the secure editor. The app checks
+the provider before keeping it. Cancelling does not save a provider. The key stays
+in this device's Keychain and goes only to that provider over HTTPS, never to a
+paired computer, the relay or Nekko Cloud. These conversations have no tools and
+cannot see your computers or files. A configured provider keeps its existing
+models, enable switch and key-management actions. This is separate from remote
+control of a computer described below.
+
 ## From another computer
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.

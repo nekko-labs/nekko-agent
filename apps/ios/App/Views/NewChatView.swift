@@ -38,6 +38,7 @@ struct NewChatView: View {
     @State private var onPhone = false
     @State private var phoneModel: (String, String)?
     @State private var pickingPhoneModel = false
+    @State private var addingPhoneProvider = false
     @State private var cloudBusy = false
     @State private var cloudError: String?
     @Environment(\.dismiss) private var dismiss
@@ -78,6 +79,9 @@ struct NewChatView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
+                if onPhone && phone.providers.isEmpty {
+                    PhoneProviderGettingStarted { addingPhoneProvider = true }
+                }
                 if offline {
                     note(Label("\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then.",
                                systemImage: "tray.and.arrow.up"), color: palette.inkSoft)
@@ -103,6 +107,7 @@ struct NewChatView: View {
         .navigationTitle("New chat")
         .navigationBarTitleDisplayMode(.inline)
         .keyboardDoneButton()
+        .sheet(isPresented: $addingPhoneProvider, onDismiss: { Task { await pickPhoneDefault() } }) { AddPhoneProviderSheet() }
         .sheet(isPresented: $pickingPhoneModel) {
             PhoneModelPicker(selected: phoneModel) { p, m in
                 phoneModel = (p, m)
@@ -263,7 +268,7 @@ struct NewChatView: View {
                 // Where it runs, whenever there is a choice (2026-11-04): it starts on the
                 // computer the list was showing, or the one used last, and every paired
                 // computer is already connected, so picking another is instant.
-                if isLocal || pickedComputer || store.computers.count + (phone.isSetUp ? 1 : 0) > 1 {
+                if isLocal || pickedComputer || !store.computers.isEmpty {
                     Menu {
                         Picker("Run on", selection: Binding(get: { onPhone ? PhoneProviders.computerId : store.activeId }, set: { if let id = $0 { switchPlace(id) } })) {
                             ForEach(store.computers) { c in
@@ -275,7 +280,7 @@ struct NewChatView: View {
                                 }
                                 .tag(Optional(c.id))
                             }
-                            if phone.isSetUp {
+                            Group {
                                 Label {
                                     Text(ChatPlace.phoneName)
                                     Text("Its own models, no tools")
@@ -447,7 +452,8 @@ struct NewChatView: View {
 
     /// Start on this iPhone when the list shows only its chats, or when no computer is paired.
     private func pickPlace() {
-        guard phone.isSetUp, app.prefs.chatsFilter == PhoneProviders.computerId || store.computers.isEmpty else { return }
+        guard phone.isSetUp || app.prefs.chatsFilter == PhoneProviders.computerId else { return }
+        guard app.prefs.chatsFilter == PhoneProviders.computerId || store.computers.isEmpty else { return }
         onPhone = true
         Task { await pickPhoneDefault() }
     }
