@@ -24,7 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
-import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, RunnerSettings, RunnerView } from './runners.js';
+import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -340,6 +340,10 @@ export const IpcChannels = {
   runnerImageBuild: 'runner:imageBuild',
   runnerImageResume: 'runner:imageResume',
   runnerImageCancel: 'runner:imageCancel',
+  /** The Linux runner image (decision 0053), served by nekkod; never by a phone. */
+  runnerLinuxImageStatus: 'runner:linuxImageStatus',
+  runnerLinuxImageBuild: 'runner:linuxImageBuild',
+  runnerLinuxImageCancel: 'runner:linuxImageCancel',
   /** CI runners (T213), served by nekkod's runner supervisor; never by a phone. */
   runnerList: 'runner:list',
   runnerConnect: 'runner:connect',
@@ -500,6 +504,8 @@ export const IpcEvents = {
   workflowsUpdated: 'workflows:updated',
   /** The image builder's `ImageView`, after any change. */
   runnerImageChanged: 'runner:imageChanged',
+  /** The Linux image builder's `LinuxImageView`, after any change. */
+  runnerLinuxImageChanged: 'runner:linuxImageChanged',
   /** Every runner's `RunnerView`, after any change. */
   runnerChanged: 'runner:changed',
   /** The GitHub connect moved on: a `GithubSetupView`. */
@@ -1126,6 +1132,10 @@ export interface NekkoApi {
   buildImage(req: ImageBuildRequest): Promise<ImageView>;
   resumeImage(): Promise<ImageView>;
   cancelImage(): Promise<ImageView>;
+  /** The Linux runner image: Ubuntu, provisioned on this Mac. Rejects with a sentence. */
+  linuxImageStatus(): Promise<LinuxImageView>;
+  buildLinuxImage(): Promise<LinuxImageView>;
+  cancelLinuxImage(): Promise<LinuxImageView>;
   /** CI runners on this Mac. Rejects where the daemon serves none (not macOS, or an older daemon). */
   listRunners(): Promise<RunnerView[]>;
   connectRunner(req: ConnectRequest): Promise<RunnerView>;
@@ -1343,6 +1353,7 @@ export interface NekkoApi {
   /** Fires when a workflow is edited or any run advances a step. */
   onWorkflowsUpdated(cb: (snapshot: WorkflowsSnapshot) => void): () => void;
   onImageChanged(cb: (view: ImageView) => void): () => void;
+  onLinuxImageChanged(cb: (view: LinuxImageView) => void): () => void;
   onRunnersChanged(cb: (views: RunnerView[]) => void): () => void;
   onGithubSetupChanged(cb: (view: GithubSetupView) => void): () => void;
   /** Fires when subscription limits are captured or polled for any token key. */
