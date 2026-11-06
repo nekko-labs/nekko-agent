@@ -1623,8 +1623,13 @@ impl Turns {
         // The turn is over: nothing it waited on can still be answered.
         self.pending.release(&session_id);
         // The `error` event only reaches windows open now. Saved, a chat reopened
-        // later can still offer Retry. A Stop is the user's, not a failure.
-        let failure = lock(&shared.last_error).clone().filter(|_| last_stop.is_none() && !shared.cancel.is_cancelled());
+        // later can still offer Retry. A Stop counts too: one that lands between
+        // steps leaves no partial reply to mark, so this is its only record.
+        let stopped = shared.cancel.is_cancelled();
+        let failure = lock(&shared.last_error)
+            .clone()
+            .filter(|_| last_stop.is_none())
+            .map(|message| if stopped { "Stopped".to_string() } else { message });
         if let Some(obj) = lock(session).as_object_mut() {
             obj.remove("activeRun");
             if let Some(message) = failure {

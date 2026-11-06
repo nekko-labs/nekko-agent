@@ -642,6 +642,7 @@ async fn stopping_the_chat_stops_its_sub_agent() {
     })
     .await;
     assert_eq!(stopped["message"], "Stopped");
+    assert_eq!(saved(&rig)["turnFailure"]["message"], "Stopped", "a reopened chat still offers Retry");
 }
 
 #[tokio::test(flavor = "multi_thread")]
