@@ -11,6 +11,15 @@
 /** A live shell session attached to a PTY. */
 export interface TerminalInfo {
   id: string;
+  /** Passive display metadata observed in PTY output. Never authorization. */
+  activity?: {
+    title?: string;
+    cwd?: string;
+    state?: 'running' | 'idle' | 'attention';
+    detail?: string;
+    lastExitCode?: number;
+    pullRequestUrl?: string;
+  };
   title: string;
   /** Project this terminal belongs to (groups it in the workbench sidebar). */
   workspaceId?: string;
