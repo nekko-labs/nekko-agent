@@ -693,7 +693,7 @@ async fn stopping_a_daemon_turn_ends_it_and_clears_the_run_marker() {
     assert!(event_types(&events).contains(&"error".to_string()));
     let saved = saved_session(&rig, "s_turn_s");
     assert!(saved.get("activeRun").is_none());
-    assert!(saved.get("turnFailure").is_none(), "a Stop is not a failure");
+    assert_eq!(saved["turnFailure"]["message"], "Stopped", "a reopened chat still offers Retry");
     let (_, alive) = post(rig.d.port, "turn:alive", json!(["turn_s"]), Some(TOKEN)).await;
     assert_eq!(alive, json!(false));
 }

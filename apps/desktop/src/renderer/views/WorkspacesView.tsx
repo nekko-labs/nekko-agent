@@ -1,3 +1,4 @@
+import { terminalPresentation } from '../components/terminalActivity.js';
 import { HoverTip } from '../components/HoverTip.js';
 import { CreateMenuRows } from '../components/CreateMenu.js';
 import { confirmDeletion } from '../components/DeleteConfirmation.js';
@@ -49,7 +50,7 @@ const COMPLETED_GROUP = '__completed';
 /** What a card sorts by: its chat, or its shell when it is a terminal. */
 function sortable(e: Entry): SortableCard {
   const at = e.s?.updatedAt ?? e.t?.createdAt ?? 0;
-  return { title: e.s?.title ?? e.t?.title ?? '', updatedAt: at, createdAt: e.s?.createdAt ?? e.t?.createdAt ?? at, order: e.s?.order ?? e.t?.order };
+  return { title: e.s?.title ?? (e.t ? terminalPresentation(e.t).title : ''), updatedAt: at, createdAt: e.s?.createdAt ?? e.t?.createdAt ?? at, order: e.s?.order ?? e.t?.order };
 }
 
 /** One group the panel shows: a project, a status, a date range, or all of it. */
@@ -501,7 +502,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    */
   const bucketEntries = (key: string): Entry[] =>
     [
-      ...listedWorkspaces.filter((w) => projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
+      ...listedWorkspaces.filter((w) => w.anchor.kind !== 'terminal' && projectOf(w) === key).map((w): Entry => ({ key: w.id, w, s: sessionOf(w), t: terminalOf(w) })),
+      ...terminals.filter((t) => !t.id.startsWith('agent_') && !t.agentSessionId && (buckets.some((b) => b.key === t.workspaceId) ? t.workspaceId : '__none') === key).map((t): Entry => ({ key: 'terminal:' + t.id, w: null, s: null, t })),
       ...savedChats.filter((s) => chatGroupOf(s) === key).map((s): Entry => ({ key: CHAT_KEY + s.id, w: null, s, t: null })),
     ]
       .map((e) => ({ e, order: e.s?.order ?? e.t?.order, at: e.s ? -e.s.updatedAt : e.t?.createdAt ?? 0 }))
@@ -515,7 +517,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    * in manual order this is exactly the bucket list drag-and-drop writes to;
    * every other arrangement is a read-only view of the same cards.
    */
-  const utilityKind = (e: Entry) => e.w?.anchor.kind === 'terminal' ? 'terminal' : e.s?.chatType === 'image' ? 'media' : null;
+  const utilityKind = (e: Entry) => e.t ? 'terminal' : e.s?.chatType === 'image' ? 'media' : null;
   const shown = (e: Entry) => !utilityKind(e) && (view.showAutomations || !e.s?.taskId);
   const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
   const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
@@ -862,7 +864,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                             else if (entry.t) onOpenTerminal(entry.t.id);
                             setMobileNav(false);
                           }}
-                          onClose={() => (w ? archiveWorkspace(w.id) : s ? archiveChat(s.id) : undefined)}
+                          onClose={async () => {
+                            if (entry.t) {
+                              if (entry.t.running && !await confirmDeletion('Close this terminal and stop its running processes?')) return;
+                              try { await window.nekko.closeTerminal(entry.t.id); await refreshTerminals(); }
+                              catch (error) { useStore.getState().pushToast('error', `Could not close terminal: ${String(error)}`); }
+                            } else if (w) await archiveWorkspace(w.id);
+                            else if (s) await archiveChat(s.id);
+                          }}
                           renaming={!!s && s.id === renamingId}
                           onRenameStart={s ? () => setRenamingId(s.id) : undefined}
                           onRename={s ? (title) => void renameChat(s.id, title) : undefined}

@@ -25,6 +25,8 @@ Nekko Agent is one engine and one React UI that run in several places: the deskt
 
 ## Desktop lifetime and notifications
 
+On first launch, the desktop waits for the engine's full startup allowance before failing queued settings requests. A macOS Keychain consent dialog pauses that wait; answering it gives startup its full allowance again. A missing or unlaunchable service still reports its specific error immediately. If startup remains stuck, use **Restart Nekko service** in the tray menu.
+
 Closing the UI already hides it to the tray without stopping the engine. Explicit Quit shuts down the service and managed processes; Stop Nekko service stops the engine without quitting the UI. Neither arrangement promises continued work during OS sleep, shutdown or logout.
 
 The 2026-10-13 implementation moves Electron native notifications into main (`apps/desktop/src/main/notifications.ts`), with a direct authenticated engine WebSocket subscription, fresh settings reads per eligible notice, reconnect/backoff and disposal on Quit. Main creates native notices; click delivery uses an encoded session deep link to restore the window and select the chat. Renderer notifications remain for browser editions only, avoiding duplicate Electron delivery. Settings exposes the default-on toggle in its standalone Notifications section.

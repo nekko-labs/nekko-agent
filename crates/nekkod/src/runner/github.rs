@@ -599,16 +599,81 @@ impl<H: Http + 'static> Provider for GitHub<H> {
 
     /// `None` for a runner that has not taken a job (never, or not yet).
     async fn job(&self, r: &RunnerRecord, _runner_id: u64, runner_name: &str) -> Result<Option<JobRef>, ProviderError> {
-        // A job that ended before anyone asked is only among the completed runs.
+        // First cover every repo's first page; optional pages share a per-status budget.
+        // At most 11 requests per repo per status, plus 24 extra per status.
+        const EXTRA_REQUESTS_PER_STATUS: usize = 24;
+        const RUN_PAGE_SIZE: usize = 10;
+        const JOB_PAGE_SIZE: usize = 100;
+        enum Extra {
+            Runs(String),
+            Jobs(String, Value, usize),
+        }
         for status in ["in_progress", "completed"] {
-            let found = self
-                .jobs(r, status)
-                .await?
-                .into_iter()
-                .find(|(_, _, job)| job["runner_name"].as_str() == Some(runner_name))
-                .map(|(repo, run, job)| job_ref(repo, &run, &job));
-            if found.is_some() {
-                return Ok(found);
+            let mut extra = std::collections::VecDeque::new();
+            for repo in &link(r)?.repos {
+                let path = format!("/repos/{repo}/actions/runs?status={status}&per_page={RUN_PAGE_SIZE}&page=1");
+                let (s, v) = self.call(r, "GET", &path, None).await?;
+                if !ok(s) {
+                    return Err(other("the workflow runs", s, &v));
+                }
+                let runs = v["workflow_runs"].as_array().map(Vec::as_slice).unwrap_or_default();
+                for run in runs.iter().take(RUN_PAGE_SIZE) {
+                    let Some(id) = run["id"].as_u64() else { continue };
+                    // A VM can have run an earlier attempt even when the run was retried.
+                    let path =
+                        format!("/repos/{repo}/actions/runs/{id}/jobs?filter=all&per_page={JOB_PAGE_SIZE}&page=1");
+                    let (s, v) = self.call(r, "GET", &path, None).await?;
+                    if !ok(s) {
+                        return Err(other("the jobs", s, &v));
+                    }
+                    let jobs = v["jobs"].as_array().map(Vec::as_slice).unwrap_or_default();
+                    if let Some(job) = jobs.iter().find(|job| job["runner_name"].as_str() == Some(runner_name)) {
+                        return Ok(Some(job_ref(repo.clone(), run, job)));
+                    }
+                    if jobs.len() >= JOB_PAGE_SIZE {
+                        extra.push_back(Extra::Jobs(repo.clone(), run.clone(), 2));
+                    }
+                }
+                if runs.len() >= RUN_PAGE_SIZE {
+                    extra.push_back(Extra::Runs(repo.clone()));
+                }
+            }
+            for _ in 0..EXTRA_REQUESTS_PER_STATUS {
+                let Some(next) = extra.pop_front() else { break };
+                match next {
+                    Extra::Runs(repo) => {
+                        let path =
+                            format!("/repos/{repo}/actions/runs?status={status}&per_page={RUN_PAGE_SIZE}&page=2");
+                        let (s, v) = self.call(r, "GET", &path, None).await?;
+                        if !ok(s) {
+                            return Err(other("the workflow runs", s, &v));
+                        }
+                        if let Some(runs) = v["workflow_runs"].as_array() {
+                            for run in runs.iter().take(RUN_PAGE_SIZE) {
+                                if run["id"].as_u64().is_some() {
+                                    extra.push_back(Extra::Jobs(repo.clone(), run.clone(), 1));
+                                }
+                            }
+                        }
+                    }
+                    Extra::Jobs(repo, run, page) => {
+                        let Some(id) = run["id"].as_u64() else { continue };
+                        let path = format!(
+                            "/repos/{repo}/actions/runs/{id}/jobs?filter=all&per_page={JOB_PAGE_SIZE}&page={page}"
+                        );
+                        let (s, v) = self.call(r, "GET", &path, None).await?;
+                        if !ok(s) {
+                            return Err(other("the jobs", s, &v));
+                        }
+                        let jobs = v["jobs"].as_array().map(Vec::as_slice).unwrap_or_default();
+                        if let Some(job) = jobs.iter().find(|job| job["runner_name"].as_str() == Some(runner_name)) {
+                            return Ok(Some(job_ref(repo, &run, job)));
+                        }
+                        if page == 1 && jobs.len() >= JOB_PAGE_SIZE {
+                            extra.push_back(Extra::Jobs(repo, run, 2));
+                        }
+                    }
+                }
             }
         }
         Ok(None)

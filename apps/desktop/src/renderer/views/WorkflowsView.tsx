@@ -100,6 +100,8 @@ export function WorkflowsView() {
   const [setup, setSetup] = useState<WorkflowTemplate | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const paused = useStore((s) => s.settings?.automationsPaused === true);
+  const ciRunnersFocus = useStore((s) => s.ciRunnersFocus);
+  const [showCi, setShowCi] = useState(ciRunnersFocus);
   const workflowFocus = useStore((s) => s.workflowFocus);
   /** A run a notification asked to show; its row opens on that run. */
   const [focusRun, setFocusRun] = useState<{ workflowId: string; runId: string } | null>(null);
@@ -108,6 +110,10 @@ export function WorkflowsView() {
     void window.nekko.listWorkflows().then((next) => { setSnapshot(next); setLoaded(true); }).catch(() => setLoadFailed(true));
     return window.nekko.onWorkflowsUpdated((next) => { setSnapshot(next); setLoaded(true); });
   }, []);
+
+  useEffect(() => {
+    if (ciRunnersFocus) setShowCi(true);
+  }, [ciRunnersFocus]);
 
   // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
   const sheetOpen = !!(creating || editing || setup);
@@ -195,7 +201,7 @@ export function WorkflowsView() {
     await window.nekko.updateWorkflow(wf.id, { enabled: !wf.enabled });
   };
 
-  const ciShown = useShown('ci');
+  const ciShown = useShown('ci') || showCi || ciRunnersFocus;
   return (
     <div className="flex h-full min-h-0">
       {/* Filters */}

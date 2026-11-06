@@ -43,6 +43,22 @@ const image = (over: Partial<ImageView> = {}): ImageView => ({
 const noImage = view({ state: 'error', error: 'No VM image yet.', slots: [] });
 
 describe('RunnerCard', () => {
+  it('names ready and starting VMs and offers their live logs before they have a job', () => {
+    const html = render(view({ slots: [
+      { state: 'ready', vm: 'ready-mac', job: null, since: now, drainEndsAt: null },
+      { state: 'starting', vm: 'booting-mac', job: null, since: now, drainEndsAt: null },
+    ], recent: [] }));
+    for (const name of ['ready-mac', 'booting-mac']) expect(html).toContain(`data-runner-vm="${name}"`);
+    expect(html.match(/>Live log</g)).toHaveLength(2);
+    expect(html).not.toContain('data-running-job');
+  });
+
+  it('does not invent VM names or log actions for empty slots', () => {
+    const html = render(view({ slots: [], recent: [] }));
+    expect(html).not.toContain('data-runner-vm');
+    expect(html).not.toContain('>Live log<');
+  });
+
   it('running_card_matches_mockup_3', () => {
     const html = render(view());
     for (const s of [

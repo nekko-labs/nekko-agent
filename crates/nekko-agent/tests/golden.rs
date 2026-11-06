@@ -481,3 +481,19 @@ fn the_golden_outputs_cover_every_input() {
         assert_eq!(per[p.as_str().unwrap()], rc["requests"].as_object().unwrap().len());
     }
 }
+
+// Cloud setup presets use the existing wire kind; listing must keep vendor paths and bearer auth.
+#[tokio::test]
+async fn cloud_presets_list_models_with_vendor_paths_and_auth() {
+    for base in ["https://generativelanguage.googleapis.com/v1beta/openai", "https://ollama.com/v1"] {
+        let transport =
+            FakeTransport::queue(vec![json!({ "status": 200, "body": "{\"data\":[{\"id\":\"fixture-model\"}]}" })]);
+        let config = serde_json::from_value(json!({ "id": "cloud", "kind": "openai-compat", "label": "Cloud", "baseUrl": base, "apiKey": "fixture-key", "enabled": true })).unwrap();
+        let provider = OpenAiCompatProvider::new(config, Io { transport: transport.clone(), ..Default::default() });
+        let models = provider.list_models().await.unwrap();
+        assert_eq!(models[0].id, "fixture-model");
+        let sent = transport.sent();
+        assert_eq!(sent[0].url, format!("{base}/models"));
+        assert!(sent[0].headers.contains(&("Authorization".into(), "Bearer fixture-key".into())));
+    }
+}
