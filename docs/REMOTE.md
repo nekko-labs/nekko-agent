@@ -81,6 +81,14 @@ credentials. For safety the phone does not merge different keys just because the
 Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
 to old duplicates that were saved with different identity keys.
 
+## iPhone chat controls
+
+New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
+
+The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
+
+From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
+
 ## The phone app
 
 > **Native apps.** The phone apps are moving to platform-native code: Kotlin / Jetpack Compose in

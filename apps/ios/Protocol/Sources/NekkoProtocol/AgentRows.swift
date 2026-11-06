@@ -248,6 +248,7 @@ public enum AgentRows {
         switch activity {
         case .needsYou?: return .waiting
         case .running?: return .working
+        case .failed?: return .failed
         case nil: return parentRunning ? .working : .waiting
         }
     }

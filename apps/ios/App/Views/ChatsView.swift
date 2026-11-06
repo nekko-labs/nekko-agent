@@ -15,6 +15,7 @@ struct ChatsView: View {
     @Environment(ComputersStore.self) private var store
     @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var query = ""
     /// Explicitly opened groups; headed groups start folded.
     @State private var opened: Set<String> = []
@@ -50,6 +51,7 @@ struct ChatsView: View {
         // Flat rows straight on the coloured ground, hairline separated, as the
         // desktop's Agents panel (2026-10-24; the panels of 2026-10-26 went 2026-10-28).
         .listStyle(.plain)
+        .animation(reduceMovement ? nil : .smooth(duration: 0.35), value: sections)
         .listRowSeparatorTint(palette.line)
         .appBackground()
         // Room for the floating pill under the large title, while it sits there.
@@ -280,7 +282,7 @@ struct ChatsView: View {
             Menu("Show") {
                 Toggle("Previews", isOn: bind(\.showPreviews))
                 Toggle("Completed chats", isOn: bind(\.showCompleted))
-                Toggle("Empty groups", isOn: bind(\.showEmptyGroups))
+                Toggle("Always show groups", isOn: bind(\.showEmptyGroups))
                 if places.count > 1 {
                     Toggle("Computer", isOn: bind(\.showComputer))
                     Toggle("Computer icons", isOn: bind(\.showComputerIcons))
@@ -334,6 +336,13 @@ struct ChatsView: View {
     }
 
     private var nowMs: Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+    private var reduceMovement: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReduceMotion") { return true }
+        #endif
+        return reduceMotion
+    }
 
     private var sections: [ChatSection] {
         ChatSections.make(filtered, folders: listFolders, view: view, activity: listActivity,
@@ -572,6 +581,7 @@ struct ChatRow: View {
         switch activity {
         case .needsYou?: RowChip(text: String(localized: "Needs you"), tone: .warn)
         case .running?: RowChip(text: String(localized: "Working"), tone: .normal, accent: true)
+        case .failed?: RowChip(text: String(localized: "Error"), tone: .warn)
         case nil: EmptyView()
         }
     }
