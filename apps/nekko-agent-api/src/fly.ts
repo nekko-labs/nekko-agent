@@ -22,8 +22,13 @@ export interface MachineDriver {
   stop(ref: string): Promise<void>;
   start(ref: string): Promise<void>;
   destroy(ref: string): Promise<void>;
-  /** The provider's word for its state, mapped to ours. */
-  state(ref: string): Promise<"running" | "stopped" | "gone">;
+  /** The provider's word for its state, mapped to ours, and when a stopped machine stopped, if it says. */
+  state(ref: string): Promise<LiveState>;
+}
+
+export interface LiveState {
+  state: "running" | "stopped" | "gone";
+  stoppedAt?: Date;
 }
 
 export const GUESTS: Record<MachineSpec["size"], { cpu_kind: string; cpus: number; memory_mb: number }> = {
@@ -100,12 +105,16 @@ export class FlyDriver implements MachineDriver {
     }
   }
 
-  async state(ref: string): Promise<"running" | "stopped" | "gone"> {
+  async state(ref: string): Promise<LiveState> {
     try {
-      const m = await this.call<{ state?: string }>("GET", `/machines/${encodeURIComponent(ref)}`);
-      return m.state === "started" ? "running" : m.state === "destroyed" ? "gone" : "stopped";
+      const m = await this.call<{ state?: string; events?: { type?: string; timestamp?: number }[] }>("GET", `/machines/${encodeURIComponent(ref)}`);
+      if (m.state === "started") return { state: "running" };
+      if (m.state === "destroyed") return { state: "gone" };
+      // The newest exit or stop event: when the machine stopped itself (idle) or was stopped.
+      const at = Math.max(0, ...(m.events ?? []).filter((e) => e.type === "exit" || e.type === "stop").map((e) => Number(e.timestamp) || 0));
+      return at ? { state: "stopped", stoppedAt: new Date(at) } : { state: "stopped" };
     } catch (e) {
-      if (String(e).includes(": 404")) return "gone";
+      if (String(e).includes(": 404")) return { state: "gone" };
       throw e;
     }
   }
@@ -113,7 +122,7 @@ export class FlyDriver implements MachineDriver {
 
 /** Machines that exist only in memory: what the tests run against. */
 export class MemoryDriver implements MachineDriver {
-  readonly machines = new Map<string, { spec: MachineSpec; state: "running" | "stopped" | "gone" }>();
+  readonly machines = new Map<string, { spec: MachineSpec; state: LiveState["state"]; stoppedAt?: Date }>();
   private next = 1;
 
   async create(spec: MachineSpec): Promise<{ ref: string }> {
@@ -123,7 +132,7 @@ export class MemoryDriver implements MachineDriver {
   }
   async stop(ref: string): Promise<void> {
     const m = this.machines.get(ref);
-    if (m) m.state = "stopped";
+    if (m) Object.assign(m, { state: "stopped", stoppedAt: new Date() });
   }
   async start(ref: string): Promise<void> {
     const m = this.machines.get(ref);
@@ -133,7 +142,8 @@ export class MemoryDriver implements MachineDriver {
     const m = this.machines.get(ref);
     if (m) m.state = "gone";
   }
-  async state(ref: string): Promise<"running" | "stopped" | "gone"> {
-    return this.machines.get(ref)?.state ?? "gone";
+  async state(ref: string): Promise<LiveState> {
+    const m = this.machines.get(ref);
+    return m ? { state: m.state, stoppedAt: m.state === "stopped" ? m.stoppedAt : undefined } : { state: "gone" };
   }
 }

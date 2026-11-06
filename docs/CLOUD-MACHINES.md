@@ -15,7 +15,8 @@ switched on. It is part of Nekko Cloud Pro and Team.
   address. It only dials out: to the relay, to GitHub and to the providers you set up.
 - To the phone it is a computer: the same end-to-end encrypted relay, the same chat, approvals,
   files, git and pull requests, the same computer page.
-- It stops when idle and keeps its disk; it is deleted when you say so or after a week unused.
+- It stops itself after 15 minutes with no device connected and no chat running, and keeps its disk.
+  It is deleted when you say so, or after 7 days unused. Hours count only while it runs.
   Your chats sync back to your account end-to-end encrypted, so nothing is lost when it sleeps.
 
 ## What the cloud may see
