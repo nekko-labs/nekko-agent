@@ -35,6 +35,11 @@ export const GUESTS: Record<MachineSpec["size"], { cpu_kind: string; cpus: numbe
   small: { cpu_kind: "shared", cpus: 2, memory_mb: 4096 },
 };
 
+/** Each machine's disk, kept while it is stopped. */
+export const DISK_GB = 20;
+
+const machineOf = (ref: string) => encodeURIComponent(ref.split("~")[0]);
+
 export interface FlyOptions {
   token: string;
   /** The Fly app that holds every user machine, e.g. `nekko-cloud-machines`. */
@@ -66,10 +71,23 @@ export class FlyDriver implements MachineDriver {
       const text = await res.text().catch(() => "");
       throw new Error(`Fly ${method} ${path}: ${res.status}${text ? ` ${text.slice(0, 200)}` : ""}`);
     }
-    return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+    // Some calls (DELETE, 204) answer with no body.
+    const raw = await res.text();
+    return (raw ? JSON.parse(raw) : undefined) as T;
   }
 
+  /**
+   * A Fly machine's root filesystem is rebuilt from the image on every start, so
+   * the machine's data (paired devices, chats, settings) lives on its own volume.
+   * Our ref is `<machine>~<volume>`; the routes treat it as opaque.
+   */
   async create(spec: MachineSpec): Promise<{ ref: string }> {
+    const vol = await this.call<{ id: string }>("POST", "/volumes", {
+      name: spec.name.replace(/[^a-z0-9]/g, "_").slice(0, 30),
+      region: spec.region,
+      size_gb: DISK_GB,
+      encrypted: true,
+    });
     const made = await this.call<{ id: string }>("POST", "/machines", {
       name: spec.name,
       region: spec.region,
@@ -77,6 +95,7 @@ export class FlyDriver implements MachineDriver {
         image: spec.image,
         env: spec.env,
         guest: GUESTS[spec.size],
+        mounts: [{ volume: vol.id, path: "/data" }],
         // Stopped when idle by the machine itself; restarted on the next chat. Never auto-destroyed.
         auto_destroy: false,
         restart: { policy: "on-failure", max_retries: 3 },
@@ -84,30 +103,47 @@ export class FlyDriver implements MachineDriver {
         services: [],
         metadata: { nekko: "cloud-machine" },
       },
+    }).catch(async (e) => {
+      await this.gone("DELETE", `/volumes/${encodeURIComponent(vol.id)}`).catch(() => {});
+      throw e;
     });
-    return { ref: made.id };
+    return { ref: `${made.id}~${vol.id}` };
   }
 
   async stop(ref: string): Promise<void> {
-    await this.call("POST", `/machines/${encodeURIComponent(ref)}/stop`, {});
+    await this.call("POST", `/machines/${machineOf(ref)}/stop`, {});
   }
 
   async start(ref: string): Promise<void> {
-    await this.call("POST", `/machines/${encodeURIComponent(ref)}/start`, {});
+    await this.call("POST", `/machines/${machineOf(ref)}/start`, {});
   }
 
-  /** A machine Fly no longer has (404) counts as destroyed. */
-  async destroy(ref: string): Promise<void> {
+  /** A call where 404 (already gone) counts as done. */
+  private async gone(method: string, path: string): Promise<void> {
     try {
-      await this.call("DELETE", `/machines/${encodeURIComponent(ref)}?force=true`);
+      await this.call(method, path);
     } catch (e) {
       if (!String(e).includes(": 404")) throw e;
     }
   }
 
+  /**
+   * The machine, then its volume, which Fly refuses to delete while still
+   * attached. A machine or volume Fly no longer has (404) counts as destroyed,
+   * so a failed half is finished on the next try.
+   */
+  async destroy(ref: string): Promise<void> {
+    const machine = machineOf(ref);
+    await this.gone("DELETE", `/machines/${machine}?force=true`);
+    const volume = ref.split("~")[1];
+    if (!volume) return;
+    await this.call("GET", `/machines/${machine}/wait?state=destroyed&timeout=25`).catch(() => {});
+    await this.gone("DELETE", `/volumes/${encodeURIComponent(volume)}`);
+  }
+
   async state(ref: string): Promise<LiveState> {
     try {
-      const m = await this.call<{ state?: string; events?: { type?: string; timestamp?: number }[] }>("GET", `/machines/${encodeURIComponent(ref)}`);
+      const m = await this.call<{ state?: string; events?: { type?: string; timestamp?: number }[] }>("GET", `/machines/${machineOf(ref)}`);
       if (m.state === "started") return { state: "running" };
       if (m.state === "destroyed") return { state: "gone" };
       // The newest exit or stop event: when the machine stopped itself (idle) or was stopped.

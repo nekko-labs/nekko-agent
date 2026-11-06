@@ -415,7 +415,8 @@ export function registerMachines(app: FastifyInstance, db: Db, opts: MachinesOpt
     if (!caller) return;
     const m = await mine(caller, (req.params as { id: string }).id);
     if (!m) return reply.code(404).send({ error: "not-found" });
-    if (m.provider_ref) await opts.driver.destroy(m.provider_ref).catch(() => {});
+    // shortcut: a failed destroy leaves the Fly volume until the account is deleted (which destroys again); sweep orphans if `fly volumes list` shows them.
+    if (m.provider_ref) await opts.driver.destroy(m.provider_ref).catch((e) => req.log.warn({ err: String(e) }, "machine destroy failed"));
     await retire(db, m.id);
     return reply.code(204).send();
   });
