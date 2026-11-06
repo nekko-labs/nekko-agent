@@ -2,11 +2,9 @@
 //! and the relay agent (`nekko-remote`).
 //!
 //! The agent answers a paired phone's requests through the daemon's own
-//! router, so a phone reaches exactly what the UI reaches (the daemon's
-//! services and, through it, the TS host's), and forwards the events the UI
-//! hears from the hub, the daemon's and the host's merged. It used to live in
-//! the TS host, which dispatched into its own copies of services the daemon
-//! now owns (sessions, tasks) and so wrote their files beside the daemon.
+//! router, so a phone reaches the same Rust services as the UI. It forwards
+//! daemon hub events and reads the complete `chat:pending` map for attention
+//! reconciliation, independently of the phone's clipped Live Activity card.
 
 use crate::hub::Hub;
 use nekko_remote::{
@@ -133,7 +131,11 @@ impl Link for HubLink {
                             break;
                         }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        if tx.send((nekko_remote::ATTENTION_GAP.into(), Value::Null)).is_err() {
+                            break;
+                        }
+                    }
                     Err(_) => break,
                 }
             }
@@ -141,6 +143,11 @@ impl Link for HubLink {
         let dispatch_cell = self.dispatch.clone();
         let dispatch: PhoneDispatcher = Arc::new(move |who, channel, args| match dispatch_cell.get() {
             Some(run) => run(who, channel, args),
+            None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
+        });
+        let pending_router = self.router.clone();
+        let pending: nekko_remote::Pending = Arc::new(move || match pending_router.get() {
+            Some(run) => run("chat:pending".into(), Value::Array(Vec::new())),
             None => Box::pin(std::future::ready(Err("the daemon is still starting".to_string()))),
         });
         let router = self.router.clone();
@@ -161,6 +168,7 @@ impl Link for HubLink {
                 events,
                 terminals: self.terminals.clone(),
                 summaries: Some(summaries),
+                pending: Some(pending),
             },
         ))
     }
@@ -224,6 +232,58 @@ mod tests {
         assert_eq!(payload["deviceId"], "phone-1");
         assert!(payload["name"].is_null(), "an unknown phone has no name");
         assert!(payload["at"].as_f64().unwrap() > 0.0);
+    }
+
+    #[tokio::test]
+    async fn production_link_reads_the_complete_daemon_pending_map_and_recovers_hub_lag() {
+        use futures_util::StreamExt;
+        use serde_json::json;
+        use std::time::Duration;
+        let dir = tempfile::tempdir().unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let hub = Hub::new();
+        let remote = Remote::new(dir.path().to_path_buf(), hub.clone());
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = calls.clone();
+        let mut pending = serde_json::Map::new();
+        for i in 0..20 {
+            pending.insert(format!("chat-{i}"), json!({ "approval": {}, "question": {} }));
+        }
+        let pending = Value::Object(pending);
+        remote.set_dispatcher(Arc::new(move |channel, args| {
+            seen.lock().unwrap().push((channel.clone(), args));
+            let pending = pending.clone();
+            Box::pin(async move {
+                assert_eq!(channel, "chat:pending", "attention must not borrow the card's summaries");
+                Ok(pending)
+            })
+        }));
+        remote.route("remote:enable", &[json!(format!("ws://{}", listener.local_addr().unwrap()))]).await.unwrap();
+        let (tcp, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept()).await.unwrap().unwrap();
+        let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+        let mut frames = Vec::new();
+        for _ in 0..2 {
+            let text = tokio::time::timeout(Duration::from_secs(10), ws.next()).await.unwrap().unwrap().unwrap();
+            frames.push(serde_json::from_str::<Value>(text.to_text().unwrap()).unwrap());
+        }
+        assert_eq!(frames[0]["type"], "attention-unknown");
+        assert_eq!(frames[1]["type"], "attention-snapshot");
+        let tags = frames[1]["tags"].as_array().unwrap();
+        assert_eq!(tags.len(), 20, "complete source is not clipped to a phone/card list");
+        assert!(tags.contains(&json!(nekko_remote::agent::activity_tag("chat-19"))));
+        assert_eq!(*calls.lock().unwrap(), vec![("chat:pending".to_string(), json!([]))]);
+        // This current-thread task does not yield while publishing, so the
+        // production forwarder must observe broadcast lag (capacity 16K).
+        for _ in 0..(16 * 1024 + 1) {
+            hub.publish("not:relayed", Value::Null, false);
+        }
+        for kind in ["attention-unknown", "attention-snapshot"] {
+            let text = tokio::time::timeout(Duration::from_secs(10), ws.next()).await.unwrap().unwrap().unwrap();
+            let frame: Value = serde_json::from_str(text.to_text().unwrap()).unwrap();
+            assert_eq!(frame["type"], kind);
+        }
+        remote.stop();
+        assert_eq!(calls.lock().unwrap().len(), 2, "a hub gap triggers another complete read");
     }
 
     #[test]
