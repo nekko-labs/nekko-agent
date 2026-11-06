@@ -3530,6 +3530,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Prompt suggestions as one chip among the composer's actions. In a crowded
    bar it gives up its words before the model and Mode give up theirs, down to
    the grade badge. */
+.composer-suggestions-row { display: flex; justify-content: flex-end; padding: 4px 8px 8px; }
 .composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
@@ -3959,7 +3960,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
   }
 }
 
-.command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }
+/* The strip carries the chat's name and controls. Clean start has neither yet. */
+.command-wall-layout[data-wall-layout='focus'] .panel:has([data-clean-start]) > [data-pane-title-strip] { display: none; }
 
 /* The pending question shares the transcript scroll, with no outer panel. */
 .conversation-question { margin-top: 16px; animation: conversation-question-rise 220ms ease-out; }

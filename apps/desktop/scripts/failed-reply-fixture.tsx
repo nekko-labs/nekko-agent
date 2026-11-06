@@ -59,7 +59,11 @@ function Fixture() {
   };
   Object.assign(window, { integration: {
     failed: () => open(makeSession('t1')),
-    movedOn: () => open(makeSession('a-message-that-was-deleted')),
+    movedOn: () => { const s = makeSession('t1'); open({ ...s, messages: [...s.messages, { id: 'a2', role: 'assistant', content: 'Both builds are checked.', createdAt: at + 3000 }] }); },
+    stopped: () => { const s = makeSession('t1'); open({ ...s, turnFailure: { ...s.turnFailure, message: 'Stopped' } }); },
+    // Stopped before `turnFailure` recorded a Stop: only the transcript's end tells.
+    cutOff: () => { const { turnFailure: _, ...s } = makeSession('t1'); open(s); },
+    running: () => { const { turnFailure: _, ...s } = makeSession('t1'); open({ ...s, activeRun: { startedAt: at } }); },
     reopen: () => open(record),
     calls: () => calls,
   } });
