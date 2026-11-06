@@ -52,6 +52,7 @@ public enum Channels {
     public static let remoteStop = "remote:stop"
     /// Names and descriptions only, never templates.
     public static let skillsRunnable = "skills:runnable"
+    public static let toolsList = "tools:list"
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
     /// refused unless the computer allows it (`phoneChanges`).
     public static let changesList = "changes:list"
@@ -126,7 +127,7 @@ public enum Channels {
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
         sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, changesList,
+        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,

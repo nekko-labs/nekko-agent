@@ -23,13 +23,45 @@ public struct RunOption: Sendable, Identifiable, Equatable {
         RunOption(key: "gitIsolation", values: []),
         RunOption(key: "workMode", values: ["default", "better-review", "design", "best-output"]),
         RunOption(key: "toolApproach", values: ["list", "code"]),
+        RunOption(key: "memory", values: ["all", "project", "off"]),
+        RunOption(key: "guidance", values: ["rules", "root", "off"]),
+        RunOption(key: "privacy", values: ["default", "redact", "off"]),
     ]
+
+    /// The choice shown: Privacy Shield's mode, `default` while the chat follows the computer.
+    public func shown(_ v: JSONValue?) -> String? {
+        key == "privacy" ? (v?["mode"]?.string ?? "default") : v?.string
+    }
+
+    /// What to send for `picked`. Privacy Shield keeps the chat's kinds and allowed values and changes only its mode.
+    public func wire(_ picked: String, current: JSONValue?) -> JSONValue {
+        guard key == "privacy" else { return .string(picked) }
+        var o = current?.object ?? [:]
+        if picked == "default" { o.removeValue(forKey: "mode") } else { o["mode"] = .string(picked) }
+        return .object(o)
+    }
 
     /// A chat's run settings, as the computer holds them.
     public static func values(of v: JSONValue?) -> [String: JSONValue] {
         var out: [String: JSONValue] = [:]
         for o in all { if let value = v?[o.key], !value.isNull { out[o.key] = value } }
         return out
+    }
+}
+
+/// A tool the computer's agents can call (`tools:list`): the name a chat's `disabledTools` holds.
+public struct ToolInfo: Sendable, Identifiable, Equatable {
+    public let name: String
+    public let description: String
+    public var id: String { name }
+
+    public init(name: String, description: String) {
+        self.name = name
+        self.description = description
+    }
+
+    public static func list(_ v: JSONValue?) -> [ToolInfo] {
+        (v?.array ?? []).compactMap { t in t.str("name").map { ToolInfo(name: $0, description: t.str("description") ?? "") } }
     }
 }
 

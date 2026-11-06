@@ -533,7 +533,9 @@ changes how the computer itself is set up:
   the computer's hardware readings, the Model Server's loaded models and a chat's context size,
   and unload a model; load a model, unload them all, and choose how many stay loaded, when an idle
   one unloads and whether a chat may load one, while the Model Server lets connected devices choose
-  model settings (each change confirmed with Face ID or the screen lock);
+  model settings (each change confirmed with Face ID or the screen lock); a chat's run settings, including its memory, project rules, Privacy Shield
+  and which tools it may call (from the computer's list of tool names), each confirmed with Face ID
+  or the screen lock;
   git in a chat's folder and its terminals and SSH (below); a chat's or saved folder's files and the computer's logs (below);
   and a few settings (below).
 - **Never allowed from a phone:** wiping data or resetting settings, remote access itself (pairing,

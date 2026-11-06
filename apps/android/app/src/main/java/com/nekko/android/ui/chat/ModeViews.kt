@@ -119,6 +119,7 @@ import com.nekko.protocol.PcSettings.ChatMode
 import com.nekko.protocol.RunOption
 import com.nekko.protocol.ModelServerSettings
 import com.nekko.android.monitors.ServerActions
+import com.nekko.protocol.ToolInfo
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -259,6 +260,9 @@ private val RUN_OPTION_TITLES = mapOf(
     "gitIsolation" to "Separate Git branch",
     "workMode" to "Work mode",
     "toolApproach" to "Tool style",
+    "memory" to "Memory",
+    "guidance" to "Project rules",
+    "privacy" to "Privacy Shield",
 )
 
 private val RUN_VALUE_LABELS = mapOf(
@@ -268,6 +272,12 @@ private val RUN_VALUE_LABELS = mapOf(
     "best-output" to "Best output",
     "list" to "List",
     "code" to "Code",
+    "all" to "Everything",
+    "project" to "Project",
+    "off" to "Off",
+    "rules" to "Rules",
+    "root" to "Root files",
+    "redact" to "On",
 )
 
 /** One run setting: a switch, or a choice of its values. */
@@ -281,11 +291,11 @@ private fun RunOptionRow(option: RunOption, value: JsonElement?, onSet: (JsonEle
             Switch(checked = (value as? JsonPrimitive)?.booleanOrNull == true, onCheckedChange = { onSet(JsonPrimitive(it)) })
         }
     } else {
-        val current = (value as? JsonPrimitive)?.contentOrNull ?: option.values.first()
+        val current = option.shown(value) ?: option.values.first()
         Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink)
         Row(Modifier.fillMaxWidth().testTag("run.${option.key}"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             option.values.forEach { v ->
-                FilterChip(selected = v == current, onClick = { onSet(JsonPrimitive(v)) }, label = { Text(RUN_VALUE_LABELS[v] ?: v) })
+                FilterChip(selected = v == current, onClick = { onSet(option.wire(v, value)) }, label = { Text(RUN_VALUE_LABELS[v] ?: v) })
             }
         }
     }
@@ -372,12 +382,15 @@ fun ModelEffortSheet(
     onSet: suspend (providerId: String?, modelId: String?, effort: Effort?) -> Unit,
     onLoadModels: suspend () -> Unit,
     onRunOption: suspend (key: String, value: JsonElement) -> Unit,
+    onLoadTools: suspend () -> List<ToolInfo>,
+    onSetTool: suspend (name: String, on: Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
     var picking by remember { mutableStateOf(false) }
+    var choosingTools by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf<Effort?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -453,10 +466,18 @@ fun ModelEffortSheet(
                         }
                     }
                 }
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { choosingTools = true }.testTag("run.disabledTools"),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Tools", style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+                    if (chat.disabledTools.isNotEmpty()) Text("${chat.disabledTools.size} off", style = MaterialTheme.typography.bodyMedium, color = p.inkSoft)
+                }
             }
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         }
     }
+    if (choosingTools) ToolsSheet(chat.disabledTools, onLoadTools, onSetTool, onDismiss = { choosingTools = false })
 }
 
 /**
@@ -1037,6 +1058,41 @@ private fun ResidentRow(model: EngineStatus.Resident, name: String, budget: Long
         val bytes = model.bytes
         if (budget != null && budget > 0 && bytes != null) {
             LinearProgressIndicator(progress = { min(1f, bytes.toFloat() / budget) }, modifier = Modifier.fillMaxWidth(), color = p.accent)
+        }
+    }
+}
+
+/** The tools a chat may call, each with a switch, from the computer's own list. A change asks for the screen lock. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ToolsSheet(disabled: List<String>, onLoad: suspend () -> List<ToolInfo>, onSet: suspend (name: String, on: Boolean) -> Unit, onDismiss: () -> Unit) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    var tools by remember { mutableStateOf<List<ToolInfo>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        try { tools = onLoad() } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "Could not read the tools." }
+    }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 24.dp).verticalScroll(rememberScrollState())) {
+            Text("Tools this chat can use", style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.padding(bottom = 8.dp))
+            error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
+            val list = tools
+            if (list == null && error == null) CircularProgressIndicator(color = p.accent, modifier = Modifier.padding(16.dp))
+            list?.forEach { tool ->
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag("run.tool.${tool.name}"), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(tool.name, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace), color = p.ink)
+                        if (tool.description.isNotEmpty()) Text(tool.description, style = MaterialTheme.typography.bodySmall, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    Switch(checked = tool.name !in disabled, onCheckedChange = { on ->
+                        error = null
+                        scope.launch {
+                            try { onSet(tool.name, on) } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message ?: "Could not change that tool." }
+                        }
+                    })
+                }
+            }
         }
     }
 }

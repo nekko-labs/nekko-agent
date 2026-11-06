@@ -388,7 +388,7 @@ private fun ChatScreenContent(
     }
 
     if (showModelEffort) {
-        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onDismiss = { showModelEffort = false })
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false })
     }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
