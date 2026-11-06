@@ -1581,3 +1581,20 @@ Conditions: M1 Max, macOS, Chrome156.0.8078.4, reused debug nekkod, candidate `a
 | Streaming main-thread frame work | 3.44 ms |
 
 Five-lap retention: heap12.5056→12.9589MB (0.11334MB/lap), DOM2579→2579, listeners2275→2275; all six windows working, software tile memory184.359375MB. Missing clip-layer attribution is unavailable, not zero overdraw. Terminal keypress skipped (no pane opened). Exit zero and raw samples inspected, but this does not prove Linux release-daemon or native GPU performance. Source: `.shots/cold-mount/candidate-full-contract/`, [investigation](../reports/cold-chat-paint-investigation.md).
+
+
+## 2026-11-06 — Linux SVG lifecycle attribution confirmed; cold p95 mixed (#1998)
+
+Area: renderer. Result: redundant synchronous SVG seeks eliminated; partial mount-cost reduction, not a reliable33ms repair or a claimed p95 speedup.
+Conditions: Linux AMD EPYC9V74 (4 threads), Chrome156.0.8078.4, Node22.23.4, one release daemon, full six-zone latency workload,1440×1000, no GPU, one attempt and33 cold samples per phase. Exact base `bdd59fa3870f52e5dff3884308a782b14e372db6` with only icon source from `806629f807b9006f6ca16f966c70fc83cdbecd7c`. Raw nearest-rank values independently recomputed, milliseconds:
+
+| Phase | Base first | Head first | Head second | Base last |
+|---|---:|---:|---:|---:|
+| Cold frame p50 |23.5|23.7|23.3|25.3|
+| Cold frame p95 |30.9|32.2|29.2|33.0|
+| Cold frame max |31.6|32.4|29.8|42.1|
+| Cold history p95 |58.1|46.7|46.8|50.1|
+
+Separate profiled base/head cold p95:39.6/36.3ms, not gate-equivalent. Sampled `setCurrentTime` self-time fell175.837→0ms (113.407ms mount,62.430ms deletion across33 base switches). In-click style-recalculation total fell156.822→0ms; click duration median18.459→12.457ms. Whole-profile style/layout/paint still present; do not sum overlapping trace totals or infer a per-frame gain from cumulative CPU samples.
+
+Why: pause fresh SVGs without redundant zero-time seeks; cancel timers/listeners without seeking discarded SVGs; replace motion SVG by icon identity. Playback/reset and synchronous first-frame requirements unchanged. Both recovered head p95s meet33ms but first pair is slower; prior log-only head33.7ms misses. #1998 stays open; no budget reduction or increase in this PR. Main's separate48ms gate is not acceptance of this repair. Terminal skipped; Linux streaming/memory not requested. Source: [run42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142), artifact13521343207 ZIP SHA256 `0910a63aad23d1dfd6945c6cb37e224cb733147a64851de8e0bbfeb7f45add46`, [detailed provenance/limitations](../reports/cold-chat-paint-investigation.md). Diagnostic branch must never merge.

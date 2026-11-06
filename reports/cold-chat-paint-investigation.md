@@ -199,3 +199,43 @@ All measured timing rows passed, with cold frame judged against 33 ms. Terminal 
 
 
 The additional local loopback integration suites all exited zero: turn variants8 checks, daemon relay24, messaging12, small services9 (**53 checks** total). They used the existing debug binary at `/Users/gomi/code/nekko-agent/target/debug/nekkod`, a worktree-built relay, synthetic providers/servers and disposable data/home directories, with `NEKKO_FILE_VAULT=1`. All owned servers/processes exited and no matching harness/fixture server remained afterward. This is local flow coverage with a reused binary, not a current-head release-daemon CI result. MCP HTTP was not run locally: the available Hypergate checkout lacks built core output; the required isolated CI job still needs to cover it. No existing Hypergate/user daemon was contacted or changed. Logs: `.shots/cold-mount/itests/`.
+
+
+## Recovered Linux evidence: real seek reduction, partial #1998 optimization
+
+[Recovery run 42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142) retained artifact `cold-mount-comparison` (ID13521343207). Downloaded ZIP SHA256 matches the Actions digest exactly: `0910a63aad23d1dfd6945c6cb37e224cb733147a64851de8e0bbfeb7f45add46`. Its source/candidate manifests match `bdd59fa3870f52e5dff3884308a782b14e372db6` / `806629f807b9006f6ca16f966c70fc83cdbecd7c`; candidate patch matches the local patch (only Git's abbreviated index-hash length differs). Bundle SHA256 base/head: `ed1512c8749c8bfc7f2177eb94203c1d79155102ddde357e8564a88388101e93` / `18507c4cf3b959f0afea2430f648dff3aa532a30482a262ae0a7f04df2f409a7`.
+
+Conditions verified across all six JSON reports: same Linux AMD EPYC9V74 (4 threads,16GB), Chrome156.0.8078.4, Node22.23.4, full six-zone latency workload (1000+12×400 messages),1440×1000,33 cold/40 warm/150 composer samples, one attempt per phase, no GPU, identical configuration. Both pairs used one release daemon built before the icon-only change (workflow/log inspected); its binary hash was not retained, so do not claim independent binary-hash validation. Cold-frame budget in every report remains33ms. Raw nearest-rank percentiles were independently recomputed:
+
+| Phase | Cold p50 | Cold p95 | Cold max | History p95 | Warm p95 | Composer p95 |
+|---|---:|---:|---:|---:|---:|---:|
+| base-1 |23.5|30.9|31.6|58.1|17.2|10.5|
+| head-1 |23.7|32.2|32.4|46.7|15.3|10.9|
+| head-2 |23.3|29.2|29.8|46.8|16.6|10.2|
+| base-2 |25.3|33.0|42.1|50.1|15.5|12.1|
+| profiled base |32.1|39.6|41.0|65.4|20.2|11.4|
+| profiled head |29.8|36.3|37.2|63.1|18.4|9.7|
+
+Values are milliseconds. Both plain head phases meet33ms, but head-1 is slower than base-1; the earlier run's head-1 missed at33.7ms. This is **not** a repeatable cold-frame p95 speedup or a reliable33ms repair across runner conditions. Profiled values include CPU/timeline overhead and are not gate clearance. Terminal was skipped in all phases; streaming/memory were not requested in this latency-only Linux experiment.
+
+### CPU and timeline attribution
+
+The base cold-switch CPU profile samples **175.837ms** self-time in `SVGSVGElement.setCurrentTime` under Gentleface `stop()`:113.407ms under React layout-effect mount and62.430ms under deletion cleanup. The candidate profile samples **zero** `setCurrentTime` time/nodes during cold switching. This is cumulative sampled work across33 switches, not per-frame elapsed time.
+
+Same-thread complete `EventDispatch(click)` spans (33 in each timeline) independently show:
+
+| Inside click | Base median / max / total | Candidate median / max / total |
+|---|---|---|
+| Click duration |18.459 /24.965 /540.666ms|12.457 /17.637 /361.719ms|
+| `UpdateLayoutTree` |4.889 /7.762 /156.822ms|0 /0 /0ms|
+| `Layout` |0 /0 /0ms|0 /0 /0ms|
+
+The click-only zeros do **not** mean no style/layout work or paint. Whole-profile `UpdateLayoutTree` remains925.480/912.686ms, Layout174.231/168.919ms and Paint556.330/545.950ms (base/head). These long, overlapping traces include background board/animation activity and must not be summed with CPU self-time or treated as per-click causality. The directly attributed redundant seeks disappear; remaining first-frame mount/style/paint work is still substantial.
+
+### Decision and current-main provenance
+
+Land the narrow behavior-preserving icon lifecycle optimization as a **partial contribution to #1998**, not `Closes #1998`. It removes evidenced synchronous clock writes without deferring any required first-frame work or changing artwork/playback. Do not reopen rejected containment/browser-pin experiments or repeat screenshots to decide this candidate. Follow-up optimization must profile the remaining React mount/style/paint cost and retain draft/editor/scroll isolation.
+
+Current main `3e1b0882138e9dd9d9b9f42a2d5de0fe7591fc1f` merged cleanly into the implementation branch. The icon source SHA256 is still `346a1943f8c541e6c674e9f462e02a524431e7330a972bb150210792eb49009f`, identical to the measured candidate. Main independently raised its gate to48ms in#1999; this PR has **no** diff in `scripts/perf/`, the speed-contract spec, or CI workflows and does not use48ms as evidence that#1998 is fixed. It cannot honestly lower the repository-wide gate to33ms based on these mixed results. #1998 stays open, including its gate-lowering completion condition. Required current-head perf/itests remain separate from this exact-source attribution diagnostic.
+
+Raw files and analysis: `.shots/cold-mount/linux-icon-paired/`, `analysis.json`, recovery job log. The diagnostic workflow is intentionally absent from the implementation branch and must never merge.
