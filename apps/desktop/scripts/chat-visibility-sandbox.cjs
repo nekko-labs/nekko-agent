@@ -11,6 +11,7 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const report = { metrics: {}, checks: [], errors: [], captures: [] };
 const check = (name, pass, detail) => report.checks.push({ name, pass: !!pass, ...(detail === undefined ? {} : { detail }) });
 app.disableHardwareAcceleration();
@@ -33,14 +34,14 @@ app.whenReady().then(async () => {
   const scene = async mode => {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture').catch(() => false); i++) await sleep(100);
-    await run(`localStorage.setItem('fixture.platform','win32'); localStorage.setItem('nekko.chatMode', ${JSON.stringify(mode)})`);
+    await run(`localStorage.setItem('fixture.platform','win32'); localStorage.setItem('nekko.chatMode', ${js(mode)})`);
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture').catch(() => false); i++) await sleep(100);
     await run('layoutFixture.showVisibility()');
     for (let i = 0; i < 50 && !await run(`!!document.querySelector('.plan-sheet-dock') && !!document.querySelector('[data-transcript-scroll]')`).catch(() => false); i++) await sleep(100);
     await sleep(1200);
   };
-  const rect = s => `(() => { const e = document.querySelector(${JSON.stringify(s)}); if (!e) return null; const b = e.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), height: Math.round(b.height) }; })()`;
+  const rect = s => `(() => { const e = document.querySelector(${js(s)}); if (!e) return null; const b = e.getBoundingClientRect(); return { top: Math.round(b.top), bottom: Math.round(b.bottom), height: Math.round(b.height) }; })()`;
   const caret = `[...document.querySelectorAll('[data-transcript-scroll] button[aria-expanded]')].find(b => /^[▸▾]/.test(b.textContent.trim()))`;
   try {
     await scene('simple');
