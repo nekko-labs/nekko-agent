@@ -133,17 +133,13 @@ export const TrainingColorIcon = (p: P) => (
   </Svg>
 );
 
-/** Workflows — a node graph: steps, a branch, and a dashed loop back. */
-export const WorkflowsColorIcon = (p: P) => (
-  <Svg {...p}>
-    {/* A three-node pipeline with a branch and a loop back, the shape of the
-        thing itself: run a step, and route where it goes next. */}
-    <path d="M8.6 7.4h3.2" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" />
-    <path d="M14.4 8.9v4.6a1.6 1.6 0 0 1-1.6 1.6H9.4" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-    <path d="M6.2 9.2v6.4a1.8 1.8 0 0 0 1.8 1.8h1.2" stroke="#fb923c" strokeWidth="1.4" strokeLinecap="round" strokeDasharray="2.4 2.4" fill="none" />
-    <rect x="3" y="4.6" width="5.8" height="5.6" rx="1.7" fill="#a5b4fc" />
-    <rect x="12" y="4.6" width="8.4" height="5.6" rx="1.7" fill="#6366f1" />
-    <rect x="6.2" y="14" width="8.4" height="5.6" rx="1.7" fill="#34d399" />
-    <circle cx="17.8" cy="16.8" r="2.5" fill="#fbbf24" />
-  </Svg>
+/** Scheduled Tasks — Gentleface workflow-clock (0.3.0, MIT), recolored for the rail.
+ * Source: https://gentleface.com/icons/workflow-clock.json (solid-round).
+ * The two subpaths retain the upstream geometry; only their fills differ.
+ */
+export const WorkflowsColorIcon = ({ className }: P) => (
+  <svg viewBox="0 0 16 16" width="22" height="22" className={className} data-gentleface-icon="workflow-clock">
+    <path fill="#6366f1" d="M6 7L5 7L5 10C5 10.209 5.06 10.4 5.179 10.571C5.299 10.743 5.457 10.865 5.653 10.938C5.785 10.987 5.88 11.073 5.937 11.197C5.993 11.32 5.997 11.448 5.949 11.58C5.901 11.71 5.814 11.803 5.689 11.861C5.563 11.919 5.436 11.924 5.306 11.876C4.914 11.731 4.598 11.486 4.359 11.143C4.12 10.799 4 10.418 4 10L4 7L3 7C2.724 7 2.488 6.902 2.293 6.707C2.098 6.512 2 6.276 2 6L2 3C2 2.724 2.098 2.488 2.293 2.293C2.488 2.098 2.724 2 3 2L6 2C6.276 2 6.512 2.098 6.707 2.293C6.902 2.488 7 2.724 7 3L7 6C7 6.276 6.902 6.512 6.707 6.707C6.512 6.902 6.276 7 6 7Z" />
+    <path fill="#fbbf24" d="M13.156 7.316C13.734 7.545 14.243 7.879 14.682 8.318C15.121 8.757 15.455 9.266 15.684 9.844C15.895 10.376 16 10.928 16 11.5C16 12.072 15.895 12.624 15.684 13.156C15.455 13.734 15.121 14.243 14.682 14.682C14.243 15.121 13.734 15.455 13.156 15.684C12.624 15.895 12.072 16 11.5 16C10.928 16 10.376 15.895 9.844 15.684C9.266 15.455 8.757 15.121 8.318 14.682C7.879 14.243 7.545 13.734 7.316 13.156C7.105 12.624 7 12.072 7 11.5C7 10.928 7.105 10.376 7.316 9.844C7.545 9.266 7.879 8.757 8.318 8.318C8.757 7.879 9.266 7.545 9.844 7.316C10.376 7.105 10.928 7 11.5 7C12.072 7 12.624 7.105 13.156 7.316ZM12 8.5C12 8.224 11.776 8 11.5 8C11.224 8 11 8.224 11 8.5L11 11.5C11 11.776 11.224 12 11.5 12L13.5 12C13.776 12 14 11.776 14 11.5C14 11.224 13.776 11 13.5 11L12 11L12 8.5Z" />
+  </svg>
 );
