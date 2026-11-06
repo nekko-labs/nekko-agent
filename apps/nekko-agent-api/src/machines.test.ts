@@ -258,28 +258,55 @@ describe("the Fly driver", () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const fetchImpl = (async (url: string, init: RequestInit) => {
       calls.push({ url, init });
+      if (init.method === "POST" && url.endsWith("/volumes")) return new Response(JSON.stringify({ id: "vol_1" }), { status: 200 });
       if (init.method === "POST" && url.endsWith("/machines")) return new Response(JSON.stringify({ id: "m-1" }), { status: 200 });
       if (init.method === "GET" && url.endsWith("/m-idle"))
         return new Response(JSON.stringify({ state: "stopped", events: [{ type: "start", timestamp: 3000 }, { type: "exit", timestamp: 2000 }, { type: "stop", timestamp: 1000 }] }), { status: 200 });
       if (init.method === "GET") return new Response(JSON.stringify({ state: "started" }), { status: 200 });
-      if (init.method === "DELETE") return new Response(null, { status: url.includes("/m-gone") ? 404 : 500 });
+      if (init.method === "DELETE") return new Response(null, { status: url.includes("/m-gone") || url.includes("/vol_gone") ? 404 : url.includes("/m-ok") || url.includes("/vol_1") ? 200 : 500 });
       return new Response("{}", { status: 200 });
     }) as unknown as typeof fetch;
     const fly = new FlyDriver({ token: "fo1_secret", app: "nekko-cloud-machines", api: "https://fly.test", fetch: fetchImpl });
     const { ref } = await fly.create({ name: "n", region: "nrt", image: "img", size: "small", env: { NEKKO_ROOM: "r" } });
-    expect(ref).toBe("m-1");
-    expect(calls[0].url).toBe("https://fly.test/v1/apps/nekko-cloud-machines/machines");
-    const sent = JSON.parse(String(calls[0].init.body));
+    expect(ref).toBe("m-1~vol_1");
+    // Its own encrypted volume first, mounted at /data: Fly rebuilds the root filesystem on every start.
+    expect(calls[0].url).toBe("https://fly.test/v1/apps/nekko-cloud-machines/volumes");
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ name: "n", region: "nrt", size_gb: 20, encrypted: true });
+    expect(calls[1].url).toBe("https://fly.test/v1/apps/nekko-cloud-machines/machines");
+    const sent = JSON.parse(String(calls[1].init.body));
+    expect(sent.config.mounts).toEqual([{ volume: "vol_1", path: "/data" }]);
     expect(sent.config.guest).toEqual({ cpu_kind: "shared", cpus: 2, memory_mb: 4096 });
     expect(sent.config.services).toEqual([]);
     expect(sent.config.auto_destroy).toBe(false);
     expect((calls[0].init.headers as Record<string, string>).authorization).toBe("Bearer fo1_secret");
     expect(calls.every((c) => !c.url.includes("fo1_secret"))).toBe(true);
-    expect(await fly.state("m-1")).toEqual({ state: "running" });
+    expect(await fly.state(ref)).toEqual({ state: "running" });
     // A stopped machine says when: its newest exit or stop event.
     expect(await fly.state("m-idle")).toEqual({ state: "stopped", stoppedAt: new Date(2000) });
     // Already gone counts as destroyed (account deletion relies on it); any other failure surfaces.
     await expect(fly.destroy("m-gone")).resolves.toBeUndefined();
     await expect(fly.destroy("m-1")).rejects.toThrow("500");
+    // Destroy takes the machine, then its volume; either already gone counts as done.
+    calls.length = 0;
+    await fly.destroy("m-ok~vol_1");
+    expect(calls.map((c) => `${c.init.method} ${c.url.replace("https://fly.test/v1/apps/nekko-cloud-machines", "")}`)).toEqual([
+      "DELETE /machines/m-ok?force=true",
+      "GET /machines/m-ok/wait?state=destroyed&timeout=25",
+      "DELETE /volumes/vol_1",
+    ]);
+    await expect(fly.destroy("m-gone~vol_gone")).resolves.toBeUndefined();
+  });
+
+  it("removes the volume when the machine can't be made", async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      calls.push(`${init.method} ${url.replace("https://fly.test/v1/apps/a", "")}`);
+      if (url.endsWith("/volumes")) return new Response(JSON.stringify({ id: "vol_2" }), { status: 200 });
+      if (url.endsWith("/machines")) return new Response("no capacity", { status: 412 });
+      return new Response(null, { status: 200 });
+    }) as unknown as typeof fetch;
+    const fly = new FlyDriver({ token: "t", app: "a", api: "https://fly.test", fetch: fetchImpl });
+    await expect(fly.create({ name: "n", region: "nrt", image: "img", size: "small", env: {} })).rejects.toThrow("412");
+    expect(calls).toEqual(["POST /volumes", "POST /machines", "DELETE /volumes/vol_2"]);
   });
 });
