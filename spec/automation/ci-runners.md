@@ -308,7 +308,7 @@ Asked for by Philip (2026-11-06): the slot's bar was unclear (it measured elapse
 - **P1, one Mac, GitHub, local only:** supervisor, the gate chain, the three priority modes, drain and grace, keep awake, the `nekko-vm` helper, VM lifecycle, scopes, caches, the security-update gate, the network filter, GitHub App connect, JIT configs, the audit log, the CI section with on/off, slots and memory, and the menu bar indicator. Total runner memory is a setting with a recommended value for the Mac.
 - **P2, more of one Mac:** Linux slots `[implemented 2026-11-05]`.
 - **P3, Buildkite and GitLab.** GitLab landed early as T215 (unverified against a live job); Buildkite is still deferred.
-- **P4, Nekko Cloud fleet:** presence, picker endpoint, JIT broker, fleet view.
+- **P4, Nekko Cloud fleet:** presence, picker endpoint, JIT broker, fleet view. `[design proposed 2026-11-07, waiting on Philip]` [Design](../../reports/ci-runners-p4-design.md), [decision 0064](../../docs/decisions/0064-ci-runner-fleet-through-nekko-cloud.md).
 - **P5, other hosts** if asked.
 
 ## Open questions `[planned]`
