@@ -798,8 +798,10 @@
 }
 .titlebar-mac .developer-server-controls { margin-right: 12px; }
 /* The Agents controls share the title bar row. Keep them clear of the
-   Windows/Linux caption buttons unless the developer controls already do. */
-.titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 138px; }
+   Windows/Linux caption buttons unless the developer controls already do:
+   their 138px, then the 16px the add bar's divider leaves before the layout
+   switcher, so the row has the same space at both ends. */
+.titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 154px; }
 .titlebar-mac:not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 12px; }
 /* The strip is 46px with 12px top padding (mark and heading centred at 29px),
    but the native caption buttons keep their 38px band (`TITLEBAR_HEIGHT`).
