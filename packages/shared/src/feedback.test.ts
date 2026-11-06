@@ -1,7 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { FEEDBACK_MAX_CHARS, agentPrompt, appInfoLine, feedbackNote, feedbackNoteLength } from './feedback.js';
+import {
+  FEEDBACK_MAX_CHARS, FEEDBACK_SCREENSHOT_MAX_BYTES, agentPrompt, appInfoLine, feedbackNote, feedbackNoteLength,
+  feedbackScreenshotProblem, feedbackScreenshotType,
+} from './feedback.js';
+
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0]);
 
 describe('feedback', () => {
+  it('knows a screenshot by its first bytes', () => {
+    expect(feedbackScreenshotType(PNG)).toBe('image/png');
+    expect(feedbackScreenshotType(JPEG)).toBe('image/jpeg');
+    expect(feedbackScreenshotType(new TextEncoder().encode('GIF89a'))).toBeNull();
+    expect(feedbackScreenshotType(new Uint8Array())).toBeNull();
+  });
+
+  it('takes PNG, JPG and JPEG up to exactly 5 MB', () => {
+    for (const name of ['a.png', 'A.PNG']) expect(feedbackScreenshotProblem(name, 10, PNG)).toBeNull();
+    for (const name of ['b.jpg', 'c.jpeg']) expect(feedbackScreenshotProblem(name, 10, JPEG)).toBeNull();
+    expect(feedbackScreenshotProblem('a.png', FEEDBACK_SCREENSHOT_MAX_BYTES, PNG)).toBeNull();
+    expect(feedbackScreenshotProblem('a.png', FEEDBACK_SCREENSHOT_MAX_BYTES + 1, PNG)).toBe('a.png is over the 5 MB limit.');
+  });
+
+  it('refuses other formats, and a file only named like an image', () => {
+    expect(feedbackScreenshotProblem('a.gif', 10, new TextEncoder().encode('GIF89a'))).toBe("a.gif isn't a PNG or JPG file.");
+    expect(feedbackScreenshotProblem('fake.png', 10, new TextEncoder().encode('not an image'))).toBe("fake.png isn't a PNG or JPG file.");
+    expect(feedbackScreenshotProblem('real-png.gif', 10, PNG)).toBe("real-png.gif isn't a PNG or JPG file.");
+  });
+
   it('puts the choice, summary and description in the one message the server takes', () => {
     expect(feedbackNote('improve', ' The picker forgets ', ' It resets on restart. '))
       .toBe('Needs improvement: The picker forgets\n\nIt resets on restart.');

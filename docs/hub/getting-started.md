@@ -30,7 +30,7 @@ The quickest way to start is the installer.
    - **macOS (Apple silicon):** the `.dmg`
    - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
 2. Run it. On macOS, drag Nekko Agent into Applications.
-3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab. Click a model's name there to make it the default for new chats.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
@@ -155,7 +155,7 @@ Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Vi
 
 When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
 
-For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent chips on the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
+For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent cards along the bottom of the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
 
 ### Model and effort controls
 
@@ -177,13 +177,15 @@ The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
 
 ### How the Agents panel groups your agents
 
+The selected agent has a tinted background across its row, so you can spot the chat you are viewing without hovering. Other rows stay flat; their status icons still show whether they are working, waiting or finished.
+
 By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. Use the sliders button to group by project, date or computer instead.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Accessibility > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
 ### Delegated agents in the Agents panel
 
-Delegated subagents appear as compact rows beneath their parent, in Claude chats too, where a subagent's chat is a live copy you can read but not write to. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
+Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
 A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
 

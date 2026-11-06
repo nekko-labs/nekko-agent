@@ -18,7 +18,11 @@ Some things appear only when they mean something, in both modes:
 
 - **Changes** appears once the agent has changed files, and says how many: *3 files changed*.
 - **Pull request status** appears once the chat has a pull request.
-- **The hardware gauges and monitors** appear while a local model is running on this computer or on a connected one. **Settings > Simple mode** can keep them on all the time.
+- **The hardware gauges** under a chat's title appear while a local model is running on this computer or on a connected one. **Settings > Simple mode** can keep them on all the time.
+
+## The Monitors panel on the agents wall
+
+The monitors you tick in the panel's **Configure** menu are exactly the ones it shows, in Simple and in Detailed. Switching modes only opens or closes the panel; it never changes which monitors are in it. Simple starts with the panel closed and Detailed with it open, and each mode remembers whether you last opened or closed it there.
 - **Anything about other computers** appears once you have connected one. To connect the first, switch to Detailed and open **Settings > Computers**.
 
 ## What Simple shows
@@ -26,7 +30,7 @@ Some things appear only when they mean something, in both modes:
 In the message box's bottom row, Simple shows the folder, the model, how the agent asks you, and a ring for how full the chat is. Hover over the ring for the numbers.
 
 - **Effort** is inside the model menu.
-- **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**.
+- **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**. Each choice has the same icon as in Expert's Mode panel (a hand, a shield and a bolt) and a one-line description.
 - **Incognito and Automate** are in the **+** menu.
 - **The Agent Monitor** appears while agents are working in the background.
 - **In replies:** each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them.
@@ -36,7 +40,7 @@ Simple keeps these for Detailed:
 - **In a chat:** cost and limits, the Mode panel, Privacy Shield, the Tools and MCP menus, the internet switch, the git checkout chip and Logs.
 - **In replies:** reply stats.
 - **Elsewhere:**
-  - the Terminal entries on the agents wall, the model and token line on window cards, and the budget monitors
+  - the Terminal entries on the agents wall and the model and token line on window cards
   - CI runners in Workflows
   - the Model Server's settings and expert load flags
   - Settings' Tools group, folded behind **Show advanced settings**
@@ -53,7 +57,7 @@ Open **Settings > Simple mode**. Each area of the app is drawn beside its contro
 - **Detailed only:** out of sight in Simple.
 - **Hide:** out of sight in both modes.
 
-The monitors wait for a local model instead, so theirs are **When running**, **Always** and **Hide**.
+The hardware gauges wait for a local model instead, so theirs are **When running**, **Always** and **Hide**. The Monitors panel is not on this page: its own **Configure** menu chooses its monitors for both modes.
 
 Use the **Preview** switch to see the drawings as Simple or as Detailed. Controls the previewed mode leaves out are drawn dashed. **Reset to defaults** puts every control back.
 
