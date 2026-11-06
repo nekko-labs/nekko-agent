@@ -218,7 +218,7 @@ The Agent Board header also has a single **+**: hover or click it for the same t
 | New terminal | Cmd+Shift+T | Ctrl+Shift+T |
 | Search chats | Cmd+Shift+F | Ctrl+Shift+F |
 
-Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat.
+Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat. In Dynamic view, click an agent window's transcript, title bar, or composer first to search that window.
 
 
 ### Compact agent row and monitor controls
