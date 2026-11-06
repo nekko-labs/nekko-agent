@@ -54,6 +54,21 @@ Both unchanged-base runs failed the 33 ms gate. The first head also failed and t
 Separate timeline-instrumented pair: base/head cold p95 **34.5 / 34.2 ms**, p50 **27.3 / 27.4 ms**, 33 samples each. Inspected cold-switch trace files (203811/224842 events). Renderer-main whole-phase nested totals, base/head: UpdateLayoutTree **646.228 / 614.891 ms**, Layout **153.080 / 157.301 ms**, Paint **1963.557 / 2083.449 ms**, Layerize **1233.972 / 1328.307 ms**. Profiling overhead and overlapping nested events preclude per-interaction causal attribution; no trace-based speed win is claimed.
 
 Source: [matched reports, samples, provenance and latency traces](https://github.com/nekko-labs/nekko-agent/actions/runs/41972417341), baseline tracker [#712](https://github.com/nekko-labs/nekko-agent/issues/712). Product behavior and budgets unchanged. Later queue attempts on other runners also failed only cold first-paint.
+## Existing-chat static grain (#1904, 2026-11-06)
+
+Area: renderer. Result: no regression reproduced in two matched latency pairs; original runner-specific cold-paint failure remains unexplained. No speedup or zero-effect claim.
+Conditions: exact queue parent `50d6e93c6f26424870cf2ad0743c69a21d97094f`, head `fce171e745563042fa7c0bdc79363e719f179df6`; same Linux Intel Xeon 6973P-C runner (4 threads, 16 GB), Chrome 156.0.8078.79, Node 22.23.4, 1440x1000, scripted model, 33 cold switches per measurement. Clean snapshots, unchanged latency harness and independently built identical release daemon binaries (SHA256 `debfcc01554946e966330170e802054153e88d7d49a7f6d198243cabe4358e6b`). Order base/head/head/base, full latency workload, one attempt each.
+
+| Metric | Base first / last | Head first / second |
+|---|---|---|
+| Cold-chat first-frame p95 | 31.4 / 32.6 ms | 28.4 / 31.9 ms |
+| Cold-chat first-frame p50 | 23.7 / 22.9 ms | 23.4 / 25.2 ms |
+
+All four full latency measurements passed their budgets, including the unchanged 33 ms cold-paint gate. Raw nearest-rank samples, snapshot identities, clean-tree assertions and daemon hashes were inspected. The original queue run on AMD EPYC 7763 (same Chrome, Linux 4 threads, 16 GB) failed only cold first-frame paint at p95 36.6 / 40.6 / 37.1 ms, 33 samples each. Other measured speed/memory rows and build/integration tests passed; terminal typing was skipped. Automatic streaming-only profiles did not measure the failing cold-switch metric. The Intel comparison does not reproduce a baseline failure or establish the cause on AMD; it supports one evidence-backed protected requeue, not repeated retries if the failure recurs. Related baseline investigation: [#712](https://github.com/nekko-labs/nekko-agent/issues/712).
+
+Separate timeline-instrumented base/head cold-paint p95 was 31.0 / 32.8 ms. Inspected cold traces contain 195607 / 196657 events. Renderer-main whole-phase totals in ms: UpdateLayoutTree 384.870 / 394.106, Layout 167.313 / 167.238, Paint 420.876 / 418.657, Layerize 1310.728 / 1309.487. Nested events overlap; totals are not per-click causality or unprofiled gate measurements. Grain implementation and budgets were not changed during diagnosis.
+
+Source: [matched reports, raw samples, provenance and cold-paint traces](https://github.com/nekko-labs/nekko-agent/actions/runs/42134801181), [original queue failure](https://github.com/nekko-labs/nekko-agent/actions/runs/42131946898). Raw artifacts retained locally under `.shots/chat-gradient-dither/`. Temporary `ci/1904-cold-paint` workflow is diagnostic only and must never merge.
 ## Inline PR lifecycle model queue diagnosis (#1820/#1821, 2026-11-05)
 
 Area: renderer / shared projection. Result: unchanged-base cold-paint failure reproduced; no product optimization or zero-regression claim.
