@@ -4,7 +4,7 @@ import { registerAccount, type SignInConfig } from "./account.js";
 import type { Alert } from "./alerts.js";
 import type { Db } from "./db.js";
 import { registerDonations } from "./donations.js";
-import { registerFeedback } from "./feedback.js";
+import { registerFeedback, type ScreenshotLimit } from "./feedback.js";
 import { registerMachines, type MachinesOptions } from "./machines.js";
 import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from "./confirmations.js";
 import { parseSignup, recordSignup } from "./signups.js";
@@ -27,6 +27,8 @@ export interface ServerOptions {
   donationRateLimit?: { max: number; windowMs: number };
   /** Feedback notes per IP per window before 429. */
   feedbackRateLimit?: { max: number; windowMs: number };
+  /** Feedback notes with screenshots per IP per window, and uploads at once, before 429 or 503. */
+  feedbackScreenshotLimit?: ScreenshotLimit;
   /** Nekko Cloud machines (decision 0017); without it the /v1/machines routes are absent. */
   machines?: MachinesOptions;
   /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
@@ -162,7 +164,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser });
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });
-  registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 });
+  registerFeedback(app, opts.db, opts.feedbackRateLimit ?? { max: 10, windowMs: 60 * 60 * 1000 }, opts.feedbackScreenshotLimit);
   if (opts.machines) registerMachines(app, opts.db, opts.machines);
 
   return app;

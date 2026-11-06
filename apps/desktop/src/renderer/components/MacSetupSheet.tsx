@@ -120,10 +120,12 @@ export function ModeStep({ priority, error, busy, onPriority, onStart }: { prior
 /** Frame 6, and the same list when a stopped build offers to resume. */
 export function ProgressStep({ image, error, busy, onCancel, onResume, onBackground }: { image: ImageView; error: string | null; busy: boolean; onCancel(): void; onResume?(): void; onBackground?(): void }) {
   const fraction = imageFraction(image);
-  const refresh = image.kind === 'refresh';
+  // Both change a copy of the image in use, which keeps taking jobs meanwhile.
+  const update = image.kind === 'refresh' || image.kind === 'tools';
+  const heading = image.kind === 'tools' ? 'Installing the missing tools' : update ? 'Updating the image' : 'Setting up this Mac';
   return (
     <Sheet>
-      <Heading>{onResume ? 'Setup paused' : refresh ? 'Updating the image' : 'Setting up this Mac'}</Heading>
+      <Heading>{onResume ? 'Setup paused' : heading}</Heading>
       {imageStageRows(image).map((row) => (
         <React.Fragment key={row.stage}>
           <Stage row={row} />
@@ -132,7 +134,7 @@ export function ProgressStep({ image, error, busy, onCancel, onResume, onBackgro
       ))}
       {image.state === 'waiting' && <p role="status" className="runner-note warn">{image.detail}</p>}
       <Fine>
-        {refresh
+        {update
           ? 'The image in use keeps taking jobs until the updated one passes its test boot.'
           : onResume
           ? 'Finished stages are kept, and a stopped download picks up where it left off.'

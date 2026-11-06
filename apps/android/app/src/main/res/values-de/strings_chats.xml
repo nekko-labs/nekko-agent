@@ -186,6 +186,13 @@
     <string name="chats_run_on">Ausführen auf</string>
     <string name="chats_run_on_note">Ein lokales Modell läuft auf der eigenen Hardware des Computers. Wenn du einen anderen Computer wählst, werden dessen Modelle und Ordner angezeigt.</string>
     <string name="chats_run_on_state">%1$s · %2$s</string>
+    <string name="chats_auto">Automatisch</string>
+    <string name="chats_auto_note">Ein freier Computer</string>
+    <string name="chats_auto_finding">Freier Computer wird gesucht …</string>
+    <string name="chats_auto_free_busy">Auto hat %1$s gewählt: %2$s ist beschäftigt.</string>
+    <string name="chats_auto_free">Auto hat %1$s gewählt: Er ist frei.</string>
+    <string name="chats_auto_all_busy">Alle Computer sind beschäftigt, daher bleibt Auto bei %1$s, dem zuletzt verwendeten.</string>
+    <string name="chats_auto_none">Kein anderer Computer kann gerade ein lokales Modell ausführen, daher bleibt Auto bei %1$s.</string>
     <string name="chats_shared_with">Mit Nekko geteilt</string>
     <string name="chats_shared_note">Kommt in das Nachrichtenfeld des Chats. Senden tust du.</string>
     <string name="chats_remove_shared">Geteilten Text entfernen</string>

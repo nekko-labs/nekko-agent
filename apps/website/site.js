@@ -411,6 +411,34 @@
   videos.forEach((v) => io.observe(v));
 })();
 
+// ---- panel videos with a light version: each <source> carries data-src-light
+//      (and the video data-poster-light). The file and poster follow the look,
+//      switching with the theme; dark keeps the sources as written. ----
+(() => {
+  const toned = [...document.querySelectorAll('video[data-autoplay]')].filter((v) => v.querySelector('source[data-src-light]'));
+  if (!toned.length) return;
+  toned.forEach((v) => {
+    v.dataset.posterDark = v.getAttribute('poster');
+    v.querySelectorAll('source').forEach((s) => { s.dataset.srcDark = s.getAttribute('src'); });
+  });
+  const apply = () => {
+    const key = document.documentElement.dataset.theme === 'dark' ? 'Dark' : 'Light';
+    toned.forEach((v) => {
+      if (v.dataset.tone === key) return;
+      const first = v.dataset.tone === undefined;
+      v.dataset.tone = key;
+      if (first && key === 'Dark') return; // already as written
+      const wasPlaying = !v.paused;
+      v.poster = v.dataset[`poster${key}`] || v.dataset.posterDark;
+      v.querySelectorAll('source').forEach((s) => { s.src = s.dataset[`src${key}`] || s.dataset.srcDark; });
+      if (v.readyState > 0 || v.networkState !== HTMLMediaElement.NETWORK_EMPTY) v.load();
+      if (wasPlaying) v.play().catch(() => {});
+    });
+  };
+  apply();
+  new MutationObserver(apply).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+
 // ---- the hero's speed replay: its file and end-frame poster follow the look
 //      (dark files for Dark, light for White), switching with the theme. It
 //      autoplays muted and loops; with reduced motion only the poster loads. ----

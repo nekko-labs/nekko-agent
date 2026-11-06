@@ -54,9 +54,36 @@ const SCRIPTS: [(&str, &str); 2] = [
     ("dev.nekkolabs.runner-boot.plist", "Library/LaunchDaemons/dev.nekkolabs.runner-boot.plist"),
 ];
 const NO_IMAGE_TO_UPDATE: &str = "There is no image to update. Set up this Mac first.";
+const NO_RECORD_TO_UPDATE: &str = "This image has no record of what it holds. Rebuild it instead.";
 const PROOF_FILE: &str = "usr/local/share/nekko-runner-image.json";
 const PROVISION_LOG: &str = "private/var/log/nekko-provision.log";
 const BOOT_LOG: &str = "private/var/log/nekko-runner-boot.log";
+/// What [`tools_script`] logs in the guest.
+const TOOLS_LOG: &str = "private/var/log/nekko-add-tools.log";
+/// The boot script's PATH for jobs (`RUNNER_PATH` in `nekko-runner-boot.sh`).
+const RUNNER_PATH: &str = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+
+/// A command jobs run before any setup step of theirs could install it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct JobTool {
+    pub command: &'static str,
+    /// Homebrew's name for it.
+    pub formula: &'static str,
+    /// The macOS major that ships it in `/usr/bin`, if any.
+    pub system_since: Option<u32>,
+}
+
+/// The tools every image gets, and the runner card offers to add to an image without them.
+/// `ios-native.yml` runs `node` before `actions/setup-node` (to pick the appearances) and
+/// reports a batch with `gh` and `jq`, as GitHub's hosted Macs allow (#1845).
+pub const JOB_TOOLS: [JobTool; 3] = [
+    JobTool { command: "node", formula: "node", system_since: None },
+    JobTool { command: "gh", formula: "gh", system_since: None },
+    JobTool { command: "jq", formula: "jq", system_since: Some(15) },
+];
+/// Where a job's PATH finds a tool, relative to a guest volume's root.
+const TOOL_DIRS: [&str; 3] = ["opt/homebrew/bin", "usr/local/bin", "usr/bin"];
+const TOOLS_LABEL: &str = "Installing node, gh and jq";
 /// What the boot script logs when the runner hands back.
 const RUNNER_RAN: &str = "runner exited with";
 const UPDATE_MACOS: &str = "Update this Mac to macOS 27 to set it up here.";
@@ -76,6 +103,8 @@ const SHUTDOWN_LIMIT: Duration = minutes(3);
 const XCODE_COPY_LIMIT: Duration = minutes(45);
 const LOCKDOWN_LIMIT: Duration = minutes(15);
 const TEST_BOOT_LIMIT: Duration = minutes(10);
+/// Booting a copy of the image, waiting for the network and `brew install`.
+const ADD_TOOLS_LIMIT: Duration = minutes(30);
 /// No bytes for this long is a stalled download, which keeps its `.part`.
 const DOWNLOAD_STALL_LIMIT: Duration = minutes(5);
 
@@ -89,6 +118,8 @@ pub enum Stage {
     Lockdown,
     /// A refresh: a copy of the image with Nekko's scripts written in.
     Scripts,
+    /// Adding [`JOB_TOOLS`] to a copy of the image.
+    Tools,
     Test,
     Finish,
 }
@@ -96,6 +127,7 @@ pub enum Stage {
 const STAGES: [Stage; 7] =
     [Stage::Check, Stage::Download, Stage::Install, Stage::Xcode, Stage::Lockdown, Stage::Test, Stage::Finish];
 const REFRESH_STAGES: [Stage; 4] = [Stage::Check, Stage::Scripts, Stage::Test, Stage::Finish];
+const TOOLS_STAGES: [Stage; 4] = [Stage::Check, Stage::Tools, Stage::Test, Stage::Finish];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -104,11 +136,17 @@ pub enum Kind {
     MacosOnly,
     /// The image in use with only Nekko's own scripts replaced: minutes, not half an hour.
     Refresh,
+    /// The image in use with the job tools it lacks installed.
+    Tools,
 }
 
 impl Kind {
     fn stages(self) -> &'static [Stage] {
-        if self == Kind::Refresh { &REFRESH_STAGES } else { &STAGES }
+        match self {
+            Kind::Refresh => &REFRESH_STAGES,
+            Kind::Tools => &TOOLS_STAGES,
+            Kind::Xcode | Kind::MacosOnly => &STAGES,
+        }
     }
 }
 
@@ -123,7 +161,8 @@ pub enum ImageState {
     Failed,
 }
 
-/// What the image holds: `provision.sh`'s proof file, kept as `image.json`.
+/// What the image holds: `provision.sh`'s proof file, kept as `image.json`
+/// with the job tools nekkod found on the disk.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageInfo {
@@ -131,6 +170,72 @@ pub struct ImageInfo {
     pub xcode: Option<String>,
     pub actions_runner: String,
     pub built: String,
+    /// The [`JOB_TOOLS`] found on the disk; `None` for an image built before nekkod looked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
+    /// The [`JOB_TOOLS`] jobs will not find, worked out from the rest; never stored.
+    #[serde(default, skip_deserializing)]
+    pub missing_tools: Vec<String>,
+}
+
+/// The job tools `info`'s image lacks. An image built before nekkod looked had none
+/// installed, so it lacks every one macOS does not ship.
+pub fn missing_tools(info: &ImageInfo) -> Vec<String> {
+    let major = os_major(&info.macos);
+    let has = |t: &JobTool| match &info.tools {
+        Some(found) => found.iter().any(|f| f == t.command),
+        None => t.system_since.is_some_and(|since| major >= since),
+    };
+    JOB_TOOLS.iter().filter(|t| !has(t)).map(|t| t.command.to_owned()).collect()
+}
+
+/// The proof file with `tools` set, as `image.json` keeps it.
+fn with_tools(proof: &str, tools: &[String]) -> Result<String, String> {
+    let mut v: Value = serde_json::from_str(proof).map_err(|e| format!("The proof file is not valid: {e}"))?;
+    let fields = v.as_object_mut().ok_or("The proof file is not valid: not an object.")?;
+    fields.insert("tools".into(), json!(tools));
+    Ok(v.to_string())
+}
+
+/// Which [`JOB_TOOLS`] a job's PATH would find on whichever of a disk's mounted volumes.
+fn tools_on(mounts: &Path) -> Vec<String> {
+    let roots: Vec<PathBuf> = std::fs::read_dir(mounts).into_iter().flatten().flatten().map(|e| e.path()).collect();
+    // symlink_metadata: Homebrew links into its Cellar, and a link is what the PATH finds.
+    let found = |cmd: &str| {
+        roots.iter().any(|r| TOOL_DIRS.iter().any(|d| std::fs::symlink_metadata(r.join(d).join(cmd)).is_ok()))
+    };
+    JOB_TOOLS.iter().map(|t| t.command).filter(|c| found(c)).map(str::to_owned).collect()
+}
+
+fn tool_formulas() -> String {
+    JOB_TOOLS.iter().map(|t| t.formula).collect::<Vec<_>>().join(" ")
+}
+
+/// What a locked image runs at one boot, written over its boot script, to install
+/// [`JOB_TOOLS`]: by then SSH and the build admin are gone, but `runner` owns Homebrew
+/// (`provision.sh` step 7). It powers the guest off however it ends, and nekkod writes
+/// the real boot script back before the test boot.
+fn tools_script() -> String {
+    let formulas = tool_formulas();
+    format!(
+        r#"#!/bin/bash
+# Written by nekkod for one boot of a copy of the runner image; never a job's boot.
+exec >>/{TOOLS_LOG} 2>&1
+set -u
+trap 'echo "add-tools: shutting down"; shutdown -h now' EXIT
+echo "add-tools: $(date -u +%Y-%m-%dT%H:%M:%SZ) installing {formulas}"
+if [ ! -x /opt/homebrew/bin/brew ]; then
+  echo "add-tools: this image has no Homebrew"
+  exit 1
+fi
+for _ in $(seq 1 60); do
+  /usr/bin/curl -fsS -o /dev/null --max-time 5 https://formulae.brew.sh/ && break
+  sleep 2
+done
+/usr/bin/sudo -u runner -H /usr/bin/env PATH={RUNNER_PATH} NONINTERACTIVE=1 HOMEBREW_NO_ANALYTICS=1 /opt/homebrew/bin/brew install {formulas}
+echo "add-tools: brew-rc=$?"
+"#
+    )
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -293,6 +398,7 @@ fn xcode_steps(kind: Kind) -> Vec<Step> {
         ),
         // `actions/cache` compresses with zstd only when it finds `gtar` and `zstd`, as on hosted Macs.
         step("Installing zstd and GNU tar", "/opt/homebrew/bin/brew install zstd gnu-tar", false, minutes(10)),
+        step(TOOLS_LABEL, &format!("/opt/homebrew/bin/brew install {}", tool_formulas()), false, minutes(15)),
         step("Removing the Homebrew allowance", "rm -f /etc/sudoers.d/build", true, minutes(1)),
     ]);
     steps
@@ -324,6 +430,8 @@ chown root:wheel /tmp/prov.plist && chmod 644 /tmp/prov.plist && launchctl boots
 pub struct Proof {
     pub image: Option<String>,
     pub log: String,
+    /// The [`JOB_TOOLS`] on the disk.
+    pub tools: Vec<String>,
 }
 
 /// Every guest and host action of a build.
@@ -356,6 +464,9 @@ pub trait BuildHost: Send + Sync + 'static {
     fn clone_bundle(&self, from: &Path, to: &Path) -> impl Future<Output = Result<(), String>> + Send;
     /// Writes this build of Nekko's `SCRIPTS` over the ones on `bundle`'s disk.
     fn write_scripts(&self, bundle: &Path) -> impl Future<Output = Result<(), String>> + Send;
+    /// Boots `bundle` once to install [`JOB_TOOLS`], puts its own boot script back,
+    /// and says which of them its disk then has.
+    fn add_tools(&self, bundle: &Path) -> impl Future<Output = Result<Vec<String>, String>> + Send;
     fn swap(&self, bundle: &Path, default: &Path) -> impl Future<Output = Result<(), String>> + Send;
     fn enable_runner(&self, id: &str, priority: Priority) -> impl Future<Output = Result<(), String>> + Send;
 }
@@ -502,7 +613,12 @@ impl<H: BuildHost> ImageJob<H> {
     /// The view with no job running: the image there is, and any build to resume.
     fn at_rest(&self) -> ImageView {
         let default = self.images.join("default");
-        let info = std::fs::read(default.join("image.json")).ok().and_then(|r| serde_json::from_slice(&r).ok());
+        let info = std::fs::read(default.join("image.json")).ok().and_then(|r| serde_json::from_slice(&r).ok()).map(
+            |mut i: ImageInfo| {
+                i.missing_tools = missing_tools(&i);
+                i
+            },
+        );
         let build = self.read_build();
         ImageView {
             state: if default.is_dir() { ImageState::Ready } else { ImageState::None },
@@ -753,7 +869,30 @@ impl<H: BuildHost> ImageJob<H> {
                 self.log(&proof.log);
                 let image = proof.image.ok_or("The lockdown did not finish: the VM has no proof file.")?;
                 serde_json::from_str::<ImageInfo>(&image).map_err(|e| format!("The proof file is not valid: {e}"))?;
+                let image = with_tools(&image, &proof.tools)?;
                 std::fs::write(dir.join("proof.json"), image).map_err(|e| format!("Cannot save the proof: {e}"))
+            }
+            Stage::Tools => {
+                let default = self.images.join("default");
+                if !default.is_dir() {
+                    return Err(NO_IMAGE_TO_UPDATE.into());
+                }
+                let info = std::fs::read_to_string(default.join("image.json")).map_err(|_| NO_RECORD_TO_UPDATE)?;
+                remove_any(&bundle).await?;
+                self.detail("Copying the image");
+                self.host.clone_bundle(&default, &bundle).await?;
+                self.detail(TOOLS_LABEL);
+                let found = self.host.add_tools(&bundle).await?;
+                let lacking: Vec<&str> =
+                    JOB_TOOLS.iter().map(|t| t.command).filter(|c| !found.iter().any(|f| f == c)).collect();
+                if !lacking.is_empty() {
+                    return Err(format!(
+                        "Still missing after the install: {}. Show the log for why.",
+                        lacking.join(", ")
+                    ));
+                }
+                std::fs::write(dir.join("proof.json"), with_tools(&info, &found)?)
+                    .map_err(|e| format!("Cannot save the proof: {e}"))
             }
             Stage::Scripts => {
                 let default = self.images.join("default");
@@ -844,7 +983,11 @@ fn test_boot_verdict(stopped: Option<&Stopped>, log: &str) -> Result<(), String>
 }
 
 fn proof_on(mounts: &Path) -> Proof {
-    Proof { image: read_on(mounts, PROOF_FILE), log: read_on(mounts, PROVISION_LOG).unwrap_or_default() }
+    Proof {
+        image: read_on(mounts, PROOF_FILE),
+        log: read_on(mounts, PROVISION_LOG).unwrap_or_default(),
+        tools: tools_on(mounts),
+    }
 }
 
 /// The VM this build has up, and its forwarded SSH port.
@@ -1189,8 +1332,9 @@ impl RealBuildHost {
 impl BuildHost for RealBuildHost {
     async fn preflight(&self, kind: Kind) -> Result<(), String> {
         self.vm()?;
-        if kind == Kind::Refresh {
-            // A clone costs no space, and nothing here needs Xcode or a first boot.
+        if matches!(kind, Kind::Refresh | Kind::Tools) {
+            // A clone costs no space, and nothing here needs Xcode or a first boot. Tools
+            // writes the scripts back after its boot, so it needs them too.
             if !self.images.join("default").is_dir() {
                 return Err(NO_IMAGE_TO_UPDATE.into());
             }
@@ -1448,6 +1592,50 @@ impl BuildHost for RealBuildHost {
             Ok(())
         })
         .await?
+    }
+
+    async fn add_tools(&self, bundle: &Path) -> Result<Vec<String>, String> {
+        let vm = self.vm()?;
+        // Over the boot script, in place, as write_scripts does: a new LaunchDaemon written
+        // from the host would not be root's, and launchd would refuse it.
+        let (script, at) = (tools_script(), SCRIPTS[0].1);
+        self.with_data_volume(bundle, |root| {
+            if !root.join(at).is_file() {
+                return Err("This image has no Nekko scripts. Rebuild it instead.".to_owned());
+            }
+            overwrite_in_place(&root.join(at), script.as_bytes()).map_err(|e| format!("Cannot write {at}: {e}"))
+        })
+        .await??;
+        // The VM takes a seed; the script ignores it.
+        let seed = self.dir().join("seed.iso");
+        remove_any(&seed).await?;
+        vm.write_seed(&seed, GITHUB_SEED, "not-a-config").await?;
+        let spec = RunSpec {
+            bundle: bundle.to_path_buf(),
+            cpus: self.cpus(),
+            memory_mb: MEMORY_MB,
+            seed: seed.clone(),
+            stats: None,
+        };
+        let mut handle = vm.start(spec).await?;
+        let stopped = timeout(ADD_TOOLS_LIMIT, &mut handle.done).await;
+        if stopped.is_err() {
+            handle.kill();
+            let _ = timeout(Duration::from_secs(10), &mut handle.done).await;
+        }
+        remove_any(&seed).await?;
+        // However the boot went, no copy of this disk may run the installer again.
+        self.write_scripts(bundle).await?;
+        let (tools, log) = self.with_disk(bundle, |m| (tools_on(m), read_on(m, TOOLS_LOG).unwrap_or_default())).await?;
+        if let Ok(mut file) = self.log_file() {
+            let _ = writeln!(file, "{log}");
+        }
+        match stopped {
+            Ok(_) => Ok(tools),
+            Err(_) => {
+                Err(format!("Installing the tools did not finish within {} min.", ADD_TOOLS_LIMIT.as_secs() / 60))
+            }
+        }
     }
 
     async fn swap(&self, bundle: &Path, default: &Path) -> Result<(), String> {
