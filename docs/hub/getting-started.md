@@ -139,7 +139,7 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 
 Closing the desktop window hides it to the tray; the engine and running work remain alive. This is not Quit. **Quit Nekko Agent** stops the service and managed processes; **Stop Nekko service** stops the service while leaving the UI available. This does not promise execution during OS sleep, shutdown or logout.
 
-**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
+**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification, on screen or later from the Windows notification centre, brings the window forward and opens that chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
 
 **Full-screen games (Windows).** While a game runs in exclusive fullscreen, Nekko Agent holds its notices and shows them together when you leave the game, one per chat and kind. Windows you open yourself (launching the app, a link, the tray) still open at once.
 
