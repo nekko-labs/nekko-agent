@@ -86,6 +86,8 @@ struct NekkoApp: App {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") {
             TurnDetailsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {
+            PhotoPreviewFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") {
             ChatRefreshFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") {
@@ -118,7 +120,7 @@ struct NekkoApp: App {
                 .onOpenURL { app.handle(url: $0) }
                 .task {
                     #if DEBUG
-                    if ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") || ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") || ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") { return }
+                    if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") || ProcessInfo.processInfo.arguments.contains("-uiTestChatRefresh") || ProcessInfo.processInfo.arguments.contains("-uiTestNewChat") || ProcessInfo.processInfo.arguments.contains("-uiTestPurposeGroups") || ProcessInfo.processInfo.arguments.contains("-uiTestChatStatus") || ProcessInfo.processInfo.arguments.contains("-uiTestReplyVoices") || ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") { return }
                     #endif
                     if !ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { app.start() }
                 }

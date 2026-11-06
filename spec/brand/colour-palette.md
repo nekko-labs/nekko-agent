@@ -56,6 +56,7 @@ The Nekko and Indigo themes use the standard Light and Dark surfaces unchanged; 
   - Dark: `#854F6C` at 30%. Light: the main colour at 10%.
   - **When:** the selected agent keeps the same gradient from its new-chat greeting into its full transcript, working or idle. In Dynamic only the active pane has it; background agents stay neutral even while working. Selection fades the base field over 0.7 s.
   - **Colour transition:** a static violet/rose palette (`rgb(107 77 153 / .22)` top-left, `rgb(163 80 119 / .12)` bottom-right) crossfades by composited opacity from .1 to .9 over 24 s, alternating. It never intercepts input. Reduced motion disables the cycle and selection fade, retaining a static plum field.
+  - **Existing-chat dithering (#1891):** the selected conversation adds the new-chat screen's faint (5.5% opacity), fixed-seed monochrome grain behind its content, reducing harsh gradient bands without blurring text. The tile is static even while the colours crossfade. New chat keeps its existing single grain layer; inactive panes, standalone composers and other themes are unchanged. No network assets, settings, host calls or permissions are added. Acceptance: smoother-looking transitions, readable text, pointer and typing pass-through, and unchanged new-chat appearance at desktop and narrow widths. Implemented and verified with 484 focused tests, desktop typecheck and nine isolated Electron checks on both base and head. Matching Windows desktop (1400×900) and narrow (460×900) captures were inspected; new-chat pixels are identical at both sizes. The narrow fixture scrolls to reach its composer on base and head. Reproduce with `NEKKO_CONTROLS_SANDBOX=chat-gradient-dither-sandbox.cjs node apps/desktop/scripts/agent-window-controls-integration.cjs` (add `NEKKO_TEST_REVISION=13f3f189` for the baseline). Native phone apps, macOS/Linux, other presets and packaged builds are not visually verified by this change.
   - Implemented in the shared desktop/Local Web UI renderer. Windows hidden Electron fixture verification is tracked in #1791; native macOS/Linux and packaged builds are not verified by this change.
 - **Dot wave** (faint dots behind the new-chat page; drawn at 60% strength and slowed, as for every Experimental theme):
 
@@ -73,6 +74,18 @@ Plum in every theme (there is no indigo icon).
 - **Tile:** left-to-right gradient `#190019` to `#5A2352`, rounded square.
 - **Mark (the cat):** `#854F6C`.
 - Source of truth: `apps/desktop/scripts/icon-art.cjs`; regenerate with `npx electron apps/desktop/scripts/make-icons.cjs`.
+
+## Base looks and other brand surfaces
+
+`[updated 2026-11-05]` The last places that still drew the old lilac and violet now use the palette above.
+
+- **System, Light and Dark** (the base looks, and the default accent a fresh profile saves): Light `#5A2352` / `#8A4A7F`, Dark `#C084B5` / `#C99BB3`, on the desktop, the iPhone and Android. A saved `#6D5EFC` (the old default) migrates to `#5A2352` on load, and the old base accents (`#6D5EFC`, `#06B6D4`, `#8B7DFF`, `#22D3EE`) read as the new ones, so nobody who never picked a colour keeps the violet. A phone paired to a computer that still sends the old violet keeps plum.
+- **Startup splash, first launch** (desktop) and the **iPhone launch screen, opening animation and lock cover**: `#190019` with the white cat.
+- **iPhone brand mark** (first run, pairing): the cat in `#854F6C`, as on Android.
+- **Tray companion and memory warning popups** (desktop): `#16161C` panel, `#C99BB3` outlines, `#190019` main button with a `#854F6C` outline.
+- **Nekko Cloud beta emails and the confirm/unsubscribe pages**: `#FBF6F8` page, `#5A2352` wordmark and links (`#C99BB3` in dark), `#190019` to `#3A1438` button, `#5A2352` to `#C084B5` headline.
+
+Not changed: themes a user picks by name (Nebula, and the older Lilac, Lavender and Nekko Dark presets, no longer in the picker) keep their own colours, as do the multicolour nav icons.
 
 ## Website
 

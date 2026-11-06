@@ -59,7 +59,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'computers', area: 'Agents wall', label: 'Connected computers', hint: 'Run on, the computer chip, grouping and icons. Only once a computer is connected', platforms: D, default: 'show', needs: 'computers' },
   { id: 'ph-subtitle', area: 'Chat · header', label: 'Model and computer under the title', hint: 'Like "Opus 5.5 · Studio Mac"', platforms: P, default: 'expert' },
   { id: 'model', area: 'Chat · message box', label: 'Model name and picker', hint: 'Switch between Claude, ChatGPT or a local model', platforms: DP, default: 'show' },
-  { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'How hard the model thinks before it answers. Inside the model menu in Simple', platforms: DP, default: 'show' },
+  { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'Provider-reported effort choices beside the model in both modes', platforms: DP, default: 'show' },
   { id: 'asks', area: 'Chat · message box', label: 'Asks first', hint: 'When the agent stops to ask you, in plain words', platforms: DP, default: 'show' },
   { id: 'context', area: 'Chat · message box', label: 'Usage ring', hint: 'How full this chat is. Simple shows only the ring; the numbers are in its tooltip', platforms: DP, default: 'show' },
   { id: 'cost', area: 'Chat · message box', label: 'Cost and limits', hint: 'What this chat has cost, and plan limits', platforms: D, default: 'expert' },
@@ -74,8 +74,9 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'run-settings', area: 'Chat · message box', label: 'Run settings', hint: 'Offline, incognito, Git branch and tool style, in the model menu', platforms: P, default: 'expert' },
   { id: 'ph-git', area: 'Chat · conversation', label: 'Git', hint: 'The Git screen and commits', platforms: P, default: 'expert' },
   { id: 'cardmeta', area: 'Agents wall', label: 'Model and tokens on window cards', hint: 'Like "Opus 5.5 · 48k context"', platforms: D, default: 'expert' },
-  { id: 'mon-hw', area: 'Agents wall', label: 'Hardware and local models monitors', hint: 'Dials and resident models in the dock', platforms: D, default: 'auto', when: 'localModel' },
-  { id: 'mon-budget', area: 'Agents wall', label: 'Budget, cost and utilization', hint: 'Spending and token use in the dock', platforms: D, default: 'expert' },
+  // The desktop's Monitors panel is not listed: the monitors checked in its
+  // Configure menu are what it shows in both modes, and Simple and Detailed only
+  // open or close the panel (mon-hw and mon-budget were here until 2026-11-06).
   { id: 'ci', area: 'Workflows', label: 'CI runners', hint: 'Use this computer as a CI runner', platforms: D, default: 'expert' },
   { id: 'engine', area: 'Models', label: 'Model server details', hint: 'Engine, load settings and advanced flags', platforms: D, default: 'expert' },
   { id: 'set-tools', area: 'Settings', label: 'Advanced settings', hint: 'Tools, agent loop, hooks, sandbox and developer pages', platforms: D, default: 'expert' },

@@ -389,7 +389,7 @@ describe('wall preferences and panel migration', () => {
   it('exports the dock descriptors and fresh defaults without tree panels', () => {
     expect(WALL_KINDS).toEqual(['chat', 'terminal']);
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
-    expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true,
+    expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true, simpleShow: false,
       monitorOrder: MONITORS.map(p => p.key),
       minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false },
       monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true, localModels: true } });

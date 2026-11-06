@@ -680,6 +680,8 @@ export function sanitizeMonitorsDock(raw: unknown): MonitorsDock {
   return {
     side: value.side === 'left' || value.side === 'top' || value.side === 'bottom' ? value.side : 'right',
     show: typeof value.show === 'boolean' ? value.show : true,
+    // Simple keeps the panel closed until it is opened there.
+    simpleShow: value.simpleShow === true,
     minimized,
     monitorOrder: normalizeMonitorOrder(value.monitorOrder ?? value.panelOrder),
     monitors: out,

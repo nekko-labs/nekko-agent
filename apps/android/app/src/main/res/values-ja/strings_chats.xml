@@ -185,6 +185,14 @@
     <string name="chats_start_on">%1$s で開始</string>
     <string name="chats_run_on">実行場所</string>
     <string name="chats_run_on_note">ローカルモデルはコンピュータ自身のハードウェアで動作します。別のコンピュータを選ぶと、そのモデルとフォルダが表示されます。</string>
+    <string name="chats_run_on_state">%1$s · %2$s</string>
+    <string name="chats_auto">自動</string>
+    <string name="chats_auto_note">空いているコンピュータ</string>
+    <string name="chats_auto_finding">空いているコンピュータを探しています…</string>
+    <string name="chats_auto_free_busy">自動で%1$sを選びました：%2$sは使用中です。</string>
+    <string name="chats_auto_free">自動で%1$sを選びました：空いています。</string>
+    <string name="chats_auto_all_busy">すべてのコンピュータが使用中のため、最後に使った%1$sのままにしました。</string>
+    <string name="chats_auto_none">今ローカルモデルを実行できる他のコンピュータがないため、%1$sのままにしました。</string>
     <string name="chats_shared_with">Nekko に共有</string>
     <string name="chats_shared_note">チャットのメッセージ欄に入ります。送信するのはあなたです。</string>
     <string name="chats_remove_shared">共有テキストを削除</string>

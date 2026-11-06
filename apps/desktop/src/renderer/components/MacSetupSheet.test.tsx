@@ -105,6 +105,12 @@ describe('MacSetupSheet', () => {
     for (const s of ['Download', 'Add Xcode', 'Lock the VM down']) expect(html).not.toContain(s);
   });
 
+  it('installing_tools_follows_its_own_stages_and_keeps_the_image_working', () => {
+    const html = progress(image({ kind: 'tools', state: 'building', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh and jq' }));
+    for (const s of ['Installing the missing tools', 'Install the missing tools', 'Installing node, gh and jq', 'Test a boot', 'keeps taking jobs']) expect(html).toContain(s);
+    for (const s of ['Download', 'Add Xcode', 'Lock the VM down', esc("Update Nekko's scripts")]) expect(html).not.toContain(s);
+  });
+
   it('waiting_shows_its_reason', () => {
     const html = progress(image({ state: 'waiting', stage: 'install', doneStages: ['check', 'download'], detail: 'Waiting for a free VM slot' }));
     expect(html).toContain('>Waiting<');

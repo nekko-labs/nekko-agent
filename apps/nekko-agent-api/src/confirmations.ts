@@ -111,14 +111,14 @@ The link works once and expires in ${LINK_DAYS} days. If you didn't sign up, ign
 Unsubscribe: ${unsubscribe}
 
 Nekko Labs LLC · hello@nekkoagent.com`;
-  const html = `<!doctype html><html><body style="margin:0;background:#fbfaff;font-family:'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;color:#17151f">
+  const html = `<!doctype html><html><body style="margin:0;background:#fbf6f8;font-family:'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;color:#000000">
 <div style="max-width:520px;margin:0 auto;padding:32px 24px">
-<p style="font-size:20px;font-weight:700;color:#453a92;margin:0 0 24px">Nekko Agent</p>
+<p style="font-size:20px;font-weight:700;color:#5a2352;margin:0 0 24px">Nekko Agent</p>
 <p>${escape(hi)}</p>
 <p>Thanks for signing up for the Nekko Agent beta. Please confirm it was you:</p>
-<p style="margin:28px 0"><a href="${escape(confirm)}" style="background:linear-gradient(115deg,#453a92,#9d8ce6);color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;display:inline-block">Confirm I want to join</a></p>
-<p style="color:#5d5970;font-size:14px">The link works once and expires in ${LINK_DAYS} days. If you didn't sign up, ignore this email and we won't write again.</p>
-<p style="color:#5d5970;font-size:12px;margin-top:32px">Nekko Labs LLC · <a href="mailto:hello@nekkoagent.com" style="color:#5d5970">hello@nekkoagent.com</a> · <a href="${escape(unsubscribe)}" style="color:#5d5970">Unsubscribe</a></p>
+<p style="margin:28px 0"><a href="${escape(confirm)}" style="background:linear-gradient(115deg,#190019,#3a1438);color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;display:inline-block">Confirm I want to join</a></p>
+<p style="color:#52525e;font-size:14px">The link works once and expires in ${LINK_DAYS} days. If you didn't sign up, ignore this email and we won't write again.</p>
+<p style="color:#52525e;font-size:12px;margin-top:32px">Nekko Labs LLC · <a href="mailto:hello@nekkoagent.com" style="color:#52525e">hello@nekkoagent.com</a> · <a href="${escape(unsubscribe)}" style="color:#52525e">Unsubscribe</a></p>
 </div></body></html>`;
   return { html, text };
 }
@@ -164,11 +164,12 @@ export function page(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escape(title)} · Nekko Agent</title>
 <style>
-:root{--ink:#17151f;--muted:#5d5970;--bg:#fbfaff;--accent:#453a92}
-@media (prefers-color-scheme:dark){:root{--ink:#f3f1fb;--muted:#aaa5bf;--bg:#121019;--accent:#9d8ce6}}
+:root{--ink:#000000;--muted:#52525e;--bg:#fbf6f8;--accent:#5a2352}
+@media (prefers-color-scheme:dark){:root{--ink:#ffffff;--muted:#a3a1b0;--bg:#0c0c11;--accent:#c99bb3}}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter Tight',system-ui,-apple-system,'Segoe UI',sans-serif;display:grid;place-items:center;min-height:100vh}
 main{max-width:460px;padding:32px 20px;text-align:center}
-h1{font-size:28px;margin:0 0 12px;background:linear-gradient(110deg,#453a92,#9d8ce6);-webkit-background-clip:text;background-clip:text;color:transparent}
+h1{font-size:28px;margin:0 0 12px;background:linear-gradient(110deg,#5a2352,#c084b5);-webkit-background-clip:text;background-clip:text;color:transparent}
+@media (prefers-color-scheme:dark){h1{background-image:linear-gradient(110deg,#854f6c,#e6d0dc)}}
 p{color:var(--muted);line-height:1.5}a{color:var(--accent)}
 </style></head><body><main><h1>${escape(title)}</h1>${body}<p><a href="https://nekkoagent.com">nekkoagent.com</a></p></main></body></html>`;
 }

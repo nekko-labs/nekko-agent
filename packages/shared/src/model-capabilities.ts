@@ -1,18 +1,11 @@
 import type { EffortLevel } from './settings.js';
+import type { ModelEffort } from './models.js';
 
 /**
- * What a model can do, read off its id.
- *
- * Two facts the app kept guessing in different places, and getting wrong in
- * both: how much context a Claude model holds (every current one holds 1M, but
- * the catalog said 200k, so the gauge read "4.45k / 200k" against a window five
- * times that size), and which effort levels it takes (the menu offered three
- * generic ones, while Opus takes five and Opus 5.5 defaults to a different one
- * than Opus 5). Both are decided here, once, so the catalog, the gauge, the
- * effort menu and the request agree.
- *
- * Parsed by family and version rather than by a list of ids, so a model released
- * after this build still lands on the right side of each rule.
+ * Live provider metadata owns native effort choices. Context-window estimates,
+ * sampling-shape detection, and legacy saved-setting compatibility still use
+ * model-id heuristics when live information is unavailable. Those heuristics
+ * are not evidence of a provider's supported effort ladder.
  */
 
 interface ClaudeId {
@@ -91,33 +84,26 @@ export function usesNativeEffort(modelId: string | undefined): boolean {
   return atLeast(c, 4, 7);
 }
 
-/** The generic scale for models steered by temperature. */
-const TEMPERATURE_LEVELS: EffortLevel[] = ['low', 'normal', 'high'];
-/** Anthropic's full ladder, as the 4.7 generation onwards takes it. */
-const CLAUDE_LEVELS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-/** OpenAI reasoning rungs supported by the request adapters; normal omits the rung. */
-const OPENAI_LEVELS: EffortLevel[] = ['low', 'medium', 'normal', 'high'];
-
 function isOpenAIReasoning(modelId: string | undefined): boolean {
   return /(?:^|[-_/ .])(?:o[134](?:-|$)|gpt-?(?:[5-9]|\d{2,})(?:[.\-]|$)|gpt-oss|codex)/i.test(modelId ?? '');
 }
 
 /**
- * The effort levels worth offering for a model, lowest first.
- *
- * `normal` is not in the Claude ladder: it means "the model's own default",
- * which the menu offers separately so the user can see which rung that is.
+ * Native effort choices are provider-owned, never guessed from a model id.
+ * Missing metadata yields no advertised choices. `normal` remains an internal
+ * compatibility sentinel, not a menu option. The id parameter is retained for callers.
  */
-export function modelEffortLevels(modelId: string | undefined): EffortLevel[] {
-  if (usesNativeEffort(modelId)) return CLAUDE_LEVELS;
-  return isOpenAIReasoning(modelId) ? OPENAI_LEVELS : TEMPERATURE_LEVELS;
+export function modelEffortLevels(_modelId: string | undefined, effort?: ModelEffort): EffortLevel[] {
+  return effort?.levels.map(level => level.effort) ?? [];
 }
 
 /**
- * The rung a model runs at when no effort is sent. Anthropic's default is
- * `high`, except Opus 5.5, which defaults to `medium`.
+ * API default when published, otherwise the legacy `normal` sentinel. Without
+ * metadata, retain the historical Claude-id defaults for old saved settings.
+ * This compatibility fallback must not be presented as an API-derived default.
  */
-export function modelDefaultEffort(modelId: string | undefined): EffortLevel {
+export function modelDefaultEffort(modelId: string | undefined, effort?: ModelEffort): EffortLevel {
+  if (effort) return effort.default ?? 'normal';
   if (!usesNativeEffort(modelId)) return 'normal';
   const c = parseClaudeModel(modelId);
   if (c?.family === 'opus' && atLeast(c, 5, 5)) return 'medium';
@@ -125,17 +111,16 @@ export function modelDefaultEffort(modelId: string | undefined): EffortLevel {
 }
 
 /**
- * The saved effort setting, as this model can actually honour it.
- *
- * The setting is global and a chat can switch models, so the saved level is not
- * always one the model has: `xhigh` on a model steered by temperature, or the
- * old three-level `normal` on Opus. Each maps to the nearest rung the model does
- * have, so the menu shows what will be sent rather than what was once picked.
+ * Resolve saved settings against live choices when supplied. An unsupported
+ * setting uses the published default, or `normal` to leave the API default
+ * unspecified. Without metadata, retain legacy sampling compatibility, but
+ * never clamp explicit OpenAI native rungs to high.
  */
-export function effectiveEffort(setting: EffortLevel | undefined, modelId: string | undefined): EffortLevel {
+export function effectiveEffort(setting: EffortLevel | undefined, modelId: string | undefined, effort?: ModelEffort): EffortLevel {
   const level = setting ?? 'normal';
+  if (effort) return effort.levels.some(option => option.effort === level) ? level : effort.default ?? 'normal';
   if (usesNativeEffort(modelId)) return level === 'normal' ? modelDefaultEffort(modelId) : level;
-  if (isOpenAIReasoning(modelId)) return level === 'xhigh' || level === 'max' ? 'high' : level;
+  if (isOpenAIReasoning(modelId)) return level;
   if (level === 'medium') return 'normal';
   if (level === 'xhigh' || level === 'max') return 'high';
   return level;

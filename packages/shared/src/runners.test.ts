@@ -15,6 +15,7 @@ import {
   imageFraction,
   imageLine,
   imageStageRows,
+  missingToolsLine,
   settingsPatch,
   todayText,
   reasonText,
@@ -120,6 +121,26 @@ describe('runner helpers', () => {
     expect(slotLines(view({ available: 0 }), now)[0]).toEqual({ title: 'Slot 1 · macOS', text: 'Not available: Fewer slots are available right now.', progress: 0, dim: true });
     // A job past the max time caps at a full bar.
     expect(slotLines(view({ slots: [slot('running', { job, since: now - 99_999 })] }), now)[0].progress).toBe(1);
+  });
+
+  it('linux_slots_follow_the_macos_ones_and_say_why_they_wait', () => {
+    const job = { repo: 'o/r', runId: 1, jobId: 2, workflow: 'ci', job: 'server tests' };
+    const v = view(
+      { available: 1, linuxAvailable: 1, slots: [slot('ready'), slot('running', { guest: 'linux', job, since: now - 60 })] },
+      { macosSlots: 1, linuxSlots: 2 },
+    );
+    expect(slotLines(v, now).map((l) => [l.title, l.text, l.dim])).toEqual([
+      ['Slot 1 · macOS', 'Ready for a job', false],
+      ['Slot 2 · Linux', 'ci · server tests · 1 min', false],
+      ['Slot 3 · Linux', 'Not available: the memory macOS slots leave is used up.', true],
+    ]);
+    // A Linux VM never fills a macOS tile, whatever order the daemon lists them in.
+    const first = view({ available: 1, linuxAvailable: 1, slots: [slot('starting', { guest: 'linux' })] }, { macosSlots: 1, linuxSlots: 1 });
+    expect(slotLines(first, now).map((l) => l.text)).toEqual(['Starts a VM when a job is queued', 'Starting a VM']);
+    const none = view({ linuxAvailable: 0, linuxError: 'No Linux image yet.' }, { macosSlots: 0, linuxSlots: 1 });
+    expect(slotLines(none, now)).toEqual([{ title: 'Slot 1 · Linux', text: 'Not available: No Linux image yet.', progress: 0, dim: true }]);
+    // An older daemon sends neither field: no Linux tiles beyond the setting, all unavailable.
+    expect(slotLines(view({}, { linuxSlots: 0 }), now)).toHaveLength(1);
   });
 
   it('describes recent jobs', () => {
@@ -282,6 +303,19 @@ describe('image progress', () => {
     expect(marks(v)).toEqual(['done', 'now', 'todo']);
     // No build at all lists a full one.
     expect(imageStageRows(image({ kind: null, state: 'none', stage: null, doneStages: [] }))).toHaveLength(6);
+  });
+
+  it('adding tools lists only its own stages', () => {
+    const v = image({ kind: 'tools', stage: 'tools', doneStages: ['check'], detail: 'Installing node, gh and jq' });
+    expect(imageStageRows(v).map((r) => r.label)).toEqual(['Check this Mac', 'Install the missing tools', 'Test a boot']);
+    expect(marks(v)).toEqual(['done', 'now', 'todo']);
+    expect(imageLine(v)).toBe('Install the missing tools: Installing node, gh and jq');
+  });
+
+  it('names the missing tools in a plain sentence', () => {
+    expect(missingToolsLine(['node', 'gh'])).toBe("node and gh are missing from this Mac's runner image. Jobs that need them will fail.");
+    expect(missingToolsLine(['node', 'gh', 'jq'])).toBe("node, gh and jq are missing from this Mac's runner image. Jobs that need them will fail.");
+    expect(missingToolsLine(['gh'])).toBe("gh is missing from this Mac's runner image. Jobs that need it will fail.");
   });
 
   it('marks each stage of a running build', () => {
