@@ -287,7 +287,7 @@ function WorkspaceCardImpl({
           onOpen();
         }
       }}
-      /* Only the selected chat gets a background; status keeps its own icon. */
+      /* Selection persists; hover/focus adds a soft glow. Status keeps its icon. */
       className={`agent-chip group relative w-full cursor-pointer rounded-xl px-3 py-1 text-left transition-colors duration-150 ${isChat ? 'agent-chip-chat' : 'border border-line bg-surface hover:bg-surface-2'}`}
       data-agent-active={isActive || undefined}
       title={title}

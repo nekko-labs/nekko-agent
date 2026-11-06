@@ -3533,9 +3533,29 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-suggestions-row { display: flex; justify-content: flex-end; padding: 4px 8px 8px; }
 .composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
+/* Rows stay flat at rest; pointer/focus feedback is a wash and soft light,
+   not a raised card. The inset glow survives the group's overflow clipping. */
+.agent-chip-chat {
+  background: transparent; border: 0; box-shadow: none;
+  transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
+}
 .agent-chip-chat[data-agent-active] { background: var(--accent-soft); }
-.agent-chip-chat:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.agent-chip-chat:focus-visible {
+  background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+  box-shadow: inset 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 8px color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+@media (hover: hover) {
+  .agent-chip-chat:hover {
+    background: color-mix(in srgb, var(--accent-soft) 70%, transparent);
+    box-shadow: inset 0 0 16px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 8px color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+/* Selection remains stronger than a hover, including while it is hovered. */
+.agent-chip-chat[data-agent-active]:is(:hover, :focus-visible) {
+  background: color-mix(in srgb, var(--accent) 6%, var(--accent-soft));
+}
+@media (prefers-reduced-motion: reduce) { .agent-chip-chat { transition: none; } }
 .composer-suggestions-chip {
   display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px 0 8px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
