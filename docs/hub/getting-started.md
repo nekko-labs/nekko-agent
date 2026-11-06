@@ -167,7 +167,9 @@ The composer shows the model title without a subscription suffix. Open its menu 
 
 **Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog.
 
-Prompt-writing **Suggestions** appear in their own bottom composer row in Expert only.
+In a new chat, prompt-writing **Suggestions** appear on a separate row below the composer controls in Expert only. Ongoing chats keep Suggestions beside the microphone. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
+
+Local chats can read and write `~/.nekko-agent` without adding it as a project folder. This is the app data directory and may contain sensitive local state; normal write approvals still apply. This does not grant the rest of your home folder, change the project directory, or expose the host folder to Sandbox containers.
 
 ### Quickly filter the model picker
 

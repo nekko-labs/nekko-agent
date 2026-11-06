@@ -2144,6 +2144,7 @@ fn native_context(
         }
     });
     let mut ctx = ToolContext::new(approver);
+    ctx.app_data_root = nekko_js::home_dir().map(|home| home.join(".nekko-agent").to_string_lossy().into_owned());
     let parse = |key: &str| settings.get(key).filter(|v| !v.is_null()).cloned();
     if let Some(v) = parse("sandboxMode") {
         ctx.sandbox_mode = serde_json::from_value(v).ok()?;

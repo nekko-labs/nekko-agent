@@ -3530,6 +3530,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Prompt suggestions as one chip among the composer's actions. In a crowded
    bar it gives up its words before the model and Mode give up theirs, down to
    the grade badge. */
+.composer-suggestions-row { display: flex; justify-content: flex-end; padding: 4px 8px 8px; }
 .composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agent-chip-chat { background: transparent; border: 0; box-shadow: none; }
