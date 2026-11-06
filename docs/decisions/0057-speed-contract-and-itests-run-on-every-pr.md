@@ -44,7 +44,7 @@ one required check, and it now covers both suites.
   `build`, not after it.
 - Until the cold-chat first-paint flake (#712) is fixed, `perf` fails on
   unchanged code about half the time: 17 of the 35 queue runs that ran it on
-  2026-11-05/06 failed only on that row, and the last two nightly runs did too.
+  2026-11-05/06 failed, on that row in every log checked, and the last two nightly runs did too.
   Those PRs go red until `queue-sweeper.yml`'s one re-run or a hand re-run
   passes. That is accepted rather than weakening the 33 ms gate; fixing #712 is
   the remedy. A PR whose only red row is the cold-chat paint, and that does not
