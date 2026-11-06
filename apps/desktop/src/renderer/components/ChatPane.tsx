@@ -2038,7 +2038,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   useEffect(() => {
     if (!session) return;
     const awaitingTranscript = !!held || finalizingReply.current;
-    const interrupted = shouldShowPersistedInterruption(session.messages, streaming, awaitingTranscript, !!question);
+    // `activeRun`: a run started elsewhere is going even if this pane isn't streaming it.
+    // A `turnFailure` of null is a saved Dismiss, which outlives this pane.
+    const interrupted = session.turnFailure !== null && shouldShowPersistedInterruption(session.messages, streaming || !!session.activeRun, awaitingTranscript, !!question);
     // A stale transcript can arrive before the completed record. Retire only
     // the inferred notice, never a provider error or a user-requested stop.
     if (reconcileInterruptionNotice(errorNotice, interrupted) !== errorNotice) {
@@ -2766,7 +2768,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       <button className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink" title="Dismiss" onClick={() => {
                         setDismissedInterruption(lastMsgId ?? null);
                         setErrorNotice(null);
-                        if (session?.turnFailure) void window.nekko.setSessionOptions(sessionId, { turnFailure: null }).catch(() => {});
+                        void window.nekko.setSessionOptions(sessionId, { turnFailure: null }).catch(() => {});
                       }}>
                         <CloseIcon className="h-3 w-3" />
                       </button>

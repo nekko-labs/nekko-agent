@@ -64,6 +64,13 @@ describe('persisted interruption after completion', () => {
     expect(shouldShowPersistedInterruption(stale, false, false)).toBe(true);
     expect(shouldShowPersistedInterruption([{ id: 'cut', role: 'assistant', content: 'Partial', interrupted: true, createdAt: 1 }], false, false)).toBe(true);
   });
+  it('treats a transcript ending on a tool result as cut off, unless the turn completed', () => {
+    const stats = { providerId: 'p', modelId: 'm', inputTokens: 1, outputTokens: 1, wallMs: 1, calls: 1, stop: 'complete' as const };
+    const result = { id: 'result', role: 'tool' as const, content: '', toolResult: { toolCallId: 'call', output: 'ok' }, createdAt: 2 };
+    expect(shouldShowPersistedInterruption([...stale, result], false, false)).toBe(true);
+    expect(shouldShowPersistedInterruption([...stale, result], true, false)).toBe(false);
+    expect(shouldShowPersistedInterruption([{ ...stale[0], turnStats: stats }, result], false, false)).toBe(false);
+  });
 });
 
 describe('question waits', () => {
@@ -79,7 +86,6 @@ describe('savedTurnFailure', () => {
   const failure = { message: 'You hit your usage limit.', afterMessageId: 't' };
 
   it('brings back a failure that left no mark on the transcript', () => {
-    expect(shouldShowPersistedInterruption([tool], false, false)).toBe(false);
     expect(savedTurnFailure({ messages: [tool], turnFailure: failure })).toBe(failure.message);
   });
 
