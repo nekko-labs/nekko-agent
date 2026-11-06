@@ -969,7 +969,7 @@ export const useStore = create<UiState>((set, get) => ({
   refreshTerminals: async () => {
     try {
       const terminals = await window.nekko.listTerminals();
-      set({ terminals });
+      if (JSON.stringify(get().terminals) !== JSON.stringify(terminals)) set({ terminals });
       // Shells do not outlive the app's backend, so a restored terminal window
       // usually points at nothing; drop it instead of showing a dead pane.
       const ids = new Set(terminals.map((t) => t.id));

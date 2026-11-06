@@ -155,6 +155,10 @@ Hover over the left navigation panel, including its curved top and bottom wings,
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 
+Each terminal has its own Agents-panel row, including terminals opened beside a chat and shells that have exited. It shows the terminal-reported title and activity when available. The strip above terminal output shows working/ready/attention status, reported directory, and an observed GitHub PR link. **Refresh** fetches that PR's current state and checks; until then, the link is explicitly unverified. No terminal output is sent to a model for summaries.
+
+Claude Code users can opt into explicit tool/permission/completion signals using the [terminal hook setup](https://github.com/nekko-labs/nekko-agent/blob/main/docs/terminal-claude-hooks.md). Nekko never installs hooks or approves tools silently. Without integration signals a terminal says **Shell open**, not Working.
+
 ### Approvals and delegated work
 
 When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.

@@ -202,7 +202,15 @@ export function CommandCenterView() {
     window.nekko.pendingInput().then(setPending).catch(() => {});
     window.nekko.runningSessions().then((ids) => setRunning((r) => (ids.every((id) => r.has(id)) ? r : new Set([...r, ...ids])))).catch(() => {});
     const off = window.nekko.onTasksUpdated(setTasks);
-    return off;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      if (disposed) return;
+      await refreshTerminals();
+      if (!disposed) timer = setTimeout(poll, 3000);
+    };
+    timer = setTimeout(poll, 3000);
+    return () => { disposed = true; clearTimeout(timer); off(); };
   }, [refreshSessions, refreshTerminals]);
 
   const refreshPending = () => { window.nekko.pendingInput().then(setPending).catch(() => {}); };
@@ -382,7 +390,7 @@ export function CommandCenterView() {
     // Placed on another screen: that window opens it; nothing to add here.
     if (fresh && !(await keepNewChat(ref))) return;
     setWall((w) => openWallPane(w, kind, ref));
-    if (kind === 'chat') setSelected(ref);
+    if (kind === 'chat' || kind === 'terminal') setSelected(ref);
   };
   /** A one-click add that failed says so, instead of silently opening nothing. */
   const reportAddFailure = (e: unknown) => useStore.getState().pushToast('error', `Could not add the window: ${e instanceof Error ? e.message : String(e)}`);
@@ -406,7 +414,7 @@ export function CommandCenterView() {
     setSelected(id);
     // The agent's zone becomes the active one too.
     setWall((w) => {
-      const activeZone = id ? zoneOf(w.root, 'chat', id) ?? w.activeZone : w.activeZone;
+      const activeZone = id ? zoneOf(w.root, 'chat', id) ?? zoneOf(w.root, 'terminal', id) ?? w.activeZone : w.activeZone;
       return w.hero === id && w.activeZone === activeZone ? w : { ...w, hero: id, activeZone };
     });
   }, [setWall]);
@@ -434,9 +442,10 @@ export function CommandCenterView() {
   const panel = readAgentPanel(wall.agentPanel);
   const agentsPresent = usePanelPresence(panel.show);
   useEffect(() => {
+    if (selected && allPanes(wall.root).some((p) => p.kind === 'terminal' && p.refId === selected)) return;
     if (agentsOnWall.length === 0) { if (selected) setSelected(null); return; }
     if (!selected || !agentsOnWall.some((p) => p.refId === selected)) setSelected(agentsOnWall.find((p) => p.refId === wall.hero)?.refId ?? agentsOnWall[0].refId);
-  }, [agentsOnWall, selected, wall.hero]);
+  }, [agentsOnWall, selected, wall.hero, wall.root]);
   // An empty wall is the new-chat screen: Focused on an untouched chat (reused
   // when one exists, so emptying the wall again never piles up blank chats).
   // One attempt at a time; a failure is reported once and not retried until
