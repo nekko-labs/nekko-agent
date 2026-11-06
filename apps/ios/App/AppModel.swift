@@ -23,6 +23,9 @@ final class AppModel {
     let cloud: CloudSync
     /// This iPhone as a place chats run, on its own cloud providers (decision 0050).
     let phone: PhoneChats
+    /// GitHub, Linear, Jira and the rest, connected on this iPhone itself (decision 0058).
+    let connectors: ConnectorsModel
+    private let connectorKeychain: KeychainStore
     private let cloudKeychain: KeychainStore
     private let cloudKey: CloudDeviceKey
     let lock: AppLock
@@ -131,6 +134,13 @@ final class AppModel {
         #else
         phone = PhoneChats(secrets: phoneKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
         #endif
+        // Connector tokens have a Keychain service of their own too (decision 0058).
+        let connectorKeychain = KeychainStore(service: "dev.nekkolabs.nekkoagent.phone-connectors")
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestReset") { connectorKeychain.wipe() }
+        #endif
+        self.connectorKeychain = connectorKeychain
+        connectors = ConnectorsModel(secrets: connectorKeychain, files: offlineFiles, http: URLSessionPhoneHTTP())
         lock = AppLock(enabled: prefs.appLock)
         #if DEBUG
         // What the share extension leaves behind, without driving another app's share sheet.
@@ -620,6 +630,8 @@ final class AppModel {
         cloudKey.forget()
         cloudKeychain.wipe()
         phone.forgetAll()
+        connectors.forgetAll()
+        connectorKeychain.wipe()
         chatLists.removeAll()
         transcriptFiles.removeAll()
         offlineFiles.removeAll()

@@ -118,6 +118,7 @@ struct NekkoApp: App {
                 .environment(app.store)
                 .environment(app.cloud)
                 .environment(app.phone)
+                .environment(app.connectors)
                 .environment(app.prefs)
                 .modifier(Themed(choice: app.prefs.theme, appearance: app.store.appearance))
                 .onOpenURL { app.handle(url: $0) }
