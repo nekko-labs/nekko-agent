@@ -177,6 +177,7 @@ let toastSeq = 0;
 interface UiState {
   completionTipSessionId: string | null;
   /** A workflow run to show when the Workflows view opens (a notification click). */
+  ciRunnersFocus: boolean;
   workflowFocus: { workflowId: string; runId: string } | null;
   /** A memory note's title to open when the Memory view shows (a chat's memory card). */
   memoryFocus: string | null;
@@ -608,6 +609,7 @@ export const textScaleOf = (v: number | undefined): number =>
 
 export const useStore = create<UiState>((set, get) => ({
   completionTipSessionId: null,
+  ciRunnersFocus: false,
   workflowFocus: null,
   memoryFocus: null,
   settings: null,
