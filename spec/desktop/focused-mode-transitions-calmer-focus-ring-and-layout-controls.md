@@ -21,15 +21,29 @@ split-from: SPEC.md (2026-10-22)
 
 ## Focused workspace and panel motion refinement
 
-Implemented in the current change; 25 focused tests, desktop typecheck, production build, and hidden macOS Electron runtime checks pass. Matching 1400px/760px light/dark captures and timestamp-timed GIFs exist; the parent inspected matching stills and sampled motion frames (not a frame-rate benchmark): Focused mode hides
-individual pane title strips and removes their outer frame, so the workspace does
-not read as a floating window. Other layouts retain window controls and borders.
+Implemented in the current change; 25 focused tests, desktop typecheck, production build, and hidden macOS Electron runtime checks pass. Matching 1400px/760px light/dark captures and timestamp-timed GIFs exist; the parent inspected matching stills and sampled motion frames (not a frame-rate benchmark): Focused mode removes
+the pane's outer frame, so the workspace does not read as a floating window. (It
+hid the title strip too until 2026-11-06, see below.) Other layouts retain window
+controls and borders.
 Agents and Monitors use short reversible enter/exit transitions, with outgoing
 content inert and hidden from accessibility APIs. Reduced motion skips the delay.
 The navigation outline and its lower tail share the same short timing; labels
 reveal together near the end of expansion, without stagger or text blur. Its
 translucent tint no longer applies a backdrop blur during shape morphing.
 No profile data or external permissions change.
+
+## Title strip in Focused (2026-11-06)
+
+User intent: "in focused view the top bar with information and controls are missing add them."
+
+`[implemented; unit-tested; hidden Electron fixture checks and screenshots at 1400px in light and dark and 760px in light; packaged app and macOS not checked]`
+
+- The Focused window shows the same title strip as a Dynamic window: Nekko with its status badge, chat name, branch, Find, Changes, Files, Browser, Logs, Minimize and Complete. The window stays unframed.
+- **No window number in Focused.** User intent: "i dont need the number on the left for the focused view." The number tells tiled windows apart, and Focused shows one.
+- **Clean start is unchanged.** An untouched new chat keeps its quiet page with no strip, so the composer does not move. The strip arrives with the first send.
+- **No Zen button in Focused.** The window is already focused, so it would do nothing.
+- **The strip does not move the window.** Focused shows one window, so the strip has no grab cursor, no "Drag to move" tooltip and no drag.
+- With both side panels open in a very narrow app window (760px leaves the chat about 210px), the strip's right-hand controls clip. Their keyboard shortcuts still work.
 
 ## Subtle focus surface and push panels (2026-10-24)
 
