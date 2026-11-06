@@ -5,12 +5,13 @@ import { MODEL_LIST_TIMEOUT_MS, filteredModelGroups, isModelPickerEscape, modelR
 import type { AutoQuality, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
   AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, formatModelPriceLabel,
-  isLocalProvider, modelPricing, resolveModelAvailability, shortModelName,
+  isLocalProvider, limitsKeyFor, modelPricing, resolveModelAvailability, shortModelName,
 } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
-import { useAllProviderLimits } from '../../useLimits.js';
+import { useProviderLimitsPortfolio } from '../../useLimits.js';
 import { accountEmailOf, accountShortName, accountSiblings, providerDisplayName, useAccountEmails } from '../../accountEmails.js';
+import { ProviderUsageMeters } from './ProviderUsageMeters.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { CloudIcon, GridIcon, LaptopIcon, RouteIcon, StarIcon } from '../../icons.js';
 
@@ -91,7 +92,8 @@ export function ModelPicker({
   const [byProvider, setByProvider] = useState<Record<string, ModelInfo[] | null>>({});
   // Live usage limits for every signed-in provider, so a model that can't run
   // right now can say so instead of quietly failing on send.
-  const limitsByToken = useAllProviderLimits(providers, open);
+  const { byToken: limitsByToken, answered } = useProviderLimitsPortfolio(providers, open || expanded);
+  const limitsOf = (p: ProviderConfig) => limitsByToken[limitsKeyFor(p) ?? ''];
   // Which account each signed-in provider uses, so two plans on one vendor
   // (personal and work, say) are told apart in the chip and the list.
   const accountEmails = useAccountEmails(providers);
@@ -252,7 +254,7 @@ export function ModelPicker({
    * live usage windows for whichever account this provider signs in as.
    */
   const availabilityOf = (p: ProviderConfig, m: ModelInfo) =>
-    resolveModelAvailability({ model: m, provider: p, limits: p.tokenKey ? limitsByToken[p.tokenKey] : undefined });
+    resolveModelAvailability({ model: m, provider: p, limits: limitsOf(p) });
 
   const row = (p: ProviderConfig, m: ModelInfo, showProvider: boolean) => {
     const key = `${p.id}::${m.id}`;
@@ -285,7 +287,7 @@ export function ModelPicker({
           aria-selected={selected}
           aria-disabled={blocked}
           disabled={blocked}
-          className={`flex min-w-0 flex-1 flex-col px-3 py-1 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
+          className={`flex min-w-0 flex-1 flex-col px-3 py-1.5 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
           onClick={() => pick(p.id, m.id)}
           title={`${label.name} · ${hint}`}
         >
@@ -337,7 +339,7 @@ export function ModelPicker({
   const header = (label: string, email?: string, provider = false) => (
     <p
       className={provider
-        ? 'truncate px-3 pb-0.5 pt-2 text-xs font-semibold text-ink'
+        ? 'truncate px-3 pb-2 pt-1 text-xs font-semibold text-ink'
         : 'truncate px-3 pb-0.5 pt-1 text-xs font-medium text-ink-soft'}
       data-provider-heading={provider || undefined}
       title={email ? `${label} · ${email}` : undefined}
@@ -353,8 +355,8 @@ export function ModelPicker({
   ].filter((column) => column.providers.length > 0);
 
   const popup = (
-        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'card flex h-full min-h-0 w-full flex-col p-2 text-left' : 'card fixed z-50 flex flex-col p-2 shadow-(--shadow-float)'}>
-          <div role="group" aria-label="Model source" className="mb-1 grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-surface-2 p-0.5">
+        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'card flex h-full min-h-0 w-full flex-col p-3 text-left' : 'card fixed z-50 flex flex-col p-3 shadow-(--shadow-float)'}>
+          <div role="group" aria-label="Model source" className="mb-2 grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-surface-2 p-0.5">
             {([
               ['all', 'All', GridIcon], ['fusion', 'Fusion', RouteIcon],
               ['cloud', 'Cloud', CloudIcon], ['local', 'Local', LaptopIcon],
@@ -372,7 +374,7 @@ export function ModelPicker({
               capped so it never runs off a narrow pane. */}
           {(expanded || total > 8) && (
             <input
-              className="input mb-1 rounded-lg px-3 py-1 text-xs"
+              className="input mb-2 rounded-lg px-3 py-1 text-xs"
               placeholder="Filter models…"
               value={query}
               autoFocus={!expanded}
@@ -413,7 +415,8 @@ export function ModelPicker({
                       const g = groups.find((group) => group.provider.id === provider.id) ?? { provider, models: [] };
                       const remaining = q ? g.models : g.models.filter((m) => (favSet.has(`${g.provider.id}::${m.id}`) || !pinnedKeys.has(`${g.provider.id}::${m.id}`)));
                       const missingDefault = defaultProvider?.id === provider.id && !defaultModel && !q;
-                      if (!remaining.length && !missingDefault) return null;
+                      // Keep the account meter visible even when every model is pinned above.
+                      if (!remaining.length && !missingDefault && !(g.models.length && limitsKeyFor(g.provider))) return null;
                       // A local provider can serve models out of several folders; when
                       // the rows say where they live, group them under that heading.
                       const locs = [...new Set(remaining.map((m) => m.details?.location ?? ''))];
@@ -422,8 +425,9 @@ export function ModelPicker({
                           ? locs.map((loc) => ({ loc, models: remaining.filter((m) => (m.details?.location ?? '') === loc) }))
                           : [{ loc: '', models: remaining }];
                       return (
-                        <React.Fragment key={g.provider.id}>
+                        <div key={g.provider.id} role="group" aria-label={nameOf(g.provider)} className="mt-3 border-t border-line pt-3" data-provider-group={g.provider.id}>
                           {header(g.provider.label, accountEmailOf(g.provider, accountEmails), true)}
+                          {limitsKeyFor(g.provider) && <ProviderUsageMeters limits={limitsOf(g.provider)} answered={answered.has(limitsKeyFor(g.provider)!)} />}
                           {missingDefault && <button role="option" disabled aria-disabled="true" className="w-full px-3 py-2 text-left text-xs text-ink-faint">{settings?.defaultModelId} <span className="text-2xs">Default · {defaultStatus}</span></button>}
                           {byLoc.map(({ loc, models: ms }) => (
                             <React.Fragment key={loc || '_'}>
@@ -435,7 +439,7 @@ export function ModelPicker({
                               {ms.map((m) => row(g.provider, m, false))}
                             </React.Fragment>
                           ))}
-                        </React.Fragment>
+                        </div>
                       );
                     })}
                   </div>

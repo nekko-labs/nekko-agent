@@ -7,7 +7,7 @@ name: CI
 #                  apps (apps/ios, apps/android) skips all three: their own
 #                  workflows test them. `gate` here is what main requires;
 #                  there is no merge queue, so this is the last check before
-#                  main (decision 0057).
+#                  main (decision 0059).
 #   schedule       nightly: every job on every OS (the Linux, Windows and macOS
 #                  daemon and capture), the speed contract and the itests.
 #                  Skipped when main has not moved.

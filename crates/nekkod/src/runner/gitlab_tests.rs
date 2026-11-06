@@ -291,7 +291,7 @@ async fn queued_counts_jobs_our_tags_cover() {
         job_tags(&["nekko-cloud-mac", "gpu"]),
     ]);
     let t = rig(vec![(200, jobs)]);
-    assert_eq!(t.gl.queued(&unprotected_rec(), Guest::Macos).await.unwrap(), 2);
+    assert_eq!(t.gl.queued(&unprotected_rec(), Guest::Macos).await.unwrap().len(), 2);
     assert_eq!(
         t.http.urls(),
         vec!["GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/jobs?scope[]=pending&per_page=100"]
@@ -318,14 +318,14 @@ async fn queued_skips_unprotected_refs_when_protected_only() {
         (200, jobs),
     ]);
     let r = project_rec();
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 2, "main and the protected tag");
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 2, "main and the protected tag");
     let urls = t.http.urls();
     assert_eq!(urls[1], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/branches/main");
     assert_eq!(urls[2], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/branches/feature");
     assert_eq!(urls[3], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/tags/v1.0");
     assert_eq!(urls[4], "GET https://gitlab.com/api/v4/projects/a%2Fb%2Fc/repository/tags/v2%2Frc");
     assert_eq!(urls.len(), 6);
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 2);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 2);
     assert_eq!(t.http.urls().len(), 7, "the ref answers are cached");
 }
 
@@ -343,15 +343,15 @@ async fn protected_answers_expire_after_ten_minutes() {
         (200, json!({"protected": true})),
     ]);
     let r = project_rec();
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
     advance(599);
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
     assert_eq!(t.http.urls().len(), 3, "still cached at 599 s");
     advance(1);
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 0, "asked again at 600 s");
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 0, "asked again at 600 s");
     assert!(t.http.urls()[4].ends_with("/repository/branches/main"));
     advance(600);
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
     assert_eq!(t.gl.refs_cached(), 1, "the expired main entry was dropped");
 }
 
@@ -365,7 +365,7 @@ async fn group_queue_polls_each_listed_project() {
     if let Link::Gitlab(l) = &mut r.link {
         l.protected_only = false;
     }
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 3);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 3);
     assert_eq!(
         t.http.urls(),
         vec![
@@ -386,7 +386,7 @@ async fn group_queue_skips_a_project_it_cannot_read() {
     if let Link::Gitlab(l) = &mut r.link {
         l.protected_only = false;
     }
-    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap(), 1);
+    assert_eq!(t.gl.queued(&r, Guest::Macos).await.unwrap().len(), 1);
 }
 
 #[tokio::test]

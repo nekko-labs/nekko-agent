@@ -70,6 +70,24 @@ for console in /dev/cu.virtio*; do
   fi
 done
 
+# GitHub's runner writes each step's output to _diag/pages while the step runs (masked, as on
+# github.com), then uploads and deletes the page. Following each page onto the console gives the
+# host a live log of the job. Read as the runner user, and never through a symlink: the job owns
+# that folder, and root must not read a file for it.
+follow_pages() {
+  local pages="$1" seen="|" f
+  while :; do
+    for f in "$pages"/*.log; do
+      if [ ! -f "$f" ] || [ -L "$f" ]; then continue; fi
+      case "$seen" in *"|$f|"*) continue ;; esac
+      seen="$seen$f|"
+      # tail -f keeps the descriptor, so a page the runner deletes just goes quiet.
+      sudo -u "$NEKKO_RUNNER_USER" -H -- tail -n +1 -f "$f" 2>/dev/null &
+    done
+    sleep "$NEKKO_POLL"
+  done
+}
+
 finish() {
   if [ -n "$seed_copy" ]; then rm -f "$seed_copy"; fi
   if [ "$stay_up" != 1 ]; then
@@ -150,10 +168,14 @@ case "$name" in
     rm -f "$conf_dir/jit-config"
     seed_copy=""
     log "starting the GitHub Actions runner"
+    follow_pages "$NEKKO_RUNNER_HOME/actions-runner/_diag/pages" &
+    pages_pid=$!
     # The JIT config on argv shows in ps inside this single-tenant guest; it is single-use, so that is intended.
     launchctl asuser "$uid" sudo -u "$NEKKO_RUNNER_USER" -H -- /usr/bin/env PATH="$RUNNER_PATH" "$NEKKO_RUNNER_HOME/actions-runner/run.sh" --jitconfig "$jit"
     rc=$?
     unset jit
+    # The tails it started end with the guest, which powers off next.
+    kill "$pages_pid" 2>/dev/null
     ;;
   gitlab-runner.toml)
     seed_copy=""

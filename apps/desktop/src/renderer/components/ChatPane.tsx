@@ -1295,10 +1295,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const onGrowWhileUnpinned = useCallback(() => setShowJump(true), []);
 
   // Ctrl/Cmd+F finds in one chat: the window that has focus. With focus
-  // nowhere in a chat (the wall's composer drives a transcript window that has
-  // no keyboard focus of its own), it goes to the visible full chat, or the
-  // wall's selected transcript. The composer pane has no transcript, so it
-  // hands Ctrl+F to the transcript window it drives.
+  // nowhere in a chat (e.g. after clicking transcript text or a title bar), it
+  // goes to the wall's selected window, or the standalone full chat. Tiled wall
+  // windows are all full chats, so surface alone cannot choose one. A legacy
+  // composer-only pane hands Ctrl+F to the transcript window it drives.
   const paneShown = usePaneVisible();
   const searchTargetRef = useRef({ surface, selected, paneShown });
   searchTargetRef.current = { surface, selected, paneShown };
@@ -1313,7 +1313,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       const focusedPane = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-chat-surface]');
       const mine = focusedPane
         ? focusedPane === paneRef.current || (focusedPane.dataset.chatSurface === 'composer' && focusedPane.dataset.sessionId === sessionId)
-        : s === 'full' || sel === true;
+        : sel ?? s === 'full';
       if (!mine) return;
       e.preventDefault();
       openSearch();
@@ -3360,6 +3360,24 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
+                  {/* Suggestions ride the bar beside the microphone, so typing never grows the box. Detailed only (#1687). */}
+                  {!imageMode && expertMode && showSuggest && <div className="composer-suggestions empty:hidden" data-composer-suggestions>
+                    <PromptAnalyzer
+                      variant="chip"
+                      text={deferredDraft}
+                      sessionId={sessionId}
+                      canModelFill={hasProvider}
+                      workspaces={settings?.workspaces ?? []}
+                      contextItems={ctx?.items ?? []}
+                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
+                      onFill={({ snippet, placement }) => {
+                        setDraft((d) =>
+                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
+                        );
+                        composerRef.current?.focus();
+                      }}
+                    />
+                  </div>}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3432,24 +3450,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     {modelControls}
                   </div>
                 )}
-                {/* Suggestions get their own row at the bottom of the composer, clear of the model and send controls, in Detailed only (#1687, #1791). */}
-                {!imageMode && expertMode && showSuggest && <div className="composer-suggestions-row empty:hidden" data-composer-suggestions data-composer-suggestions-row>
-                    <PromptAnalyzer
-                      variant="chip"
-                      text={deferredDraft}
-                      sessionId={sessionId}
-                      canModelFill={hasProvider}
-                      workspaces={settings?.workspaces ?? []}
-                      contextItems={ctx?.items ?? []}
-                      activeWorkspaceIds={session ? getSessionWorkspaceIds(session) : []}
-                      onFill={({ snippet, placement }) => {
-                        setDraft((d) =>
-                          placement === 'start' ? `${snippet}\n\n${d.replace(/^\s+/, '')}` : `${d.replace(/\s+$/, '')}\n\n${snippet}`,
-                        );
-                        composerRef.current?.focus();
-                      }}
-                    />
-                </div>}
             </div>
           </div>
         </div>

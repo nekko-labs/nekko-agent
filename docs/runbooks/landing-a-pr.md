@@ -63,7 +63,7 @@ passes. With no queue, `gate` on the PR is the last check before `main`, so it
 also waits for the speed contract (`perf`, when the PR touches what it measures:
 the renderer, the Local Web UI, `packages/`, the Rust crates or `scripts/perf/`;
 `ci:perf` forces it) and the loopback itests (every PR that needs `build`)
-([decision 0057](../decisions/0057-speed-contract-and-itests-run-on-every-pr.md)).
+([decision 0059](../decisions/0059-speed-contract-and-itests-run-on-every-pr.md)).
 Both also run nightly. Until #712 is fixed, `perf` misses the cold-chat paint
 budget on unchanged code about half the time; see
 [failing checks](failing-checks.md). Do not merge with `--admin`: it skips `gate`.

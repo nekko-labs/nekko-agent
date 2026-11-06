@@ -1,6 +1,6 @@
 # 0056: No merge queue; the speed contract and itests run nightly
 
-- Status: partly superseded by [0057](0057-speed-contract-and-itests-run-on-every-pr.md) (2026-11-06): the speed contract and itests run on every PR again; the rest (no merge queue, native auto-merge, draft and `hold` disarm it) stands
+- Status: partly superseded by [0059](0059-speed-contract-and-itests-run-on-every-pr.md) (2026-11-06): the speed contract and itests run on every PR again; the rest (no merge queue, native auto-merge, draft and `hold` disarm it) stands
 - Date: 2026-11-06
 - Decided by: Philip
 

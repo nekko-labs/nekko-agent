@@ -5,7 +5,7 @@
 
 use super::github::{is_ours, plain_name};
 use super::keychain::token_key;
-use super::provider::{JobRef, Minted, Provider, ProviderError, RunnerStatus};
+use super::provider::{JobRef, Minted, Provider, ProviderError, QueuedJob, RunnerStatus};
 use super::store::{GitlabLink, Link, RunnerRecord};
 use super::vm::GITLAB_SEED;
 use nekko_cloud::vault::Vault;
@@ -544,15 +544,17 @@ impl<H: Http + 'static> Provider for GitLab<H> {
                 url: j["web_url"].as_str().unwrap_or_default().to_string(),
                 // shortcut: GitLab's merge request is not looked up, so its jobs show none.
                 pr: None,
+                // shortcut: GitLab jobs have no steps to count; its running jobs show no progress.
+                steps: None,
             })
         }))
     }
 
-    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<u32, ProviderError> {
+    async fn queued(&self, r: &RunnerRecord, guest: Guest) -> Result<Vec<QueuedJob>, ProviderError> {
         let l = link(r)?;
         let tags = guest_tags(&r.config.label, guest);
         let ours: Vec<&str> = tags.split(',').collect();
-        let mut n = 0u32;
+        let mut out = Vec::new();
         let group = matches!(r.config.scope, Scope::Org { .. });
         let list = projects(r, l);
         let mut unread = 0;
@@ -587,14 +589,26 @@ impl<H: Http + 'static> Provider for GitLab<H> {
                         continue;
                     }
                 }
-                n = n.saturating_add(1);
+                out.push(QueuedJob {
+                    job: JobRef {
+                        repo: project.to_string(),
+                        run_id: job["pipeline"]["id"].as_u64().unwrap_or_default(),
+                        job_id: job["id"].as_u64().unwrap_or_default(),
+                        workflow: job["ref"].as_str().unwrap_or_default().to_string(),
+                        job: job["name"].as_str().unwrap_or_default().to_string(),
+                        url: job["web_url"].as_str().unwrap_or_default().to_string(),
+                        ..Default::default()
+                    },
+                    created_at: job["created_at"].as_str().map(String::from),
+                    ..Default::default()
+                });
             }
         }
         // Not one project readable: an error, not an empty queue.
         if unread > 0 && unread == list.len() {
             return Err(refused(last));
         }
-        Ok(n)
+        Ok(out)
     }
 
     async fn remove(&self, r: &RunnerRecord, runner_id: u64) -> Result<(), ProviderError> {
@@ -641,6 +655,14 @@ impl<H: Http + 'static> Provider for GitLab<H> {
 
     async fn rerun(&self, r: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
         let path = format!("/projects/{}/jobs/{}/retry", enc(&job.repo), job.job_id);
+        match self.call(r, "POST", &path, None).await? {
+            (s, _) if ok(s) => Ok(()),
+            (s, _) => Err(refused(s)),
+        }
+    }
+
+    async fn cancel(&self, r: &RunnerRecord, job: &JobRef) -> Result<(), ProviderError> {
+        let path = format!("/projects/{}/jobs/{}/cancel", enc(&job.repo), job.job_id);
         match self.call(r, "POST", &path, None).await? {
             (s, _) if ok(s) => Ok(()),
             (s, _) => Err(refused(s)),

@@ -15,7 +15,7 @@
 //
 // There is no merge queue (removed 2026-11-06), so nothing runs between a PR's
 // `gate` and main: the PR is the last place to stop a speed or itest
-// regression (decision 0057, superseding 0056's nightly-only runs).
+// regression (decision 0059, superseding 0056's nightly-only runs).
 //
 // Unknown changed files (none listed, or a list at the API's 3,000-file cap) and
 // changes to CI itself fall back to every job of the tier.

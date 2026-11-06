@@ -37,7 +37,6 @@ class CardReceiver : BroadcastReceiver() {
                         ALLOW -> {
                             val callId = intent.getStringExtra(CALL) ?: return@withTimeout
                             app.computers.caller.call(Channels.TOOL_APPROVE, JsonPrimitive(sessionId), JsonPrimitive(callId), JsonPrimitive(true))
-                            app.connection.notices.clear(sessionId)
                         }
                         STOP -> app.computers.caller.call(Channels.CHAT_ABORT, JsonPrimitive(sessionId))
                     }

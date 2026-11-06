@@ -1,4 +1,4 @@
-# 0057: The speed contract and itests run on every PR
+# 0059: The speed contract and itests run on every PR
 
 - Status: accepted (supersedes [0056](0056-no-merge-queue-speed-contract-and-itests-run-nightly.md)'s nightly-only speed contract and itests; the rest of 0056 stands)
 - Date: 2026-11-06

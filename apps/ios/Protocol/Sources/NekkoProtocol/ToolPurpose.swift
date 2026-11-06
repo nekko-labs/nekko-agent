@@ -34,6 +34,36 @@ public struct PurposeHeadline: Sendable, Equatable {
 }
 
 public enum Purpose {
+    /// SF Symbol for the work, independent of whether it is running or finished.
+    /// Matches desktop's purposeIconKind, including homogeneous read/list runs.
+    public static func icon(_ purpose: ToolPurpose, _ calls: [PurposeCall]) -> String {
+        func fallback(_ purpose: ToolPurpose) -> String {
+            switch purpose {
+            case .guidance: return "doc.text"
+            case .explore: return "magnifyingglass"
+            case .edit: return "pencil"
+            case .check: return "checkmark"
+            case .run: return "terminal"
+            case .git: return "arrow.triangle.branch"
+            case .web: return "globe"
+            case .plan: return "list.bullet"
+            default: return "wrench.and.screwdriver"
+            }
+        }
+        let icons = calls.map { call in
+            let name = call.name.hasPrefix("functions.") ? String(call.name.dropFirst(10)) : call.name
+            let normalized = key(name)
+            let kind = of(name: name, input: call.input)
+            if [.check, .git, .edit, .web, .plan].contains(kind) { return fallback(kind) }
+            if shell.contains(normalized) { return "terminal" }
+            if kind == .guidance || read.contains(normalized) { return "doc.text" }
+            if list.contains(normalized) { return "folder" }
+            return fallback(kind)
+        }
+        if let first = icons.first, icons.allSatisfy({ $0 == first }) { return first }
+        return fallback(purpose)
+    }
+
     // MARK: Tool names
 
     /// Tool names compared without case, `_`, `-` or spaces: `read_file`, `Read` and `ReadFile` alike.

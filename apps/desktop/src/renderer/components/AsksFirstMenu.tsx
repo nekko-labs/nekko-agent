@@ -3,14 +3,14 @@ import { createPortal } from 'react-dom';
 import { getExecutionMode, type ChatMode, type Session } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { saveSettings } from '../settingsIndex.js';
-import { BoltIcon, CheckIcon, HandIcon, ShieldCheckIcon } from '../icons.js';
+import { CheckIcon, HandIcon, ShieldCheckIcon, YoloIcon } from '../icons.js';
 import { usePopover } from './ModeViews.js';
 
-/** The tool policy in plain words. Same values, behaviour and icons as Expert's Mode panel (its Approvals tiles). */
+/** The tool policy in plain words. Same values and behaviour as Expert's Mode panel; its Approvals tiles' icons, except the hands-up emoji for yolo. */
 export const ASKS_FIRST: ReadonlyArray<{ mode: ChatMode; label: string; hint: string; icon: (p: { className?: string }) => React.ReactElement }> = [
   { mode: 'ask', label: 'Asks first', hint: 'Checks with you before it changes a file or runs a command.', icon: HandIcon },
   { mode: 'guardrails', label: 'Asks when it matters', hint: 'Reads and looks around freely, and asks before anything else.', icon: ShieldCheckIcon },
-  { mode: 'yolo', label: 'Works on its own', hint: 'Runs everything, except what your rules block.', icon: BoltIcon },
+  { mode: 'yolo', label: 'Works on its own', hint: 'Runs everything, except what your rules block.', icon: YoloIcon },
 ];
 
 /** Wide enough that each hint sits on one line; the floating menu narrows it to fit a small window. */
@@ -36,7 +36,7 @@ export function AsksFirstMenu({ session, onChange }: { session: Session; onChang
   return (
     <>
       <button ref={pop.anchor} type="button" className="ctl-menu min-w-0 whitespace-nowrap" data-asks-first={mode} disabled={sandbox} aria-haspopup="menu" aria-expanded={pop.open} title={sandbox ? 'A sandbox always asks first' : current.hint} onClick={() => pop.setOpen((o) => !o)}>
-        <HandIcon className="h-3 w-3 shrink-0 text-ink-faint" />
+        <current.icon className="h-3 w-3 shrink-0 text-ink-faint" />
         <span className="min-w-0 truncate text-ink">{current.label}</span>
         <span className="ctl-caret">▾</span>
       </button>

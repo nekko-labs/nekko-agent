@@ -7,7 +7,7 @@ What to do when a required check is red, on your PR or on `main`, and how long t
 The repo's required check is `gate`, which passes when every job its run needed
 passed. CI runs in two tiers (`scripts/ci-scope.mjs`); there is no merge queue
 (decision 0056), so `gate` on the PR also waits for the speed contract and the
-itests (decision 0057):
+itests (decision 0059):
 
 | Tier | When | Runs |
 | --- | --- | --- |

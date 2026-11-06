@@ -70,8 +70,11 @@ private struct AutomaticMachineFixture: View {
         .task {
             guard !ready else { return }
             store.load()
-            let hostKey = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="
+            // Two computers, two host keys: a known host key is the same computer re-paired.
+            let hostKeys = ["bbbb": "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE=",
+                            "aaaa": String(repeating: "A", count: 87) + "="]
             for (room, name) in [("bbbb", "Studio Mac"), ("aaaa", "MacBook")] {
+                let hostKey = hostKeys[room]!
                 let link = PairingLink(relayUrl: "wss://fixture.invalid", room: room,
                                        key: "00112233445566778899aabbccddeeff", hostKey: hostKey, pair: nil)
                 if let id = try? await store.pair(link) { store.rename(id, to: name) }

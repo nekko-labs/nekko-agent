@@ -24,7 +24,7 @@ import type { DesignBoard, DesignPage, GenerateDesignInput } from './design.js';
 import type { AutomationTask, NewTask } from './tasks.js';
 import type { TrainingRun, NewTrainingRun } from './training.js';
 import type { NewWorkflow, Workflow, WorkflowEvent, WorkflowRun, WorkflowsSnapshot } from './workflows.js';
-import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
+import type { ConnectRequest, ForkApproval, GithubAccounts, GithubSetupView, GithubStartRequest, ImageBuildRequest, ImagePlan, ImageView, JobAction, LinuxImageView, RunnerSettings, RunnerView } from './runners.js';
 import type { ConnectorConfig, ConnectorKind, ConnectorResource } from './connectors.js';
 import type {
   AgentToolId,
@@ -149,6 +149,8 @@ export const IpcChannels = {
   chatSend: 'chat:send',
   chatGenerateImage: 'chat:generateImage',
   sessionImages: 'session:images',
+  /** A phone opening one photo a user attached, full size (`session:photo`, served by the daemon). */
+  sessionPhoto: 'session:photo',
   chatAbort: 'chat:abort',
   chatCompact: 'chat:compact',
   chatCancelCompaction: 'chat:cancelCompaction',
@@ -354,6 +356,10 @@ export const IpcChannels = {
   runnerJobLog: 'runner:jobLog',
   /** What a recent job's VM wrote to its console, kept by nekkod. */
   runnerVmLog: 'runner:vmLog',
+  /** The end of a running VM's console: its boot, then the job's output as it runs. */
+  runnerLiveLog: 'runner:liveLog',
+  /** Decline, accept or undo a queued job; cancel or restart a running one; re-run a recent one. */
+  runnerJob: 'runner:job',
   /** The click-through GitHub connect, confirmed through `runner:connect`. */
   runnerGithubAccounts: 'runner:githubAccounts',
   runnerGithubStart: 'runner:githubStart',
@@ -1148,6 +1154,10 @@ export interface NekkoApi {
   runnerJobLog(id: string, jobId: number): Promise<string>;
   /** A recent job's VM console log, by the line's `vm`; rejects with a sentence. */
   runnerVmLog(id: string, vm: string): Promise<string>;
+  /** A running slot's console so far, by the slot's `vm`; rejects with a sentence. */
+  runnerLiveLog(id: string, vm: string): Promise<string>;
+  /** Acts on a job the runner's view lists; rejects with a sentence. */
+  runnerJob(id: string, action: JobAction, repo: string, jobId: number): Promise<null>;
   /** Accounts `gh` is signed in to; empty without `gh`. */
   githubAccounts(): Promise<GithubAccounts>;
   /** `url` is the page to open in the browser, or null when GitHub has nothing left to do. */

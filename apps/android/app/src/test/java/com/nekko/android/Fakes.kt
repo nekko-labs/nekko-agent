@@ -62,6 +62,7 @@ open class FakeCaller(
 class FakeRemote(val config: RelayConfig, handler: suspend (Call) -> JsonElement) : FakeCaller(handler), Remote {
     override val status = MutableStateFlow(RelayStatus(RelayState.IDLE))
     override val events = MutableSharedFlow<Pair<String, JsonElement>>(extraBufferCapacity = 64)
+    override val dismissals = MutableSharedFlow<String>(extraBufferCapacity = 64)
     override val welcome = MutableSharedFlow<WelcomedDevice>(replay = 1, extraBufferCapacity = 1)
     var connected = false
     var closed = false
