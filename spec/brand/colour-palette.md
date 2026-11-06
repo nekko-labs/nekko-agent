@@ -15,7 +15,7 @@ The reference for every colour in the Nekko and Indigo app themes, the app icon 
 |---|---|---|
 | **Plum** (main, Nekko) | `#190019` | Main buttons, the app icon tile, website download button, big fills. Too dark for text or thin lines on dark backgrounds. |
 | **Indigo** (main, Indigo theme) | `#2B124C` | Same role as plum, in the Indigo themes only. |
-| **Secondary** | `#854F6C` | Outlines, glows, the icon mark, the cat on the website, wash gradients, chart/dot-wave ends. Not for small text on dark (2.9:1). |
+| **Secondary** | `#854F6C` | Outlines, glows, installer marks, the cat on the website, wash gradients, chart/dot-wave ends. Not for small text on dark (2.9:1). |
 | **Secondary, light** | `#C99BB3` | The secondary as **small text on dark** (7.6:1): links, labels, merged-PR text in Dark. |
 | **Text, dark mode** | `#FFFFFF` | All body text in Dark. |
 | **Text, light mode** | `#000000` | All body text in Light. |
@@ -72,7 +72,9 @@ The Nekko and Indigo themes use the standard Light and Dark surfaces unchanged; 
 Plum in every theme (there is no indigo icon).
 
 - **Tile:** left-to-right gradient `#190019` to `#5A2352`, rounded square.
-- **Mark (the cat):** `#854F6C`.
+- **Mark (the cat):** white `#FFFFFF` (implemented in #1943); geometry and the plum tile gradient are unchanged.
+- **Installer banners:** keep the original plum `#854F6C` cat, text and edge stripe, not the white app-icon mark. The generator selects installer ink explicitly (#2003). Non-icon brand marks keep their existing plum treatments.
+- **Implemented and tested (#2003):** regression tests cover white app-icon output at nine sizes, explicit ink for fill and small-size strokes, and exact header/sidebar SVG equality with the pre-#1943 generator, including supersampled dimensions. No visual change to current UI or installers: committed icon and installer assets are not regenerated or changed. This restores future banner regeneration to the original plum art, not a new design. Cross-platform raster reproducibility and native launcher/installer appearance are not verified by this source-only follow-up.
 - Source of truth: `apps/desktop/scripts/icon-art.cjs`; regenerate with `npx electron apps/desktop/scripts/make-icons.cjs`.
 
 ## Base looks and other brand surfaces

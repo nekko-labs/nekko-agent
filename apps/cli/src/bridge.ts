@@ -34,6 +34,69 @@ export const APPROVE_TOOL = {
   },
 };
 
+/**
+ * Nekko Agent's durable watch, offered to a Claude Code chat only when nekkod
+ * passes `--tools agent_watch`: it does so where the Claude policy allows Nekko
+ * tools and unattended wake-ups for the chat's sign-in (an API key or a cloud
+ * account; on a Claude plan only with the user's recorded approval). nekkod
+ * checks the policy again on every call.
+ */
+export const WATCH_TOOL = {
+  name: 'agent_watch',
+  description:
+    "Nekko Agent's durable watch: wakes this chat later, even after you end your turn, Claude Code exits, or the app restarts (while Nekko Agent runs). " +
+    'Use it before ending a turn that waits on background work you do not control, such as PR checks or a review: kind=pr wakes once when the PR changes (state, checks, review, draft) or at timeout_seconds; kind=timer wakes once after delay_seconds. ' +
+    'Do everything that does not depend on the result first (tests, evidence, docs), then arm the watch with a concrete continuation prompt. ' +
+    'Report the watch id and wake condition only after it was armed; on wake, check the current state and re-arm if you still need to wait. ' +
+    'List or cancel this chat\'s watches with action=list or action=cancel. Never use it to wait out a user decision, a missing permission or credential, or evidence only the user can provide. It grants no new permissions.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['create', 'list', 'cancel'] },
+      kind: { type: 'string', enum: ['timer', 'pr'] },
+      prompt: { type: 'string', description: 'Concrete continuation instruction; no new authority is granted.' },
+      url: { type: 'string', description: 'GitHub PR URL for a pr watch.' },
+      delay_seconds: { type: 'number', description: 'Timer delay (60 seconds to 7 days); default 300.' },
+      timeout_seconds: { type: 'number', description: 'PR maximum wait before waking for a status check (60 seconds to 7 days); default 3600.' },
+      id: { type: 'string', description: 'Watch id to cancel, owned by this chat.' },
+    },
+    required: ['action'],
+  },
+};
+
+/** The Nekko tools a bridge may be told to offer, by name. */
+const NEKKO_TOOLS = { [WATCH_TOOL.name]: WATCH_TOOL } as const;
+
+/** `--tools a,b`: the known Nekko tools nekkod asked this bridge to offer. */
+export function offeredTools(flag: string | undefined): (typeof WATCH_TOOL)[] {
+  const names = (flag ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  return [...new Set(names)].flatMap((n) => (n in NEKKO_TOOLS ? [NEKKO_TOOLS[n as keyof typeof NEKKO_TOOLS]] : []));
+}
+
+export type ToolAnswer = { ok: true; text: string } | { ok: false; error: string };
+
+/** Run one Nekko tool through nekkod. Never throws: a failure is an error result. */
+export async function callNekkod(
+  url: string,
+  token: string,
+  call: { name: string; input: Record<string, unknown> },
+  fetchImpl: typeof fetch = fetch,
+): Promise<ToolAnswer> {
+  try {
+    const res = await fetchImpl(`${url.replace(/\/$/, '')}/harness/tool`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(call),
+    });
+    if (!res.ok) return { ok: false, error: `Nekko Agent refused the tool call (HTTP ${res.status}).` };
+    const answer = (await res.json()) as { ok?: unknown; text?: unknown; error?: unknown };
+    if (answer.ok === true && typeof answer.text === 'string') return { ok: true, text: answer.text };
+    return { ok: false, error: typeof answer.error === 'string' ? answer.error : 'Nekko Agent gave no usable answer.' };
+  } catch (e) {
+    return { ok: false, error: `Could not reach Nekko Agent (${(e as Error).message}).` };
+  }
+}
+
 export type BridgeDecision =
   | { behavior: 'allow'; updatedInput: Record<string, unknown> }
   | { behavior: 'deny'; message: string };
@@ -69,6 +132,8 @@ export async function askNekkod(
 export async function handleBridgeMessage(
   msg: { id?: unknown; method?: string; params?: any },
   ask: (prompt: Record<string, unknown>) => Promise<BridgeDecision>,
+  tools: (typeof WATCH_TOOL)[] = [],
+  run: (call: { name: string; input: Record<string, unknown> }) => Promise<ToolAnswer> = async () => ({ ok: false, error: 'Not offered.' }),
 ): Promise<unknown | undefined> {
   const { id, method, params } = msg;
   const ok = (result: unknown) => ({ jsonrpc: '2.0', id, result });
@@ -79,7 +144,12 @@ export async function handleBridgeMessage(
   }
   if (typeof method === 'string' && method.startsWith('notifications/')) return undefined;
   if (method === 'ping') return ok({});
-  if (method === 'tools/list') return ok({ tools: [APPROVE_TOOL] });
+  if (method === 'tools/list') return ok({ tools: [APPROVE_TOOL, ...tools] });
+  if (method === 'tools/call' && tools.some((t) => t.name === params?.name)) {
+    const input = params?.arguments && typeof params.arguments === 'object' ? (params.arguments as Record<string, unknown>) : {};
+    const answer = await run({ name: String(params.name), input });
+    return ok(answer.ok ? { content: [{ type: 'text', text: answer.text }] } : { content: [{ type: 'text', text: answer.error }], isError: true });
+  }
   if (method === 'tools/call') {
     const decision =
       params?.name === APPROVE_TOOL.name
@@ -91,11 +161,14 @@ export async function handleBridgeMessage(
   return { jsonrpc: '2.0', id, error: { code: -32601, message: `Unknown method: ${method}` } };
 }
 
-export function runBridgeServer(opts: { token?: string; url?: string }): void {
+export function runBridgeServer(opts: { token?: string; url?: string; tools?: string }): void {
   console.log = (...a: unknown[]) => console.error(...a);
   const { token, url } = opts;
   const ask = (prompt: Record<string, unknown>) =>
     token && url ? askNekkod(url, token, prompt) : Promise.resolve(deny('The approval bridge was started without its token or address.'));
+  const tools = token && url ? offeredTools(opts.tools) : [];
+  const run = (call: { name: string; input: Record<string, unknown> }) =>
+    token && url ? callNekkod(url, token, call) : Promise.resolve<ToolAnswer>({ ok: false, error: 'The bridge was started without its token or address.' });
   const send = (msg: unknown) => process.stdout.write(JSON.stringify(msg) + '\n');
   let buffer = '';
   process.stdin.setEncoding('utf8');
@@ -112,7 +185,7 @@ export function runBridgeServer(opts: { token?: string; url?: string }): void {
       } catch {
         continue;
       }
-      void handleBridgeMessage(msg, ask).then((reply) => reply !== undefined && send(reply));
+      void handleBridgeMessage(msg, ask, tools, run).then((reply) => reply !== undefined && send(reply));
     }
   });
   process.stdin.on('end', () => process.exit(0));

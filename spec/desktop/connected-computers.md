@@ -41,7 +41,7 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 `[implemented 2026-11-02; picker and engine tested, not yet on real machines]`
 
 - **Run on.** New chat gets a *Run on* row once a computer is connected, as on the iPhone. Choosing one swaps the model list to that computer's models and subscriptions, and the folder list to its folders, and picks its first model so starting there is still one click. A computer that is offline, or that allows watching only, can't be chosen. A chat started there has one working folder; supporting folders stay a local feature for now.
-- **Monitors.** A switch in the dock points the Hardware monitor at a connected computer. Local models and Utilization still read this one.
+- **Monitors.** A switch in the dock points the monitors at a connected computer: Hardware, Local models and Utilization all read the one chosen. `[implemented 2026-11-06; unit tests and a hidden capture with a stand-in computer, not yet against a real one]` Local models shows what that computer's Model Server holds, by model id (its phone view has no names). Utilization lists its enabled cloud providers with their quota, read by provider id, and its token use, re-read every minute; it never shows this computer's plans beside them. A model's Settings, Open Model Server and Manage providers belong to this computer and hide while another is watched. The Expert strip that follows the computer running a chat's model moves the same switch, so the two never disagree.
 
 ## Where the model runs
 
@@ -80,4 +80,7 @@ Refused from a computer, always: provider keys and sign-ins, sync, remote-access
 
 ## Status
 
-Phases and what is left: `TASKS.md`, section *Connected computers*.
+Phases are in the design's Plan; the frozen task list is in `docs/history/tasks-archive.md`, section *Connected computers*, and what is left is tracked on #1492.
+
+- Done: messages during a run (CC0, #1516), link and host class, federation, see and drive, model sources, a host with no window, icons on phones, the host proving itself, and the monitors following the computer switch (2026-11-06).
+- Left: *Keep this computer awake while agents run* (CC4), model-loading controls on any client and the guarded options on phones (CC6), pairing without pasting (CC8).
