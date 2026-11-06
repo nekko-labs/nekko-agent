@@ -80,6 +80,9 @@ final class Prefs {
     var paneTipShown: Bool { didSet { d.set(paneTipShown, forKey: "paneTipShown") } }
     /// The note that the panes were made without a foldable to test on was dismissed (on this device).
     var foldNoteDismissed: Bool { didSet { d.set(foldNoteDismissed, forKey: "foldNoteDismissed") } }
+    /// "Don't warn me again" on the YOLO warning (decision 0054). On this device
+    /// only, not the computer's setting; Settings > Warn before YOLO turns it back off.
+    var skipYoloWarning: Bool { didSet { d.set(skipYoloWarning, forKey: YoloWarning.skipKey) } }
 
     init(defaults: UserDefaults = .standard) {
         d = defaults
@@ -122,6 +125,7 @@ final class Prefs {
         paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
         paneTipShown = flag("paneTipShown", false)
         foldNoteDismissed = flag("foldNoteDismissed", false)
+        skipYoloWarning = flag(YoloWarning.skipKey, false)
         // On unless the user turned them off: an install that never touched a switch has nothing stored.
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))

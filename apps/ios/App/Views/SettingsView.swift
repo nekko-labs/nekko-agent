@@ -90,6 +90,8 @@ struct SettingsView: View {
     @Environment(\.palette) private var palette
     @State private var confirmWipe = false
     @State private var error: String?
+    /// A switch of the default for new chats to YOLO, waiting on the warning.
+    @State private var yoloAsk: YoloAsk?
     @State private var testing = false
     @State private var testResult: (text: String, ok: Bool)?
     @State private var sendingFeedback = false
@@ -123,6 +125,9 @@ struct SettingsView: View {
                         Task { if await app.lock.confirmDisable() { prefs.appLock = false; app.lock.disable() } }
                     }
                 }))
+                // The YOLO warning (decision 0054): "Don't warn me again" turns it off on this iPhone only.
+                Toggle("Warn before YOLO", isOn: Binding(get: { !prefs.skipYoloWarning }, set: { prefs.skipYoloWarning = !$0 }))
+                    .accessibilityIdentifier("settings.warnBeforeYolo")
                 if store.active != nil {
                     // SK-6: the active computer's step-up (security keys, passkeys, codes).
                     NavigationLink(value: Route.security) {
@@ -211,7 +216,9 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Tools in new chats").accessibilityHidden(true)
                         Picker("Tools in new chats", selection: Binding(get: { store.pcSettings.effectiveMode }, set: { m in
-                            Task { do { try await store.updatePcSettings(PcSettings.patch(mode: m)) } catch { self.error = error.localizedDescription } }
+                            yoloAsk = prefs.gateYolo(from: store.pcSettings.effectiveMode, to: m) {
+                                Task { do { try await store.updatePcSettings(PcSettings.patch(mode: m)) } catch { self.error = error.localizedDescription } }
+                            }
                         })) {
                             ForEach(PcSettings.ChatMode.allCases, id: \.self) { Text(modeName($0)).tag($0) }
                         }
@@ -266,6 +273,7 @@ struct SettingsView: View {
         }
         .appBackground()
         .navigationTitle("Settings")
+        .yoloWarning($yoloAsk)
         .sheet(isPresented: $sendingFeedback) { FeedbackSheet() }
         .sheet(isPresented: $voiceIntro.showing, onDismiss: { voiceIntro.closed(app.prefs) {} }) { VoiceIntroView() }
         .confirmationDialog("Forget all computers and keys?", isPresented: $confirmWipe, titleVisibility: .visible) {

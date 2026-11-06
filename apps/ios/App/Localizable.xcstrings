@@ -3735,6 +3735,46 @@
         }
       }
     },
+    "Allows this call and stops asking for this tool in this chat. Other tools still ask.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erlaubt diesen Aufruf und fragt in diesem Chat nicht mehr nach diesem Tool. Andere Tools fragen weiterhin."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite esta llamada y deja de preguntar por esta herramienta en este chat. Las demás herramientas siguen preguntando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorise cet appel et ne demande plus pour cet outil dans cette discussion. Les autres outils demandent toujours."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この呼び出しを許可し、このチャットではこのツールについて確認しなくなります。他のツールは引き続き確認します。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite esta chamada e deixa de perguntar sobre esta ferramenta neste chat. As outras ferramentas continuam perguntando."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许此次调用，并在此聊天中不再就此工具询问。其他工具仍会询问。"
+          }
+        }
+      }
+    },
     "Also shown in Simple while a local model is loaded": {
       "localizations": {
         "de": {
@@ -3771,6 +3811,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "加载本地模型时，简单模式下也会显示"
+          }
+        }
+      }
+    },
+    "Always allow this tool": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Tool immer erlauben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir siempre esta herramienta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toujours autoriser cet outil"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このツールを常に許可"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sempre permitir esta ferramenta"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终允许此工具"
           }
         }
       }
@@ -7815,6 +7895,46 @@
         }
       }
     },
+    "Don’t warn me again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht mehr warnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No volver a avisarme"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne plus m’avertir"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今後は警告しない"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não me avisar de novo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不再提醒我"
+          }
+        }
+      }
+    },
     "Fill in %@.": {
       "localizations": {
         "de": {
@@ -8055,6 +8175,46 @@
         }
       }
     },
+    "Guardrails asks only when it matters, and is the recommended mode.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leitplanken fragt nur, wenn es wichtig ist, und ist der empfohlene Modus."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvaguardas pregunta solo cuando importa y es el modo recomendado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Garde-fous ne demande que quand c’est important, et c’est le mode recommandé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ガードレールは必要なときだけ確認する、おすすめのモードです。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proteções pergunta só quando importa e é o modo recomendado."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "防护规则只在重要时询问，是推荐的模式。"
+          }
+        }
+      }
+    },
     "In Projects": {
       "localizations": {
         "de": {
@@ -8171,6 +8331,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "它的令牌将从这台 iPhone 上删除。"
+          }
+        }
+      }
+    },
+    "Keep asking": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter fragen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seguir preguntando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuer à demander"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認を続ける"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar perguntando"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续询问"
           }
         }
       }
@@ -31971,6 +32171,46 @@
         }
       }
     },
+    "The agent will run commands, edit files, fetch addresses and call tools without asking you first. A web page, search result or tool output it reads can carry instructions, and in YOLO nothing stops them from sending your files or data out of this computer. Your deny rules still block.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Agent führt Befehle aus, bearbeitet Dateien, ruft Adressen ab und nutzt Tools, ohne dich vorher zu fragen. Eine Webseite, ein Suchergebnis oder eine Tool-Ausgabe, die er liest, kann Anweisungen enthalten, und in YOLO hindert nichts sie daran, deine Dateien oder Daten von diesem Computer nach außen zu senden. Deine Verbotsregeln blockieren weiterhin."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El agente ejecutará comandos, editará archivos, consultará direcciones y usará herramientas sin preguntarte antes. Una página web, un resultado de búsqueda o la salida de una herramienta que lea puede contener instrucciones, y en YOLO nada impide que envíen tus archivos o datos fuera de este ordenador. Tus reglas de denegación siguen bloqueando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’agent exécutera des commandes, modifiera des fichiers, consultera des adresses et appellera des outils sans vous demander d’abord. Une page web, un résultat de recherche ou la sortie d’un outil qu’il lit peut contenir des instructions, et en YOLO rien ne les empêche d’envoyer vos fichiers ou vos données hors de cet ordinateur. Vos règles de refus bloquent toujours."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エージェントは事前に確認せずに、コマンドの実行、ファイルの編集、アドレスの取得、ツールの呼び出しを行います。読み込んだWebページ、検索結果、ツールの出力には指示が含まれている可能性があり、YOLOではそれらがファイルやデータをこのコンピュータの外へ送ることを止めるものがありません。拒否ルールは引き続きブロックします。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O agente vai executar comandos, editar arquivos, acessar endereços e chamar ferramentas sem perguntar antes. Uma página da web, um resultado de pesquisa ou a saída de uma ferramenta que ele lê pode conter instruções, e no YOLO nada impede que elas enviem seus arquivos ou dados para fora deste computador. Suas regras de bloqueio continuam bloqueando."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代理会运行命令、编辑文件、访问地址并调用工具，而不会先询问你。它读取的网页、搜索结果或工具输出可能带有指令，而在 YOLO 模式下，没有什么能阻止这些指令把你的文件或数据发送到这台电脑之外。你的拒绝规则仍会拦截。"
+          }
+        }
+      }
+    },
     "The Model Server is stopped.": {
       "localizations": {
         "de": {
@@ -33931,6 +34171,86 @@
         }
       }
     },
+    "Turn on YOLO": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YOLO einschalten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar YOLO"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer YOLO"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YOLOをオンにする"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativar o YOLO"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启 YOLO"
+          }
+        }
+      }
+    },
+    "Turn on YOLO?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YOLO einschalten?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Activar YOLO?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer YOLO ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YOLOをオンにしますか？"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativar o YOLO?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要开启 YOLO 吗？"
+          }
+        }
+      }
+    },
     "Turn Remote access on and choose Pair a phone to show the pairing code.": {
       "localizations": {
         "de": {
@@ -35127,6 +35447,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "等待发送：%@"
+          }
+        }
+      }
+    },
+    "Warn before YOLO": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vor YOLO warnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avisar antes de YOLO"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avertir avant YOLO"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "YOLOの前に警告"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avisar antes do YOLO"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启 YOLO 前提醒"
           }
         }
       }
@@ -36527,6 +36887,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "昨天"
+          }
+        }
+      }
+    },
+    "You can turn the warning back on in Settings.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst die Warnung in den Einstellungen wieder einschalten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes volver a activar el aviso en Ajustes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pouvez réactiver l’avertissement dans Paramètres."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告は設定でもう一度オンにできます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você pode reativar o aviso em Configurações."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你可以在设置中重新开启此提醒。"
           }
         }
       }
