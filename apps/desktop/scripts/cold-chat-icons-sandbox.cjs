@@ -41,14 +41,18 @@ app.whenReady().then(async () => {
     await run(`document.querySelector('#icon-4').click()`);
     await check('reduced motion stops running icons and refuses new motion', 'icons.states().every(s => s.paused && s.time < .001)');
     await shot('reduced');
-    await run('icons.clear(); icons.render(true)');
+    await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+    await sleep(100);
+    await run(`document.querySelector('#icon-0').click(); icons.clear(); icons.render(true)`);
     report.nameChange = await run('({ calls: [...icons.calls], states: icons.states() })');
-    await check('changing icon name starts the replacement at rest', 'icons.states().every(s => s.paused && s.time < .001)');
-    await run('icons.clear(); icons.unmount()');
+    await check('changing an actively playing icon starts the replacement at rest', 'icons.states().every(s => s.paused && s.time < .001)');
+    await run(`document.querySelector('#icon-0').click(); icons.clear(); icons.unmount()`);
     report.unmount = await run('[...icons.calls]');
     await check('unmount removes every SVG', '!document.querySelector("svg")');
-    await sleep(1200);
+    await sleep(3200);
     report.afterUnmount = await run('[...icons.calls]');
+    if (JSON.stringify(report.unmount) !== JSON.stringify(report.afterUnmount)) report.failed.push('no timer callback may touch an unmounted SVG');
+    else report.checks.push('no timer callback touches an unmounted SVG');
     report.window = { visible: win.isVisible(), focused: win.isFocused() };
     if (win.isVisible() || win.isFocused()) throw Error('Fixture became visible or focused');
   } catch (e) { report.errors.push(String(e.stack || e)); }
