@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { ApprovalBar, handleApprovalKey, isTruncated, needsFullTextToggle } from './ApprovalBar.js';
+import { ApprovalBar, approvalNeedsYoloConfirmation, handleApprovalKey, isTruncated, needsFullTextToggle } from './ApprovalBar.js';
+import type { ApprovalScope } from './approval-decision.js';
 
 const approval = { call: { id: 'approval', name: 'bash', input: { command: 'echo test' } }, reason: 'Confirm command', severity: 'medium' as const };
 const heredoc = "cat > notes.txt <<'EOF'\nfirst line\nsecond line\nEOF";
@@ -12,6 +13,11 @@ it('renders approval controls without automatic focus', () => {
   expect(html).toContain('Approve');
   expect(html).toContain('Allow all this session');
   expect(html).not.toContain('autofocus');
+});
+
+it.each<ApprovalScope>(['once', 'tool', 'session', 'always'])('warns only when approving a YOLO scope: %s', (scope) => {
+  expect(approvalNeedsYoloConfirmation(true, scope)).toBe(scope === 'session' || scope === 'always');
+  expect(approvalNeedsYoloConfirmation(false, scope)).toBe(false);
 });
 
 it('keeps keyboard decisions scoped to the approval surface', () => {
