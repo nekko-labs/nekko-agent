@@ -1680,7 +1680,10 @@ mod tests {
     #[test]
     fn tools_reach_a_phone_as_names_and_what_they_do() {
         let raw = json!([{ "name": "bash", "description": "Run a command", "inputSchema": { "type": "object" } }, { "name": "mcp__gh__issue" }]);
-        assert_eq!(redact("tools:list", raw), json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }]));
+        assert_eq!(
+            redact("tools:list", raw),
+            json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }])
+        );
         assert_eq!(redact("tools:list", Value::Null), json!([]));
     }
     use super::*;
