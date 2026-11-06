@@ -53,6 +53,10 @@ describe('tool activity icons', () => {
     expect(transcript).toContain('focusable="false"');
   });
 
+  it('keeps the terminal artwork out of a line box, so it centers like the other icons', () => {
+    expect(renderToStaticMarkup(<ToolActivityIcon kind="terminal" />)).toContain('<span class="flex h-3 w-3');
+  });
+
   it('renders specific icons in both the summary and individual call rows', () => {
     const html = renderToStaticMarkup(<ActivityGroup streaming items={[
       { kind: 'tool', call: { id: 'p', name: 'bash', input: { command: 'python3 report.py' } } },

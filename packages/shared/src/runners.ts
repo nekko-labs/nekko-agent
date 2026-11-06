@@ -20,6 +20,8 @@ export interface RunnerSettings {
   runnerMemoryMb: number | null;
   /** Null: the daemon picks from the Mac's cores. */
   cpusPerVm: number | null;
+  /** VMs kept booted while idle, 0 to 2. Null or missing: the mode's default (`readyVms`). */
+  readyVms?: number | null;
   diskBudgetGb: number;
   diskFloorGb: number;
   maxJobMinutes: number;
@@ -48,9 +50,36 @@ export type SlotLimit = 'appleCap' | 'otherApps' | 'memory';
 export type RunnerState = 'off' | 'waiting' | 'ready' | 'running' | 'draining' | 'cleaning' | 'error';
 export type SlotState = 'starting' | 'ready' | 'running' | 'draining' | 'cleaning';
 
-export interface JobRef { repo: string; runId: number; jobId: number; workflow: string; job: string }
+export interface PrRef { number: number; url: string }
+export interface JobRef {
+  repo: string; runId: number; jobId: number; workflow: string; job: string;
+  /** The job's page; empty when the provider gave none. Absent from older daemons. */
+  url?: string;
+  pr?: PrRef | null;
+  /** A running job's steps, refreshed every 15 s; absent when the provider lists none (GitLab). */
+  steps?: JobSteps | null;
+}
+export interface JobSteps { done: number; total: number; current: string | null }
+/** A job waiting for a runner with this one's labels. */
+export interface QueuedJob extends JobRef {
+  /** ISO 8601, as the provider wrote it. */
+  createdAt: string | null;
+  /** The owner declined it: this Mac starts no VM for it. */
+  declined: boolean;
+  /** The owner accepted it now: a VM starts for it as if the runner were in Runner first. */
+  accepted: boolean;
+}
+/** What `runner:job` does to a job: a queued one, a running one, or a recent one. */
+export type JobAction = 'decline' | 'accept' | 'undo' | 'cancel' | 'restart' | 'rerun';
+export type Guest = 'macos' | 'linux';
 export interface SlotView {
+  /** Absent from daemons before Linux slots: macOS. */
+  guest?: Guest;
   state: SlotState;
+  /** The VM's name, for `runner:liveLog`. Absent from older daemons. */
+  vm?: string;
+  /** Started for a job the owner accepted now. */
+  boosted?: boolean;
   job: JobRef | null;
   /** Unix seconds the slot entered `state`. */
   since: number;
@@ -80,6 +109,34 @@ export interface AuditLine {
   seconds: number;
   /** `Reason` names, or the daemon's own (`slept`, `maxJobTime`, ...). */
   reason: string[];
+  /** The provider's id for the job, for `runner:jobLog`. Older daemons send none of these four. */
+  jobId?: number | null;
+  url?: string | null;
+  pr?: PrRef | null;
+  /** When the VM entered each state, oldest first; `ts` is when it was deleted. */
+  events?: { ts: number; state: SlotState }[];
+  /** The VM's name when nekkod kept its console log, for `runner:vmLog`. */
+  vm?: string | null;
+  /** What a finished job used inside its VM, when its stats disk was readable. */
+  usage?: Usage;
+}
+/** One job's usage summary (CI runners, "Suggested VM size"). */
+export interface Usage {
+  cpus: number;
+  memoryMb: number;
+  cpuP95: number;
+  cpuFullShare: number;
+  memPeakMb: number;
+  compressedPeakMb: number;
+  swapOutMb: number;
+}
+/** The VM size that fits a runner's jobs at its current size; the current size when it fits or before enough jobs. */
+export interface SizeSuggestion {
+  jobs: number;
+  cpus: number;
+  memoryMb: number;
+  /** The daemon's sentences: why it changed, and any limit that held it back. */
+  reasons: string[];
 }
 export interface RunnerView {
   config: RunnerConfig;
@@ -88,12 +145,26 @@ export interface RunnerView {
   reasons: Reason[];
   available: number;
   limit: SlotLimit | null;
+  /** Linux VMs that may run now: no Apple cap, the memory macOS slots leave. Absent from older daemons. */
+  linuxAvailable?: number;
+  /** Why Linux slots cannot start (no Linux image yet), when some are asked for. */
+  linuxError?: string | null;
   awake: boolean;
   error: string | null;
   today: Today;
   host: HostView;
+  /** The repos an org runner serves, from its link; empty when the scope says it all. */
+  repos: string[];
+  /** A public repo's approval for outside contributors is unsettled, so the daemon keeps this runner off. */
+  forkApprovalOpen: boolean;
   /** Newest first. */
   recent: AuditLine[];
+  /** Jobs waiting for a runner with this one's labels. Absent from older daemons. */
+  queue?: QueuedJob[];
+  /** Why Accept now would not start a VM: the hard limits Runner first keeps. Empty when it would. */
+  acceptWhy?: Reason[];
+  /** `null` until the Mac has been read. */
+  suggestedSize: SizeSuggestion | null;
 }
 export type ConnectRequest = GithubConnectRequest | GitlabConnectRequest;
 export interface GithubConnectRequest {
@@ -106,6 +177,8 @@ export interface GithubConnectRequest {
   repos: string[];
   allowPublic: boolean;
   label?: string;
+  /** False leaves a new runner off; the daemon defaults to true. */
+  enabled?: boolean;
 }
 /** A GitLab project (repo scope, `owner` may hold subgroups) or group (org scope). */
 export interface GitlabConnectRequest {
@@ -123,15 +196,46 @@ export interface GitlabConnectRequest {
   label?: string;
 }
 
+/** `canGroup` is null when it cannot be known: an org's plan is hidden, or a personal account. */
+export interface GithubAccount { login: string; kind: 'user' | 'org'; canGroup: boolean | null }
+export interface GithubAccounts { login: string | null; accounts: GithubAccount[] }
+export interface GithubRepo { name: string; private: boolean }
+export type GithubSetupStep = 'idle' | 'create' | 'install' | 'confirm' | 'failed';
+/** The click-through connect, from `runner:githubStatus` and the `runner:githubChanged` push. */
+export interface GithubSetupView {
+  step: GithubSetupStep;
+  owner: string | null;
+  kind: 'user' | 'org' | null;
+  /** The app has repo Administration, so it serves one repo, even under an org. */
+  repoAdmin: boolean;
+  slug: string | null;
+  appId: number | null;
+  installationId: number | null;
+  repos: GithubRepo[];
+  error: string | null;
+}
+export interface GithubStartRequest { owner: string; kind: 'user' | 'org'; repoAdmin?: boolean }
+/** `url` is the GitHub settings page to link to when `done` is false. */
+export interface ForkApproval { done: boolean; url: string }
+
+export const IDLE_GITHUB_SETUP: GithubSetupView = {
+  step: 'idle', owner: null, kind: null, repoAdmin: false, slug: null, appId: null, installationId: null, repos: [], error: null,
+};
+/** The runner polls every repo it serves. */
+export const MAX_RUNNER_REPOS = 20;
+/** More repos than this on an install means "All repositories", so none start ticked. */
+const TICKED_BY_DEFAULT = 5;
+
 export const DEFAULT_RUNNER_SETTINGS: RunnerSettings = {
   enabled: false,
-  priority: 'doNotDisturb',
+  priority: 'balanced',
   keepAwake: 'whileActive',
   macosSlots: 1,
   linuxSlots: 0,
   memoryPerVmMb: 8192,
   runnerMemoryMb: null,
   cpusPerVm: null,
+  readyVms: null,
   diskBudgetGb: 150,
   diskFloorGb: 25,
   maxJobMinutes: 120,
@@ -148,6 +252,18 @@ export const DEFAULT_RUNNER_LABEL = 'nekko-cloud-mac';
 export const MAX_MACOS_SLOTS = 2;
 export const MAX_JOB_CHOICES = [30, 60, 120, 360];
 
+/** Balanced first: it is the default and the one to recommend. */
+export const PRIORITIES: Priority[] = ['balanced', 'doNotDisturb', 'runnerFirst'];
+/** The ready VM counts offered. Apple allows 2 macOS VMs per Mac, so never more. */
+export const READY_VM_CHOICES = [0, 1, 2];
+export const DEFAULT_READY_VMS = 1;
+
+/** VMs kept booted while idle, as nekkod's `warm_slots` reads the settings (before the slot limit). */
+export function readyVms(s: Pick<RunnerSettings, 'priority' | 'readyVms'>): number {
+  if (s.readyVms !== null && s.readyVms !== undefined) return Math.min(s.readyVms, MAX_MACOS_SLOTS);
+  return s.priority === 'doNotDisturb' ? 0 : s.priority === 'balanced' ? 1 : MAX_MACOS_SLOTS;
+}
+
 export const PRIORITY_LABELS: Record<Priority, string> = {
   doNotDisturb: "Do not disturb: Only run when I'm idle",
   balanced: 'Balanced: in the background',
@@ -155,8 +271,8 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 };
 export const PRIORITY_DESCRIPTIONS: Record<Priority, string> = {
   doNotDisturb: "Only when you're away and plugged in. Steps aside the moment you need the Mac.",
-  balanced: "Takes jobs while you work if there's headroom. Keeps one VM ready.",
-  runnerFirst: "For a docked Mac that mostly runs CI. All slots ready, jobs finish even when you're busy.",
+  balanced: "Takes jobs while you work if there's headroom.",
+  runnerFirst: "For a docked Mac that mostly runs CI. Jobs finish even when you're busy.",
 };
 export const KEEP_AWAKE_LABELS: Record<KeepAwake, string> = {
   systemDefault: 'System default',
@@ -237,36 +353,82 @@ export function runnerSubtitle(v: RunnerView): string {
   return `${scope.kind} scope · label ${label} · ${PRIORITY_LABELS[settings.priority]} · ${KEEP_AWAKE_LABELS[settings.keepAwake]}`;
 }
 
-export interface SlotLine { title: string; text: string; progress: number; dim: boolean }
+export interface SlotLine { title: string; text: string; active: boolean; dim: boolean; vm?: string }
 
-/** One tile per configured macOS slot; slots past what the Mac allows are greyed with the bound's sentence. */
+/** Linux guests have no Apple cap; nekkod clamps the setting to this. */
+export const MAX_LINUX_SLOTS = 8;
+export const LINUX_SLOT_CHOICES = [0, 1, 2, 3, 4] as const;
+
+/** The Linux image builder's view, from `runner:linuxImageStatus`. */
+export interface LinuxImageView {
+  state: 'none' | 'building' | 'ready' | 'failed';
+  stage: 'download' | 'assemble' | 'provision' | 'test' | 'finish' | null;
+  /** 0 to 1 within a download. */
+  progress: number | null;
+  message: string | null;
+  /** What provisioning installed: `{ distro, runner, docker, kernel, ... }`. */
+  proof: { distro?: string; runner?: string; docker?: string; kernel?: string } | null;
+}
+
+/**
+ * One tile per configured macOS slot (slots past what the Mac allows are greyed with the bound's
+ * sentence), then one per Linux slot. Linux VMs boot only for a queued Linux job.
+ */
 export function slotLines(v: RunnerView, nowSecs: number): SlotLine[] {
-  const { macosSlots, maxJobMinutes } = v.config.settings;
-  return Array.from({ length: macosSlots }, (_, i) => {
-    const title = `Slot ${i + 1} · macOS`;
-    const s = v.slots[i];
-    if (!s) {
-      if (i >= v.available) return { title, text: `Not available: ${slotLimitText(v.limit)}`, progress: 0, dim: true };
-      const text = v.state === 'error' ? 'Stopped until the error above is fixed'
-        : v.reasons.length ? `Waiting: ${reasonText(v.reasons[0]).short}` : 'Starts a VM when a job is queued';
-      return { title, text, progress: 0, dim: false };
-    }
-    const elapsed = Math.max(0, nowSecs - s.since);
-    const line = (text: string, progress = 0): SlotLine => ({ title, text, progress, dim: false });
-    switch (s.state) {
-      case 'starting': return line('Starting a VM');
-      case 'ready': return line('Ready for a job');
-      case 'running':
-        return line(
-          s.job ? `${s.job.workflow} · ${s.job.job} · ${formatMinutes(elapsed)}` : `Running a job · ${formatMinutes(elapsed)}`,
-          Math.min(1, elapsed / (maxJobMinutes * 60)),
-        );
-      case 'draining':
-        return line(s.drainEndsAt === null ? 'Finishing' : `Finishing, stops in ${Math.max(1, Math.ceil((s.drainEndsAt - nowSecs) / 60))} min`);
-      case 'cleaning': return line('Deleting the VM');
-      default: return line(STATE_LABELS[s.state as RunnerState] ?? 'Working');
-    }
+  const { macosSlots, linuxSlots = 0 } = v.config.settings;
+  const of = (g: Guest) => v.slots.filter((s) => (s.guest ?? 'macos') === g);
+  const mac = Array.from({ length: macosSlots }, (_, i) => slotLine(v, `Slot ${i + 1} · macOS`, of('macos')[i], nowSecs, i >= v.available ? slotLimitText(v.limit) : null));
+  const linuxAvailable = v.linuxAvailable ?? 0;
+  const linux = Array.from({ length: Math.min(linuxSlots, MAX_LINUX_SLOTS) }, (_, i) => {
+    const why = v.linuxError ?? (i >= linuxAvailable ? 'the memory macOS slots leave is used up.' : null);
+    return slotLine(v, `Slot ${macosSlots + i + 1} · Linux`, of('linux')[i], nowSecs, why, 'Starts a VM when a Linux job is queued');
   });
+  return [...mac, ...linux];
+}
+
+/** What one slot's VM does, as a tile; a running job's progress is on the job, not here. */
+function slotLine(v: RunnerView, title: string, s: SlotView | undefined, nowSecs: number, unavailable: string | null, idle = 'Starts a VM when a job is queued'): SlotLine {
+  if (!s) {
+    if (unavailable !== null) return { title, text: `Not available: ${unavailable}`, active: false, dim: true };
+    const text = v.state === 'error' ? 'Stopped until the error above is fixed'
+      : v.reasons.length ? `Waiting: ${reasonText(v.reasons[0]).short}` : idle;
+    return { title, text, active: false, dim: false };
+  }
+  const elapsed = Math.max(0, nowSecs - s.since);
+  const line = (text: string, active = true): SlotLine => ({ title, text, active, dim: false, ...(s.vm ? { vm: s.vm } : {}) });
+  switch (s.state) {
+    case 'starting': return line('Starting a VM');
+    case 'ready': return line('Ready for a job');
+    case 'running':
+      return line(s.job ? `${s.job.workflow} · ${s.job.job} · ${formatMinutes(elapsed)}` : `Running a job · ${formatMinutes(elapsed)}`);
+    case 'draining':
+      return line(s.drainEndsAt === null ? 'Finishing' : `Finishing, stops in ${Math.max(1, Math.ceil((s.drainEndsAt - nowSecs) / 60))} min`);
+    case 'cleaning': return line('Deleting the VM', false);
+    default: return line(STATE_LABELS[s.state as RunnerState] ?? 'Working');
+  }
+}
+
+/** How far a running job has got, from its steps: "Step 3 of 8: Build · 25%". Null when the provider lists no steps. */
+export function stepText(steps: JobSteps | null | undefined): { text: string; fraction: number } | null {
+  if (!steps || steps.total <= 0) return null;
+  const fraction = Math.min(1, Math.max(0, steps.done / steps.total));
+  const pct = `${Math.round(fraction * 100)}%`;
+  if (steps.done >= steps.total) return { text: `All ${steps.total} steps done · ${pct}`, fraction };
+  return { text: `Step ${steps.done + 1} of ${steps.total}${steps.current ? `: ${steps.current}` : ''} · ${pct}`, fraction };
+}
+
+/** How long a queued job has waited, from the provider's ISO time. */
+export function waitingText(createdAt: string | null, nowSecs: number): string {
+  const t = createdAt ? Date.parse(createdAt) / 1000 : Number.NaN;
+  return Number.isFinite(t) ? `waiting ${formatMinutes(Math.max(0, nowSecs - t))}` : 'waiting';
+}
+
+/** Why Accept now cannot start a VM for a queued job, as a sentence; null when it can. */
+export function acceptBlocked(v: RunnerView): string | null {
+  if (!v.config.settings.enabled) return 'Turn the runner on first.';
+  if (v.error) return 'Fix the error above first.';
+  const why = v.acceptWhy ?? [];
+  return why.length ? reasonText(why[0]).sentence : null;
 }
 
 /** The supervisor's own stop reasons, beside the `Reason` names. */
@@ -293,12 +455,36 @@ export function auditText(l: AuditLine, rerun = true): string {
   const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
   const took = formatMinutes(l.seconds);
   switch (l.result) {
-    case 'finished': return `${name} · finished · ${took} · VM deleted`;
+    case 'finished': return `${name} · finished · ${took}`;
     case 'lost': return `${name} · lost${why}${rerun ? ' · re-run if allowed' : ''}`;
     default:
-      if (l.reason.includes('maxJobTime')) return `${name} · stopped at the max job time · VM deleted`;
-      return `${name} · stopped after ${took}${why} · VM deleted`;
+      if (l.reason.includes('maxJobTime')) return `${name} · stopped at the max job time`;
+      return `${name} · stopped after ${took}${why}`;
   }
+}
+
+const EVENT_LABELS: Record<SlotState, string> = {
+  starting: 'Starting a VM',
+  ready: 'VM online, waiting for a job',
+  running: 'Running the job',
+  draining: 'Finishing: a condition stopped being met',
+  cleaning: 'Stopping the VM',
+};
+
+/** A recent job's VM, step by step, ending when the VM was deleted. Empty for lines with no VM. */
+export function auditTimeline(l: AuditLine): { ts: number; text: string }[] {
+  if (l.result === 'notRemoved') return [];
+  const why = l.reason.length ? ` (${auditWhy(l.reason)})` : '';
+  const end = {
+    finished: 'The job finished and the VM powered off',
+    stopped: `Stopped${why}`,
+    lost: `Lost${why}`,
+    failedToStart: `The VM failed to start${why}`,
+  }[l.result];
+  return [
+    ...(l.events ?? []).map((e) => ({ ts: e.ts, text: EVENT_LABELS[e.state] ?? 'Working' })),
+    { ts: l.ts, text: `${end}; VM deleted` },
+  ];
 }
 
 /** The network fact: trust plus which network, so "Not trusted" always says which one. */
@@ -316,6 +502,32 @@ export function recommendationText(h: HostView): string {
   return gb > 0 ? `Recommended: ${gb} GB for this Mac` : '';
 }
 
+/** Jobs at the current size before the daemon suggests a size (`SUGGEST_MIN_JOBS` in nekko-runner). */
+export const SUGGEST_MIN_JOBS = 3;
+
+const sizeLabel = (cpus: number, memoryMb: number) => `${cpus} vCPUs, ${Math.round(memoryMb / 1024)} GB`;
+
+/**
+ * The suggested-size row in runner settings: one line, the daemon's reasons, and the patch Apply
+ * sends when the suggestion differs from the saved size. `null` hides the row (the Mac is unread).
+ */
+export function suggestedSizeRow(v: RunnerView): { line: string; reasons: string[]; apply: Pick<RunnerSettings, 'cpusPerVm' | 'memoryPerVmMb'> | null } | null {
+  const s = v.suggestedSize;
+  if (!s) return null;
+  if (s.jobs < SUGGEST_MIN_JOBS) {
+    return { line: `Suggested size after ${SUGGEST_MIN_JOBS} jobs at this size (${s.jobs} so far).`, reasons: [], apply: null };
+  }
+  const now = { cpus: v.host.cpusPerVm, memoryMb: v.config.settings.memoryPerVmMb };
+  if (s.cpus === now.cpus && s.memoryMb === now.memoryMb) {
+    return { line: `Fits your last ${s.jobs} jobs.`, reasons: s.reasons, apply: null };
+  }
+  return {
+    line: `Suggested for your jobs: ${sizeLabel(s.cpus, s.memoryMb)} (now ${sizeLabel(now.cpus, now.memoryMb)}).`,
+    reasons: s.reasons,
+    apply: { cpusPerVm: s.cpus, memoryPerVmMb: s.memoryMb },
+  };
+}
+
 /** The keys of `draft` that differ from `base` (arrays by value): `runner:update` merges a patch, so unchanged keys a push moved meanwhile stay as the daemon has them. */
 export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Partial<RunnerSettings> {
   return Object.fromEntries(
@@ -323,6 +535,163 @@ export function settingsPatch(base: RunnerSettings, draft: RunnerSettings): Part
       .filter((k) => JSON.stringify(draft[k]) !== JSON.stringify(base[k]))
       .map((k) => [k, draft[k]]),
   ) as Partial<RunnerSettings>;
+}
+
+/** The image build's stages, in order. A refresh runs only `REFRESH_STAGES`, adding tools only `TOOLS_STAGES`. */
+export const IMAGE_STAGES = ['check', 'download', 'install', 'xcode', 'lockdown', 'scripts', 'tools', 'test', 'finish'] as const;
+export type ImageStage = (typeof IMAGE_STAGES)[number];
+/**
+ * A build from Apple's image (with or without Xcode), or the image in use with Nekko's
+ * scripts replaced, or with the job tools it lacks installed.
+ */
+export type ImageKind = 'xcode' | 'macosOnly' | 'refresh' | 'tools';
+const REFRESH_STAGES: readonly ImageStage[] = ['check', 'scripts', 'test', 'finish'];
+const TOOLS_STAGES: readonly ImageStage[] = ['check', 'tools', 'test', 'finish'];
+const FULL_STAGES: readonly ImageStage[] = IMAGE_STAGES.filter((s) => s !== 'scripts' && s !== 'tools');
+/** The stages a build of `kind` runs; a view with no build lists a full one. */
+export const imageStages = (kind: ImageKind | null): readonly ImageStage[] =>
+  kind === 'refresh' ? REFRESH_STAGES : kind === 'tools' ? TOOLS_STAGES : FULL_STAGES;
+export type ImageState = 'none' | 'ready' | 'building' | 'waiting' | 'failed';
+
+/** What the image holds, from the proof file `provision.sh` writes. */
+export interface ImageInfo {
+  macos: string;
+  xcode: string | null;
+  actionsRunner: string;
+  built: string;
+  /** The job tools found on the image's disk; absent for an image built before Nekko looked. */
+  tools?: string[];
+  /** Tools jobs run before their own setup (node, gh, jq) that this image lacks; absent from an older daemon. */
+  missingTools?: string[];
+}
+
+/** "a", "a and b", "a, b and c". */
+const andList = (items: string[]) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+
+/** The runner card's notice for an image without some job tools. */
+export function missingToolsLine(tools: string[]): string {
+  const one = tools.length === 1;
+  return `${andList(tools)} ${one ? 'is' : 'are'} missing from this Mac's runner image. Jobs that need ${one ? 'it' : 'them'} will fail.`;
+}
+
+export interface ImageView {
+  state: ImageState;
+  /** The build under way or stopped, null with none. */
+  kind: ImageKind | null;
+  /** The stage running, failed, waiting, or next to resume. */
+  stage: ImageStage | null;
+  doneStages: ImageStage[];
+  /** What the stage is doing now, or why it waits. */
+  detail: string;
+  /** Received and total bytes, during Download. */
+  bytes: [number, number] | null;
+  /** 0 to 1, during Install. */
+  fraction: number | null;
+  /** The sentence to show when `state` is `failed`. */
+  error: string | null;
+  /** The end of the build log, for a failure. */
+  log: string | null;
+  info: ImageInfo | null;
+  /** A stopped build can pick up where it left off. */
+  canResume: boolean;
+}
+
+export interface ImageBuildRequest {
+  kind: ImageKind;
+  /** The runner to turn on when the build finishes. */
+  runnerId?: string;
+  /** The mode that runner gets. */
+  priority: Priority;
+}
+
+/** The daemon's words for a runner with no image, which the card replaces with **Set up this Mac**. */
+export const NO_IMAGE_ERROR = 'No VM image yet.';
+
+/** What setting up this Mac would use, from `runner:imagePlan`. */
+export interface ImagePlan {
+  /** This Mac's Xcode version, or null with no Xcode to copy in. */
+  xcode: string | null;
+  /** Null before the daemon's first reading. */
+  freeGb: number | null;
+  needsGb: number;
+  /** A macOS image kept from an earlier build, reused while it is still Apple's newest. */
+  cachedMacos: boolean;
+}
+
+export const IMAGE_STAGE_LABELS: Record<ImageStage, string> = {
+  check: 'Check this Mac',
+  download: 'Download the macOS image',
+  install: 'Install the macOS VM',
+  xcode: 'Add Xcode and tools',
+  lockdown: 'Lock the VM down',
+  scripts: "Update Nekko's scripts",
+  tools: 'Install the missing tools',
+  test: 'Test a boot',
+  finish: 'Turn the runner on',
+};
+
+export type StageMark = 'done' | 'now' | 'bad' | 'todo';
+export interface StageRow { stage: ImageStage; label: string; mark: StageMark; note: string }
+
+const gb = (bytes: number) => (bytes / 1e9).toFixed(1);
+
+/** The stage's own progress. A wait keeps the last stage's numbers, so they only count while building. */
+function stageNote(v: ImageView): string {
+  if (v.state === 'failed') return 'Failed';
+  if (v.state === 'waiting') return 'Waiting';
+  if (v.state !== 'building') return 'Paused';
+  if (v.bytes) return `${gb(v.bytes[0])} of ${gb(v.bytes[1])} GB`;
+  if (v.fraction !== null) return `${Math.round(v.fraction * 100)}%`;
+  return v.detail;
+}
+
+/**
+ * One row per stage a person follows; Finish is one rename, so it has none. A wait
+ * names the stage it waits for before the last one is listed as done, so order counts too.
+ */
+export function imageStageRows(v: ImageView): StageRow[] {
+  const stages = imageStages(v.kind);
+  const at = v.stage === null ? -1 : stages.indexOf(v.stage);
+  return stages.filter((s) => s !== 'finish').map((stage, i) => {
+    const done = i < at || v.doneStages.includes(stage);
+    const mark: StageMark = stage === v.stage && !done ? (v.state === 'failed' ? 'bad' : 'now') : done ? 'done' : 'todo';
+    return { stage, label: IMAGE_STAGE_LABELS[stage], mark, note: mark === 'now' || mark === 'bad' ? stageNote(v) : '' };
+  });
+}
+
+/** 0 to 1 for the bar, or null when this stage has nothing to measure. */
+export function imageFraction(v: ImageView): number | null {
+  if (v.state !== 'building') return null;
+  if (v.bytes && v.bytes[1] > 0) return Math.min(1, v.bytes[0] / v.bytes[1]);
+  return v.fraction;
+}
+
+/** A build is running or stopped on a failure, so the sheet follows it. */
+export const imageBusy = (v: ImageView) => v.state === 'building' || v.state === 'waiting' || v.state === 'failed';
+
+/** What the runner card says about a build in progress. */
+export function imageLine(v: ImageView): string {
+  if (v.state === 'failed') return `Setup stopped: ${v.error ?? 'Something went wrong.'}`;
+  const stage = v.stage ? IMAGE_STAGE_LABELS[v.stage] : 'Setting up this Mac';
+  if (v.state === 'waiting') return `${stage}: ${v.detail}`;
+  const note = stageNote(v);
+  return note ? `${stage}: ${note}` : stage;
+}
+
+/** The message a new chat starts with. The person reads it and presses Send. */
+export function runnerWorkflowPrompt(v: RunnerView): string {
+  const { scope, label } = v.config;
+  const repos = (v.repos.length ? v.repos : [scopeName(scope)]).map((r) => `\`${r}\``).join(', ');
+  return [
+    'Connect my Mac runner to my GitHub Actions workflows.',
+    '',
+    `Runner label: \`${label}\``,
+    `Repos: ${repos}`,
+    '',
+    "Read the workflows, then ask me which ones should run on this Mac. Offer only jobs that can run on macOS, and warn me about any that run on pull requests from forks. If the repo isn't in this folder, ask me where it is.",
+    '',
+    `Set \`runs-on: [self-hosted, macOS, ARM64, ${label}]\` on the ones I pick, and open a pull request.`,
+  ].join('\n');
 }
 
 export function runnerActivity(views: RunnerView[]): { vms: number; awake: boolean } {
@@ -340,6 +709,8 @@ export interface ConnectForm {
   allowPublic: boolean;
   label: string;
   priority: Priority;
+  /** VMs kept ready, 0 to 2. */
+  readyVms: number;
 }
 
 const NAME = /^[A-Za-z0-9._-]+$/;
@@ -383,3 +754,59 @@ export function toConnectRequest(f: ConnectForm, keyStored: boolean): GithubConn
     label,
   };
 }
+
+/** A personal account's runner, or an org's that cannot use runner groups, serves one repo. */
+export const servesOneRepo = (v: GithubSetupView) => v.kind === 'user' || v.repoAdmin;
+
+export function defaultRepoPicks(v: GithubSetupView): string[] {
+  if (servesOneRepo(v)) return v.repos.length === 1 ? [v.repos[0].name] : [];
+  return v.repos.length > TICKED_BY_DEFAULT ? [] : v.repos.map((r) => r.name);
+}
+
+/** The picks after ticking `name` on or off, or a sentence saying why not. */
+export function tickRepo(v: GithubSetupView, picked: string[], name: string, on: boolean): { picked: string[]; error: string | null } {
+  if (servesOneRepo(v)) return { picked: [name], error: null };
+  if (!on) return { picked: picked.filter((r) => r !== name), error: null };
+  if (picked.includes(name)) return { picked, error: null };
+  if (picked.length >= MAX_RUNNER_REPOS) return { picked, error: `A runner serves at most ${MAX_RUNNER_REPOS} repos.` };
+  return { picked: [...picked, name], error: null };
+}
+
+export const publicPicks = (v: GithubSetupView, picked: string[]) =>
+  v.repos.filter((r) => !r.private && picked.includes(r.name)).map((r) => r.name);
+
+export interface SetupPicks { repos: string[]; allowPublic: boolean; label: string }
+
+/**
+ * The confirm step as a `runner:connect` request, or the sentence to fix. Every
+ * runner connects off, because its mode is chosen on the Mac setup sheet. A public
+ * repo's runner also cannot start until GitHub holds outside contributors for approval.
+ */
+export function toSetupRequest(v: GithubSetupView, p: SetupPicks): GithubConnectRequest | { error: string } {
+  if (!v.owner || v.appId === null || v.installationId === null) return { error: 'GitHub is not connected yet.' };
+  if (!p.repos.length) return { error: 'Pick at least one repo.' };
+  if (p.repos.length > MAX_RUNNER_REPOS) return { error: `A runner serves at most ${MAX_RUNNER_REPOS} repos.` };
+  const anyPublic = publicPicks(v, p.repos).length > 0;
+  if (anyPublic && !p.allowPublic) return { error: 'Choose how to handle the public repo first.' };
+  const label = p.label.trim() || DEFAULT_RUNNER_LABEL;
+  if (!LABEL.test(label)) return { error: 'Labels use letters, digits, dot, dash and underscore.' };
+  const [owner, repo] = p.repos[0].split('/');
+  const scope: Scope = servesOneRepo(v) ? { kind: 'repo', owner, repo } : { kind: 'org', org: v.owner };
+  return {
+    provider: 'github',
+    scope,
+    appId: v.appId,
+    installationId: v.installationId,
+    repos: servesOneRepo(v) ? [] : p.repos,
+    allowPublic: anyPublic,
+    label,
+    enabled: false,
+  };
+}
+
+export const githubInstallUrl = (slug: string) => `https://github.com/apps/${slug}/installations/new`;
+/** Where fork approval is set by hand, when Nekko could not ask. */
+export const githubActionsSettingsUrl = (s: Scope) =>
+  (s.kind === 'org' ? `https://github.com/organizations/${s.org}/settings/actions` : `https://github.com/${s.owner}/${s.repo}/settings/actions`);
+/** Where an org's app is deleted, which is the way out when the org turns out to have no runner groups. */
+export const githubAppSettingsUrl = (org: string, slug: string) => `https://github.com/organizations/${org}/settings/apps/${slug}/advanced`;

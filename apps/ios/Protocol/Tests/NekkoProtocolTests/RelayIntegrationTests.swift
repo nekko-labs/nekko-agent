@@ -17,24 +17,41 @@ import XCTest
 /// their coordinates in `NEKKO_ITEST_*`; without them every test is skipped.
 final class RelayIntegrationTests: XCTestCase {
     struct Env {
-        let relay, room, key, pair: String
+        let relay, room, key, pair, hostKey: String
         let keyBytes: Data
     }
 
     /// The phone testB enrolled, so later tests reconnect without a (single-use) code.
-    static var enrolled: String?
+    /// XCTest runs this case's tests one after another, in order, so nothing races on it.
+    nonisolated(unsafe) static var enrolled: String?
 
     static let env: Env? = {
         let e = ProcessInfo.processInfo.environment
         guard let relay = e["NEKKO_ITEST_RELAY"], let room = e["NEKKO_ITEST_ROOM"], let key = e["NEKKO_ITEST_KEY"],
-              let pair = e["NEKKO_ITEST_PAIR"] else { return nil }
-        return Env(relay: relay, room: room, key: key, pair: pair, keyBytes: E2E.deriveKey(secret: key, room: room))
+              let pair = e["NEKKO_ITEST_PAIR"], let hostKey = e["NEKKO_ITEST_HOST"]?.removingPercentEncoding else { return nil }
+        return Env(relay: relay, room: room, key: key, pair: pair, hostKey: hostKey, keyBytes: E2E.deriveKey(secret: key, room: room))
     }()
 
+    /// One device key per test device, kept across its connections, as the Keychain keeps it.
+    final class Signers: @unchecked Sendable {
+        private let lock = NSLock()
+        private var all: [String: SoftwareHelloSigner] = [:]
+        func signer(for id: String) -> SoftwareHelloSigner {
+            lock.lock()
+            defer { lock.unlock() }
+            if let s = all[id] { return s }
+            let s = SoftwareHelloSigner()
+            all[id] = s
+            return s
+        }
+    }
+    static let signers = Signers()
+
     func client(_ env: Env, pair: String?, deviceId: String = UUID().uuidString.lowercased()) -> (RelayClient, RelayClientTests.Recorder) {
-        var cfg = RelayConfig(relayUrl: env.relay, room: env.room, key: env.key, keyBytes: env.keyBytes, deviceId: deviceId,
-                              deviceName: "iOS itest", pairCode: pair)
+        var cfg = RelayConfig(relayUrl: env.relay, room: env.room, key: env.key, hostKey: env.hostKey, keyBytes: env.keyBytes,
+                              deviceId: deviceId, deviceName: "iOS itest", pairCode: pair)
         cfg.requestTimeout = 30
+        cfg.helloSigner = Self.signers.signer(for: deviceId)
         #if os(Linux)
         let transport: WsTransport = SocketTransport() // libcurl there has no WebSockets
         #else
@@ -411,9 +428,11 @@ final class RelayIntegrationTests: XCTestCase {
         guard let device = Self.enrolled else { throw XCTSkip("needs testB's enrolled phone") }
         let link = try XCTUnwrap(Pairing.parse("nekko-agent-pair:?relay=\(route)&room=\(env.room)&key=\(env.key)&alt=\(env.relay)"))
         XCTAssertEqual(link.alts, [env.relay])
-        var cfg = RelayConfig(relayUrl: link.relayUrl, room: env.room, key: env.key, keyBytes: env.keyBytes, deviceId: device,
-                              deviceName: "iOS itest")
+        var cfg = RelayConfig(relayUrl: link.relayUrl, room: env.room, key: env.key, hostKey: env.hostKey, keyBytes: env.keyBytes,
+                              deviceId: device, deviceName: "iOS itest")
         cfg.alternates = link.alts
+        // The enrolled phone proves its device key in every HELLO (#1444), on each route.
+        cfg.helloSigner = Self.signers.signer(for: device)
         cfg.requestTimeout = 30
         var rules = RouteRules()
         rules.openTimeout = 3

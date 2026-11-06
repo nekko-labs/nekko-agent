@@ -43,6 +43,9 @@ import com.nekko.android.connection.TailnetStatus
 import androidx.compose.runtime.remember
 import com.nekko.android.BuildConfig
 import com.nekko.protocol.RelayState
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
+import com.nekko.android.R
 
 /**
  * What a refused phone should do. REVOKED names the steps on the computer: a
@@ -54,9 +57,21 @@ fun deniedCopy(reason: DenyReason?): String = when (reason) {
     DenyReason.BAD_CODE -> "That pairing code expired or was already used. Scan a fresh QR."
     DenyReason.UNKNOWN_DEVICE -> "Your computer doesn’t know this phone yet. Scan a pairing QR."
     DenyReason.KICKED -> "Your computer disconnected this phone. Pair it again."
-    DenyReason.BAD_KEY -> "The pairing key changed on your computer. Scan a fresh QR."
+    DenyReason.BAD_KEY -> "Your computer has a new pairing key. Pair this phone again: on the computer, Settings → Remote access → Pair a device, then scan the new QR here."
     DenyReason.UPDATE_REQUIRED -> "Your computer only accepts phones on the newest Nekko Agent. Update this app to connect to it."
     DenyReason.INVALID, null -> "Pairing failed. Scan a fresh QR on your computer."
+}
+
+/** [deniedCopy] as a string resource, in the phone's language (the English above stays for tests). */
+@StringRes
+fun deniedCopyRes(reason: DenyReason?): Int = when (reason) {
+    DenyReason.REVOKED -> R.string.chats_denied_revoked
+    DenyReason.BAD_CODE -> R.string.chats_denied_bad_code
+    DenyReason.UNKNOWN_DEVICE -> R.string.chats_denied_unknown_device
+    DenyReason.KICKED -> R.string.chats_denied_kicked
+    DenyReason.BAD_KEY -> R.string.chats_denied_bad_key
+    DenyReason.UPDATE_REQUIRED -> R.string.chats_denied_update_required
+    DenyReason.INVALID, null -> R.string.chats_denied_invalid
 }
 
 /**
@@ -83,23 +98,32 @@ fun ConnectionBanner(
     // This phone stopped remote access: the computer kicked every phone, which is not a reason to pair again.
     val stopped = s.remoteStoppedAt != null
     val denied = !stopped && (s.denied != null || s.conn == RelayState.DENIED)
+    val badKey = !stopped && !denied && s.badKey
     // Pairing again can't help an app that is too old for the computer.
-    val repair = denied && s.denied != DenyReason.UPDATE_REQUIRED
+    val repair = badKey || (denied && s.denied != DenyReason.UPDATE_REQUIRED)
+    // The route in use or being dialed (AN-28): one of the computer's addresses.
+    val route = s.route ?: active.relayUrl
     // An address the phone can never reach: say why instead of "Connecting…" forever.
-    val hint = RelayHint.problem(active.relayUrl, BuildConfig.DEBUG)
+    val hint = RelayHint.problem(route, BuildConfig.DEBUG)
     // A tailnet relay with Tailscale off on this phone: say so (re-read on each state change).
-    val tailnetHint = remember(s.conn, active.relayUrl) {
-        if (s.conn == RelayState.ONLINE) null else Tailnet.hint(active.relayUrl, TailnetStatus.phoneOnTailnet(), active.name)
+    val tailnetHint = remember(s.conn, route) {
+        if (s.conn == RelayState.ONLINE) null else Tailnet.hint(route, TailnetStatus.phoneOnTailnet(), active.name)
     }
     val (tone, line) = when {
         stopped && s.conn != RelayState.ONLINE ->
-            Tone.WARNING to "You stopped remote access on ${active.name}. Turn it on there (Settings → Remote access), then tap here to reconnect."
-        denied -> Tone.DANGER to deniedCopy(s.denied)
-        s.conn == RelayState.ONLINE -> Tone.SUCCESS to "${active.name} is online"
+            Tone.WARNING to stringResource(R.string.chats_banner_stopped, active.name)
+        denied -> Tone.DANGER to stringResource(deniedCopyRes(s.denied))
+        badKey -> Tone.DANGER to stringResource(deniedCopyRes(DenyReason.BAD_KEY))
+        s.conn == RelayState.ONLINE -> Tone.SUCCESS to stringResource(R.string.chats_banner_online, active.name)
         hint != null -> Tone.DANGER to RelayHint.message(hint, active.name)
         tailnetHint != null -> Tone.WARNING to tailnetHint
-        s.conn == RelayState.OFFLINE -> Tone.WARNING to "${active.name} is offline. Open Nekko Agent on it."
-        else -> Tone.WARNING to "Connecting to ${active.name}…"
+        s.conn == RelayState.OFFLINE -> Tone.WARNING to stringResource(R.string.chats_banner_offline, active.name)
+        else -> Tone.WARNING to stringResource(R.string.chats_banner_connecting, active.name)
+    }
+    val clickLabel = when {
+        stopped && exits != null -> stringResource(R.string.chats_reconnect)
+        repair -> stringResource(R.string.chats_pair_again)
+        else -> stringResource(R.string.chats_manage_computers)
     }
     var menu by remember { mutableStateOf(false) }
     Column(modifier) {
@@ -112,11 +136,7 @@ fun ConnectionBanner(
                 .border(1.dp, p.line, RoundedCornerShape(12.dp))
                 .clickable(
                     role = Role.Button,
-                    onClickLabel = when {
-                        stopped && exits != null -> "Reconnect"
-                        repair -> "Pair again"
-                        else -> "Manage computers"
-                    },
+                    onClickLabel = clickLabel,
                 ) {
                     when {
                         stopped && exits != null -> exits.reconnect()
@@ -131,10 +151,10 @@ fun ConnectionBanner(
         ) {
             Dot(tone)
             Column(Modifier.weight(1f)) {
-                Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied) 5 else 2, overflow = TextOverflow.Ellipsis)
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied || badKey) 5 else 2, overflow = TextOverflow.Ellipsis)
                 if (s.conn == RelayState.ONLINE && !denied) {
                     Text(
-                        "End-to-end encrypted via ${Pairing.relayHost(active.relayUrl)}",
+                        stringResource(R.string.chats_encrypted_via, Pairing.relayHost(route)),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkFaint,
                     )
@@ -149,7 +169,7 @@ fun ConnectionBanner(
             if (exits != null) {
                 Box {
                     IconButton(onClick = { menu = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Safety options for ${active.name}", tint = p.inkSoft)
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chats_safety_options, active.name), tint = p.inkSoft)
                     }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         SafetyExitMenuItems(s, exits, onPicked = { menu = false })

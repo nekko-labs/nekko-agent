@@ -6,12 +6,17 @@ export interface SignupInput {
   list: string;
   source: string | null;
   utm: Record<string, string>;
+  /** Also send product updates; beta mail never depends on it. */
+  marketing: boolean;
+  /** The privacy policy version the form showed. */
+  policyVersion: string | null;
 }
 
 export type Parsed = { ok: true; value: SignupInput } | { ok: false; error: string };
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LIST = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const POLICY_VERSION = /^[A-Za-z0-9._-]{1,32}$/;
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"] as const;
 
 function text(value: unknown, max: number): string | null {
@@ -37,25 +42,34 @@ export function parseSignup(body: unknown): Parsed {
     const v = text(rawUtm[key], 100);
     if (v) utm[key] = v;
   }
-  return { ok: true, value: { email, name: text(b.name, 200), list, source, utm } };
+  if (b.marketing !== undefined && typeof b.marketing !== "boolean") return { ok: false, error: "marketing must be true or false." };
+  if (b.policyVersion !== undefined && (typeof b.policyVersion !== "string" || !POLICY_VERSION.test(b.policyVersion))) {
+    return { ok: false, error: "Unknown policy version." };
+  }
+  const policyVersion = (b.policyVersion as string | undefined) ?? null;
+  return { ok: true, value: { email, name: text(b.name, 200), list, source, utm, marketing: b.marketing === true, policyVersion } };
 }
 
 /**
  * Records a signup. Signing up twice is not an error: the existing row keeps its
  * status and first-seen source, and picks up a name if it had none. An
- * unsubscribed address that signs up again goes back to pending.
+ * unsubscribed address that signs up again goes back to pending. Marketing
+ * consent and the policy version follow the latest signup: each one is a new
+ * statement of what the person agreed to.
  */
 export async function recordSignup(db: Db, input: SignupInput): Promise<{ id: string; created: boolean }> {
   const { rows } = await db.query<{ id: string; created: boolean }>(
-    `insert into signups (email, name, list, source, utm)
-     values ($1, $2, $3, $4, $5::jsonb)
+    `insert into signups (email, name, list, source, utm, marketing_opt_in, policy_version)
+     values ($1, $2, $3, $4, $5::jsonb, $6, $7)
      on conflict (list, lower(email)) do update set
        name = coalesce(signups.name, excluded.name),
        status = case when signups.status = 'unsubscribed' then 'pending' else signups.status end,
        consented_at = now(),
+       marketing_opt_in = excluded.marketing_opt_in,
+       policy_version = excluded.policy_version,
        updated_at = now()
      returning id, (xmax = 0) as created`,
-    [input.email, input.name, input.list, input.source, JSON.stringify(input.utm)],
+    [input.email, input.name, input.list, input.source, JSON.stringify(input.utm), input.marketing, input.policyVersion],
   );
   return rows[0];
 }

@@ -85,12 +85,15 @@ private struct LockScreenPreview: View {
 }
 
 extension LiveCardState {
-    /// The Settings preview: one chat waiting on an approval, three more on the strip.
+    /// The Settings preview: one chat waiting on an approval and one working as
+    /// rows, two more counted under them.
     static let sample = LiveCardState(chats: [
         LiveChat(id: "billing", short: "Billing", state: .needsYou, step: "Run npm test", reply: "Want me to run the tests first?",
-                 closeWord: "Nice", finishedAt: nil, callId: "sample", severity: "low", startedAt: Date().addingTimeInterval(-754)),
+                 closeWord: "Nice", finishedAt: nil, callId: "sample", severity: "low", startedAt: Date().addingTimeInterval(-754),
+                 title: "Billing page redesign"),
         LiveChat(id: "login", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.",
-                 closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil),
+                 closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil, startedAt: Date().addingTimeInterval(-312),
+                 title: "Fix the login redirect"),
         LiveChat(id: "ios", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up.",
                  closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil),
         LiveChat(id: "docs", short: "Docs", state: .done, step: "Finished", reply: "Docs page added.",

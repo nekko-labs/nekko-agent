@@ -13,6 +13,7 @@
  */
 
 import { clientMessageIdOf } from './chat.js';
+import { COMPUTER_ICONS } from './computers.js';
 import { skillTurnText } from './skills.js';
 import { stepUpPolicy, STEP_UP_CHALLENGE } from './step-up.js';
 import { phoneChangesView, PHONE_CHANGES_VIEW } from './phone-changes.js';
@@ -136,6 +137,7 @@ import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
  * phone-artifacts.ts and chat-links.ts.
  */
 export const PHONE_CHANNELS = [
+  'activity:state',
   'app:info',
   'app:quit',
   'artifact:read',
@@ -143,9 +145,11 @@ export const PHONE_CHANNELS = [
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
+  'chat:interruptQueued',
   'chat:pending',
   'chat:queue',
   'chat:send',
+  'chat:steer',
   'context:preview',
   'device:signOut',
   'engine:status',
@@ -170,6 +174,10 @@ export const PHONE_CHANNELS = [
   'logs:list',
   'logs:read',
   'machine:summary',
+  'engine:saveModelPreset',
+  'engine:settings',
+  'engine:unloadAll',
+  'model:load',
   'model:unload',
   'models:list',
   'monitor:summary',
@@ -189,7 +197,9 @@ export const PHONE_CHANNELS = [
   'session:delete',
   'session:fork',
   'session:get',
+  'session:photo',
   'session:setOptions',
+  'session:setSupportingWorkspaces',
   'session:watches',
   'sessions:summaries',
   'settings:get',
@@ -230,13 +240,16 @@ export interface PhoneDeniedGroup {
  * `PHONE_ALWAYS_DENIED` (SPEC "Full phone access"). Provider keys and other
  * credentials, remote access itself (settings, pairing more devices,
  * revoking, rotating), wiping data or resetting settings, and the desktop's
- * own OAuth sign-in, native dialogs, updater and OS shell.
+ * own OAuth sign-in, native dialogs, updater and OS shell, and closing
+ * another app on the computer to free memory.
  */
 export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
   channels: [
     'connector:connect',
     'connector:disconnect',
     'data:wipe',
+    // Closes another app on the computer: only the person at it decides that.
+    'memory:closeApp',
     'providers:importCliAuth',
     'providers:remove',
     'providers:save',
@@ -318,6 +331,27 @@ export const PHONE_ALWAYS_DENIED = {
 };
 
 /**
+ * What a paired computer may do beyond a phone (connected computers, decision
+ * 0040). It adds to the phone classes and never removes from them. The class
+ * comes from the pairing grant (`remote:pairComputer`) and stays on the device
+ * record, so nothing in a HELLO can set it. Credentials and the machine's own
+ * administration stay refused: these lists are all a computer gains.
+ */
+export const COMPUTER_ACCESS = {
+  icons: COMPUTER_ICONS,
+  /**
+   * Phone channels a computer does not get. A phone's change proof means Face
+   * ID; a computer signs with no presence check, so what a phone reaches behind
+   * that prompt, a shell above all, is not the computer's by inheritance.
+   */
+  refused: ['providers:saveSealed', 'providers:setEnabled', 'ssh:open', 'terminal:close', 'terminal:create', 'terminal:open', 'terminal:signal', 'workspace:addByPath'],
+  // `model:next` and `model:cancel` carry a reply `model:open` already started: not logged per piece.
+  read: ['agent:replay', 'chat:running', 'model:cancel', 'model:next', 'session:images', 'session:page'],
+  agent: ['attachment:import', 'changes:accept', 'changes:acceptAll', 'chat:cancelCompaction', 'chat:compact', 'chat:dequeue', 'model:open', 'session:setAttachments', 'session:truncate'],
+  sendKeys: ['clientMessageId', 'images', 'maxHistoryTurns', 'modelId', 'noTools', 'providerId', 'regenerate', 'resume', 'sessionId', 'skill', 'text', 'videos'],
+} as const;
+
+/**
  * IO-33 access classes. A paired phone's *Read* and *Change* switches
  * (Settings → Remote access → What phones can do, `RemoteDevice.access`)
  * decide whether it may call the channels listed here: a read-class call is
@@ -344,6 +378,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'providers:list',
   'providers:sealKey',
   'session:get',
+  'session:photo',
   'session:watches',
   'sessions:summaries',
   'settings:get',
@@ -359,9 +394,17 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
  * Server's state and a chat's context totals, each a narrow projection.
  */
 export const PHONE_MONITOR_READ_CHANNELS: readonly string[] = ['context:preview', 'engine:status', 'gpu:stats', 'system:stats'];
+/**
+ * Whether someone is using a computer (2026-11-05), so New chat can start a
+ * local-model chat on a free one: only yes/no answers, never how long it has
+ * been idle, its battery or its temperatures.
+ */
+export const PHONE_ACTIVITY_READ_CHANNELS: readonly string[] = ['activity:state'];
+export const PHONE_ACTIVITY_VIEW = ['chatActive', 'headless', 'strain', 'userActive'] as const;
 export const PHONE_READ_CHANNELS: readonly string[] = [
   ...PHONE_CHAT_READ_CHANNELS,
   ...PHONE_MONITOR_READ_CHANNELS,
+  ...PHONE_ACTIVITY_READ_CHANNELS,
   ...PHONE_GIT_READ_CHANNELS,
   ...PHONE_FILES_READ_CHANNELS,
   ...PHONE_TERMINAL_READ_CHANNELS,
@@ -396,8 +439,14 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
+  'chat:interruptQueued',
   'chat:queue',
   'chat:send',
+  'chat:steer',
+  'engine:saveModelPreset',
+  'engine:settings',
+  'engine:unloadAll',
+  'model:load',
   'model:unload',
   'session:create',
   'session:delete',
@@ -420,6 +469,7 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
   // Saved-folder access changes need a signed proof, including revocation.
+  'session:setSupportingWorkspaces',
   'workspace:addByPath',
   'workspace:remove',
   ...PHONE_PROVIDER_CHANGE_CHANNELS,
@@ -535,6 +585,8 @@ export function checkPhoneAccess(channel: string, access: PhoneDeviceAccess): vo
 export const PHONE_SETTINGS_KEYS = [
   'chatPaneAction',
   'defaultChatMode',
+  'defaultWorkspaceIds',
+  'machineIcon',
   'skipDeleteConfirmation',
   'voice.enabled',
   'voice.language',
@@ -553,9 +605,13 @@ export const PHONE_SETTINGS_VIEW = [
   'automationsPaused',
   'chatPaneAction',
   'defaultChatMode',
+  'defaultWorkspaceIds',
   'defaultModelId',
   'defaultProviderId',
+  'machineIcon',
   'favoriteModels',
+  // Read-only: Solo hides the composer's "In a subagent" (set on the computer only).
+  'orchestration.strategy',
   // Read-only: show the computer's effort before the phone has a saved choice.
   'effort',
   // Whether this computer shows phones the agent's changes (set on the computer only).
@@ -636,15 +692,68 @@ export const PHONE_PROVIDER_VIEW = ['enabled', 'id', 'kind', 'label'] as const;
  */
 export const PHONE_SESSION_OPTION_KEYS = [
   'archivedAt',
+  'autoModel',
+  'autoProviderSwitch',
+  'autoQuality',
+  'chatType',
+  'cloudOnly',
+  'disabledConnectors',
+  'disabledMcpServers',
+  'disabledTools',
   'effort',
+  'executionMode',
+  'gitIsolation',
+  'guidance',
+  'imageParams',
+  'incognito',
+  'memory',
   'mode',
   'modelId',
+  'offline',
+  'order',
   'pinned',
+  'privacy',
   'providerId',
   'tags',
   'thinking',
   'title',
+  'toolApproach',
+  'workMode',
 ] as const;
+
+/**
+ * Options that change what an agent may touch or where its data goes. They take
+ * the same signed proof as raising a mode, in either direction, since the gate
+ * can't always rank two values.
+ */
+export const PHONE_GUARDED_OPTION_KEYS = ['cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'memory', 'offline', 'privacy'] as const;
+
+/** The values a closed chat option may take (the store checks the rest). */
+export const PHONE_OPTION_VALUES = {
+  autoQuality: ['cheap', 'normal', 'quality'],
+  chatType: ['image', 'multimodal'],
+  executionMode: ['sandbox', 'unified', 'worktree'],
+  guidance: ['off', 'root', 'rules'],
+  memory: ['all', 'off', 'project'],
+  toolApproach: ['code', 'list'],
+  workMode: ['best-output', 'better-review', 'default', 'design'],
+} as const;
+
+/**
+ * How a Model Server loads and keeps models, from a connected device, while it
+ * has *Connected devices choose model settings* on. `port`, `bind`, `apiKey`,
+ * `corsOrigins` and the model folders stay on the machine: they open it to its
+ * network or read its disk. So do the two settings below, which decide this.
+ */
+export const PHONE_ENGINE_KEYS = ['autoStart', 'autoload', 'idleTtlSeconds', 'jitLoad', 'maxLoaded'] as const;
+export const PHONE_MODEL_SERVER_VIEW = [...PHONE_ENGINE_KEYS, 'clientModelSettings', 'shareWithComputers'] as const;
+/** Refused with `server-locked` while the Model Server sets its own. */
+export const PHONE_MODEL_SETTING_CHANNELS = ['engine:saveModelPreset', 'engine:settings', 'engine:unloadAll', 'model:load'] as const;
+/** A preset's keys that name files on the machine, which stay there. */
+export const PHONE_PRESET_PATH_KEYS = ['clip_g', 'clip_l', 'llm', 't5xxl', 'taesd', 'vae'] as const;
+
+/** Chat options that are on or off. */
+export const PHONE_OPTION_SWITCHES = ['autoModel', 'autoProviderSwitch', 'cloudOnly', 'gitIsolation', 'incognito', 'offline'] as const;
 
 /** The effort levels a phone may set on a chat (`EffortLevel`, settings.ts). */
 export const PHONE_EFFORT_LEVELS = ['low', 'medium', 'normal', 'high', 'xhigh', 'max'] as const;
@@ -653,13 +762,16 @@ export const PHONE_EFFORT_LEVELS = ['low', 'medium', 'normal', 'high', 'xhigh', 
 export const PHONE_CHAT_SEND_KEYS = [
   'clientMessageId',
   'images',
+  'maxHistoryTurns',
   'modelId',
+  'noTools',
   'providerId',
   'regenerate',
   'resume',
   'sessionId',
   'skill',
   'text',
+  'videos',
 ] as const;
 
 /**
@@ -671,6 +783,8 @@ export const PHONE_SKILL_VIEW = ['category', 'description', 'name', 'source'] as
 
 /** `chat:queue` payload fields a phone may set (a plain string is text). */
 export const PHONE_QUEUE_KEYS = ['clientMessageId', 'images', 'skill', 'text'] as const;
+/** The model a phone may name when it interrupts with a queued prompt. */
+export const PHONE_BRAIN_KEYS = ['modelId', 'providerId'] as const;
 
 /**
  * Chat modes a phone may choose, for new chats or for one chat. YOLO is
@@ -696,9 +810,21 @@ export const PHONE_CHAT_MODES = ['ask', 'guardrails', 'yolo'] as const;
  *   side, `thumbnailPhoneImages`), then only the newest `images` of them, each
  *   at most `thumbChars` long, are kept. Any other photo becomes `''`, so the
  *   phone still knows how many there were.
+ * - one photo at a time at full size when the phone opens it (`session:photo`):
+ *   the stored photo when it fits `photoSide` and `photoChars`, else a JPEG
+ *   copy with its long side at most `photoSide` px, so a phone screen shows it
+ *   sharp and it still fits one relay frame.
  * The computer keeps the whole chat; the desktop is where the full detail lives.
  */
-export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, thumbSide: 384, thumbChars: 96 * 1024 } as const;
+export const PHONE_SESSION_VIEW = {
+  messages: 300,
+  textChars: 4000,
+  images: 40,
+  thumbSide: 384,
+  thumbChars: 96 * 1024,
+  photoSide: 2048,
+  photoChars: 6 * 1024 * 1024,
+} as const;
 
 /**
  * The largest sealed reply frame the agent sends a phone. The relay drops
@@ -707,12 +833,6 @@ export const PHONE_SESSION_VIEW = { messages: 300, textChars: 4000, images: 40, 
  * Under 10 MB to leave room for the relay envelope.
  */
 export const PHONE_MAX_FRAME_BYTES = 9 * 1024 * 1024;
-
-/** The error a phone gets instead of a reply too large for the relay. */
-export function phoneFrameTooLarge(bytes: number): string {
-  const mb = (bytes / (1024 * 1024)).toFixed(1);
-  return `This reply is too large to send to a phone (${mb} MB). Open it on the computer.`;
-}
 
 export type PhoneAccessCode =
   | 'channel-denied'
@@ -796,6 +916,12 @@ function chatMode(value: unknown, what: string): void {
 /** One phone-settable setting's value, or why not. */
 function settingValue(path: string, value: unknown): void {
   switch (path) {
+    case 'defaultWorkspaceIds':
+      if (Array.isArray(value) && value.length <= 100 && value.every((id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(id))) return;
+      break;
+    case 'machineIcon':
+      if (value === '' || (COMPUTER_ICONS as readonly unknown[]).includes(value)) return;
+      break;
     case 'defaultChatMode':
       return chatMode(value, path);
     case 'chatPaneAction':
@@ -873,6 +999,10 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'session:setSupportingWorkspaces':
+      if (args.length !== 2 || typeof args[0] !== 'string' || !args[0]) throw new PhoneAccessError('value-invalid', 'session id');
+      settingValue('defaultWorkspaceIds', args[1]);
+      return {};
     case 'workspace:addByPath':
     case 'workspace:remove':
       if (typeof args[0] !== 'string' || args[0].trim() === '' || args[0].includes('\0')) {
@@ -894,10 +1024,38 @@ export function screenPhoneCall(
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (channel === 'pr:sessionList' && args[1] !== undefined && typeof args[1] !== 'boolean') throw new PhoneAccessError('value-invalid', 'refresh');
       return {};
+    case 'session:photo':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'message id');
+      if (!Number.isInteger(args[2]) || (args[2] as number) < 0) throw new PhoneAccessError('value-invalid', 'photo index');
+      if (args.length > 3) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
     case 'session:fork':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (args[1] !== undefined && args[1] !== null && (typeof args[1] !== 'string' || args[1] === '')) throw new PhoneAccessError('value-invalid', 'message id');
       return {};
+    case 'model:load':
+    case 'model:unload':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
+      // Passed to a runtime's own CLI on the computer: a leading dash would read as a flag.
+      if (typeof args[1] !== 'string' || args[1] === '' || args[1].startsWith('-')) throw new PhoneAccessError('value-invalid', 'model id');
+      return {};
+    case 'engine:saveModelPreset': {
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'model id');
+      if (!isObj(args[1])) throw new PhoneAccessError('value-invalid', 'preset');
+      const diffusion = args[1].diffusion;
+      for (const key of PHONE_PRESET_PATH_KEYS) {
+        if (isObj(diffusion) && own(diffusion, key)) throw new PhoneAccessError('option-denied', key);
+      }
+      return {};
+    }
+    case 'engine:settings': {
+      if (!isObj(args[0])) throw new PhoneAccessError('value-invalid', 'model server settings');
+      for (const key of Object.keys(args[0])) {
+        if (!(PHONE_ENGINE_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+      }
+      return {};
+    }
     case 'chat:editQueued': {
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
       if (typeof args[1] !== 'number' || !Number.isInteger(args[1]) || args[1] < 0) throw new PhoneAccessError('value-invalid', 'queue index');
@@ -911,6 +1069,21 @@ export function screenPhoneCall(
       }
       return {};
     }
+    case 'chat:steer':
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'string' || !args[1].trim()) throw new PhoneAccessError('value-invalid', 'message');
+      return {};
+    case 'chat:interruptQueued': {
+      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
+      if (typeof args[1] !== 'number' || !Number.isInteger(args[1]) || args[1] < 0) throw new PhoneAccessError('value-invalid', 'queue index');
+      const brain = args[2];
+      if (brain === undefined || brain === null) return {};
+      if (!isObj(brain)) throw new PhoneAccessError('value-invalid', 'model');
+      for (const key of Object.keys(brain)) {
+        if (!(PHONE_BRAIN_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+      }
+      return {};
+    }
     case 'task:runNow':
     case 'workflow:run':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', channel === 'task:runNow' ? 'task id' : 'workflow id');
@@ -920,10 +1093,6 @@ export function screenPhoneCall(
       return {};
     case 'context:preview':
       if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'chat id');
-      return {};
-    case 'model:unload':
-      if (typeof args[0] !== 'string' || args[0] === '') throw new PhoneAccessError('value-invalid', 'provider id');
-      if (typeof args[1] !== 'string' || args[1] === '') throw new PhoneAccessError('value-invalid', 'model id');
       return {};
     case 'settings:update':
       return { settingsPatch: checkPhoneSettingsPatch(args[0]) };
@@ -935,6 +1104,12 @@ export function screenPhoneCall(
       }
       if (own(patch, 'mode')) chatMode(patch.mode, 'mode');
       if (own(patch, 'effort') && !(PHONE_EFFORT_LEVELS as readonly unknown[]).includes(patch.effort)) throw new PhoneAccessError('value-invalid', 'effort');
+      for (const [key, allowed] of Object.entries(PHONE_OPTION_VALUES)) {
+        if (own(patch, key) && !(allowed as readonly unknown[]).includes(patch[key])) throw new PhoneAccessError('value-invalid', key);
+      }
+      for (const key of PHONE_OPTION_SWITCHES) {
+        if (own(patch, key) && typeof patch[key] !== 'boolean') throw new PhoneAccessError('value-invalid', key);
+      }
       return {};
     }
     case 'chat:send': {
@@ -1035,13 +1210,21 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
     case 'skills:runnable':
       return Array.isArray(result) ? result.map((s) => pick(s, PHONE_SKILL_VIEW)) : [];
     case 'session:get':
+    case 'chat:steer':
       return phoneSessionView(result);
+    case 'session:photo':
+      // One photo's data URL, nothing else.
+      return typeof result === 'string' && result.startsWith('data:image/') ? result : null;
     case 'changes:list':
       return phoneChangesView(result);
     case 'chat:editQueued':
       return isObj(result) ? { id: result.id, queue: phoneQueueView(result.queue) } : null;
     case 'session:fork':
       return isObj(result) ? pick(result, ['id', 'title']) : null;
+    case 'engine:settings':
+      return pick(result, PHONE_MODEL_SERVER_VIEW);
+    case 'activity:state':
+      return pick(result, PHONE_ACTIVITY_VIEW);
     case 'tasks:list':
       return phoneTasksView(result);
     case 'workflows:list':
@@ -1229,12 +1412,15 @@ export async function callFromPhone(
   if (channel === 'task:runNow' || channel === 'workflow:run') callArgs = [args[0]];
   if (channel === 'tasks:list' || channel === 'workflows:list' || channel === 'usage:summary') callArgs = [];
   if (channel === 'system:stats' || channel === 'gpu:stats' || channel === 'engine:status') callArgs = [];
+  // The computer's own idle threshold: the phone never sets it.
+  if (channel === 'activity:state') callArgs = [];
   // A chat's own context only: the phone never attaches a path.
   if (channel === 'context:preview') callArgs = [args[0], []];
   if (channel === 'model:unload') callArgs = [args[0], args[1]];
   if (channel === 'session:fork') callArgs = args[1] == null ? [args[0]] : [args[0], args[1]];
   if (channel === 'chat:editQueued') callArgs = [args[0], args[1], pick(args[2], PHONE_QUEUE_EDIT_KEYS)];
   if (channel === 'pr:sessionList') callArgs = [args[0], args[1] === true];
+  if (channel === 'session:photo') callArgs = [args[0], args[1], args[2]];
   if ((PHONE_TERMINAL_CHANNELS as readonly string[]).includes(channel)) callArgs = phoneTerminalCallArgs(channel, args);
   if (channel === 'terminal:create') {
     // A new terminal starts in the chat's folder, as the desktop's does: the phone never names a path.
@@ -1292,6 +1478,14 @@ export function phoneAccessPolicy() {
     skillView: [...PHONE_SKILL_VIEW],
     queueKeys: [...PHONE_QUEUE_KEYS],
     sessionOptionKeys: [...PHONE_SESSION_OPTION_KEYS],
+    guardedOptionKeys: [...PHONE_GUARDED_OPTION_KEYS],
+    optionValues: PHONE_OPTION_VALUES,
+    optionSwitches: [...PHONE_OPTION_SWITCHES],
+    engineKeys: [...PHONE_ENGINE_KEYS],
+    modelServerView: [...PHONE_MODEL_SERVER_VIEW],
+    activityView: [...PHONE_ACTIVITY_VIEW],
+    modelSettingChannels: [...PHONE_MODEL_SETTING_CHANNELS],
+    presetPathKeys: [...PHONE_PRESET_PATH_KEYS],
     chatSendKeys: [...PHONE_CHAT_SEND_KEYS],
     chatModes: [...PHONE_CHAT_MODES],
     effortLevels: [...PHONE_EFFORT_LEVELS],
@@ -1308,6 +1502,8 @@ export function phoneAccessPolicy() {
     monitorView: { ...PHONE_MONITOR_VIEW },
     monitorSources: [...PHONE_MONITOR_SOURCES],
     queueEditKeys: [...PHONE_QUEUE_EDIT_KEYS],
+    brainKeys: [...PHONE_BRAIN_KEYS],
+    computerAccess: COMPUTER_ACCESS,
     expertMonitor: {
       systemView: [...PHONE_SYSTEM_VIEW],
       tempsView: [...PHONE_TEMPS_VIEW],

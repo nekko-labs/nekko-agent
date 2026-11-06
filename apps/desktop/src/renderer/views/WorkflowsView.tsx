@@ -1,3 +1,4 @@
+import { WorkflowIcon } from '../gentleface-icons.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import type {
   SkillDef,
@@ -39,7 +40,7 @@ import { CiRunnersView } from './CiRunnersView.js';
 import { useShown } from '../simpleMode.js';
 
 /**
- * The Workflows tab: automation modelled on GitHub Actions, where a step can be
+ * The Scheduled Tasks tab (code name: workflows): automation modelled on GitHub Actions, where a step can be
  * an agent prompt, a skill, another workflow, or a shell command.
  *
  * Built for an install that accumulates hundreds of these. The left rail filters
@@ -92,7 +93,6 @@ export function WorkflowsView() {
   const [snapshot, setSnapshot] = useState<WorkflowsSnapshot>({ workflows: [], runs: [] });
   const [filter, setFilter] = useState<WorkflowFilter>({});
   const [grouping, setGrouping] = useState<WorkflowGrouping>('category');
-  const [section, setSection] = useState<'workflows' | 'ciRunners'>('workflows');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<Workflow | null>(null);
   const [creating, setCreating] = useState<{ seed?: WorkflowSeed } | null>(null);
@@ -100,6 +100,8 @@ export function WorkflowsView() {
   const [setup, setSetup] = useState<WorkflowTemplate | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const paused = useStore((s) => s.settings?.automationsPaused === true);
+  const ciRunnersFocus = useStore((s) => s.ciRunnersFocus);
+  const [showCi, setShowCi] = useState(ciRunnersFocus);
   const workflowFocus = useStore((s) => s.workflowFocus);
   /** A run a notification asked to show; its row opens on that run. */
   const [focusRun, setFocusRun] = useState<{ workflowId: string; runId: string } | null>(null);
@@ -108,6 +110,10 @@ export function WorkflowsView() {
     void window.nekko.listWorkflows().then((next) => { setSnapshot(next); setLoaded(true); }).catch(() => setLoadFailed(true));
     return window.nekko.onWorkflowsUpdated((next) => { setSnapshot(next); setLoaded(true); });
   }, []);
+
+  useEffect(() => {
+    if (ciRunnersFocus) setShowCi(true);
+  }, [ciRunnersFocus]);
 
   // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
   const sheetOpen = !!(creating || editing || setup);
@@ -195,15 +201,14 @@ export function WorkflowsView() {
     await window.nekko.updateWorkflow(wf.id, { enabled: !wf.enabled });
   };
 
-  const ciShown = useShown('ci');
+  const ciShown = useShown('ci') || showCi || ciRunnersFocus;
   return (
     <div className="flex h-full min-h-0">
-      {section === 'ciRunners' && ciShown ? <CiRunnersView segment={<SectionSegment value={section} onChange={setSection} />} /> : <>
       {/* Filters */}
       {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
         <input
-          className="input w-full text-[12.5px]"
-          placeholder="Search workflows…"
+          className="input w-full text-xs"
+          placeholder="Search scheduled tasks…"
           value={filter.query ?? ''}
           onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value || undefined }))}
         />
@@ -215,10 +220,10 @@ export function WorkflowsView() {
                 key={g}
                 title={
                   g === 'category'
-                    ? 'Group by what each workflow is for (Code review, Maintenance…)'
-                    : 'Group by what starts it — "what runs when a PR opens"'
+                    ? 'Group by what each task is for (Code review, Maintenance…)'
+                    : 'Group by what starts it: "what runs when a PR opens"'
                 }
-                className={`flex-1 rounded-lg border px-2 py-1 text-[11.5px] transition ${grouping === g ? 'border-transparent' : 'border-line text-ink-faint'}`}
+                className={`flex-1 rounded-lg border px-2 py-1 text-xs transition ${grouping === g ? 'border-transparent' : 'border-line text-ink-faint'}`}
                 style={grouping === g ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
                 onClick={() => setGrouping(g)}
               >
@@ -233,7 +238,7 @@ export function WorkflowsView() {
             {([undefined, 'enabled', 'disabled'] as const).map((s) => (
               <button
                 key={s ?? 'all'}
-                className={`flex-1 rounded-lg border px-2 py-1 text-[11.5px] transition ${filter.state === s ? 'border-transparent' : 'border-line text-ink-faint'}`}
+                className={`flex-1 rounded-lg border px-2 py-1 text-xs transition ${filter.state === s ? 'border-transparent' : 'border-line text-ink-faint'}`}
                 style={filter.state === s ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
                 onClick={() => setFilter((f) => ({ ...f, state: s }))}
               >
@@ -246,7 +251,7 @@ export function WorkflowsView() {
         <FilterGroup label="Starts when">
           {TRIGGER_FAMILIES.map((fam) => (
             <div key={fam.label} className="mb-2">
-              <p className="mb-1 text-[10.5px] text-ink-faint">{fam.label}</p>
+              <p className="mb-1 text-2xs text-ink-faint">{fam.label}</p>
               <div className="flex flex-wrap gap-1">
                 {fam.kinds.map((kind) => {
                   const k = WORKFLOW_TRIGGER_KINDS.find((x) => x.kind === kind)!;
@@ -255,7 +260,7 @@ export function WorkflowsView() {
                     <button
                       key={k.kind}
                       title={k.hint}
-                      className={`rounded-full border px-2 py-0.5 text-[11px] transition ${on ? 'border-transparent' : 'border-line text-ink-faint'}`}
+                      className={`rounded-full border px-2 py-0.5 text-2xs transition ${on ? 'border-transparent' : 'border-line text-ink-faint'}`}
                       style={on ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
                       onClick={() => setFilter((f) => ({ ...f, triggerKind: on ? undefined : (k.kind as WorkflowTriggerKind) }))}
                     >
@@ -286,69 +291,68 @@ export function WorkflowsView() {
 
       {/* List */}
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        {!loaded ? <p className="p-4 text-[13px] text-ink-soft" role="status">{loadFailed ? 'Could not load workflows. Reopen this tab to try again.' : 'Loading workflows…'}</p> : workflows.length === 0 ? (<>
-          {/* The wizard replaces the list header, so keep the switcher: CI runners must stay reachable with no workflows. */}
-          <div className="mx-auto max-w-4xl px-4 sm:px-8"><SectionSegment value={section} onChange={setSection} /></div>
+        {!loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
+          {/* The wizard replaces the list, so the runners follow it: they must stay reachable with no tasks. */}
+          {ciShown && <div className="mx-auto mt-6 max-w-4xl px-4 sm:px-8"><CiRunnersView /></div>}
         </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
-            {!hasAppChrome && <h1 className="view-title">Workflows</h1>}
-            <SectionSegment value={section} onChange={setSection} />
-            <span className="text-[12px] text-ink-faint">
+            {!hasAppChrome && <h1 className="view-title">Scheduled Tasks</h1>}
+            <span className="text-xs text-ink-faint">
               {visible.length === workflows.length
                 ? `${workflows.length} total`
                 : `${visible.length} of ${workflows.length}`}
             </span>
             <label
-              className="ml-auto flex items-center gap-2 text-[12px] text-ink-soft"
+              className="ml-auto flex items-center gap-2 text-xs text-ink-soft"
               title="Stops schedules, events and polls from starting runs, and stops what is running now. Run buttons still work."
             >
               Pause all automations
               <Toggle value={paused} onChange={(v) => void togglePaused(v)} label="Pause all automations" />
             </label>
-            <button className="btn btn-primary py-1.5!" onClick={() => setPicking(true)}>
-              <PlusIcon className="h-3.5 w-3.5" /> New workflow
+            <button className="btn btn-primary py-1!" onClick={() => setPicking(true)}>
+              <WorkflowIcon className="h-3.5 w-3.5" /> New scheduled task
             </button>
           </div>
-          <p className="mt-1 text-[12.5px] text-ink-soft">
-            A workflow is a small automation: named steps run in order and can loop back. A trigger is what starts it —
+          <p className="mt-1 text-xs text-ink-soft">
+            A scheduled task is a small automation: named steps run in order and can loop back. A trigger is what starts it:
             by hand, on a schedule, or when something happens.
           </p>
 
           {paused && (
             <div
-              className="mt-2 flex items-center gap-3 rounded-xl border px-3 py-2 text-[12.5px]"
+              className="mt-2 flex items-center gap-3 rounded-xl border px-3 py-2 text-xs"
               style={{ borderColor: 'var(--warning)', background: 'color-mix(in srgb, var(--warning) 10%, transparent)' }}
               role="status"
               data-automations-paused
             >
               <span className="min-w-0 flex-1">
-                <strong className="font-semibold">Automations are paused.</strong> Schedules, events and polls won't start runs, and
-                scheduled tasks wait. Run still works.
+                <strong className="font-semibold">Automations are paused.</strong> Schedules, events and polls won't start
+                any task. Run still works.
               </span>
-              <button className="btn btn-outline py-1! text-[12px]" onClick={() => void togglePaused(false)}>Resume</button>
+              <button className="btn btn-outline py-1! text-xs" onClick={() => void togglePaused(false)}>Resume</button>
             </div>
           )}
 
-          <details className="mt-2 rounded-xl border px-3 py-2 text-[12px] text-ink-soft" style={{ borderColor: 'var(--line)' }} open={workflows.length === 0}>
-            <summary className="cursor-pointer font-medium text-ink-faint">How workflows work</summary>
-            <dl className="mt-2 space-y-1.5">
+          <details className="mt-2 rounded-xl border px-3 py-2 text-xs text-ink-soft" style={{ borderColor: 'var(--line)' }} open={workflows.length === 0}>
+            <summary className="cursor-pointer font-medium text-ink-faint">How scheduled tasks work</summary>
+            <dl className="mt-2 space-y-1">
               <div className="flex gap-2">
                 <dt className="w-32 shrink-0 font-medium">Automation</dt>
                 <dd className="text-ink-faint">
-                  The whole thing: steps (an agent prompt, a shell command, a skill, another workflow) plus the triggers
+                  The whole thing: steps (an agent prompt, a shell command, a skill, another scheduled task) plus the triggers
                   that set them off. A verify step that finds problems can send the run back to build and try again.
                 </dd>
               </div>
               <div className="flex gap-2">
                 <dt className="w-32 shrink-0 font-medium">Manual trigger</dt>
                 <dd className="text-ink-faint">
-                  Started by you: the <strong>Run</strong> button, or <code className="font-mono text-[11px]">nekko-agent workflow run</code> in a
-                  terminal. Every workflow can run by hand, even one whose other triggers are off.
+                  Started by you: the <strong>Run</strong> button, or <code className="font-mono text-2xs">nekko-agent scheduled-task run</code> in a
+                  terminal. Every scheduled task can run by hand, even one whose other triggers are off.
                 </dd>
               </div>
               <div className="flex gap-2">
-                <dt className="w-32 shrink-0 font-medium">Scheduled job</dt>
+                <dt className="w-32 shrink-0 font-medium">Schedule trigger</dt>
                 <dd className="text-ink-faint">
                   A schedule trigger: a cron expression or a plain interval ("every night", "every 15 minutes"). This
                   machine must be awake when it fires.
@@ -364,7 +368,7 @@ export function WorkflowsView() {
               <div className="flex gap-2">
                 <dt className="w-32 shrink-0 font-medium">Groupings</dt>
                 <dd className="text-ink-faint">
-                  The sidebar sorts the list two ways: <strong>Category</strong> is what a workflow is for
+                  The sidebar sorts the list two ways: <strong>Category</strong> is what a task is for
                   ("Code review"); <strong>Trigger</strong> is what starts it ("GitHub · pull request"), so one heading
                   answers "what runs when a PR opens".
                 </dd>
@@ -398,10 +402,10 @@ export function WorkflowsView() {
                 focusRun={focusRun}
               />
             ))}
+            {ciShown && <CiRunnersView />}
           </div>
         </div>}
       </div>
-      </>}
 
       {picking && (
         <TemplateGallery
@@ -451,32 +455,10 @@ export function WorkflowsView() {
   );
 }
 
-/** Switches the tab between workflows and this Mac's CI runners. */
-export function SectionSegment({ value, onChange }: { value: 'workflows' | 'ciRunners'; onChange(v: 'workflows' | 'ciRunners'): void }) {
-  // Workflows alone needs no switch: CI runners is kept for Expert by default.
-  if (!useShown('ci')) return null;
-  return (
-    <div role="group" aria-label="Section" className="flex gap-1">
-      {(['workflows', 'ciRunners'] as const).map((v) => (
-        <button
-          key={v}
-          type="button"
-          aria-pressed={value === v}
-          className={`rounded-lg border px-2 py-1 text-[11.5px] transition ${value === v ? 'border-transparent' : 'border-line text-ink-faint'}`}
-          style={value === v ? { background: 'var(--accent-soft)', color: 'var(--accent)' } : undefined}
-          onClick={() => onChange(v)}
-        >
-          {v === 'workflows' ? 'Workflows' : 'CI runners'}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mt-4">
-      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{label}</p>
+      <p className="mb-1 text-xs font-medium text-ink-soft">{label}</p>
       {children}
     </div>
   );
@@ -485,11 +467,11 @@ function FilterGroup({ label, children }: { label: string; children: React.React
 function CategoryRow({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
   return (
     <button
-      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[12px] transition hover:bg-(--surface-2) ${active ? 'bg-(--surface-2) font-medium' : ''}`}
+      className={`flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs transition hover:bg-(--surface-2) ${active ? 'bg-(--surface-2) font-medium' : ''}`}
       onClick={onClick}
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="font-mono text-[10.5px] tabular-nums text-ink-faint">{count}</span>
+      <span className="font-mono text-2xs tabular-nums text-ink-faint">{count}</span>
     </button>
   );
 }
@@ -519,12 +501,12 @@ function WorkflowGroupBlock({
   return (
     <section>
       <button className="flex w-full items-baseline gap-2 py-1 text-left" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span className="w-3 text-[10px] text-ink-faint">{open ? '▾' : '▸'}</span>
-        <h2 className="text-[13.5px] font-semibold">{label}</h2>
-        <span className="font-mono text-[10.5px] text-ink-faint">{workflows.length}</span>
+        <span className="w-3 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
+        <h2 className="text-sm font-semibold">{label}</h2>
+        <span className="font-mono text-2xs text-ink-faint">{workflows.length}</span>
       </button>
       {open && (
-        <div className="mt-1 space-y-1.5">
+        <div className="mt-1 space-y-1">
           {shown.map((wf) => (
             <WorkflowRow
               key={`${label}-${wf.id}`}
@@ -543,7 +525,7 @@ function WorkflowGroupBlock({
             />
           ))}
           {hidden > 0 && (
-            <button className="btn btn-ghost w-full py-1! text-[12px] text-ink-soft" onClick={() => setShowAll(true)}>
+            <button className="btn btn-ghost w-full py-1! text-xs text-ink-soft" onClick={() => setShowAll(true)}>
               Show {hidden} more
             </button>
           )}
@@ -575,13 +557,13 @@ function WorkflowRow({
 
   return (
     <div className="card overflow-hidden" data-workflow-row={wf.id}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3.5 py-2.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
         <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onExpand} aria-expanded={expanded}>
-          <span className="w-3 shrink-0 text-[10px] text-ink-faint">{expanded ? '▾' : '▸'}</span>
+          <span className="w-3 shrink-0 text-2xs text-ink-faint">{expanded ? '▾' : '▸'}</span>
           <StatusDot color={tone?.color ?? STATUS.neutral} pulse={!!live} title={tone?.label ?? 'never run'} />
-          <span className={`truncate text-[13px] font-medium ${wf.enabled ? '' : 'text-ink-faint'}`}>{wf.name}</span>
+          <span className={`truncate text-sm font-medium ${wf.enabled ? '' : 'text-ink-faint'}`}>{wf.name}</span>
           {!wf.enabled && <Badge tone="neutral">off</Badge>}
-          <span className="shrink-0 font-mono text-[10.5px] text-ink-faint">
+          <span className="shrink-0 font-mono text-2xs text-ink-faint">
             {wf.steps.length} step{wf.steps.length === 1 ? '' : 's'}
           </span>
         </button>
@@ -596,7 +578,7 @@ function WorkflowRow({
           )}
         </span>
 
-        <span className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-faint">
+        <span className="flex shrink-0 items-center gap-2 text-2xs text-ink-faint">
           {!live && last && isRunnerRun(last) && <Badge tone="info" title="Fired by an external event">runner</Badge>}
           {!live && wf.waitingSince && (
             <span data-workflow-waiting>
@@ -619,25 +601,25 @@ function WorkflowRow({
 
         <span className="flex shrink-0 items-center gap-1">
           {live ? (
-            <button className="btn btn-outline py-1! text-[12px]" onClick={() => void window.nekko.cancelWorkflowRun(live.id)}>
+            <button className="btn btn-outline py-1! text-xs" onClick={() => void window.nekko.cancelWorkflowRun(live.id)}>
               Stop
             </button>
           ) : (
             <button
-              className="btn btn-outline py-1! text-[12px]"
+              className="btn btn-outline py-1! text-xs"
               disabled={busy || wf.steps.length === 0}
-              title="Run it now — a manual trigger; works even when the workflow's other triggers are off"
+              title="Run it now, a manual trigger; works even when the task's other triggers are off"
               onClick={onRun}
             >
               {busy ? 'Running…' : 'Run'}
             </button>
           )}
-          <button className="btn btn-ghost py-1! text-[12px]" onClick={onEdit}>Edit</button>
-          <button className="btn btn-ghost px-1.5! py-1! text-[12px] text-ink-faint" title={wf.enabled ? 'Disable' : 'Enable'} onClick={onToggle}>
+          <button className="btn btn-ghost py-1! text-xs" onClick={onEdit}>Edit</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs text-ink-faint" title={wf.enabled ? 'Disable' : 'Enable'} onClick={onToggle}>
             {wf.enabled ? '◉' : '○'}
           </button>
-          <button className="btn btn-ghost px-1.5! py-1! text-[12px] text-ink-faint" title="Duplicate" onClick={onDuplicate}>⧉</button>
-          <button className="btn btn-ghost px-1.5! py-1! text-[12px] text-danger" title="Delete" onClick={onDelete}>✕</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs text-ink-faint" title="Duplicate" onClick={onDuplicate}>⧉</button>
+          <button className="btn btn-ghost px-2! py-1! text-xs text-danger" title="Delete" onClick={onDelete}>✕</button>
         </span>
       </div>
 
@@ -657,7 +639,7 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
   const transcript = (sessionId?: string) =>
     sessionId && (
       <button
-        className="btn btn-ghost shrink-0 px-1.5! py-0.5! text-[11px] text-ink-soft"
+        className="btn btn-ghost shrink-0 px-2! py-0.5! text-2xs text-ink-soft"
         title="Open this step's transcript"
         onClick={() => { openChat(sessionId); setView('command'); }}
       >
@@ -666,17 +648,17 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
     );
 
   return (
-    <div className="border-t border-line bg-(--surface-2) px-3.5 py-3">
-      {wf.description && <p className="text-[12.5px] text-ink-soft">{wf.description}</p>}
+    <div className="border-t border-line bg-(--surface-2) px-4 py-3">
+      {wf.description && <p className="text-xs text-ink-soft">{wf.description}</p>}
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         {wf.triggers.map((t) => (
           <Badge
             key={t.id}
             tone={t.enabled === false ? 'neutral' : 'info'}
             title={
               t.enabled === false
-                ? 'Not armed — this trigger never starts the workflow. The Run button still does.'
+                ? 'Not armed: this trigger never starts the task. The Run button still does.'
                 : (WORKFLOW_TRIGGER_KINDS.find((k) => k.kind === t.kind)?.hint ?? undefined)
             }
           >
@@ -684,12 +666,12 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
           </Badge>
         ))}
         {wf.triggers.some((t) => t.kind === 'cli') && (
-          <span className="font-mono text-[10.5px] text-ink-faint">nekko-agent workflow run {cliCommand(wf)}</span>
+          <span className="font-mono text-2xs text-ink-faint">nekko-agent scheduled-task run {cliCommand(wf)}</span>
         )}
       </div>
 
       <div className="mt-3">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+        <p className="mb-1 text-xs font-medium text-ink-soft">
           {shownRun ? `Steps · ${STATUS_TONE[shownRun.status].label} run` : 'Steps'}
         </p>
         <WorkflowCanvas steps={wf.steps} run={shownRun} />
@@ -698,18 +680,18 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
       {shownRun && (
         <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_220px]">
           <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+            <p className="mb-1 text-xs font-medium text-ink-soft">
               This run · {STATUS_TONE[shownRun.status].label}
               {shownRun.status !== 'running' && ` in ${formatDuration(runDurationMs(shownRun))}`} · {relative(shownRun.startedAt)}
               {runPolicyNote(shownRun.lowPriority, shownRun.waitedMs) && ` · ${runPolicyNote(shownRun.lowPriority, shownRun.waitedMs)}`}
             </p>
             {outcome.failed && (
-              <div className="mb-2 rounded-lg border px-2.5 py-2" style={{ borderColor: STATUS.danger }} data-run-failure>
+              <div className="mb-2 rounded-lg border px-3 py-2" style={{ borderColor: STATUS.danger }} data-run-failure>
                 <div className="flex items-start gap-2">
-                  <span className="min-w-0 flex-1 text-[12px]">
+                  <span className="min-w-0 flex-1 text-xs">
                     <span className="font-semibold" style={{ color: STATUS.danger }}>Failed at "{outcome.failed.name}"</span>
                     {outcome.failed.text && (
-                      <span className="mt-0.5 block max-h-24 overflow-y-auto whitespace-pre-wrap font-mono text-[11px] text-ink-soft">
+                      <span className="mt-0.5 block max-h-24 overflow-y-auto whitespace-pre-wrap font-mono text-2xs text-ink-soft">
                         {outcome.failed.text.slice(-600)}
                       </span>
                     )}
@@ -719,18 +701,18 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
               </div>
             )}
             {outcome.result && (
-              <div className="mb-2 rounded-lg border border-line bg-(--surface) px-2.5 py-2" data-run-result>
+              <div className="mb-2 rounded-lg border border-line bg-(--surface) px-3 py-2" data-run-result>
                 <div className="flex items-start gap-2">
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-ink-faint">Result</span>
-                    <span className="mt-0.5 block max-h-48 overflow-y-auto whitespace-pre-wrap text-[12px] leading-snug">{outcome.result.text}</span>
+                    <span className="block text-xs font-medium text-ink-soft">Result</span>
+                    <span className="mt-0.5 block max-h-48 overflow-y-auto whitespace-pre-wrap text-xs leading-snug">{outcome.result.text}</span>
                   </span>
                   {transcript(outcome.result.sessionId)}
                 </div>
               </div>
             )}
             {shownRun.message && shownRun.message !== outcome.failed?.text && (
-              <p className="mb-1.5 text-[11.5px]" style={{ color: shownRun.status === 'failure' ? STATUS.danger : 'var(--ink-soft)' }}>
+              <p className="mb-1 text-xs" style={{ color: shownRun.status === 'failure' ? STATUS.danger : 'var(--ink-soft)' }}>
                 {shownRun.message}
               </p>
             )}
@@ -739,15 +721,15 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
                 const step = wf.steps.find((s) => s.id === entry.stepId);
                 const t = STATUS_TONE[entry.status === 'skipped' ? 'cancelled' : entry.status === 'pending' ? 'queued' : entry.status];
                 return (
-                  <div key={`${entry.stepId}-${i}`} className="flex items-start gap-2 text-[11.5px]">
-                    <StatusDot color={t.color} pulse={entry.status === 'running'} className="mt-1.5" />
+                  <div key={`${entry.stepId}-${i}`} className="flex items-start gap-2 text-xs">
+                    <StatusDot color={t.color} pulse={entry.status === 'running'} className="mt-1" />
                     <span className="min-w-0 flex-1">
                       <span className="font-medium">{step?.name ?? entry.stepId}</span>
-                      {entry.attempt > 1 && <span className="ml-1 font-mono text-[10px] text-ink-faint">attempt {entry.attempt}</span>}
-                      {step && <span className="ml-1.5 text-ink-faint">{stepSummary(step)}</span>}
-                      {entry.error && <span className="block text-[11px]" style={{ color: STATUS.danger }}>{entry.error}</span>}
+                      {entry.attempt > 1 && <span className="ml-1 font-mono text-2xs text-ink-faint">attempt {entry.attempt}</span>}
+                      {step && <span className="ml-2 text-ink-faint">{stepSummary(step)}</span>}
+                      {entry.error && <span className="block text-2xs" style={{ color: STATUS.danger }}>{entry.error}</span>}
                       {entry.output && !entry.error && (
-                        <span className="mt-0.5 block max-h-16 overflow-y-auto whitespace-pre-wrap font-mono text-[10.5px] text-ink-faint">
+                        <span className="mt-0.5 block max-h-16 overflow-y-auto whitespace-pre-wrap font-mono text-2xs text-ink-faint">
                           {entry.output.slice(-400)}
                         </span>
                       )}
@@ -756,26 +738,26 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
                   </div>
                 );
               })}
-              {shownRun.steps.length === 0 && <p className="text-[11.5px] text-ink-faint">No steps recorded yet.</p>}
+              {shownRun.steps.length === 0 && <p className="text-xs text-ink-faint">No steps recorded yet.</p>}
             </div>
           </div>
 
           <div>
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">History</p>
+            <p className="mb-1 text-xs font-medium text-ink-soft">History</p>
             <div className="space-y-0.5">
               {runs.slice(0, 10).map((r) => {
                 const failedAt = runOutcome(r, wf.steps).failed?.name;
                 return (
                   <button
                     key={r.id}
-                    className={`flex w-full items-start gap-2 rounded-lg px-2 py-1 text-left text-[11.5px] transition hover:bg-(--surface) ${r.id === shownRun.id ? 'bg-(--surface)' : ''}`}
+                    className={`flex w-full items-start gap-2 rounded-lg px-2 py-1 text-left text-xs transition hover:bg-(--surface) ${r.id === shownRun.id ? 'bg-(--surface)' : ''}`}
                     onClick={() => setSelectedRunId(r.id)}
                     data-run-id={r.id}
                   >
                     <StatusDot color={STATUS_TONE[r.status].color} pulse={r.status === 'running'} className="mt-1" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate">{r.triggerLabel || r.triggerKind}</span>
-                      <span className="block truncate text-[10.5px] text-ink-faint">
+                      <span className="block truncate text-2xs text-ink-faint">
                         {isRunnerRun(r) && <span title="Fired by an external event">runner · </span>}
                         {STATUS_TONE[r.status].label}
                         {r.status !== 'running' && ` · ${formatDuration(runDurationMs(r))}`}
@@ -783,11 +765,11 @@ function WorkflowDetail({ wf, runs, live, focusRunId }: { wf: Workflow; runs: Wo
                         {runPolicyNote(r.lowPriority, r.waitedMs) && <span data-run-policy-note>{` · ${runPolicyNote(r.lowPriority, r.waitedMs)}`}</span>}
                       </span>
                     </span>
-                    <span className="shrink-0 font-mono text-[10px] text-ink-faint">{relative(r.startedAt)}</span>
+                    <span className="shrink-0 font-mono text-2xs text-ink-faint">{relative(r.startedAt)}</span>
                   </button>
                 );
               })}
-              {runs.length === 0 && <p className="text-[11.5px] text-ink-faint">No runs yet.</p>}
+              {runs.length === 0 && <p className="text-xs text-ink-faint">No runs yet.</p>}
             </div>
           </div>
         </div>

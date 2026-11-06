@@ -7,7 +7,7 @@
 use crate::allowlist::{Dialect, runs_git};
 use crate::bash::{Failure, RunRequest};
 use crate::context::{ChatMode, ToolCall, ToolContext, ToolResult};
-use crate::gitguard::{hardened_git_env, touches_git_config};
+use crate::gitguard::{harden_git_command, hardened_git_env, touches_git_config};
 use crate::guardrails::{Action, NOT_READ_ONLY, Severity, classify_command, default_guardrails};
 use crate::js;
 use crate::nodefs;
@@ -260,12 +260,10 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     // YOLO never prompts; Ask always prompts; Guardrails prompts unless every
     // command in it is read-only or allowed by a user rule (decision 0010).
     let needs_approval = ctx.mode != ChatMode::Yolo && (asks_everything(ctx) || decision.action == Action::Ask);
-    // An auto-run git gets an environment that keeps repo config from running anything.
-    let env = if !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host()) {
-        hardened_git_env()
-    } else {
-        Vec::new()
-    };
+    // An auto-run git gets an environment, and options, that keep repo config from running anything.
+    let auto_git = !needs_approval && ctx.mode == ChatMode::Guardrails && runs_git(&command, Dialect::host());
+    let env = if auto_git { hardened_git_env() } else { Vec::new() };
+    let hardened = auto_git.then(|| harden_git_command(&command, Dialect::host()));
     if needs_approval {
         let reason = if labels.is_empty() { "Run command" } else { labels.as_str() };
         if !approve(call, ctx, reason, decision.severity).await {
@@ -291,7 +289,7 @@ async fn bash(call: &ToolCall, ctx: &ToolContext) -> Outcome {
         Some(Value::String(cmd)) => {
             ctx.runner
                 .run(RunRequest {
-                    command: cmd,
+                    command: hardened.as_deref().unwrap_or(cmd),
                     cwd: &cwd,
                     limits: ctx.limits,
                     cancel: &ctx.cancel,

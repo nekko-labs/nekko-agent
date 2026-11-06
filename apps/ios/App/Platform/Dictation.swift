@@ -24,11 +24,12 @@ protocol SpeechRecognizing: AnyObject {
     var isAvailable: Bool { get }
     var locale: Locale { get }
     /// The final transcript, or nil when the recognizer heard no words; a real failure throws.
-    func text(for request: SFSpeechURLRecognitionRequest) async throws -> String?
+    /// On the main actor, where Dictation asks: neither the recognizer nor the request is Sendable.
+    @MainActor func text(for request: SFSpeechURLRecognitionRequest) async throws -> String?
 }
 
 extension SFSpeechRecognizer: SpeechRecognizing {
-    func text(for request: SFSpeechURLRecognitionRequest) async throws -> String? {
+    @MainActor func text(for request: SFSpeechURLRecognitionRequest) async throws -> String? {
         try await withCheckedThrowingContinuation { c in
             let once = Once()
             recognitionTask(with: request) { result, err in
@@ -93,6 +94,8 @@ final class Dictation {
         let id = UUID()
         let text: String
     }
+    /// Phone-only chats must never send audio to a paired computer.
+    var allowComputer = true
     var available: Bool { AVAudioApplication.shared.recordPermission != .denied }
 
     var status: String {
@@ -252,7 +255,9 @@ final class Dictation {
         // Each of these leaves the microphone dead: stop listening with it, keeping what was said.
         let center = NotificationCenter.default
         let stop: @Sendable (Notification) -> Void = { [weak self] n in
-            MainActor.assumeIsolated { if Self.endsListening(n) { self?.stoppedUnasked() } }
+            // Read here, so the notification itself never crosses to the main actor.
+            let ends = Self.endsListening(n)
+            MainActor.assumeIsolated { if ends { self?.stoppedUnasked() } }
         }
         stops = [center.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main, using: stop),
                  center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main, using: stop),
@@ -436,8 +441,9 @@ final class Dictation {
               let converter = AVAudioConverter(from: from, to: to) else { throw RelayError("Couldn’t start recording.") }
         input.installTap(onBus: 0, bufferSize: 4096, format: from) { [weak dictation] buffer, _ in
             guard let samples = convert(buffer, converter, to) else { return }
-            // The main queue keeps the buffers in order.
-            DispatchQueue.main.async { MainActor.assumeIsolated { dictation?.consume(samples) } }
+            // A constant for the hop (a weak capture is a variable); the main queue keeps the buffers in order.
+            let target = dictation
+            DispatchQueue.main.async { MainActor.assumeIsolated { target?.consume(samples) } }
         }
     }
 
@@ -542,7 +548,7 @@ final class Dictation {
     }
 
     private func computerHasWhisper(_ store: ComputersStore) async -> Bool {
-        guard AppModel.shared.prefs.dictationOnComputer, store.conn == .online, store.pcSettings.voiceEnabled,
+        guard allowComputer, AppModel.shared.prefs.dictationOnComputer, store.conn == .online, store.pcSettings.voiceEnabled,
               let r = try? store.remote(), let v = try? await r.call(Channels.voiceStatus) else { return false }
         return VoiceInstall.from(v).installed
     }

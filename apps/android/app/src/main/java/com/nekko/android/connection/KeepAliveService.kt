@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import com.nekko.protocol.LiveLevel
 
 /**
  * Foreground service that keeps the app (and so the relay socket) alive while a
@@ -37,18 +39,22 @@ class KeepAliveService : Service() {
         ServiceCompat.startForeground(
             this,
             Notices.ID_KEEP_ALIVE,
-            keeper.notices.keepAlive(line ?: KeepAlive.FINISHING),
+            keeper.notices.keepAlive(line ?: KeepAlive.FINISHING, keeper.card.value, keeper.level.value ?: LiveLevel.NONE),
             if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0,
         )
         if (!started) {
             started = true
             scope.launch {
-                keeper.status.collect { l ->
+                // The counts, or the Lock Screen card when its level is on and it has chats.
+                combine(keeper.status, keeper.card, keeper.level) { l, card, level -> Triple(l, card, level) }.collect { (l, card, level) ->
                     if (l == null) {
                         ServiceCompat.stopForeground(this@KeepAliveService, ServiceCompat.STOP_FOREGROUND_REMOVE)
                         stopSelf()
                     } else {
-                        runCatching { NotificationManagerCompat.from(this@KeepAliveService).notify(Notices.ID_KEEP_ALIVE, keeper.notices.keepAlive(l)) }
+                        runCatching {
+                            NotificationManagerCompat.from(this@KeepAliveService)
+                                .notify(Notices.ID_KEEP_ALIVE, keeper.notices.keepAlive(l, card, level ?: LiveLevel.NONE))
+                        }
                     }
                 }
             }

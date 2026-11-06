@@ -1,5 +1,8 @@
 package com.nekko.android.ui.screens
 
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalResources
+import com.nekko.android.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -45,6 +48,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,13 +64,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nekko.android.data.ComputersRepository
+import com.nekko.protocol.WorkspaceFolder
+import com.nekko.android.data.NewChatSpec
+import com.nekko.protocol.DraftStore
 import com.nekko.android.data.ModelChoice
 import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
 import com.nekko.android.data.modelGroups
 import com.nekko.android.ui.chat.effortLabel
 import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.components.ComputerIcon
 import com.nekko.android.ui.components.NCard
+import com.nekko.android.ui.components.computerIconRes
 import com.nekko.android.ui.components.Pill
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
@@ -74,11 +83,13 @@ import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.Channels
 import com.nekko.protocol.Effort
 import com.nekko.protocol.LocalProviders
+import com.nekko.protocol.MachinePick
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.Session
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.nekko.android.ui.settings.stateName
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -101,10 +112,13 @@ fun NewChatScreen(
     onEditShared: (String) -> Unit = {},
     onPair: () -> Unit,
     onCreated: (String) -> Unit,
+    /** Offline: the chat and its first message went to the outbox (*Start when online*). */
+    onQueued: () -> Unit = onBack,
 ) {
     val c by repo.state.collectAsStateWithLifecycle()
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val res = LocalResources.current
     val active = c.active
     val online = c.conn == RelayState.ONLINE
     val groups = modelGroups(c)
@@ -119,6 +133,15 @@ fun NewChatScreen(
     var switched by rememberSaveable { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    /** Automatic (2026-11-05): a local-model chat starts on a free computer. Off once a computer is picked by hand. */
+    var autoOn by rememberSaveable { mutableStateOf(true) }
+    /** What Automatic chose last, and why (the line under Run on). */
+    var autoPick by remember { mutableStateOf<MachinePick?>(null) }
+    var autoFinding by remember { mutableStateOf(false) }
+    /** Bumped to ask again: a local model picked, or Automatic chosen. */
+    var autoRun by remember { mutableIntStateOf(0) }
+    /** Automatic set the model (a local one), on a computer whose providers may still be loading. */
+    var autoChoseModel by rememberSaveable { mutableStateOf(false) }
 
     // The models are the computer's: ask every enabled provider there, in parallel.
     LaunchedEffect(online, c.providers) {
@@ -145,9 +168,53 @@ fun NewChatScreen(
         if (effort != null && Effort.levels(pick?.modelId).none { it.wire == effort }) effort = null
     }
     val pickedKind = c.providers.firstOrNull { it.id == pick?.providerId }?.kind
+    val isLocal = LocalProviders.isLocal(pickedKind) || (autoChoseModel && pickedKind == null)
     // A local model runs on its computer's hardware: offer the other paired computers.
-    val showRunOn = c.computers.size > 1 && (switched || LocalProviders.isLocal(pickedKind))
+    val showRunOn = c.computers.size > 1 && (switched || isLocal)
+    // Automatic can choose: a local model, other computers connected, and no folder (a folder decides the computer).
+    val autoOffered = isLocal && workspaceId == null && c.computers.size > 1 && c.peers.isNotEmpty()
+    val autoShown = autoOn && autoOffered
+    // Ask every computer whether it is in use and move the chat to a free one, with a local model there.
+    LaunchedEffect(autoRun, autoShown, online) {
+        val chosen = pick
+        if (!autoShown || !online || autoPick != null || busy || chosen == null) return@LaunchedEffect
+        autoFinding = true
+        try {
+            val from = repo.state.value.activeId
+            val result = repo.pickMachine(from)
+            if (!autoOn || pick != chosen) return@LaunchedEffect
+            val target = result.computerId
+            if (target == null || target == from) {
+                autoPick = result
+                return@LaunchedEffect
+            }
+            val next = repo.localModel(target, listOf(chosen.providerId to chosen.modelId))
+            if (next == null) {
+                // It has no model to start with after all: stay, and say every other computer was busy.
+                autoPick = MachinePick(from, MachinePick.Reason.ALL_BUSY)
+                return@LaunchedEffect
+            }
+            if (!autoOn || pick != chosen || busy) return@LaunchedEffect
+            // Moved by Automatic: the folder stays unset, and the model is that computer's.
+            repo.connect(target)
+            pick = ModelPick(next.first, next.second)
+            touched = true
+            autoChoseModel = true
+            effort = null
+            error = null
+            autoPick = result
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Nothing moved: the chat starts where it is.
+        } finally {
+            autoFinding = false
+        }
+    }
     val runOn: (String) -> Unit = { id ->
+        // Picking a computer by hand turns Automatic off for this chat.
+        autoOn = false
+        autoPick = null
         if (id != c.activeId) {
             switched = true
             // The model, folder and effort are the old computer's; the new one's defaults are picked when its models arrive.
@@ -162,7 +229,7 @@ fun NewChatScreen(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    error = e.message ?: "Couldn’t connect to that computer."
+                    error = e.message ?: res.getString(R.string.chats_connect_failed)
                 }
             }
         }
@@ -171,7 +238,7 @@ fun NewChatScreen(
     val start: () -> Unit = start@{
         val chosen = pick
         if (chosen == null) {
-            error = "Pick a model for this chat."
+            error = res.getString(R.string.chats_pick_model)
             return@start
         }
         val pid = chosen.providerId
@@ -182,7 +249,7 @@ fun NewChatScreen(
             try {
                 val r = repo.remote()
                 val created = r.call(Channels.SESSION_CREATE, *listOfNotNull(workspaceId?.let { JsonPrimitive(it) }).toTypedArray())
-                val session = Session.from(created) ?: throw IllegalStateException("Your computer didn’t create the chat.")
+                val session = Session.from(created) ?: throw IllegalStateException(res.getString(R.string.chats_not_created))
                 val level = effort
                 r.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(session.id), buildJsonObject {
                     put("providerId", pid)
@@ -193,7 +260,7 @@ fun NewChatScreen(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn’t start the chat."
+                error = e.message ?: res.getString(R.string.chats_start_failed)
                 busy = false
             }
         }
@@ -206,43 +273,37 @@ fun NewChatScreen(
         containerColor = p.paper,
         topBar = {
             TopAppBar(
-                title = { Text("New chat") },
+                title = { Text(stringResource(R.string.chats_new_chat)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.chats_back)) }
                 },
             )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             if (shared != null) SharedTextCard(shared, onEditShared)
-            SectionHeader(if (active != null) "On ${active.name}" else "On your computer")
+            SectionHeader(if (active != null) stringResource(R.string.chats_on_computer, active.name) else stringResource(R.string.chats_on_your_computer))
             Column(Modifier.padding(horizontal = 16.dp)) {
                 when {
                     active == null -> NCard {
                         Text(
-                            "Pair your computer to run chats there, with its models, files and tools.",
+                            stringResource(R.string.chats_pair_to_run),
                             style = MaterialTheme.typography.bodyMedium,
                             color = p.inkSoft,
                         )
                         OutlinedButton(onClick = onPair, modifier = Modifier.heightIn(min = 48.dp)) {
                             Icon(Icons.Filled.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.size(8.dp))
-                            Text("Pair a computer")
+                            Text(stringResource(R.string.chats_pair_title))
                         }
                     }
-                    !online -> NCard {
-                        Text(
-                            "${active.name} is ${if (c.conn == RelayState.CONNECTING) "connecting…" else "offline"}. Open Nekko Agent on your computer and try again.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = p.inkSoft,
-                        )
-                    }
+                    !online -> OfflineNewChat(repo, active.name, c.conn == RelayState.CONNECTING, phonePick, c.workspaces, shared, onQueued)
                     else -> NCard {
-                        Label(Icons.Filled.Memory, "Model · from ${active.name}")
+                        Label(Icons.Filled.Memory, stringResource(R.string.chats_model_from, active.name))
                         if (phonePickMissing && !touched) {
                             Text(
-                                "Your default model for ${active.name} (${phonePick?.modelId}) isn’t available any more, so this uses the computer’s default. Change it in Settings → New chats.",
+                                stringResource(R.string.chats_default_missing, active.name, phonePick?.modelId.toString()),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = p.warning,
                             )
@@ -256,7 +317,13 @@ fun NewChatScreen(
                             onPick = {
                                 pick = it
                                 touched = true
+                                autoChoseModel = false
                                 error = null
+                                // A local model picked: Automatic asks again.
+                                if (LocalProviders.isLocal(c.providers.firstOrNull { pr -> pr.id == it.providerId }?.kind)) {
+                                    autoPick = null
+                                    autoRun++
+                                }
                             },
                             onRetry = {
                                 scope.launch {
@@ -272,16 +339,16 @@ fun NewChatScreen(
                         )
                         val chosen = pick
                         if (chosen != null && LocalSimple.current.shown("effort")) {
-                            Label(Icons.Filled.Speed, "Effort")
+                            Label(Icons.Filled.Speed, stringResource(R.string.chats_effort))
                             Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.effort"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Chip("Computer default", effort == null) { effort = null }
+                                Chip(stringResource(R.string.chats_computer_default), effort == null) { effort = null }
                                 Effort.levels(chosen.modelId).forEach { e -> Chip(effortLabel(e), effort == e.wire) { effort = e.wire } }
                             }
                         }
                         if (c.workspaces.isNotEmpty()) {
-                            Label(Icons.Filled.Folder, "Folder")
+                            Label(Icons.Filled.Folder, stringResource(R.string.chats_folder))
                             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Chip("None", workspaceId == null) { workspaceId = null }
+                                Chip(stringResource(R.string.chats_folder_none), workspaceId == null) { workspaceId = null }
                                 c.workspaces.forEach { w -> Chip(w.name, w.id == workspaceId) { workspaceId = w.id } }
                             }
                         }
@@ -297,21 +364,48 @@ fun NewChatScreen(
                                 Icon(Icons.Filled.Computer, contentDescription = null, modifier = Modifier.size(18.dp))
                             }
                             Spacer(Modifier.size(8.dp))
-                            Text("Start on ${active.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(stringResource(R.string.chats_start_on, active.name), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
                 if (showRunOn) {
                     Spacer(Modifier.size(12.dp))
                     NCard {
-                        Label(Icons.Filled.Computer, "Run on")
+                        Label(Icons.Filled.Computer, stringResource(R.string.chats_run_on))
                         Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.runOn"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            c.computers.forEach { pc -> Chip(pc.name, pc.id == c.activeId) { runOn(pc.id) } }
+                            if (autoOffered) {
+                                Chip(stringResource(R.string.chats_auto), autoShown) {
+                                    autoOn = true
+                                    autoPick = null
+                                    autoRun++
+                                }
+                            }
+                            c.computers.forEach { pc ->
+                                // Every paired computer stays connected: each says whether it can take the chat now.
+                                val label = if (pc.id == c.activeId || c.peers.isEmpty()) pc.name
+                                else stringResource(R.string.chats_run_on_state, pc.name, stringResource(stateName(c.connOf(pc.id))))
+                                Chip(label, !autoShown && pc.id == c.activeId, pc.icon) { runOn(pc.id) }
+                            }
+                        }
+                        val name = active?.name.orEmpty()
+                        val made = autoPick
+                        val line = when {
+                            !autoShown -> stringResource(R.string.chats_run_on_note)
+                            autoFinding -> stringResource(R.string.chats_auto_finding)
+                            made == null -> stringResource(R.string.chats_auto_note)
+                            made.reason == MachinePick.Reason.FREE -> {
+                                val busyName = made.skipped.firstOrNull()?.let { id -> c.computers.firstOrNull { it.id == id }?.name }
+                                if (busyName != null) stringResource(R.string.chats_auto_free_busy, name, busyName)
+                                else stringResource(R.string.chats_auto_free, name)
+                            }
+                            made.reason == MachinePick.Reason.ALL_BUSY -> stringResource(R.string.chats_auto_all_busy, name)
+                            else -> stringResource(R.string.chats_auto_none, name)
                         }
                         Text(
-                            "A local model runs on the computer’s own hardware. Choosing another computer shows its models and folders.",
+                            line,
                             style = MaterialTheme.typography.bodySmall,
                             color = p.inkSoft,
+                            modifier = if (autoShown) Modifier.testTag("newChat.auto") else Modifier,
                         )
                     }
                 }
@@ -325,13 +419,13 @@ fun NewChatScreen(
 @Composable
 private fun SharedTextCard(text: String, onEdit: (String) -> Unit) {
     val p = Nekko.palette
-    SectionHeader("Shared with Nekko")
+    SectionHeader(stringResource(R.string.chats_shared_with))
     Column(Modifier.padding(horizontal = 16.dp)) {
         NCard {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Row(Modifier.weight(1f)) { Label(Icons.AutoMirrored.Filled.Notes, "Goes into the chat’s message box. You send it.") }
+                Row(Modifier.weight(1f)) { Label(Icons.AutoMirrored.Filled.Notes, stringResource(R.string.chats_shared_note)) }
                 IconButton(onClick = { onEdit("") }) {
-                    Icon(Icons.Filled.Close, contentDescription = "Remove shared text", tint = p.inkFaint)
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chats_remove_shared), tint = p.inkFaint)
                 }
             }
             OutlinedTextField(
@@ -355,13 +449,14 @@ private fun Label(icon: androidx.compose.ui.graphics.vector.ImageVector, text: S
 }
 
 @Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun Chip(label: String, selected: Boolean, icon: String? = null, onClick: () -> Unit) {
     val p = Nekko.palette
     FilterChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = p.accent, selectedLabelColor = p.accentInk),
+        leadingIcon = computerIconRes(icon)?.let { { ComputerIcon(icon) } },
+        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = p.accent, selectedLabelColor = p.accentInk, selectedLeadingIconColor = p.accentInk),
         modifier = Modifier.heightIn(min = 48.dp),
     )
 }
@@ -383,7 +478,7 @@ internal fun ModelList(
     val p = Nekko.palette
     if (groups.isEmpty()) {
         Text(
-            "No model providers are switched on in Nekko Agent on your computer. Add or enable one in its Models settings.",
+            stringResource(R.string.chats_no_providers),
             style = MaterialTheme.typography.bodyMedium,
             color = p.inkFaint,
         )
@@ -395,7 +490,7 @@ internal fun ModelList(
             value = query,
             onValueChange = onQuery,
             singleLine = true,
-            placeholder = { Text("Search models") },
+            placeholder = { Text(stringResource(R.string.chats_search_models)) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -404,7 +499,7 @@ internal fun ModelList(
     val starred = if (query.isBlank()) ModelChoice.starred(groups, favorites) else emptyList()
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
         if (starred.isNotEmpty()) {
-            GroupTitle("Starred")
+            GroupTitle(stringResource(R.string.chats_starred))
             starred.forEach { (pr, m) ->
                 val k = ModelPick(pr.id, m.id)
                 ModelRow(m, detail = pr.label, selected = k == selected) { onPick(k) }
@@ -416,12 +511,12 @@ internal fun ModelList(
             when {
                 g.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "Couldn’t list its models. ${g.error}",
+                        stringResource(R.string.chats_list_models_failed, g.error.orEmpty()),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.danger,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = onRetry) { Text("Retry") }
+                    TextButton(onClick = onRetry) { Text(stringResource(R.string.chats_retry)) }
                 }
                 list == null -> Row(
                     Modifier.padding(vertical = 8.dp),
@@ -429,16 +524,16 @@ internal fun ModelList(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     CircularProgressIndicator(color = p.accent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                    Text("Asking your computer…", style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                    Text(stringResource(R.string.chats_asking), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                 }
                 list.isEmpty() -> Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "No models available. Is its server running?",
+                        stringResource(R.string.chats_no_models),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkFaint,
                         modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = onRetry) { Text("Retry") }
+                    TextButton(onClick = onRetry) { Text(stringResource(R.string.chats_retry)) }
                 }
                 else -> list.forEach { m ->
                     val k = ModelPick(g.provider.id, m.id)
@@ -447,7 +542,7 @@ internal fun ModelList(
             }
         }
         if (shown.isEmpty()) {
-            Text("No models match “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = p.inkFaint)
+            Text(stringResource(R.string.chats_no_models_match, query.trim()), style = MaterialTheme.typography.bodyMedium, color = p.inkFaint)
         }
     }
 }
@@ -488,7 +583,77 @@ private fun ModelRow(m: ModelInfo, detail: String?, selected: Boolean, onClick: 
             Text(m.name, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
-        if (m.loaded) Pill("loaded", Tone.SUCCESS)
-        if (selected) Icon(Icons.Filled.Check, contentDescription = "Selected", tint = p.accent, modifier = Modifier.size(18.dp))
+        if (m.loaded) Pill(stringResource(R.string.chats_loaded), Tone.SUCCESS)
+        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.chats_selected), tint = p.accent, modifier = Modifier.size(18.dp))
+    }
+}
+
+/**
+ * New chat while the computer is out of reach (offline mode): the first message,
+ * the folder and the phone's default model for this computer go to the outbox,
+ * and the chat is created there and the message sent when the computer is back
+ * (*Start when online*). What is typed is kept as New chat's draft; a chat the
+ * computer turned down comes back here with the reason.
+ */
+@Composable
+private fun OfflineNewChat(
+    repo: ComputersRepository,
+    computer: String,
+    connecting: Boolean,
+    phonePick: ModelPick?,
+    workspaces: List<WorkspaceFolder>,
+    shared: String?,
+    onQueued: () -> Unit,
+) {
+    val p = Nekko.palette
+    val saved = remember { repo.drafts.draft(DraftStore.NEW_CHAT) }
+    var text by rememberSaveable { mutableStateOf(saved.text.ifEmpty { shared.orEmpty() }) }
+    var workspaceId by rememberSaveable { mutableStateOf(saved.workspaceId) }
+    // The model can't be listed offline: the one this chat came back with, else the phone's default for this computer.
+    val pick = saved.providerId?.let { pid -> saved.modelId?.let { ModelPick(pid, it) } } ?: phonePick
+    LaunchedEffect(text, workspaceId) {
+        repo.drafts.set(DraftStore.NEW_CHAT, repo.drafts.draft(DraftStore.NEW_CHAT).copy(text = text, workspaceId = workspaceId))
+    }
+    NCard {
+        Text(
+            stringResource(if (connecting) R.string.chats_offline_connecting else R.string.chats_offline_offline, computer),
+            style = MaterialTheme.typography.bodyMedium,
+            color = p.inkSoft,
+            modifier = Modifier.testTag("newChat.offlineNote"),
+        )
+        saved.refusal?.let { Text(stringResource(R.string.chats_not_started, it), style = MaterialTheme.typography.bodySmall, color = p.danger) }
+        if (pick == null) {
+            Text(
+                stringResource(R.string.chats_offline_no_model, computer),
+                style = MaterialTheme.typography.bodySmall,
+                color = p.warning,
+            )
+        } else {
+            Label(Icons.Filled.Memory, stringResource(R.string.chats_model_named, pick.modelId))
+        }
+        if (workspaces.isNotEmpty()) {
+            Label(Icons.Filled.Folder, stringResource(R.string.chats_folder))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip(stringResource(R.string.chats_folder_none), workspaceId == null) { workspaceId = null }
+                workspaces.forEach { w -> Chip(w.name, w.id == workspaceId) { workspaceId = w.id } }
+            }
+        }
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            label = { Text(stringResource(R.string.chats_first_message)) },
+            minLines = 3,
+            modifier = Modifier.fillMaxWidth().testTag("newChat.firstMessage"),
+        )
+        Button(
+            onClick = {
+                val chosen = pick ?: return@Button
+                repo.outbox.add(null, text.trim(), newChat = NewChatSpec(chosen.providerId, chosen.modelId, workspaceId))
+                repo.drafts.clear(DraftStore.NEW_CHAT)
+                onQueued()
+            },
+            enabled = pick != null && text.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("newChat.startWhenOnline"),
+        ) { Text(stringResource(R.string.chats_start_when_online)) }
     }
 }

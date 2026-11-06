@@ -92,7 +92,7 @@ A run that started keeps checking, and steps aside if the computer stops being f
   - `idle`: someone uses the computer (input within the idle threshold, or a chat of theirs replying), or the machine is on battery, low on battery or hot;
   - `lowPriority`: a chat of the person's is replying on a local model, or the battery is low, or the machine is hot. Typing alone does not pause it.
 - **How:**
-  - The turn's model client (nekko-chat's `YieldingClient`) looks before each model call and every 200 ms while one streams.
+  - The turn's model client (nekkod's `chat_client::YieldingClient`) looks before each model call and every 200 ms while one streams.
   - It closes the call's connection, which stops llama-server's generation, and ends the call with "Paused while someone uses this computer".
   - The loop drops what that call had streamed and sends it again from the same point. That costs no retry attempt and no backoff.
   - The next call waits until the gate opens.
@@ -106,7 +106,7 @@ A run that started keeps checking, and steps aside if the computer stops being f
   - The time from real input to the stop is bounded by design, not measured: about 0.4 s on macOS and Windows, about 1.2 s on Linux.
 
 Acceptance:
-- **Client:** a yielding call stops and is sent again without spending an attempt, and Stop is not a yield (`nekko-chat/tests/yielding.rs`, `nekko-loop/tests/retry.rs`).
+- **Client:** a yielding call stops and is sent again without spending an attempt, and Stop is not a yield (`nekkod/src/chat_client/yielding_tests.rs`, `nekko-loop/tests/retry.rs`).
 - **Daemon:** the real daemon pauses a low-priority task while a person's chat replies on the same loopback model, then finishes it with no trace of the stopped reply (`nekkod/tests/daemon/automation.rs`).
 
 **Not built:** unloading the model when a pause lasts (B3, residency), and lighter launches (fewer GPU layers or threads) for low priority.

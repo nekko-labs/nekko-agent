@@ -224,17 +224,14 @@ struct Daemon(Ctx);
 impl Deps for Daemon {
     fn session(&self, id: &str) -> Fut<'_, Option<Value>> {
         let (store, id) = (self.0.sessions.clone(), id.to_string());
-        Box::pin(async move {
-            let store = store?;
-            tokio::task::spawn_blocking(move || store.get(&id)).await.ok().flatten()
-        })
+        Box::pin(async move { tokio::task::spawn_blocking(move || store.get(&id)).await.ok().flatten() })
     }
     fn is_running(&self, id: &str) -> Fut<'_, bool> {
         let id = id.to_string();
         Box::pin(async move {
             let ctx = &self.0;
             ctx.compactions.is_compacting(&id)
-                || ctx.admission.as_ref().is_some_and(|a| a.is_admitting(&id))
+                || ctx.admission.is_admitting(&id)
                 || crate::routes::running_chats(ctx).contains(&id)
         })
     }

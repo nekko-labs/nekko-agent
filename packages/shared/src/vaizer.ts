@@ -50,25 +50,6 @@ export const VAIZER_REPO_URL = `https://github.com/${VAIZER_REPO}`;
 export const VAIZER_SITE_URL = 'https://vaizer.app/skills';
 export const VAIZER_CATALOG_URL = `https://raw.githubusercontent.com/${VAIZER_REPO}/main/catalog.json`;
 
-/** Raw URL of a Vaizer skill's SKILL.md (agentskills.io plugin layout). */
-export function vaizerSkillMdUrl(slug: string): string {
-  // Every Vaizer skill lives in one `vaizer` plugin, so that Claude Code
-  // invokes them as `/vaizer:<skill>` rather than `/<skill>:<skill>`. Before
-  // 2026-08-28 each skill was its own plugin at `plugins/<slug>/skills/<slug>`.
-  return `https://raw.githubusercontent.com/${VAIZER_REPO}/main/plugins/vaizer/skills/${slug}/SKILL.md`;
-}
-
-/**
- * The pre-2026-08-28 layout, when each skill was its own plugin. Released
- * versions from before the rename still ask for this path, and a checkout of
- * the marketplace from before the restructure still serves it, so the fetch
- * tries it as a fallback rather than silently degrading to the catalog summary.
- */
-export function vaizerLegacySkillMdUrl(slug: string): string {
-  return `https://raw.githubusercontent.com/${VAIZER_REPO}/main/plugins/${slug}/skills/${slug}/SKILL.md`;
-}
-
-
 /**
  * Bundled snapshot of the Vaizer catalog so the shelf works fully offline.
  * Kept in sync with the repo's catalog.json when the integration is touched

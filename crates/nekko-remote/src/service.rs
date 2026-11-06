@@ -1,15 +1,21 @@
-//! Remote access (`packages/host/src/remote.ts`): the persisted relay config
+//! Daemon-owned remote access: the persisted relay config
 //! and paired-device registry in `remote.json`, the single-use pairing code,
 //! and the live relay agent. The registry is the auth layer: a device must
 //! complete the HELLO handshake against it before the agent serves a single
 //! request; new devices enroll only with a short-lived code; revoking a
 //! device kicks it live. This process is the file's only writer.
 
+use crate::client::SigningKey;
 use crate::hello::{self, Grant, PAIRING_TTL_MS, Random, Verdict};
 use crate::jsobj::JsObj;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
+
+/// How the stored pairing works: 2 is a room credential derived from the secret
+/// (decision 0036), 3 adds the host key devices pin (decision 0041). Anything
+/// else is replaced at start, so a secret a revoked device kept dies with it.
+const PAIRING_VERSION: u64 = 3;
 
 /// Validates a device's HELLO, answering with the sealed reply.
 pub type Verifier = Arc<dyn Fn(&Value) -> Value + Send + Sync>;
@@ -25,7 +31,14 @@ pub fn system_clock() -> Clock {
 
 /// What connects the agent to a relay (`connectRelayAgent`).
 pub trait Link: Send + Sync {
-    fn connect(&self, relay_url: &str, room: &str, key: &str, verify: Verifier) -> Arc<dyn LinkHandle>;
+    fn connect(
+        &self,
+        relay_url: &str,
+        room: &str,
+        key: &str,
+        host_key: SigningKey,
+        verify: Verifier,
+    ) -> Arc<dyn LinkHandle>;
 }
 
 /// A running relay agent (`RelayAgentHandle`).
@@ -38,6 +51,8 @@ pub trait LinkHandle: Send + Sync {
     fn disconnect_device(&self, device_id: &str) {
         self.kick_device(device_id);
     }
+    /// The owner's Read switch for a device's live connections: events stop or resume.
+    fn set_reads(&self, _device_id: &str, _reads: bool) {}
     /// Device ids with a welcomed live connection.
     fn connected_devices(&self) -> Vec<String>;
     fn is_online(&self) -> bool;
@@ -99,6 +114,8 @@ impl RemoteService {
                     .with("relayUrl", get("relayUrl"))
                     .with("room", get("room"))
                     .with("secret", get("secret"))
+                    .with("hostKey", get("hostKey"))
+                    .with("pairing", get("pairing"))
                     .with("devices", or(get("devices"), json!([])))
                     // Relay replay protection: phones from before protocol 4
                     // are welcomed unless this is `false` (one release).
@@ -107,6 +124,29 @@ impl RemoteService {
                     .with("stoppedBy", get("stoppedBy"))
             }
         }
+    }
+
+    /// A room and secret from an older pairing: replaced, keeping the paired
+    /// devices, so phones pair again with a secret no revoked device holds and
+    /// a host key to pin. `None` when the pairing is already current or there
+    /// is none.
+    fn upgraded_pairing(&self, cfg: &JsObj) -> Option<JsObj> {
+        let readable = s(cfg.get("hostKey")).and_then(crate::proof::parse_key_text).is_some();
+        let current = cfg.get("pairing").and_then(Value::as_u64) == Some(PAIRING_VERSION) && readable;
+        if current || !nekko_js::truthy(cfg.get("secret")) {
+            return None;
+        }
+        Some(
+            cfg.clone()
+                .with("room", Some(json!(hello::new_room_code(&self.random))))
+                .with("secret", Some(json!(hello::new_room_secret(&self.random))))
+                .with("hostKey", Some(self.new_host_key()))
+                .with("pairing", Some(json!(PAIRING_VERSION))),
+        )
+    }
+
+    fn new_host_key(&self) -> Value {
+        json!(crate::proof::key_text(&crate::proof::new_key(&self.random)))
     }
 
     fn save(&self, cfg: &JsObj) -> Result<(), String> {
@@ -121,51 +161,57 @@ impl RemoteService {
         st.grant.clone().filter(|g| g.expires_at > (self.clock)())
     }
 
-    /// Whether phones from before relay replay protection are still welcomed
-    /// (`acceptLegacyPhones` in remote.json; missing means yes, for one release).
-    fn accepts_legacy(cfg: &JsObj) -> bool {
-        cfg.get("acceptLegacyPhones") != Some(&Value::Bool(false))
-    }
-
     /// The HELLO check the agent runs for every connection. The agent has
-    /// already checked a protocol 4 HELLO's challenge; an older phone's HELLO
-    /// (legacy: no challenge, no request counter) is refused with
-    /// `update-required` when the owner turned legacy phones off, and
-    /// otherwise welcomed, logged and marked on the device (`legacyProtocol`,
-    /// and once in its activity) so the owner sees which phone to update.
+    /// already checked the HELLO's challenge. A phone app older than this
+    /// protocol ([`hello::SESSION_PROTOCOL`]) is refused with `update-required`;
+    /// otherwise the HELLO must be signed with the device's key
+    /// ([`hello::check_hello_key`]) before the registry is consulted, and a
+    /// device that enrolls with the live code keeps the key it signed with
+    /// (`remote-hello-keys.json`).
     pub fn verify(&self, hello_frame: &Value) -> Value {
         let _io = lock(&self.io);
         let cfg = self.load();
-        let legacy =
-            hello_frame.as_object().is_some_and(|h| crate::agent::hello_protocol(h) < crate::agent::CHALLENGE_PROTOCOL);
+        let protocol = hello_frame.as_object().map_or(1, crate::agent::hello_protocol);
         let known = |cfg: &JsObj| -> Option<Value> {
             let id = hello_frame.get("deviceId")?;
             Self::devices_of(cfg).into_iter().find(|d| d.get("id") == Some(id) && !nekko_js::truthy(d.get("revoked")))
         };
-        if legacy && !Self::accepts_legacy(&cfg) {
+        if protocol < hello::SESSION_PROTOCOL {
             if let Some(d) = known(&cfg) {
                 let id = d.get("id").map(nekko_js::display).unwrap_or_default();
-                eprintln!(
-                    "nekkod: refused phone {id}: its app predates relay replay protection (acceptLegacyPhones is off)"
-                );
+                eprintln!("nekkod: refused phone {id}: its app can't check this computer; it needs an update");
                 self.record_locked(&id, self.legacy_entry(false));
             }
             return json!({ "type": "denied", "reason": "update-required" });
         }
-        let was_legacy = known(&cfg).is_some_and(|d| d.get("legacyProtocol") == Some(&Value::Bool(true)));
         let mut st = lock(&self.state);
-        let verdict =
-            hello::verify_hello(&Self::devices_of(&cfg), hello_frame, self.live_grant(&st).as_ref(), (self.clock)());
+        let now = (self.clock)();
+        // A code only pairs what it was minted for, so a link can't change a
+        // device's class: not a new device's, nor a paired one's, on re-pairing.
+        let computer = hello_frame.get("platform").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM);
+        let is_computer = |d: &Value| d.get("kind").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM);
+        let same_class = known(&cfg).is_none_or(|d| is_computer(&d) == computer);
+        let grant = self.live_grant(&st).filter(|g| g.computer == computer && same_class);
+        let code_ok = grant.as_ref().is_some_and(|g| {
+            hello_frame.get("pair").and_then(Value::as_str) == Some(g.code.as_str()) && g.expires_at > now
+        });
+        let room = cfg.get("room").and_then(Value::as_str).unwrap_or_default().to_string();
+        let mut keys = self.load_hello_keys();
+        let id_text = hello_frame.get("deviceId").and_then(Value::as_str).unwrap_or_default();
+        let stored = known(&cfg).map(|_| json!({ "helloKey": keys.get(id_text) }));
+        let new_key = match hello::check_hello_key(stored.as_ref(), hello_frame, &room, code_ok) {
+            Ok(k) => k,
+            Err(reason) => return json!({ "type": "denied", "reason": reason }),
+        };
+        let verdict = hello::verify_hello(&Self::devices_of(&cfg), hello_frame, grant.as_ref(), now);
         if let Verdict::Welcome { device, enrolled } = &verdict {
             let mut device = device.clone();
             if let Some(o) = device.as_object_mut() {
-                if legacy {
-                    o.insert("legacyProtocol".into(), json!(true));
-                } else {
-                    o.remove("legacyProtocol");
+                o.remove("legacyProtocol");
+                if *enrolled && computer {
+                    o.insert("kind".into(), json!(hello::COMPUTER_PLATFORM));
                 }
             }
-            let device = &device;
             let id = device.get("id").cloned();
             let mut devices: Vec<Value> =
                 Self::devices_of(&cfg).into_iter().filter(|d| d.get("id") != id.as_ref()).collect();
@@ -175,16 +221,16 @@ impl RemoteService {
             if self.save(&cfg.clone().with("devices", Some(Value::Array(devices)))).is_err() {
                 return json!({ "type": "denied", "reason": "invalid" });
             }
-            if *enrolled {
-                st.grant = None; // single use
-            }
-            if legacy {
-                let id = id.as_ref().map(nekko_js::display).unwrap_or_default();
-                eprintln!("nekkod: phone {id} connected with an app that predates relay replay protection");
-                if !was_legacy {
-                    self.record_locked(&id, self.legacy_entry(true));
+            if let Some(k) = &new_key {
+                keys.insert(id_text.to_string(), json!(k));
+                if write_json_atomic(&self.hello_keys_file(), &Value::Object(keys)).is_err() {
+                    return json!({ "type": "denied", "reason": "invalid" });
                 }
             }
+            if *enrolled || new_key.is_some() {
+                st.grant = None; // single use, re-enrolling a known device included
+            }
+            return Verdict::Welcome { device, enrolled: *enrolled }.reply();
         }
         verdict.reply()
     }
@@ -215,7 +261,11 @@ impl RemoteService {
         else {
             return;
         };
-        st.handle = Some(self.link.connect(url, room, key, self.verifier()));
+        let Some(host_key) = s(cfg.get("hostKey")).and_then(crate::proof::parse_key_text) else {
+            eprintln!("nekkod: remote access has no usable host key; rotate the pairing to make one");
+            return;
+        };
+        st.handle = Some(self.link.connect(url, room, key, host_key, self.verifier()));
     }
 
     /// The running agent, out of the lock: its own lock is taken while the
@@ -253,7 +303,8 @@ impl RemoteService {
             return Err(problem);
         }
         let _io = lock(&self.io);
-        let prev = self.load();
+        let loaded = self.load();
+        let prev = self.upgraded_pairing(&loaded).unwrap_or(loaded);
         let room = match prev.get("room").filter(|v| !v.is_null()) {
             Some(r) => r.clone(),
             None => json!(hello::new_room_code(&self.random)),
@@ -262,23 +313,27 @@ impl RemoteService {
             Some(s) => s.clone(),
             None => json!(hello::new_room_secret(&self.random)),
         };
+        let host_key = prev.get("hostKey").filter(|v| !v.is_null()).cloned().unwrap_or_else(|| self.new_host_key());
         let cfg = prev
             .with("enabled", Some(json!(true)))
             // Turned on again at the computer: the banner about a phone's stop goes.
             .with("stoppedBy", None)
             .with("relayUrl", Some(relay_url.clone()))
             .with("room", Some(room))
-            .with("secret", Some(secret));
+            .with("secret", Some(secret))
+            .with("hostKey", Some(host_key))
+            .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
         drop(_io);
         Ok(self.status_of(self.handle(), &cfg))
     }
 
-    /// `attach({ relayUrl, room, secret })`: join a room someone else chose
-    /// (relay-agent mode, `NEKKO_RELAY_URL` + `NEKKO_ROOM` + `NEKKO_PAIR_KEY`),
-    /// keeping the devices already paired. Internal: not an IPC channel the
-    /// UI has, and a phone may not call any `remote:` channel.
+    /// `attach({ relayUrl, room, secret, hostKey? })`: join a room someone else
+    /// chose (relay-agent mode, `NEKKO_RELAY_URL` + `NEKKO_ROOM` + `NEKKO_PAIR_KEY`,
+    /// and `NEKKO_HOST_KEY` when whoever chose it wrote the link), keeping the
+    /// devices already paired. Internal: not an IPC channel the UI has, and a
+    /// phone may not call any `remote:` channel.
     pub fn attach(&self, opts: &Value) -> Result<Value, String> {
         let relay_url = opts.get("relayUrl").cloned().unwrap_or(Value::Null);
         if let Some(problem) = crate::route::relay_url_problem(relay_url.as_str().unwrap_or("")) {
@@ -289,12 +344,22 @@ impl RemoteService {
             return Err("remote:attach needs a room and a secret".into());
         };
         let _io = lock(&self.io);
-        let cfg = self
-            .load()
+        let prev = self.load();
+        let host_key = match (text("hostKey"), prev.get("hostKey").filter(|v| !v.is_null())) {
+            (Some(k), _) if k.as_str().and_then(crate::proof::parse_key_text).is_none() => {
+                return Err("remote:attach: that host key can't be read".into());
+            }
+            (Some(k), _) => k,
+            (None, Some(k)) => k.clone(),
+            (None, None) => self.new_host_key(),
+        };
+        let cfg = prev
             .with("enabled", Some(json!(true)))
             .with("relayUrl", Some(relay_url))
             .with("room", Some(room))
-            .with("secret", Some(secret));
+            .with("secret", Some(secret))
+            .with("hostKey", Some(host_key))
+            .with("pairing", Some(json!(PAIRING_VERSION)));
         self.save(&cfg)?;
         self.connect(&mut lock(&self.state), &cfg);
         drop(_io);
@@ -331,7 +396,13 @@ impl RemoteService {
         if !t("enabled") || !t("relayUrl") || !t("room") || !t("secret") {
             return Value::Null;
         }
-        json!({ "relayUrl": cfg.get("relayUrl"), "room": cfg.get("room"), "key": cfg.get("secret") })
+        let host_key = s(cfg.get("hostKey")).and_then(crate::proof::parse_key_text);
+        json!({
+            "relayUrl": cfg.get("relayUrl"),
+            "room": cfg.get("room"),
+            "key": cfg.get("secret"),
+            "hostKey": host_key.map(|k| crate::proof::public_key(&k)),
+        })
     }
 
     pub fn pair(&self) -> Value {
@@ -343,6 +414,15 @@ impl RemoteService {
     /// the phone in its pairing link). A preset code must be 8 to 16 characters
     /// of the pairing alphabet; anything else is ignored and a random one is made.
     pub fn pair_with(&self, preset: &Value) -> Value {
+        self.mint(preset, false)
+    }
+
+    /// `remote:pairComputer`: a one-time code that enrolls a computer, not a phone.
+    pub fn pair_computer(&self) -> Value {
+        self.mint(&Value::Null, true)
+    }
+
+    fn mint(&self, preset: &Value, computer: bool) -> Value {
         let preset = preset
             .as_str()
             .filter(|c| (8..=16).contains(&c.len()) && c.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()));
@@ -350,7 +430,7 @@ impl RemoteService {
             Some(c) => c.to_string(),
             None => hello::new_pairing_code(&self.random, 8),
         };
-        let grant = Grant { code, expires_at: (self.clock)() + PAIRING_TTL_MS };
+        let grant = Grant { code, expires_at: (self.clock)() + PAIRING_TTL_MS, computer };
         let v = grant.value();
         lock(&self.state).grant = Some(grant);
         v
@@ -435,7 +515,28 @@ impl RemoteService {
             return Err("remote:setAccess: no device with that id".into());
         }
         self.save(&cfg.with("devices", Some(Value::Array(devices.clone()))))?;
+        drop(_io);
+        if let (Some(read), Some(h), Some(id)) =
+            (patch.get("read").and_then(Value::as_bool), self.handle(), device_id.as_str())
+        {
+            h.set_reads(id, read);
+        }
         Ok(Value::Array(devices))
+    }
+
+    /// Each paired device's HELLO key (`{ [deviceId]: base64 X9.63 P-256 }`),
+    /// beside `remote.json` so the registry's shape is unchanged.
+    fn hello_keys_file(&self) -> PathBuf {
+        self.file.with_file_name("remote-hello-keys.json")
+    }
+
+    fn load_hello_keys(&self) -> serde_json::Map<String, Value> {
+        let file = self.hello_keys_file();
+        ensure_private(&file);
+        match std::fs::read(&file).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) {
+            Some(Value::Object(m)) => m,
+            _ => serde_json::Map::new(),
+        }
     }
 
     fn activity_file(&self) -> PathBuf {
@@ -464,11 +565,16 @@ impl RemoteService {
         let prev = self.load();
         let room = hello::new_room_code(&self.random);
         let secret = hello::new_room_secret(&self.random);
-        let cfg =
-            prev.with("room", Some(json!(room))).with("secret", Some(json!(secret))).with("devices", Some(json!([])));
+        let cfg = prev
+            .with("room", Some(json!(room)))
+            .with("secret", Some(json!(secret)))
+            .with("hostKey", Some(self.new_host_key()))
+            .with("pairing", Some(json!(PAIRING_VERSION)))
+            .with("devices", Some(json!([])));
         self.save(&cfg)?;
         // Every device is gone, and so is what they did.
         let _ = std::fs::remove_file(self.activity_file());
+        let _ = std::fs::remove_file(self.hello_keys_file());
         {
             let mut st = lock(&self.state);
             st.grant = None;
@@ -484,7 +590,11 @@ impl RemoteService {
     pub fn start_if_enabled(&self) {
         let cfg = {
             let _io = lock(&self.io);
-            self.load()
+            let cfg = self.load();
+            match self.upgraded_pairing(&cfg) {
+                Some(next) if self.save(&next).is_ok() => next,
+                _ => cfg,
+            }
         };
         let t = |k: &str| nekko_js::truthy(cfg.get(k));
         if t("enabled") && t("relayUrl") && t("room") && t("secret") {
@@ -508,6 +618,7 @@ impl RemoteService {
             "remote:status" => Ok(self.status()),
             "remote:pairing" => Ok(self.pairing()),
             "remote:pair" => Ok(self.pair_with(arg(0))),
+            "remote:pairComputer" => Ok(self.pair_computer()),
             "remote:devices" => Ok(self.devices()),
             "remote:revoke" => self.revoke(arg(0)),
             "remote:rename" => self.rename(arg(0), arg(1)),
@@ -523,6 +634,19 @@ impl RemoteService {
 /// Change key from `remote.json`, its activity in `remote-activity.json`
 /// beside it.
 impl crate::phone::Devices for RemoteService {
+    fn attachments_of(&self, chat: &str) -> Option<PathBuf> {
+        // The folder name `attachment:import` writes (`safe_session` in remote_image.rs).
+        let dir: String = chat
+            .chars()
+            .flat_map(|c| {
+                let keep = c.is_ascii_alphanumeric() || c == '_' || c == '-';
+                std::iter::repeat_n(if keep { c } else { '_' }, if keep { 1 } else { c.len_utf16() })
+            })
+            .collect();
+        let dir = nekko_js::slice16(&dir, 64);
+        Some(self.file.parent()?.join("attachments").join(if dir.is_empty() { "chat" } else { dir }))
+    }
+
     fn device(&self, id: &str) -> Option<crate::phone::PhoneDevice> {
         let _io = lock(&self.io);
         let cfg = self.load();
@@ -532,6 +656,7 @@ impl crate::phone::Devices for RemoteService {
         Some(crate::phone::PhoneDevice {
             access: crate::phone::DeviceAccess::of(&d),
             key: d.get("changeKey").and_then(Value::as_str).map(String::from),
+            computer: d.get("kind").and_then(Value::as_str) == Some(hello::COMPUTER_PLATFORM),
         })
     }
 
@@ -659,6 +784,7 @@ pub const CHANNELS: &[&str] = &[
     "remote:status",
     "remote:pairing",
     "remote:pair",
+    "remote:pairComputer",
     "remote:devices",
     "remote:revoke",
     "remote:rename",
@@ -682,39 +808,8 @@ fn ensure_private(path: &Path) {
 /// file beside the target, flushed to disk, then renamed over it, so a crash
 /// never leaves half a config. The temp file is removed if anything fails.
 pub fn write_json_atomic(path: &Path, value: &Value) -> std::io::Result<()> {
-    use std::io::Write;
-    let dir = path.parent().unwrap_or(Path::new("."));
-    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
-    // Not the service's random source: the TS host names its temp files with
-    // `randomUUID`, which never draws on the source codes and keys come from.
-    let mut tag = [0u8; 16];
-    let _ = getrandom::fill(&mut tag);
-    let tag: String = tag.iter().map(|b| format!("{b:02x}")).collect();
-    let temp = dir.join(format!(".{name}.{tag}.tmp"));
-    let result = (|| {
-        let mut opts = std::fs::OpenOptions::new();
-        opts.write(true).create(true).truncate(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            opts.mode(0o600);
-        }
-        let mut f = opts.open(&temp)?;
-        f.write_all(nekko_js::stringify_pretty(value, "  ").as_bytes())?;
-        f.sync_all()?;
-        drop(f);
-        ensure_private(&temp);
-        std::fs::rename(&temp, path)
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&temp);
-    }
-    result?;
-    if let Ok(d) = std::fs::File::open(dir) {
-        let _ = d.sync_all();
-    }
-    ensure_private(path);
-    Ok(())
+    let opts = nekko_js::fs::AtomicWrite { mode: nekko_js::fs::Mode::Private, fsync: true, create_dir: false };
+    nekko_js::fs::atomic_write(path, nekko_js::stringify_pretty(value, "  ").as_bytes(), opts)
 }
 
 #[cfg(test)]

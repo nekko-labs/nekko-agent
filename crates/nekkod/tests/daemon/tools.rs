@@ -13,7 +13,7 @@ async fn reports_mcp_status_from_its_own_servers() {
         { "id": "off", "name": "Off", "enabled": false, "command": "nope", "args": [] },
     ] });
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (status, rows) = post(d.port, "mcp:status", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     assert_eq!(
@@ -195,7 +195,7 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     std::fs::create_dir_all(&data).unwrap();
     let mine = json!({ "id": "fs", "name": "Files", "command": "npx", "args": [], "enabled": false });
     std::fs::write(data.join("settings.json"), json!({ "mcpServers": [mine] }).to_string()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (_, found) = post(d.port, "mcp:hypergate", json!([port]), Some(TOKEN)).await;
     assert_eq!(found["version"], "9.9");
     assert_eq!(found["port"], port);
@@ -203,8 +203,10 @@ async fn hypergate_is_found_and_connected_by_the_daemon() {
     let (_, connected) = post(d.port, "mcp:hypergate:connect", json!([port]), Some(TOKEN)).await;
     assert_eq!(connected["token"], "agent");
     assert_eq!(connected["agent"], "Nekko Agent");
-    // Saved here, beside the user's own servers.
-    let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    // Saved here, beside the user's own servers (the token in the keystore).
+    let (_, saved) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    let file: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
+    assert!(file["mcpServers"][1].get("token").is_none(), "{file}");
     let servers = saved["mcpServers"].as_array().unwrap();
     assert_eq!(servers[0], mine);
     assert_eq!(
@@ -444,7 +446,7 @@ async fn a_daemon_turn_runs_its_tool_hooks_itself() {
         { "id": "h2", "event": "PostToolUse", "name": "note", "matcher": "read_file", "command": post_cmd },
     ]);
     // The daemon writes settings.json and re-reads the hooks from it per call;
-    // the spec's copy is only for a daemon without a data directory.
+    // the spec's `hookRules` only says that hooks run in this turn.
     let (status, _) = post(rig.d.port, "settings:update", json!([{ "hooks": rules }]), Some(TOKEN)).await;
     assert_eq!(status, 200);
     let mut spec = turn_spec(&rig, &model, "turn_h", "s_turn_h", json!({}));
@@ -472,7 +474,7 @@ async fn classifies_commands_and_lists_tools_without_the_host() {
     let data = std::env::temp_dir().join(format!("nekkod-tooling-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&data);
     std::fs::create_dir_all(&data).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let (status, decision) = post(d.port, "guardrails:classify", json!(["rm -rf /"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{decision}");
     assert_eq!(decision["action"], "ask", "{decision}");
@@ -648,7 +650,7 @@ async fn a_user_started_pr_watch_registers_and_wakes_the_chat_when_ci_changes() 
     std::fs::write(data.join("settings.json"), settings.to_string()).unwrap();
     // No gh: the PR is read from the loopback REST API, never from github.com.
     let d = start_with_env(
-        Some(&data),
+        &data,
         json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
         &[("NEKKO_GH_PATH", Some("nekko-no-such-gh"))],
     );

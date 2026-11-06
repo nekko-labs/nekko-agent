@@ -13,17 +13,16 @@ cuda = ["nekko-decide/cuda"]
 # Developer-only settings (`npm run dev`'s daemon, stage-daemon.mjs): the Claude
 # policy preview. Never on in the release build the app packages.
 dev-tools = []
-# The runner VM spike example only: the NAT's host-to-guest port forward
-# (127.0.0.1:2222 -> guest:22). Never on in any shipped build (decision 0022).
+# Builds the runner VM spike example, which job code never reaches (decision 0022).
 spike = []
 
 [dependencies]
 # Verifies the signed claudePolicy document (claude_policy.rs).
 ed25519-dalek = "2"
-chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+chrono.workspace = true
 anyhow.workspace = true
 axum.workspace = true
-base64 = "0.22"
+base64.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 # The computer's name and addresses, for "Visible on this network" and the local relay.
@@ -34,7 +33,6 @@ getrandom.workspace = true
 icu_normalizer = "2"
 nekko-agent = { path = "../nekko-agent" }
 nekko-automation = { path = "../nekko-automation" }
-nekko-chat = { path = "../nekko-chat" }
 nekko-codemode = { path = "../nekko-codemode" }
 nekko-privacy = { path = "../nekko-privacy" }
 nekko-connectors = { path = "../nekko-connectors" }
@@ -59,6 +57,7 @@ nekko-term = { path = "../nekko-term" }
 nekko-tools = { path = "../nekko-tools" }
 nekko-turn = { path = "../nekko-turn" }
 nekko-usage = { path = "../nekko-usage" }
+nekko-vault = { path = "../nekko-vault" }
 nekko-web = { path = "../nekko-web" }
 regress.workspace = true
 nekko-workspace = { path = "../nekko-workspace" }

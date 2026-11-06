@@ -74,8 +74,3 @@ export function agentsToAutoComplete(
     .filter((s) => typeof s.updatedAt === 'number' && s.updatedAt > 0 && s.updatedAt < cutoff && !busy(s.id))
     .map((s) => s.id);
 }
-
-/** Compatibility helper: completed history never expires automatically. */
-export function archiveExpired(_s: { archivedAt?: number | null }, _now = Date.now()): boolean {
-  return false;
-}

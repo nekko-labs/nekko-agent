@@ -24,9 +24,11 @@ describe('agent question in the window', () => {
     const html = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} tone="attention" />);
     expect(html).toContain('data-question-tone="attention"');
     expect(html).toContain('var(--warning) 70%');
-    expect(html).toContain('text-[14px] font-semibold');
+    expect(html).toContain('text-sm font-semibold');
     const plain = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} />);
-    expect(plain).toContain('data-question-tone="accent"');
+    expect(plain).toContain('data-question-tone="attention"');
+    const accent = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} tone="accent" />);
+    expect(accent).toContain('data-question-tone="accent"');
   });
   // Source pin, pending the wall e2e journey: the question reaches the pane
   // from the host (a promise or an agent event), which a server render never
@@ -64,7 +66,7 @@ describe('plan panel toggle', () => {
   });
   const toggle = (html: string) => html.match(/<button[^>]*data-plan-toggle[^>]*>/)?.[0] ?? null;
 
-  it('is a floating plan icon in the chat area while minimized; the open panel minimizes itself', () => {
+  it('is a button in the chat header while minimized, never over the transcript; the open panel minimizes itself', () => {
     const plan = chatSession();
     const open = renderChatPane(plan);
     expect(toggle(open)).toBeNull();
@@ -72,11 +74,10 @@ describe('plan panel toggle', () => {
     expect(open).not.toContain('Hide the plan panel');
     useStore.setState({ planRailOpenBySession: { [plan.id]: false } });
     const minimized = renderChatPane(plan);
-    expect(toggle(minimized)).toMatch(/class="plan-rail-toggle /);
+    expect(toggle(minimized)).toMatch(/class="plan-rail-toggle"/);
     expect(minimized).not.toContain('data-plan-minimize');
-    // It floats in the chat area's top-right, and the transcript starts below it.
-    expect(cssRule(styles, '.plan-rail-toggle')).toMatchObject({ position: 'absolute', top: '8px', right: '10px' });
-    expect(cssRule(styles, 'div:has(> .plan-rail-toggle) > [data-transcript-scroll]')['padding-top']).toBe('44px');
+    expect(minimized.indexOf('data-plan-toggle')).toBeLessThan(minimized.indexOf('</header>'));
+    expect(cssRule(styles, '.plan-rail-toggle').position).toBeUndefined();
   });
 
   it('is on by default and only gives way when the pane is under two panels wide', () => {

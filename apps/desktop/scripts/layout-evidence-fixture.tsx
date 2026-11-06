@@ -9,7 +9,7 @@ const current = async () => screensFixture.state;
 const displays = { displayId: localStorage.getItem('fixture.displayId'), list: current, toggle: current, setPlacement: current, toggleDesktop: current, setSpacesMode: current, go: async () => 'ok', report: () => {}, claim: async () => 'main', onChange: (cb: (s: unknown) => void) => { screensFixture.emit = cb; return () => {}; }, onPlaced: () => () => {} };
 // A sandbox can open the App as a second screen's window (localStorage 'fixture.displayId') before a reload.
 // A sandbox can pick Windows chrome (localStorage 'fixture.platform') before a reload.
-(window as any).nekkoChrome = { platform: localStorage.getItem('fixture.platform') ?? 'darwin', titleBarHeight: 38, setTitleBarOverlay: () => {}, serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
+(window as any).nekkoChrome = { platform: localStorage.getItem('fixture.platform') ?? 'darwin', titleBarHeight: 38, setTitleBarOverlay: () => {}, ...((window as any).nekkoTestZoom ? { setPageZoom: (window as any).nekkoTestZoom } : {}), serviceControl: async () => ({}), reportNotificationVisibility: () => {}, displays };
 const now = Date.now();
 const provider = { id: 'fixture', kind: 'openai', enabled: true, label: 'ChatGPT (subscription)', auth: 'subscription', tokenKey: 'fixture' };
 const session = (id: string, title: string, workspaceId?: string) => ({ id, title, createdAt: now, updatedAt: now - 3600e3, providerId: 'fixture', modelId: 'gpt-fixture', mode: 'agent', chatType: 'multimodal', workspaceId, messages: [], attachments: [], queuedPrompts: [] });
@@ -33,7 +33,11 @@ const bridge: any = {
 };
 Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
-  bridge.listSessionSummaries = async () => records.map(summarizeSession);
+  // A sandbox can seed what the engine would add to a summary (localStorage 'fixture.summaries', by chat id).
+  bridge.listSessionSummaries = async () => {
+    const seeded = JSON.parse(localStorage.getItem('fixture.summaries') ?? '{}');
+    return records.map(summarizeSession).map((s) => ({ ...s, ...seeded[s.id] }));
+  };
   const [{ createRoot }, React, { App }, { useStore }, { putCachedSession }, { UpdateProvider }] = await Promise.all([import('react-dom/client'), import('react'), import('../src/renderer/App'), import('../src/renderer/store'), import('../src/renderer/sessionCache'), import('../src/renderer/components/UpdateBanner')]);
   await import('@fontsource-variable/inter-tight');
   await import('@fontsource-variable/jetbrains-mono');
@@ -42,7 +46,11 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   document.documentElement.dataset.theme = 'dark';
   const root = createRoot(document.getElementById('root')!);
   root.render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showRetry: async () => {
+  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showTheme: async () => {
+    const { ThemeStep } = await import('../src/renderer/components/onboarding/ThemeStep');
+    root.render(React.createElement('main', { style: { padding: 24, minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' } },
+      React.createElement('div', { style: { maxWidth: 640, margin: 'auto' } }, React.createElement(ThemeStep))));
+  }, showRetry: async () => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     const record = records[0] as any;
     record.messages = [
@@ -57,10 +65,75 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'a' })));
     const { applyEvent } = await import('../src/renderer/liveRuns');
     (window as any).layoutFixture.emit = (event: any) => { applyEvent({ ...event, sessionId: 'a' }); emitAgent({ ...event, sessionId: 'a' }); };
+  }, showComposer: async (surface: 'full' | 'composer' | 'window' = 'composer') => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'a', running: new Set(['a']) } as any);
+    bridge.abortChat = async (id: string) => { (window as any).layoutFixture.lastAbort = id; };
+    bridge.queuePrompt = async (id: string, prompt: any) => { (window as any).layoutFixture.lastQueue = { sessionId: id, prompt }; return records.find(s => s.id === id); };
+    root.render(React.createElement('div', { style: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 24 } }, React.createElement(ChatPane, { key: surface, sessionId: 'a', surface: surface === 'window' ? 'full' : surface, commandCenter: surface === 'window', header: surface === 'composer' ? React.createElement('span', null, 'Persist quota history') : undefined })));
+  }, showPrLifecycle: async (stream = false) => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    const { applyEvent } = await import('../src/renderer/liveRuns');
+    const url = 'https://github.com/example/project/pull/42';
+    const record = records[0] as any;
+    const startedAt = now - 10000;
+    const pr = { url, owner: 'example', repo: 'project', number: 42, title: 'Keep pull requests visible in chat', state: stream ? 'open' : 'merged', isDraft: false, additions: 12, deletions: 3, changedFiles: 2, checks: 'passing', source: 'gh', mergedAt: new Date(startedAt + 5000).toISOString() };
+    record.messages = [{ id: 'prompt', role: 'user', content: 'Ship this change.', createdAt: startedAt }];
+    const steps = [
+      { id: 'create', command: 'gh pr create --draft --fill', output: url },
+      { id: 'draft', command: 'gh pr ready 42 --undo --repo example/project', output: '✓ Pull request example/project#42 is converted to "draft"' },
+      { id: 'ready', command: 'gh pr ready 42 --repo example/project', output: '✓ Pull request example/project#42 is marked as "ready for review"' },
+      { id: 'auto', command: 'gh pr merge 42 --auto --repo example/project', output: '✓ Pull request example/project#42 will be automatically merged via squash when all requirements are met' },
+      { id: 'queue', command: 'gh pr merge 42 --auto --repo example/project', output: '✓ Added pull request example/project#42 to the merge queue' },
+      { id: 'merge', command: 'gh pr merge 42 --repo example/project', output: '✓ Merged pull request example/project#42' },
+    ];
+    let tick = startedAt;
+    const emit = (step: typeof steps[number]) => {
+      const call = { id: step.id, name: 'bash', input: { command: step.command } };
+      const result = { toolCallId: step.id, output: step.output };
+      record.messages.push({ id: `call_${step.id}`, role: 'assistant', content: '', createdAt: ++tick, toolCalls: [call] });
+      record.messages.push({ id: `result_${step.id}`, role: 'tool', content: step.output, createdAt: ++tick, toolResult: result });
+      if (stream) {
+        const events = [{ type: 'tool_call', call }, { type: 'tool_result', result }];
+        for (const event of events) { applyEvent({ ...event, sessionId: 'a' } as any); emitAgent({ ...event, sessionId: 'a' }); }
+      }
+    };
+    if (!stream) { steps.forEach(emit); record.messages.push({ id: 'answer', role: 'assistant', content: 'Merged. The change is now on main.', createdAt: startedAt + 6000 }); }
+    bridge.listSessionPrs = async () => [pr];
+    bridge.openPath = async (href: string) => { (window as any).layoutFixture.lifecycle.openedUrl = href; };
+    bridge.getContextBundle = async () => ({ items: [], totalTokens: 0, budget: 128000 });
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], sessions: records.map(summarizeSession), settings, activeSessionId: 'a', prsBySession: { a: [pr] }, running: new Set() } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { key: `pr-${stream}`, sessionId: 'a' })));
+    (window as any).layoutFixture.lifecycle = { steps, emit: (index: number) => emit(steps[index]), finish: () => {
+      record.messages.push({ id: 'answer', role: 'assistant', content: 'Queued; waiting for required checks.', createdAt: ++tick });
+      applyEvent({ type: 'done', sessionId: 'a', messageId: 'answer' });
+      emitAgent({ type: 'done', sessionId: 'a', messageId: 'answer' });
+    } };
   }, showGreeting: async () => {
 
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'd' } as any);
     root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'd', cleanStart: true })));
+  }, showSkeletons: async () => {
+    const { PixelSkeleton } = await import('../src/renderer/components/PixelSkeleton');
+    const cards = [
+      { label: 'Wide card', style: { width: 480, height: 180 } },
+      { label: 'Square card', style: { width: 180, height: 180 } },
+      { label: 'Row card', style: { width: 480, height: 60 } },
+      { label: 'Tall card', style: { width: 240, height: 320 } },
+    ];
+    root.render(React.createElement('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 24, padding: 32, background: 'var(--paper)', minHeight: '100vh', color: 'var(--ink)' } },
+      cards.map(({ label, style }) => React.createElement('div', { key: label, style: { display: 'grid', gap: 8 } },
+        React.createElement('span', { style: { fontSize: 11, opacity: 0.6 } }, label),
+        React.createElement(PixelSkeleton, { style: { ...style, borderRadius: 12 }, label })))));
+  }, showPlusMenu: async () => {
+    const { CreateMenuRows } = await import('../src/renderer/components/CreateMenu');
+    // On the base branch CreateMenuRows read `terminal` to gate the Terminal row (Simple mode hid it);
+    // on this branch there is no such prop and all three rows always show. Passing `terminal: false` to
+    // whichever version loads keeps the comparison honest.
+    root.render(React.createElement('div', { style: { padding: 32, background: 'var(--paper)', minHeight: '100vh', color: 'var(--ink)' } },
+      React.createElement('div', { className: 'create-menu card p-1 shadow-(--shadow-float)', style: { width: 'max-content' } },
+        React.createElement(CreateMenuRows as any, { onCreate: () => {}, terminal: false }))));
   } };
 });

@@ -1,0 +1,242 @@
+{
+  "name": "llama-bench-b11224-qwen3-8b-depth512",
+  "valid": true,
+  "problems": [],
+  "notes": "",
+  "settings": {
+    "command": [
+      "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-bench",
+      "-m",
+      "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+      "-p",
+      "512",
+      "-n",
+      "256",
+      "-r",
+      "5",
+      "-o",
+      "json",
+      "-ngl",
+      "999",
+      "-d",
+      "512"
+    ],
+    "version": "version: 0.5.0-dev (build 11224, commit 526247161)\nbuilt with AppleClang 21.0.0.21000101 for Darwin arm64"
+  },
+  "summary": [
+    {
+      "test": "pp512",
+      "avg_tok_s": 2583.862506,
+      "stddev_tok_s": 6.37943,
+      "samples_tok_s": [
+        2577.03,
+        2587.89,
+        2577.06,
+        2590.61,
+        2586.73
+      ],
+      "n_gpu_layers": 999,
+      "flash_attn": -1,
+      "build": "526247161",
+      "build_number": 11224
+    },
+    {
+      "test": "tg256",
+      "avg_tok_s": 95.451981,
+      "stddev_tok_s": 2.716915,
+      "samples_tok_s": [
+        97.3366,
+        97.7038,
+        97.1115,
+        93.3766,
+        91.7314
+      ],
+      "n_gpu_layers": 999,
+      "flash_attn": -1,
+      "build": "526247161",
+      "build_number": 11224
+    }
+  ],
+  "conditions_before": {
+    "taken_at": "2026-10-27T17:50:48.443027+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t49%; AC attached; not charging present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [],
+    "inference_processes": [],
+    "busiest_other_processes": [
+      {
+        "pid": 405,
+        "cpu": 3.4,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 373,
+        "cpu": 0.1,
+        "command": "opendirectoryd"
+      },
+      {
+        "pid": 380,
+        "cpu": 0.1,
+        "command": "locationd"
+      },
+      {
+        "pid": 398,
+        "cpu": 0.1,
+        "command": "notifyd"
+      },
+      {
+        "pid": 753,
+        "cpu": 0.1,
+        "command": "Siri.app"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      },
+      {
+        "pid": 333,
+        "cpu": 0.0,
+        "command": "smd"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.0,
+        "command": "UserEventAgent"
+      }
+    ],
+    "scripts": {
+      "commit": "56825490472ddbcffc5846ce2e29f0a867e00117",
+      "uncommitted_changes": false
+    },
+    "model_file": {
+      "path": "~/.nekko-agent/models/chat/Qwen_Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf",
+      "bytes": 5027783488,
+      "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+    }
+  },
+  "conditions_after": {
+    "taken_at": "2026-10-27T17:51:05.344148+00:00",
+    "machine": {
+      "model": "Mac17,6",
+      "chip": "Apple M5 Max",
+      "memory_bytes": 137438953472,
+      "macos": "26.6.2",
+      "macos_build": "25G83",
+      "python": "3.15.1"
+    },
+    "power": {
+      "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=22675555)\t49%; charging; (no estimate) present: true",
+      "on_ac": true,
+      "power_mode": 0,
+      "low_power_mode": 0,
+      "thermal": "Note: No thermal warning level has been recorded\nNote: No performance warning level has been recorded\nNote: No CPU power status has been recorded"
+    },
+    "targets": [],
+    "inference_processes": [],
+    "busiest_other_processes": [
+      {
+        "pid": 380,
+        "cpu": 0.8,
+        "command": "locationd"
+      },
+      {
+        "pid": 389,
+        "cpu": 0.6,
+        "command": "PerfPowerServices"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.1,
+        "command": "UserEventAgent"
+      },
+      {
+        "pid": 397,
+        "cpu": 0.1,
+        "command": "bluetoothd"
+      },
+      {
+        "pid": 398,
+        "cpu": 0.1,
+        "command": "notifyd"
+      },
+      {
+        "pid": 400,
+        "cpu": 0.1,
+        "command": "corebrightnessd"
+      },
+      {
+        "pid": 405,
+        "cpu": 0.1,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.0,
+        "command": "logd"
+      }
+    ],
+    "scripts": {
+      "commit": "56825490472ddbcffc5846ce2e29f0a867e00117",
+      "uncommitted_changes": false
+    }
+  },
+  "cpu_during_run": {
+    "seconds": 15.1,
+    "busiest_other_processes": [
+      {
+        "pid": 380,
+        "cpu": 0.6,
+        "command": "locationd"
+      },
+      {
+        "pid": 405,
+        "cpu": 0.5,
+        "command": "WindowServer"
+      },
+      {
+        "pid": 638,
+        "cpu": 0.4,
+        "command": "talagentd"
+      },
+      {
+        "pid": 397,
+        "cpu": 0.3,
+        "command": "bluetoothd"
+      },
+      {
+        "pid": 586,
+        "cpu": 0.3,
+        "command": "searchpartyd"
+      },
+      {
+        "pid": 332,
+        "cpu": 0.1,
+        "command": "logd"
+      },
+      {
+        "pid": 334,
+        "cpu": 0.1,
+        "command": "UserEventAgent"
+      },
+      {
+        "pid": 336,
+        "cpu": 0.1,
+        "command": "fseventsd"
+      }
+    ]
+  }
+}

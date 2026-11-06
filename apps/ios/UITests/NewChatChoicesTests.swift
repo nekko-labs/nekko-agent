@@ -1,6 +1,7 @@
 import XCTest
 
 /// No paired computer, network or user data: the real New chat with a seeded draft.
+@MainActor
 final class NewChatChoicesTests: XCTestCase {
     func testConcreteChoicesAndIndependentRecommendations() {
         let app = launch()
@@ -20,11 +21,11 @@ final class NewChatChoicesTests: XCTestCase {
         app.buttons["newChat.tools"].tap()
         XCTAssertFalse(app.buttons["Computer default"].exists)
         attach(app, "iphone-tools-after")
-        option("YOLO (never ask)", in: app).tap()
-        XCTAssertTrue(app.buttons["newChat.tools"].label.contains("YOLO"))
+        app.buttons["tools.yolo"].tap()
+        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "Works on its own")
         app.buttons["newChat.tools"].tap()
-        XCTAssertTrue(app.buttons["Guardrails (ask for risky tools) (Recommended)"].exists)
-        option("YOLO (never ask)", in: app).tap()
+        XCTAssertTrue(app.buttons["tools.guardrails"].exists)
+        app.buttons["tools.yolo"].tap()
     }
 
     func testMascotLaughRestartsAndReturnsToIdle() { checkLaugh(reduced: false) }
@@ -42,6 +43,54 @@ final class NewChatChoicesTests: XCTestCase {
         let idle = NSPredicate(format: "value == %@", "Idle")
         expectation(for: idle, evaluatedWith: cat)
         waitForExpectations(timeout: 4)
+    }
+
+    /// The same fixture and assertions are overlaid on the unchanged base for evidence.
+    func testAutomaticRoutingAndManualOverride() {
+        let app = launch(["-uiTestAutomatic"])
+        let computer = app.buttons["newChat.computer"]
+        XCTAssertTrue(computer.waitForExistence(timeout: 10))
+        if ProcessInfo.processInfo.environment["NEKKO_AUTOMATIC_BASELINE"] != "1" {
+            let picked = NSPredicate(format: "label CONTAINS %@", "Auto · Studio Mac")
+            expectation(for: picked, evaluatedWith: computer)
+            waitForExpectations(timeout: 10)
+            XCTAssertTrue(app.staticTexts["newChat.auto"].label.contains("MacBook is busy"))
+            XCTAssertTrue(app.buttons["newChat.model"].label.contains("qwen3:8b"))
+        }
+        attach(app, "automatic-new-chat")
+        computer.tap()
+        attach(app, "automatic-run-on-menu")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "MacBook")).firstMatch.tap()
+        XCTAssertFalse(computer.label.contains("Auto"))
+        XCTAssertFalse(app.staticTexts["newChat.auto"].exists)
+        attach(app, "automatic-manual-macbook")
+    }
+
+    func testAutomaticAllBusyFallback() {
+        let app = launch(["-uiTestAutomatic", "-uiTestAllBusy"])
+        let computer = app.buttons["newChat.computer"]
+        XCTAssertTrue(computer.waitForExistence(timeout: 10))
+        if ProcessInfo.processInfo.environment["NEKKO_AUTOMATIC_BASELINE"] != "1" {
+            let line = app.staticTexts["newChat.auto"]
+            let fallback = NSPredicate(format: "label CONTAINS %@", "Every computer is busy")
+            expectation(for: fallback, evaluatedWith: line)
+            waitForExpectations(timeout: 10)
+            XCTAssertTrue(computer.label.contains("MacBook"))
+        }
+        attach(app, "automatic-all-busy")
+    }
+
+    func testAutomaticStartWaitsForProbe() throws {
+        guard ProcessInfo.processInfo.environment["NEKKO_AUTOMATIC_BASELINE"] != "1" else { throw XCTSkip("Before state has no Automatic") }
+        let app = launch(["-uiTestAutomatic", "-uiTestSlowAuto"])
+        let line = app.staticTexts["newChat.auto"]
+        XCTAssertTrue(line.waitForExistence(timeout: 10))
+        XCTAssertTrue(line.label.contains("Finding a free computer"))
+        XCTAssertFalse(app.buttons["newChat.start"].isEnabled)
+        let picked = NSPredicate(format: "label CONTAINS %@", "MacBook is busy")
+        expectation(for: picked, evaluatedWith: line)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(app.buttons["newChat.start"].isEnabled)
     }
 
     private func option(_ title: String, in app: XCUIApplication) -> XCUIElement {

@@ -13,7 +13,7 @@ struct NekkoCardAttributes: ActivityAttributes, Equatable {
 
     var computerId: String
     var computerName: String
-    /// What the card draws (icon-only chips at Minimal, the reply line at Detailed).
+    /// What the card draws (no titles at Minimal, the reply line at Detailed).
     /// Fixed for the card's life: a level change ends the card and starts a new one.
     var level: LiveLevel
 }
@@ -22,23 +22,22 @@ struct NekkoCardAttributes: ActivityAttributes, Equatable {
 /// widget extension, where the buttons are drawn but never run.
 @MainActor
 enum IntentRouter {
-    static var approve: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
-    static var stop: ((_ sessionId: String) async -> Void)?
+    static var approve: (@MainActor @Sendable (_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
+    static var stop: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     // The card's buttons.
-    static var focus: ((_ sessionId: String) async -> Void)?
-    static var nextPage: ((_ sessionId: String) async -> Void)?
-    static var dismiss: ((_ sessionId: String) async -> Void)?
-    static var talk: ((_ sessionId: String) async -> Void)?
-    static var cancelTalk: (() async -> Void)?
+    static var focus: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    static var dismiss: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    static var talk: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    static var cancelTalk: (@MainActor @Sendable () async -> Void)?
 }
 
 /// Allow or deny the waiting tool call from the Lock Screen or the Dynamic
 /// Island. A `LiveActivityIntent` runs in the app's process (iOS launches it in
 /// the background if needed), which holds the relay connection.
 struct AnswerApprovalIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Answer a tool approval"
-    static var description = IntentDescription("Allow or deny the tool call your computer is waiting on.")
-    static var isDiscoverable = false
+    static let title: LocalizedStringResource = "Answer a tool approval"
+    static let description = IntentDescription("Allow or deny the tool call your computer is waiting on.")
+    static let isDiscoverable = false
 
     @Parameter(title: "Chat") var sessionId: String
     @Parameter(title: "Tool call") var callId: String
@@ -63,10 +62,10 @@ struct AnswerApprovalIntent: LiveActivityIntent {
 /// something, so they stay one tap.) Before this, Allow on a locked phone
 /// quietly did nothing.
 struct AllowToolIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Allow a tool call"
-    static var description = IntentDescription("Allow the tool call your computer is waiting on.")
-    static var isDiscoverable = false
-    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    static let title: LocalizedStringResource = "Allow a tool call"
+    static let description = IntentDescription("Allow the tool call your computer is waiting on.")
+    static let isDiscoverable = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Chat") var sessionId: String
     @Parameter(title: "Tool call") var callId: String
@@ -85,8 +84,8 @@ struct AllowToolIntent: LiveActivityIntent {
 }
 
 struct StopRunIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Stop a running chat"
-    static var isDiscoverable = false
+    static let title: LocalizedStringResource = "Stop a running chat"
+    static let isDiscoverable = false
 
     @Parameter(title: "Chat") var sessionId: String
 
@@ -100,10 +99,10 @@ struct StopRunIntent: LiveActivityIntent {
     }
 }
 
-/// A chip on the card: bring that chat up top.
+/// A row on the card: bring that chat into focus (the buttons answer it).
 struct FocusChatIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Show a chat on the card"
-    static var isDiscoverable = false
+    static let title: LocalizedStringResource = "Show a chat on the card"
+    static let isDiscoverable = false
 
     @Parameter(title: "Chat") var sessionId: String
 
@@ -117,30 +116,10 @@ struct FocusChatIntent: LiveActivityIntent {
     }
 }
 
-/// The "+N" chip: step the strip to the next chats. The strip shows the page
-/// that holds the focused chat and only the view knows how many chips fit, so
-/// the chip names the chat that starts the next page (the first one again after
-/// the last page) and the app focuses it.
-struct NextPageIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Show more chats on the card"
-    static var isDiscoverable = false
-
-    @Parameter(title: "Chat") var sessionId: String
-
-    init() {}
-
-    init(sessionId: String) { self.sessionId = sessionId }
-
-    func perform() async throws -> some IntentResult {
-        await IntentRouter.nextPage?(sessionId)
-        return .result()
-    }
-}
-
 /// The close button under a finished chat: take it off the card.
 struct DismissChatIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Remove a finished chat from the card"
-    static var isDiscoverable = false
+    static let title: LocalizedStringResource = "Remove a finished chat from the card"
+    static let isDiscoverable = false
 
     @Parameter(title: "Chat") var sessionId: String
 
@@ -160,9 +139,9 @@ struct DismissChatIntent: LiveActivityIntent {
 /// On iOS 17, without `AudioRecordingIntent`, the card's mic is a link that opens
 /// the chat listening instead (`LiveCardView.listenURL`).
 struct TalkToChatIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Talk to a chat"
-    static var isDiscoverable = false
-    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    static let title: LocalizedStringResource = "Talk to a chat"
+    static let isDiscoverable = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
 
     @Parameter(title: "Chat") var sessionId: String
 
@@ -183,8 +162,8 @@ extension TalkToChatIntent: AudioRecordingIntent {}
 
 /// Cancel while listening: nothing is sent.
 struct CancelTalkIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Stop listening"
-    static var isDiscoverable = false
+    static let title: LocalizedStringResource = "Stop listening"
+    static let isDiscoverable = false
 
     init() {}
 

@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { LocalRelayStatus } from '@nekko-agent/shared';
-import { connectionName, LocalRelayView, MANAGED_RELAY_URL, PairingChoiceView, relayToEnable } from './RemoteAccess.js';
+import { CloudGoneBanner, connectionName, LocalRelayView, MANAGED_RELAY_URL, PairingChoiceView, relayToEnable } from './RemoteAccess.js';
 
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => undefined, { getState: () => ({}) }) }));
 
@@ -18,8 +18,16 @@ const tailnet: LocalRelayStatus = {
 };
 
 describe('PairingChoiceView', () => {
-  const html = (local: LocalRelayStatus | null) =>
-    renderToStaticMarkup(<PairingChoiceView local={local} relayUrl="" onRelayUrl={vi.fn()} onTailscale={vi.fn()} onCloud={vi.fn()} onOwnRelay={vi.fn()} />);
+  const html = (local: LocalRelayStatus | null, cloudLive = true) =>
+    renderToStaticMarkup(<PairingChoiceView local={local} relayUrl="" onRelayUrl={vi.fn()} onTailscale={vi.fn()} onCloud={vi.fn()} onOwnRelay={vi.fn()} cloudLive={cloudLive} />);
+
+  it('marks Nekko Cloud coming soon and leads with Tailscale while the managed relay is down', () => {
+    const out = html(tailnet, false);
+    expect(out).toContain('Coming soon');
+    expect(out).toMatch(/<button[^>]*disabled[^>]*>Use Nekko Cloud/);
+    expect(out).toMatch(/<button class="btn btn-primary[^"]*"[^>]*>Use Tailscale/);
+    expect(out).not.toMatch(/<button[^>]*disabled=""[^>]*>Use Tailscale/);
+  });
 
   it('offers Tailscale and Nekko Cloud, never naming the relay host', () => {
     const out = html(tailnet);
@@ -47,6 +55,15 @@ describe('connectionName', () => {
     expect(connectionName('ws://gomi.tailfd6474.ts.net:4400', tailnet)).toBe('Tailscale');
     expect(connectionName('ws://100.114.173.86:4400', tailnet)).toBe('Tailscale');
     expect(connectionName('wss://relay.example.com', tailnet)).toBe('wss://relay.example.com');
+  });
+});
+
+describe('CloudGoneBanner', () => {
+  it('says phones cannot connect and offers the way out', () => {
+    const out = renderToStaticMarkup(<CloudGoneBanner onChange={vi.fn()} />);
+    expect(out).toContain('phones can’t reach this computer');
+    expect(out).toContain('Tailscale');
+    expect(out).toMatch(/<button[^>]*>Change<\/button>/);
   });
 });
 

@@ -81,12 +81,11 @@ fn chat_provider<'a>(session: &Value, settings: &'a Value) -> Option<&'a Value> 
 /// whether the shield is on and can reach this chat's model.
 async fn preview(ctx: &Ctx, session_id: &str, draft: &str) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
-    let session = match (&ctx.sessions, session_id.is_empty()) {
-        (Some(store), false) => {
-            let (store, id) = (store.clone(), session_id.to_string());
-            tokio::task::spawn_blocking(move || store.get(&id)).await.map_err(|e| e.to_string())?.unwrap_or(Value::Null)
-        }
-        _ => Value::Null,
+    let session = if session_id.is_empty() {
+        Value::Null
+    } else {
+        let (store, id) = (ctx.sessions.clone(), session_id.to_string());
+        tokio::task::spawn_blocking(move || store.get(&id)).await.map_err(|e| e.to_string())?.unwrap_or(Value::Null)
     };
     let reach = chat_provider(&session, &settings).map(reach).unwrap_or(Reach::Cloud);
     let messages: Vec<Value> = session.get("messages").and_then(Value::as_array).cloned().unwrap_or_default();

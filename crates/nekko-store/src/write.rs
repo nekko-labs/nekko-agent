@@ -15,11 +15,11 @@ use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde_json::{Map, Value, json};
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The fields `setSessionOptions` takes (its `Pick<Session, ...>`).
 const OPTION_KEYS: &[&str] = &[
     "title",
+    "turnFailure",
     "pinned",
     "tags",
     "order",
@@ -186,6 +186,13 @@ const USER_FIELDS: &[&str] = &[
     "connectivityNotices",
 ];
 
+/// A queued prompt's text, when text is all it is.
+fn plain_text(item: &Value) -> Option<&str> {
+    let carried = |k: &str| item.get(k).is_some_and(|v| v.as_array().map_or(!v.is_null(), |a| !a.is_empty()));
+    let text = item.as_str().or_else(|| item.get("text").and_then(Value::as_str))?;
+    (!text.trim().is_empty() && !carried("images") && !carried("videos") && !carried("skill")).then_some(text)
+}
+
 /// `queueItemPayload`: a queued prompt as `{ text, images?, skill? }`.
 fn queue_payload(item: &Value) -> Value {
     match item {
@@ -271,10 +278,6 @@ fn is_archived(s: &Value) -> bool {
     s.get("archivedAt").and_then(Value::as_f64).is_some_and(|at| at > 0.0)
 }
 
-fn now_ms() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 fn base36(mut n: u64) -> String {
     const DIGITS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
     let mut out = Vec::new();
@@ -302,26 +305,11 @@ fn base64url(bytes: &[u8]) -> String {
     out
 }
 
-/// Write whole or not at all, as `writeAtomic` in sessions.ts does.
+/// Write whole or not at all, as `writeAtomic` in sessions.ts does. Not
+/// flushed to disk: this is every save of a chat, and a crash costs at most
+/// the last one.
 fn write_atomic(file: &Path, text: &str) -> std::io::Result<()> {
-    let tmp = file.with_extension(format!("json.{}.tmp", std::process::id()));
-    std::fs::write(&tmp, text)?;
-    let mut attempt = 0;
-    loop {
-        match std::fs::rename(&tmp, file) {
-            Ok(()) => return Ok(()),
-            // Windows refuses a rename over a file another process holds open
-            // without delete sharing; that clears in moments.
-            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied && attempt < 20 => {
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(5 * attempt));
-            }
-            Err(e) => {
-                let _ = std::fs::remove_file(&tmp);
-                return Err(e);
-            }
-        }
-    }
+    nekko_js::fs::atomic_write(file, text.as_bytes(), Default::default())
 }
 
 // Inject the timezone for deterministic parity tests without process-global TZ.
@@ -411,7 +399,7 @@ impl SessionStore {
 
     /// `saveSession`.
     fn save(&self, s: &mut Map<String, Value>) -> Result<(), String> {
-        s.insert("updatedAt".into(), json!(now_ms()));
+        s.insert("updatedAt".into(), json!(nekko_js::now_ms()));
         let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
         self.write_text(id, &serde_json::to_string_pretty(s).map_err(|e| e.to_string())?)
     }
@@ -470,7 +458,7 @@ impl SessionStore {
                 if let Some(disk) = &disk {
                     merge_disk(target, disk, None)?;
                 }
-                target.insert("updatedAt".into(), json!(now_ms()));
+                target.insert("updatedAt".into(), json!(nekko_js::now_ms()));
                 if !target.get("id").and_then(Value::as_str).is_some_and(valid_id) {
                     return Err("a session without a valid id".into());
                 }
@@ -523,7 +511,7 @@ impl SessionStore {
         settings: &Value,
         snapshot: bool,
     ) -> Result<Value, String> {
-        let now = now_ms();
+        let now = nekko_js::now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
         let parent = parent_id.and_then(|p| self.get(p)).and_then(|p| p.as_object().cloned());
@@ -859,7 +847,7 @@ impl SessionStore {
 
     /// Compatibility no-op at the current time.
     pub fn purge_archived(&self, before_delete: impl Fn(&str) -> Result<(), String>) -> Result<usize, String> {
-        self.purge_archived_with(now_ms() as f64, before_delete)
+        self.purge_archived_with(nekko_js::now_ms() as f64, before_delete)
     }
 
     /// `forkSession(id, beforeMessageId)`: a new chat holding `id`'s
@@ -889,7 +877,7 @@ impl SessionStore {
             } else {
                 None
             };
-        let now = now_ms();
+        let now = nekko_js::now_ms();
         let mut rand = [0u8; 6];
         getrandom::fill(&mut rand).map_err(|e| e.to_string())?;
         let mut s = Map::new();
@@ -961,6 +949,11 @@ impl SessionStore {
             "memory",
             "guidance",
             "toolApproach",
+            // A fork carries the transcript, so it keeps what protects it.
+            "offline",
+            "cloudOnly",
+            "privacy",
+            "incognito",
         ] {
             if let Some(v) = src.get(key) {
                 s.insert(key.into(), v.clone());
@@ -1265,6 +1258,24 @@ impl SessionStore {
         })
     }
 
+    /// The messages an agent can read at its next step: the queue's head, up to
+    /// the first with photos or a skill, which waits for a turn of its own so
+    /// nothing overtakes it. Taken off the queue, so none runs twice.
+    pub fn take_queued_text(&self, id: &str) -> Result<Vec<String>, String> {
+        let waiting = |s: &Map<String, Value>| s.get("queue").and_then(Value::as_array).is_some_and(|q| !q.is_empty());
+        if !self.meta(id).is_some_and(|m| waiting(&m.fields)) {
+            return Ok(Vec::new());
+        }
+        let mut taken = Vec::new();
+        self.patch(id, |s| {
+            let q = s.get("queue").and_then(Value::as_array).cloned().unwrap_or_default();
+            taken = q.iter().map_while(plain_text).map(str::to_string).collect();
+            s.insert("queue".into(), Value::Array(q[taken.len()..].to_vec()));
+            !taken.is_empty()
+        })?;
+        Ok(taken)
+    }
+
     /// `editQueuedPrompt`: change or remove the queued prompt at `index`, only
     /// while it still shows the text the editor saw (`edit.expect`). A missing
     /// `text`, or a blank one with no photos, removes it; a skill's prompt can
@@ -1341,6 +1352,21 @@ impl SessionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_next_step_takes_the_queues_plain_head_and_nothing_past_a_photo() {
+        let dir = std::env::temp_dir().join(format!("nekko-take-queued-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sessions")).unwrap();
+        let store = SessionStore::new(&dir);
+        let id = store.create(None).unwrap()["id"].as_str().unwrap().to_string();
+        assert!(store.take_queued_text(&id).unwrap().is_empty());
+        let photo = json!({ "text": "see this", "images": ["data:x"] });
+        store.assign(&id, &[("queue", json!(["one", { "text": "two" }, photo.clone(), "after the photo"]))]).unwrap();
+        assert_eq!(store.take_queued_text(&id).unwrap(), ["one", "two"]);
+        assert_eq!(store.get(&id).unwrap()["queue"], json!([photo, "after the photo"]));
+        assert!(store.take_queued_text(&id).unwrap().is_empty(), "the photo holds its place");
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn connectivity_notices_survive_checkpoints_without_entering_model_messages() {

@@ -22,7 +22,7 @@ struct AutomationsView: View {
         .navigationTitle("Automations")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
             if model == nil { model = AutomationsModel(store: store) }
             await model?.load()
@@ -151,11 +151,14 @@ private struct AutomationRow: View {
     }
 }
 
-/// What the computer's providers have used, and each plan's limits. Read only.
+/// What was used, by where it came from (#1773): each paired computer and this
+/// iPhone's own chats, and within each, subscriptions (with their limits) before
+/// pay-per-token API use. An All places total on top. Read only.
 struct UsageView: View {
     @Environment(ComputersStore.self) private var store
+    @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette
-    @State private var model: UsageModel?
+    @State private var model: FleetUsageModel?
 
     var body: some View {
         List {
@@ -166,51 +169,133 @@ struct UsageView: View {
         .navigationTitle("Usage and limits")
         .navigationBarTitleDisplayMode(.inline)
         .overlay { if model?.loaded != true { ProgressView() } }
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         .task {
-            if model == nil { model = UsageModel(store: store) }
+            if model == nil { model = FleetUsageModel(store: store, phone: phone) }
             await model?.load()
         }
         .accessibilityIdentifier("usage.view")
     }
 
-    @ViewBuilder private func content(_ model: UsageModel) -> some View {
-        if let e = model.error {
-            Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
-        }
-        ForEach(model.limited) { item in
-            Section {
-                ForEach(item.limits.windows) { w in LimitBar(window: w) }
-                if item.limits.windows.isEmpty {
-                    Text("No limits reported.").font(.footnote).foregroundStyle(palette.inkSoft)
-                }
-            } header: {
-                SectionTitle([item.provider.label, item.limits.planType?.capitalized].compactMap { $0 }.joined(separator: " · "))
-            }
-        }
-        if let s = model.summary {
-            Section {
-                LabeledContent("Tokens", value: s.totalTokens.formatted(.number.notation(.compactName)))
-                LabeledContent("Estimated spend", value: s.totalCost.formatted(.currency(code: "USD")))
-            } header: { SectionTitle("All time") }
-            if !s.days.isEmpty {
-                Section {
-                    ForEach(s.days.reversed()) { d in
-                        LabeledContent(d.date, value: "\(d.tokens.formatted(.number.notation(.compactName))) · \(d.cost.formatted(.currency(code: "USD")))")
-                    }
-                } header: { SectionTitle("Recent days") }
-            }
-            if !s.models.isEmpty {
-                Section {
-                    ForEach(s.models) { m in
-                        LabeledContent(m.model, value: m.subscription ? "\(m.tokens.formatted(.number.notation(.compactName))) · plan"
-                                       : "\(m.tokens.formatted(.number.notation(.compactName))) · \(m.cost.formatted(.currency(code: "USD")))")
-                    }
-                } header: { SectionTitle("By model") }
-            }
-        } else if model.loaded && model.error == nil {
+    @ViewBuilder private func content(_ model: FleetUsageModel) -> some View {
+        if model.loaded && model.places.isEmpty {
             Text("No usage recorded yet.").font(.subheadline).foregroundStyle(palette.inkSoft)
         }
+        if model.places.count > 1 {
+            let t = model.total
+            Section {
+                LabeledContent("Tokens", value: Self.tokens(t.tokens))
+                LabeledContent("On a subscription", value: Self.tokens(t.subscriptionTokens))
+                LabeledContent("API", value: Self.tokens(t.apiTokens))
+                LabeledContent("Estimated API spend", value: Self.money(t.apiCost))
+                if t.offline > 0 {
+                    Text("Some places are offline: their last numbers are counted.").font(.footnote).foregroundStyle(palette.inkSoft)
+                }
+            } header: { SectionTitle(String(localized: "All places")) }
+                .accessibilityIdentifier("usage.total")
+        }
+        ForEach(model.places) { place in
+            UsagePlaceSection(usage: place, place: chatPlace(place))
+        }
+    }
+
+    private func chatPlace(_ p: UsagePlace) -> ChatPlace {
+        if p.kind == .phone { return ChatPlace.phonePlace }
+        return ChatPlace.of(p.id, store: store) ?? ChatPlace(id: p.id, name: p.name, color: Int(ComputerColors.computer(at: 0)))
+    }
+
+    static func tokens(_ n: Int64) -> String { n.formatted(.number.notation(.compactName)) }
+    static func money(_ x: Double) -> String { x.formatted(.currency(code: "USD")) }
+}
+
+/// One place's usage: its subscriptions and their limits, then its API use, then its recent days.
+private struct UsagePlaceSection: View {
+    let usage: UsagePlace
+    let place: ChatPlace
+    @Environment(\.palette) private var palette
+    @State private var showDays = false
+
+    var body: some View {
+        Section {
+            status
+            if !usage.plans.isEmpty || !usage.subscriptionModels.isEmpty {
+                Subheading(text: String(localized: "Subscriptions"))
+                ForEach(usage.plans) { plan in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(plan.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
+                        ForEach(plan.limits.windows) { w in LimitBar(window: w) }
+                        if plan.limits.windows.isEmpty {
+                            Text("No limits reported.").font(.footnote).foregroundStyle(palette.inkSoft)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                ForEach(usage.subscriptionModels) { m in
+                    LabeledContent(m.model, value: UsageView.tokens(m.tokens))
+                }
+            }
+            if !usage.apiGroups.isEmpty || (usage.apiCost ?? 0) > 0 {
+                Subheading(text: String(localized: "API"))
+                ForEach(usage.apiGroups) { group in
+                    if let label = group.label {
+                        Text(label).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink)
+                    }
+                    ForEach(group.models) { m in
+                        LabeledContent(m.model, value: usage.priced ? "\(UsageView.tokens(m.tokens)) · \(UsageView.money(m.cost))" : UsageView.tokens(m.tokens))
+                    }
+                }
+                if let cost = usage.apiCost {
+                    LabeledContent("Estimated API spend", value: UsageView.money(cost))
+                }
+            }
+            if let days = usage.summary?.days, !days.isEmpty {
+                DisclosureGroup(isExpanded: $showDays) {
+                    ForEach(days.reversed()) { d in
+                        LabeledContent(d.date, value: usage.priced ? "\(UsageView.tokens(d.tokens)) · \(UsageView.money(d.cost))" : UsageView.tokens(d.tokens))
+                    }
+                } label: {
+                    Text("Recent days").font(.subheadline).foregroundStyle(palette.ink)
+                }
+            }
+            if usage.kind == .phone && usage.summary != nil {
+                Text("Counted from each provider’s replies, in tokens only. It stays on \(place.name).")
+                    .font(.footnote).foregroundStyle(palette.inkSoft)
+            }
+        } header: {
+            HStack(spacing: 6) {
+                PlaceMark(place: place, size: 14)
+                Text(place.name).foregroundStyle(palette.inkSoft).lineLimit(1)
+                Spacer(minLength: 8)
+                if !usage.online {
+                    Text("Offline").font(.caption.weight(.semibold)).foregroundStyle(palette.warning).textCase(nil)
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+        .accessibilityIdentifier("usage.place")
+    }
+
+    @ViewBuilder private var status: some View {
+        if let e = usage.error {
+            Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
+        }
+        if !usage.online && usage.isEmpty {
+            Text("Offline. Its usage shows here when it reconnects.").font(.footnote).foregroundStyle(palette.inkSoft)
+        } else if !usage.online {
+            Text("Offline. These are the last numbers it gave.").font(.footnote).foregroundStyle(palette.inkSoft)
+        } else if usage.isEmpty {
+            Text("No usage recorded yet.").font(.footnote).foregroundStyle(palette.inkSoft)
+        }
+    }
+}
+
+/// A group's name inside a place's section: Subscriptions or API.
+private struct Subheading: View {
+    let text: String
+    @Environment(\.palette) private var palette
+    var body: some View {
+        Text(text).font(.footnote.weight(.bold)).foregroundStyle(palette.accent)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

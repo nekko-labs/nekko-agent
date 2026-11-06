@@ -27,7 +27,7 @@ export function TitleBar() {
   return (
     <div className={`titlebar ${isMacChrome ? 'titlebar-mac' : ''}`}>
       <span className="titlebar-mark"><BrandMark size={28} title="Nekko Agent" /></span>
-      <h1 className="titlebar-heading text-gradient">{t(`nav.${view === 'modelserver' ? 'models' : view}`)}</h1>
+      <h1 className="titlebar-heading">{t(`nav.${view === 'modelserver' ? 'models' : view}`)}</h1>
       <ModeSwitch />
       <UpdateControl />
       {/* Layout controls follow the heading and version in the same row. */}

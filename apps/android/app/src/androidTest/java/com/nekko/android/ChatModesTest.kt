@@ -36,8 +36,6 @@ import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
 import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.chat.ModeTags
-import com.nekko.android.ui.simple.EXPERT_DESCRIPTION
-import com.nekko.android.ui.simple.SIMPLE_DESCRIPTION
 import com.nekko.android.ui.simple.PILL_TAB_TAG
 import com.nekko.android.ui.simple.PILL_TAG
 import com.nekko.android.data.PillDock
@@ -55,7 +53,6 @@ import com.nekko.protocol.PaneContent
 import com.nekko.protocol.PaneLayout
 import com.nekko.protocol.PaneMode
 import com.nekko.protocol.PaneSide
-import com.nekko.protocol.PairingLink
 import com.nekko.protocol.RelayConfig
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.RelayStatus
@@ -84,6 +81,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
+private const val SIMPLE_DESCRIPTION = "Simple: everyday controls"
+private const val EXPERT_DESCRIPTION = "Detailed: every control"
+
 /**
  * Simple and Expert modes in the real chat screen (spec/phone/iphone-simple-and-expert-modes.md):
  * [ChatScreen] and [ChatViewModel] over a real [ComputersRepository] whose computer is a fake
@@ -97,6 +97,13 @@ class ChatModesTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val computer = FakeComputer()
+
+    // Only the manual evidence workflow reads the selected app revision's label. Normal
+    // test runs keep the explicit current-label selector above, including rename regressions.
+    private val expertDescription: String
+        get() = if (InstrumentationRegistry.getArguments().getString("nekkoModeEvidence") == "true") {
+            InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.simple_switch_expert)
+        } else EXPERT_DESCRIPTION
 
     /** What Start fresh asked New chat to open on. */
     @Volatile private var fresh: com.nekko.android.data.ModelPick? = null
@@ -135,12 +142,15 @@ class ChatModesTest {
         Thread.sleep(4_000)
         assertEquals("Simple without a local model reads no hardware", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
 
-        // Expert (the code icon): the monitor is back and the hardware is read again.
-        compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst().performClick()
-        compose.waitUntil(5_000) { computer.calls.count { it == Channels.SYSTEM_STATS } > idle }
+        // Expert (the code icon) with no local model: the monitors are off in both modes until a
+        // local model runs (spec/phone/iphone-simple-and-expert-modes.md, "Monitors"), so still no
+        // monitor and no hardware reads. Expert with a local model shows them: pillExpandsAndDocks.
+        compose.onAllNodesWithContentDescription(expertDescription).onFirst().performClick()
         settle()
         assertTrue(prefs.get(EXPERT_MODE))
-        assertTrue(compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty())
+        Thread.sleep(4_000)
+        assertEquals("Expert without a local model reads no hardware either", idle, computer.calls.count { it == Channels.SYSTEM_STATS })
+        assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().size)
         shot("4-expert")
 
         // Model and effort: the sheet with the effort slider, then High.
@@ -231,7 +241,7 @@ class ChatModesTest {
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.MONITOR_SHEET).fetchSemanticsNodes().size)
 
         // A tap 2 px from the top of the Expert segment's 48 dp touch area still switches.
-        val expertSegment = compose.onAllNodesWithContentDescription(EXPERT_DESCRIPTION).onFirst()
+        val expertSegment = compose.onAllNodesWithContentDescription(expertDescription).onFirst()
         assertTrue(expertSegment.fetchSemanticsNode().boundsInRoot.height >= min)
         expertSegment.performTouchInput { click(Offset(centerX, 2f)) }
         settle()
@@ -359,45 +369,6 @@ class ChatModesTest {
         prefs.reset(PillPlace.KEY)
     }
 
-    // TOUR-TEMP: paced tour for the PR's GIF, frames advanced in real time; not committed.
-    @Test fun tourForGif() {
-        if (androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("tour") == null) return
-        prefs.set(EXPERT_MODE, true)
-        show()
-        compose.waitUntil(15_000) { compose.onAllNodesWithTag(ModeTags.MONITOR).fetchSemanticsNodes().isNotEmpty() }
-        settle()
-        compose.mainClock.autoAdvance = false
-        fun play(ms: Int) = repeat(ms / 16) { compose.mainClock.advanceTimeByFrame(); Thread.sleep(16) }
-        val pill = { compose.onAllNodesWithTag(PILL_TAG).onFirst() }
-        val root = compose.onRoot().fetchSemanticsNode().size
-        fun drag(lift: Boolean, to: Offset) {
-            val c = pill().fetchSemanticsNode().boundsInRoot.center
-            pill().performTouchInput { down(center) }
-            play(if (lift) 520 else 16)
-            val steps = if (lift) 24 else 6
-            val d = (to - c) / steps.toFloat()
-            repeat(steps) {
-                pill().performTouchInput { moveBy(d) }
-                play(if (lift) 32 else 16)
-            }
-            pill().performTouchInput { up() }
-        }
-        play(1500)
-        android.util.Log.i("TOUR", "start ${System.currentTimeMillis()}")
-        play(800)
-        compose.onAllNodesWithContentDescription("CPU, 38%").onFirst().performClick(); play(2500)
-        compose.onAllNodes(hasText("Done")).onFirst().performClick(); play(1500)
-        drag(true, Offset(root.width - 60f, root.height * 0.42f)); play(1500)
-        drag(false, Offset(root.width + 200f, root.height * 0.42f)); play(1800)
-        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick(); play(1500)
-        drag(true, Offset(root.width / 2f, 300f)); play(1500)
-        drag(false, Offset(root.width / 2f, -300f)); play(1800)
-        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick(); play(1500)
-        android.util.Log.i("TOUR", "end ${System.currentTimeMillis()}")
-        compose.mainClock.autoAdvance = true
-        prefs.reset(PillPlace.KEY)
-    }
-
     /** In a long chat, reading on slides the pill away; scrolling back brings it back. */
     @Test fun pillHidesOnScroll() {
         computer.resident = false
@@ -451,7 +422,7 @@ class ChatModesTest {
     @Test fun simpleModeSettings() {
         compose.setContent { NekkoTheme(dark = false) { SimpleModeScreen(prefs, onBack = {}) } }
         settle()
-        assertTrue(compose.onAllNodes(hasText("Simple keeps Nekko calm for everyday use. Everything still works; these controls just stay out of sight.")).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(compose.onAllNodes(hasText("Simple is a cleaner, more focused view, and details show only when they matter. Everything still works.")).fetchSemanticsNodes().isNotEmpty())
         shot("settings-simple-mode")
     }
 
@@ -466,7 +437,7 @@ class ChatModesTest {
             deriveKey = { _, _ -> ByteArray(32) },
         )
         runBlocking {
-            val id = repo.pair(PairingLink("wss://relay.example.dev", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff"))
+            val id = repo.pair(testPairing())
             repo.rename(id, "Studio Mac")
         }
         return repo
@@ -540,6 +511,8 @@ class ChatModesTest {
         }
 
         val calls = CopyOnWriteArrayList<String>()
+        /** When this computer was made: its chats were last touched just before. */
+        private val now = System.currentTimeMillis()
         /** Each chat's effort, as `session:setOptions` left it. */
         val efforts = java.util.concurrent.ConcurrentHashMap<String, String>()
         val effort: String? get() = efforts["s1"]
@@ -596,7 +569,8 @@ class ChatModesTest {
                     "anthropic" -> json("""[{"id":"claude-opus-4-7","providerId":"anthropic","name":"Claude Opus 4.7"},{"id":"claude-sonnet-4-5","providerId":"anthropic","name":"Claude Sonnet 4.5"}]""")
                     else -> json("""[{"id":"google/gemma-4-e4b","providerId":"nekko-engine","name":"Gemma 4 E4B","loaded":true}]""")
                 }
-                Channels.SESSIONS_SUMMARIES -> json("""[{"id":"s1","title":"Tidy the release notes","updatedAt":2},{"id":"s2","title":"Profile the image cache","updatedAt":1}]""")
+                // Touched a minute ago: a group lists only recent chats before Show more (ChatSections.split).
+                Channels.SESSIONS_SUMMARIES -> json("""[{"id":"s1","title":"Tidy the release notes","updatedAt":${now - 60_000}},{"id":"s2","title":"Profile the image cache","updatedAt":${now - 120_000}}]""")
                 Channels.SESSION_GET -> session(args.first().jsonPrimitive.content)
                 Channels.SESSION_SET_OPTIONS -> {
                     args.getOrNull(1)?.jsonObject?.get("effort")?.let { efforts[args.first().jsonPrimitive.content] = it.jsonPrimitive.content }

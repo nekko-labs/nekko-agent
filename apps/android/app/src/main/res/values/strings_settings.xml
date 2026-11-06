@@ -1,0 +1,430 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings and its sections, the computers and computer pages, monitors, automations, usage, providers, step-up, safety exits and the app lock. -->
+<resources>
+    <!-- Shared -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Back</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_close">Close</string>
+    <string name="settings_ok">OK</string>
+    <string name="settings_done">Done</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_refresh">Refresh</string>
+    <string name="settings_selected">Selected</string>
+    <string name="settings_copied">Copied</string>
+    <string name="settings_on">On</string>
+    <string name="settings_off">Off</string>
+    <string name="settings_none">None</string>
+    <string name="settings_name">Name</string>
+    <string name="settings_just_now">just now</string>
+    <string name="settings_ago">%1$s ago</string>
+
+    <!-- About -->
+    <string name="settings_about">About</string>
+    <string name="settings_phone_protocol">Phone protocol</string>
+    <string name="settings_protocol_both">%1$s here, %2$s on the computer</string>
+    <string name="settings_licenses">Open-source licenses</string>
+    <string name="settings_licenses_detail">Nekko Agent is MIT licensed; the libraries it uses</string>
+    <string name="settings_version">Version %1$s (%2$d)</string>
+    <string name="settings_version_unknown">Version unknown</string>
+    <string name="settings_show_license">Show license text</string>
+    <string name="settings_hide_license">Hide license text</string>
+
+    <!-- On <computer>: providers, files, logs, automations, usage -->
+    <string name="settings_providers">Providers</string>
+    <string name="settings_providers_count">%1$d of %2$d on · add one with a sealed key</string>
+    <string name="settings_providers_none">Add one with a key sealed to the computer</string>
+    <string name="settings_files">Files</string>
+    <string name="settings_files_detail">Saved folders, browse and edit small text files</string>
+    <string name="settings_logs">Logs</string>
+    <string name="settings_logs_detail">The app\'s, the engine\'s and each chat\'s, read only</string>
+    <string name="settings_automations">Automations</string>
+    <string name="settings_automations_paused">Paused · Run now still works</string>
+    <string name="settings_automations_detail">Tasks and workflows, Run now</string>
+    <string name="settings_usage">Usage and limits</string>
+    <string name="settings_usage_detail">What the providers used, and each plan\'s limits</string>
+
+    <!-- Computers -->
+    <string name="settings_computers">Computers</string>
+    <string name="settings_computers_none">None paired yet</string>
+    <string name="settings_computers_paired_using">%1$d paired · using %2$s</string>
+    <string name="settings_computers_paired">%1$d paired</string>
+
+    <!-- Connection -->
+    <string name="settings_connection">Connection</string>
+    <string name="settings_stay_connected">Stay connected while a chat runs</string>
+    <string name="settings_stay_connected_detail">Keeps a notification up until the reply is done</string>
+    <string name="settings_notify_me">Notify me about</string>
+    <string name="settings_notify_needs_you">Approvals and questions</string>
+    <string name="settings_notify_needs_you_detail">A tool waits for your Allow, or the agent asks you something</string>
+    <string name="settings_notify_finished">Finished replies</string>
+    <string name="settings_notify_finished_detail">A reply on your computer is ready</string>
+    <string name="settings_notify_failed">Failed replies</string>
+    <string name="settings_notify_failed_detail">A reply ended with an error</string>
+    <string name="settings_test_shown">Shown by the app. Until Nekko Agent can push to Android, notifications arrive while the app is open or running in the background.</string>
+    <string name="settings_test_off">Notifications are off for Nekko on this phone. Allow them below.</string>
+    <string name="settings_send_test">Send a test notification</string>
+    <string name="settings_keep_list">Keep the chat list when offline</string>
+    <string name="settings_keep_list_detail">Chat titles and folders as last seen, never what they say. Not backed up; off deletes it</string>
+    <string name="settings_keep_chats">Keep recent chats to read offline</string>
+    <string name="settings_keep_chats_detail">The last 20 chats you opened, without their photos. Not backed up; off deletes them</string>
+    <string name="settings_notifications_off">Notifications are off for Nekko, so you won’t hear when a chat finishes or needs you.</string>
+    <string name="settings_allow_notifications">Allow notifications</string>
+    <string name="settings_restricted">Android restricts Nekko in the background, so it disconnects soon after you leave the app. Allow background use in the app’s battery settings.</string>
+    <string name="settings_open_app_settings">Open app settings</string>
+    <string name="settings_connection_footer">Saved on this phone. Nekko reconnects by itself when your phone changes network. Notifications say only what happened and in which chat, never the reply or the command; with the app lock on they don’t name the chat either.</string>
+
+    <!-- Connection status -->
+    <string name="settings_connection_status">Connection status</string>
+    <string name="settings_fact_computer">Computer</string>
+    <string name="settings_fact_route">Route</string>
+    <string name="settings_fact_relay">Relay</string>
+    <string name="settings_fact_other_routes">Other routes</string>
+    <string name="settings_route_other">%1$s (%2$s)</string>
+    <string name="settings_route_other_unused">%1$s (%2$s, not used on Android)</string>
+    <string name="settings_fact_status">Status</string>
+    <string name="settings_fact_tailscale">Tailscale on this phone</string>
+    <string name="settings_connected">Connected</string>
+    <string name="settings_what_to_try">What to try</string>
+    <string name="settings_try_again_now">Try again now</string>
+    <string name="settings_routes">Routes</string>
+    <string name="settings_checking">Checking…</string>
+    <string name="settings_check_routes">Check routes</string>
+    <string name="settings_share_diagnostics">Share diagnostics</string>
+    <string name="settings_check_routes_footer">Check routes looks up each of %1$s\'s addresses, opens a connection and says hello on a socket of its own. Share diagnostics sends the checks and the log: hosts and timings, never keys or messages.</string>
+    <string name="settings_since_started">Since the app started</string>
+    <string name="settings_nothing_yet">Nothing yet.</string>
+    <string name="settings_copy_log">Copy log</string>
+    <string name="settings_e2e_footer">Messages are end-to-end encrypted on every route; the relay sees only sealed frames. The log holds times, states and the relay\'s host, no keys or messages.</string>
+    <string name="settings_step_dns">Name lookup</string>
+    <string name="settings_step_tcp">Connection</string>
+    <string name="settings_step_hello">Hello</string>
+    <string name="settings_step_checking">%1$s: checking…</string>
+    <string name="settings_step_skipped">%1$s: skipped</string>
+    <string name="settings_step_ok">%1$s: ok</string>
+    <string name="settings_step_failed">%1$s: failed</string>
+    <string name="settings_refused_wire">Refused: %1$s</string>
+    <string name="settings_route_lan">Local network</string>
+    <string name="settings_route_loopback">This device</string>
+    <string name="settings_route_internet">Internet relay</string>
+    <string name="settings_state_idle">Not connected</string>
+    <string name="settings_state_connecting">Connecting</string>
+    <string name="settings_state_online">Online</string>
+    <string name="settings_state_offline">Computer offline</string>
+    <string name="settings_state_denied">Refused</string>
+    <string name="settings_state_connecting_dots">Connecting…</string>
+    <string name="settings_state_offline_short">Offline</string>
+    <string name="settings_state_not_paired">Not paired</string>
+
+    <!-- Dictation -->
+    <string name="settings_dictation">Dictation</string>
+    <string name="settings_mic">Microphone in chats</string>
+    <string name="settings_mic_detail">Speak a message; it goes in the box and you press Send</string>
+    <string name="settings_speech_with">Turn speech into text with</string>
+    <string name="settings_engine_computer_first">%1$s when ready</string>
+    <string name="settings_engine_computer_first_detail">Nekko Voice (Whisper) on %1$s, end-to-end encrypted. Otherwise this phone.</string>
+    <string name="settings_engine_computer_only">%1$s only</string>
+    <string name="settings_engine_computer_only_detail">The audio only ever goes to %1$s. Up to 30 seconds at a time.</string>
+    <string name="settings_engine_phone">This phone</string>
+    <string name="settings_engine_phone_detail">Android’s speech recognizer. Depending on the phone, the audio may go to Google.</string>
+    <string name="settings_recognizer_language">Phone recognizer language</string>
+    <string name="settings_recognizer_language_hint">The phone’s own, or e.g. it-IT</string>
+    <string name="settings_voice_checking">Checking Nekko Voice on %1$s…</string>
+    <string name="settings_voice_ready">Nekko Voice is ready on %1$s.</string>
+    <string name="settings_voice_meanwhile">This phone’s recognizer is used meanwhile.</string>
+    <string name="settings_dictation_footer">Saved on this phone. Nothing is recorded until you tap the microphone, the audio is kept in memory only, and dictated text is never sent without you pressing Send. %1$s uses the language set in its own Nekko Voice settings.</string>
+
+    <!-- Feedback -->
+    <string name="settings_feedback">Feedback</string>
+    <string name="settings_send_feedback">Send feedback</string>
+    <string name="settings_send_feedback_detail">A bug or an idea, to the team that makes Nekko Agent</string>
+    <string name="settings_copy_for_agent">Copy for an agent</string>
+    <string name="settings_copy_for_agent_detail">Paste it into Claude Code, Codex or Nekko Agent. It asks you a few questions and files a GitHub issue once you approve it.</string>
+    <string name="settings_copy_prompt">Copy prompt</string>
+    <string name="settings_quick_note">Quick note</string>
+    <string name="settings_quick_note_detail">Goes straight to Nekko Labs. No account, and nothing about you unless you add app info.</string>
+    <string name="settings_note_thanks">Thanks, your note reached Nekko Labs.</string>
+    <string name="settings_write_another">Write another</string>
+    <string name="settings_note_label">What happened, or what you\'d like</string>
+    <string name="settings_include_info">Include app info</string>
+    <string name="settings_include_info_detail">App, version, OS and version, and CPU type. Nothing that identifies you.</string>
+    <string name="settings_sending">Sending…</string>
+    <string name="settings_send">Send</string>
+    <string name="settings_github_issues">Open GitHub issues</string>
+    <string name="settings_github_issues_detail">See what others have reported, or file an issue in public.</string>
+
+    <!-- New chats -->
+    <string name="settings_new_chats">New chats</string>
+    <string name="settings_model_on">Model on %1$s</string>
+    <string name="settings_new_chats_footer">Saved on this phone. New chat opens with these; the computer’s own default model is not changed.</string>
+    <string name="settings_used_last">The one used last</string>
+    <string name="settings_used_last_detail">Opens on whichever computer you used most recently</string>
+    <string name="settings_same_as_default">Same as the computer’s default</string>
+    <string name="settings_same_as_default_detail">Follows the default set in Nekko Agent on the computer</string>
+    <string name="settings_default_computer">Default computer</string>
+    <string name="settings_default_model_on">Default model on %1$s</string>
+    <string name="settings_this_computer_lower">this computer</string>
+    <string name="settings_connect_to_choose">Connect to the computer to choose one of its models.</string>
+    <string name="settings_no_providers_on">No model providers are switched on on the computer.</string>
+    <string name="settings_couldnt_list">Couldn’t list its models.</string>
+    <string name="settings_asking_computer">Asking your computer…</string>
+    <string name="settings_saved_model_missing">The saved model (%1$s) isn’t offered by the computer any more; new chats use the computer’s default.</string>
+
+    <!-- On <computer>: its settings -->
+    <string name="settings_didnt_save">%1$s didn’t save that.</string>
+    <string name="settings_on_computer">On %1$s</string>
+    <string name="settings_reading_settings">Reading %1$s’s settings…</string>
+    <string name="settings_pc_offline_unknown">%1$s is offline. Its chat mode, chat action and delete confirmation show here once it’s connected.</string>
+    <string name="settings_chat_mode_new">Chat mode for new chats</string>
+    <string name="settings_long_press">Long-press a chat to</string>
+    <string name="settings_complete_it">Complete it</string>
+    <string name="settings_complete_it_detail">Moves it to Completed on %1$s; nothing is deleted</string>
+    <string name="settings_delete_it">Delete it</string>
+    <string name="settings_delete_it_detail">Removes it from %1$s for good</string>
+    <string name="settings_confirm_delete">Confirm before deleting</string>
+    <string name="settings_confirm_delete_detail">Ask first, here and on %1$s</string>
+    <string name="settings_pc_footer_online">Saved on %1$s, the same settings as in Nekko Agent there. Each chat can still change its own mode.</string>
+    <string name="settings_pc_footer_offline">%1$s is offline. Connect to change its settings.</string>
+    <string name="settings_yolo_title">Use YOLO for new chats?</string>
+    <string name="settings_yolo_text">New chats on %1$s will run commands and edit files without asking you first. Your deny rules still block. You can switch back here or on %1$s at any time.</string>
+    <string name="settings_use_yolo">Use YOLO</string>
+    <string name="settings_step_up_switch">Switch new chats on %1$s to %2$s</string>
+    <string name="settings_step_up_change">Change %1$s’s settings</string>
+    <string name="settings_mode_ask">Ask</string>
+    <string name="settings_mode_guardrails">Guardrails</string>
+    <string name="settings_mode_yolo">YOLO</string>
+    <string name="settings_mode_ask_detail">Confirm every file write and command before it runs</string>
+    <string name="settings_mode_guardrails_detail">Run freely, but ask or deny per your guardrail rules</string>
+    <string name="settings_mode_yolo_detail">Run everything without confirming; deny rules still block</string>
+
+    <!-- Security -->
+    <string name="settings_security">Security</string>
+    <string name="settings_turn_off_lock">Turn off app lock</string>
+    <string name="settings_confirm_its_you">Confirm it’s you</string>
+    <string name="settings_app_lock">App lock</string>
+    <string name="settings_app_lock_detail">Fingerprint, face or screen lock every time you open the app</string>
+    <string name="settings_no_screen_lock">This phone has no screen lock, so the app can’t be locked. Set a PIN, pattern or password in the phone’s settings.</string>
+    <string name="settings_open_security">Open security settings</string>
+    <string name="settings_security_footer">Saved on this phone. While locked nothing is shown and nothing can be approved. With the lock on, the recent-apps preview shows a plain cover instead of your chats; screenshots still work. After a restart the app doesn’t connect to your computer until you unlock.</string>
+    <string name="settings_method_key">Security key</string>
+    <string name="settings_method_passkey">Passkey</string>
+    <string name="settings_method_totp">One-time code</string>
+    <string name="settings_step_up_shows_once">Shows once %1$s is connected.</string>
+    <string name="settings_step_up_on_line">On: raising a chat’s mode from this phone asks for one of these.</string>
+    <string name="settings_step_up_off_line">Off on %1$s. Turn it on there in Settings → Security.</string>
+    <string name="settings_step_up_on">Step-up on %1$s</string>
+    <string name="settings_keys_cant_answer">Keys and passkeys can’t answer from this phone yet, so the phone asks for a code. Keep an authenticator app set up on %1$s.</string>
+    <string name="settings_step_up_footer">Add or remove methods on %1$s in Settings → Security there. Each computer keeps its own, so a key is touched once per computer; a key that holds only a few passkeys can run out of room.</string>
+    <string name="settings_registered">Registered</string>
+    <string name="settings_hw_note">The Devs don’t have a hardware security key to test this one, so we tried our best without one! If you see any issues, please let us know 🙏</string>
+    <string name="settings_hw_note_link">let us know</string>
+    <string name="settings_report_issue">Report an issue</string>
+
+    <!-- Step-up sheet -->
+    <string name="settings_confirm_with_key">Confirm with your security key</string>
+    <string name="settings_no_method">%1$s asks for a security key or a code, but none it has can answer from a phone. Do this on %1$s.</string>
+    <string name="settings_touch_key">Touch your key when it blinks, or hold it to the back of the phone. A passkey on this phone works too.</string>
+    <string name="settings_use_key">Use security key or passkey</string>
+    <string name="settings_keys_unavailable">Security keys and passkeys for %1$s can’t be used from this phone yet.</string>
+    <string name="settings_code_label">Code from your authenticator app</string>
+    <string name="settings_confirm_with_code">Confirm with code</string>
+    <string name="settings_use_code">Use a code</string>
+    <string name="settings_checking_with">Checking with %1$s…</string>
+
+    <!-- This computer: safety exits -->
+    <string name="settings_this_computer">This computer</string>
+    <string name="settings_exits_footer">For when this phone is lost or something looks wrong. None of these needs a key or a code.</string>
+    <string name="settings_quit_off">Quitting Nekko Agent from a phone is off on %1$s (Settings → Remote access there).</string>
+    <string name="settings_signed_out_sent">Signed out of %1$s. To use it from this phone again, pair with a new code from %1$s.</string>
+    <string name="settings_signed_out_queued">Signed out of %1$s on this phone. %1$s will hear it the next time this phone reaches it.</string>
+    <string name="settings_remote_off">Remote access is off on %1$s and every phone was disconnected. Only %1$s can turn it on again (Settings → Remote access).</string>
+    <string name="settings_quitting">Nekko Agent is quitting on %1$s. Start it again there when you need it.</string>
+    <string name="settings_didnt_answer">%1$s didn’t answer. Try again.</string>
+    <string name="settings_exit_sign_out">Sign out this phone</string>
+    <string name="settings_exit_sign_out_detail">Forget %1$s here; %1$s removes this phone</string>
+    <string name="settings_exit_stop">Stop remote access on %1$s</string>
+    <string name="settings_exit_stop_detail">Disconnects every phone; only %1$s can turn it back on</string>
+    <string name="settings_exit_must_be_online">%1$s must be online</string>
+    <string name="settings_exit_quit">Quit Nekko Agent on %1$s</string>
+    <string name="settings_exit_quit_detail">Running chats stop; start it again at %1$s</string>
+    <string name="settings_quit_title">Quit Nekko Agent on %1$s?</string>
+    <string name="settings_quit_text">Nekko Agent and its background service stop on %1$s, and any running chats are interrupted. A phone can’t start it again: someone at %1$s has to.</string>
+    <string name="settings_quit">Quit</string>
+
+    <!-- Vibration -->
+    <string name="settings_vibration">Vibration</string>
+    <string name="settings_vib_approval">Needs your approval</string>
+    <string name="settings_vib_approval_detail">Two firm pulses</string>
+    <string name="settings_vib_question">Asks you a question</string>
+    <string name="settings_vib_question_detail">One long pulse</string>
+    <string name="settings_vib_finished">Reply finished</string>
+    <string name="settings_vib_finished_detail">One short tap</string>
+    <string name="settings_vib_failed">Reply failed</string>
+    <string name="settings_vib_failed_detail">Three short taps</string>
+    <string name="settings_vib_no_motor">This device has no vibration motor, so these switches have no effect here.</string>
+    <string name="settings_vib_footer">Saved on this phone. Only while Nekko Agent is open, never in silent mode or Do Not Disturb. A sub-agent finishing doesn’t buzz; its approvals and questions do.</string>
+
+    <!-- App lock -->
+    <string name="settings_unlock_title">Unlock Nekko Agent</string>
+    <string name="settings_unlock_subtitle">Use your fingerprint, face or screen lock</string>
+    <string name="settings_locked">Nekko Agent is locked</string>
+    <string name="settings_locked_detail">Unlock with your fingerprint, face or screen lock to see your chats and approve what the agent wants to do.</string>
+    <string name="settings_unlock">Unlock</string>
+
+    <!-- Computers screen -->
+    <string name="settings_computers_intro">Run Nekko Agent on your computer and run it from here: start chats, follow runs, approve what it wants to do.</string>
+    <string name="settings_paired">Paired</string>
+    <string name="settings_pair_computer">Pair a computer</string>
+    <string name="settings_pair_another">Pair another computer</string>
+    <string name="settings_how_it_works">How it works</string>
+    <string name="settings_how_1">On your computer, open Nekko Agent → Settings → Remote access and turn it on.</string>
+    <string name="settings_how_2">Choose “Pair a device” and scan the QR with this app. The code works once and expires in 10 minutes.</string>
+    <string name="settings_how_3">Your computer dials out to a relay; it never opens a port. Everything is end-to-end encrypted with a key only your devices hold.</string>
+    <string name="settings_how_4">Remove this phone any time from the same screen on your computer. It loses access immediately.</string>
+    <string name="settings_rename_computer">Rename computer</string>
+    <string name="settings_forget_title">Forget %1$s?</string>
+    <string name="settings_forget_text">This phone deletes the pairing key. To be safe, also remove the phone on your computer (Settings → Remote access).</string>
+    <string name="settings_forget">Forget</string>
+    <string name="settings_open_computer">Open %1$s</string>
+    <string name="settings_card_line_ago">%1$s · %2$s · paired %3$s ago</string>
+    <string name="settings_card_line_now">%1$s · %2$s · paired just now</string>
+    <string name="settings_active">Active</string>
+    <string name="settings_pair_again">Pair again</string>
+    <string name="settings_reconnect">Reconnect</string>
+    <string name="settings_use_this_computer">Use this computer</string>
+    <string name="settings_more_options_for">More options for %1$s</string>
+    <string name="settings_details">Details</string>
+    <string name="settings_rename">Rename</string>
+    <string name="settings_forget_this_computer">Forget this computer</string>
+
+    <!-- Computer screen -->
+    <string name="settings_edit_computer">Edit %1$s</string>
+    <string name="settings_connect">Connect</string>
+    <string name="settings_forget_ellipsis">Forget…</string>
+    <string name="settings_computer_forgotten">This computer was forgotten</string>
+    <string name="settings_connect_to">Connect to %1$s</string>
+    <string name="settings_one_at_a_time">The phone talks to one computer at a time. Its details show once it is connected.</string>
+    <string name="settings_models">Models</string>
+    <string name="settings_provider_off">%1$s · off</string>
+    <string name="settings_add_switch_providers">Add or switch providers</string>
+    <string name="settings_hardware">Hardware</string>
+    <string name="settings_kind_api_key">%1$s · API key</string>
+    <string name="settings_kind_subscription">%1$s · subscription</string>
+    <string name="settings_kind_local">%1$s · local</string>
+    <string name="settings_kind_model_server">Local Model Server</string>
+    <string name="settings_kind_openai_compat">OpenAI-compatible</string>
+    <string name="settings_round_trip">Round trip</string>
+    <string name="settings_round_trip_samples">Round trip, last %1$d samples</string>
+    <string name="settings_measuring">Measuring…</string>
+    <string name="settings_model_server">Model server</string>
+    <string name="settings_loaded_count">%1$d loaded</string>
+    <string name="settings_loading_count">· %1$d loading</string>
+    <string name="settings_mem_of">%1$s of %2$s</string>
+    <string name="settings_mem_of_unified">%1$s of %2$s unified</string>
+    <string name="settings_up">Up</string>
+    <string name="settings_paired_ago">Paired %1$s ago</string>
+    <string name="settings_paired_just_now">Paired just now</string>
+    <string name="settings_today">Today</string>
+    <string name="settings_no_usage">No usage yet</string>
+    <string name="settings_tokens_count">%1$s tokens</string>
+    <string name="settings_loaded">loaded</string>
+    <string name="settings_default">Default</string>
+    <string name="settings_chip">Chip</string>
+    <string name="settings_chip_cores">%1$s · %2$d cores</string>
+    <string name="settings_n_cores">%1$d cores</string>
+    <string name="settings_memory">Memory</string>
+    <string name="settings_memory_free">%1$s · %2$s free</string>
+    <string name="settings_memory_free_unified">%1$s unified · %2$s free</string>
+    <string name="settings_cpu_now">CPU now</string>
+    <string name="settings_backends">Backends</string>
+    <string name="settings_free_for_models">Free for models</string>
+
+    <!-- Monitors -->
+    <string name="settings_monitors">Monitors</string>
+    <string name="settings_read_off">Read is off for this phone. Turn it on on %1$s in Remote access → What phones can do.</string>
+    <string name="settings_monitor_offline">%1$s is offline. Monitors update once it answers.</string>
+    <string name="settings_monitor_reconnecting">%1$s is reconnecting. Monitors update once it answers.</string>
+    <string name="settings_hardware_on">Hardware · %1$s</string>
+    <string name="settings_running">Running</string>
+    <string name="settings_nothing_running">Nothing running.</string>
+    <string name="settings_needs_you">Needs you</string>
+    <string name="settings_nothing_waiting">Nothing waiting on you.</string>
+    <string name="settings_no_scheduled">No scheduled runs.</string>
+    <string name="settings_automation">Automation</string>
+    <string name="settings_shared_memory">shared memory</string>
+    <string name="settings_step_approval">needs your approval</string>
+    <string name="settings_step_question">has a question</string>
+    <string name="settings_step_working">working</string>
+    <string name="settings_open_chat">Open chat</string>
+    <string name="settings_chat">Chat</string>
+    <string name="settings_couldnt_reach">Couldn’t reach your computer.</string>
+    <string name="settings_and_more">%1$s (and %2$d more)</string>
+    <string name="settings_wants_to_run">Wants to run %1$s</string>
+    <string name="settings_risk_high">high risk</string>
+    <string name="settings_risk_medium">medium risk</string>
+    <string name="settings_risk_low">low risk</string>
+    <string name="settings_deny">Deny</string>
+    <string name="settings_denying">Denying…</string>
+    <string name="settings_allow">Allow</string>
+    <string name="settings_allowing">Allowing…</string>
+    <string name="settings_already_answered">Already answered.</string>
+    <string name="settings_answer">Answer</string>
+    <string name="settings_opening">Opening…</string>
+
+    <!-- Automations and usage -->
+    <string name="settings_couldnt_run">Couldn’t run it.</string>
+    <string name="settings_couldnt_run_title">Couldn’t run it</string>
+    <string name="settings_automations_paused_on">Automations are paused on %1$s. Run now still works.</string>
+    <string name="settings_no_automations">No automations yet. Set them up on %1$s, and run them from here.</string>
+    <string name="settings_tasks">Tasks</string>
+    <string name="settings_workflows">Workflows</string>
+    <string name="settings_last_run_failed">Last run failed</string>
+    <string name="settings_paused">Paused</string>
+    <string name="settings_task_done">Done</string>
+    <string name="settings_last_run_passed">Last run passed</string>
+    <string name="settings_last_run_cancelled">Last run cancelled</string>
+    <string name="settings_started_cd">%1$s started</string>
+    <string name="settings_run_now_cd">Run %1$s now</string>
+    <string name="settings_started">Started</string>
+    <string name="settings_run_now">Run now</string>
+    <string name="settings_last_run">Last run %1$s</string>
+    <string name="settings_no_limits">No limits reported.</string>
+    <string name="settings_all_time">All time</string>
+    <string name="settings_tokens">Tokens</string>
+    <string name="settings_estimated_spend">Estimated spend</string>
+    <string name="settings_recent_days">Recent days</string>
+    <string name="settings_by_model">By model</string>
+    <string name="settings_plan_tokens">%1$s · plan</string>
+    <string name="settings_no_usage_recorded">No usage recorded yet.</string>
+    <string name="settings_used_pct">%1$d%% used</string>
+    <string name="settings_resets">Resets %1$s</string>
+
+    <!-- Providers -->
+    <string name="settings_provider_change_failed">The computer couldn’t change the provider.</string>
+    <string name="settings_connect_to_change_providers">Connect to %1$s to change its providers.</string>
+    <string name="settings_no_providers_yet">No providers on %1$s yet.</string>
+    <string name="settings_add_provider">Add a provider</string>
+    <string name="settings_provider_note">A key you add here is sealed to %1$s before it leaves this phone, and never kept on the phone. Turning a provider on or off, or adding one, asks for your fingerprint, face or screen lock.</string>
+    <string name="settings_provider_save_failed">The computer couldn’t save the provider.</string>
+    <string name="settings_save_to">Save to %1$s</string>
+    <string name="settings_saved_models">Saved · models %1$s can use</string>
+    <string name="settings_saved_no_models">%1$s saved it but listed no models yet.</string>
+    <string name="settings_and_n_more">and %1$d more</string>
+    <string name="settings_kind">Kind</string>
+    <string name="settings_api_key">API key</string>
+    <string name="settings_paste_key">Paste the API key</string>
+    <string name="settings_sealed_note">Sealed to %1$s before it leaves this phone. The key is encrypted to the computer’s own key, sent once over the end-to-end encrypted relay, and never written on this phone. %1$s tests it and keeps it in its own keychain.</string>
+    <string name="settings_address">Address</string>
+    <string name="settings_localhost_note">As %1$s reaches it: localhost means the computer itself.</string>
+    <string name="settings_card_title">Lock Screen card</string>
+    <string name="settings_card_counts">Counts only</string>
+    <string name="settings_card_counts_detail">How many chats are running, nothing else</string>
+    <string name="settings_card_minimal">Minimal</string>
+    <string name="settings_card_minimal_detail">What the chat that needs you is doing, with Stop and Deny. No chat text</string>
+    <string name="settings_card_standard">Standard</string>
+    <string name="settings_card_standard_detail">Adds the chat\'s name, its live step and Allow</string>
+    <string name="settings_card_detailed">Detailed</string>
+    <string name="settings_card_detailed_detail">Adds the first line of the latest reply</string>
+    <string name="settings_card_footer_private">No chat text leaves your computer for the lock screen.</string>
+    <string name="settings_card_footer_text">Chat names and steps show when the phone is unlocked; a locked phone that hides sensitive content shows the Minimal words. Allow asks you to unlock first.</string>
+</resources>

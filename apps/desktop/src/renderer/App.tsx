@@ -3,7 +3,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { navOrder, moveNav, sidebarViewVisible } from './nav-order.js';
 import { useStore, viewEnabled, type View } from './store.js';
 import { startLiveRuns } from './liveRuns.js';
-import { useAnyAgentWorking } from './workingAgents.js';
 import { startSessionSummaryRefresh } from './sessionSummaryRefresh.js';
 import { startAgentSubscription } from './agentSubscription.js';
 import { startDesktopNotifications } from './notifications.js';
@@ -21,7 +20,7 @@ import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
-import { Mascot, NekkoAvatar } from './components/Mascot.js';
+import { NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
 import { StepUpSheet } from './components/security/StepUpSheet.js';
@@ -76,14 +75,14 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, mascotMood, settings, settingsLoaded, providers, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, settings, settingsLoaded, providers, providersLoaded, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
-      mascotMood: s.mascotMood,
       settings: s.settings,
       settingsLoaded: s.settingsLoaded,
       providers: s.providers,
+      providersLoaded: s.providersLoaded,
       onboardingOpen: s.onboardingOpen,
       refreshSettings: s.refreshSettings,
       refreshProviders: s.refreshProviders,
@@ -91,7 +90,6 @@ export function App() {
       refreshTerminals: s.refreshTerminals,
     })),
   );
-  const working = useAnyAgentWorking();
   const t = useT();
 
   // Experimental surfaces only exist in the nav once their Settings flag is on.
@@ -122,6 +120,14 @@ export function App() {
   // pane is a view of this; without it, switching workspaces unmounted the only
   // listener and the run's output went nowhere until the next event arrived.
   useEffect(() => startLiveRuns(), []);
+  useEffect(() => {
+    const { refreshComputers, refreshSessions: refreshChats } = useStore.getState();
+    void refreshComputers();
+    return window.nekko.onComputersUpdated?.(() => {
+      void refreshComputers();
+      void refreshChats();
+    });
+  }, []);
   useEffect(() => startSessionSummaryRefresh(refreshSessions), [refreshSessions]);
   // Take only the streams of the chats this window shows (agentSubscription.ts);
   // every chat's start, waits and end still arrive for the sidebar and board.
@@ -249,7 +255,9 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col" style={{ background: 'var(--field, var(--paper))' }}>
+    // viewport-fit=cover hands the notch and the rounded corners to the page:
+    // the shell keeps clear of them (all zero on a desktop).
+    <div className="flex h-full w-full flex-col" style={{ background: 'var(--field, var(--paper))', padding: 'env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px)' }}>
       {/* With the Lilac / Lavender pixel field on, the shell stays see-through so
           the dots (drawn behind it) show in the space around the panels; the
           body still paints --paper beneath them. */}
@@ -284,9 +292,9 @@ export function App() {
             {/* The brand mark heads the rail. The wordmark joins it only where
                 there is no title bar to carry it (web and phone builds), so the
                 name is never shown twice. */}
-            {!hasAppChrome && <div className="mb-3 flex h-9 items-center gap-2 px-1.5">
+            {!hasAppChrome && <div className="mb-3 flex h-9 items-center gap-2 px-2">
               <span className="grid h-8 w-8 shrink-0 place-items-center text-ink"><BrandMark size={24} title={hasAppChrome ? undefined : 'Nekko Agent'} /></span>
-              {!hasAppChrome && <span className="rail-label text-[15px] font-semibold tracking-tight">Nekko Agent</span>}
+              {!hasAppChrome && <span className="rail-label text-base font-semibold tracking-tight">Nekko Agent</span>}
             </div>}
             {visibleNav.map(({ view: v, labelKey, Icon }, navIndex) => (
               <button
@@ -310,32 +318,35 @@ export function App() {
                 onClick={() => setView(v)}
               >
                 <span className="grid h-10 w-10 shrink-0 place-items-center"><Icon /></span>
-                <span className="rail-label text-[13px] font-medium">{t(labelKey)}</span>
+                <span className="rail-label text-sm font-medium">{t(labelKey)}</span>
               </button>
             ))}
             </div>
-            </div>
-            <div className="rail-space-after" aria-hidden="true" />
-            {/* Not a destination: it opens the Send feedback sheet over the current view. */}
+            {/* Not a destination: it opens the Send feedback sheet over the current view,
+                so a divider sets it apart below the last destination. */}
+            <div className="rail-divider" aria-hidden="true" />
             <button className="nav-item rail-feedback" aria-label={t('nav.feedback')} title={t('nav.feedback')} onClick={openFeedback} data-testid="rail-feedback">
               <span className="grid h-10 w-10 shrink-0 place-items-center text-ink-faint"><FeedbackIcon className="h-[18px] w-[18px]" /></span>
-              <span className="rail-label text-[13px] font-medium">{t('nav.feedback')}</span>
+              <span className="rail-label text-sm font-medium">{t('nav.feedback')}</span>
             </button>
+            </div>
+            <div className="rail-space-after" aria-hidden="true" />
           </div>
         </nav>
 
-        {/* Main (bottom padding on phones so the tab bar never covers content) */}
-        <main className="relative flex min-w-0 flex-1 flex-col pb-16 md:pb-0">
-          {providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
+        {/* Main (bottom padding on phones so the tab bar never covers content,
+            the home indicator's inset included) */}
+        <main className="relative flex min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+          {providersLoaded && providers.length === 0 && view !== 'models' && view !== 'modelserver' && view !== 'settings' && (
             <button
-              className="flex items-center justify-center gap-2 border-b border-line py-2.5 text-[13px]"
+              className="flex items-center justify-center gap-2 border-b border-line py-2 text-sm"
               style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
               onClick={() => setView('models')}
             >
               <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
-          <ErrorBoundary key={view} label={t(`nav.${view}`)}>
+          <ErrorBoundary key={view === 'modelserver' ? 'models' : view} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}
@@ -358,7 +369,7 @@ export function App() {
           destinations (models, connectors, …) stays reachable via ⌘K / More. */}
       <nav
         className="fixed inset-x-0 bottom-0 z-40 flex items-stretch justify-around border-t border-line md:hidden"
-        style={{ background: 'var(--paper)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        style={{ background: 'var(--paper)', paddingBottom: 'env(safe-area-inset-bottom)', paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}
       >
         {mobileNav.map((v) => {
           const item = NAV.find((n) => n.view === v)!;
@@ -366,13 +377,13 @@ export function App() {
           return (
             <button
               key={v}
-              className="flex flex-1 flex-col items-center gap-0.5 py-1.5"
+              className="phone-tab flex flex-1 flex-col items-center gap-0.5 py-1"
               style={view === v ? { color: 'var(--accent)' } : { color: 'var(--ink-faint)' }}
               aria-label={t(item.labelKey)}
               onClick={() => setView(v)}
             >
               <span className="grid h-7 w-7 place-items-center"><Icon /></span>
-              <span className="text-[10px] font-medium">{t(item.labelKey)}</span>
+              <span className="text-2xs font-medium">{t(item.labelKey)}</span>
             </button>
           );
         })}
@@ -387,7 +398,6 @@ export function App() {
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>
       {view !== 'command' && <ErrorBoundary label="Resource monitor"><ResourceHud /></ErrorBoundary>}
-      <ErrorBoundary label="Nekko"><Mascot mood={mascotMood} working={working} enabled={settings?.mascotEnabled ?? true} wizardHat={settings?.themePreset === 'autumn'} /></ErrorBoundary>
       <ErrorBoundary label="Command palette"><CommandPalette /></ErrorBoundary>
       <ErrorBoundary label="Links"><DeepLinkListener /></ErrorBoundary>
       <ErrorBoundary label="Claude plan"><ClaudePlanSheet /></ErrorBoundary>
@@ -400,7 +410,7 @@ export function App() {
 /** Catalog pages remain reachable from the rail, with a clear route back to Settings. */
 function SettingsDestination({ children }: { children: React.ReactNode }) {
   return <div className="settings-destination">
-    <div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div>
+    <div className="settings-bar"><div className="settings-back-bar"><button type="button" className="btn btn-ghost" onClick={() => useStore.getState().setView('settings')}><span aria-hidden="true">←</span> Back to Settings</button></div></div>
     <div className="settings-destination-content">{children}</div>
   </div>;
 }

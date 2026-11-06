@@ -77,6 +77,17 @@ public enum SyncCrypto {
         public var bytes: Data { enc + id }
     }
 
+    // MARK: Epoch proof
+
+    public static let epochProofLabel = "nekko-sync-epoch-proof/v1"
+
+    /// Proof that this device holds an epoch's keyring, shown to Nekko Cloud before it lets a sign-in change
+    /// keys, devices or data: HKDF-SHA256(keyring, empty salt, info = label + "\n" + keyId), 32 bytes.
+    /// One-way: the server keeps only its SHA-256 and can derive no key from it.
+    public static func epochProof(keyring: Keyring, keyId: UInt32) -> Data {
+        derive32(keyring.bytes, info: "\(epochProofLabel)\n\(keyId)")
+    }
+
     // MARK: Records
 
     static func validCollection(_ c: String) -> Bool {

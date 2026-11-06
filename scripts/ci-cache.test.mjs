@@ -10,33 +10,35 @@ test('CI cancels stale PR revisions without cancelling main runs', () => {
   assert.ok(ci.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}"));
 });
 
-test('CI runs in three tiers: PR, merge queue, and a 6-hourly full run', () => {
+test('CI runs in two tiers: PR and a nightly full run, with no merge queue', () => {
   const on = read('../.github/workflows/ci.yml').split('\njobs:')[0];
-  for (const trigger of ['pull_request:', 'merge_group:', 'schedule:', 'workflow_dispatch:']) assert.ok(on.includes(`\n  ${trigger}`), trigger);
-  assert.ok(on.includes("cron: '17 */6 * * *'"));
-  // The queue replaces per-merge runs on main.
+  for (const trigger of ['pull_request:', 'schedule:', 'workflow_dispatch:']) assert.ok(on.includes(`\n  ${trigger}`), trigger);
+  for (const path of ['ci.yml', 'codeql.yml']) assert.ok(!read(`../.github/workflows/${path}`).includes('merge_group'), path);
+  assert.ok(on.includes("cron: '17 18 * * *'"));
+  // The nightly run, not a run per merge, covers main.
   assert.ok(!/\n  push:/.test(on));
   assert.ok(!read('../.github/workflows/auto-merge.yml').includes('gh workflow run ci.yml'));
 });
 
 test('gate is the single required check and sees every job', () => {
   const gate = read('../.github/workflows/ci.yml').split('\n  gate:')[1];
-  assert.ok(gate.includes('needs: [scope, build, daemon, capture, perf]'));
+  assert.ok(gate.includes('needs: [scope, build, daemon, capture, perf, itests, licenses]'));
   assert.ok(gate.includes('if: always()'));
   assert.ok(gate.includes('(failure|cancelled)'));
 });
 
-test('auto-merge queues only ready PRs into main, never a stacked layer', () => {
+test('auto-merge arms native squash auto-merge on ready PRs into main, and disarms it on draft or hold', () => {
   const merge = read('../.github/workflows/auto-merge.yml');
-  assert.ok(merge.includes("!github.event.pull_request.draft && github.event.pull_request.base.ref == 'main'"));
-  // A merge method arms classic auto-merge, which never enters a required queue.
-  assert.ok(merge.includes('run: gh pr merge --auto "$PR_URL" ||'));
-  assert.ok(!/gh pr merge --auto --(squash|merge|rebase)/.test(merge));
-  // ...and an armed request alone did not reliably enter the queue, so it enqueues once gate passes.
-  assert.ok(merge.includes('enqueuePullRequest(input:{pullRequestId:$id,expectedHeadOid:$head})'));
-  assert.ok(merge.indexOf('Enqueue once gate passes') < merge.indexOf('Release the merge'));
-  // A GITHUB_TOKEN-made merge group starts no merge_group runs, so the enqueue uses the App token.
-  assert.ok(merge.split('Enqueue once gate passes')[1].split('run:')[0].includes('GH_TOKEN: ${{ steps.app-token.outputs.token }}'));
+  const jobs = merge.split('\njobs:')[1];
+  const arm = jobs.split('\n  auto-merge:')[1];
+  const hold = jobs.split('\n  hold:')[1].split('\n  auto-merge:')[0];
+  assert.ok(arm.includes("github.event.pull_request.base.ref == 'main' && !github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'hold')"));
+  assert.ok(arm.includes('gh pr merge --auto --squash "$PR_URL"'));
+  assert.ok(hold.includes("github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'hold')"));
+  assert.ok(hold.includes('gh pr merge --disable-auto "$PR_URL"'));
+  for (const type of ['converted_to_draft', 'labeled', 'unlabeled', 'ready_for_review']) assert.ok(merge.split('\njobs:')[0].includes(type), type);
+  assert.ok(!merge.includes('enqueuePullRequest'));
+  assert.ok(!merge.includes('mergeQueueEntry'));
 });
 
 test('capture builds the verified native browser even on cache hits', () => {

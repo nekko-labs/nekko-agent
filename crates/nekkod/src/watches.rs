@@ -17,22 +17,9 @@ use serde_json::{Map, Value, json};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 const TICK: Duration = Duration::from_secs(15);
-
-fn now_ms() -> f64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as f64).unwrap_or(0.0)
-}
-
-fn uuid() -> String {
-    let mut b = [0u8; 16];
-    let _ = getrandom::fill(&mut b);
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
-}
 
 /// `parsePrUrl(url)`: whether the text holds a GitHub PR URL.
 pub fn is_pr_url(url: &str) -> bool {
@@ -81,6 +68,10 @@ pub fn view(w: &Value) -> Value {
     put("nextPollAt", field("nextPollAt"));
     put("pending", Some(json!(js::truthy(w.get("pending")))));
     put("failures", Some(js::coalesce(w.get("failures"), Some(&json!(0))).cloned().unwrap_or(json!(0))));
+    // Armed by the host itself (pr_autowatch.rs), not by an agent's tool call.
+    if w.get("auto") == Some(&Value::Bool(true)) {
+        put("auto", Some(json!(true)));
+    }
     if let Some(e) = w.get("lastError").filter(|e| js::truthy(Some(e))) {
         put("lastError", Some(json!(js::slice16(&js::display(e), 300))));
     }
@@ -173,13 +164,16 @@ pub struct Watches {
     polling: AtomicBool,
     write: tokio::sync::Mutex<()>,
     registrations: std::sync::Mutex<std::collections::HashMap<String, std::sync::Weak<AtomicBool>>>,
+    /// `(chat, PR URL)` pairs found merged or closed, so a chat's old PRs are
+    /// read once per daemon run, not at every turn end.
+    settled: std::sync::Mutex<std::collections::HashSet<(String, String)>>,
 }
 
 impl Watches {
     pub fn new(data_dir: PathBuf, store: Arc<SessionStore>, hub: crate::hub::Hub) -> Arc<Self> {
         let dispatch: Arc<std::sync::OnceLock<crate::automation::Dispatcher>> = Arc::default();
         let host = Arc::new(HostSide { store, hub, dispatch: dispatch.clone() });
-        let mut me = Self::with(data_dir.join("agent-watches.json"), host, Arc::new(now_ms));
+        let mut me = Self::with(data_dir.join("agent-watches.json"), host, Arc::new(nekko_js::now_ms_f64));
         Arc::get_mut(&mut me).expect("just made").dispatch = dispatch;
         me
     }
@@ -193,7 +187,46 @@ impl Watches {
             polling: AtomicBool::new(false),
             write: tokio::sync::Mutex::new(()),
             registrations: std::sync::Mutex::new(std::collections::HashMap::new()),
+            settled: std::sync::Mutex::default(),
         })
+    }
+
+    /// The host's own PR watches (pr_autowatch.rs): arm one for each PR the
+    /// chat opened that is still open and not already watched. Returns the
+    /// ids armed. A PR that cannot be read is left for the next turn end.
+    pub async fn watch_opened_prs(&self, session_id: &str, urls: &[String]) -> Vec<String> {
+        let mut armed = Vec::new();
+        for url in urls {
+            let key = (session_id.to_string(), url.clone());
+            if self.settled.lock().unwrap_or_else(|e| e.into_inner()).contains(&key) {
+                continue;
+            }
+            let Ok(mine) = self.list(Some(session_id)) else { return armed };
+            let on_pr: Vec<&Value> =
+                mine.iter().filter(|w| str_of(w, "kind") == Some("pr") && str_of(w, "url") == Some(url)).collect();
+            if !crate::pr_autowatch::should_arm(&on_pr) {
+                continue;
+            }
+            let Ok(snapshot) = self.host.snapshot(url).await else { continue };
+            let state = serde_json::from_str::<Value>(&snapshot)
+                .ok()
+                .and_then(|s| s.get("state").and_then(Value::as_str).map(str::to_string));
+            if state.as_deref() != Some("open") {
+                self.settled.lock().unwrap_or_else(|e| e.into_inner()).insert(key);
+                continue;
+            }
+            let prompt = crate::pr_autowatch::continuation(url);
+            let seconds = crate::pr_autowatch::TIMEOUT_SECONDS;
+            match self.create(session_id, "pr", &prompt, seconds, Some(url.clone()), true, Some(snapshot)).await {
+                Ok(text) => {
+                    if let Some(id) = text.strip_prefix("Watch armed: ").and_then(|t| t.split('.').next()) {
+                        armed.push(id.to_string());
+                    }
+                }
+                Err(e) => eprintln!("nekkod: could not watch {url}: {e}"),
+            }
+        }
+        armed
     }
 
     /// How a watch reads a PR and continues a chat: through the router, as the UI would.
@@ -353,6 +386,23 @@ impl Watches {
         if kind == "pr" && !url.as_deref().is_some_and(is_pr_url) {
             return Err("A valid GitHub PR URL is required".into());
         }
+        self.create(session_id, &kind, &prompt, seconds, url, false, None).await
+    }
+
+    /// Arm a watch (the tool's create, and the host's own PR watch). `auto`
+    /// marks one the host armed by itself; `baseline` is a PR snapshot the
+    /// caller already read, so the PR is not read twice.
+    #[allow(clippy::too_many_arguments)]
+    async fn create(
+        &self,
+        session_id: &str,
+        kind: &str,
+        prompt: &str,
+        seconds: f64,
+        url: Option<String>,
+        auto: bool,
+        baseline: Option<String>,
+    ) -> Result<String, String> {
         // In-flight baseline reads must not arm a new watch after close returns.
         let cancelled = {
             let mut registrations = self.registrations.lock().unwrap_or_else(|e| e.into_inner());
@@ -365,9 +415,10 @@ impl Watches {
             flag
         };
         // A baseline before saving; an auth or network failure is not one.
-        let fingerprint = match &url {
-            Some(u) => Some(self.host.snapshot(u).await?),
-            None => None,
+        let fingerprint = match (&url, baseline) {
+            (Some(_), Some(b)) => Some(b),
+            (Some(u), None) => Some(self.host.snapshot(u).await?),
+            (None, _) => None,
         };
         let _guard = self.write.lock().await;
         if cancelled.load(Ordering::Acquire) || !self.host.exists(session_id) {
@@ -377,10 +428,10 @@ impl Watches {
         let same = |w: &Value| {
             str_of(w, "sessionId") == Some(session_id)
                 && str_of(w, "status") == Some("active")
-                && !js::truthy(w.get("pending"))
-                && str_of(w, "kind") == Some(kind.as_str())
+                && str_of(w, "kind") == Some(kind)
                 && str_of(w, "url") == url.as_deref()
-                && str_of(w, "prompt") == Some(prompt.as_str())
+                // The host's own watch stands aside for any armed watch on the PR.
+                && (auto || (!js::truthy(w.get("pending")) && str_of(w, "prompt") == Some(prompt)))
         };
         if let Some(d) = watches.iter().find(|w| same(w)) {
             return Ok(format!("Watch already armed: {}", str_of(d, "id").unwrap_or_default()));
@@ -395,7 +446,7 @@ impl Watches {
         let now = (self.now)();
         let deadline = now + seconds * 1000.0;
         let mut w = Map::new();
-        let id = uuid();
+        let id = nekko_js::uuid();
         w.insert("id".into(), json!(id));
         w.insert("sessionId".into(), json!(session_id));
         w.insert("kind".into(), json!(kind));
@@ -411,6 +462,9 @@ impl Watches {
             w.insert("fingerprint".into(), json!(f));
         }
         w.insert("failures".into(), json!(0));
+        if auto {
+            w.insert("auto".into(), json!(true));
+        }
         watches.push(Value::Object(w));
         self.save(&watches)?;
         self.host.status_changed(session_id);
@@ -849,6 +903,47 @@ mod tests {
         r.advance(700_000);
         r.w.tick(None).await;
         assert!(r.resumes().is_empty());
+    }
+
+    #[tokio::test]
+    async fn watches_opened_prs_until_merged_or_cancelled() {
+        let r = rig("auto-pr");
+        let url = "https://github.com/owner/repo/pull/1".to_string();
+        let open = r#"{"state":"open","checks":"pending"}"#;
+        r.snapshot(Ok(open));
+        // A turn ends with the PR open: the host arms its own watch, once.
+        let armed = r.w.watch_opened_prs("s", std::slice::from_ref(&url)).await;
+        assert_eq!(armed.len(), 1);
+        assert!(r.w.watch_opened_prs("s", std::slice::from_ref(&url)).await.is_empty());
+        let w = r.all()[0].clone();
+        assert_eq!((w["auto"].clone(), w["fingerprint"].clone()), (json!(true), json!(open)));
+        assert_eq!(r.w.views("s")[0]["auto"], json!(true));
+        // Checks finish: the chat wakes with the merge-ready continuation.
+        r.snapshot(Ok(r#"{"state":"open","checks":"passing"}"#));
+        r.advance(61_000);
+        r.w.tick(None).await;
+        assert!(r.resumes()[0].contains("Get https://github.com/owner/repo/pull/1 merge-ready"));
+        // The woken turn ends with the PR still open: re-armed.
+        assert_eq!(r.w.watch_opened_prs("s", std::slice::from_ref(&url)).await.len(), 1);
+        // The user cancels it: the host stops for this PR.
+        let id = r.all()[1]["id"].clone();
+        r.w.tool("s", &json!({ "action": "cancel", "id": id })).await.unwrap();
+        assert!(r.w.watch_opened_prs("s", std::slice::from_ref(&url)).await.is_empty());
+        // A merged PR in another chat is never armed.
+        r.snapshot(Ok(r#"{"state":"merged"}"#));
+        assert!(r.w.watch_opened_prs("t", std::slice::from_ref(&url)).await.is_empty());
+        // An unreadable PR is not armed (and is tried again later).
+        r.snapshot(Err("gh auth"));
+        assert!(r.w.watch_opened_prs("u", std::slice::from_ref(&url)).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_hosts_watch_stands_aside_for_the_agents_own() {
+        let r = rig("auto-pr-own");
+        r.snapshot(Ok(r#"{"state":"open"}"#));
+        r.w.tool("s", &pr()).await.unwrap();
+        assert!(r.w.watch_opened_prs("s", &["https://github.com/owner/repo/pull/1".into()]).await.is_empty());
+        assert_eq!(r.all().len(), 1);
     }
 
     #[tokio::test]

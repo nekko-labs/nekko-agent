@@ -11,6 +11,7 @@
 //
 // Usage: node scripts/itest-messaging-daemon.mjs [path/to/nekkod]
 // Needs `npm run build:web` and `cargo build -p nekkod`.
+import { randomPort } from './itest-ports.mjs';
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -24,7 +25,7 @@ const targetDir = process.env.CARGO_TARGET_DIR ?? 'target';
 const nekkod = resolve(process.argv[2] ?? join(targetDir, 'debug', `nekkod${exe}`));
 if (!existsSync(nekkod)) throw new Error(`missing ${nekkod}: cargo build -p nekkod`);
 
-const SERVER_PORT = 5900 + Math.floor(Math.random() * 400);
+const SERVER_PORT = randomPort(5900, 400);
 const TOKEN = randomBytes(24).toString('hex');
 const BOT = '123:TEST';
 const root = mkdtempSync(join(tmpdir(), 'nekko-messaging-'));

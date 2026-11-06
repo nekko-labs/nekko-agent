@@ -1,7 +1,7 @@
 //! The JavaScript semantics the connector code leans on: `encodeURIComponent`,
 //! `URLSearchParams`, `new URL`, `Date`, `String()`, UTF-16 `slice`, `Math`.
 
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 /// `encodeURIComponent`.
 pub fn encode_uri_component(s: &str) -> String {
@@ -89,18 +89,7 @@ pub fn or_empty(v: Option<&Value>) -> String {
     }
 }
 
-/// `s.slice(0, n)` in UTF-16 units; a surrogate pair cut in half is dropped
-/// whole (a Rust string cannot hold the lone half JavaScript keeps).
-pub fn slice16(s: &str, n: usize) -> &str {
-    let mut units = 0;
-    for (i, c) in s.char_indices() {
-        units += c.len_utf16();
-        if units > n {
-            return &s[..i];
-        }
-    }
-    s
-}
+pub use nekko_js::slice16;
 
 /// `new Date(v).getTime()`.
 pub fn date_ms(v: Option<&Value>) -> f64 {
@@ -119,16 +108,7 @@ pub fn iso_string(t: f64) -> Option<String> {
     Some(format!("{date}T{h:02}:{m:02}:{s:02}.{milli:03}Z"))
 }
 
-/// A number as a JSON value (`NaN` and the infinities print as `null`).
-pub fn num(n: f64) -> Value {
-    if !n.is_finite() {
-        Value::Null
-    } else if n.fract() == 0.0 && n.abs() < 9.007_199_254_740_992e15 {
-        json!(n as i64)
-    } else {
-        serde_json::Number::from_f64(n).map_or(Value::Null, Value::Number)
-    }
-}
+pub use nekko_js::num;
 
 /// `Math.max(...xs)` (`-Infinity` for none, `NaN` if any is).
 pub fn max_of(xs: impl IntoIterator<Item = f64>) -> f64 {

@@ -36,13 +36,27 @@ struct FoldersView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             ForEach(store.workspaces) { w in
-                NavigationLink { FilesScreen(root: .folder(w.id), title: w.name) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(w.name, systemImage: "folder")
-                        if let path = w.path { Text(path).font(.caption).foregroundStyle(palette.inkSoft) }
+                HStack {
+                    NavigationLink { FilesScreen(root: .folder(w.id), title: w.name) } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(w.name, systemImage: "folder")
+                            if let path = w.path { Text(path).font(.caption).foregroundStyle(palette.inkSoft) }
+                        }
                     }
+                    .accessibilityIdentifier("files.folder")
+                    let starred = store.pcSettings.defaultWorkspaceIds.contains(w.id)
+                    Button { act { try await store.setDefaultWorkspace(w.id, included: !starred) } } label: {
+                        Image(systemName: starred ? "star.fill" : "star")
+                            .foregroundStyle(starred ? palette.accent : palette.inkSoft).frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.borderless).disabled(unavailable)
+                    .accessibilityLabel(starred ? "Remove \(w.name) from default folders" : "Include \(w.name) by default")
+                    .accessibilityIdentifier("files.star.\(w.id)")
+                    Menu {
+                        Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
+                    } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                    .disabled(unavailable).accessibilityLabel("Manage \(w.name)")
                 }
-                .accessibilityIdentifier("files.folder")
                 .swipeActions(allowsFullSwipe: false) {
                     Button(role: .destructive) { removing = w } label: { Label("Remove saved folder", systemImage: "minus.circle") }
                         .disabled(unavailable)
@@ -58,7 +72,7 @@ struct FoldersView: View {
                     .accessibilityIdentifier("files.addFolder")
                 if busy { ProgressView() }
             } footer: {
-                Text("Use an absolute path on the computer, not on this iPhone. Removing a saved folder never deletes files on disk.")
+                Text("Star folders to include them in new chats by default. Use an absolute path on the computer, not on this iPhone. Removing a saved folder never deletes files on disk.")
             }
         }
         .appBackground()
@@ -147,7 +161,7 @@ private struct FolderList: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "Find a file by name")
         .accessibilityIdentifier("files.list")
-        .refreshable { await load() }
+        .pawRefreshable { await load() }
         .task { if listing == nil { await load() } }
         .task(id: query) { await search() }
     }
@@ -335,7 +349,7 @@ struct FileDetailView: View {
                     }
                 }
             }
-            .refreshable { await load() }
+            .pawRefreshable { await load() }
             .accessibilityIdentifier("file.view")
         }
     }
@@ -505,8 +519,9 @@ struct LogsView: View {
             ForEach(store.computers) { c in
                 Section {
                     if c.id == store.activeId { computerLogs } else {
+                        // Already connected: this makes it the active computer, whose logs are read.
                         Button { store.connect(c.id) } label: {
-                            Label("Connect to read its logs", systemImage: "bolt.horizontal").foregroundStyle(palette.accent)
+                            Label("Read its logs", systemImage: "doc.text.magnifyingglass").foregroundStyle(palette.accent)
                         }
                         .accessibilityIdentifier("logs.connect")
                     }
@@ -520,7 +535,7 @@ struct LogsView: View {
         .appBackground()
         .navigationTitle("Logs")
         .accessibilityIdentifier("logs.list")
-        .refreshable { await model?.load() }
+        .pawRefreshable { await model?.load() }
         // Another computer connected from here: read its logs instead.
         .task(id: store.activeId) {
             model = LogsModel(store: store)

@@ -30,6 +30,40 @@ const css = await postcss([tailwind({ base: repo })]).process(fs.readFileSync(pa
 });
 fs.writeFileSync(path.join(out, 'styled.css'), css.css);
 
+// One press on Install runs sign-in and Connect by themselves, recorded as a GIF.
+async function checkChain(page, theme) {
+  await page.evaluate(() => window.integration.show('missing'));
+  await page.waitForTimeout(250);
+  const flow = page.locator('.claude-flow');
+  const ran = (method, command) => page.evaluate(([m, c]) => window.integration.calls.filter((x) => x.method === m && (!c || x.command === c)).length, [method, command]);
+  const frames = [];
+  const film = async (ms) => { for (const end = Date.now() + ms; Date.now() < end;) frames.push(await flow.screenshot()); };
+  const until = async (what, done) => {
+    const end = Date.now() + 5000;
+    while (!(await done())) {
+      if (Date.now() > end) throw new Error(`the workflow never reached: ${what}`);
+      frames.push(await flow.screenshot());
+    }
+  };
+  const signin = 'claude auth login --claudeai';
+  const signins = await ran('runInTerminal', signin);
+  const saves = await ran('saveProvider');
+  await film(500);
+  await page.getByRole('button', { name: 'Install Claude Code' }).click();
+  await film(1500);
+  if (await ran('runInTerminal', signin) !== signins) throw new Error('sign-in started before the install finished');
+  await page.evaluate(() => window.integration.setCodeStatus('signedOut'));
+  await until('sign-in, unpressed', async () => (await ran('runInTerminal', signin)) > signins);
+  await film(1500);
+  if (await ran('saveProvider') !== saves) throw new Error('connected before sign-in finished');
+  await page.evaluate(() => window.integration.setCodeStatus('plan'));
+  await until('connect, unpressed', async () => (await ran('saveProvider')) > saves);
+  await film(1500);
+  require(path.join(here, 'evidence-gif.cjs'))(path.join(out, `chain-${theme}.gif`), frames.filter((_, i) => i % 2 === 0), 12);
+  fs.writeFileSync(path.join(out, `chain-install-${theme}.png`), frames[0]);
+  fs.writeFileSync(path.join(out, `chain-end-${theme}.png`), frames.at(-1));
+}
+
 const { chromium } = require('playwright-core');
 const browser = await chromium.launch({ headless: true });
 try {
@@ -40,12 +74,22 @@ try {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
     await page.goto('file://' + path.join(out, `index-${theme}.html`).replaceAll('\\', '/'));
-    for (const scene of ['choices', 'checking', 'missing', 'signedOut', 'plan', 'apiKey', 'api', 'connected', 'another', 'confirm', 'blocked', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect']) {
+    for (const scene of ['choices', 'checking', 'missing', 'signedOut', 'plan', 'apiKey', 'api', 'connected', 'another', 'confirm', 'blocked', 'sheet', 'schedule', 'notice', 'retired', 'limits', 'connect', 'planOff', 'planOn']) {
       await page.evaluate((s) => window.integration.show(s), scene);
-      await page.waitForTimeout(250);
+      await page.waitForTimeout(800);
       if (scene === 'missing') await page.getByRole('button', { name: 'Install Claude Code' }).click();
+      if (scene === 'signedOut') {
+        await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+        await page.waitForTimeout(200);
+        const ran = await page.evaluate(() => window.integration.calls.at(-1)?.command);
+        if (ran !== 'claude auth login --claudeai') throw new Error(`sign-in ran ${ran}`);
+        // Claude Code's auto-update can hide the binary for a check or two: the panel must hold.
+        await page.evaluate(() => window.integration.setCodeStatus('missing'));
+        await page.waitForTimeout(3300);
+        if (await page.getByRole('button', { name: 'Install Claude Code' }).count()) throw new Error('one missed check flipped the panel to Install');
+      }
       if (scene === 'api') {
-        await page.getByRole('radio', { name: 'API' }).click();
+        await page.getByRole('radio', { name: /^API key or cloud account/ }).click();
         await page.getByRole('button', { name: 'Connect: add a key or cloud account' }).click();
       }
       if (['another', 'confirm', 'blocked'].includes(scene)) {
@@ -55,6 +99,7 @@ try {
       }
       await page.screenshot({ path: path.join(out, `${scene}-${theme}.png`), fullPage: true });
     }
+    await checkChain(page, theme);
     if (errors.length) throw new Error(`page errors (${theme}): ${errors.join('; ')}`);
     await page.close();
   }

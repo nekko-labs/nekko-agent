@@ -9,10 +9,14 @@ area: phone
 
 **Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the views driven in the simulator by LiveRelayTests/testSimpleAndExpertModes against a live stack (2026-10-25); Android implemented 2026-10-25 (T217b), see *Android* below]`**
 
+## Current native naming
+
+The native iOS and Android apps call the modes **Simple** and **Detailed**, including localized labels, settings previews, visibility choices and accessibility descriptions. The historical **Expert** wording below records the original implementation. Stored `expertMode` preferences, `expert` visibility values and existing APIs remain unchanged; this does not rename model MoE expert terminology. Static naming, localization/catalog and selector checks pass on Windows. Matched disposable-CI before/head builds and screenshot capture completed: iPhone 18 Pro / iOS 27.0 evidence tests pass; Android 14 / API 34 captures completed with the same three pre-existing polling/list-state failures on base and head, tracked in #1707. Matching native settings and preview screenshots with revision/runtime metadata are published on PR #1705. Actual pixel inspection is still blocked by image-tool timeouts; no physical device or user-owned app/profile was used.
+
 ## Behaviour
 
 - **The switch.** A menu at the top left of every chat (next to Back) reads *Simple* or *Expert* with a gauge icon. The choice is the iPhone's (`Prefs.expertMode`, off by default) and holds for every chat and computer.
-- **Model and effort (both modes).** Under the message box, one control: an effort dial (one notch per level the chat's model takes, the arc empty and the needle centred while the chat follows the computer's effort) and the model's name. It opens **Model and effort**: the model row opens the existing model picker; the effort dial is drawn large with a stop per level (`Effort.levels(for:)`, the desktop's `modelEffortLevels` ladder). Choosing one sets the chat's `effort` through `session:setOptions`. *Computer default* can't be chosen again from the phone (the gate takes only a level); the chat follows the computer until a level is chosen. Read-only while the chat on screen is the phone's saved copy.
+- **Model and effort (both modes).** Inside the message box, as its bottom row under + and Send (moved inside 2026-11-03, [#1599](https://github.com/nekko-labs/nekko-agent/issues/1599): nothing sits below the box), one control: an effort dial (one notch per level the chat's model takes, the arc empty and the needle centred while the chat follows the computer's effort) and the model's name. It opens **Model and effort**: the model row opens the existing model picker; the effort dial is drawn large with a stop per level (`Effort.levels(for:)`, the desktop's `modelEffortLevels` ladder). Choosing one sets the chat's `effort` through `session:setOptions`. *Computer default* can't be chosen again from the phone (the gate takes only a level); the chat follows the computer until a level is chosen. Read-only while the chat on screen is the phone's saved copy.
 - **Context (both modes, always).** Beside it, a ring that fills as the chat's window does and the count (`12.3k / 128k`, or just the tokens when the window is unknown, or `–` until the computer answers). The colours follow the desktop's composer gauge (`fillTone`: warning from 60%, danger from 85%). Tap for the breakdown by kind of source (system prompt, conversation, attached files, guidelines, memory, connectors, code index, skill), the reply streaming now, and what is free. The count is the computer's own (`context:preview`, the same estimate as the desktop's gauge), read with the chat and after each turn; while a reply streams it adds about one token per four characters streamed, as the desktop's live gauge does, in steps of 256 tokens so the gauge redraws a few times a reply rather than on every token.
 - **Expert: the monitor panel.** Under the chat's title, small dials for CPU, memory, each GPU and GPU memory (*VRAM*, or *GPU memory* on a unified-memory Mac), in the desktop Hardware monitor's order, and the number of models loaded. Temperatures show under a dial where the computer has sensors (warning from 80 °C, danger from 90 °C). Dials colour by load (warning above 70%, danger above 90%). Re-read every 3 seconds, only while Expert mode is on and a chat is open.
 - **Expert: the whole monitor.** Tapping the panel opens **Monitor**: the hardware as larger dials with the core count and memory; **Loaded models**, each with its name, where it runs (GPU, GPU + CPU with layers, CPU only, the split in the warning colour as on the desktop), its context size and memory, a bar for its share of the memory for models, and **Unload**; models queued or loading with their progress; how much of the memory for models the loaded ones take; and this chat's context breakdown. Unloading needs no confirmation (the next reply that uses the model loads it again) and says what the computer answered.
@@ -34,13 +38,13 @@ Recorded in [docs/decisions/0028](../../docs/decisions/0028-phones-read-the-moni
 The same design as the iPhone, in the native app (`apps/android`), wide foldables first:
 
 - **The switch** sits right of Back in every chat's header and is the phone's own choice (`EXPERT_MODE`, Simple by default). In a folding phone's chat pane (Galaxy Fold, Pixel Fold open) the header is narrow, so the switch is the dial icon alone, coloured in Expert, and the title stays readable; each pane's chat follows the same choice.
-- **Model and effort** and the **context ring** sit in one row under the message box, in both modes. The row's control opens a bottom sheet: the model row opens the computer's model list (the New chat picker, every enabled provider, starred first) and the large effort dial has a button per level; both go through `session:setOptions`. The ring's breakdown opens as a small menu. The model's name comes from the chat's provider's `models:list`, read when the chat opens.
+- **Model and effort** and the **context ring** sit in one row inside the message box, as its bottom row under **+** and Send, in both modes (moved inside 2026-11-03, #1599: nothing sits below the box). The row's control opens a bottom sheet: the model row opens the computer's model list (the New chat picker, every enabled provider, starred first) and the large effort dial has a button per level; both go through `session:setOptions`. The ring's breakdown opens as a small menu. The model's name comes from the chat's provider's `models:list`, read when the chat opens.
 - **Expert** adds the strip of dials under the chat's header and the **Monitor** bottom sheet (larger dials, Loaded models with Unload, models loading, the memory for models, this chat's context). The hardware is re-read every 3 s only while Expert is on, the chat is on screen (lifecycle STARTED) and the computer is online. On a folding phone each chat pane reads it on its own.
 - Strings are Android resources in English and the iPhone's six other languages, drafted from its String Catalog; the rest of the Android app is still English only, so those six languages see these controls translated in an otherwise English app.
 
 ## Simple hides developer controls (reframed 2026-10-28, #1311)
 
-The same change as the desktop ([Desktop Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md), [decision 0030](../../docs/decisions/0030-simple-hides-developer-controls-per-device.md)). Simple becomes the everyday app: developer controls out of sight, every capability still there, no screen hidden. The mode and the choices are kept on the phone (`expertMode`, and `simpleChoices` as JSON holding only values that differ from the defaults). A new install starts in Simple. The 2026-10-24 rule that effort and context show in both modes was first superseded (both Expert only), then brought back by Philip's updates of 2026-10-28: context and effort are Show by default.
+The same change as the desktop ([Desktop Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md), [decision 0044](../../docs/decisions/0044-simple-hides-developer-controls-per-device.md)). Simple becomes the everyday app: developer controls out of sight, every capability still there, no screen hidden. The mode and the choices are kept on the phone (`expertMode`, and `simpleChoices` as JSON holding only values that differ from the defaults). A new install starts in Simple. The 2026-10-24 rule that effort and context show in both modes was first superseded (both Expert only), then brought back by Philip's updates of 2026-10-28: context and effort are Show by default.
 
 - **The switch** is two icon segments, a chat bubble (*Simple: everyday controls*) and angle brackets (*Expert: every control*), at the top left of a chat and of the chats list.
 - **The phone's catalogue** has the same ids as `packages/shared/src/simple-mode.ts`. The model picker, effort and context are Show by default; every other control is Expert only:
@@ -50,7 +54,7 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `model`
   - `effort`
   - `context`
-  - `ph-policy`
+  - `asks`
   - `thinking`
   - `ph-git`
   - `terminal`
@@ -103,6 +107,7 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - **Touch and hold** lifts the pill (it grows a little, with a haptic); it follows the finger. Let go within 22% of the width of the left or right edge and it docks there, stacked: the switch's two segments, a hairline, each gauge as a ring over its percentage, and the models count. Let go anywhere else and it lies across the screen at that height, snapping back under the bar within 72 pt of it. Heights stay between the bar and the message box. The place is saved on the phone and shared by every chat and Chats. VoiceOver offers *Move to the top*, *Dock on the left* and *Dock on the right*.
   - **Gauge tooltips** stay on hover with a pointer; touch and hold now moves the pill instead.
   - **Searching** in Chats puts the search row under the title and hides the pill until Cancel.
+  - **iPhone: the switch moved into the menus (2026-11-05).** Philip asked: "let's move the simple/detailed view toggle into the menus instead of the floating option". On iPhone the pill now holds only the minimal gauges, and with the hardware hidden there is no pill and no room left for it above the list or transcript. Simple or Detailed is the first section of the Chats view menu (the filter icon) and of a chat's More menu (`ModeMenuPicker`, an inline picker with the chat bubble and brackets icons, a checkmark on the current one); it works on a saved copy too, since it is the phone's own choice. Android keeps the switch in its pill. `[implemented; awaits the macOS CI build, LiveRelayTests and screenshots]`
   - **Android:** the morph uses Compose's shared element transition; the card is titled *Monitor*; whether a release docks at a side is judged from the finger; the pill keeps its shape while dragged and turns upright or flat when let go; it is nearly opaque (no backdrop blur) and side docks are excluded from the system back gesture. ChatModesTest (9) passes on the emulator.
 
 ### iPhone `[implemented 2026-10-28 on branch simple-expert-modes; SimpleModeTests and the NekkoNativeTests suite pass (98 run, 1 skipped); LiveRelayTests/testSimpleAndExpertModes passes against a live relay stack with its accessibility audits in both modes; screenshots on a fresh simulator; NewChatChoicesTests and PanesTests now launch in Expert but were not run]`
@@ -113,13 +118,13 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `hardware`: the monitor panel; polling stops while hidden.
   - `model` and `effort`: their halves of the composer's control and of its sheet, More > Model, and the New chat chips. The control goes when both are hidden. A chat with no model still shows the picker.
   - `context`: the ring and count.
-  - `ph-policy`: More > Tool policy and the New chat Tools chip. A hidden choice keeps its saved or default value.
+  - `asks`: More > Tool policy in Expert, the plain control under the message box in Simple, and the New chat Tools chip. A hidden choice keeps its saved or default value.
   - `thinking`: the reasoning fold, tool step rows, sub-agent and purpose groups. They are hidden outright; there is no per-turn fold yet. *Working…* still shows while a reply runs.
-  - `ph-git`: More > Git, More > Commit or open a PR, and the PR chip above the composer.
+  - `ph-git`: More > Git, More > Commit or open a PR, the PR chip above the composer, and the plan sheet's PR chips.
   - `terminal`: More > Terminals and + > Terminal.
   - `ph-monitors`: the Monitors row at the bottom of Chats. The Monitors pane on a folding phone or iPad stays.
 - **Settings > Simple mode** is a row under Appearance that shows the current mode. Touching a control's row outlines its element in the accent colour for a moment.
-- **Steps in Simple:** each turn's reasoning and tool steps fold to one line (*Took 4 steps*, *Working · 2 steps so far*, *Thought it through*) with **Show steps** / **Hide steps** per turn. The phone gets no turn times from the computer, so no duration shows.
+- **Steps in Simple:** each turn's reasoning and tool steps fold to one line (*Took 4 steps*, *Working · 2 steps so far*, *Thought it through*) with **Show steps** / **Hide steps** per turn. A watch's wake-up counts as a step of its turn, on both phones. The phone gets no turn times from the computer, so no duration shows.
 - **Strings:** the new strings are in `Localizable.xcstrings` in de, es, fr, ja, pt and zh-Hans (2026-10-28).
 
 ### Android `[implemented 2026-10-28 on branch simple-expert-modes; JVM unit tests (SimpleModeTest, 273 in all), lint and debug and androidTest builds pass; ChatModesTest rewritten for the new switch but not run (no working adb on the build Mac); no screenshots yet]`
@@ -131,13 +136,25 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
   - `model`, `effort` and `context`: each is its own part of the row under the message box, and the row goes when all three do. A chat with no model still shows the picker. Effort also leaves New chat, which then uses the computer's default.
   - `thinking`: the Show reasoning toggle, and the tool step rows and step cards, which are left out (Android has no per-turn fold). Allow and Deny cards still show.
   - `ph-git`: the PR chip and its sheet. More > Git stays, since it is the only way to the Git screen.
+  - `asks`: Chat mode in More, and the plain control under the message box in Simple.
   - `terminal`: Terminal in the + menu and Terminals in More.
   - `ph-monitors`: the Monitors row at the bottom of the chats list. The foldable Monitors pane and screen stay.
 - **Steps in Simple (2026-10-28):** each turn folds to one line with its time when known (*Took 3 steps · 14s*), and **Show steps** opens it.
 - **Touch targets:** the slim row's switch and gauges keep a 34 dp look with 48 dp touch areas.
 - **Verified:** `ChatModesTest` (5 tests) passes on a headless arm64 emulator after platform-tools moved to r37 (2026-10-28).
-- **Left out of the Settings screen:** `ph-policy`. Android has no per-chat tool policy, so the choice would do nothing.
 - **The preview** starts on Simple. A row just changed is ringed in the accent colour for a moment.
+
+## Contextual relevance (2026-11-03)
+
+Philip's rule, recorded in the [desktop spec](../desktop/desktop-simple-and-expert-modes.md): a control that means nothing right now is not on screen. On both phones, through `SimpleMode.swift` and `SimpleMode.kt`, with the same ids and rules as `simple-mode.ts`:
+
+- **Asks first** (`asks`, replacing `ph-policy`, Show by default): in Simple the tool policy is a plain control beside the model under the message box, *Asks first*, *Asks when it matters* or *Works on its own*, with the same values and the same step-up as before. Expert keeps it in More. New chat shows it in the same words.
+- **Effort** stays inside the model dropdown in Simple: the dial leaves the control under the message box unless the model's half is hidden.
+- **Changes** (Show by default) needs changed files, in both modes, and says how many. The phone reads `changes:list` when a chat opens and after each turn. iPhone: *3 files changed* in More. Android: the header icon with a count badge, spoken as *3 files changed*, because the bar has no room for the words.
+- **PR status** (`pr-status`, Show by default) needs a PR: the PR chip, its sheet, and the iPhone plan sheet's PR chips. `ph-git` keeps the rest: More > Git and Commit or open a PR on the iPhone, and More > Git on Android, which is new there.
+- **Monitors** (`hardware`, `ph-monitors`) are off by default in both modes and appear only while a local model runs on the computer the phone is connected to. **Always** pins them on. A model on a further computer that one is linked to is not reported to a phone: `computers:*` answers the desktop window only.
+- **Run settings** (`run-settings`, Expert only): main's offline, incognito, Git branch and tool style choices, in the model dropdown.
+- **Strings:** every new string is in the seven languages. On Android, everything this branch had in English moved to `strings_simple.xml`.
 
 ## Not yet
 

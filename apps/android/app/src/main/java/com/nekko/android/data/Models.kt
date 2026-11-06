@@ -1,11 +1,13 @@
 package com.nekko.android.data
 
+import com.nekko.protocol.ProtocolCheck
 import com.nekko.protocol.Activity
 import com.nekko.protocol.DenyReason
 import com.nekko.protocol.Appearance
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.RelayStatus
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.SessionSummary
@@ -17,7 +19,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 
@@ -29,6 +33,11 @@ data class Computer(
     val pairedAt: Long,
     /** OS of the computer, learned from app:info once connected. */
     val platform: String? = null,
+    /** Other addresses of the same relay, from the pairing link (AN-28). */
+    val alts: List<String> = emptyList(),
+    /** Its `machineIcon`, learned from app:info once connected. Null shows nothing. */
+    val icon: String? = null,
+    val nameIsCustom: Boolean? = null,
 )
 
 /** Secret half of a pairing, kept in [SecureStore] only. */
@@ -39,7 +48,14 @@ data class ComputerSecret(
     val keyHex: String,
     /** Present until the computer welcomes us once. */
     val pair: String? = null,
+    /** The computer's public key, pinned from the pairing link; older pairings have none (decision 0041). */
+    val hostKey: String? = null,
+    /** [com.nekko.protocol.E2E.PAIRING_VERSION] when saved; older pairings must pair again (decisions 0036, 0041). */
+    val version: Int = com.nekko.protocol.E2E.PAIRING_VERSION,
 ) {
+    /** The key to dial with; null when this pairing must be made again, since a first-seen key is never trusted. */
+    val pin: String? get() = hostKey.takeIf { version >= com.nekko.protocol.E2E.PAIRING_VERSION }
+
     /** Never print the secret. */
     override fun toString(): String = "ComputerSecret(room=$room, pair=${pair != null})"
 }
@@ -50,6 +66,8 @@ data class ComputersState(
     val activeId: String? = null,
     val conn: RelayState = RelayState.IDLE,
     val connDetail: String? = null,
+    /** The relay address in use or being dialed, one of the active computer's routes. */
+    val route: String? = null,
     val denied: DenyReason? = null,
     val summaries: List<SessionSummary> = emptyList(),
     val summariesLoading: Boolean = false,
@@ -65,6 +83,8 @@ data class ComputersState(
     val workspaces: List<WorkspaceFolder> = emptyList(),
     /** Chats mid-run or waiting on an approval/answer, by session id. */
     val activity: Map<String, Activity> = emptyMap(),
+    /** Authoritative waiting inputs for local alerts and launcher badges, independent of the open chat. */
+    val attention: AttentionState = AttentionState(),
     val lastError: String? = null,
     /** When the list on screen is the phone's saved copy, when it was saved; null once the computer answers. */
     val savedListAt: Long? = null,
@@ -72,9 +92,40 @@ data class ComputersState(
     val quitFromPhone: Boolean = false,
     /** When this phone stopped remote access on the active computer (SK-8); null otherwise. */
     val remoteStoppedAt: Long? = null,
+    /** The active computer's phone protocol from its welcome (IO-32); null until it has welcomed this phone. */
+    val hostProtocol: Int? = null,
+    /**
+     * Every paired computer but the active one, kept connected beside it
+     * (2026-11-05, the iPhone's fleet): its state, chats, folders and which
+     * chats run or need you. Empty unless the repository stays connected.
+     */
+    val peers: Map<String, Peer> = emptyMap(),
 ) {
     val active: Computer? get() = computers.firstOrNull { it.id == activeId }
+
+    /** A computer's connection state, active or not. */
+    fun connOf(id: String): RelayState = if (id == activeId) conn else peers[id]?.conn ?: RelayState.IDLE
+
+    /** The relay keeps closing on a bad pairing key: not a denial (it isn't sealed), but worth asking to pair again. */
+    val badKey: Boolean get() = connDetail == RelayStatus.BAD_KEY && conn != RelayState.IDLE
+
+    /** Which side to update when the phone and the computer speak different versions. */
+    val protocolCheck: ProtocolCheck get() = ProtocolCheck.compare(hostProtocol)
 }
+
+/** What the phone knows about one paired computer that isn't the active one. */
+data class Peer(
+    val conn: RelayState = RelayState.CONNECTING,
+    val detail: String? = null,
+    val denied: DenyReason? = null,
+    val summaries: List<SessionSummary> = emptyList(),
+    val activity: Map<String, Activity> = emptyMap(),
+    val workspaces: List<WorkspaceFolder> = emptyList(),
+    /** The computer answered on this link (not only a saved list). */
+    val loaded: Boolean = false,
+    /** The list shown is the phone's saved copy, from then. */
+    val savedAt: Long? = null,
+)
 
 /** Hand-written JSON for what we persist; the app has no serialization plugin. */
 internal object StoredJson {
@@ -88,6 +139,9 @@ internal object StoredJson {
                 put("relayUrl", c.relayUrl)
                 put("pairedAt", c.pairedAt)
                 c.platform?.let { put("platform", it) }
+                if (c.alts.isNotEmpty()) put("alts", buildJsonArray { c.alts.forEach { add(JsonPrimitive(it)) } })
+                c.icon?.let { put("icon", it) }
+                c.nameIsCustom?.let { put("nameIsCustom", it) }
             })
         }
     }.toString()
@@ -102,6 +156,9 @@ internal object StoredJson {
                 relayUrl = o.str("relayUrl") ?: return@mapNotNull null,
                 pairedAt = (o["pairedAt"] as? JsonPrimitive)?.longOrNull ?: 0,
                 platform = o.str("platform"),
+                alts = (o["alts"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
+                icon = o.str("icon"),
+                nameIsCustom = (o["nameIsCustom"] as? JsonPrimitive)?.booleanOrNull,
             )
         }
     }
@@ -111,6 +168,8 @@ internal object StoredJson {
         put("key", s.key)
         put("keyHex", s.keyHex)
         s.pair?.let { put("pair", it) }
+        s.hostKey?.let { put("hostKey", it) }
+        put("v", s.version)
     }.toString()
 
     fun decodeSecret(raw: String?): ComputerSecret? {
@@ -120,6 +179,9 @@ internal object StoredJson {
             key = o.str("key") ?: return null,
             keyHex = o.str("keyHex") ?: return null,
             pair = o.str("pair"),
+            hostKey = o.str("hostKey"),
+            // Saved before the relay credential was derived: 1.
+            version = (o["v"] as? JsonPrimitive)?.intOrNull ?: 1,
         )
     }
 

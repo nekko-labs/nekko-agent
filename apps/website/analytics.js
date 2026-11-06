@@ -2,6 +2,7 @@
 // (persistence: memory), so there is no consent banner to show. Pageviews,
 // clicks and the referrer only; no session recordings, no person profiles.
 // Stays off until POSTHOG_KEY holds the Nekko Agent project's public phc_ key.
+// Add PostHog to privacy.html before setting it: the policy doesn't mention it.
 (function () {
   var POSTHOG_KEY = '';
   if (!POSTHOG_KEY || location.hostname !== 'nekkoagent.com') return;

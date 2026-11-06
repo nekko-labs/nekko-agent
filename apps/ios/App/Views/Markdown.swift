@@ -14,12 +14,56 @@ struct MarkdownText: View {
     var bubble = false
     /// Long-press selects text (replies) rather than opening the bubble's menu (the user's own messages).
     var selectable = true
+    /// Draw the topics an agent's message names as headers (`ReplyTopics`).
+    var topics = false
+    /// Give a closing question a header when the message did not. For settled text: a stream ends on one in passing.
+    var askTail = false
     @Environment(\.palette) private var palette
 
     var body: some View {
         let style = bubble ? MarkdownStyle.bubble(palette) : MarkdownStyle.standard(palette)
-        MarkdownBlocks(blocks: MarkdownParser.blocks(text), style: style)
-            .modifier(Selectable(on: selectable))
+        let sections = topics ? ReplyTopics.sections(text, askTail: askTail) : []
+        Group {
+            if sections.count > 1 || sections.first?.header != nil {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(sections.enumerated()), id: \.offset) { i, section in
+                        if let header = section.header { TopicHeader(line: header, first: i == 0) }
+                        if section.body.contains(where: { !$0.isWhitespace }) {
+                            MarkdownBlocks(blocks: MarkdownParser.blocks(section.body), style: style)
+                        }
+                    }
+                }
+            } else {
+                MarkdownBlocks(blocks: MarkdownParser.blocks(text), style: style)
+            }
+        }
+        .modifier(Selectable(on: selectable))
+    }
+}
+
+/// A named topic of the agent's message, drawn as a header. The text stays in
+/// ink; the icon carries the colour, and only what asks something of the
+/// reader is loud (spec/chat/thinking-and-replies.md).
+private struct TopicHeader: View {
+    let line: TopicLine
+    let first: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let (symbol, tint): (String, Color) = switch line.topic {
+        case .question: ("questionmark.circle", palette.warning)
+        case .next: ("arrow.right.circle", palette.warning)
+        case .command: ("terminal", palette.warning)
+        case .decision: ("arrow.triangle.branch", palette.accent)
+        case .summary: ("list.bullet", palette.inkFaint)
+        }
+        Label {
+            Text(line.label).fontWeight(.semibold)
+        } icon: {
+            Image(systemName: symbol).foregroundStyle(tint)
+        }
+        .padding(.top, first ? 0 : 4)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -389,26 +433,22 @@ struct CodeBlock: View {
 /// every token re-renders the whole reply; without this each finished paragraph
 /// went through `AttributedString(markdown:)` again on every token.
 enum InlineMarkdown {
-    private final class Box {
+    private final class Box: Sendable {
         let value: AttributedString?
         init(_ value: AttributedString?) { self.value = value }
     }
 
-    private static let cache: NSCache<NSString, Box> = {
-        let c = NSCache<NSString, Box>()
-        c.countLimit = 800
-        return c
-    }()
+    private static let cache = SharedCache<Box>(countLimit: 800)
 
     private static let options = AttributedString.MarkdownParsingOptions(
         interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
 
     static func attributed(_ s: String) -> AttributedString? {
-        let key = s as NSString
-        if let hit = cache.object(forKey: key) { return hit.value }
+        let key = s
+        if let hit = cache[key] { return hit.value }
         // Paths Markdown can't read as URLs (`C:\x\y.html`, spaces) become `file:` links first.
         let value = try? AttributedString(markdown: ChatLinks.linkable(s), options: options)
-        cache.setObject(Box(value), forKey: key)
+        cache[key] = Box(value)
         return value
     }
 

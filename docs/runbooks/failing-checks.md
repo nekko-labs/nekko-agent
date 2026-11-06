@@ -5,22 +5,25 @@ What to do when a required check is red, on your PR or on `main`, and how long t
 ## When a check fails on `main` too
 
 The repo's required check is `gate`, which passes when every job its run needed
-passed. CI runs in three tiers (`scripts/ci-scope.mjs`):
+passed. CI runs in two tiers (`scripts/ci-scope.mjs`); there is no merge queue
+(decision 0056), so `gate` on the PR also waits for the speed contract and the
+itests (decision 0059):
 
 | Tier | When | Runs |
 | --- | --- | --- |
-| PR | every push to a PR | `build`; `daemon` on Linux if Rust or `packages/{host,core,shared}` changed; `capture` on Windows if desktop code or `packages/` changed |
-| Queue | `merge_group` | the PR tier, plus `daemon` on Windows and `perf` when the group changes what it measures |
-| Full | every 6 hours (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included |
+| PR | every push to a PR | `build`; `perf` when the change touches what the speed contract measures (or with `ci:perf`); the itests whenever it needs `build`; `daemon` and `capture` only on the OSes a `deploy:linux` / `deploy:windows` / `deploy:macos` label names, when the change touches what they test |
+| Full | nightly at 03:17 JST (skipped if `main` has not moved), or `gh workflow run ci.yml --ref <branch>` | every job on every OS, macOS included, plus `perf` and the itests |
 
-The same goes for every other macOS job (native iOS,
-dev identity, nekkod darwin, decision-model CoreML, CodeQL Swift): scheduled, or
-`ci:macos` on the PR. Add `ci:macos` to a PR that changes macOS-specific code (`cfg(target_os =
-"macos")`, the dev bundle, signing, native capture), and `ci:perf` to one that
-changes a hot path the speed contract measures and wants the numbers before
-queueing. Labels are read when a run starts: add the label, then push. A skipped
-job is not a missing check. A failed 6-hourly run opens or updates the
-`ci-scheduled` issue; whoever lands the next fix to that area clears it.
+Every other platform build is nightly too, or on a PR with its label:
+`deploy:ios` (Native iOS, CodeQL Swift), `deploy:android` (Native Android),
+`deploy:macos` (dev identity, nekkod darwin, decision-model CoreML, the macOS
+installer), `deploy:windows` (the Windows installer). Add the label to a PR that
+changes that platform's code (`cfg(target_os = ...)`, ConPTY, the dev bundle,
+signing, native capture, the phone apps), and `ci:perf` to one whose speed
+matters but that changes no path the speed contract is gated on. Labels
+are read when a run starts: adding one re-runs CI. A skipped job is not a missing
+check. A failed nightly run opens or updates the `ci-scheduled` issue; whoever
+lands the next fix to that area clears it.
 
 When one of them is red:
 
@@ -28,10 +31,10 @@ When one of them is red:
 2. Otherwise compare against `main`: the same job on the merge-base commit, or the
    most recent full runs (`gh run list --workflow ci.yml --event schedule`). If
    `main` fails the same way on the same metric, the failure is a baseline problem.
-3. A baseline failure is not this PR's fault, but in the queue it blocks every
-   group that runs that job, so it is the most urgent thing in the repo. Make sure
-   an issue exists (search first, file one if not), then fix it forward or revert
-   the commit that caused it, in its own small PR, before re-queueing yours.
+3. A baseline failure is not this PR's fault, but it blocks every PR that runs
+   that job, so it is the most urgent thing in the repo. Make sure an issue exists
+   (search first, file one if not), then fix it forward or revert the commit that
+   caused it, in its own small PR, before re-running yours.
    Record it in this PR's Unfinished work with the run that proves it. Do not
    weaken a budget or delete a check to get past it; recalibrating a noisy gate
    from measured data is a separate, explicit decision (see `docs/perf-history.md`).
@@ -40,19 +43,31 @@ When one of them is red:
 
 This is the policy the "Bound failed-check investigations" rules below apply to.
 
-### `perf` fails in the queue but not on the PR
+### `perf` fails on your PR
 
-`perf` is skipped on PR runs unless the PR has `ci:perf`, so a change to a UI
-path the speed contract drives can pass its own CI and leave the queue on
-`perf`. Read which phase failed:
+`perf` runs on every PR that touches what the speed contract measures, and `gate`
+waits for it. When the contract fails on a PR, the job then measures the failed
+budgets on the unchanged base and on head, alternately on the same runner (base,
+head, head, base, `scripts/perf/compare.mjs`), and puts the table in the job
+summary ("Matched base/head comparison") with the reports and one traced pair in
+the `perf-report` artifact. That is the matched comparison the rules below ask
+for; a hand-made `ci/<pr>-cold-paint` workflow is no longer needed for it. Read
+which phase failed:
 
 - A missing selector, a layout the script waits for, or a phase that times out
   waiting for the UI is the PR's: it changed something the script drives.
-- Only a timing budget missed, on a PR that does not touch that path, is the
-  known flap on unchanged code (issue #704): add the run there and compare the
-  queue runs just before and after.
+- Only **Switch to a cold chat, frame painted** over its 33 ms gate, on a PR that
+  does not touch chat switching or first paint, is the known flake on unchanged
+  code (issue #712: `perf` failed 17 of 35 queue runs on 2026-11-05/06, on this row). Re-run the
+  failed jobs once (`gh run rerun <id> --failed`; `queue-sweeper.yml` also does
+  this once by itself) and add the run to #712. Do not raise the budget.
+- Any other timing budget missed on a PR that does not touch that path is the
+  older flap (issue #704): add the run there and compare against the nightly runs.
 
-Run it locally, headless, before queuing a change to such a path:
+The nightly run measures `main` too, so a regression that slipped past a PR (one
+that did not touch a gated path) shows up there and opens the `ci-scheduled` issue.
+
+Run it locally, headless, before pushing a change to such a path:
 
 ```
 npm run build:web

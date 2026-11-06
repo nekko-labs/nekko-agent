@@ -1,6 +1,6 @@
 //! The runtime control plane and the Models page's server calls, served from
-//! the daemon (`nekko-engine::runtimes`): `runtime:*`, `model:pull/load/unload`,
-//! `lms:probe` and `server:stop`, over the daemon's own library, installers
+//! the daemon (`nekko-engine::runtimes`): `runtime:*`, `model:pull/load/unload`
+//! and `server:stop`, over the daemon's own library, installers
 //! and model server. The daemon is the only writer of
 //! `runtime-calibration.json` and owns the servers it starts.
 
@@ -22,50 +22,33 @@ pub const CHANNELS: &[&str] = &[
     "model:pull",
     "model:load",
     "model:unload",
-    "lms:probe",
     "server:stop",
 ];
 
 /// The engine's side: the model list (the daemon's library), the install
 /// state (its installers) and the model server.
-struct DaemonEngine(
-    Option<Arc<crate::library::Library>>,
-    Option<Arc<crate::installs::Installs>>,
-    Option<Arc<crate::model_server::Server>>,
-);
+struct DaemonEngine(Arc<crate::library::Library>, Arc<crate::installs::Installs>, Arc<crate::model_server::Server>);
 
 impl HostEngine for DaemonEngine {
     fn call(&self, method: &'static str, args: Vec<Value>) -> BoxFuture<Result<Value, String>> {
-        if method == "models"
-            && let Some(library) = self.0.clone()
-        {
-            return Box::pin(async move { library.models().await });
+        let (library, installs, server) = (self.0.clone(), self.1.clone(), self.2.clone());
+        let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
+        let (first, second) = (arg(0), arg(1));
+        match method {
+            "models" => Box::pin(async move { library.models().await }),
+            "detectEngine" => Box::pin(async move { Ok(installs.detect("llama").await) }),
+            "isRunning" => Box::pin(async move { Ok(json!(server.model.is_running())) }),
+            "status" => Box::pin(async move { Ok(server.status().await) }),
+            "resident" => Box::pin(async move { Ok(json!(server.model.resident())) }),
+            "start" => Box::pin(async move { Ok(server.model.start().await) }),
+            "stop" => Box::pin(async move { Ok(server.model.stop().await) }),
+            "load" => Box::pin(async move {
+                let params = if second.is_object() { second } else { json!({}) };
+                Ok(server.load(&nekko_js::display(&first), params).await)
+            }),
+            "unload" => Box::pin(async move { Ok(server.model.unload(&nekko_js::display(&first)).await) }),
+            _ => Box::pin(async move { Err(format!("engine:{method}: no model server runs here")) }),
         }
-        if method == "detectEngine"
-            && let Some(installs) = self.1.clone()
-        {
-            return Box::pin(async move { Ok(installs.detect("llama").await) });
-        }
-        if let Some(server) = self.2.clone() {
-            let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
-            let (first, second) = (arg(0), arg(1));
-            match method {
-                "isRunning" => return Box::pin(async move { Ok(json!(server.model.is_running())) }),
-                "status" => return Box::pin(async move { Ok(server.status().await) }),
-                "resident" => return Box::pin(async move { Ok(json!(server.model.resident())) }),
-                "start" => return Box::pin(async move { Ok(server.model.start().await) }),
-                "stop" => return Box::pin(async move { Ok(server.model.stop().await) }),
-                "load" => {
-                    return Box::pin(async move {
-                        let params = if second.is_object() { second } else { json!({}) };
-                        Ok(server.load(&nekko_js::display(&first), params).await)
-                    });
-                }
-                "unload" => return Box::pin(async move { Ok(server.model.unload(&nekko_js::display(&first)).await) }),
-                _ => {}
-            }
-        }
-        Box::pin(async move { Err(format!("engine:{method}: no model server runs here")) })
     }
 }
 
@@ -86,9 +69,9 @@ impl Probes for MachineProbes {
 pub fn new(
     settings: &crate::settings::Settings,
     machine: Arc<nekko_machine::Machine>,
-    library: Option<Arc<crate::library::Library>>,
-    installs: Option<Arc<crate::installs::Installs>>,
-    server: Option<Arc<crate::model_server::Server>>,
+    library: Arc<crate::library::Library>,
+    installs: Arc<crate::installs::Installs>,
+    server: Arc<crate::model_server::Server>,
 ) -> Arc<Runtimes> {
     let store = settings.store.clone();
     let data_dir = store.path().parent().map(std::path::Path::to_path_buf);
@@ -116,35 +99,23 @@ pub async fn route(ctx: &crate::routes::Ctx, rt: &Runtimes, channel: &str, args:
     let arg = |i: usize| args.get(i).unwrap_or(&Value::Null);
     let s = |i: usize| nekko_js::display(arg(i));
     let params = |i: usize| if arg(i).is_object() { arg(i).clone() } else { json!({}) };
-    // The Models page polls status, facts and the `lms` probe. A provider
-    // switched off there answers as absent, so polling never spawns `lms` or
-    // touches its server (and so cannot wake a stopped LM Studio).
+    // The Models page polls status and facts. A provider switched off there
+    // answers as absent, so polling never spawns `lms` or touches its server
+    // (and so cannot wake a stopped LM Studio). `lms:probe` is providers.rs'.
     if matches!(
         channel,
-        "runtime:status"
-            | "runtime:facts"
-            | "runtime:plan"
-            | "runtime:autoFit"
-            | "runtime:place"
-            | "runtime:recommend"
-            | "lms:probe"
+        "runtime:status" | "runtime:facts" | "runtime:plan" | "runtime:autoFit" | "runtime:place" | "runtime:recommend"
     ) && disabled(ctx, &s(0)).await
     {
-        return Ok(match channel {
-            "runtime:facts" => json!([]),
-            "lms:probe" => json!({ "available": false, "reason": crate::providers::DISABLED }),
-            _ => Value::Null,
-        });
+        return Ok(if channel == "runtime:facts" { json!([]) } else { Value::Null });
     }
     Ok(match channel {
         "runtime:status" => rt.status(&s(0)).await,
         "runtime:start" => rt.start(&s(0)).await,
         "runtime:stop" => {
             // The engine's speech server goes down with it, as in the host.
-            if s(0) == "nekko-engine"
-                && let Some(voice) = &ctx.voice
-            {
-                voice.stop().await;
+            if s(0) == "nekko-engine" {
+                ctx.voice.stop().await;
             }
             rt.stop(&s(0), nekko_js::truthy(Some(arg(1)))).await
         }
@@ -157,7 +128,6 @@ pub async fn route(ctx: &crate::routes::Ctx, rt: &Runtimes, channel: &str, args:
         "model:pull" => rt.pull_model(&s(0), &s(1)).await,
         "model:load" => rt.load_model(&s(0), &s(1)).await,
         "model:unload" => rt.unload_model(&s(0), &s(1)).await,
-        "lms:probe" => rt.lms_probe(&s(0)).await,
         "server:stop" => rt.stop_server(&s(0)).await,
         other => return Err(format!("{other} is not a runtime channel")),
     })

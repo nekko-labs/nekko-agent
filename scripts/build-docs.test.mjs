@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { build, loadNav, slugify } from './build-docs.mjs';
+import { build, loadNav, releaseInfo, slugify } from './build-docs.mjs';
 
 // Staleness itself is not a test: the pages are built on deploy, and the Docs
 // site workflow commits the regenerated llms.txt and sitemap.xml to the PR, so failing CI on the author's commit would only
@@ -13,6 +13,18 @@ test('the Docs site workflow runs for every page source', () => {
   const covered = (file) => paths.some((p) => (p.endsWith('/**') ? file.startsWith(p.slice(0, -2)) : file === p));
   const missing = loadNav().pages.map((p) => p.source).filter((s) => !covered(s));
   assert.deepEqual(missing, [], 'add these to the paths in .github/workflows/docs-site.yml');
+});
+
+// Vercel skips a commit that touches none of these, so a missed path is a site change that never deploys.
+test('Vercel builds for every path the Docs site workflow watches', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/docs-site.yml', import.meta.url), 'utf8');
+  const block = workflow.split(/\n  push:/)[0].split(/\n    paths:\n/)[1];
+  const watched = [...block.matchAll(/^\s+- '([^']+)'$/gm)].map((m) => m[1].replace(/\/\*\*$/, ''));
+  const ignore = readFileSync(new URL('./vercel-ignore.sh', import.meta.url), 'utf8');
+  const paths = [...ignore.matchAll(/^ {2}([^\s\\]+)(?: \\)?$/gm)].map((m) => m[1]);
+  assert.ok(paths.includes('apps/website'));
+  const missing = watched.filter((w) => !paths.some((p) => w === p || w.startsWith(`${p}/`)));
+  assert.deepEqual(missing, [], 'add these to the paths in scripts/vercel-ignore.sh');
 });
 
 test('every nav page has a unique slug and its own output page', () => {
@@ -61,4 +73,18 @@ test('every link to a docs page, and to a heading on one, resolves', () => {
 test('heading slugs match GitHub-style anchors', () => {
   assert.equal(slugify('5. Guardrails & sandbox'), '5-guardrails--sandbox');
   assert.equal(slugify('Run it from `source`'), 'run-it-from-source');
+});
+
+// The download buttons read this at runtime instead of asking api.github.com, so
+// no visitor's browser talks to GitHub just by opening the page.
+test('release info keeps only the tag and each asset name and URL', () => {
+  const rel = { tag_name: 'v1.2.3', author: { login: 'x' }, assets: [{ name: 'Nekko-x64.exe', browser_download_url: 'https://github.com/a.exe', size: 9 }] };
+  assert.deepEqual(releaseInfo(rel), { version: 'v1.2.3', assets: { 'Nekko-x64.exe': 'https://github.com/a.exe' } });
+  assert.deepEqual(releaseInfo({}), { version: '', assets: {} });
+});
+
+test('no page loads fonts or release info from a third party', () => {
+  const pages = [...build().entries()].filter(([path]) => path.endsWith('.html')).map(([, html]) => html);
+  for (const file of ['index.html', 'privacy.html', 'site.js']) pages.push(readFileSync(new URL(`../apps/website/${file}`, import.meta.url), 'utf8'));
+  for (const html of pages) assert.doesNotMatch(html, /fonts\.googleapis\.com|fonts\.gstatic\.com|api\.github\.com/);
 });

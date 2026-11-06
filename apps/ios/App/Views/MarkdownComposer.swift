@@ -39,7 +39,7 @@ struct MarkdownComposerField: View {
                 }
             }
             if focused {
-                MarkdownToolbar(editor: editor, text: text, shown: $toolbarShown)
+                MarkdownToolbar(editor: editor, text: text, shown: $toolbarShown, dismissKeyboard: { focused = false })
             }
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
@@ -56,6 +56,7 @@ struct MarkdownComposerField: View {
 }
 
 /// What the toolbar and the text view share: the selection, the text view to edit, a paste to offer formatting for.
+@MainActor
 @Observable
 final class MarkdownEditorState {
     struct PasteOffer: Equatable {
@@ -102,6 +103,7 @@ struct MarkdownToolbar: View {
     let editor: MarkdownEditorState
     let text: String
     @Binding var shown: Bool
+    var dismissKeyboard: () -> Void
     @Environment(\.palette) private var palette
 
     private static let symbols: [MarkdownAction: String] = [
@@ -135,8 +137,18 @@ struct MarkdownToolbar: View {
                 }
             }
             Spacer(minLength: 0)
+            // Fixed outside the scroller and the Aa toggle: always reachable while editing.
+            Button(action: dismissKeyboard) {
+                Image(systemName: "keyboard.chevron.compact.down")
+                    .font(.system(size: 20))
+                    .foregroundStyle(palette.inkSoft)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Hide keyboard")
+            .accessibilityIdentifier("composer.hideKeyboard")
         }
-        .frame(minHeight: 40)
+        .frame(minHeight: 44)
     }
 
     private func button(_ action: MarkdownAction) -> some View {

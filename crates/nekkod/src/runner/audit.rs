@@ -1,6 +1,9 @@
 //! `<data>/runners/audit.jsonl`: one line per job a runner ran, lost or
 //! stopped, and per VM that failed to start.
 
+use super::provider::PrRef;
+use super::supervisor::SlotState;
+use nekko_runner::Usage;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -17,7 +20,7 @@ pub enum AuditResult {
     NotRemoved,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AuditLine {
     pub ts: u64,
@@ -28,6 +31,61 @@ pub struct AuditLine {
     pub result: AuditResult,
     pub seconds: u64,
     pub reason: Vec<String>,
+    /// What a finished job used inside its VM, when its stats disk was readable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+    /// The provider's id for the job, for fetching its log.
+    #[serde(default)]
+    pub job_id: Option<u64>,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub pr: Option<PrRef>,
+    /// When the VM entered each state, oldest first; `ts` is when it was deleted.
+    #[serde(default)]
+    pub events: Vec<SlotEvent>,
+    /// The VM's name when its console log was kept under `logs/`.
+    #[serde(default)]
+    pub vm: Option<String>,
+}
+
+/// How many VM console logs `logs/` keeps (each at most 1 MB, the helper's cap).
+const VM_LOGS_KEPT: usize = 20;
+
+/// Moves a deleted VM's console log to `logs/<name>.log`, dropping the oldest past
+/// `VM_LOGS_KEPT`. False when there was nothing to keep (an empty log: an image from
+/// before the guest wrote one).
+pub fn keep_vm_log(runners_dir: &Path, console: &Path, name: &str) -> io::Result<bool> {
+    if std::fs::metadata(console).map(|m| m.len()).unwrap_or(0) == 0 {
+        return Ok(false);
+    }
+    let logs = runners_dir.join("logs");
+    std::fs::create_dir_all(&logs)?;
+    std::fs::rename(console, logs.join(format!("{name}.log")))?;
+    let mut all: Vec<_> = std::fs::read_dir(&logs)?
+        .filter_map(|e| e.ok())
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .collect();
+    all.sort();
+    for (_, old) in all.iter().rev().skip(VM_LOGS_KEPT) {
+        let _ = std::fs::remove_file(old);
+    }
+    Ok(true)
+}
+
+/// A kept VM log. `name` must come from an audit line, never from a caller.
+pub fn vm_log(runners_dir: &Path, name: &str) -> io::Result<String> {
+    if name.is_empty() || name.contains(['/', '\\']) || name.starts_with('.') {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a VM name"));
+    }
+    std::fs::read(runners_dir.join("logs").join(format!("{name}.log")))
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SlotEvent {
+    pub ts: u64,
+    pub state: SlotState,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,6 +139,16 @@ pub fn recent(runners_dir: &Path, runner_id: &str, n: usize) -> Vec<AuditLine> {
         .collect()
 }
 
+/// One runner's job usage since `since_ts`, oldest first, with each line's time.
+pub fn usage(runners_dir: &Path, runner_id: &str, since_ts: u64) -> Vec<(u64, Usage)> {
+    let text = std::fs::read_to_string(runners_dir.join("audit.jsonl")).unwrap_or_default();
+    text.lines()
+        .filter_map(|l| serde_json::from_str::<AuditLine>(l).ok())
+        .filter(|l| l.runner_id == runner_id && l.ts >= since_ts)
+        .filter_map(|l| Some((l.ts, l.usage?)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,6 +163,12 @@ mod tests {
             result,
             seconds: 100,
             reason: vec![],
+            usage: None,
+            job_id: None,
+            url: None,
+            pr: None,
+            events: vec![],
+            vm: None,
         }
     }
 
@@ -134,5 +208,37 @@ mod tests {
             .unwrap();
         let ts: Vec<u64> = recent(dir.path(), "a", 2).iter().map(|l| l.ts).collect();
         assert_eq!(ts, [3, 2]);
+    }
+
+    #[test]
+    fn vm_logs_are_kept_newest_first_and_read_by_name_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let console = dir.path().join("console.log");
+        // An image from before the guest wrote a log leaves it empty: nothing to keep.
+        std::fs::write(&console, "").unwrap();
+        assert!(!keep_vm_log(dir.path(), &console, "vm-0").unwrap());
+        for i in 0..VM_LOGS_KEPT {
+            std::fs::write(&console, format!("boot {i}\n")).unwrap();
+            assert!(keep_vm_log(dir.path(), &console, &format!("vm-{i}")).unwrap());
+            // Distinct modification times, oldest first.
+            let t = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000 + i as u64);
+            std::fs::File::options()
+                .write(true)
+                .open(dir.path().join(format!("logs/vm-{i}.log")))
+                .unwrap()
+                .set_modified(t)
+                .unwrap();
+        }
+        assert_eq!(std::fs::read_dir(dir.path().join("logs")).unwrap().count(), VM_LOGS_KEPT);
+        std::fs::write(&console, "last\n").unwrap();
+        keep_vm_log(dir.path(), &console, "vm-last").unwrap();
+        assert_eq!(std::fs::read_dir(dir.path().join("logs")).unwrap().count(), VM_LOGS_KEPT);
+        assert!(vm_log(dir.path(), "vm-0").is_err(), "the oldest went");
+        assert_eq!(vm_log(dir.path(), "vm-1").unwrap(), "boot 1\n");
+        assert_eq!(vm_log(dir.path(), "vm-last").unwrap(), "last\n");
+        assert!(!console.exists());
+        for bad in ["", "../audit.jsonl", "a/b", ".hidden"] {
+            assert!(vm_log(dir.path(), bad).is_err(), "{bad}");
+        }
     }
 }

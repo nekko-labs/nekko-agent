@@ -82,6 +82,10 @@ Conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 Use the issue templates. For local-model issues, please include your provider
 kind (Ollama / LM Studio / vLLM / cloud), the base URL shape, and the model id.
 
+## Third-party code and assets
+
+Before adding a package, icon, font, model or anything else you did not make, read [the third-party runbook](docs/runbooks/third-party.md).
+
 ## License
 
 By contributing, you agree your contributions are licensed under the [MIT License](LICENSE).

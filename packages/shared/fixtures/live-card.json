@@ -1,5 +1,5 @@
 {
- "about": "The Live Activity card's rules (buildCard). Run by LiveCardTests (Swift, apps/ios/Protocol) and crates/nekko-remote card tests (Rust), so change both together. Dates are seconds since 2001-01-01, ActivityKit's default JSONDecoder date form. A chat or card leaves out empty text, false, zero and missing values; read them as empty. bytes is the card's size as Swift's JSONEncoder writes it (a slash counts twice).",
+ "about": "The Live Activity card's rules (buildCard). Run by LiveCardTests (Swift, apps/ios/Protocol), crates/nekko-remote card tests (Rust) and LiveCardTest (Kotlin, apps/android/protocol, which skips the 4 KB cases), so change them together. Dates are seconds since 2001-01-01, ActivityKit's default JSONDecoder date form. A chat or card leaves out empty text, false, zero and missing values; read them as empty. bytes is the card's size as Swift's JSONEncoder writes it (a slash counts twice).",
  "now": 800000000,
  "build": [
   {
@@ -496,13 +496,14 @@
    "bytes": 140
   },
   {
-   "name": "minimal blanks the short title, step and reply",
+   "name": "minimal blanks the short title, row title, step and reply",
    "level": "minimal",
    "chats": [
     {
      "id": "a",
      "state": "working",
      "short": "Fix it",
+     "title": "Fix it  now\nplease",
      "step": "Run  tests\n now",
      "reply": "Got it.",
      "closeWord": "Cool"
@@ -528,6 +529,7 @@
      "id": "a",
      "state": "working",
      "short": "Fix it",
+     "title": "Fix it  now\nplease",
      "step": "Run  tests\n now",
      "reply": "Got it.",
      "closeWord": "Cool"
@@ -538,6 +540,7 @@
      {
       "id": "a",
       "short": "Fix it",
+      "title": "Fix it now please",
       "state": "working",
       "step": "Run tests now",
       "closeWord": "Cool"
@@ -545,7 +548,7 @@
     ],
     "focusId": "a"
    },
-   "bytes": 162
+   "bytes": 190
   },
   {
    "name": "detailed keeps the reply; the step is one line",
@@ -555,6 +558,7 @@
      "id": "a",
      "state": "working",
      "short": "Fix it",
+     "title": "Fix it  now\nplease",
      "step": "Run  tests\n now",
      "reply": "Got it.",
      "closeWord": "Cool"
@@ -565,6 +569,7 @@
      {
       "id": "a",
       "short": "Fix it",
+      "title": "Fix it now please",
       "state": "working",
       "step": "Run tests now",
       "reply": "Got it.",
@@ -573,7 +578,7 @@
     ],
     "focusId": "a"
    },
-   "bytes": 169
+   "bytes": 197
   },
   {
    "name": "the step is clipped to 60 characters",
@@ -620,6 +625,28 @@
     "focusId": "a"
    },
    "bytes": 199
+  },
+  {
+   "name": "the row title is clipped to 40 characters",
+   "level": "standard",
+   "chats": [
+    {
+     "id": "a",
+     "state": "working",
+     "title": "ttttttttttttttttttttttttttttttttttttttttttttt"
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "a",
+      "state": "working",
+      "title": "ttttttttttttttttttttttttttttttttttttttt…"
+     }
+    ],
+    "focusId": "a"
+   },
+   "bytes": 192
   },
   {
    "name": "a big card blanks every reply first",

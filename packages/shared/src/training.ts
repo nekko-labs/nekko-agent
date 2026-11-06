@@ -62,6 +62,20 @@ export interface RunArtifact {
 /** Status of one step in a goal run's execution plan. */
 export type PlanStepStatus = 'pending' | 'active' | 'done' | 'skipped';
 
+/**
+ * Where a step sits in the work loop: work it out and make it, check, hand over.
+ * Verify failing sends work back to Build. Looking and making are one kind,
+ * `build`, since 2026-11-04.
+ */
+export type PlanStepKind = 'build' | 'verify' | 'ship';
+export const PLAN_STEP_KINDS: readonly PlanStepKind[] = ['build', 'verify', 'ship'];
+
+/** A step's kind as saved or sent; `explore`, from older plans and models, is `build` now. */
+export function planStepKind(raw: unknown): PlanStepKind | undefined {
+  if (raw === 'explore') return 'build';
+  return typeof raw === 'string' && PLAN_STEP_KINDS.includes(raw as PlanStepKind) ? (raw as PlanStepKind) : undefined;
+}
+
 export type PlanVerificationStatus = 'pending' | 'active' | 'passed' | 'failed' | 'blocked' | 'unknown';
 
 export interface PlanVerification {
@@ -77,6 +91,10 @@ export interface PlanStep {
   /** Concrete, verifiable step, e.g. "Wire the CSV parser + unit tests". */
   title: string;
   status: PlanStepStatus;
+  /** The step's place in the loop, when the agent says. */
+  kind?: PlanStepKind;
+  /** Set from 2 when a finished step is reopened (Verify sent the work back): which pass this is. */
+  pass?: number;
   /** Explicit inspection state, independent of generic completion; freshness uses updatedAt. */
   verification?: PlanVerification;
   /** One-line outcome, blocker, or the reason a step was skipped. */
@@ -201,70 +219,6 @@ export interface RunStats {
   repairs: number;
   runtimeMs: number;
   turns: number;
-}
-
-/** Common ML solving approaches offered as presets on goal runs. */
-export interface ApproachPreset {
-  id: string;
-  label: string;
-  blurb: string;
-  /** Folded into the agent brief when selected. */
-  hint: string;
-}
-
-export const APPROACH_PRESETS: ApproachPreset[] = [
-  {
-    id: 'automl-sweep',
-    label: 'AutoML sweep',
-    blurb: 'Breadth-first: try many model families fast, then double down on winners.',
-    hint: 'Work breadth-first like an AutoML system: quickly try many model families (linear, trees, boosting, kNN, small nets) with sane defaults, compare on one CV metric, then iterate on the top 2-3 families.',
-  },
-  {
-    id: 'feature-first',
-    label: 'Feature engineering first',
-    blurb: 'Invest in the data representation before touching model choice.',
-    hint: 'Prioritize feature engineering: profile the data, handle missingness/outliers, build derived features and encodings, and validate each transformation by its CV delta before exploring model families.',
-  },
-  {
-    id: 'hyperparam-search',
-    label: 'Hyperparameter search',
-    blurb: 'Fix a strong family, then search its configuration space methodically.',
-    hint: 'Pick the strongest baseline family early, then run a methodical hyperparameter search (coarse random search, then fine-grained around the best region). Track every trial as an experiment.',
-  },
-  {
-    id: 'ensemble-stack',
-    label: 'Ensemble & stacking',
-    blurb: 'Combine diverse decent models instead of hunting one perfect model.',
-    hint: 'Build several diverse decent models and combine them (voting, averaging, stacking with a meta-learner). Diversity matters more than individual perfection.',
-  },
-  {
-    id: 'transfer-finetune',
-    label: 'Transfer learning / fine-tune',
-    blurb: 'Start from a pretrained model and adapt it to the task.',
-    hint: 'Start from a suitable pretrained model (Hugging Face) and fine-tune: freeze most layers first, tune the head, then progressively unfreeze if the budget allows. Compare against a classical baseline.',
-  },
-  {
-    id: 'data-centric',
-    label: 'Data-centric iteration',
-    blurb: 'Fix the labels and coverage; the model is rarely the bottleneck.',
-    hint: 'Iterate on the data, not the model: audit label quality, find error clusters, augment or rebalance underrepresented slices, and re-measure. Keep the model fixed while the data improves.',
-  },
-  {
-    id: 'neuro-evolution',
-    label: 'Evolutionary / population search',
-    blurb: 'Maintain a population of candidates, mutate winners, prune losers.',
-    hint: 'Run a population-based search: keep a pool of candidate pipelines, mutate/crossover the best performers each generation, prune the weakest, and record each generation as experiments branching from their parent.',
-  },
-  {
-    id: 'custom',
-    label: 'Custom',
-    blurb: 'No preset. The brief and your hints steer the agent.',
-    hint: '',
-  },
-];
-
-export function getApproach(id?: string): ApproachPreset | undefined {
-  return APPROACH_PRESETS.find((a) => a.id === id);
 }
 
 /** Compare scores respecting the run's metric direction. */
@@ -399,6 +353,7 @@ export function applyPlanUpdate(
       ? (r.status as PlanStepStatus)
       : undefined;
     const note = typeof r.note === 'string' && r.note.trim() ? r.note.trim().slice(0, 240) : undefined;
+    const kind = planStepKind(r.kind);
     const verification = sanitizeVerification(r.verification);
     let step = id ? next.find((s) => s.id === id) : undefined;
     // A fresh plan often starts numbering at step_1 again. Do not rename history.
@@ -408,24 +363,20 @@ export function applyPlanUpdate(
       const was = step.status;
       if (title) step.title = title;
       if (status && !(replace && (was === 'done' || was === 'skipped'))) step.status = status;
+      if (kind) step.kind = kind;
+      // A finished step picked up again is another pass through the loop.
+      if (was === 'done' && step.status === 'active') step.pass = (step.pass ?? 1) + 1;
       if (note) step.note = note;
       if (verification) step.verification = verification;
       step.updatedAt = now;
       if (step.status === 'done' && was !== 'done') finished.push(step);
       else if (step.status === 'skipped' && was !== 'skipped') skippedNow.push(step);
     } else if (title) {
-      next.push({ id: id && !next.some((s) => s.id === id) ? id : freshId(), title, status: status ?? 'pending', note, createdAt: now, updatedAt: now, ...(verification ? { verification } : {}) });
+      next.push({ id: id && !next.some((s) => s.id === id) ? id : freshId(), title, status: status ?? 'pending', ...(kind ? { kind } : {}), note, createdAt: now, updatedAt: now, ...(verification ? { verification } : {}) });
     }
   }
   if (!next.length) return { error: 'The plan cannot be empty; pass the full step list.' };
   return { plan: next, replaced: replace, finished, skippedNow };
-}
-
-/** The text an `update_plan` call echoes back so the agent knows each step's id. */
-export function planEcho(plan: PlanStep[]): string {
-  const p = planProgress(plan);
-  const lines = plan.map((s, i) => `${i + 1}. [${s.status}] ${s.id}: ${s.title}`);
-  return `Plan saved (${p.done}/${p.total} done${p.skipped ? `, ${p.skipped} skipped` : ''}):\n${lines.join('\n')}`;
 }
 
 /** A node placed on the idea-maze canvas (column/row grid coordinates). */
@@ -498,13 +449,3 @@ export function formatRuntime(ms: number): string {
   if (h < 48) return h >= 10 ? `${h}h` : `${h}h ${m % 60 ? `${m % 60}m` : ''}`.trim();
   return `${Math.floor(h / 24)}d ${h % 24}h`;
 }
-
-/** Token the agent uses to declare the whole run finished. */
-export const RUN_DONE_TOKEN = '⟦RUN_DONE⟧';
-
-/**
- * Default safety backstop on total agent turns for a run (overridable per run
- * via config.maxTurns). The host stops a run at this cap; resuming grants a
- * fresh leg. Shared so the dashboard can show the budget the loop enforces.
- */
-export const RUN_MAX_TURNS_DEFAULT = 400;

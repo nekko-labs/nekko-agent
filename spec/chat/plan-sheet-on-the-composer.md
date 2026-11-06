@@ -1,5 +1,5 @@
 ---
-title: "Plan sheet on the composer (2026-10-25)"
+title: "Plan sheet on the composer (2026-10-25; folded summary, loop kinds and sub-agent chips 2026-10-28; dense steps that open on their own 2026-11-03; one Verify step, no placeholder plan 2026-11-04)"
 area: chat
 ---
 
@@ -14,22 +14,112 @@ The agent's plan was split from the place the user works: it sat in the Agent Mo
 ## Behavior (implemented)
 
 - In the full chat view, the agent's plan is a card tucked behind the composer. It rises out from under the composer's top edge when the plan first appears, and has no border: a slightly raised surface separates it from the transcript.
-- The header shows "Plan", progress ("2 of 4") and **Change plan**, which opens the existing plan-change prompt. Clicking the header collapses the card to one line with the current step's title.
+- `[superseded 2026-10-28, see below]` The header shows "Plan", progress ("2 of 4") and **Change plan**, which opens the existing plan-change prompt. Clicking the header collapses the card to one line with the current step's title.
 - Each step has up to three rows: its title; one line of detail (the agent's note); and, only when the step has something to show, a slim row of chips.
-- Finished and skipped steps squeeze to their title. While the pointer (or keyboard focus) is anywhere on the card, every squeezed step opens to its full rows. The grow and shrink take 120 ms; reduced motion turns them off.
+- `[superseded 2026-11-03, see below]` Finished and skipped steps squeeze to their title. While the pointer (or keyboard focus) is anywhere on the card, every squeezed step opens to its full rows. The grow and shrink take 120 ms; reduced motion turns them off.
 - Chips are attached by the app, not reported by the model. The app replays the transcript's `update_plan` calls in order, and a PR the agent created (the same rule as the PR dock: a successful `gh pr create` or POST to `pulls`) or a file or preview it linked belongs to the step that was active at that point. Replayed steps map onto the live plan by title. A PR chip shows its number, state and CI rollup (passing, failing, or "CI 6 of 9" while running) from the existing PR poller and opens the PR; a file chip opens it in the file pane, and a preview chip opens its URL.
 - The Agent Monitor no longer shows the plan; it keeps artifacts, project, sub-agents and queued follow-ups.
 - Step status marks are unchanged from [per-step plan working icons](per-step-plan-working-icons.md) and still do not animate.
 - An archived chat has no composer, so it shows no plan card.
-- In Grid and Dynamic layouts the agent windows show only their transcripts, so the shared composer carries the selected agent's plan card, and **Change plan** opens its prompt there. The card is not shown on a clean-start chat.
+- `[superseded 2026-10-28]` In Grid and Dynamic layouts the agent windows show only their transcripts, so the shared composer carries the selected agent's plan card, and **Change plan** opens its prompt there. Every wall window now has its own composer and plan sheet ([a composer in every wall window](../desktop/a-composer-in-every-wall-window.md)). The card is not shown on a clean-start chat.
 
 ## Verification and CI on the card (implemented, second PR)
 
-- A step with an explicit verification report shows a chip: Verified, Checking, Check failed, Check blocked, Check pending or Check unknown, with the device ("Verified on macOS"). Its tooltip says it is agent-reported and gives the report's age (stale for waiting reports). It opens the evidence link only when that link is safe. The report's detail replaces the step's note on the detail row. A done step without a report shows no chip.
+- `[superseded 2026-11-04, see below: reports sit under the one Verify step]` A step with an explicit verification report shows a chip: Verified, Checking, Check failed, Check blocked, Check pending or Check unknown, with the device ("Verified on macOS"). Its tooltip says it is agent-reported and gives the report's age (stale for waiting reports). It opens the evidence link only when that link is safe. The report's detail replaces the step's note on the detail row. A done step without a report shows no chip.
 - CI checks of each open PR sit in one slim row under the last step that has a verification report (else the step that opened the PR, else the running step): failing and running checks by name, failing first, and the passing ones folded into "N passed", which opens the PR's checks page.
 - The separate Verification panel under the composer (and inside each agent window) is gone. When the card shows CI, the PR card keeps its actions and review threads but drops its CI lines, and the PR actions start tucked away behind their slim "1 pull request · Show actions" row; without a plan the PR card still shows CI and opens as before.
-- Below the composer the agent window reads as one surface: the PR row has no border or shadow, and the footer controls have no divider or separate background.
+- `[superseded 2026-11-03]` Below the composer the agent window reads as one surface: the PR row has no border or shadow, and the footer controls have no divider or separate background. Nothing renders below the message box now; the footer controls are its bottom row ([Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md#message-box-bottom-row-2026-11-03)).
 
 ## Verification
 
-Unit coverage for step matching (`planStepLinks.test.ts`) and the card's rendering (`PlanRail.test.tsx`). Hidden, off-screen Electron captures (`plan-sheet-sandbox.cjs`) check that the card is tucked behind the composer, the right column has no plan, finished steps are squeezed, the PR and link chips land on the right steps, and hovering the card opens every finished step. Not verified in a packaged build.
+Unit coverage for step matching (`planStepLinks.test.ts`) and the card's rendering (`PlanRail.test.tsx`). Hidden, off-screen Electron captures (`plan-sheet-sandbox.cjs`) check that the card is tucked behind the composer, the right column has no plan, finished steps are squeezed, the PR and link chips land on the right steps, and hovering the card opens every finished step (superseded 2026-11-03: the sandbox now checks that hovering opens nothing). Not verified in a packaged build.
+
+## Folded summary, loop kinds, sub-agents and task links (implemented 2026-10-28)
+
+Issue: [#1317](https://github.com/nekko-labs/nekko-agent/issues/1317).
+
+- **Shape.** The sheet is narrower than the composer (84%), tucked behind its top edge with curved shoulders where its sides meet the composer, and filled with the composer's surface plus a touch of accent, so no dividing line separates them.
+- **Folded by default.** One or two lines: the step being worked (its progress mark, loop kind, title, pass and place, "2 of 4"), then one row of chips for it: the sub-agents as one count ("Sub-agents 1 (rocket) 2 (check)": running and done), then its verification, PRs, task links and files. When the step has no task link of its own, the chat's (the first step's) shows, so the folded sheet always says what the work is for. Clicking it opens the whole plan; the header ("Plan · 1 of 4 done") folds it again.
+- **Open.** Every step with its loop kind in a fixed column, its title and pass, its detail line, and its chips underneath: task links, each sub-agent (title and a running or done glyph; clicking opens its chat, on the wall as a window), verification, PRs, CI checks and files. Finished steps still squeeze and open on hover or focus (`[superseded 2026-11-03, see below]`).
+- **Loop kinds.** A step can say where it sits in the work loop: Explore, Build, Verify or Ship (`update_plan`'s `kind`). Shown as a small caps word before the title, in the accent while that step is being worked. A step without one shows none.
+- **Passes.** When a finished step is set active again (a Verify step sending the work back to Build), the plan counts another pass on it, shown as "Pass 2" with a loop arrow.
+- **Where sub-agents and task links land.** The app places them, not the model: a sub-agent on the step being worked when its chat was created (else the last step worked before then), a task link (Linear, Jira, GitHub issue, Trello, Asana, ClickUp, Todoist) on the step being worked when it appeared in the chat. Anything from before the first step, such as the task the chat was started from, goes on the first step. A link already shown on an earlier step is not repeated.
+- **Agent Monitor on the wall.** Wall windows no longer open the Agent Monitor rail, and the floating sub-agents chip only shows on a window without a plan: the plan sheet carries both. The Agent tab keeps its Agent Monitor.
+- **Change plan is gone**, with its prompt. Telling the agent to change course is an ordinary message (or Ctrl+Enter to send it at the running reply's next step).
+
+Verification: `planStepLinks.test.ts` (placement by time, first-step fallback, task-link parsing), `PlanRail.test.tsx` (folded line, kind, pass, sub-agent count and per-step chips), `plan-step-kind.test.ts` and the `nekko-turn` Rust test (kinds and passes). Hidden, off-screen Electron captures (`wall-composers-sandbox.cjs`) check the folded line, the sub-agent count, the Linear chip, the tuck behind the composer, and the open plan's per-step chips. Not checked in a packaged build.
+
+## Dense steps that open on their own (implemented 2026-11-03)
+
+Issue: [#1599](https://github.com/nekko-labs/nekko-agent/issues/1599).
+
+- **Intent.** Philip: the bordered step cards cost too much height, and the plan opening every finished step while the pointer is on it jumped around and was distracting. Keep the plan dense and let each step open on its own.
+- **Dense rows.** In the open plan the steps have no card, border or background of their own, with a small gap between them. The loop kind (Explore, Build, Verify, Ship) is semibold in the ink colour (the accent while that step is worked), so it carries each row.
+- **Each step opens on its own.** A step with details (a note, verification, PRs, CI checks, files, task links or sub-agents) has its title row as a disclosure button (`aria-expanded`, Enter or Space from the keyboard) with a small caret at its right end that turns when open. A step with nothing to show is a plain row. Nothing opens on hover or on focus elsewhere on the sheet.
+- **What starts open.** Unfinished (active and pending) steps start open; finished and skipped steps start closed, except the last step in plan order with results for the user (PRs, files, previews and other links such as PDFs), which starts open. Task links, sub-agents, verification and CI alone do not count as results. The user's own open or close of a step holds for as long as the chat stays on screen (component state, not saved).
+- **Unchanged.** The folded one-line summary, the PR chip's own hover actions (Approve, Decline, Merge) and where chips land.
+
+Verification: `PlanSheet.test.tsx` (the defaults, plain rows for steps with nothing to show, no step-level tab stops, and no hover, focus-within or border rule on a step in `styles.css`). Hidden, off-screen Electron captures (`plan-sheet-sandbox.cjs`) check no step border, the bold kind word, step 1 closed, step 2 (the PR) and the active step open, hovering opens nothing, a click opens step 1 and Enter closes step 2. Not checked in a packaged build.
+
+## Claude Agent chats (implemented 2026-10-31)
+
+Issue: [#1401](https://github.com/nekko-labs/nekko-agent/issues/1401).
+
+- **Intent.** A Claude Agent chat (Claude Code, on a plan or a key) showed no plan sheet: the sheet fills from Nekko's `update_plan`, which Claude Code doesn't have. It plans with its own tools, which showed only as tool calls.
+- **Behavior.** The harness reads Claude Code's own plan calls from its stream-json, and nekkod keeps the chat's `agentPlan` in step with them, so the same sheet shows. `TodoWrite` replaces the whole plan (its list is the full plan each time). `TaskCreate` adds a step (`task_<id>`, the id from its result, the description's first line as the note), and `TaskUpdate` changes or removes it (`pending`/`in_progress`/`completed` read as pending/active/done; `deleted` drops it). Only calls that succeeded count, and only the main thread's: a sub-agent's plan is its own. Each change is saved with the call's checkpoint and announced with `session_meta`.
+- **Policy.** Display only and on for every auth, Claude plan included: Nekko adds no tool, prompt or flag to Claude Code (see [Claude policy](../product/claude-policy.md)).
+- **Not covered.** Step chips (PRs, files, sub-agents) are placed by replaying `update_plan` calls, so on a Claude Agent chat the steps carry no chips yet. Loop kinds and verification reports have no Claude Code counterpart.
+
+Verification: `nekko-harness` unit tests (`plan.rs`, and the mapper only handing up a successful main-thread call) and `claude_codes_own_plan_is_the_chats_plan` in nekkod's daemon tests (a fake Claude Code's `TaskCreate`/`TaskUpdate` end up as the saved plan). Not checked against a live Claude Code turn or on screen.
+
+## Claude Agent chats without a plan of their own, and their PRs (implemented 2026-11-01)
+
+- **Intent.** Even when Claude Code writes no plan, the sheet should say what it was asked to do and where the work landed (its PRs).
+- `[superseded 2026-11-01, see below]` **Turn plan.** A Claude Agent chat with no `agentPlan` showed one step per request it sent Claude Code ("Ask Claude Code: <first line>"), the last 8, with the newest active while Claude Code works and the rest done (`claudeAgentPlan.ts`, built in the renderer, never saved). Claude Code's own plan replaces it as soon as it writes one. Other chats are unchanged: no plan, no sheet. With the sheet showing, the PR card leaves CI to it, as it does for any plan.
+- **Chips.** A PR, file or task link lands on the turn it came from. On Claude Code's own plan, the step it had in progress (`TodoWrite`'s `in_progress` item, or a `TaskUpdate` to `in_progress`, matched by title) is the step being worked.
+- **PRs Claude Code opens.** `collectSessionPrUrls` now accepts Claude Code's `Bash` tool as well as Nekko's `bash`, and sets a heredoc body aside before its checks, since Claude Code passes `--body` as `"$(cat <<'EOF' ... EOF)"`. A batch around it (`&&`, `;`, `|`) is still refused. This also fixes the PR card and the "1 pull request" row on Claude Agent chats, which never saw those PRs before.
+
+Verification: `claudeAgentPlan.test.ts`, `planStepLinks.test.ts` (turn steps, `TodoWrite`, `TaskCreate`/`TaskUpdate`), `packages/shared/src/pr.test.ts` (Claude Code's heredoc create, chained commands refused). Hidden, off-screen Electron captures (`claude-agent-plan-sandbox.cjs`) check that the sheet shows on a Claude Agent chat, the running turn is the folded line, and the PR chip sits on the turn that opened it. Not checked against a live Claude Code turn.
+
+## Claude Code's plan rebuilt, and an activity plan instead of the turn plan (implemented 2026-11-01)
+
+Issue: [#1468](https://github.com/nekko-labs/nekko-agent/issues/1468).
+
+- **Intent.** Philip saw no plan on a Claude plan chat, and the fallback plan only restated each prompt as a row ("Ask Claude Code: nekko agent", since his prompts start with that line). In that chat Claude Code made 107 tool calls and never called `TodoWrite` or `TaskCreate` (in Claude Code 2.1 the task tools are deferred, so a headless turn often skips planning), and chats from before nekkod kept Claude Code's plan (#1401) never got one saved.
+- **Claude Code's plan, rebuilt.** A Claude Agent chat with no `agentPlan` rebuilds Claude Code's own plan from the transcript's successful `TodoWrite`, `TaskCreate` and `TaskUpdate` calls, with the same ids, titles, statuses and notes nekkod keeps (`claudeCodeOwnPlan`).
+- `[superseded 2026-11-04, see below]` **Activity plan.** Without any plan calls, the sheet shows the work loop of the latest request, read from Claude Code's tool calls (`claudeCodeActivityPlan`): **Send the request to Claude Code** (its first line as the note), then **Explore** "Look through the code" (`Read`, `Grep`, `Glob`, web reads, and `Bash` that is none of the below), **Build** "Make the changes" (`Edit`, `Write`, `git add/commit`), **Verify** "Check the work" (`Bash` tests, builds, lints, type checks, `gh pr checks`) and **Ship** "Open a pull request" (`gh pr create/merge`, `git push`). A phase is active while Claude Code's latest call is in it, done once it has calls, and pending ahead of it while Claude Code works. A finished turn keeps only the phases it touched. A request Claude Code only answered shows no plan. Notes count the calls ("82 reads and searches", "12 edits", "9 checks run").
+- `[superseded 2026-11-04]` **Chips.** On the activity plan, a PR, file or task link lands on the phase of the call that produced it, so the PR Claude Code opened sits on Ship.
+- **PRs Claude Code opens, continued.** Besides its heredoc body, `collectSessionPrUrls` now allows the shape Claude Code really runs: one leading `cd <dir> &&` (a plain or quoted path) and a trailing `2>&1` and/or `| tail -N` / `| head -N`, reading the URL from gh's last output line. Anything else chained (`cd a && cd b`, a second `&&` command, `| grep`, `$(...)` in the path) is still refused.
+
+Verification: `claudeAgentPlan.test.ts` (phases by tool and command, the loop while working and after, no plan for an answer, the rebuilt task and todo plans), `planStepLinks.test.ts` (the PR on Ship), `packages/shared/src/pr.test.ts` (leading cd, trailing trim, warnings before the URL, chained commands refused). Run against Philip's real Claude Agent chats: the two that used `TaskCreate`/`TaskUpdate` now show those tasks, and the 2026-11-01 chat shows Send, Explore, Build, Verify and Ship with PR #1466 on Ship. Hidden, off-screen Electron captures (`claude-agent-plan-sandbox.cjs`) check the folded line is the current phase, five steps rather than one per prompt, and the PR chip on Ship. Not checked against a live Claude Code turn.
+
+## One Verify step, and no placeholder plan (implemented 2026-11-04)
+
+Issue: [#1671](https://github.com/nekko-labs/nekko-agent/issues/1671).
+
+- **Intent.** Philip saw several Verify steps in one plan, and a verification chip under steps that were not checks (an Explore or Build step carrying "Verified on macOS"). Checks belong together, under one Verify step. And on a Claude plan chat the sheet showed the activity plan (Send the request, then Explore, Build, Verify and Ship, all pending), which read as a placeholder: with no real plan there should be no sheet.
+- **Why Claude Agent chats had no plan.** Not a capture bug. Of Philip's 14 recent Claude Agent chats that used tools, 11 never called `TodoWrite` or `TaskCreate` (the chat in his screenshot: 60 tool calls, no plan calls). Headless Claude Code 2.1 rarely plans, and Nekko adds no prompt or flag to make it (see [Claude policy](../product/claude-policy.md)). When it does plan, nekkod keeps the plan and the sheet shows it, as before.
+- **No placeholder plan.** A Claude Agent chat whose Claude Code wrote no plan shows no sheet; the activity plan is gone. Its PR still shows on the PR card under the chat, with CI, as on any chat without a plan, and sub-agents keep their floating chip.
+- **One Verify step.** In the sheet (display only; the saved plan is unchanged), every Verify-kind step and every other step's verification report gather under a single Verify step, "Check the work". It sits where the last Verify step was (else before the first Ship step, else last). Its sub-bullets are each Verify step and each report, in plan order, each with its own mark, title, verification chip and detail line. Its status rolls up from the Verify steps (from the reports when the plan has none): working if any is, done when all are, else pending. Its folded-line chip is a failing, blocked or running report first, else the newest. The PRs, files, task links and sub-agents of the folded Verify steps land on it, and CI checks go under it.
+- `[updated 2026-11-06]` Verification chips are gone from the sheet entirely: each sub-bullet's own mark shows its check. See [Sub-agents as a tree and plan checks on their bullets](../agents/subagent-tree-and-plan-check-marks.md).
+- **No verification chips elsewhere.** A step that is not a check no longer shows a verification chip or the report's detail; its report is a sub-bullet of the Verify step.
+- **Unchanged.** A plan with at most one Verify step and no reports on other steps draws as before. Loop kinds, passes, the folded line, step disclosure and chip placement are as described above.
+- **Not yet on the iPhone.** The phone still shows the activity plan and per-step verification chips ([#1672](https://github.com/nekko-labs/nekko-agent/issues/1672)).
+
+Verification: `planVerifyGroup.test.ts` (one Verify step left alone, several folded where the last was, reports moved off their steps, a Verify step made for reports before Ship, chips merged), `PlanSheet.test.tsx` (one Verify kind word, three sub-bullets, no chip on the Build row, CI under the Verify step), `claudeAgentPlan.test.ts` (no plan without plan calls). Hidden, off-screen Electron captures: `plan-sheet-sandbox.cjs` (both reports as sub-bullets of the one Verify step, CI under it) and `claude-agent-plan-sandbox.cjs` (no sheet before Claude Code plans and the PR card still shows; after a `TodoWrite`, its three steps with the PR on the step in progress). Not checked in a packaged build.
+
+## On the iPhone (implemented 2026-11-01)
+
+Issue: [#1474](https://github.com/nekko-labs/nekko-agent/issues/1474). The native iPhone app draws the same sheet behind its message box: the shape, folded line, open plan, loop kinds, passes, sub-agent, verification, PR and task-link chips, and the Claude Agent plans above. See [native iOS app](../phone/native-ios-app.md) for what differs on the phone (squeezed steps open on tap, PR chips show the CI rollup only, no file chips). Unit-tested on Linux (`PlanTests`); not yet run on a simulator or device.
+
+## Exploring folds into Building (2026-11-04)
+
+Implemented: published and saved plan steps with the legacy `explore` kind render as Build, and `update_plan` offers build, verify and ship. This does not restore the inferred Claude Code activity plan removed by #1673: when Claude Code has published no plan, the sheet stays absent. Verification grouping from #1673 is unchanged.
+
+## Running delegates and explicit chip types
+
+`[superseded 2026-11-06]` by live sub-agent cards along the bottom of the sheet, folded or open; see [Sub-agents as a tree and as live cards on the plan](../agents/subagent-tree-and-plan-check-marks.md). Was: the expanded plan keeps a Running row outside step disclosures, listing direct children reported active by live events or saved activeRun metadata. A child remains reachable when its originating step is completed or manually collapsed. The folded plan retains its subagent summary. No placeholder plan is created.
+
+PR, CI, Task, File, Preview and Sub-agent chips use text prefixes so their purpose is visible without a tooltip. Verification chips retain their explicit state and device wording. Opening chips follows existing navigation; this adds no routing, provider, permission or network behavior.
+
+Acceptance: inactive children and children of other parents do not enter the Running row; running children remain visible above collapsed steps; labels identify link types. Focused rendering regressions and isolated Electron evidence cover these behaviors. Live-provider delegation and packaged builds are not verified by fixtures.

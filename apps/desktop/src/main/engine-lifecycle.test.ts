@@ -31,6 +31,58 @@ describe('service lifecycle', () => {
     expect((await engine.endpoint()).url).toBe('http://127.0.0.1:12345');
     const final = engine.stop(); second.emit('exit', 0, null); await final;
   });
+  it('keeps concurrent first-load calls pending until a slow but healthy daemon is ready', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess(options);
+    engine.start();
+    const calls = [engine.endpoint(), engine.endpoint()];
+    const settled = vi.fn();
+    calls.forEach(call => { void call.then(settled, settled); });
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(settled).not.toHaveBeenCalled();
+    expect(first.kill).not.toHaveBeenCalled();
+    first.stdout.write('NEKKOD_READY {"port":4242}\n');
+    expect(await Promise.all(calls)).toEqual([
+      expect.objectContaining({ url: 'http://127.0.0.1:4242' }),
+      expect.objectContaining({ url: 'http://127.0.0.1:4242' }),
+    ]);
+    const final = engine.stop(); first.emit('exit', 0, null); await final;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('allows a queued call to survive bounded termination and one quick startup retry', async () => {
+    vi.useFakeTimers();
+    const first = child(); const next = child();
+    mocked.spawn.mockReturnValueOnce(first).mockReturnValueOnce(next);
+    const engine = new EngineProcess(options);
+    engine.start();
+    const call = engine.endpoint();
+    await vi.advanceTimersByTimeAsync(33_000);
+    expect(first.kill).toHaveBeenLastCalledWith('SIGKILL');
+    first.emit('exit', null, 'SIGKILL');
+    await vi.advanceTimersByTimeAsync(500);
+    next.stdout.write('NEKKOD_READY {"port":4244}\n');
+    expect((await call).url).toBe('http://127.0.0.1:4244');
+    const final = engine.stop(); next.emit('exit', 0, null); await final;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('uses the configured startup deadline rather than a shorter fixed endpoint timeout', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess({ ...options, readyTimeoutMs: 60_000 });
+    engine.start();
+    const settled = vi.fn();
+    const call = engine.endpoint();
+    void call.then(settled, settled);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(settled).not.toHaveBeenCalled();
+    first.stdout.write('NEKKOD_READY {"port":4243}\n');
+    expect((await call).url).toBe('http://127.0.0.1:4243');
+    const final = engine.stop(); first.emit('exit', 0, null); await final;
+  });
+
   it('manual stop cancels an already scheduled crash restart', async () => {
     vi.useFakeTimers();
     const first = child(); mocked.spawn.mockReturnValue(first);
@@ -47,7 +99,7 @@ describe('service lifecycle', () => {
     const engine = new EngineProcess(options);
     engine.start();
     const ready = expect(engine.endpoint()).rejects.toThrow('did not become ready');
-    await vi.advanceTimersByTimeAsync(15000); await ready;
+    await vi.advanceTimersByTimeAsync(38_000); await ready;
     const stopping = engine.stop(); engine.start();
     expect(mocked.spawn).toHaveBeenCalledTimes(1);
     first.emit('exit', 0, null); await stopping;
@@ -150,6 +202,95 @@ describe('a daemon that never comes up', () => {
     expect(next.kill).not.toHaveBeenCalled();
     expect((await engine.endpoint()).url).toBe('http://127.0.0.1:6161');
     const final = engine.stop(); next.emit('exit', 0, null); await final;
+  });
+
+  it('holds the ready timeout while nekkod waits on a Keychain dialog, then starts it over', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess({ ...options, readyTimeoutMs: 1000 });
+    engine.start();
+    let settled = false;
+    const call = engine.endpoint().finally(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(500);
+    first.stdout.write('NEKKOD_WAITING {"on":"keychain"}\n');
+    // Minutes reading the dialog: no kill, and the waiting call is still waiting.
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(first.kill).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+    first.stdout.write('NEKKOD_WAITING {"on":null}\n');
+    // The full timeout again from the answer, not what was left before it.
+    await vi.advanceTimersByTimeAsync(999);
+    expect(first.kill).not.toHaveBeenCalled();
+    first.stdout.write('NEKKOD_READY {"port":7171}\n');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(first.kill).not.toHaveBeenCalled();
+    expect((await call).url).toBe('http://127.0.0.1:7171');
+    expect(mocked.spawn).toHaveBeenCalledTimes(1);
+    const final = engine.stop(); first.emit('exit', 0, null); await final;
+  });
+
+  it('gives startup a full endpoint budget after Keychain consent, even near the old deadline', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess(options);
+    engine.start();
+    const settled = vi.fn();
+    const call = engine.endpoint();
+    void call.then(settled, settled);
+    await vi.advanceTimersByTimeAsync(1000);
+    first.stdout.write('NEKKOD_WAITING {"on":"keychain"}\n');
+    await vi.advanceTimersByTimeAsync(119_000);
+    first.stdout.write('NEKKOD_WAITING {"on":null}\n');
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(settled).not.toHaveBeenCalled();
+    expect(first.kill).not.toHaveBeenCalled();
+    first.stdout.write('NEKKOD_READY {"port":7172}\n');
+    expect((await call).url).toBe('http://127.0.0.1:7172');
+    const final = engine.stop(); first.emit('exit', 0, null); await final;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps new calls paused during consent, but Stop still rejects them immediately', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess(options);
+    engine.start();
+    first.stdout.write('NEKKOD_WAITING {"on":"keychain"}\n');
+    const waiting = expect(engine.endpoint()).rejects.toThrow('stopped');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(first.kill).not.toHaveBeenCalled();
+    const final = engine.stop();
+    await waiting;
+    first.emit('exit', 0, null); await final;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('bounds endpoint waits again if a daemon dies during Keychain consent', async () => {
+    vi.useFakeTimers();
+    const first = child(); const next = child();
+    mocked.spawn.mockReturnValueOnce(first).mockReturnValueOnce(next);
+    const engine = new EngineProcess(options);
+    engine.start();
+    const waiting = expect(engine.endpoint()).rejects.toThrow('did not become ready');
+    first.stdout.write('NEKKOD_WAITING {"on":"keychain"}\n');
+    await vi.advanceTimersByTimeAsync(120_000);
+    first.emit('exit', 1, null);
+    await vi.advanceTimersByTimeAsync(38_000);
+    await waiting;
+    const final = engine.stop(); next.emit('exit', 0, null); await final;
+  });
+
+  it('still kills a daemon wedged after the Keychain answered', async () => {
+    vi.useFakeTimers();
+    const first = child(); mocked.spawn.mockReturnValue(first);
+    const engine = new EngineProcess({ ...options, readyTimeoutMs: 1000 });
+    engine.start();
+    first.stdout.write('NEKKOD_WAITING {"on":"keychain"}\n');
+    await vi.advanceTimersByTimeAsync(10_000);
+    first.stdout.write('NEKKOD_WAITING {"on":null}\n');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(first.kill).toHaveBeenCalledWith('SIGTERM');
+    const final = engine.stop(); first.emit('exit', null, 'SIGTERM'); await final;
   });
 
   it('says another engine holds the data folder instead of restarting into it', async () => {

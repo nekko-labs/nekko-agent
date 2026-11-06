@@ -61,8 +61,7 @@ pub fn parse_porcelain_v2(workspace_id: &str, stdout: &str) -> Value {
         }
         if line.starts_with("# branch.ab ") {
             if let Some(m) = ab.find(line) {
-                let int =
-                    |i: usize| m.group(i).map_or(Value::Null, |r| crate::pr::js_num(js::string_to_number(&line[r])));
+                let int = |i: usize| m.group(i).map_or(Value::Null, |r| js::num(js::string_to_number(&line[r])));
                 s.insert("ahead".into(), int(1));
                 s.insert("behind".into(), int(2));
             }

@@ -20,6 +20,47 @@ export async function deriveKey(secret: string, salt: string): Promise<CryptoKey
   );
 }
 
+/**
+ * The room credential presented to the relay as `key=`: hex of HMAC-SHA256
+ * keyed with the pairing secret over `"nekko-relay-auth:" + room` (decision
+ * 0036). One-way, so the relay can check both ends hold the same pairing
+ * without ever seeing the secret the E2E key derives from.
+ */
+export async function relayAuth(secret: string, room: string): Promise<string> {
+  const enc = new TextEncoder();
+  // PROTOCOL CONSTANT: the label every client and computer derives the relay credential with.
+  const mac = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', mac, enc.encode(`nekko-relay-auth:${room}`)));
+  return Array.from(sig, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** How saved pairings work: 2 is `relayAuth` (decision 0036), 3 pins the host key (decision 0041). Older saved pairings must pair again. */
+export const RELAY_PAIRING_VERSION = 3;
+
+/** A one-use P-256 key for a connection's key exchange. */
+export function ephemeralKeys(): Promise<CryptoKeyPair> {
+  return crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']) as Promise<CryptoKeyPair>;
+}
+
+/** A public key as frames carry it: X9.63 uncompressed, base64. */
+export async function publicKeyText(key: CryptoKey): Promise<string> {
+  return toB64(new Uint8Array(await crypto.subtle.exportKey('raw', key)));
+}
+
+/** The key only this connection's two ends hold: `HKDF-SHA256(ECDH(ours, theirs), zero salt, info)`. */
+export async function sessionKey(ours: CryptoKey, theirs: string, info: string): Promise<CryptoKey> {
+  const peer = await crypto.subtle.importKey('raw', fromB64(theirs), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+  const shared = await crypto.subtle.deriveBits({ name: 'ECDH', public: peer }, ours, 256);
+  const hkdf = await crypto.subtle.importKey('raw', shared, 'HKDF', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(32), info: new TextEncoder().encode(info) },
+    hkdf,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
 /** Encrypt a JSON-serializable value → a base64 string (iv ‖ ciphertext). */
 export async function seal(key: CryptoKey, value: unknown): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -46,7 +87,7 @@ function toB64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-function fromB64(b64: string): Uint8Array {
+function fromB64(b64: string): Uint8Array<ArrayBuffer> {
   const s = atob(b64);
   const out = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);

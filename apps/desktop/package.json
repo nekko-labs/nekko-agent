@@ -1,6 +1,6 @@
 {
   "name": "@nekko-agent/desktop",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "description": "Nekko Agent desktop app.",
   "author": {
@@ -25,8 +25,10 @@
     "test:command-center": "node scripts/command-center-integration.cjs",
     "prestart": "node scripts/ensure-electron.mjs && npm run build:native-browser -- --dev",
     "start": "node scripts/dev-launch.mjs preview",
-    "dist": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder",
-    "release": "npm run build:app --prefix ../cli && electron-vite build && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder --publish always",
+    "presenter": "node scripts/presenter-launch.mjs",
+    "demo": "node scripts/demo/run-demo.mjs",
+    "dist": "npm run build:app --prefix ../cli && electron-vite build && node ../../scripts/third-party.mjs notices && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder",
+    "release": "npm run build:app --prefix ../cli && electron-vite build && node ../../scripts/third-party.mjs notices && node scripts/stage-daemon.mjs && npm run build:native-browser && electron-builder --publish always",
     "build:native-browser": "node ../../scripts/build-agent-browser.mjs",
     "test:browser": "node ../../scripts/build-agent-browser.mjs --dev && node --test ../../scripts/agent-browser-native.test.mjs && node scripts/browser-automation-smoke.mjs"
   },
@@ -41,6 +43,7 @@
     "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "ghostty-web": "^0.4.0",
+    "highlight.js": "^11.12.0",
     "mermaid": "^12.1.0",
     "playwright-core": "1.63.0",
     "qrcode": "^1.5.4",

@@ -62,6 +62,17 @@ describe('tinted dark presets', () => {
   });
 });
 
+describe('faint ink', () => {
+  // --ink-faint carries timestamps, hints, counts and labels on every screen,
+  // much of it at 11 to 12px, so it is held to the same AA bar as body text.
+  it.each(Object.entries(THEMES))('%s: --ink-faint is readable on paper and every surface', (name, vars) => {
+    for (const bg of ['--paper', '--win', '--surface', '--surface-2']) {
+      const ratio = contrastRatio(parseColor(vars['--ink-faint']), parseColor(vars[bg]));
+      expect(ratio, `${name}: ink-faint on ${bg} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA);
+    }
+  });
+});
+
 describe('contrast helper', () => {
   it('matches the WCAG reference points', () => {
     expect(contrastRatio(parseColor('#000'), parseColor('#fff'))).toBeCloseTo(21, 5);
@@ -85,7 +96,7 @@ const toHex = (c: { r: number; g: number; b: number }) => '#' + [c.r, c.g, c.b].
 
 /** Each theme with the accent its preset applies (store.applyTheme). */
 const ACCENTS: Record<string, string> = {
-  light: '#6d5efc', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#8b7dff',
+  light: '#5a2352', 'light/solar': '#b45309', 'light/lilac': '#5b4ea7', 'light/lavender': '#3b2f86', dark: '#c084b5',
   'dark/nebula': '#9d8ce6', 'dark/terminal': '#3fb96a', 'dark/nord': '#88c0d0', 'dark/nekko-dark': '#c4b9ff',
   ...Object.fromEntries(EXPERIMENTAL.map((p) => [`${p.mode}/${p.id}`, p.accent])),
 };

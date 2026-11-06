@@ -6,12 +6,13 @@ const presence = readFileSync('src/renderer/usePanelPresence.ts', 'utf8');
 const agents = readFileSync('src/renderer/views/CommandCenterView.tsx', 'utf8');
 
 describe('panel presence transition contract', () => {
-  it('removes only the Focused pane frame and title strip, not terminal content', () => {
+  it('removes only the Focused pane frame, and the title strip only on a clean start', () => {
     const css = readFileSync('src/renderer/styles.css', 'utf8');
     expect(css).toContain(".command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel {");
     expect(css).toContain('--panel-ring-width: 0px !important');
     expect(css).toContain(".command-wall-layout[data-wall-layout='focus'] .command-wall-window > .panel::after { display: none; }");
-    expect(css).toContain(".command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }");
+    expect(css).toContain(".command-wall-layout[data-wall-layout='focus'] .panel:has([data-clean-start]) > [data-pane-title-strip] { display: none; }");
+    expect(css).not.toContain(".command-wall-layout[data-wall-layout='focus'] [data-pane-title-strip] { display: none; }");
     expect(readFileSync('src/renderer/components/PaneFrame.tsx', 'utf8')).toContain('data-pane-title-strip');
   });
   it('shares presence independently of dock component mocks', () => {

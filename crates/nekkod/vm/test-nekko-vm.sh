@@ -1,8 +1,8 @@
 #!/bin/bash
 # CLI checks for nekko-vm (crates/nekkod/vm/nekko-vm.swift). Builds the helper
-# into a temp dir, ad-hoc signs it with its entitlement, runs clone, run and
-# count-vms against small fake bundle files, and reads the first line of egress
-# and host.
+# into a temp dir, ad-hoc signs it with its entitlement, runs clone, run, install
+# and count-vms against small fake files, asks restore-image, and reads the first
+# line of egress and host.
 # Never boots a VM.
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
@@ -49,6 +49,18 @@ check "clone has a new locally administered MAC ($mac)" \
 check "clone keeps the other config keys" "[ \"\$(plutil -extract hardwareModel raw '$tmp/c1/config.json')\" = AAAA ]"
 check "clone never touches the source" "[ \"\$(cat '$src'/* | shasum)\" = '$src_sum' ]"
 
+# A Linux bundle (decision 0053): clone takes its kernel and initrd too; run refuses one without them
+lsrc="$tmp/lsrc"
+mkdir -p "$lsrc"
+printf '{"version":1,"os":"linux","arch":"arm64","macAddress":"aa:bb:cc:dd:ee:01"}' >"$lsrc/config.json"
+for f in disk.img vmlinux initrd; do head -c 4096 /dev/urandom >"$lsrc/$f"; done
+out=$("$helper" clone --from "$lsrc" --to "$tmp/l1"); code=$?
+check "clone copies a Linux bundle's kernel and initrd" \
+  "[ $code -eq 0 ] && cmp -s '$lsrc/vmlinux' '$tmp/l1/vmlinux' && cmp -s '$lsrc/initrd' '$tmp/l1/initrd' && [ ! -e '$tmp/l1/nvram.bin' ]"
+rm "$tmp/l1/vmlinux"
+out=$("$helper" run --bundle "$tmp/l1" --cpus 2 --memory-mb 4096 --net-fd 3 3</dev/null); code=$?
+check "run refuses a Linux bundle with no kernel" "[ $code -eq 1 ] && [[ '$out' == *'no vmlinux'* ]]"
+
 # run with a missing bundle reports an error and exits 1
 out=$("$helper" run --bundle "$tmp/nope" --cpus 2 --memory-mb 4096 --net-fd 3 3</dev/null); code=$?
 check "run with a missing bundle stops with an error" "[ $code -eq 1 ] && [[ '$out' == '{\"event\":\"stopped\",\"reason\":\"error\",\"detail\":'* ]]"
@@ -56,6 +68,30 @@ check "run with a missing bundle stops with an error" "[ $code -eq 1 ] && [[ '$o
 # run with an unusable hardware model reports an error instead of booting
 out=$("$helper" run --bundle "$tmp/c1" --cpus 2 --memory-mb 4096 --net-fd 3 3</dev/null); code=$?
 check "run with a fake bundle stops with an error" "[ $code -eq 1 ] && [[ '$out' == *'\"event\":\"stopped\"'* && '$out' == *'\"reason\":\"error\"'* ]]"
+
+# first boot: the password file never outlives the call, whatever happens next
+printf secret >"$tmp/pw"
+out=$("$helper" run --bundle "$tmp/c1" --cpus 2 --memory-mb 4096 --net-fd 3 --first-boot-user nekko-build --first-boot-password-file "$tmp/pw" 3</dev/null); code=$?
+check "first boot on a fake bundle stops with an error" "[ $code -eq 1 ] && [[ '$out' == *'\"reason\":\"error\"'* ]]"
+check "first boot deletes the password file" "[ ! -e '$tmp/pw' ]"
+out=$("$helper" run --bundle "$tmp/c1" --cpus 2 --memory-mb 4096 --net-fd 3 --first-boot-user nekko-build --first-boot-password-file "$tmp/nope" 3</dev/null); code=$?
+check "first boot without a password file fails" "[ $code -eq 1 ] && [[ '$out' == *'\"reason\":\"error\"'* ]]"
+
+# install refuses bad input and leaves no bundle
+out=$("$helper" install --ipsw "$tmp/nope"); code=$?
+check "install needs its flags" "[ $code -eq 1 ] && [[ '$out' == '{\"ok\":false,\"error\":\"install needs'* ]]"
+head -c 4096 /dev/urandom >"$tmp/not.ipsw"
+out=$("$helper" install --ipsw "$tmp/not.ipsw" --bundle "$tmp/fresh" --disk-gb 1); code=$?
+check "install refuses a file that is no restore image" "[ $code -eq 1 ] && [[ '$out' == '{\"ok\":false,\"error\":'* ]] && [ ! -e '$tmp/fresh' ]"
+
+# capabilities says what this SDK built in
+out=$("$helper" capabilities); code=$?
+check "capabilities reports first boot ($out)" "[ $code -eq 0 ] && [ '$out' = '{\"firstBoot\":true}' ]"
+
+# restore-image asks Apple's catalog, so offline it must still answer in JSON
+out=$("$helper" restore-image); code=$?
+check "restore-image answers in JSON ($out)" \
+  "python3 -c 'import json, sys; d = json.loads(sys.argv[1]); assert isinstance(d[\"ok\"], bool); assert \"usage\" not in d.get(\"error\", \"\"); assert not d[\"ok\"] or (d[\"url\"].startswith(\"https://\") and d[\"build\"] and d[\"version\"])' '$out' 2>/dev/null"
 
 # count-vms prints a JSON count
 out=$("$helper" count-vms); code=$?

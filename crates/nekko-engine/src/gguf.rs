@@ -140,8 +140,12 @@ pub fn read_metadata(path: &str) -> Option<GgufMetadata> {
     }
 }
 
+/// The buffer is sized once and reserved fallibly: on a machine out of
+/// memory the header goes unread rather than the daemon aborting.
 fn read_up_to(file: &mut std::fs::File, n: usize) -> Option<Vec<u8>> {
-    let mut buf = Vec::with_capacity(n.min(1 << 20));
+    let len = file.metadata().map_or(n as u64, |m| m.len());
+    let mut buf = Vec::new();
+    buf.try_reserve_exact(n.min(len as usize)).ok()?;
     file.take(n as u64).read_to_end(&mut buf).ok()?;
     Some(buf)
 }

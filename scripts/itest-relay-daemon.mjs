@@ -1,7 +1,9 @@
 // The phone path with the relay agent in the engine daemon (crates/nekko-remote):
 // a device on a local apps/relay-server reaches the Local Web UI, which runs behind
-// nekkod, whose agent dials the relay. Checks transport auth, the sealed HELLO
-// answering the agent's challenge (phone protocol 4, with a legacy phone too),
+// nekkod, whose agent dials the relay. Checks transport auth, the agent's challenge
+// signed with the pinned host key, the HELLO sealed under the connection's own
+// key and signed with the device key (phone protocol 6, decision 0041; older
+// phones are told to update),
 // replayed HELLOs and requests, one-time pairing, requests to the daemon and
 // through it to the TS host, host events fanned out to the phone, the phone
 // channel allowlist, and live revocation.
@@ -11,12 +13,15 @@
 //
 // Usage: node scripts/itest-relay-daemon.mjs [path/to/nekkod]
 // Needs `npm run build:web`, `npm run build -w @nekko-agent/relay-server` and a cargo build of nekkod.
+import { randomPort } from './itest-ports.mjs';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { deriveKey, seal, open } from '@nekko-agent/shared';
+import {
+  REMOTE_PROTOCOL_VERSION, challengeIsGenuine, deriveKey, ephemeralKeys, helloProof, open, publicKeyText, relayAuth, seal, sessionInfo, sessionKey,
+} from '@nekko-agent/shared';
 import { killTree, treeOptions } from './itest-procs.mjs';
 
 const exe = process.platform === 'win32' ? 'nekkod.exe' : 'nekkod';
@@ -27,8 +32,8 @@ const nekkod =
   );
 if (!nekkod) throw new Error('build nekkod first (cargo build -p nekkod) or pass its path');
 
-const RELAY_PORT = 4400 + Math.floor(Math.random() * 500);
-const SERVER_PORT = 5400 + Math.floor(Math.random() * 500);
+const RELAY_PORT = randomPort(4400, 500);
+const SERVER_PORT = randomPort(5400, 500);
 const RELAY_URL = `ws://127.0.0.1:${RELAY_PORT}`;
 const TOKEN = randomBytes(24).toString('hex');
 const root = mkdtempSync(join(tmpdir(), 'nekko-relay-daemon-'));
@@ -96,9 +101,12 @@ try {
 
   const status = await api('remote:enable', RELAY_URL);
   check('remote access enabled through the daemon', status?.enabled === true);
-  const { room, key } = await api('remote:pairing');
+  const { room, key, hostKey } = await api('remote:pairing');
   const grant = await api('remote:pair');
-  const e2eKey = await deriveKey(key, room);
+  // The room key carries only the challenge; a device takes nothing else under it (decision 0041).
+  const roomKey = await deriveKey(key, room);
+  // The relay checks a credential derived from the secret, never the secret (decision 0036).
+  const auth = await relayAuth(key, room);
   let online = false;
   for (let i = 0; i < 40 && !online; i++) {
     online = (await api('remote:status'))?.online === true;
@@ -106,8 +114,15 @@ try {
   }
   check('the daemon agent is online at the relay', online);
 
+  // Each test device's key, kept across its connections as a phone keeps it.
+  const deviceKeys = new Map();
+  const deviceKey = async (id) => {
+    if (!deviceKeys.has(id)) deviceKeys.set(id, await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']));
+    return deviceKeys.get(id);
+  };
+
   async function device({ deviceId, name, pair, legacy = false }) {
-    const ws = new WebSocket(`${RELAY_URL}/relay?role=client&room=${room}&key=${key}`);
+    const ws = new WebSocket(`${RELAY_URL}/relay?role=client&room=${room}&key=${auth}`);
     const pending = new Map();
     const events = [];
     const sent = [];
@@ -115,9 +130,12 @@ try {
     let seq = 0;
     let hello = null;
     let onHello = null;
-    // The agent's challenges, newest last (phone protocol 4).
+    // The agent's challenges, newest last (phone protocol 4), and the key each offers.
     const challenges = [];
+    const hostEphs = new Map();
     let onChallenge = null;
+    // The key this connection's exchange derived, from the HELLO on.
+    let session = null;
     const closed = new Promise((res) => ws.addEventListener('close', (ev) => res(ev.code)));
     ws.onmessage = async (ev) => {
       let env;
@@ -127,8 +145,14 @@ try {
         return;
       }
       if (!env.enc) return;
-      const f = await open(e2eKey, env.enc);
+      let f = session && (await open(session, env.enc).catch(() => null));
+      if (!f) {
+        f = await open(roomKey, env.enc).catch(() => null);
+        if (f?.type !== 'challenge' && !(legacy && f?.type === 'denied')) return;
+      }
       if (f.type === 'challenge') {
+        if (!(await challengeIsGenuine(hostKey, room, f))) return;
+        hostEphs.set(f.challenge, f.eph);
         challenges.push(f.challenge);
         onChallenge?.(f.challenge);
       } else if (f.type === 'welcome' || f.type === 'denied') {
@@ -146,8 +170,8 @@ try {
       ws.onopen = res;
       ws.onerror = () => rej(new Error('client ws failed'));
     });
-    const sendSealed = async (frame) => {
-      const text = JSON.stringify({ enc: await seal(e2eKey, frame) });
+    const sendSealed = async (frame, envelope = {}) => {
+      const text = JSON.stringify({ ...envelope, enc: await seal(session ?? roomKey, frame) });
       sent.push(text);
       ws.send(text);
     };
@@ -170,15 +194,22 @@ try {
       new Promise(async (res) => {
         hello = null;
         onHello = res;
-        const challenge = legacy ? undefined : (answer ?? (await nextChallenge(0)));
-        await sendSealed({
-          type: 'hello', deviceId, name, platform: 'android',
-          ...(legacy ? {} : { protocol: 4, challenge }), ...(pair ? { pair } : {}),
-        });
+        const frame = { type: 'hello', deviceId, name, platform: 'android', ...(pair ? { pair } : {}) };
+        if (legacy) {
+          await sendSealed(frame);
+        } else {
+          const challenge = answer ?? (await nextChallenge(0));
+          const hostEph = hostEphs.get(challenge);
+          const ours = await ephemeralKeys();
+          const eph = await publicKeyText(ours.publicKey);
+          session = await sessionKey(ours.privateKey, hostEph, sessionInfo(room, challenge, hostEph, eph));
+          const proof = await helloProof(await deviceKey(deviceId), deviceId, room, challenge, hostEph, eph);
+          await sendSealed({ ...frame, protocol: REMOTE_PROTOCOL_VERSION, challenge, ...proof }, { eph });
+        }
         if (hello === null) seq = 0;
         setTimeout(() => res(hello ?? { type: 'timeout' }), 8000);
       }).then((h) => (h.type === 'welcome' && !legacy ? Object.assign(h, { challenge: challenges[challenges.length - 1] }) : h));
-    return { ws, call, doHello, closed, events, challenges, nextChallenge, sent, raw: (text) => ws.send(text) };
+    return { ws, call, doHello, closed, events, challenges, nextChallenge, sent, raw: (text) => ws.send(text), reply: () => hello };
   }
 
   const wrongKey = await new Promise((resolve) => {
@@ -189,9 +220,12 @@ try {
   check('wrong-key client rejected at the relay', wrongKey);
 
   const sneaky = await device({ deviceId: 'sneaky-1', name: 'No hello' });
+  // Refused in silence since protocol 6: only a challenge or a refusal to update
+  // goes out under the room key, the one key a connection has before its HELLO.
+  // The HELLO answered below is what shows this request reached a live agent.
   check(
     'a request before HELLO is refused',
-    await sneaky.call('settings:get').then(() => false, (e) => /not paired/.test(e.message)),
+    (await sneaky.call('settings:get').then(() => false, (e) => e.message === 'timeout: settings:get')) && sneaky.challenges.length === 1,
   );
   const stranger = await sneaky.doHello();
   check('an unknown device is denied', stranger.type === 'denied' && stranger.reason === 'unknown-device');
@@ -216,8 +250,10 @@ try {
   for (let i = 0; i < 40 && !phone.events.some((e) => e.channel === 'tasks:updated'); i++) await sleep(100);
   check('host events reach the phone (tasks:updated)', phone.events.some((e) => e.channel === 'tasks:updated'));
 
-  // Relay replay protection: a request sent again byte for byte is dropped
-  // and the connection challenged anew; the recorded HELLO on a new connection is never welcomed.
+  // Relay replay protection: a request sent again byte for byte is dropped and
+  // the connection challenged anew. A recorded HELLO on a new connection is sealed
+  // for another exchange, so the agent can't open it and that connection's own
+  // challenge stands: the honest HELLO after it shows the agent saw it and moved on.
   const lastReq = phone.sent[phone.sent.length - 1];
   const before = phone.challenges.length;
   phone.raw(lastReq);
@@ -227,12 +263,17 @@ try {
   await eve.nextChallenge(0);
   eve.raw(recordedHello);
   await sleep(1500);
-  check('a recorded HELLO is not welcomed on another connection', eve.challenges.length === 2);
+  check('a recorded HELLO is not welcomed on another connection', eve.reply() === null && eve.challenges.length === 1);
+  const honest = await eve.doHello();
+  check('and the challenge it could not answer still stands', honest.type === 'denied' && honest.reason === 'unknown-device');
   const old = await device({ deviceId: 'phone-1', name: 'Pixel', legacy: true });
-  check('a legacy phone is still welcomed by default', (await old.doHello()).type === 'welcome');
-  const marked = JSON.parse(readFileSync(join(dataDir, 'remote.json'), 'utf8'));
-  check('and marked as legacy', marked.devices?.[0]?.legacyProtocol === true);
-  check('its requests need no counter', Array.isArray(await old.call('sessions:summaries')));
+  const oldReply = await old.doHello();
+  check('a phone app from before device keys is told to update', oldReply.type === 'denied' && oldReply.reason === 'update-required');
+  // The pairing secret alone is not enough: a HELLO signed with another key is refused.
+  deviceKeys.set('phone-1', await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']));
+  const imposter = await device({ deviceId: 'phone-1', name: 'Pixel' });
+  const ir = await imposter.doHello();
+  check('a HELLO not signed with the enrolled device key is refused', ir.type === 'denied' && ir.reason === 'bad-key');
 
   const replay = await device({ deviceId: 'replay-1', name: 'Replayer', pair: grant.code });
   const r = await replay.doHello();

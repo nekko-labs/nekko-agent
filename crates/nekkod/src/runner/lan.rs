@@ -1,5 +1,6 @@
 //! Which network the Mac is on, for the trusted-networks gate: the router's
-//! hardware address, read from `route -n get default` and `arp -n <gateway>`.
+//! hardware address, read from the system's network state, or from
+//! `route -n get default` and `arp -n <gateway>` when that has none.
 //! An SSID needs Location access on current macOS; the router's MAC does not,
 //! and it tells two networks with the same name apart.
 //!
@@ -24,10 +25,27 @@ pub fn default_gateway(route_get_default: &str) -> Option<Ipv4Addr> {
 pub fn network_id(arp_n: &str, gateway: Ipv4Addr) -> Option<String> {
     let host = format!("({gateway})");
     let line = arp_n.lines().find(|l| l.split_whitespace().nth(1) == Some(host.as_str()))?;
-    let mac = line.split_whitespace().skip_while(|w| *w != "at").nth(1)?;
+    gw_id(line.split_whitespace().skip_while(|w| *w != "at").nth(1)?)
+}
+
+fn gw_id(mac: &str) -> Option<String> {
     let octets: Vec<u8> = mac.split(':').map(|o| u8::from_str_radix(o, 16)).collect::<Result<_, _>>().ok()?;
     (octets.len() == 6)
         .then(|| format!("gw:{}", octets.iter().map(|o| format!("{o:02x}")).collect::<Vec<_>>().join(":")))
+}
+
+/// A `key : value` line of `scutil`'s `show` output.
+pub fn scutil_field<'a>(show: &'a str, key: &str) -> Option<&'a str> {
+    show.lines().find_map(|l| Some(l.trim().strip_prefix(key)?.trim_start().strip_prefix(':')?.trim()))
+}
+
+/// The same `gw:` id from a network service's `show State:/Network/Service/<id>/IPv4`:
+/// macOS records the router it resolved there, so this works without Local Network
+/// permission, which hides the whole ARP table from `arp`. `None` when that address
+/// belongs to some other router than the service's current one.
+pub fn service_network_id(ipv4: &str) -> Option<String> {
+    let resolved = scutil_field(ipv4, "ARPResolvedIPAddress")?;
+    (resolved == scutil_field(ipv4, "Router")?).then(|| gw_id(scutil_field(ipv4, "ARPResolvedHardwareAddress")?))?
 }
 
 /// Where DNS goes when the physical interface has no usable resolver.

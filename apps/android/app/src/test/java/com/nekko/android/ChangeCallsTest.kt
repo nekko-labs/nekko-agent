@@ -24,7 +24,7 @@ class ChangeCallsTest {
         const val GIT_PUSH = "git:push"
     }
 
-    private val config = RelayConfig("wss://relay.example.dev", "room", "key", ByteArray(32), "phone-1", "Pixel Test")
+    private val config = RelayConfig("wss://relay.example.dev", "room", "key", ByteArray(32), TEST_HOST_KEY, "phone-1", "Pixel Test")
 
     private fun refused(code: String, channel: String): Nothing =
         throw RelayException("Not allowed from a paired phone ($code): $channel")

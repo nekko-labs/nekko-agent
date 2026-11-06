@@ -16,7 +16,8 @@
     <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>LSRequiresIPhoneOS</key><true/>
-    <key>UILaunchStoryboardName</key><string>LaunchScreen</string>
+    <!-- Renamed (LaunchScreen, Launch) with each colour change: iOS keeps showing a cached launch screen. -->
+    <key>UILaunchStoryboardName</key><string>LaunchPlum</string>
     <key>UIApplicationSceneManifest</key>
     <dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
     <key>UISupportedInterfaceOrientations</key>

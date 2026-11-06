@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({ view: 'models', setView: vi.fn() }));
+const state = vi.hoisted(() => ({ view: 'models' }));
 vi.mock('../store.js', () => ({ useStore: (select: (s: typeof state) => unknown) => select(state) }));
 vi.mock('../chrome.js', () => ({ hasAppChrome: true }));
 vi.mock('./ModelsView.js', () => ({ ModelsView: ({ localOnly }: { localOnly?: boolean }) => <div data-providers={localOnly ? 'local' : 'cloud'} /> }));
@@ -11,22 +11,23 @@ vi.mock('./ModelServerView.js', () => ({ ModelServerView: ({ embedded }: { embed
 import { guideFirstModel, ModelsWorkspace } from './ModelsWorkspace.js';
 
 describe('Models workspace', () => {
-  it('opens the cloud section for the existing models destination', () => {
-    state.view = 'models';
-    const html = renderToStaticMarkup(<ModelsWorkspace />);
-    expect(html).toContain('aria-label="Models"');
-    expect(html).toContain('aria-current="page">');
-    expect(html).toContain('data-providers="cloud"');
-    expect(html).not.toContain('data-server');
+  it('shows the local and cloud sections together from either destination', () => {
+    for (const view of ['models', 'modelserver']) {
+      state.view = view;
+      const html = renderToStaticMarkup(<ModelsWorkspace />);
+      expect(html).not.toContain('<nav');
+      expect(html).toContain('id="models-local-title"');
+      expect(html).toContain('id="models-cloud-title"');
+      expect(html).toContain('data-providers="cloud"');
+      expect(html.indexOf('models-local-title')).toBeLessThan(html.indexOf('models-cloud-title'));
+    }
   });
   it('waits for the engine before choosing between the guided screen and the full page', () => {
     state.view = 'modelserver';
     const html = renderToStaticMarkup(<ModelsWorkspace />);
-    expect(html).toContain('aria-label="Models"');
     expect(html).not.toContain('data-server');
     expect(html).not.toContain('data-first-run');
-    expect(html).not.toContain('data-providers="cloud"');
-    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(html).toContain('data-providers="cloud"');
   });
   it('guides only someone with no local model and no local server of their own', () => {
     const engine = { enabled: true, kind: 'llamacpp' } as const;

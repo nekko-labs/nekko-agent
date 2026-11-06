@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { applyPlanUpdate, planEcho, type PlanStep, type PlanUpdateInput } from './training.js';
+import { applyPlanUpdate, type PlanStep, type PlanUpdateInput } from './training.js';
 
 function apply(current: PlanStep[] | undefined, input: PlanUpdateInput) {
   const result = applyPlanUpdate(current, input);
@@ -29,7 +29,6 @@ it('accepts all explicit states and never infers verification from done', () => 
   }
   const result = apply(undefined, { steps: [{ title: 'Build', status: 'done' }] });
   expect(result.plan[0]).not.toHaveProperty('verification');
-  expect(planEcho(result.plan)).toBe('Plan saved (1/1 done):\n1. [done] step_1: Build');
 });
 
 it('ignores invalid metadata and bounds text without truncating evidence links', () => {

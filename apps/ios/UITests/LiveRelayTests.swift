@@ -6,6 +6,7 @@ import XCTest
 /// it. Each step is a screenshot attachment (the PR's visual evidence).
 ///
 /// Opt-in: the CI passes `TEST_RUNNER_NEKKO_ITEST_LINK`; without it this skips.
+@MainActor
 final class LiveRelayTests: XCTestCase {
     /// How long a step the computer drives may take to reach the phone: a
     /// reply from the fake model, an approval or question card, a tool step,
@@ -144,7 +145,8 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(step.waitForExistence(timeout: computerWait), "the write step shows in the chat")
         sleep(2)
         app.buttons["More"].tap()
-        app.buttons["Changes"].tap()
+        // It says how many files changed, and only shows once there are some.
+        app.buttons["1 file changed"].tap()
         let note = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "nekko-itest-note.txt", "new file, 2 added")).firstMatch
         XCTAssertTrue(note.waitForExistence(timeout: computerWait), "the changed file reaches the phone")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Read only")).firstMatch.exists)
@@ -242,9 +244,15 @@ final class LiveRelayTests: XCTestCase {
         settle()
         test.tap()
         let result = app.staticTexts["settings.notify.testResult"]
-        XCTAssertTrue(result.waitForExistence(timeout: 20), "the test reports which path it took")
-        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        // A slow simulator can drop the first-run prompt, and then iOS asks here instead.
+        // Not a fixed wait: the banner checked below is only up for a few seconds.
+        let deadline = Date().addingTimeInterval(20)
+        while !result.exists, Date() < deadline {
+            if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
+        }
+        XCTAssertTrue(result.exists, "the test reports which path it took")
+        XCTAssertTrue(result.label.contains("shown by the app"), result.label)
         let banner = springboard.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Test notification")).firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 10), "the test notification shows over the app")
         let bannerShot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -529,7 +537,7 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-0-search")
         app.buttons["chats.search.cancel"].tap()
         XCTAssertTrue(waitGone(search, 5), "Cancel closes the search")
-        XCTAssertTrue(app.buttons["Simple: everyday controls"].waitForExistence(timeout: 5), "the slim row is back")
+        XCTAssertTrue(app.buttons["chats.view"].waitForExistence(timeout: 5), "the toolbar is back")
 
         // Logs: this phone's, then each computer's.
         XCTAssertTrue(waitForFrame(menu, in: app, 10))
@@ -557,13 +565,11 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-1-simple")
         auditAccessibility(app, "modes-simple")
 
-        // Expert: the minimal monitor in the row under the title, and the context gauge.
-        let expert = app.buttons["Expert: every control"]
-        XCTAssertTrue(expert.waitForExistence(timeout: 5))
-        expert.tap()
+        // Detailed, from the chat's More menu: the context gauge. The hardware stays away here too until a local model runs.
+        chooseMode("Detailed", in: app)
         let panel = app.buttons["chat.monitor"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 15), "Expert shows the minimal monitor")
-        XCTAssertTrue(app.buttons["chat.context"].exists, "Expert shows the context gauge")
+        XCTAssertFalse(panel.waitForExistence(timeout: 5), "Detailed has no monitor without a local model")
+        XCTAssertTrue(app.buttons["chat.context"].exists, "Detailed shows the context gauge")
 
         // The effort dropdown: pick High on the slider, and it says so.
         modelEffort.tap()
@@ -577,6 +583,16 @@ final class LiveRelayTests: XCTestCase {
         // A popover goes with a tap outside it.
         app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
         XCTAssertTrue(modelEffort.waitForExistence(timeout: 5))
+
+        // A local model loads: the minimal monitor joins the row under the title.
+        app.terminate()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "YES", "-uiTestLocalModel"]
+        app.launch()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer again")
+        let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the chat is still in the list")
+        row.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 15), "the monitor shows while a local model runs")
 
         // A reading or two: the panel reads every 3 seconds.
         RunLoop.current.run(until: Date().addingTimeInterval(4))
@@ -626,58 +642,124 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-4-monitor")
         app.buttons["Done"].firstMatch.tap()
 
-        // Back to Simple: the panel goes.
-        let simple = app.buttons["Simple: everyday controls"]
-        XCTAssertTrue(simple.waitForExistence(timeout: 5))
-        simple.tap()
-        XCTAssertTrue(waitGone(panel, 10), "Simple mode hides the monitor")
+        // Back to Simple: the panel stays while the local model runs.
+        chooseMode("Simple", in: app)
+        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the monitor stays in Simple while a local model runs")
     }
 
-    // TOUR-TEMP: paced pill tour for the PR's GIF; not committed.
-    func testPillTour() throws {
-        guard ProcessInfo.processInfo.environment["NEKKO_ITEST_TOUR"] != nil,
-              let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else { throw XCTSkip("tour") }
+    /// The plan sheet (#1474): the agent's `update_plan` shows behind the
+    /// composer folded to the step being worked, and opens to the whole plan.
+    func testPlanSheetBehindTheComposer() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
         let app = XCUIApplication()
-        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "NO", "-uiTestReset", "YES"]
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-uiTestReset", "YES"]
         app.launch()
         allowSystemAlerts()
-        app.buttons["Pair with your computer"].firstMatch.tap()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
         let field = app.input("nekko-agent-pair:?relay=…")
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText(link.absoluteString)
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
-        XCTAssertTrue(waitOnline(app, 30))
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        // The fake model answers "make a plan" with update_plan; the task link lands on the first step.
+        prompt.typeText("Make a plan for https://linear.app/nekko/issue/NEK-412")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait), "the reply after the plan streamed in")
+
+        let folded = app.buttons["chat.planFolded"]
+        XCTAssertTrue(folded.waitForExistence(timeout: busyWait), "the plan shows behind the composer")
+        XCTAssertTrue(app.staticTexts["Draw the plan sheet"].exists, "folded, it shows the step being worked")
+        XCTAssertTrue(app.staticTexts["2 of 4"].exists, "and where it is in the plan")
+        XCTAssertTrue(app.staticTexts["NEK-412"].exists, "the chat's task link, from the first step, says what the work is for")
+        settle()
+        attach(app, "plan-1-folded")
+
+        folded.tap()
+        XCTAssertTrue(app.buttons["chat.planOpen"].waitForExistence(timeout: 10), "tapping it opens the whole plan")
+        XCTAssertTrue(app.staticTexts["Open a pull request"].exists, "every step shows")
+        XCTAssertTrue(app.staticTexts["Tucked behind the composer"].exists, "the step being worked shows its note")
+        // The finished first step has no results for the user (a task link says what the work is for),
+        // so it starts squeezed to its title; a tap opens its note and task link.
+        XCTAssertFalse(app.staticTexts["Found the message box"].exists, "a finished step without results is squeezed")
+        settle()
+        attach(app, "plan-2-open")
+        // Its title, not the row's centre: open, the centre is the task link's chip.
+        let first = app.staticTexts["Read the composer code"].firstMatch
+        first.tap()
+        XCTAssertTrue(app.staticTexts["Found the message box"].waitForExistence(timeout: 5), "tapping a finished step opens it")
+        XCTAssertTrue(app.staticTexts["NEK-412"].exists, "the task link sits on the first step")
+        settle()
+        attach(app, "plan-3-step-open")
+        auditAccessibility(app, "plan-open")
+        first.tap()
+        XCTAssertTrue(waitGone(app.staticTexts["Found the message box"], 5), "a second tap folds it again")
+
+        app.buttons["chat.planOpen"].tap()
+        XCTAssertTrue(folded.waitForExistence(timeout: 10), "the header folds it again")
+    }
+
+    func testFollowUpInASubagent() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-uiTestReset", "YES"]
+        app.launch()
+        allowSystemAlerts()
+        let start = app.buttons["Pair with your computer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
         app.navigationBars.buttons["New chat"].tap()
         let prompt = app.input("What should your computer do?")
         XCTAssertTrue(prompt.waitForExistence(timeout: 5))
         prompt.tap()
         prompt.typeText("Say hello")
         app.buttons["Start"].tap()
-        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30))
-        app.buttons["Expert: every control"].tap()
-        let panel = app.buttons["chat.monitor"]
-        XCTAssertTrue(panel.waitForExistence(timeout: 15))
-        let window = app.windows.firstMatch
-        let tab = app.buttons["chat.pill.tab"]
-        func pause(_ s: Double) { RunLoop.current.run(until: Date().addingTimeInterval(s)) }
-        func at(_ x: Double, _ y: Double) -> XCUICoordinate { window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y)) }
-        func center(_ e: XCUIElement) -> XCUICoordinate { e.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)) }
-        func move(to x: Double, _ y: Double) { center(panel).press(forDuration: 0.6, thenDragTo: at(x, y), withVelocity: XCUIGestureVelocity(500), thenHoldForDuration: 0.25) }
-        func flick(to x: Double, _ y: Double) { center(panel).press(forDuration: 0.01, thenDragTo: at(x, y), withVelocity: .fast, thenHoldForDuration: 0) }
-        pause(4)
-        print("TOUR-MARK start \(Date().timeIntervalSince1970)")
-        pause(1)
-        panel.tap(); pause(2.5)
-        app.buttons["Done"].firstMatch.tap(); pause(1.5)
-        move(to: 0.94, 0.42); pause(1.5)
-        flick(to: 0.995, 0.42); XCTAssertTrue(tab.waitForExistence(timeout: 5)); pause(1.8)
-        tab.tap(); XCTAssertTrue(panel.waitForExistence(timeout: 5)); pause(1.5)
-        move(to: 0.5, 0.14); pause(1.5)
-        flick(to: 0.5, 0.02); XCTAssertTrue(tab.waitForExistence(timeout: 5)); pause(1.8)
-        tab.tap(); XCTAssertTrue(panel.waitForExistence(timeout: 5)); pause(1.5)
-        print("TOUR-MARK end \(Date().timeIntervalSince1970)")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait), "the first reply")
+
+        let inSubagent = app.buttons["composer.inSubagent"]
+        let box = app.input("Message")
+        XCTAssertTrue(box.waitForExistence(timeout: busyWait))
+        XCTAssertFalse(inSubagent.exists, "nothing to place in an empty box")
+        box.tap()
+        box.typeText("/review")
+        XCTAssertFalse(inSubagent.exists, "a slash command is not work to place")
+        box.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 7))
+        box.typeText("Fix the tests")
+        settle()
+        attach(app, "subagent-1-typed")
+        XCTAssertTrue(inSubagent.waitForExistence(timeout: 5), "a typed follow-up can go to a subagent")
+        XCTAssertTrue(app.buttons["composer.doItHere"].exists)
+        XCTAssertTrue(app.staticTexts["Here uses more context"].exists)
+        auditAccessibility(app, "subagent-typed")
+
+        inSubagent.tap()
+        // A plain message, shown as sent, and the box is empty again.
+        let sent = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Do this in a subagent, then report back:")).firstMatch
+        XCTAssertTrue(sent.waitForExistence(timeout: computerWait), "the message says what was asked")
+        XCTAssertTrue(sent.label.hasSuffix("Fix the tests"), sent.label)
+        XCTAssertTrue(waitGone(inSubagent, busyWait))
+        settle()
+        attach(app, "subagent-2-sent")
     }
 
     func testPairFromADeepLink() throws {
@@ -710,10 +792,128 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "deeplink-2-connected")
     }
 
+    /// One list across every place chats run (decision 0050): a paired computer
+    /// and this iPhone's own provider (the fixture, which answers in the simulator).
+    /// A chat on each, both in the list with where they run, Group by → Computer,
+    /// the iPhone's chat itself, and Settings → Models on this iPhone.
+    func testChatsOnTheComputerAndOnThisIPhoneInOneList() throws {
+        guard let raw = ProcessInfo.processInfo.environment["NEKKO_ITEST_LINK"], let link = URL(string: raw) else {
+            throw XCTSkip("set NEKKO_ITEST_LINK (apps/ios/scripts/itest-stack.sh)")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES", "-uiTestReset", "YES",
+                               "-uiTestPhoneProvider", "-AppleLanguages", "(en)"]
+        app.launch()
+        allowSystemAlerts()
+
+        // This iPhone runs chats of its own, so the list shows before any computer is paired.
+        let menu = app.buttons["chats.menu"].firstMatch
+        XCTAssertTrue(menu.waitForExistence(timeout: 10), "the chat list, with no computer paired")
+        attach(app, "fleet-0-phone-only")
+        XCTAssertTrue(waitForFrame(menu, in: app, 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let settings = app.buttons["Settings"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let models = app.buttons["settings.phoneModels"].firstMatch
+        XCTAssertTrue(reveal(models, in: app), "Settings → Models on this iPhone")
+        models.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Fixture Claude")).firstMatch
+            .waitForExistence(timeout: 10), "the fixture provider")
+        attach(app, "fleet-1-phone-models")
+        auditAccessibility(app, "fleet-phone-models")
+        app.buttons["phoneModels.add"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["addPhoneProvider.save"].firstMatch.waitForExistence(timeout: 5), "the Add sheet")
+        attach(app, "fleet-1b-add-provider")
+        auditAccessibility(app, "fleet-add-provider")
+        app.buttons["Cancel"].firstMatch.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // Pair a computer from Settings → Paired computers, as a second place.
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        app.buttons["Computers"].firstMatch.tap()
+        let pair = app.buttons["Pair another computer"].firstMatch
+        XCTAssertTrue(pair.waitForExistence(timeout: 5), "Pair another computer")
+        pair.tap()
+        let field = app.input("nekko-agent-pair:?relay=…")
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(link.absoluteString)
+        app.buttons["Pair"].firstMatch.tap()
+        tapSystemAlertIfShown()
+        XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
+
+        // A chat on the computer.
+        app.navigationBars.buttons["New chat"].tap()
+        let prompt = app.input("What should your computer do?")
+        XCTAssertTrue(prompt.waitForExistence(timeout: 5))
+        prompt.tap()
+        prompt.typeText("Say hello")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: computerWait), "the computer's reply")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // A chat on this iPhone: New chat → Run on → This iPhone.
+        app.navigationBars.buttons["New chat"].tap()
+        let runOn = app.buttons["newChat.computer"].firstMatch
+        XCTAssertTrue(runOn.waitForExistence(timeout: 5), "Run on, with this iPhone as a choice")
+        runOn.tap()
+        let here = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
+        XCTAssertTrue(here.waitForExistence(timeout: 5), "This iPhone in Run on")
+        here.tap()
+        let ask = app.input("Ask anything")
+        XCTAssertTrue(ask.waitForExistence(timeout: 5), "New chat on this iPhone")
+        XCTAssertTrue(app.descendants(matching: .any)["newChat.phoneNote"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Claude Opus 5.5")).firstMatch.waitForExistence(timeout: 10),
+                      "the iPhone's model is chosen")
+        attach(app, "fleet-2-new-chat-on-phone")
+        ask.tap()
+        ask.typeText("Plan a weekend in Kyoto")
+        app.buttons["Start"].tap()
+        XCTAssertTrue(app.staticTexts["Hello from this iPhone."].waitForExistence(timeout: 20), "the reply streamed from the iPhone's provider")
+        XCTAssertTrue(app.descendants(matching: .any)["phoneChat.place"].exists, "the chat says where it runs")
+        attach(app, "fleet-3-phone-chat")
+        auditAccessibility(app, "fleet-phone-chat")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // Both chats in one list, each naming where it runs.
+        let rows = app.descendants(matching: .any).matching(identifier: "chats.row")
+        XCTAssertTrue(rows.element(boundBy: 1).waitForExistence(timeout: 15), "both chats in the list")
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "On This iPhone")).firstMatch.exists,
+                      "the iPhone's chat names its place")
+        attach(app, "fleet-4-one-list")
+        auditAccessibility(app, "fleet-one-list")
+
+        // Group by → Computer: a heading per place.
+        let viewMenu = app.buttons["chats.view"].firstMatch
+        XCTAssertTrue(waitForFrame(viewMenu, in: app, 10))
+        viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let groupBy = app.buttons["Group by"].firstMatch
+        XCTAssertTrue(groupBy.waitForExistence(timeout: 5), "Group by")
+        groupBy.tap()
+        let byComputer = app.buttons["Computer"].firstMatch
+        XCTAssertTrue(byComputer.waitForExistence(timeout: 5), "Group by → Computer")
+        byComputer.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
+            .waitForExistence(timeout: 5), "a heading for this iPhone")
+        attach(app, "fleet-5-by-computer")
+        auditAccessibility(app, "fleet-by-computer")
+
+        // Show chats from → This iPhone: only its chat.
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let onlyHere = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
+        XCTAssertTrue(onlyHere.waitForExistence(timeout: 5), "This iPhone in Show chats from")
+        onlyHere.tap()
+        XCTAssertTrue(waitGone(rows.element(boundBy: 1), 10), "only the iPhone's chat")
+        attach(app, "fleet-6-only-this-iphone")
+    }
+
     private func allowSystemAlerts() {
         addUIInterruptionMonitor(withDescription: "system alerts") { alert in
+            // firstMatch: on some simulators the camera alert lists its Allow button twice.
             for label in ["Allow", "OK", "Allow While Using App"] where alert.buttons[label].exists {
-                alert.buttons[label].tap()
+                alert.buttons[label].firstMatch.tap()
                 return true
             }
             return false
@@ -723,7 +923,7 @@ final class LiveRelayTests: XCTestCase {
     /// Notification permission is asked right after pairing.
     private func tapSystemAlertIfShown() {
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let allow = springboard.buttons["Allow"]
+        let allow = springboard.buttons["Allow"].firstMatch
         if allow.waitForExistence(timeout: 4) { allow.tap() }
     }
 
@@ -742,6 +942,16 @@ final class LiveRelayTests: XCTestCase {
 
     /// A tap while a swipe is still decelerating only stops the scroll; let it finish.
     private func settle() { RunLoop.current.run(until: Date().addingTimeInterval(1.2)) }
+
+    /// Simple or Detailed, from the open chat's More menu (the floating pill's switch until 2026-11-05).
+    private func chooseMode(_ name: String, in app: XCUIApplication) {
+        let more = app.buttons["chat.more"].firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 5), "the chat has its More menu")
+        more.tap()
+        let item = app.buttons[name].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "the More menu offers \(name)")
+        item.tap()
+    }
 
     private func waitValue(_ e: XCUIElement, _ value: String, _ seconds: TimeInterval) -> Bool {
         let p = expectation(for: NSPredicate(format: "value == %@", value), evaluatedWith: e)
@@ -763,7 +973,8 @@ final class LiveRelayTests: XCTestCase {
     /// `GET <NEKKO_ITEST_RELAY_CTL>/stop` or `/start` (apps/ios/scripts/relay-ctl.mjs): kill or restart the relay.
     private func relay(_ ctl: String, _ action: String) {
         let done = expectation(description: "relay \(action)")
-        var status = 0
+        // Written once by the callback, read after the wait below has seen it fulfilled.
+        nonisolated(unsafe) var status = 0
         URLSession.shared.dataTask(with: URL(string: "\(ctl)/\(action)")!) { _, response, _ in
             status = (response as? HTTPURLResponse)?.statusCode ?? 0
             done.fulfill()

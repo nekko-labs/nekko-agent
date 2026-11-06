@@ -117,7 +117,16 @@ public final class Outbox {
     static let file = "outbox"
     static let version: Int64 = 1
 
-    public private(set) var items: [OutboxItem] = []
+    public private(set) var items: [OutboxItem] = [] {
+        didSet {
+            guard !leaving.isEmpty else { return }
+            for (id, wake) in leaving where !items.contains(where: { $0.id == id }) { wake.fire() }
+        }
+    }
+    /// `sendWaiting`'s prompts: each is woken when its prompt leaves `items`.
+    @ObservationIgnored private var leaving: [String: Wake] = [:]
+    /// A `chat:send` being confirmed, per chat: woken by the computer's first event for it.
+    @ObservationIgnored private var firstEvent: [String: Wake] = [:]
     /// The prompt being delivered now: its Edit and Delete wait until it is settled.
     public private(set) var sendingId: String?
     public private(set) var flushing = false
@@ -203,12 +212,19 @@ public final class Outbox {
     public func sendWaiting(chatId: String, text: String, wait: TimeInterval) async throws -> Bool {
         let id = add(chatId: chatId, text: text).id
         awaited[id] = .some(nil)
-        defer { awaited[id] = nil }
+        let wake = Wake()
+        leaving[id] = wake
+        defer {
+            awaited[id] = nil
+            leaving[id] = nil
+        }
         Task { await flush() }
+        // Woken when the prompt leaves the outbox (delivered or refused), not polled.
         let deadline = Date().addingTimeInterval(wait)
         while items.contains(where: { $0.id == id }) {
-            if Date() > deadline { return false }
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            let left = deadline.timeIntervalSinceNow
+            if left <= 0 { return false }
+            await wake.wait(left)
         }
         if let reason = awaited[id] ?? nil { throw RelayError(reason) }
         return true
@@ -284,6 +300,8 @@ public final class Outbox {
     /// The computer's events: an `error` for a chat is the reason a send was turned down.
     public func onEvent(_ e: AgentEvent) {
         if case .error(let sid, let message) = e { lastErrors[sid] = message }
+        // Only the first: a streaming reply sends many, and one re-read is enough.
+        firstEvent.removeValue(forKey: e.sessionId)?.fire()
     }
 
     // MARK: Delivering
@@ -397,7 +415,14 @@ public final class Outbox {
                                    images: item.images, clientMessageId: item.id)
             // `chat:send` answers when the whole turn ends (maybe hours): the
             // prompt counts as delivered once the chat lists its id.
+            // The chat is re-read when the computer's first event for it arrives
+            // (it has started the turn, so it has the prompt), when `chat:send`
+            // answers, or else on a backoff (pollInterval, x2, x4, x8, then x8),
+            // instead of reading the whole chat twice a second.
             let send = SendWatch()
+            let wake = Wake()
+            firstEvent[chatId] = wake
+            defer { firstEvent[chatId] = nil }
             Task { @MainActor in
                 do {
                     _ = try await c.call(Channels.chatSend, [opts], timeout: turnTimeout)
@@ -405,11 +430,13 @@ public final class Outbox {
                 } catch {
                     send.finish(error)
                 }
+                wake.fire()
             }
-            var waited: TimeInterval = 0
+            let started = Date()
+            var step = pollInterval
             while true {
-                try? await Task.sleep(nanoseconds: UInt64(pollInterval * 1e9))
-                waited += pollInterval
+                await wake.wait(step)
+                step = min(step * 2, pollInterval * 8)
                 let finished = send.done
                 do {
                     let s = Session.from(try await c.call(Channels.sessionGet, [.string(chatId)]))
@@ -428,7 +455,7 @@ public final class Outbox {
                     }
                     return Self.outcome(error)
                 }
-                if waited >= confirmTimeout { return .later("No answer from your computer yet.") }
+                if Date().timeIntervalSince(started) >= confirmTimeout { return .later("No answer from your computer yet.") }
             }
         } catch {
             return Self.outcome(error)
@@ -476,5 +503,42 @@ final class SendWatch {
     func finish(_ error: Error?) {
         done = true
         self.error = error
+    }
+}
+
+/// A one-at-a-time wait that something else can end early: `wait(_:)` returns
+/// when `fire()` is called or after the given time, whichever is first. A fire
+/// while nobody waits ends the next wait at once. No polling, no spinning.
+@MainActor
+final class Wake {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var woken = false
+    /// Bumped by every fire, so a stale timer from an earlier wait does nothing.
+    private var generation = 0
+
+    func fire() {
+        generation += 1
+        if let c = continuation {
+            continuation = nil
+            c.resume()
+        } else {
+            woken = true
+        }
+    }
+
+    func wait(_ seconds: TimeInterval) async {
+        if woken {
+            woken = false
+            return
+        }
+        let gen = generation
+        let timer = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1e9))
+            guard !Task.isCancelled, let self, self.generation == gen else { return }
+            self.fire()
+        }
+        await withCheckedContinuation { continuation = $0 }
+        timer.cancel()
+        woken = false
     }
 }

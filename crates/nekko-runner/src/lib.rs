@@ -1,13 +1,15 @@
 //! CI runner logic: pure decisions with no I/O, so every rule is testable on
 //! any machine. `settings` and `slots` size the runner, `gates` decides take,
-//! hold, drain or stop, `awake` decides whether to hold the Mac awake, and
-//! `egress` decides which addresses a guest may connect to.
+//! hold, drain or stop, `awake` decides whether to hold the Mac awake,
+//! `egress` decides which addresses a guest may connect to, and `usage` reads
+//! what a job used and suggests the VM size that fits.
 
 pub mod awake;
 pub mod egress;
 pub mod gates;
 pub mod settings;
 pub mod slots;
+pub mod usage;
 
 pub use awake::hold_awake;
 pub use egress::{HostNets, guest_may_connect, guest_may_reach};
@@ -17,7 +19,8 @@ pub use gates::{
 };
 pub use settings::{KeepAwake, Priority, RunnerConfig, RunnerSettings, Scope};
 pub use slots::{
-    HostFacts, MAX_MACOS_VMS, MAX_RUNNER_MEMORY_SHARE, OWNER_RESERVE_MIN_MB, OWNER_USE_HEADROOM, SlotLimit,
-    cpus_per_vm, macos_slots_available, macos_slots_explained, recommended_runner_memory_mb, runner_memory_mb,
-    usual_memory_mb, vms_wanted, warm_slots,
+    Guest, HostFacts, MAX_LINUX_VMS, MAX_MACOS_VMS, MAX_RUNNER_MEMORY_SHARE, OWNER_RESERVE_MIN_MB, OWNER_USE_HEADROOM,
+    SlotLimit, cpus_per_vm, linux_slots_available, macos_slots_available, macos_slots_explained,
+    recommended_runner_memory_mb, runner_memory_mb, usual_memory_mb, vms_wanted, warm_slots,
 };
+pub use usage::{SizeSuggestion, Usage, blank_stats_disk, parse_stats, suggest_size};

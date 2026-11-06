@@ -44,7 +44,7 @@ export function ServerPowerPill({
   return (
     <button
       type="button"
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition-colors disabled:cursor-default disabled:opacity-60"
+      className="inline-flex shrink-0 items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-default disabled:opacity-60"
       style={
         on
           ? { background: color, borderColor: color, color: '#fff' }

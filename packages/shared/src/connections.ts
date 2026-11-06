@@ -37,8 +37,9 @@ export const CONNECTIONS: ConnectionInfo[] = [
   { id: 'skills-catalog', label: 'Skills catalog', group: 'background', where: 'raw.githubusercontent.com', desc: 'Refreshes the skills marketplace every 6 hours when switched on.' },
   { id: 'cloud-sync', label: 'Nekko Cloud', group: 'background', where: 'nekko-agent-api.fly.dev', desc: 'Your account and end-to-end encrypted sync, every minute while sync is on.' },
   { id: 'phone-relay', label: 'Phone relay', group: 'background', where: 'nekko-agent-relay.fly.dev or your relay', desc: 'Keeps a connection open to the relay while remote access is on, so your phone can reach this computer.' },
+  { id: 'connected-computers', label: 'Connected computers', group: 'background', where: 'The computers you connected', desc: 'Keeps a sealed link to each computer you connected, to show and run its agents.' },
   { id: 'limits', label: 'Plan and limit checks', group: 'background', where: 'chatgpt.com, openrouter.ai', desc: 'Reads your plan’s usage limits about every 30 seconds while a subscription or key is connected.' },
-  { id: 'connectors', label: 'Connectors', group: 'background', where: 'GitHub, Slack, Linear and the others you connect', desc: 'Fetches context for each turn and polls for workflow triggers. Sends text from the turn.' },
+  { id: 'connectors', label: 'Connectors', group: 'background', where: 'GitHub, Slack, Linear and the others you connect', desc: 'Fetches context for each turn and polls for scheduled task triggers. Sends text from the turn.' },
   { id: 'decide', label: 'Decision models', group: 'background', where: 'api.typesafe.ai, github.com', desc: 'Hosted decisions on each turn when a TypeSafe key is set (sends turn text), and decision model downloads.' },
   { id: 'telemetry', label: 'Usage and crash reports', group: 'background', where: 'us.i.posthog.com', desc: 'Only if you turned on Help improve Nekko Agent: anonymous feature use and scrubbed errors, sent once a minute.' },
   { id: 'github', label: 'GitHub pull requests', group: 'background', where: 'api.github.com, your git remotes', desc: 'PR status every 20 seconds while a PR card is open, and git fetches for PR checkouts.' },
@@ -56,7 +57,7 @@ export const CONNECTIONS: ConnectionInfo[] = [
   { id: 'model-server-lan', label: 'Model server on your network', group: 'listener', where: 'Your local network', desc: 'Serves your local models to other devices when Model Server is bound to LAN. Off here keeps it on this computer only.' },
   { id: 'local-relay', label: 'Relay on this computer', group: 'listener', where: 'Your tailnet and local network', desc: 'Lets your phone connect without Nekko Cloud.' },
   { id: 'network-visibility', label: 'Visible on this network', group: 'listener', where: 'Your local network (mDNS)', desc: 'Announces this computer so your phone can find it.' },
-  { id: 'webhook-listener', label: 'Workflow webhooks', group: 'listener', where: 'This computer (127.0.0.1:1441)', desc: 'Experimental: receives webhooks that start workflows.' },
+  { id: 'webhook-listener', label: 'Scheduled task webhooks', group: 'listener', where: 'This computer (127.0.0.1:1441)', desc: 'Experimental: receives webhooks that start scheduled tasks.' },
 ];
 
 /** One row of `connections:status`. */

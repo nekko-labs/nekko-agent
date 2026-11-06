@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCloudScope, scopeSettings } from './relay-agent.js';
+import { armsMintedCode, parseCloudScope, scopeSettings } from './relay-agent.js';
 
 /** A Nekko Cloud machine's scope as the relay-agent mode reads it (decision 0017). */
 describe('cloud scope', () => {
@@ -15,5 +15,12 @@ describe('cloud scope', () => {
     expect(scopeSettings({ privacyShield: true })).toEqual({ privacyMode: 'shield' });
     expect(scopeSettings({})).toEqual({ privacyMode: 'shield' });
     expect(scopeSettings({ privacyShield: false })).toEqual({});
+  });
+});
+
+describe('a machine\'s minted pairing code', () => {
+  it('pairs only a machine that has never paired', () => {
+    expect(armsMintedCode([])).toBe(true);
+    expect(armsMintedCode([{ id: 'phone-1', revoked: true }])).toBe(false);
   });
 });

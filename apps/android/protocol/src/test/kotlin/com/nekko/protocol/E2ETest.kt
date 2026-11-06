@@ -24,6 +24,12 @@ class E2ETest {
         assertEquals(v("keyHex"), E2E.toHex(E2E.deriveKey(v("secret"), v("room"))))
     }
 
+    @Test fun `derives the relay credential the computer and the other clients derive`() {
+        assertEquals(v("relayAuth"), E2E.relayAuth(v("secret"), v("room")))
+        assertNotEquals(v("secret"), E2E.relayAuth(v("secret"), v("room")))
+        assertNotEquals(v("relayAuth"), E2E.relayAuth(v("secret"), "another-room"))
+    }
+
     @Test fun `seals byte-identical to WebCrypto AES-GCM for the same iv`() {
         val key = E2E.fromHex(v("keyHex"))
         assertEquals(v("sealed"), E2E.sealText(key, v("plaintext"), E2E.fromHex(v("ivHex"))))
@@ -53,6 +59,17 @@ class E2ETest {
         bytes[bytes.size - 1] = (bytes[bytes.size - 1].toInt() xor 1).toByte()
         assertThrows(Exception::class.java) { E2E.openText(key, Base64.getEncoder().encodeToString(bytes)) }
         assertThrows(IllegalArgumentException::class.java) { E2E.openText(key, "AAAA") }
+    }
+
+    @Test fun `both ends of an exchange derive one key and nobody else does`() {
+        val (a, b, c) = listOf(Ephemeral(), Ephemeral(), Ephemeral())
+        val ab = a.sessionKey(b.public, "x")!!
+        assertArrayEquals(ab, b.sessionKey(a.public, "x"))
+        assertEquals(E2E.KEY_BYTES, ab.size)
+        assertNotEquals(E2E.toHex(ab), E2E.toHex(a.sessionKey(c.public, "x")!!))
+        assertNotEquals("bound to the transcript", E2E.toHex(ab), E2E.toHex(a.sessionKey(b.public, "y")!!))
+        assertEquals(null, a.sessionKey("not a point", "x"))
+        assertEquals(null, a.sessionKey(Base64.getEncoder().encodeToString(ByteArray(65) { 4 }), "x"))
     }
 
     @Test fun `hex helpers round trip and refuse garbage`() {

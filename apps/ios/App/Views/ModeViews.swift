@@ -4,44 +4,25 @@ import SwiftUI
 
 // MARK: - Simple and Expert
 
-/// Simple or Expert, in the floating pill of a chat and of the chats list: a
-/// chat bubble for Simple and code brackets for Expert.
-/// Simple hides the controls Settings > Simple mode keeps to Expert.
-struct ModeToggle: View {
-    /// Stacked, in the pill docked at a side.
-    var vertical = false
+/// Simple or Detailed, at the top of the chat list's view menu and a chat's More
+/// menu (2026-11-05; before, a switch in the floating pill): a chat bubble for
+/// Simple and code brackets for Detailed. Simple hides the controls
+/// Settings > Simple mode keeps to Detailed.
+struct ModeMenuPicker: View {
     @Environment(Prefs.self) private var prefs
-    @Environment(\.palette) private var palette
-    /// The pill is being dragged: the touch that lifted it doesn't also flip the mode.
-    @Environment(\.pillMoving) private var moving
 
     var body: some View {
-        let layout = vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
-        layout {
-            segment(expert: false)
-            segment(expert: true)
+        @Bindable var prefs = prefs
+        Picker(selection: $prefs.expertMode) {
+            Label("Simple", systemImage: Self.icon(expert: false)).tag(false)
+                .accessibilityIdentifier("mode.simple")
+            Label("Detailed", systemImage: Self.icon(expert: true)).tag(true)
+                .accessibilityIdentifier("mode.detailed")
+        } label: {
+            Text("Mode")
         }
-        .background(palette.surface2, in: Capsule())
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Mode")
-        .accessibilityValue(prefs.expertMode ? String(localized: "Expert") : String(localized: "Simple"))
+        .pickerStyle(.inline)
         .accessibilityIdentifier("chat.mode")
-    }
-
-    private func segment(expert: Bool) -> some View {
-        let on = prefs.expertMode == expert
-        return Button { if !moving { prefs.expertMode = expert } } label: {
-            Image(systemName: Self.icon(expert: expert))
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(on ? palette.onAccent : palette.inkSoft)
-                .frame(width: 34, height: 24)
-                .background(on ? palette.accent : .clear, in: Capsule())
-                .frame(minWidth: 40, minHeight: 32)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(expert ? String(localized: "Expert: every control") : String(localized: "Simple: everyday controls"))
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     static func icon(expert: Bool) -> String {
@@ -148,6 +129,7 @@ struct EffortGauge: View {
     let count: Int
     var size: CGFloat = 24
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let f = level.map { Double($0 + 1) / Double(max(1, count)) }
@@ -162,7 +144,7 @@ struct EffortGauge: View {
             Circle().fill(f == nil ? palette.inkFaint : palette.ink).frame(width: size * 0.16, height: size * 0.16)
         }
         .frame(width: size, height: size)
-        .animation(.snappy, value: level)
+        .animation(reduceMotion ? nil : .snappy, value: level)
         .accessibilityHidden(true)
     }
 }
@@ -175,6 +157,33 @@ func effortLabel(_ e: Effort) -> String {
     case .high: return String(localized: "High")
     case .xhigh: return String(localized: "Extra high")
     case .max: return String(localized: "Max")
+    }
+}
+
+// MARK: - Asks first
+
+/// Simple's view of the tool policy: one plain choice beside the model. Same
+/// values and behaviour as More > Tool policy in Expert.
+struct AsksFirstMenu: View {
+    let chat: ChatModel
+    @Environment(AppModel.self) private var app
+    @Environment(ComputersStore.self) private var store
+    @Environment(\.palette) private var palette
+    @State private var failed: String?
+
+    private var mode: PcSettings.ChatMode {
+        chat.session?.mode.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? app.prefs.newChatTools(computer: store.activeId, settings: store.pcSettings)
+    }
+
+    var body: some View {
+        ToolPolicyPicker(selection: Binding(get: { mode }, set: { m in
+            Task { do { try await chat.setOptions(mode: m) } catch { failed = error.localizedDescription } }
+        }))
+        .disabled(chat.savedAt != nil)
+        .accessibilityIdentifier("chat.asksFirst")
+        .alert("Couldn’t change it", isPresented: Binding(get: { failed != nil }, set: { if !$0 { failed = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(failed ?? "") }
     }
 }
 
@@ -200,6 +209,7 @@ struct ModelEffortButton: View {
         let parts = Self.parts(prefs, chat)
         Button { open = true } label: {
             HStack(spacing: 6) {
+                // The dial stays visible in either mode when effort is enabled.
                 if parts.effort { EffortGauge(level: level, count: levels.count, size: 16) }
                 if parts.model { Text(name).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle) }
                 Image(systemName: "chevron.up.chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
@@ -215,6 +225,50 @@ struct ModelEffortButton: View {
         .accessibilityIdentifier("chat.modelEffort")
         .popover(isPresented: $open, arrowEdge: .bottom) {
             ModelEffortPanel(chat: chat).presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+/// One run setting: a switch, or a choice of its values.
+struct RunOptionRow: View {
+    let option: RunOption
+    let value: JSONValue?
+    var set: (JSONValue) -> Void
+
+    private var title: LocalizedStringKey {
+        switch option.key {
+        case "autoModel": "Choose the model automatically"
+        case "offline": "Offline"
+        case "cloudOnly": "Cloud only"
+        case "incognito": "Incognito"
+        case "gitIsolation": "Separate Git branch"
+        case "workMode": "Work mode"
+        default: "Tool style"
+        }
+    }
+
+    private func label(_ v: String) -> LocalizedStringKey {
+        switch v {
+        case "better-review": "Better review"
+        case "design": "Design"
+        case "best-output": "Best output"
+        case "list": "List"
+        case "code": "Code"
+        default: "Default"
+        }
+    }
+
+    var body: some View {
+        if option.values.isEmpty {
+            Toggle(title, isOn: Binding(get: { value?.bool ?? false }, set: { set(.bool($0)) }))
+                .frame(minHeight: 44)
+                .accessibilityIdentifier("run.\(option.key)")
+        } else {
+            Picker(title, selection: Binding(get: { value?.string ?? option.values[0] }, set: { set(.string($0)) })) {
+                ForEach(option.values, id: \.self) { Text(label($0)).tag($0) }
+            }
+            .frame(minHeight: 44)
+            .accessibilityIdentifier("run.\(option.key)")
         }
     }
 }
@@ -266,6 +320,18 @@ struct ModelEffortPanel: View {
                          ? "Following \(computer)’s effort setting. Higher effort thinks longer and spends more tokens."
                          : "Higher effort thinks longer and spends more tokens.")
                         .font(.caption2).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if prefs.shows("run-settings") {
+                Divider()
+                Text("Run settings").font(.caption2.weight(.semibold)).foregroundStyle(palette.inkFaint)
+                ForEach(RunOption.all) { option in
+                    RunOptionRow(option: option, value: chat.runOptions[option.key]) { value in
+                        error = nil
+                        Task {
+                            do { try await chat.setRunOption(option.key, value) } catch { self.error = error.localizedDescription }
+                        }
+                    }
                 }
             }
             if let error {
@@ -828,7 +894,7 @@ struct AgentPanel: View {
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
             .containerRelativeFrame(.vertical) { h, _ in h * 0.62 }
-            .refreshable { await monitor.refresh() }
+            .pawRefreshable { await monitor.refresh() }
             if let notice {
                 Label(notice.text, systemImage: notice.ok ? "checkmark.circle" : "exclamationmark.triangle")
                     .font(.footnote).foregroundStyle(notice.ok ? palette.ink : palette.danger)

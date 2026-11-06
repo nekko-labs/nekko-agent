@@ -1,10 +1,10 @@
-import { randomBytes } from "node:crypto";
+import { createECDH, randomBytes } from "node:crypto";
 import { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { issueToken } from "./auth.js";
 import type { Db } from "./db.js";
 import { FlyDriver, MemoryDriver } from "./fly.js";
-import { DEFAULT_SCOPE, MACHINE_LIMIT, egressHosts, parseScope } from "./machines.js";
+import { DEFAULT_SCOPE, MACHINE_LIMIT, egressHosts, parseScope, sweepMachineHours } from "./machines.js";
 import { migrate } from "./migrate.js";
 import { buildServer } from "./server.js";
 import { pgliteDb } from "./test-db.js";
@@ -58,11 +58,18 @@ describe("machines", () => {
     expect(body.machine.state).toBe("running");
     expect(body.machine.scope).toEqual({ ...DEFAULT_SCOPE, repos: ["nekko-labs/nekko-agent"] });
     expect(body.machine.egress).toContain("github.com");
-    expect(body.pairingLink).toMatch(/^nekko-agent-pair:\?relay=wss%3A%2F%2Frelay\.test&room=[a-z0-9]{20}&key=[0-9a-f]{32}&pair=[A-Z2-9]{8}$/);
+    expect(body.pairingLink).toMatch(/^nekko-agent-pair:\?relay=wss%3A%2F%2Frelay\.test&room=[a-z0-9]{20}&key=[0-9a-f]{32}&host=[A-Za-z0-9%]+&pair=[A-Z2-9]{8}$/);
     // The machine got the same room, key and code in its environment, and the scope.
     const [, spec] = [...driver.machines.values()].map((m) => [m.state, m.spec] as const)[0];
     expect(spec.env.NEKKO_ROOM).toBe(body.machine.room);
     expect(body.pairingLink).toContain(`key=${spec.env.NEKKO_PAIR_KEY}`);
+    // The link pins the key the machine holds, and the two are one key pair.
+    const pinned = Buffer.from(decodeURIComponent(/host=([^&]+)/.exec(body.pairingLink)![1]), "base64");
+    const secret = Buffer.from(spec.env.NEKKO_HOST_KEY, "base64");
+    expect(secret).toHaveLength(32);
+    const ecdh = createECDH("prime256v1");
+    ecdh.setPrivateKey(secret);
+    expect(ecdh.getPublicKey().equals(pinned)).toBe(true);
     expect(spec.env.NEKKO_PAIR_CODE).toBe(body.pairingCode);
     expect(JSON.parse(spec.env.NEKKO_CLOUD_SCOPE)).toEqual(body.machine.scope);
     expect(spec.env.NEKKO_SANDBOX).toBe("workspace-jail");
@@ -108,6 +115,80 @@ describe("machines", () => {
     expect([...driver.machines.values()][0].state).toBe("gone");
   });
 
+  describe("plan hours per account per month", () => {
+    /** Pretend the machine has been running for `hours`. */
+    const ranFor = (id: string, hours: number) =>
+      db.query(`update cloud_machines set started_at = now() - make_interval(secs => $2::double precision) where id = $1`, [id, hours * 3600]);
+    const month = async (userId: string) =>
+      Number((await db.query<{ s: string }>("select coalesce(sum(seconds), 0)::text as s from machine_usage where user_id = $1", [userId])).rows[0].s) / 3600;
+
+    it("counts a machine that stopped itself, seen on refresh", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 10);
+      await driver.stop([...driver.machines.keys()][0]);
+      expect((await call(a, pro.token, "GET", `/v1/machines/${id}`)).json().machine.state).toBe("stopped");
+      expect(await month(pro.id)).toBeCloseTo(10, 1);
+    });
+
+    it("counts the time before a restart, and refuses a start past the plan's hours", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 30);
+      expect((await call(a, pro.token, "POST", `/v1/machines/${id}/start`)).statusCode).toBe(200);
+      expect(await month(pro.id)).toBeCloseTo(30, 1);
+      await ranFor(id, 15);
+      expect((await call(a, pro.token, "POST", `/v1/machines/${id}/start`)).statusCode).toBe(402);
+      expect(await month(pro.id)).toBeCloseTo(45, 1);
+    });
+
+    it("keeps a deleted machine's hours, so delete and create does not reset them", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 41);
+      expect((await call(a, pro.token, "DELETE", `/v1/machines/${id}`)).statusCode).toBe(204);
+      expect(await month(pro.id)).toBeCloseTo(41, 1);
+      const again = await call(a, pro.token, "POST", "/v1/machines", {});
+      expect(again.statusCode).toBe(402);
+      expect(again.json().error).toBe("hours-used");
+      expect((await call(a, pro.token, "GET", "/v1/machines")).json().hoursUsed).toBeCloseTo(41, 0);
+    });
+
+    it("counts every machine of the account together", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const one = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      const two = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(one, 25);
+      await ranFor(two, 25);
+      expect((await call(a, pro.token, "POST", "/v1/machines", {})).statusCode).toBe(402);
+      await call(a, pro.token, "POST", `/v1/machines/${one}/stop`);
+      expect((await call(a, pro.token, "POST", `/v1/machines/${one}/start`)).statusCode).toBe(402);
+    });
+
+    it("the sweep counts running machines and stops an account's machines past its hours", async () => {
+      const a = app();
+      const pro = await user("pro");
+      const light = await user("pro");
+      const id = (await call(a, pro.token, "POST", "/v1/machines", {})).json().machine.id;
+      const ok = (await call(a, light.token, "POST", "/v1/machines", {})).json().machine.id;
+      await ranFor(id, 50);
+      await ranFor(ok, 2);
+      expect(await sweepMachineHours(db, driver)).toBe(1);
+      expect([...driver.machines.values()].map((m) => m.state)).toEqual(["stopped", "running"]);
+      expect((await call(a, pro.token, "GET", `/v1/machines/${id}`)).json().machine.state).toBe("stopped");
+      expect((await call(a, light.token, "GET", `/v1/machines/${ok}`)).json().machine.state).toBe("running");
+      expect(await month(pro.id)).toBeCloseTo(50, 1);
+      expect(await month(light.id)).toBeCloseTo(2, 1);
+      // A second sweep adds only the seconds since the first.
+      await sweepMachineHours(db, driver);
+      expect(await month(light.id)).toBeCloseTo(2, 1);
+    });
+  });
+
   it("lets the relay admit only a live machine's access token", async () => {
     const a = app();
     const pro = await user("pro");
@@ -129,7 +210,7 @@ describe("the Fly driver", () => {
       calls.push({ url, init });
       if (init.method === "POST" && url.endsWith("/machines")) return new Response(JSON.stringify({ id: "m-1" }), { status: 200 });
       if (init.method === "GET") return new Response(JSON.stringify({ state: "started" }), { status: 200 });
-      if (init.method === "DELETE") return new Response(null, { status: 404 });
+      if (init.method === "DELETE") return new Response(null, { status: url.includes("/m-gone") ? 404 : 500 });
       return new Response("{}", { status: 200 });
     }) as unknown as typeof fetch;
     const fly = new FlyDriver({ token: "fo1_secret", app: "nekko-cloud-machines", api: "https://fly.test", fetch: fetchImpl });
@@ -143,6 +224,8 @@ describe("the Fly driver", () => {
     expect((calls[0].init.headers as Record<string, string>).authorization).toBe("Bearer fo1_secret");
     expect(calls.every((c) => !c.url.includes("fo1_secret"))).toBe(true);
     expect(await fly.state("m-1")).toBe("running");
-    await expect(fly.destroy("m-1")).rejects.toThrow("404");
+    // Already gone counts as destroyed (account deletion relies on it); any other failure surfaces.
+    await expect(fly.destroy("m-gone")).resolves.toBeUndefined();
+    await expect(fly.destroy("m-1")).rejects.toThrow("500");
   });
 });

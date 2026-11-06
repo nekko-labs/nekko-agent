@@ -56,10 +56,11 @@ final class MarkdownTests: XCTestCase {
     }
 }
 
+@MainActor
 final class PaletteTests: XCTestCase {
     func testPicksReadableInkOnTheAccent() {
         XCTAssertGreaterThan(Palette.luminance(0xFFFFFF), 0.99)
-        XCTAssertLessThan(Palette.luminance(0x6D5EFC), 0.45)
+        XCTAssertLessThan(Palette.luminance(0x5A2352), 0.45)
         XCTAssertEqual(Palette.contrast(0xFFFFFF, 0x000000), 21, accuracy: 0.01)
     }
 
@@ -77,21 +78,21 @@ final class PaletteTests: XCTestCase {
             }
             return ch(16) | ch(8) | ch(0)
         }
-        let light = [0xFBFBFD, 0xFFFFFF, 0xF2F2F7, wash(0xFBFBFD, 0x5A4AE8, AppBackdrop.lightWash)]
-        let dark = [0x0C0C11, 0x16161C, 0x20202A, wash(0x0C0C11, 0x8B7DFF, AppBackdrop.darkWash)]
+        let light = [0xFBFBFD, 0xFFFFFF, 0xF2F2F7, wash(0xFBFBFD, 0x5A2352, AppBackdrop.lightWash)]
+        let dark = [0x0C0C11, 0x16161C, 0x20202A, wash(0x0C0C11, 0xC084B5, AppBackdrop.darkWash)]
         for bg in light {
-            for ink in [0x17171D, 0x52525E, 0x5E5E6A, 0x5A4AE8, 0xB42318, 0x875709, 0x1D4ED8, 0x1A7043] {
+            for ink in [0x17171D, 0x52525E, 0x5E5E6A, 0x5A2352, 0xB42318, 0x875709, 0x1D4ED8, 0x1A7043] {
                 XCTAssertGreaterThanOrEqual(Palette.contrast(ink, bg), 4.5, String(format: "%06X on %06X", ink, bg))
             }
         }
         for bg in dark {
-            for ink in [0xECEAF3, 0xA3A1B0, 0x8E8E9B, 0x8B7DFF, 0xEF6A5B, 0xE3A446, 0x60A5FA, 0x4CC38A] {
+            for ink in [0xECEAF3, 0xA3A1B0, 0x8E8E9B, 0xC084B5, 0xEF6A5B, 0xE3A446, 0x60A5FA, 0x4CC38A] {
                 XCTAssertGreaterThanOrEqual(Palette.contrast(ink, bg), 4.5, String(format: "%06X on %06X", ink, bg))
             }
         }
         // Button labels on the default accents.
-        XCTAssertGreaterThanOrEqual(Palette.contrast(0xFFFFFF, 0x5A4AE8), 4.5)
-        XCTAssertGreaterThanOrEqual(Palette.contrast(0x0C0C11, 0x8B7DFF), 4.5)
+        XCTAssertGreaterThanOrEqual(Palette.contrast(0xFFFFFF, 0x5A2352), 4.5)
+        XCTAssertGreaterThanOrEqual(Palette.contrast(0x0C0C11, 0xC084B5), 4.5)
     }
 }
 
@@ -107,7 +108,9 @@ final class ThemePresetTests: XCTestCase {
         // The computer's own accent wins over the preset's.
         XCTAssertEqual(Palette.make(dark: true, accent: 0x112233, preset: nord).accent, Color(hex: 0x112233))
         // System, Light and Dark keep the phone's contrast-tuned accent.
-        XCTAssertEqual(Palette.make(dark: false, accent: nil, preset: ThemePreset.find("light")).accent, Color(hex: 0x5A4AE8))
+        XCTAssertEqual(Palette.make(dark: false, accent: nil, preset: ThemePreset.find("light")).accent, Color(hex: 0x5A2352))
+        // A computer from before the plum palette sends its old violet: the phone keeps plum.
+        XCTAssertEqual(Palette.make(dark: false, accent: 0x6D5EFC, preset: ThemePreset.find("system")).accent, Color(hex: 0x5A2352))
     }
 
     func testMatchingTheComputerUsesItsPreset() {
@@ -135,7 +138,7 @@ final class DeepLinkTests: XCTestCase {
     func testPairingAndChatLinksAreRouted() {
         let app = AppModel.shared
         app.pendingLink = nil
-        app.handle(url: URL(string: "nekko-agent-pair:?relay=wss%3A%2F%2Frelay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&pair=ABCD2345")!)
+        app.handle(url: URL(string: "nekko-agent-pair:?relay=wss%3A%2F%2Frelay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&host=BJ7go4GGB9flqEQfjn77eO%2BWT5J%2Bxi8WJkMUlZycp%2BJNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE%3D&pair=ABCD2345")!)
         XCTAssertEqual(app.pendingLink?.relayUrl, "wss://relay.example.com")
         XCTAssertEqual(app.pendingLink?.pair, "ABCD2345")
         app.pendingLink = nil
@@ -293,7 +296,9 @@ final class StatusWidgetTests: XCTestCase {
 @MainActor
 final class SavedListNoteTests: XCTestCase {
     func testTheNoteSaysWhenAndThatItIsNotLive() {
-        let cal = Calendar(identifier: .gregorian)
+        // UTC: west of it, ten minutes before `now` falls on the previous day.
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let today = SavedListNote.text(savedAt: Int64((now.timeIntervalSince1970 - 600) * 1000), computer: "Mac", now: now, calendar: cal)
         XCTAssertTrue(today.hasPrefix("Saved list from "))
@@ -448,6 +453,7 @@ final class NotificationPrefsTests: XCTestCase {
     }
 }
 
+@MainActor
 final class ChatStatusIconTests: XCTestCase {
     @MainActor
     func testArchivedDoneUsesTheSameGrayCheckAsUnarchivedDone() throws {
@@ -471,8 +477,8 @@ final class ChatStatusIconTests: XCTestCase {
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true).label, "Waiting to send")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true).label, "Done")
         XCTAssertEqual(ChatStatusIcon(activity: nil).label, "Done")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, activeWatchCount: 1).label, "Idle")
-        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, activeWatchCount: 1).label, "Idle")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, activeWatchCount: 1).label, "Watching")
+        XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, activeWatchCount: 1).label, "Watching")
         XCTAssertEqual(ChatStatusIcon(activity: .running, completed: true, activeWatchCount: 1).label, "Working")
         XCTAssertEqual(ChatStatusIcon(activity: .needsYou, completed: true, activeWatchCount: 1).label, "Needs you")
         XCTAssertEqual(ChatStatusIcon(activity: nil, completed: true, waiting: true, activeWatchCount: 1).label, "Waiting to send")
@@ -482,14 +488,22 @@ final class ChatStatusIconTests: XCTestCase {
 @MainActor
 final class LiveCardViewTests: XCTestCase {
     static let chats = [
-        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low", startedAt: .now.addingTimeInterval(-75)),
-        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-754)),
-        LiveChat(id: "c", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up. Watching CI.", closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil),
-        LiveChat(id: "d", short: "Docs", state: .done, step: "Done 12 min ago", reply: "Docs page added.", closeWord: "Looks good", finishedAt: .now, callId: nil, severity: nil),
-        LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil),
+        LiveChat(id: "a", short: "Billing", state: .needsYou, step: "Needs your approval: Run npm test", reply: "Want me to run the tests?", closeWord: "Nice", finishedAt: nil, callId: "c1", severity: "low", startedAt: .now.addingTimeInterval(-75), title: "Billing page redesign"),
+        LiveChat(id: "b", short: "Login", state: .working, step: "Fixing merge conflicts", reply: "Got it. Working on it now.", closeWord: "Cool", finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-754), title: "Fix the login redirect loop on Safari"),
+        LiveChat(id: "c", short: "iOS LA", state: .watching, step: "Watching PR #1211…", reply: "PR is up. Watching CI.", closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil, title: "iOS Live Activity rows"),
+        LiveChat(id: "d", short: "Docs", state: .done, step: "Done 12 min ago", reply: "Docs page added.", closeWord: "Looks good", finishedAt: .now, callId: nil, severity: nil, title: "Docs for the relay"),
+        LiveChat(id: "e", short: "Relay", state: .failed, step: "Stopped with an error", reply: "The build broke.", closeWord: "Got it", finishedAt: .now, callId: nil, severity: nil, title: "Relay reconnect backoff"),
     ]
 
-    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false, sent: String? = nil) -> LiveCardState {
+    /// Twelve chats: two needing you, then a crowd the count line has to sum up.
+    static let crowd: [LiveChat] = chats + (0..<6).map { (i: Int) -> LiveChat in
+        LiveChat(id: "x\(i)", short: "Task \(i)", state: i < 3 ? .working : .done, step: "Running the tests", reply: "",
+                 closeWord: "Cool", finishedAt: i < 3 ? nil : .now, callId: nil, severity: nil,
+                 startedAt: i < 3 ? .now.addingTimeInterval(-60) : nil, title: "A long running task number \(i) with a long title")
+    } + [LiveChat(id: "q", short: "Pricing", state: .needsYou, step: "Asks: monthly or yearly first?", reply: "", closeWord: "Nice",
+                  finishedAt: nil, callId: nil, severity: nil, startedAt: .now.addingTimeInterval(-30), title: "Pricing page copy")]
+
+    static func card(_ level: LiveLevel, focus: String? = nil, listening: Bool = false, sent: String? = nil, chats: [LiveChat] = chats) -> LiveCardState {
         var card = buildCard(chats: chats, previous: nil, pinnedFocus: focus, level: level, now: .now)!
         if listening { card.listening = true; card.heard = "Go ahead and auto merge the PR" }
         if let sent { card.heard = "Sent: \(sent)" }
@@ -506,6 +520,10 @@ final class LiveCardViewTests: XCTestCase {
         ("listening", .detailed, card(.detailed, listening: true)),
         ("sent", .detailed, card(.detailed, focus: "b", sent: "Go ahead and auto merge the PR")),
         ("done-focused", .detailed, card(.detailed, focus: "d")),
+        ("crowd-minimal", .minimal, card(.minimal, chats: crowd)),
+        ("crowd", .standard, card(.standard, chats: crowd)),
+        ("crowd-detailed", .detailed, card(.detailed, chats: crowd)),
+        ("one-chat", .standard, card(.standard, chats: [chats[1]])),
     ]
 
     func framed(_ state: LiveCardState, _ level: LiveLevel) -> some View {
@@ -522,8 +540,14 @@ final class LiveCardViewTests: XCTestCase {
     func testFitsTheLockScreenAtEveryLevel() throws {
         for (name, level, state) in Self.cases {
             let renderer = ImageRenderer(content: framed(state, level))
-            let size = try XCTUnwrap(renderer.uiImage).size
-            XCTAssertLessThanOrEqual(size.height, 160, "\(name) is \(size.height) pt tall")
+            renderer.scale = 3
+            let image = try XCTUnwrap(renderer.uiImage)
+            XCTAssertLessThanOrEqual(image.size.height, 160, "\(name) is \(image.size.height) pt tall")
+            // Kept in the result bundle, which CI exports as the PR's screenshots.
+            let shot = XCTAttachment(image: image)
+            shot.name = "live-card-\(name)"
+            shot.lifetime = .keepAlways
+            add(shot)
         }
     }
 
@@ -538,6 +562,7 @@ final class LiveCardViewTests: XCTestCase {
         var other = real
         for i in other.chats.indices {
             other.chats[i].short = "Zebra"
+            other.chats[i].title = "Zebra crossing at noon"
             other.chats[i].step = "Something else entirely"
             other.chats[i].reply = "A different reply"
         }
@@ -550,16 +575,13 @@ final class LiveCardViewTests: XCTestCase {
         XCTAssertEqual(LiveChatState.needsYou.phaseLine, "Needs you")
     }
 
-    func testTheStripShowsThePageWithTheFocusedChat() {
-        let first = LiveCardView.page(Self.chats, focus: "b", size: 3)
-        XCTAssertEqual(first.shown.map(\.id), ["a", "b", "c"])
-        XCTAssertEqual(first.next?.id, "d")
-        let last = LiveCardView.page(Self.chats, focus: "d", size: 3)
-        XCTAssertEqual(last.shown.map(\.id), ["d", "e"])
-        XCTAssertEqual(last.next?.id, "a", "the last page steps back to the first")
-        // Every chat fits: "+N" (chats past the eight) opens the app instead.
-        XCTAssertNil(LiveCardView.page(Self.chats, focus: "d", size: 5).next)
-        XCTAssertNil(LiveCardView.page([], focus: nil, size: 3).next)
+    /// The two that need you are the rows (sorted to the top from the end of
+    /// the list); the rest are counted, and the chats past the eight the card
+    /// carries are a bare "+N".
+    func testTheCrowdShowsWhatNeedsYouAsRows() {
+        let card = Self.card(.standard, chats: Self.crowd)
+        XCTAssertEqual(cardRows(card).map(\.id), ["a", "q"])
+        XCTAssertEqual(cardTally(card).more, 4)
     }
 
     /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored). Runs only
@@ -903,6 +925,62 @@ final class RunActivitiesTests: XCTestCase {
         local.listening = false
         local.heard = "Sent: Fix it."
         XCTAssertNil(SystemCard.keepingVoice(pushed: pushed, local: local), "after the send a push may replace it")
+    }
+
+    func testOrdinaryPushedContentReplacesCachedCardWithoutEcho() {
+        let old = LiveCardState(chats: [], focusId: nil, more: 6, listening: false, heard: "Sent: Fix it.")
+        let chat = LiveChat(id: "a", short: "Fix", state: .done, step: "Finished", reply: "", closeWord: "Cool",
+                            finishedAt: Date(), callId: nil, severity: nil)
+        let pushed = LiveCardState(chats: [chat], focusId: "a", more: 0, listening: false, heard: "")
+        var content = CardContent(state: old)
+        XCTAssertNil(content.receive(pushed), "ordinary pushes never write back to ActivityKit")
+        XCTAssertEqual(content.state, pushed, "a later card action must use the pushed count, focus and status")
+        XCTAssertNil(content.receive(pushed), "duplicate content is not echoed")
+        let ended = LiveCardState(chats: [], focusId: nil, more: 0, listening: false, heard: "")
+        XCTAssertNil(content.receive(ended))
+        XCTAssertEqual(content.state, ended, "an empty pushed card cannot retain old chats")
+    }
+
+    func testCardActionBeforeChatsLoadUsesPushedChats() throws {
+        loaded = false
+        let r = make()
+        let attributes = NekkoCardAttributes(computerId: "pc", computerName: "Mac", level: .standard)
+        let working = LiveChat(id: "a", short: "Fix", state: .working, step: "Writing…", reply: "", closeWord: "Cool",
+                               finishedAt: nil, callId: nil, severity: nil)
+        let old = LiveCardState(chats: [working], focusId: "a", more: 6, listening: false, heard: "")
+        let card = FakeCard(attributes, old)
+        r.adopt(card)
+        var pushed = old
+        pushed.more = 0
+        pushed.chats[0].state = .done
+        pushed.chats[0].step = "Finished"
+        pushed.chats[0].finishedAt = Date()
+        var content = CardContent(state: old)
+        _ = content.receive(pushed)
+        card.state = content.state
+        r.focus("a")
+        XCTAssertEqual(card.state.chats.first?.state, .done, "focusing must not restore the old rocket")
+        XCTAssertEqual(card.state.chats.first?.step, "Finished")
+        r.dismiss("a")
+        XCTAssertTrue(card.ended, "closing the last pushed chat ends the card before the list loads")
+    }
+
+    func testPushedContentCachesVoiceCorrectionWithoutAnEchoLoop() {
+        let local = LiveCardState(chats: [], focusId: nil, more: 6, listening: true, heard: "Fix it")
+        var pushed = local
+        pushed.more = 0
+        pushed.listening = false
+        pushed.heard = ""
+        var content = CardContent(state: local)
+        let correction = content.receive(pushed)
+        XCTAssertEqual(correction?.more, 0)
+        XCTAssertEqual(content.state.more, 0)
+        XCTAssertEqual(content.state.heard, "Fix it")
+        XCTAssertTrue(content.state.listening)
+        XCTAssertNil(content.receive(content.state), "observing our correction must not write it again")
+        content.state.listening = false
+        XCTAssertNil(content.receive(pushed))
+        XCTAssertEqual(content.state, pushed, "after listening stops the push is authoritative")
     }
 
     /// A throttled update is sent once the 2 s are up, not dropped.
@@ -1471,5 +1549,17 @@ final class LastFolderPrefsTests: XCTestCase {
         let again = Prefs(defaults: defaults)
         XCTAssertNil(again.lastFolder["mac"], "No folder is remembered too")
         XCTAssertEqual(again.lastFolder["studio"], "personal")
+    }
+}
+
+final class WidgetLanguageTests: XCTestCase {
+    /// The Live Activity runs in the extension, which resolves its language on its own: without
+    /// English declared there, an English-first phone got its second language.
+    func testTheExtensionFollowsAnEnglishFirstPhone() throws {
+        let url = try XCTUnwrap(Bundle.main.builtInPlugInsURL?.appendingPathComponent("NekkoWidgets.appex"))
+        let widgets = try XCTUnwrap(Bundle(url: url))
+        XCTAssertEqual(Bundle.preferredLocalizations(from: widgets.localizations, forPreferences: ["en-US", "ja-US"]).first, "en")
+        XCTAssertEqual(Bundle.preferredLocalizations(from: widgets.localizations, forPreferences: ["en-US"]).first, "en")
+        XCTAssertEqual(Bundle.preferredLocalizations(from: widgets.localizations, forPreferences: ["ja-JP", "en-US"]).first, "ja")
     }
 }

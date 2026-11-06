@@ -85,10 +85,20 @@ export function ReplyStatus({ streaming, status, elapsed, tps, out, last, done, 
   const showDone = !streaming && !blocked && !sleeping && !persisted && !!(done || last);
   if (!streaming && !blocked && !sleeping && !showNumbers && !showDone) return null;
   const lead = sleeping ? '' : '· ';
+  // A provider that streams no counts has no rate or total to show, so each
+  // number appears once it has a value. Elapsed time is always known.
+  const numbers: { text: string; title?: string }[] = showNumbers && measured ? [
+    ...(measured.tps > 0 ? [{
+      text: `${estimatedRate ? '~' : ''}${formatRate(measured.tps)} tok/s`,
+      title: estimatedRate ? 'Estimated tokens per second from streamed text and reasoning; replaced by provider usage when available' : 'Output tokens per second while the model was generating',
+    }] : []),
+    ...(measured.out > 0 ? [{ text: `${fmtTok(measured.out)} total tokens` }] : []),
+    { text: `${measured.secs}s` },
+  ] : [];
   return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pt-1 text-[12px] text-ink-faint" role="status" data-reply-status>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs text-ink-faint" role="status" data-reply-status>
       {streaming ? (
-        <span className="flex items-center gap-2 text-ink-soft"><ReplyActivityIcon state={iconState} /><span className="dots dots-lead -mr-1.5" aria-hidden="true" />{status || 'Working'}</span>
+        <span className="flex items-center gap-2 text-ink-soft"><ReplyActivityIcon state={iconState} /><span className="dots dots-lead -mr-2" aria-hidden="true" />{status || 'Working'}</span>
       ) : blocked ? (
         <span>{blocked}</span>
       ) : sleeping ? (
@@ -96,11 +106,7 @@ export function ReplyStatus({ streaming, status, elapsed, tps, out, last, done, 
       ) : showDone ? (
         <span className="flex items-center gap-1" title={done ?? undefined}><CheckIcon className="h-3 w-3" />Done.</span>
       ) : null}
-      {showNumbers && <>
-        <span title={estimatedRate ? 'Estimated tokens per second from streamed text and reasoning; replaced by provider usage when available' : 'Output tokens per second while the model was generating'}>{(streaming || blocked || sleeping || done || last) ? lead : ''}{estimatedRate ? '~' : ''}{measured && measured.tps > 0 ? formatRate(measured.tps) : '—'} tok/s</span>
-        <span>· {measured ? fmtTok(measured.out) : '—'} total tokens</span>
-        <span>· {measured ? `${measured.secs}s` : 'Time unavailable'}</span>
-      </>}
+      {numbers.map((n, i) => <span key={i} title={n.title}>{i > 0 ? '· ' : lead}{n.text}</span>)}
     </div>
   );
 }

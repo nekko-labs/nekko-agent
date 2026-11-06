@@ -12,7 +12,7 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
         { "id": "a", "role": "assistant", "content": "", "images": ["data:x"], "generated": { "width": 8, "height": 8, "seed": 3 }, "createdAt": 2 },
     ] });
     std::fs::write(sessions.join("s_one.json"), serde_json::to_vec_pretty(&chat).unwrap()).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (status, list) = post(d.port, "sessions:summaries", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200);
@@ -25,6 +25,13 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     assert_eq!(missing, Value::Null);
     let (_, images) = post(d.port, "session:images", json!(["s_one", 4]), Some(TOKEN)).await;
     assert_eq!(images, json!([{ "messageId": "a", "src": "data:x" }]));
+    // One photo as stored, for a phone opening it full size; anything else is null.
+    let (_, photo) = post(d.port, "session:photo", json!(["s_one", "a", 0]), Some(TOKEN)).await;
+    assert_eq!(photo, json!("data:x"));
+    for args in [json!(["s_one", "a", 1]), json!(["s_one", "u", 0]), json!(["s_one", "nope", 0]), json!(["s_one"])] {
+        let (_, none) = post(d.port, "session:photo", args.clone(), Some(TOKEN)).await;
+        assert_eq!(none, Value::Null, "{args}");
+    }
     // The UI's own writes are the daemon's too, chat creation included: a
     // folder that is not one of the user's is refused, as the host refused it.
     let (status, refused) = post(d.port, "session:create", json!(["w1"]), Some(TOKEN)).await;
@@ -89,7 +96,7 @@ async fn forks_chats_and_keeps_completed_history_indefinitely() {
         let s = json!({ "id": id, "title": id, "updatedAt": 1, "messages": [], "archivedAt": archived });
         std::fs::write(sessions.join(format!("{id}.json")), serde_json::to_vec(&s).unwrap()).unwrap();
     }
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (status, fork) = post(d.port, "session:fork", json!(["s_src", "u2"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{fork}");
@@ -136,7 +143,7 @@ async fn reports_completed_history_usage_and_clears_via_canonical_log_cleanup() 
     std::fs::write(sessions.join("s_old.commands.log"), old_log).unwrap();
     std::fs::write(sessions.join("s_recent.commands.log"), recent_log).unwrap();
     std::fs::write(sessions.join("s_live.commands.log"), live_log).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let (status, usage) = post(d.port, "sessions:historyUsage", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{usage}");
@@ -171,7 +178,7 @@ async fn a_command_log_that_cannot_be_removed_retains_json_for_every_delete_path
     }))
     .unwrap();
     std::fs::write(&path, &bytes).unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     for (channel, args) in [
         ("session:delete", json!(["callback_fail"])),
         ("sessions:clear", json!(["all"])),
@@ -194,7 +201,7 @@ async fn serves_files_memory_and_comments_itself() {
     let project = data.join("project");
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src").join("a.ts"), "export function a() {}\n").unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
 
     let file = project.join("src").join("a.ts").to_string_lossy().into_owned();
     let (status, read) = post(d.port, "file:read", json!([file]), Some(TOKEN)).await;
@@ -376,7 +383,7 @@ async fn continues_and_links_pr_stacks_itself() {
         "providerId": "p", "modelId": "m", "mode": "ask", "disabledTools": ["browser"], "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_src.json"), source.to_string()).unwrap();
     let d = start_with_env(
-        Some(&data),
+        &data,
         json!({ "githubApiUrl": format!("http://127.0.0.1:{gh}") }),
         &[
             ("NEKKO_GH_PATH", Some("nekko-no-such-gh")),
@@ -456,6 +463,19 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         ("usage.jsonl", "{}\n".into()),
         ("replies.jsonl", "{}\n".into()),
         ("tokens.json", "{}".into()),
+        ("tasks.json", "[]".into()),
+        ("remote.json", json!({ "enabled": false, "devices": [{ "id": "phone-1" }] }).to_string()),
+        ("computers.json", "[]".into()),
+        ("cloud/state.json", json!({ "account": { "id": "u1", "email": "a@example.com" } }).to_string()),
+        ("cloud/secrets.json", json!({ "token": "nk_x", "device-key": "k" }).to_string()),
+        ("backups/settings.json", "{}".into()),
+        ("logs/app.log", "personal\n".into()),
+        ("logs/app.log.1", "older\n".into()),
+        ("models/m.gguf", "weights".into()),
+        ("runners/runners.json", "[]".into()),
+        // Not ours: the data folder can be one the user chose (NEKKO_DATA_DIR, a volume).
+        ("notes.txt", "mine".into()),
+        ("my-project/a.txt", "mine".into()),
         (
             "agent-watches.json",
             json!([{ "id": "w1", "sessionId": "s_a", "kind": "timer", "prompt": "secret", "nextPollAt": 4102444800000_u64, "intervalMs": 60000,
@@ -466,7 +486,12 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
         std::fs::create_dir_all(data.join(p).parent().unwrap()).unwrap();
         std::fs::write(data.join(p), text).unwrap();
     }
-    let d = start_with_config(Some(&data), json!({ "appVersion": "9.8.7", "edition": "desktop" }));
+    let d = start_with_env(
+        &data,
+        json!({ "appVersion": "9.8.7", "edition": "desktop" }),
+        &[("NEKKO_FILE_VAULT", Some("1")), ("NEKKO_CLOUD_URL", Some("http://127.0.0.1:9"))],
+    );
+    // Ending the Cloud session goes to a closed port: the wipe carries on without it.
     post(d.port, "settings:update", json!([{ "theme": "light" }]), Some(TOKEN)).await;
 
     // session:watches: what the transcript shows, never the prompt.
@@ -491,7 +516,33 @@ async fn wipes_the_data_it_owns_and_answers_the_small_services() {
     assert!(!data.join("sessions/s_a.json").exists());
     assert!(!data.join("memory/m.md").exists() && data.join("memory").is_dir());
     assert!(!data.join("usage.jsonl").exists() && !data.join("replies.jsonl").exists());
-    assert!(data.join("tokens.json").exists(), "sign-ins are not part of a wipe");
+    for gone in [
+        "tokens.json",
+        "tasks.json",
+        "remote.json",
+        "computers.json",
+        "agent-watches.json",
+        "backups",
+        "logs/app.log.1",
+    ] {
+        assert!(!data.join(gone).exists(), "{gone} is deleted");
+    }
+    assert!(!data.join("cloud/state.json").exists(), "Nekko Cloud is forgotten");
+    let secrets: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("cloud/secrets.json")).unwrap_or("{}".into())).unwrap();
+    assert_eq!(secrets, json!({}), "the Cloud token and keys are gone");
+    assert_eq!(std::fs::read(data.join("logs/app.log")).unwrap().len(), 0, "a live log is emptied in place");
+    assert!(data.join("models/m.gguf").exists(), "downloads stay unless asked");
+    assert!(data.join("runners/runners.json").exists(), "CI runners stay");
+    let (status, _) = post(d.port, "data:wipe", json!([{ "models": true }]), Some(TOKEN)).await;
+    assert_eq!(status, 200);
+    assert!(!data.join("models").exists(), "downloads go when asked");
+    assert_eq!(std::fs::read_to_string(data.join("notes.txt")).unwrap(), "mine", "a file that is not ours stays");
+    assert_eq!(
+        std::fs::read_to_string(data.join("my-project/a.txt")).unwrap(),
+        "mine",
+        "a folder that is not ours stays"
+    );
     let saved: Value = serde_json::from_str(&std::fs::read_to_string(data.join("settings.json")).unwrap()).unwrap();
     assert_eq!(saved["theme"], json!("system"));
     drop(d);
@@ -510,7 +561,7 @@ async fn writes_other_agent_tools_mcp_entries_itself() {
     let hand = json!({ "mcpServers": { "nekko-agent": { "command": "node", "args": ["dist/index.js", "mcp"] } } });
     std::fs::write(home.join(".cursor/mcp.json"), hand.to_string()).unwrap();
     let h = home.to_string_lossy().to_string();
-    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
+    let d = start_with_env(&data, json!({}), &[("HOME", Some(&h)), ("USERPROFILE", Some(&h))]);
 
     let (_, tools) = post(d.port, "integrations:detect", json!([]), Some(TOKEN)).await;
     let ids: Vec<_> = tools
@@ -570,7 +621,7 @@ async fn scoped_files_and_logs_for_remote_callers() {
     std::fs::write(project.join("src").join("main.rs"), "fn main() {}\n").unwrap();
     std::fs::write(project.join(".env"), "TOKEN=abc").unwrap();
     std::fs::write(data.join("outside.txt"), "no").unwrap();
-    let d = start_with(Some(&data));
+    let d = start_with(&data);
     let folder =
         json!([{ "workspaces": [{ "id": "w1", "name": "project", "path": project.to_string_lossy(), "addedAt": 1 }] }]);
     post(d.port, "settings:update", folder, Some(TOKEN)).await;

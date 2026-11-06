@@ -42,16 +42,16 @@ export function MlxInstallCard({ install, onChanged }: { install?: EngineInstall
 
   return (
     <div className="mt-5 border-t border-line pt-4">
-      <h3 className="text-[13px] font-semibold">MLX runtime</h3>
-      <p className="mt-1 text-[12px] text-ink-faint">
+      <h3 className="text-sm font-semibold">MLX runtime</h3>
+      <p className="mt-1 text-xs text-ink-faint">
         Apple&apos;s framework for Apple Silicon, often the fastest way to run a model on this Mac. It runs MLX models,
         including the ones LM Studio downloads. Optional, and installed only when you choose Install.
       </p>
       {install?.binPath ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span>{install.version ?? 'Installed'} · {install.source === 'external' ? 'Your own install, never removed here' : 'Managed'}</span>
           {install.source === 'managed' && (
-            <button className="btn btn-outline ml-auto py-1 text-[12px]" disabled={busy || download.active} onClick={() => void act(true)}>
+            <button className="btn btn-outline ml-auto py-1 text-xs" disabled={busy || download.active} onClick={() => void act(true)}>
               Uninstall MLX
             </button>
           )}
@@ -59,16 +59,16 @@ export function MlxInstallCard({ install, onChanged }: { install?: EngineInstall
       ) : (
         <>
           {preview && (
-            <p className="mt-2 text-[12px]">
+            <p className="mt-2 text-xs">
               {preview.version} · about {formatBytes(preview.sizeBytes)}, including its own Python (your system Python is not touched)
             </p>
           )}
-          <button className="btn btn-primary mt-2 py-1 text-[12px]" disabled={busy || download.active} onClick={() => void act(false)}>
+          <button className="btn btn-primary mt-2 py-1 text-xs" disabled={busy || download.active} onClick={() => void act(false)}>
             {download.active ? 'Downloading…' : busy ? 'Starting…' : 'Install MLX'}
           </button>
           {download.active && <DownloadProgress group={download.group} />}
           {install?.reason && install.reason !== 'MLX is not installed yet.' && (
-            <p role="alert" className="mt-2 text-[12px] text-ink-soft">{install.reason}</p>
+            <p role="alert" className="mt-2 text-xs text-ink-soft">{install.reason}</p>
           )}
         </>
       )}

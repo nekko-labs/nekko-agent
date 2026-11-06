@@ -38,10 +38,6 @@ fn arch() -> &'static str {
     if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" }
 }
 
-fn now() -> f64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
-}
-
 /// Whether the model server is running. Before the server is set, the
 /// daemon serving the engine's port says so instead.
 fn server_running(engine: &crate::engine::Engine) -> bool {
@@ -113,7 +109,7 @@ impl Installs {
                     adapters.clone(),
                     external,
                     before_replace.clone(),
-                    Arc::new(now),
+                    Arc::new(nekko_js::now_ms_f64),
                     vc.clone(),
                 )
             };

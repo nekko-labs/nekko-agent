@@ -57,8 +57,10 @@ model servers are first-class, not an afterthought.
 - **Add provider** lets you configure a server manually, or add a cloud provider -
   Anthropic, OpenAI, OpenRouter, or any OpenAI-compatible endpoint (just paste the
   base URL + key).
-- For **Ollama**, you can **pull** new models and **load / unload** them into memory
-  right from the card.
+- For **Google Gemini**, choose Gemini and paste a key from [Google AI Studio](https://aistudio.google.com/apikey). This is API billing, not a Google AI subscription sign-in.
+- For **Claude on Vertex AI**, choose the separate Vertex option, enter your Google Cloud project and location, and follow the Google Application Default Credentials instructions on the computer running Nekko Agent. No Claude subscription sign-in is needed.
+- For **Ollama Cloud**, use an [Ollama Cloud API key](https://ollama.com/settings/keys). Requests go directly to Ollama's hosted service; no desktop app or model download is needed.
+- For local **Ollama**, use **Local servers**. You can **pull** new models and **load / unload** them into memory right from the card. Existing local connections are not converted to cloud connections.
 - The **Token usage** panel charts input/output tokens over time and breaks them
   down per model and per provider.
 
@@ -110,9 +112,11 @@ Click a saved mode to apply all of its settings to the chat at once. Change anyt
 - **Local only**: models on this computer only, with the internet off: no web tools, connectors or MCP. Nothing leaves your computer.
 - **Risky business**: for code you don't trust. The chat runs in a Sandbox container with no network, and asks before every action. With a local model the whole chat stays on this computer; with a cloud model, only the conversation with that model goes out.
 
-**Models run** in the Model column sets the same thing by hand: click *Cloud only*, *Fusion* or *Local only*, and click the highlighted one again to stop pinning. *Local only* needs a local model and *Cloud only* a cloud one; when the chat's model doesn't fit, the panel says so and leaves the setting as it was, so pick the model first. A mode never includes your folders, and applying one that runs in a Sandbox opens the Sandbox setup first.
+Each setting now shows only its name and control; the explanation sits behind a small (i) icon beside the name and reveals itself on hover or keyboard focus, so a long panel stays scannable.
 
-Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat and is remembered for new chats, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (model router, system prompt) are not available yet.
+Under **Nekko router**, **Models run** sets the same thing by hand as the saved modes: click *Cloud only*, *Fusion* or *Local only*, and click the highlighted one again to stop pinning. *Local only* needs a local model and *Cloud only* a cloud one; when the chat's model doesn't fit, the panel says so and leaves the setting as it was, so pick the model first. A mode never includes your folders, and applying one that runs in a Sandbox opens the Sandbox setup first.
+
+Under **Approach**, **Skills** holds the work modes: *Default*, *Better review*, *Design* and *Best output*. Picking one changes how the agent works in that chat and brings the matching skills with it (for example Better review applies `/review`, `/security-review` and `/review-council`), so you don't have to remember or type them. A work mode applies to that chat and is remembered for new chats, costs more tokens and time than Default, and never changes Permissions, tools, Offline or Incognito. Rows marked *Coming soon* (Model router under Nekko router, System prompt under Approach) are not available yet.
 
 **Project rules** decides how much of a repository's own agent instructions the chat reads:
 
@@ -157,6 +161,8 @@ list dirs, run shell commands).
 | `Ctrl/Cmd + Shift + M` | Minimize the focused agent or terminal board window |
 | `Ctrl/Cmd + Shift + Delete` | Delete the focused chat or close its terminal, with confirmation |
 
+Typing in the palette also finds settings, including partial words (`notif`, `git base`). A switch or choice shows its control right in the row, so you can change it without opening Settings: click it, or highlight the row and press **Enter** to flip a switch or step to the next choice (**Shift+Enter** steps back). The palette stays open after a change. A matching Settings group (for example **Settings: Safety** for `guardrail`) opens Settings at that group.
+
 ![Command palette](screenshots/command-palette.png)
 
 **Find in this chat**: click the magnifier in the chat window's header (the first icon, left of Changes and Files), or press `Ctrl/Cmd + F`. A small bar opens at the top right of the conversation. Type a word or phrase and every place it appears is highlighted, with the one you are on in solid yellow and a count that always starts at **1 of 29** (the first match from the top). Matching is by whole word and ignores case, so `scroll` finds *Scroll* and *SCROLL* but not *scroller* or *autoscroll*. Use the up and down arrows (or **Enter** / **Shift+Enter**, or the arrow keys) to step through matches; they wrap around at the ends, and a match far up the conversation is brought into view. **Esc** or the **X** closes the bar and clears the highlights. It searches the message text you see, not tool steps, reasoning or link addresses. On the Agents wall each window has its own magnifier in its title bar, and the shortcut from the shared composer searches the window it is talking to.
@@ -189,7 +195,7 @@ The magnifier beside **+** at the top of the Agents panel opens a chat finder. I
 
 ### Complete, minimize, and delete
 
-Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. The **X** in a chat window's top-right corner (and on its card) is **Complete**: it closes the window and keeps the chat under its group's **Show completed** control in the left Agent panel until you delete it, where you can read or restore it. Right-click a completed chat there for **Restore chat** or **Delete forever** without opening it. Completing never deletes; **Delete** is a separate trash action. Agents you have not touched for a month are completed for you the same way; change or turn this off under Settings → **Complete idle agents after** (1 week, 2 weeks, 1 month, 3 months or Never). Pinned, running, waiting and sub-agent chats are never completed automatically. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
+Hover a window's lifecycle buttons to see the action and hotkey. Shortcuts target the window you are using, not every chat. The **X** in a chat window's top-right corner (and on its card) is **Complete**: it closes the window and keeps the chat under its group's **Show completed** control in the left Agent panel until you delete it, where you can read or restore it. A long completed list shows 50 chats at a time, with **Show more** for the next 50. Right-click a completed chat there for **Restore chat** or **Delete forever** without opening it. Completing never deletes; **Delete** is a separate trash action. Agents you have not touched for a month are completed for you the same way; change or turn this off under Settings → **Complete idle agents after** (1 week, 2 weeks, 1 month, 3 months or Never). Pinned, running, waiting and sub-agent chats are never completed automatically. **Minimize** removes only the board window: the item remains in the Agent panel, and a terminal keeps running. Terminals do not have completed history; **Close** ends their process.
 
 Settings has **Show tips**, enabled by default. Your first successful completion highlights Show completed with a dismissible explanation. On a narrow screen, the existing agent list drawer opens automatically to reveal Show completed without taking focus. If you close it, the highlighted Agents button lets you return to the destination. Opening or closing the drawer does not dismiss the tip. Turning tips off does not disable deletion warnings. The in-app delete dialog offers **Skip future deletion confirmations**; only choose it if you want permanent deletions without another prompt. Re-enable **Confirm deletions** in Settings at any time. General chats no longer display a redundant missing-project label.
 
@@ -271,6 +277,10 @@ archives, or a photo for a text-only model) still appear in the strip above the
 message box, marked **name only**, so nothing disappears silently. Videos are
 capped at 40 MB in the message; larger ones can still be attached as files.
 
+### Code in your draft
+
+In the desktop and Local Web UI message box, multiline code can use a single backtick on a line of its own before and after the code, or the usual triple-backtick fences. The editor highlights code without changing its source: delimiters, whitespace and line endings stay in your draft and the message you send. Inline backticks still work as before. Highlighting never runs code or treats it as HTML. This does not change Markdown rendering in replies.
+
 ### Diagrams, tables and code in replies
 
 Replies render Markdown: tables, code blocks with a copy button, images, and
@@ -310,7 +320,7 @@ The context-window gauge is a ring beside the count (`125k / 200k`): green below
 
 The chat's **effort** sits beside the model as a small dial, one notch per level the model takes. Click it for a larger dial and a button per level, or step it with the arrow keys.
 
-**Simple and Expert.** The switch at the top left of a chat, beside its title, picks between them, as on the phone. Simple shows the model, effort and context. Expert adds a strip of dials under the title for CPU, memory, each GPU and VRAM (with temperatures where the machine reports them, and only the monitors switched on in Settings) and how many models the Model Server holds. Click the strip for larger dials and the loaded models, each with where it runs, its context and memory, and a jump to its settings. The choice is kept on this computer for every chat.
+**Simple and Detailed.** The switch at the top left of a chat, beside its title, picks between them, as on the phone. Simple shows the model, effort and context. Detailed adds a strip of dials under the title for CPU, memory, each GPU and VRAM (with temperatures where the machine reports them, and only the monitors switched on in Settings) and how many models the Model Server holds. Click the strip for larger dials and the loaded models, each with where it runs, its context and memory, and a jump to its settings. The choice is kept on this computer for every chat.
 
 In Agents, the Hardware panel names each detected GPU and shows its own utilization. Missing readings say Unavailable rather than zero; switching monitoring off says Monitor off. VRAM remains the aggregate memory reading across devices. Where your machine reports them, CPU, Memory and each GPU row also show a temperature at the right of the label, orange from 80°C and red from 90°C. NVIDIA cards report theirs through their driver; Linux reads its hardware sensors; on Windows the CPU reading comes from the ACPI thermal zone, which many desktops do not publish, so it can be missing there.
 

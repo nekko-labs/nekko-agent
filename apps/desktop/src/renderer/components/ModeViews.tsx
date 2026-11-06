@@ -1,18 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { formatTemperature, temperatureTone } from '@nekko-agent/shared';
-import { useExpertMode, useShown } from '../simpleMode.js';
+import { useExpertMode, useLocalModelHost, useShown } from '../simpleMode.js';
 import { ChatIcon, CodeIcon, CubeIcon } from '../icons.js';
 import { useFloatingMenu } from './floatingMenu.js';
 import { hardwareRows, LocalModels } from './MonitorsDock.js';
-import { useMonitors, useResourceSample } from './ResourceMonitor.js';
+import { useMonitors, useResourceSample, watchComputer } from './ResourceMonitor.js';
 
 /*
- * Simple and Expert (decision 0030, spec desktop/desktop-simple-and-expert-modes).
- * Simple is the everyday app: developer controls stay out of sight. Expert
- * shows every control. Settings > Simple mode chooses, per control, whether it
- * shows in both modes, in Expert only, or nowhere. Both are kept on this
- * computer and shared by every window; a new install starts in Simple.
+ * Simple and Detailed (decision 0041, spec desktop/desktop-simple-and-expert-modes).
+ * Simple is the cleaner, more focused view; Detailed shows every control. In
+ * both, a control that means nothing right now stays out of sight. Settings >
+ * Simple mode chooses where each control shows. Both are kept on this computer
+ * and shared by every window; a new install starts in Simple.
  */
 
 export { useExpertMode, useShown, useSimpleChoices } from '../simpleMode.js';
@@ -23,7 +23,7 @@ export function Shown({ id, children }: { id: string; children: React.ReactNode 
 }
 
 /**
- * The switch: a chat bubble for Simple and angle brackets for Expert. It
+ * The switch: a chat bubble for Simple and angle brackets for Detailed. It
  * changes the whole app, so it sits in the title bar (in a chat's header where
  * there is no title bar, as in the browser builds).
  */
@@ -37,8 +37,8 @@ export function ModeSwitch() {
           type="button"
           role="radio"
           aria-checked={expert === on}
-          aria-label={on ? 'Expert: every control' : 'Simple: everyday controls'}
-          title={on ? 'Expert: every control' : 'Simple: everyday controls'}
+          aria-label={on ? 'Detailed: every control' : 'Simple: everyday controls'}
+          title={on ? 'Detailed: every control' : 'Simple: everyday controls'}
           className={expert === on ? 'on' : ''}
           onClick={() => setExpert(on)}
         >
@@ -120,12 +120,12 @@ export function RingDial({ pct, value, label, temp, size = 40 }: { pct: number |
           {t && <span style={{ fontSize: Math.max(8, size * 0.17), color: tTone === 'ok' ? 'var(--ink-soft)' : tTone === 'warn' ? 'var(--warning)' : 'var(--danger)' }}>{t}</span>}
         </span>
       </div>
-      <span className="max-w-[64px] truncate text-[10px] text-ink-soft">{label}</span>
+      <span className="max-w-[64px] truncate text-2xs text-ink-soft">{label}</span>
     </div>
   );
 }
 
-/* ── Expert monitor ─────────────────────────────────────────────────────── */
+/* ── Detailed monitor ─────────────────────────────────────────────────────── */
 
 /** The Hardware monitor's rows as dials: short labels, a percent in the middle. */
 function useDials() {
@@ -154,15 +154,24 @@ function useLoadedCount(): number | null {
 }
 
 /**
- * Expert mode's strip under the chat's header: the hardware as small dials and
+ * Detailed mode's strip under the chat's header: the hardware as small dials and
  * how many models the Model Server holds. Click for larger dials and the models.
  */
 export function ExpertMonitor() {
   const dials = useDials();
-  const loaded = useLoadedCount();
+  const host = useLocalModelHost();
+  const localCount = useLoadedCount();
+  const loaded = host ? host.loaded : localCount;
+  const hostId = host?.id;
+  // The dials follow the machine the model runs on, never this one beside its count.
+  useEffect(() => {
+    if (!hostId) return;
+    watchComputer(hostId);
+    return () => watchComputer(null);
+  }, [hostId]);
   const { open, setOpen, anchor, pop, style } = usePopover(360, 560);
   return (
-    <div className="shrink-0 border-b border-line px-3 py-1.5" data-expert-monitor>
+    <div className="shrink-0 border-b border-line px-3 py-1" data-expert-monitor>
       <button
         ref={anchor}
         type="button"
@@ -170,23 +179,23 @@ export function ExpertMonitor() {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Monitor: ${dials.map((d) => `${d.label} ${d.value}`).join(', ')}, ${loaded ?? 0} models loaded`}
+        aria-label={`Monitor: ${dials.map((d) => `${d.label} ${d.value}`).join(', ')}, ${loaded ?? 0} models loaded${host ? ` on ${host.name}` : ''}`}
       >
         {dials.length === 0
-          ? <span className="flex h-10 items-center text-[11px] text-ink-faint">Hardware monitors are off in Settings.</span>
+          ? <span className="flex h-10 items-center text-2xs text-ink-faint">Hardware monitors are off in Settings.</span>
           : dials.map((d) => <RingDial key={d.label} {...d} size={40} />)}
         <span className="ml-auto flex shrink-0 flex-col items-center gap-0.5 pl-2">
           <CubeIcon className="h-4 w-4 text-accent" />
-          <span className="text-[11px] font-semibold tabular-nums text-ink">{loaded ?? '–'}</span>
-          <span className="text-[10px] text-ink-soft">Loaded</span>
+          <span className="text-2xs font-semibold tabular-nums text-ink">{loaded ?? '–'}</span>
+          <span className="max-w-24 truncate text-2xs text-ink-soft">{host ? `Loaded on ${host.name}` : 'Loaded'}</span>
         </span>
       </button>
       {open && createPortal(
-        <div ref={pop} style={style} className="card fixed z-[100] overflow-y-auto p-3 shadow-lg" role="dialog" aria-label="Monitor" data-expert-monitor-sheet>
-          <div className="mb-2 text-[12px] font-semibold text-ink">Hardware</div>
+        <div ref={pop} style={style} className="card fixed z-[100] overflow-y-auto p-3 shadow-(--shadow-float)" role="dialog" aria-label="Monitor" data-expert-monitor-sheet>
+          <div className="mb-2 text-xs font-semibold text-ink">Hardware</div>
           <div className="mb-3 grid grid-cols-4 gap-3">{dials.map((d) => <RingDial key={d.label} {...d} size={60} />)}</div>
-          <div className="mb-1 text-[12px] font-semibold text-ink">Loaded models</div>
-          <LocalModels />
+          <div className="mb-1 text-xs font-semibold text-ink">Loaded models</div>
+          {host ? <p className="text-xs text-ink-soft">{host.loaded} on {host.name}</p> : <LocalModels />}
         </div>,
         document.body,
       )}

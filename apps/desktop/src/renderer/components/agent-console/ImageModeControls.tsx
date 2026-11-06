@@ -69,7 +69,7 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
 
   if (models && !models.length) {
     return (
-      <span className="min-w-0 truncate text-[11px] text-ink-faint">
+      <span className="min-w-0 truncate text-2xs text-ink-faint">
         No image models yet.{' '}
         <button className="underline hover:text-ink" onClick={() => setView('modelserver')}>Get one in Model Server</button>
       </span>

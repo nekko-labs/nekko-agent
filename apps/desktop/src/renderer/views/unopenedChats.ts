@@ -13,3 +13,8 @@ export function unopenedChats(sessions: SessionSummary[], workspaces: Workspace[
 export function sidebarWorkspaces(workspaces: Workspace[], visibleChildIds: ReadonlySet<string>): Workspace[] {
   return workspaces.filter((w) => w.anchor.kind !== 'chat' || !visibleChildIds.has(w.anchor.refId));
 }
+
+/** Every unarchived child keeps its row, independently of focus or activity. */
+export function subagentRows<T extends { id: string }>(kids: T[]): T[] {
+  return kids;
+}

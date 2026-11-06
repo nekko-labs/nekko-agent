@@ -7,35 +7,65 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * Simple and Expert: the controls each mode shows. Every listed control shows in both modes,
- * in Expert only, or nowhere, chosen per phone in Settings > Simple mode. The phone's subset of
- * the desktop's list (packages/shared/src/simple-mode.ts); keep the ids in step.
+ * Simple and Expert: the controls each mode shows, and only while they mean something. Every listed
+ * control has one visibility, chosen per phone in Settings > Simple mode. The phone's subset of the
+ * desktop's list (packages/shared/src/simple-mode.ts); keep the ids and the rules in step.
  */
 enum class SimpleVisibility(val wire: String) {
-    SHOW("show"), EXPERT("expert"), HIDE("hide");
+    SHOW("show"), EXPERT("expert"), HIDE("hide"),
+
+    /** In both modes, but only while its condition holds. */
+    AUTO("auto");
 
     companion object {
         fun of(wire: String): SimpleVisibility? = entries.firstOrNull { it.wire == wire }
     }
 }
 
-data class SimpleItem(val id: String, val area: String, val label: String, val hint: String, val default: SimpleVisibility)
+/** What can make a control relevant. */
+enum class SimpleCondition { LOCAL_MODEL, CHANGES, PR }
+
+/** What is true right now. [localModel]: a local model runs on the computer this phone is connected to. */
+data class SimpleContext(val localModel: Boolean = false, val changes: Boolean = false, val pr: Boolean = false) {
+    fun holds(c: SimpleCondition) = when (c) {
+        SimpleCondition.LOCAL_MODEL -> localModel
+        SimpleCondition.CHANGES -> changes
+        SimpleCondition.PR -> pr
+    }
+}
+
+/** [needs]: it has nothing to show without this, in any mode. [whenever]: what an AUTO control waits for. */
+data class SimpleItem(
+    val id: String,
+    val area: String,
+    val default: SimpleVisibility,
+    val needs: SimpleCondition? = null,
+    val whenever: SimpleCondition? = null,
+)
 
 object SimpleMode {
     private val E = SimpleVisibility.EXPERT
+    private val S = SimpleVisibility.SHOW
+    private val A = SimpleVisibility.AUTO
+
+    const val HEADER = "Chat · header"
+    const val BOX = "Chat · message box"
+    const val CONVERSATION = "Chat · conversation"
+    const val CHATS = "Phone · chats list"
 
     val ITEMS: List<SimpleItem> = listOf(
-        SimpleItem("changes", "Chat · header", "Changes", "Review the files the agent changed", E),
-        SimpleItem("hardware", "Chat · header", "Hardware strip", "CPU, memory and GPU dials under the title", E),
-        SimpleItem("ph-subtitle", "Chat · header", "Model and computer under the title", "Like \"Opus 5.5 · Studio Mac\"", E),
-        SimpleItem("model", "Chat · message box", "Model name and picker", "Switch between Claude, ChatGPT or a local model", SimpleVisibility.SHOW),
-        SimpleItem("effort", "Chat · message box", "Effort", "How hard the model thinks before it answers", SimpleVisibility.SHOW),
-        SimpleItem("context", "Chat · message box", "Context ring and token count", "How full this chat is, in tokens", SimpleVisibility.SHOW),
-        SimpleItem("ph-policy", "Chat · message box", "Tool policy", "Ask, Guardrails or YOLO, in the More menu and New chat", E),
-        SimpleItem("thinking", "Chat · conversation", "Reasoning and tool steps", "What the model thought, and each step it took", E),
-        SimpleItem("ph-git", "Chat · conversation", "Git and pull requests", "Commits, PR cards and the PR dock", E),
-        SimpleItem("terminal", "Agents wall", "Terminal", "Open a terminal from New or the More menu", E),
-        SimpleItem("ph-monitors", "Phone · chats list", "Monitors row", "Hardware and loaded models at the top of Chats", E),
+        SimpleItem("changes", HEADER, S, needs = SimpleCondition.CHANGES),
+        SimpleItem("hardware", HEADER, A, whenever = SimpleCondition.LOCAL_MODEL),
+        SimpleItem("ph-subtitle", HEADER, E),
+        SimpleItem("model", BOX, S),
+        SimpleItem("effort", BOX, S),
+        SimpleItem("asks", BOX, S),
+        SimpleItem("context", BOX, S),
+        SimpleItem("run-settings", BOX, E),
+        SimpleItem("thinking", CONVERSATION, E),
+        SimpleItem("pr-status", CONVERSATION, S, needs = SimpleCondition.PR),
+        SimpleItem("ph-git", CONVERSATION, E),
+        SimpleItem("ph-monitors", CHATS, A, whenever = SimpleCondition.LOCAL_MODEL),
     )
 
     private val BY_ID = ITEMS.associateBy { it.id }
@@ -52,16 +82,21 @@ object SimpleMode {
         return choices[id] ?: item.default
     }
 
-    /** Items set to Expert only that Simple also shows while the computer's Model Server holds a model. */
-    val LOCAL_MODEL_IDS = setOf("hardware", "ph-monitors")
+    /** The choices an item offers. Show pins an AUTO control on, so it takes the place of Expert only. */
+    fun options(item: SimpleItem): List<SimpleVisibility> =
+        if (item.default == A) listOf(A, S, SimpleVisibility.HIDE) else listOf(S, E, SimpleVisibility.HIDE)
 
-    /** What Settings says under those items. */
-    const val LOCAL_MODEL_NOTE = "Also shown in Simple while a local model is loaded"
-
-    /** Whether an item is on screen in the given mode. */
-    fun shown(id: String, expert: Boolean, choices: Map<String, SimpleVisibility>, localModelLoaded: Boolean = false): Boolean {
+    /**
+     * Whether an item is on screen now, as `simpleShown` decides on the desktop. Hide always wins,
+     * [SimpleItem.needs] is required in every mode, AUTO waits for its condition, and Expert only
+     * stays for Expert.
+     */
+    fun shown(id: String, expert: Boolean, choices: Map<String, SimpleVisibility>, context: SimpleContext = SimpleContext()): Boolean {
+        val item = BY_ID[id]
         val v = visibility(id, choices)
-        return v == SimpleVisibility.SHOW || (v == SimpleVisibility.EXPERT && (expert || (localModelLoaded && id in LOCAL_MODEL_IDS)))
+        if (v == SimpleVisibility.HIDE || item?.needs?.let(context::holds) == false) return false
+        if (v == A) return item?.whenever?.let(context::holds) == true
+        return v == S || expert
     }
 
     /** Simple's "chat getting long" line shows from this share of the context window. */
@@ -83,7 +118,7 @@ object SimpleMode {
         return obj.mapNotNull { (id, v) ->
             val item = BY_ID[id] ?: return@mapNotNull null
             val value = (v as? JsonPrimitive)?.takeIf { it.isString }?.content?.let(SimpleVisibility::of)
-            if (value == null || value == item.default) null else id to value
+            if (value == null || value !in options(item) || value == item.default) null else id to value
         }.toMap()
     }
 

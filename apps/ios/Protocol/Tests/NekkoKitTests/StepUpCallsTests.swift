@@ -120,8 +120,8 @@ final class StepUpCallsTests: XCTestCase {
         let store = ComputersStore(store: MemoryStore(), makeConnection: { _ in computer }, deviceName: { "iPhone" },
                                    deriveKey: { _, _ in Data(repeating: 7, count: 32) }, newId: { "id-1" })
         store.load()
-        _ = await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                                         key: "00112233445566778899aabbccddeeff", pair: "ABCD2345"))
+        _ = try! await store.pair(PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
+                                          key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345"))
         store.changeSigner = SoftwareChangeSigner()
         return store
     }
@@ -269,7 +269,7 @@ final class StepUpCallsTests: XCTestCase {
 @MainActor
 final class SafetyExitTests: XCTestCase {
     let link = PairingLink(relayUrl: "ws://studio.tail1.ts.net:4400", room: "a1b2c3d4e5f60718",
-                           key: "00112233445566778899aabbccddeeff", pair: "ABCD2345")
+                           key: "00112233445566778899aabbccddeeff", hostKey: testHostKey, pair: "ABCD2345")
     var connections: [FakeConnection] = []
     var secure = MemoryStore()
     var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
@@ -302,7 +302,7 @@ final class SafetyExitTests: XCTestCase {
 
     func online(_ s: ComputersStore) async -> String {
         s.load()
-        let id = await s.pair(link)
+        let id = try! await s.pair(link)
         connections[0].online()
         await settle()
         return id
@@ -346,15 +346,34 @@ final class SafetyExitTests: XCTestCase {
         XCTAssertEqual(last.calls.map { $0.0 }, [Channels.deviceSignOut], "nothing else is read")
         XCTAssertNil(last.config.pairCode)
         XCTAssertEqual(last.config.room, link.room)
+        XCTAssertEqual(last.config.hostKey, testHostKey)
         XCTAssertTrue(last.closed)
         XCTAssertTrue(s.pendingSignOuts.isEmpty)
         XCTAssertNil(secure.get("nekko.pendingSignOuts"))
     }
 
+    /// Saved before the host key, this sign-out could only be dialed unpinned, and no computer would answer it.
+    func testASignOutFromBeforeTheHostKeyIsDroppedNotDialed() async throws {
+        let s = makeStore()
+        let id = await online(s)
+        connections[0].status(RelayStatus(.offline))
+        await settle()
+        await s.signOut(id)
+        let saved = try XCTUnwrap(secure.get("nekko.pendingSignOuts"))
+        let list = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(saved.utf8)) as? [[String: Any]])
+        XCTAssertEqual(list.first?["hostKey"] as? String, testHostKey)
+        let old = list.map { $0.filter { $0.key != "hostKey" } }
+        secure.set("nekko.pendingSignOuts", String(decoding: try JSONSerialization.data(withJSONObject: old), as: UTF8.self))
+        let before = connections.count
+        await s.flushSignOuts(timeout: 0.05)
+        XCTAssertEqual(connections.count, before)
+        XCTAssertTrue(s.pendingSignOuts.isEmpty)
+    }
+
     func testAPhoneTheComputerNeverWelcomedHasNothingToSend() async throws {
         let s = makeStore()
         s.load()
-        let id = await s.pair(link) // never online: the pairing code was never used
+        let id = try await s.pair(link) // never online: the pairing code was never used
         let heard = await s.signOut(id)
         XCTAssertFalse(heard)
         XCTAssertTrue(s.pendingSignOuts.isEmpty)
@@ -399,5 +418,50 @@ final class SafetyExitTests: XCTestCase {
         XCTAssertEqual(s.safetyExit?.kind, .quit)
         XCTAssertTrue(AppInfo.from(["quitFromPhone": true]).quitFromPhone)
         XCTAssertFalse(AppInfo.from(["version": "0.9"]).quitFromPhone, "older computers never offer it")
+    }
+
+    func testAComputerIconComesFromAppInfoAndTheRecordKeepsIt() async throws {
+        XCTAssertEqual(AppInfo.from(["machineIcon": "tower"]).machineIcon, "tower")
+        XCTAssertNil(AppInfo.from(["machineIcon": ""]).machineIcon)
+        XCTAssertNil(AppInfo.from(["machineIcon": "spaceship"]).machineIcon, "one this app doesn't draw")
+        XCTAssertNil(AppInfo.from(["machineIcon": .null]).machineIcon)
+        XCTAssertNil(AppInfo.from(["version": "0.9"]).machineIcon, "older computers send none")
+
+        replies[Channels.appInfo] = { _ in ["version": "1.0", "platform": "darwin", "machineIcon": "tower"] }
+        let s = makeStore()
+        _ = await online(s)
+        XCTAssertEqual(s.active?.icon, "tower")
+        let saved = try JSONDecoder().decode(Computer.self, from: JSONEncoder().encode(XCTUnwrap(s.active)))
+        XCTAssertEqual(saved.icon, "tower")
+
+        // A read that fails keeps what was learned; an answer without one clears it.
+        replies[Channels.appInfo] = { _ in throw RelayError("gone", fromComputer: true) }
+        connections[0].replies = replies
+        await s.refresh()
+        XCTAssertEqual(s.active?.icon, "tower")
+        replies[Channels.appInfo] = { _ in ["version": "1.0", "platform": "darwin", "machineIcon": .null] }
+        connections[0].replies = replies
+        await s.refresh()
+        XCTAssertNil(s.active?.icon)
+    }
+
+    func testThePickerSendsOnlyTheIconAndShowsWhatIsSaved() async throws {
+        var sent: [JSONValue] = []
+        replies[Channels.settingsUpdate] = { args in sent.append(args[0]); return ["machineIcon": args[0]["machineIcon"] ?? .null] }
+        let s = makeStore()
+        _ = await online(s)
+        try await s.setMachineIcon("cat")
+        XCTAssertEqual(s.active?.icon, "cat")
+        try await s.setMachineIcon("")
+        XCTAssertNil(s.active?.icon)
+        XCTAssertEqual(sent, [["machineIcon": "cat"], ["machineIcon": ""]])
+
+        replies[Channels.settingsUpdate] = { _ in throw RelayError("Not allowed from a paired phone (change-off): settings:update", fromComputer: true) }
+        connections[0].replies = replies
+        do {
+            try await s.setMachineIcon("sun")
+            XCTFail("refused")
+        } catch {}
+        XCTAssertNil(s.active?.icon, "a refused change shows nothing new")
     }
 }

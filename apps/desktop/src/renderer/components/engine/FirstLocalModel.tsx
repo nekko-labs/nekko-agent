@@ -200,10 +200,10 @@ export function FirstModelSteps({
   return (
     <section className="mx-auto max-w-3xl py-4" data-first-local-model={phase.kind}>
       <div className="flex flex-col items-center text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-faint">Your first local model · Step {step} of 3</p>
+        <p className="text-xs font-medium text-ink-soft">Your first local model · Step {step} of 3</p>
         <h1 className="mt-3 text-2xl font-semibold">{title}</h1>
-        <p className="mt-2 max-w-lg text-[14px] text-ink-soft">{lead}</p>
-        <ol className="my-6 flex gap-5 text-[12px] text-ink-soft" aria-label="Setup progress">
+        <p className="mt-2 max-w-lg text-sm text-ink-soft">{lead}</p>
+        <ol className="my-6 flex gap-5 text-xs text-ink-soft" aria-label="Setup progress">
           {['Choose', 'Download', 'Start chatting'].map((label, i) => (
             <li key={label} aria-current={step === i + 1 ? 'step' : undefined} style={{ color: step === i + 1 ? 'var(--accent)' : undefined }}>
               {i + 1}. {label}
@@ -218,7 +218,7 @@ export function FirstModelSteps({
             <span className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full" style={{ background: 'color-mix(in srgb, var(--success) 16%, transparent)', color: 'var(--success)' }}>
               <CheckIcon className="h-5 w-5" />
             </span>
-            <p className="mb-4 text-[13px] text-ink-soft">Nekko starts it for you whenever the app opens.</p>
+            <p className="mb-4 text-sm text-ink-soft">Nekko starts it for you whenever the app opens.</p>
             <button className="btn btn-primary" disabled={busy} onClick={() => onStart(phase.model)}>
               {busy ? 'Opening…' : 'Start chatting'}
             </button>
@@ -232,12 +232,12 @@ export function FirstModelSteps({
               </Step>
               <Step state="pending" label="Ready to chat" />
             </ul>
-            <button className="btn btn-ghost mt-5 text-[12.5px]" onClick={onCancel}>Cancel</button>
+            <button className="btn btn-ghost mt-5 text-xs" onClick={onCancel}>Cancel</button>
           </div>
         ) : (
           <>
             {phase.kind === 'failed' && (
-              <p role="alert" className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-[12.5px]" style={{ borderColor: 'var(--danger)' }}>
+              <p role="alert" className="mb-4 flex items-start gap-2 rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--danger)' }}>
                 <span className="mt-0.5 shrink-0" style={{ color: 'var(--danger)' }}><WarningIcon className="h-4 w-4" /></span>
                 <span>The download stopped: {phase.message} Press the button to try again; it picks up where it left off.</span>
               </p>
@@ -258,21 +258,21 @@ export function FirstModelSteps({
                     <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}>
                       <use.Icon className="h-[18px] w-[18px]" />
                     </span>
-                    <span className="text-[15px] font-semibold">{use.title}</span>
-                    <span className="text-[13px] text-ink-soft">{use.blurb}</span>
-                    <span className="mt-1 text-[12px] text-ink-faint">
+                    <span className="text-base font-semibold">{use.title}</span>
+                    <span className="text-sm text-ink-soft">{use.blurb}</span>
+                    <span className="mt-1 text-xs text-ink-faint">
                       {t.pick!.name} · {formatBytes(t.pick!.downloadBytes)} download
                     </span>
                   </button>
                 );
               })}
             </div>
-            <p className="mt-4 text-center text-[12.5px] text-ink-soft">{fitSentence(chosen, recs)}</p>
+            <p className="mt-4 text-center text-xs text-ink-soft">{fitSentence(chosen, recs)}</p>
             <div className="mt-5 flex flex-col items-center gap-2">
               <button className="btn btn-primary px-6" disabled={busy} onClick={onSetUp}>
                 {busy ? 'Starting…' : 'Download and set up'}
               </button>
-              <p className="max-w-md text-center text-[12px] text-ink-faint">
+              <p className="max-w-md text-center text-xs text-ink-faint">
                 One download of {formatBytes(chosen.pick!.downloadBytes)}
                 {engineReady ? '' : ', plus the small free engine that runs it'}. Nothing downloads until you press the button.
               </p>
@@ -281,7 +281,7 @@ export function FirstModelSteps({
         )}
       </div>
 
-      <p className="mt-8 text-center text-[12.5px] text-ink-faint">
+      <p className="mt-8 text-center text-xs text-ink-faint">
         Already use Ollama or LM Studio, or want a different model?{' '}
         <button className="text-accent underline-offset-2 hover:underline" onClick={onShowAll}>
           Show all models and settings
@@ -307,7 +307,7 @@ function Step({ state, label, children }: { state: 'done' | 'active' | 'pending'
         {state === 'done' && <CheckIcon className="h-3 w-3" />}
       </span>
       <div className="min-w-0 flex-1">
-        <p className={`text-[13.5px] ${state === 'pending' ? 'text-ink-faint' : 'font-medium'}`}>{label}</p>
+        <p className={`text-sm ${state === 'pending' ? 'text-ink-faint' : 'font-medium'}`}>{label}</p>
         {children}
       </div>
     </li>
@@ -330,7 +330,7 @@ function Progress({ group }: { group: DownloadGroup }) {
       >
         <div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--accent)' }} />
       </div>
-      <p className="mt-1.5 text-[12px] text-ink-faint">
+      <p className="mt-1 text-xs text-ink-faint">
         {formatBytes(group.receivedBytes)}
         {group.totalBytes ? ` of ${formatBytes(group.totalBytes)}` : ''}
         {left ? ` · about ${left}` : ''}

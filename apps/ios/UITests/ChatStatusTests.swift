@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class ChatStatusTests: XCTestCase {
     func testStatusShapesAndMascotGreeting() {
         let app = XCUIApplication()
@@ -24,7 +25,7 @@ final class ChatStatusTests: XCTestCase {
         let returned = NSPredicate(format: "value == %@", "Working")
         expectation(for: returned, evaluatedWith: mascot)
         waitForExpectations(timeout: 4)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Idle")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Watching")).firstMatch.exists)
         XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "Done")).firstMatch.exists)
     }
 }

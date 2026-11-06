@@ -70,7 +70,7 @@ export function CloudLogin({ onAuthed }: { onAuthed: () => void }) {
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6" style={{ background: 'var(--paper)' }}>
       <div className="mb-5 grid h-16 w-16 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={40} /></div>
       <h1 className="text-xl font-semibold">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
-      <p className="mt-2 max-w-sm text-center text-[13px] text-ink-faint">
+      <p className="mt-2 max-w-sm text-center text-sm text-ink-faint">
         Nekko Cloud, your chats, memory, and workspaces, hosted. The desktop and self-hosted editions never ask you to sign in.
       </p>
       <form className="mt-5 flex w-full max-w-sm flex-col gap-3" onSubmit={submit}>
@@ -92,13 +92,13 @@ export function CloudLogin({ onAuthed }: { onAuthed: () => void }) {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {error && <p className="text-center text-[12px]" style={{ color: 'var(--danger)' }}>{error}</p>}
+        {error && <p className="text-center text-xs" style={{ color: 'var(--danger)' }}>{error}</p>}
         <button className="btn btn-primary" type="submit" disabled={busy || !email || !password}>
           {busy ? 'Please wait…' : mode === 'login' ? 'Log in' : 'Sign up'}
         </button>
       </form>
       <button
-        className="mt-4 text-[12px] text-ink-faint hover:text-ink-soft"
+        className="mt-4 text-xs text-ink-faint hover:text-ink-soft"
         onClick={() => { setError(''); setMode(mode === 'login' ? 'signup' : 'login'); }}
       >
         {mode === 'login' ? 'Need an account? Sign up' : 'Already have an account? Log in'}

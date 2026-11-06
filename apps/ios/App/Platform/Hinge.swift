@@ -23,11 +23,11 @@ enum Hinge {
     static let fake: Fake? = UserDefaults.standard.string(forKey: "fakeHinge").flatMap(Fake.init(rawValue:))
 
     /// The window the faked hinge is placed in; the pane host keeps it current.
-    nonisolated(unsafe) static var windowSize: CGSize = .zero
+    @MainActor static var windowSize: CGSize = .zero
 
     /// At launch: point `Posture.hingeSource` at the faked hinge, if a test asked for one.
     /// When Apple ships a fold API, this is where it is read.
-    static func install() {
+    @MainActor static func install() {
         guard let fake else { return }
         Posture.hingeSource = { rect(fake, in: windowSize) }
     }

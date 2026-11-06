@@ -1,15 +1,15 @@
 /**
- * Stay out of the way of a full-screen app (a game, a presentation, a video).
+ * Hold native notices while an exclusive-fullscreen game is in front.
  *
- * A window that takes the foreground from an exclusive-fullscreen game knocks
- * it out of exclusive mode, and the game stays slower until it restarts; a
- * toast banner over it can do the same. So while nekkod says a full-screen app
- * is in front (`activity:fullscreen`, Windows only), notices wait and windows
- * do not come forward. Both happen as before once it is gone.
+ * While nekkod says one is (`activity:fullscreen`, Windows only, Direct3D
+ * exclusive fullscreen alone), notices wait and are posted once it is gone.
+ * Windows are not held: every window Nekko brings forward follows something
+ * the user did (a launch, a link, the tray), and a window held for minutes
+ * would then take the foreground at a moment nobody chose. Borderless apps,
+ * full-screen video and presentation mode are left to Windows' own rules.
  *
- * Anything the user does to reach Nekko (the tray, a toast, a shortcut) means
- * they already left the game, so it passes straight through. Without an answer
- * (service stopped, still starting, another platform) nothing waits.
+ * With one of Nekko's windows focused, or without an answer (service stopped,
+ * still starting, another platform), nothing waits.
  */
 
 export interface ForegroundGuardOptions {

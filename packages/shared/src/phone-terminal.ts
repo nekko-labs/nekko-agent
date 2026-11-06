@@ -66,7 +66,7 @@ export const PHONE_TERMINAL_CHANNELS = [
 /**
  * Answered by the computer's gate itself, like `device:registerKey`:
  * `terminal:open [terminalId]` (change-class, a signed proof) attaches this
- * phone to a terminal and answers a `PhoneTerminalOpened`;
+ * phone to a terminal and answers its terminal view;
  * `terminal:leave [terminalId]` detaches it (no proof: it only gives up access).
  */
 export const PHONE_TERMINAL_OPEN_CHANNEL = 'terminal:open';
@@ -98,14 +98,6 @@ export interface PhoneTerminalTail {
   rows: number;
   truncated: boolean;
   totalBytes?: number;
-}
-
-/** What `terminal:open`, `terminal:create` and `ssh:open` answer a phone. */
-export interface PhoneTerminalOpened extends PhoneTerminalTail {
-  /** For `terminal:write` / `terminal:resize` on this terminal, from this phone only. */
-  token: string;
-  idleMs: number;
-  maxMs: number;
 }
 
 /** A host from the computer's `~/.ssh/config`: no user name, never keys. */
@@ -325,7 +317,7 @@ export function phoneTerminalResult(channel: string, result: unknown): unknown {
       return phoneSshHostsView(result);
     case 'terminal:create':
     case 'ssh:open':
-      // The gate answers these with a `PhoneTerminalOpened` once it has attached the phone.
+      // The gate answers these with the terminal view once it has attached the phone.
       return phoneTerminalView(result);
     default:
       return null;

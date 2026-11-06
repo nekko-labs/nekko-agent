@@ -23,10 +23,6 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn now_ms() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
-}
-
 /// `randomInt(0, 2 ** 31 - 1)`.
 fn random_seed() -> u64 {
     let mut b = [0u8; 4];
@@ -72,9 +68,7 @@ impl ImageTurns {
         let session_id = opts.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string();
         let say = |event: Value| ctx.hub.publish("agent:event", event, false);
         let fail = |message: &str| say(json!({ "type": "error", "sessionId": session_id, "message": message }));
-        let (Some(store), Some(server)) = (ctx.sessions.clone(), ctx.server.clone()) else {
-            return Err("Image generation needs the data directory".into());
-        };
+        let (store, server) = (ctx.sessions.clone(), ctx.server.clone());
         let (st, id) = (store.clone(), session_id.clone());
         let session = tokio::task::spawn_blocking(move || st.get(&id)).await.map_err(|e| e.to_string())?;
         let Some(mut session) = session else {
@@ -97,7 +91,7 @@ impl ImageTurns {
             c
         };
         let _running = Running(self, session_id.clone());
-        let started = match v::start_image_turn(&mut session, opts, now_ms(), random_seed()) {
+        let started = match v::start_image_turn(&mut session, opts, nekko_js::now_ms(), random_seed()) {
             Ok(s) => s,
             Err(e) => {
                 fail(&e);
@@ -133,17 +127,22 @@ impl ImageTurns {
         let stopped = generated.is_none() || cancel.is_cancelled();
         let (reply, ending) = match generated {
             Some(Ok(result)) if !stopped => {
-                let reply =
-                    v::image_reply(&result, &params, &started.seed, clock.elapsed().as_millis() as u64, now_ms());
+                let reply = v::image_reply(
+                    &result,
+                    &params,
+                    &started.seed,
+                    clock.elapsed().as_millis() as u64,
+                    nekko_js::now_ms(),
+                );
                 let id = reply["id"].clone();
                 (reply, json!({ "type": "done", "sessionId": session_id, "messageId": id }))
             }
             Some(Err(e)) if !stopped => (
-                v::image_failure(false, &e, now_ms()),
+                v::image_failure(false, &e, nekko_js::now_ms()),
                 json!({ "type": "error", "sessionId": session_id, "message": e }),
             ),
             _ => {
-                let reply = v::image_failure(true, "Stopped.", now_ms());
+                let reply = v::image_failure(true, "Stopped.", nekko_js::now_ms());
                 let id = reply["id"].clone();
                 (reply, json!({ "type": "done", "sessionId": session_id, "messageId": id }))
             }

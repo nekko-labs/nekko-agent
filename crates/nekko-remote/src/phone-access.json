@@ -1,5 +1,6 @@
 {
  "channels": [
+  "activity:state",
   "app:info",
   "app:quit",
   "artifact:read",
@@ -7,9 +8,11 @@
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
+  "chat:interruptQueued",
   "chat:pending",
   "chat:queue",
   "chat:send",
+  "chat:steer",
   "context:preview",
   "device:signOut",
   "engine:status",
@@ -34,6 +37,10 @@
   "logs:list",
   "logs:read",
   "machine:summary",
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load",
   "model:unload",
   "models:list",
   "monitor:summary",
@@ -53,7 +60,9 @@
   "session:delete",
   "session:fork",
   "session:get",
+  "session:photo",
   "session:setOptions",
+  "session:setSupportingWorkspaces",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -94,6 +103,7 @@
    "file:read",
    "file:write",
    "image:fetch",
+   "memory:closeApp",
    "pr:continueStack",
    "pr:linkStack",
    "providers:importCliAuth",
@@ -151,6 +161,7 @@
   "providers:list",
   "providers:sealKey",
   "session:get",
+  "session:photo",
   "session:watches",
   "sessions:summaries",
   "settings:get",
@@ -164,6 +175,7 @@
   "engine:status",
   "gpu:stats",
   "system:stats",
+  "activity:state",
   "git:branches",
   "git:compare",
   "git:diff",
@@ -185,6 +197,7 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "session:setSupportingWorkspaces",
   "workspace:addByPath",
   "workspace:remove",
   "providers:saveSealed",
@@ -211,8 +224,14 @@
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
+  "chat:interruptQueued",
   "chat:queue",
   "chat:send",
+  "chat:steer",
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load",
   "model:unload",
   "session:create",
   "session:delete",
@@ -274,6 +293,8 @@
  "settingsKeys": [
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
+  "machineIcon",
   "skipDeleteConfirmation",
   "voice.enabled",
   "voice.language"
@@ -284,9 +305,12 @@
   "automationsPaused",
   "chatPaneAction",
   "defaultChatMode",
+  "defaultWorkspaceIds",
   "defaultModelId",
   "defaultProviderId",
+  "machineIcon",
   "favoriteModels",
+  "orchestration.strategy",
   "effort",
   "phoneChanges",
   "prompts",
@@ -369,25 +393,140 @@
  ],
  "sessionOptionKeys": [
   "archivedAt",
+  "autoModel",
+  "autoProviderSwitch",
+  "autoQuality",
+  "chatType",
+  "cloudOnly",
+  "disabledConnectors",
+  "disabledMcpServers",
+  "disabledTools",
   "effort",
+  "executionMode",
+  "gitIsolation",
+  "guidance",
+  "imageParams",
+  "incognito",
+  "memory",
   "mode",
   "modelId",
+  "offline",
+  "order",
   "pinned",
+  "privacy",
   "providerId",
   "tags",
   "thinking",
-  "title"
+  "title",
+  "toolApproach",
+  "workMode"
+ ],
+ "guardedOptionKeys": [
+  "cloudOnly",
+  "disabledConnectors",
+  "disabledMcpServers",
+  "disabledTools",
+  "executionMode",
+  "gitIsolation",
+  "guidance",
+  "incognito",
+  "memory",
+  "offline",
+  "privacy"
+ ],
+ "optionValues": {
+  "autoQuality": [
+   "cheap",
+   "normal",
+   "quality"
+  ],
+  "chatType": [
+   "image",
+   "multimodal"
+  ],
+  "executionMode": [
+   "sandbox",
+   "unified",
+   "worktree"
+  ],
+  "guidance": [
+   "off",
+   "root",
+   "rules"
+  ],
+  "memory": [
+   "all",
+   "off",
+   "project"
+  ],
+  "toolApproach": [
+   "code",
+   "list"
+  ],
+  "workMode": [
+   "best-output",
+   "better-review",
+   "default",
+   "design"
+  ]
+ },
+ "optionSwitches": [
+  "autoModel",
+  "autoProviderSwitch",
+  "cloudOnly",
+  "gitIsolation",
+  "incognito",
+  "offline"
+ ],
+ "engineKeys": [
+  "autoStart",
+  "autoload",
+  "idleTtlSeconds",
+  "jitLoad",
+  "maxLoaded"
+ ],
+ "modelServerView": [
+  "autoStart",
+  "autoload",
+  "idleTtlSeconds",
+  "jitLoad",
+  "maxLoaded",
+  "clientModelSettings",
+  "shareWithComputers"
+ ],
+ "activityView": [
+  "chatActive",
+  "headless",
+  "strain",
+  "userActive"
+ ],
+ "modelSettingChannels": [
+  "engine:saveModelPreset",
+  "engine:settings",
+  "engine:unloadAll",
+  "model:load"
+ ],
+ "presetPathKeys": [
+  "clip_g",
+  "clip_l",
+  "llm",
+  "t5xxl",
+  "taesd",
+  "vae"
  ],
  "chatSendKeys": [
   "clientMessageId",
   "images",
+  "maxHistoryTurns",
   "modelId",
+  "noTools",
   "providerId",
   "regenerate",
   "resume",
   "sessionId",
   "skill",
-  "text"
+  "text",
+  "videos"
  ],
  "chatModes": [
   "ask",
@@ -407,7 +546,9 @@
   "textChars": 4000,
   "images": 40,
   "thumbSide": 384,
-  "thumbChars": 98304
+  "thumbChars": 98304,
+  "photoSide": 2048,
+  "photoChars": 6291456
  },
  "changesView": {
   "files": 50,
@@ -504,6 +645,81 @@
   "expect",
   "text"
  ],
+ "brainKeys": [
+  "modelId",
+  "providerId"
+ ],
+ "computerAccess": {
+  "icons": [
+   "laptop",
+   "desktop",
+   "tower",
+   "mini",
+   "server",
+   "rack",
+   "cloud",
+   "gpu",
+   "chip",
+   "home",
+   "office",
+   "lab",
+   "bolt",
+   "moon",
+   "sun",
+   "star",
+   "flame",
+   "leaf",
+   "globe",
+   "cube",
+   "rocket",
+   "shield",
+   "terminal",
+   "cat"
+  ],
+  "refused": [
+   "providers:saveSealed",
+   "providers:setEnabled",
+   "ssh:open",
+   "terminal:close",
+   "terminal:create",
+   "terminal:open",
+   "terminal:signal",
+   "workspace:addByPath"
+  ],
+  "read": [
+   "agent:replay",
+   "chat:running",
+   "model:cancel",
+   "model:next",
+   "session:images",
+   "session:page"
+  ],
+  "agent": [
+   "attachment:import",
+   "changes:accept",
+   "changes:acceptAll",
+   "chat:cancelCompaction",
+   "chat:compact",
+   "chat:dequeue",
+   "model:open",
+   "session:setAttachments",
+   "session:truncate"
+  ],
+  "sendKeys": [
+   "clientMessageId",
+   "images",
+   "maxHistoryTurns",
+   "modelId",
+   "noTools",
+   "providerId",
+   "regenerate",
+   "resume",
+   "sessionId",
+   "skill",
+   "text",
+   "videos"
+  ]
+ },
  "expertMonitor": {
   "systemView": [
    "cpuCores",
@@ -825,6 +1041,7 @@
    ],
    "pairing": [
     "remote:pair",
+    "remote:pairComputer",
     "remote:rotate"
    ],
    "phoneAccess": [

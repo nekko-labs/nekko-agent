@@ -95,19 +95,19 @@ export function DeepLinkListener() {
       className="card w-full max-w-md p-4"
     >
       <div>
-        <h2 id="hypergate-link-title" className="text-[15px] font-semibold">{heading}</h2>
-        <p className="mt-2 text-[12.5px] text-ink-soft">
+        <h2 id="hypergate-link-title" className="text-base font-semibold">{heading}</h2>
+        <p className="mt-2 text-xs text-ink-soft">
           Hypergate v{ask.version} on port {ask.port} is asking to connect to Nekko Agent.{' '}
           {ask.servers === 1
             ? 'The one server it manages becomes a single entry in your MCP list, and its tools are offered in every chat.'
             : `The ${ask.servers} servers it manages become a single entry in your MCP list, and their tools are offered in every chat.`}
         </p>
-        <p className="mt-2 text-[11.5px] text-ink-faint">
+        <p className="mt-2 text-xs text-ink-faint">
           Nekko Agent gets its own scoped token, so you can narrow or revoke it from Hypergate at any time.
         </p>
         <div className="mt-4 flex justify-end gap-2">
-          <button className="btn btn-outline py-1 text-[12px]" onClick={() => setAsk(null)} disabled={busy}>Not now</button>
-          <button className="btn btn-primary py-1 text-[12px]" onClick={() => void accept()} disabled={busy}>
+          <button className="btn btn-outline py-1 text-xs" onClick={() => setAsk(null)} disabled={busy}>Not now</button>
+          <button className="btn btn-primary py-1 text-xs" onClick={() => void accept()} disabled={busy}>
             {busy ? 'Connecting…' : ask.known ? 'Reconnect' : 'Connect'}
           </button>
         </div>

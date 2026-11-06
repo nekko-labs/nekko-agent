@@ -41,3 +41,7 @@ Implemented: Configure opens in the browser top layer, outside the dock's animat
 Implemented: reorder landing outlines use the lifted monitor's measured height, with the inter-monitor gap outside the outline. The scroll surface disables overflow anchoring and reserves its scrollbar gutter, preventing a reorder from moving the scroll origin or changing card width. Saved order and drag announcements are unchanged.
 
 Verification: focused tests plus hidden full-App renderer captures test both side menus at 720x800, control hit-testing, Escape/outside dismissal, and synthetic DOM monitor dragging with stable scroll origin and width. A GIF records the reorder. Native drag initiation, OS focus/chrome, packaged builds and pixel-level visual inspection are not verified by this fixture. No real provider, host data or network access is used.
+
+## Movement-gated header pickup
+
+Implemented: a primary-button press on a monitor header only arms pickup. The same pointer must move before native dragstart may lift the card or open a landing preview. Stationary presses, unrelated pointers, release, cancellation and focus loss cannot authorize a later drag. Header buttons do not arm pickup; keyboard reordering is unchanged. No host data or network access is added. Verified with focused regression tests and isolated Windows Electron DOM interactions; physical OS drag initiation and other operating systems remain unverified.

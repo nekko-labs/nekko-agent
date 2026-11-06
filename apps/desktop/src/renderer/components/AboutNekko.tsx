@@ -29,28 +29,28 @@ export function AboutNekko() {
   if (!open) return null;
   const pet = () => setPurr(PURRS[(PURRS.indexOf(purr ?? '') + 1) % PURRS.length]);
   return (
-    <Modal title="About Nekko Agent" onClose={() => { setOpen(false); setPurr(null); }} overlayClassName="p-4" zIndex={100} className="card about-nekko w-[420px] max-w-[92vw] shadow-xl">
+    <Modal title="About Nekko Agent" onClose={() => { setOpen(false); setPurr(null); }} overlayClassName="p-4" zIndex={100} className="card about-nekko w-[420px] max-w-[92vw] shadow-(--shadow-float)">
       <div className="flex flex-col items-center gap-3 px-6 pb-6 pt-2 text-center">
         <button type="button" className="about-nekko-cat relative" onClick={pet} title="Pet the cat" aria-label="Pet the cat">
           <NekkoAvatar size={72} title="Nekko" />
           {purr && <span key={purr} className="about-nekko-purr" aria-live="polite">{purr}</span>}
         </button>
-        <h2 className="text-gradient text-[26px] font-semibold tracking-tight">Nekko Agent</h2>
-        {version && <span className="chip text-[11px]">v{version}</span>}
-        <p className="text-[13px] text-ink-soft">A local-first agent for chat, cowork and code, with a cat for a co-pilot.</p>
+        <h2 className="text-2xl text-ink font-semibold tracking-tight">Nekko Agent</h2>
+        {version && <span className="chip text-2xs">v{version}</span>}
+        <p className="text-sm text-ink-soft">A local-first agent for chat, cowork and code, with a cat for a co-pilot.</p>
         <ul className="mt-1 flex w-full flex-col gap-2 text-left">
           {FACTS.map(f => (
             <li key={f.k} className="rounded-lg border border-line px-3 py-2">
-              <span className="text-[12px] font-semibold text-ink">{f.k}</span>
-              <span className="block text-[12px] text-ink-faint">{f.v}</span>
+              <span className="text-xs font-semibold text-ink">{f.k}</span>
+              <span className="block text-xs text-ink-faint">{f.v}</span>
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-[12px] text-ink-faint">
+        <p className="mt-2 text-xs text-ink-faint">
           Built with care (and catnip) by <span className="font-semibold text-ink">Nekko Labs</span>.
         </p>
         <button type="button" className="btn btn-outline" onClick={() => { setOpen(false); setPurr(null); openFeedback(); }}>Send feedback</button>
-        <p className="text-[11px] text-ink-faint">© {new Date().getFullYear()} Nekko Labs</p>
+        <p className="text-2xs text-ink-faint">© {new Date().getFullYear()} Nekko Labs</p>
       </div>
     </Modal>
   );

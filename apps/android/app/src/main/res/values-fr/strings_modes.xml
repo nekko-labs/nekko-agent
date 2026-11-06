@@ -3,7 +3,7 @@
 <resources>
     <string name="your_computer">votre ordinateur</string>
     <string name="mode_simple">Simple</string>
-    <string name="mode_expert">Expert</string>
+    <string name="mode_expert">Détaillé</string>
     <string name="effort_low">Faible</string>
     <string name="effort_medium">Moyen</string>
     <string name="effort_normal">Normal</string>

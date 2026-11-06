@@ -18,6 +18,9 @@ interface WindowChrome {
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: { color: string; symbolColor: string }) => void;
+  /** Absent on a preload older than this page, as in a dev reload. */
+  setPageZoom?: (factor: number) => void;
+  onPageReloading: (listener: (fadeMs: number) => void) => void;
 }
 
 /** The bridge, or `undefined` when this isn't the desktop shell. */
@@ -30,6 +33,17 @@ export const hasAppChrome = Boolean(windowChrome);
 
 /** macOS keeps its native traffic lights, so the strip's *left* end is spoken for. */
 export const isMacChrome = windowChrome?.platform === 'darwin';
+
+/**
+ * Zoom the whole page, as a browser's own zoom does, and say whether that was
+ * possible. Page zoom scales every coordinate alike, so a rect, a click, the
+ * window size and `scrollTop` all still agree; CSS `zoom` on the root does not.
+ */
+export function setPageZoom(factor: number): boolean {
+  if (!windowChrome?.setPageZoom) return false;
+  windowChrome.setPageZoom(factor);
+  return true;
+}
 
 /**
  * Repaint the native buttons to match the theme that is on screen right now.

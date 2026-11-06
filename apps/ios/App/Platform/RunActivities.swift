@@ -1,5 +1,8 @@
-import ActivityKit
+// Activity is meant to be updated and ended from any task, but ActivityKit does not
+// mark it Sendable yet.
+@preconcurrency import ActivityKit
 import Foundation
+import os
 import NekkoKit
 import NekkoProtocol
 
@@ -58,7 +61,7 @@ final class RunActivities {
     private var runs: [String: Run] = [:]
     /// Closed with the card's button; off the card until the chat runs again.
     private var dismissed: Set<String> = []
-    /// The chat a chip tap brought up, until another chat newly needs you.
+    /// The chat a row tap brought up, until another chat newly needs you.
     var pinnedFocus: String?
     /// The chat the card's mic last sent to, and its reply line then: "Sent: ..." stays until that changes.
     private var sentTo: (id: String, reply: String)?
@@ -72,7 +75,7 @@ final class RunActivities {
     /// How long a run the events saw counts as working with no word from
     /// `activity` (a reconnect empties it until the next event).
     static let quietRun: TimeInterval = 30 * 60
-    private let request: (NekkoCardAttributes, LiveCardState) -> CardActivity?
+    private let request: @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity?
 
     var level: () -> LiveLevel = { .none }
     /// The card's push token for the relay, nil once the card is gone.
@@ -81,7 +84,7 @@ final class RunActivities {
     var source: () -> Source? = { nil }
 
     /// `adoptLeftover`: carry on with a card an earlier launch left up.
-    init(request: @escaping (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
+    init(request: @escaping @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
         self.request = request
         if adoptLeftover, let leftover = SystemCard.leftover() {
             card = leftover
@@ -126,7 +129,7 @@ final class RunActivities {
         Task { @MainActor [weak self] in self?.refresh() }
     }
 
-    /// A chip (or "+N", which names the chat that starts the next page).
+    /// A row tap: that chat takes the focus (and the buttons).
     func focus(_ sessionId: String) {
         pinnedFocus = sessionId
         refresh(urgent: true)
@@ -286,6 +289,7 @@ final class RunActivities {
             switch src.activity[s.id] {
             case .needsYou?: (state, step) = (.needsYou, live?.step ?? "")
             case .running?: (state, step) = (.working, live?.step ?? "")
+            case .failed?: (state, step) = (.failed, run?.step ?? "")
             case nil:
                 if let live, now.timeIntervalSince(live.lastEventAt) < Self.quietRun { (state, step) = (.working, live.step) }
                 else if s.activeWatchCount > 0 { (state, step) = (.watching, String(localized: "Watching PR…")) }
@@ -293,11 +297,12 @@ final class RunActivities {
                 else { return nil }
             }
             let finished = state == .done || state == .failed
-            return LiveChat(id: s.id, short: shortTitle(s.title.isEmpty ? "Chat" : s.title), state: state, step: step,
+            let title = s.title.isEmpty ? "Chat" : s.title
+            return LiveChat(id: s.id, short: shortTitle(title), state: state, step: step,
                             reply: replyLine(s.lastReplyText), closeWord: closeWord(for: s.id, failed: state == .failed),
                             finishedAt: finished ? run?.finishedAt : nil,
                             callId: state == .needsYou ? live?.callId : nil, severity: state == .needsYou ? live?.severity : nil,
-                            startedAt: live?.startedAt)
+                            startedAt: live?.startedAt, title: title)
         }
     }
 
@@ -314,38 +319,55 @@ final class RunActivities {
     }
 }
 
-/// The card in ActivityKit.
+/// Mirrors ActivityKit content even when no local update is needed. Ordinary pushes
+/// must not be echoed back: only restoring an active microphone needs a write.
+@MainActor
+struct CardContent {
+    var state: LiveCardState
+
+    mutating func receive(_ pushed: LiveCardState) -> LiveCardState? {
+        let kept = SystemCard.keepingVoice(pushed: pushed, local: state)
+        state = kept ?? pushed
+        return kept
+    }
+}
+
+/// The card in ActivityKit. Its two observers (push tokens, pushed content)
+/// end with it: in `end()`, and in `deinit` for a card replaced without one.
+@MainActor
 final class SystemCard: CardActivity {
     private let activity: ActivityKit.Activity<NekkoCardAttributes>
-    private(set) var state: LiveCardState
+    private var content: CardContent
+    var state: LiveCardState { content.state }
     var attributes: NekkoCardAttributes { activity.attributes }
     var isLive: Bool { activity.activityState == .active || activity.activityState == .stale }
     var id: String { activity.id }
     var onPushToken: ((String) -> Void)? {
         didSet {
-            tokens?.cancel()
             let a = activity
-            tokens = Task { [weak self] in
+            observers.set("tokens", Task { [weak self] in
                 for await token in a.pushTokenUpdates { self?.onPushToken?(hex(token)) }
-            }
+            })
         }
     }
-    private var tokens: Task<Void, Never>?
-    private var pushes: Task<Void, Never>?
+    /// The token and content observers, cancellable from `deinit` too.
+    private let observers = TaskBag()
     /// The last call to ActivityKit; each one waits for it so they arrive in order.
     private var last: Task<Void, Never>?
 
     private init(_ activity: ActivityKit.Activity<NekkoCardAttributes>, state: LiveCardState) {
         self.activity = activity
-        self.state = state
+        self.content = CardContent(state: state)
         let a = activity
-        pushes = Task { [weak self] in
+        observers.set("pushes", Task { [weak self] in
             for await content in a.contentUpdates {
-                guard let self, let kept = Self.keepingVoice(pushed: content.state, local: self.state) else { continue }
-                self.update(kept)
+                guard let self else { return }
+                if let kept = self.content.receive(content.state) { self.update(kept) }
             }
-        }
+        })
     }
+
+    deinit { observers.cancelAll() }
 
     /// A pushed card says listening false and heard "" (the computer can't know): while the
     /// mic listens, the push's chats with this phone's listening and heard. Nil when nothing to put back.
@@ -358,13 +380,13 @@ final class SystemCard: CardActivity {
     }
 
     func update(_ state: LiveCardState) {
-        self.state = state
+        self.content.state = state
         let content = ActivityContent(state: state, staleDate: Self.staleDate)
         send { await $0.update(content) }
     }
 
     func end() {
-        pushes?.cancel()
+        observers.cancelAll()
         send { await $0.end(nil, dismissalPolicy: .immediate) }
     }
 
@@ -464,5 +486,26 @@ final class TalkRunner {
         guard listening else { return }
         cancelled = true
         discard()
+    }
+}
+
+/// Tasks cancelled together, from any context (a `deinit` included): a lock
+/// around the handles, so it is checked `Sendable`.
+final class TaskBag: Sendable {
+    private let tasks = OSAllocatedUnfairLock<[String: Task<Void, Never>]>(initialState: [:])
+
+    /// Keeps `task` under `key`, cancelling the one it replaces.
+    func set(_ key: String, _ task: Task<Void, Never>) {
+        tasks.withLock { all in
+            all[key]?.cancel()
+            all[key] = task
+        }
+    }
+
+    func cancelAll() {
+        tasks.withLock { all in
+            for task in all.values { task.cancel() }
+            all = [:]
+        }
     }
 }

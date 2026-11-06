@@ -5,6 +5,7 @@ import { pairingLink, parsePairingLink } from './pairing-link.js';
 
 const ROOM = '0123456789abcdef';
 const KEY = '00112233445566778899aabbccddeeff';
+const HOST = 'BGsX0fLhLEJH+Lzm5WOkQPJ3A32BLeszoPShOUXYmMKWT+NC4v4af5uO5+tKfA+eFivOM1drMV7Oy7ZAaDe/UfU=';
 const base = `nekko-agent-pair:?relay=ws%3A%2F%2Fstudio.tail1234.ts.net%3A4400&room=${ROOM}&key=${KEY}`;
 
 /** Every phone parser reads these and must agree (TASKS.md IO-20). */
@@ -22,6 +23,9 @@ const CASES: string[] = [
   `${base}&alt=ws%3A%2F%2F%5Bfd12%3A%3A5%5D%3A4400`,
   `https://studio.local:1439/?relay=wss%3A%2F%2Frelay.example.com&room=${ROOM}&key=${KEY}&alt=ws%3A%2F%2F172.16.4.2%3A4400#x`,
   `relay=ws://100.101.102.103:4400&room=${ROOM}&key=${KEY}&alt=ws://192.168.50.100:4400`,
+  // The host key to pin, percent-encoded; anything that isn't a whole key is no key.
+  `${base}&host=${encodeURIComponent(HOST)}&pair=XY`,
+  `${base}&host=not-a-key`,
   // A broken link stays broken, alt or not.
   `nekko-agent-pair:?relay=http%3A%2F%2Fx&room=${ROOM}&key=${KEY}&alt=ws://10.0.0.5:4400`,
   `nekko-agent-pair:?alt=ws://10.0.0.5:4400&room=${ROOM}&key=${KEY}`,
@@ -56,6 +60,12 @@ describe('pairing links', () => {
     expect(parsePairingLink(CASES[4])?.alts).toEqual(['wss://relay.example.com']);
     expect(parsePairingLink(CASES[5])?.alts).toEqual(['ws://10.0.0.5:4400']);
     expect(parsePairingLink(CASES[6])?.alts).toHaveLength(4);
+  });
+
+  it('carries the host key to pin', () => {
+    expect(parsePairingLink(pairingLink('nekko-agent-pair:', { relayUrl: 'wss://r.example.com', room: ROOM, key: KEY, hostKey: HOST }))?.hostKey).toBe(HOST);
+    expect(parsePairingLink(`${base}&host=not-a-key`)?.hostKey).toBeUndefined();
+    expect(parsePairingLink(base)?.hostKey).toBeUndefined();
   });
 
   it('trims a long run of slashes in linear time (no ReDoS)', () => {

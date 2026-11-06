@@ -66,7 +66,7 @@ public enum Transcript {
                 out.append(.user(id: m.id, text: text, at: m.createdAt, images: m.imageCount))
             case "assistant":
                 let reasoning = m.reasoning.flatMap { $0.isEmpty ? nil : $0 }
-                if !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) {
+                if !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) || (m.turnStats != nil && m.toolCalls.isEmpty) {
                     out.append(.assistant(id: m.id, text: m.content, reasoning: reasoning, streaming: false, interrupted: m.interrupted))
                 }
                 for call in m.toolCalls {
@@ -177,15 +177,7 @@ public enum Transcript {
     /// repeats an earlier turn is never swallowed.
     public static func mergeLive(saved: [Block], live: [Block]) -> [Block] {
         if live.isEmpty { return saved }
-        let prompt: String? = live.lazy.compactMap { if case .user(_, let text, _, _) = $0 { return text } else { return nil } }.first
-        let lastUserAt = saved.lastIndex(where: \.isUser)
-        var lastUserText: String?
-        if let i = lastUserAt, case .user(_, let text, _, _) = saved[i] { lastUserText = text }
-        func trim(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if let prompt, lastUserText.map(trim) != trim(prompt) { return saved + live }
-        let headEnd = (lastUserAt ?? -1) + 1
-        let head = Array(saved.prefix(headEnd))
-        let turn = Array(saved.dropFirst(headEnd))
+        guard let (head, turn) = savedTurn(saved: saved, live: live) else { return saved + live }
         var toolIds = Set<String>()
         var replies = Set<String>()
         for b in turn {
@@ -205,7 +197,31 @@ public enum Transcript {
             if case .tool(let id, _, _, _, _, _) = b, let l = liveTools[id] { return l }
             return b
         }
-        return head + mergedTurn + extra
+        return Array(head) + mergedTurn + extra
+    }
+
+    /// Whether `mergeLive` keeps every live reply as it is: true when the saved
+    /// transcript has no reply yet for the turn the overlay is running (the usual
+    /// case while it streams). Then a streamed token changes only the last merged
+    /// block, and a caller may patch it instead of merging again.
+    public static func keepsLiveReplies(saved: [Block], live: [Block]) -> Bool {
+        guard !live.isEmpty, let (_, turn) = savedTurn(saved: saved, live: live) else { return true }
+        return !turn.contains(where: \.isAssistant)
+    }
+
+    private static func trim(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// The saved transcript split at the overlay's prompt: what came before it, and
+    /// the saved blocks of this turn. Nil when the saved transcript doesn't end with
+    /// the overlay's prompt (the computer hasn't saved this turn yet).
+    private static func savedTurn(saved: [Block], live: [Block]) -> (head: ArraySlice<Block>, turn: ArraySlice<Block>)? {
+        let prompt: String? = live.lazy.compactMap { if case .user(_, let text, _, _) = $0 { return text } else { return nil } }.first
+        let lastUserAt = saved.lastIndex(where: \.isUser)
+        var lastUserText: String?
+        if let i = lastUserAt, case .user(_, let text, _, _) = saved[i] { lastUserText = text }
+        if let prompt, lastUserText.map(trim) != trim(prompt) { return nil }
+        let headEnd = (lastUserAt ?? -1) + 1
+        return (saved.prefix(headEnd), saved.dropFirst(headEnd))
     }
 
     /// When a turn ends its live blocks (`pending-…`, `live-…`) are replaced by
@@ -286,7 +302,7 @@ public enum Transcript {
 }
 
 /// What the chat list shows next to a computer's chat.
-public enum Activity: Sendable, Equatable { case running, needsYou }
+public enum Activity: Sendable, Equatable { case running, needsYou, failed }
 
 public enum ActivityTracker {
     /// Track which chats are mid-run or waiting on the user, from the event stream.
@@ -295,7 +311,8 @@ public enum ActivityTracker {
         switch e {
         case .approvalRequired, .question: next = .needsYou
         case .text, .reasoning, .toolCall, .toolResult, .questionResolved: next = .running
-        case .done, .error: next = nil
+        case .error: next = .failed
+        case .done: next = activity[e.sessionId] == .failed ? .failed : nil
         default: return activity
         }
         var out = activity

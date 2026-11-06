@@ -4,21 +4,31 @@
 // is the only caller. It is the only binary that carries the
 // com.apple.security.virtualization entitlement (nekko-vm.entitlements).
 //
+// A Linux bundle (config.json "os":"linux") boots Ubuntu's own kernel and initrd
+// directly with VZLinuxBootLoader: disk.img is a bare ext4 root filesystem, and
+// there is no nvram.bin, EFI store or display (decision 0039).
+//
 // One JSON object per stdout line.
 //   clone --from <bundle> --to <bundle>        {"ok":true} | {"ok":false,"error"} (exit 1)
-//   run --bundle <dir> --cpus N --memory-mb M --net-fd 3 [--seed <img>] [--cache <img>]
+//   run --bundle <dir> --cpus N --memory-mb M --net-fd 3 [--seed <img>] [--cache <img>] [--stats <img>]
+//       [--console <file>] [--first-boot-user U --first-boot-password-file F]
 //                                              {"event":"started"}, then
 //                                              {"event":"stopped","reason":"guest|signal|error","detail"}
+//   restore-image                              {"ok":true,"url","build","version"} | {"ok":false,"error"} (exit 1)
+//   install --ipsw <file> --bundle <dir> --disk-gb N
+//                                              {"progress":0.5} every 5 s, then {"ok":true} | {"ok":false,"error"} (exit 1)
+//   capabilities                               {"firstBoot":true|false}
 //   count-vms                                  {"count":N}
 //   egress                                     {"physical":{"name","index"}|null,"vpnCarriesDefault",
 //                                               "expensive","constrained"} now and on every change
 //   host                                       {"thermal":"nominal|fair|serious|critical","lowPowerMode",
 //                                               "memoryPressure":"normal|warning|critical"} now and on every change
 //
-// A bundle is a directory with config.json (keys hardwareModel and ecid as base64
-// of the framework's data representations, plus macAddress), disk.img and
+// A macOS bundle is a directory with config.json (keys hardwareModel and ecid as
+// base64 of the framework's data representations, plus macAddress), disk.img and
 // nvram.bin. That is the same file layout Tart uses, so pilot images can be
-// shared; no Tart code is used here.
+// shared; no Tart code is used here. A Linux bundle has config.json ("os":"linux"
+// and macAddress), disk.img, vmlinux (an uncompressed arm64 Image) and initrd.
 import Darwin
 import Foundation
 import Network
@@ -40,6 +50,19 @@ func flag(_ name: String) -> String? {
 
 struct Failure: Error, CustomStringConvertible { let description: String }
 
+/// Whether the bundle's config.json says it is a Linux guest. Anything else is macOS,
+/// which is what every bundle made before Linux guests is.
+func isLinux(_ bundle: String) -> Bool {
+    guard let raw = try? Data(contentsOf: URL(fileURLWithPath: "\(bundle)/config.json")),
+          let json = try? JSONSerialization.jsonObject(with: raw) as? [String: Any] else { return false }
+    return json["os"] as? String == "linux"
+}
+
+/// The files a bundle of that kind must hold; config.json first.
+func bundleFiles(linux: Bool) -> [String] {
+    linux ? ["config.json", "disk.img", "vmlinux", "initrd"] : ["config.json", "disk.img", "nvram.bin"]
+}
+
 // MARK: clone
 
 /// Makes a new bundle from a base image. disk.img and nvram.bin are APFS clones
@@ -51,7 +74,7 @@ func clone() -> Never {
         emit(["ok": false, "error": "clone needs --from and --to"]); exit(1)
     }
     let fm = FileManager.default
-    let names = ["config.json", "disk.img", "nvram.bin"]
+    let names = bundleFiles(linux: isLinux(from))
     if let missing = names.first(where: { !fm.fileExists(atPath: "\(from)/\($0)") }) {
         emit(["ok": false, "error": "\(from) is not a VM bundle: no \(missing)"]); exit(1)
     }
@@ -63,7 +86,7 @@ func clone() -> Never {
         exit(1)
     }
     do {
-        for name in ["disk.img", "nvram.bin"] where clonefile("\(from)/\(name)", "\(to)/\(name)", 0) != 0 {
+        for name in names.dropFirst() where clonefile("\(from)/\(name)", "\(to)/\(name)", 0) != 0 {
             throw Failure(description: "clonefile \(name): \(String(cString: strerror(errno))) (the clone must be on the same APFS volume)")
         }
         let raw = try Data(contentsOf: URL(fileURLWithPath: "\(from)/config.json"))
@@ -210,15 +233,38 @@ func host() -> Never {
 /// - no keyboard or pointing device, and no VZVirtualMachineView: nobody drives the guest.
 ///
 /// One display device is present (see below) only because a macOS guest does not boot without one.
-func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32) throws -> VZVirtualMachineConfiguration {
+/// A Linux guest gets none.
+func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32?, console: String? = nil) throws -> VZVirtualMachineConfiguration {
     let fm = FileManager.default
-    for name in ["config.json", "disk.img", "nvram.bin"] where !fm.fileExists(atPath: "\(bundle)/\(name)") {
+    let linux = isLinux(bundle)
+    for name in bundleFiles(linux: linux) where !fm.fileExists(atPath: "\(bundle)/\(name)") {
         throw Failure(description: "\(bundle) is not a VM bundle: no \(name)")
     }
     let raw = try Data(contentsOf: URL(fileURLWithPath: "\(bundle)/config.json"))
     guard let json = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
         throw Failure(description: "config.json is not a JSON object")
     }
+    guard let mac = (json["macAddress"] as? String).flatMap({ VZMACAddress(string: $0) }) else {
+        throw Failure(description: "config.json has no usable macAddress")
+    }
+    let config = VZVirtualMachineConfiguration()
+    if linux {
+        config.platform = VZGenericPlatformConfiguration()
+        let loader = VZLinuxBootLoader(kernelURL: URL(fileURLWithPath: "\(bundle)/vmlinux"))
+        loader.initialRamdiskURL = URL(fileURLWithPath: "\(bundle)/initrd")
+        // Fixed here, never read from the bundle. The image has no EFI partition, so
+        // its /boot/efi mount is masked; hvc0 is the virtio console below.
+        loader.commandLine = "console=hvc0 root=LABEL=cloudimg-rootfs rw systemd.mask=boot-efi.mount"
+        config.bootLoader = loader
+    } else {
+        try macPlatform(config, json: json, bundle: bundle)
+    }
+    try finishConfiguration(config, bundle: bundle, cpus: cpus, memoryMB: memoryMB, netFd: netFd, mac: mac, console: console, linux: linux)
+    return config
+}
+
+/// A macOS guest's platform, boot loader and the identity config.json carries.
+func macPlatform(_ config: VZVirtualMachineConfiguration, json: [String: Any], bundle: String) throws {
     guard let modelData = (json["hardwareModel"] as? String).flatMap({ Data(base64Encoded: $0) }),
           let model = VZMacHardwareModel(dataRepresentation: modelData) else {
         throw Failure(description: "config.json has no usable hardwareModel")
@@ -228,11 +274,19 @@ func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32
           let ecid = VZMacMachineIdentifier(dataRepresentation: ecidData) else {
         throw Failure(description: "config.json has no usable ecid")
     }
-    guard let mac = (json["macAddress"] as? String).flatMap({ VZMACAddress(string: $0) }) else {
-        throw Failure(description: "config.json has no usable macAddress")
-    }
+    let platform = VZMacPlatformConfiguration()
+    platform.hardwareModel = model
+    platform.machineIdentifier = ecid
+    platform.auxiliaryStorage = VZMacAuxiliaryStorage(contentsOf: URL(fileURLWithPath: "\(bundle)/nvram.bin"))
+    config.platform = platform
+    config.bootLoader = VZMacOSBootLoader()
+}
 
-    let config = VZVirtualMachineConfiguration()
+/// Everything both kinds share: size, disks, the NAT network, the console.
+func finishConfiguration(
+    _ config: VZVirtualMachineConfiguration, bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32?,
+    mac: VZMACAddress, console: String?, linux: Bool
+) throws {
     let cpuRange = VZVirtualMachineConfiguration.minimumAllowedCPUCount...VZVirtualMachineConfiguration.maximumAllowedCPUCount
     guard cpuRange.contains(cpus) else { throw Failure(description: "--cpus must be in \(cpuRange)") }
     let memory = memoryMB * 1024 * 1024
@@ -243,19 +297,15 @@ func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32
     config.cpuCount = cpus
     config.memorySize = memory
 
-    let platform = VZMacPlatformConfiguration()
-    platform.hardwareModel = model
-    platform.machineIdentifier = ecid
-    platform.auxiliaryStorage = VZMacAuxiliaryStorage(contentsOf: URL(fileURLWithPath: "\(bundle)/nvram.bin"))
-    config.platform = platform
-    config.bootLoader = VZMacOSBootLoader()
-
     // The clone's own disk, read-write; the seed (the job's single-use runner
     // config) read-only, so the guest cannot alter what the host handed it; the
-    // cache read-write, shared by nothing else while this VM runs.
+    // cache read-write, shared by nothing else while this VM runs; the stats disk
+    // read-write and raw: the guest writes its usage samples there and nekkod reads
+    // the bytes after the VM stops, never mounting it.
     var disks = [(path: "\(bundle)/disk.img", readOnly: false)]
     if let seed = flag("--seed") { disks.append((seed, true)) }
     if let cache = flag("--cache") { disks.append((cache, false)) }
+    if let stats = flag("--stats") { disks.append((stats, false)) }
     config.storageDevices = try disks.map {
         let attachment = try VZDiskImageStorageDeviceAttachment(url: URL(fileURLWithPath: $0.path), readOnly: $0.readOnly)
         return VZVirtioBlockDeviceConfiguration(attachment: attachment)
@@ -263,28 +313,63 @@ func makeConfiguration(bundle: String, cpus: Int, memoryMB: UInt64, netFd: Int32
 
     // The guest's only network: raw Ethernet frames on a datagram socket whose
     // other end is nekkod's userspace NAT, which forwards to public addresses only.
-    let network = VZVirtioNetworkDeviceConfiguration()
-    network.macAddress = mac
-    let attachment = VZFileHandleNetworkDeviceAttachment(fileHandle: FileHandle(fileDescriptor: netFd, closeOnDealloc: false))
-    attachment.maximumTransmissionUnit = 1500
-    network.attachment = attachment
-    config.networkDevices = [network]
+    // `install` has none: the installer needs no network.
+    if let netFd {
+        let network = VZVirtioNetworkDeviceConfiguration()
+        network.macAddress = mac
+        let attachment = VZFileHandleNetworkDeviceAttachment(fileHandle: FileHandle(fileDescriptor: netFd, closeOnDealloc: false))
+        attachment.maximumTransmissionUnit = 1500
+        network.attachment = attachment
+        config.networkDevices = [network]
+    }
 
     // A display device with no view and no input devices. A macOS guest does
     // not boot without a graphics device (with none it spins at boot and never
     // brings up its network). Nothing attaches a VZVirtualMachineView, so no
     // frame of the guest's screen ever reaches the host.
-    let graphics = VZMacGraphicsDeviceConfiguration()
-    graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: 1024, heightInPixels: 768, pixelsPerInch: 72)]
-    config.graphicsDevices = [graphics]
+    if !linux {
+        let graphics = VZMacGraphicsDeviceConfiguration()
+        graphics.displays = [VZMacGraphicsDisplayConfiguration(widthInPixels: 1024, heightInPixels: 768, pixelsPerInch: 72)]
+        config.graphicsDevices = [graphics]
+    }
+
+    if let console { config.serialPorts = [try consolePort(console)] }
 
     config.entropyDevices = [VZVirtioEntropyDeviceConfiguration()]
     config.memoryBalloonDevices = [VZVirtioTraditionalMemoryBalloonDeviceConfiguration()]
     try config.validate()
-    return config
+}
+
+/// The most of the guest's console `--console` keeps.
+let consoleLimit = 1 << 20
+
+/// The guest's serial console, written to a new file at `path`. The guest is not trusted: past
+/// `consoleLimit` its output is still read but dropped, so it can neither fill the host's disk
+/// nor stall on a full pipe. Only text leaves the guest this way; nothing goes in.
+func consolePort(_ path: String) throws -> VZVirtioConsoleDeviceSerialPortConfiguration {
+    let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+    guard fd >= 0 else { throw Failure(description: "cannot create \(path): \(String(cString: strerror(errno)))") }
+    let out = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    let pipe = Pipe()
+    var written = 0
+    pipe.fileHandleForReading.readabilityHandler = { h in
+        let data = h.availableData
+        if data.isEmpty { h.readabilityHandler = nil; return }
+        guard written < consoleLimit else { return }
+        let part = data.prefix(consoleLimit - written)
+        out.write(part)
+        written += part.count
+        if written >= consoleLimit { out.write(Data("\n[the rest of the console was dropped]\n".utf8)) }
+    }
+    keep.append(pipe)
+    let port = VZVirtioConsoleDeviceSerialPortConfiguration()
+    port.attachment = VZFileHandleSerialPortAttachment(fileHandleForReading: nil, fileHandleForWriting: pipe.fileHandleForWriting)
+    return port
 }
 
 var finished = false
+/// What `install` must hold until it exits: dropping the VM, installer or timer ends the install.
+var keep: [Any] = []
 
 /// Reports the stop once and exits. Exiting this process also ends the VM: the
 /// framework's VM process belongs to us and goes when we go.
@@ -333,9 +418,18 @@ func run() -> Never {
           let memoryMB = flag("--memory-mb").flatMap({ UInt64($0) }), let netFd = flag("--net-fd").flatMap({ Int32($0) }) else {
         finish("error", "run needs --bundle, --cpus, --memory-mb and --net-fd", code: 1)
     }
+    // Read and deleted before anything can fail, so the password never outlives this call.
+    var firstBoot: (user: String, password: String)?
+    if let user = flag("--first-boot-user") {
+        guard let file = flag("--first-boot-password-file"), let password = try? String(contentsOfFile: file, encoding: .utf8) else {
+            finish("error", "--first-boot-user needs a readable --first-boot-password-file", code: 1)
+        }
+        unlink(file)
+        firstBoot = (user, password.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
     let config: VZVirtualMachineConfiguration
     do {
-        config = try makeConfiguration(bundle: bundle, cpus: cpus, memoryMB: memoryMB, netFd: netFd)
+        config = try makeConfiguration(bundle: bundle, cpus: cpus, memoryMB: memoryMB, netFd: netFd, console: flag("--console"))
     } catch {
         finish("error", "\(error)", code: 1)
     }
@@ -368,22 +462,158 @@ func run() -> Never {
     watch.setEventHandler { if !peerConnected(netFd) { stopForLostNetwork(vm) } }
     watch.resume()
 
-    vm.start { result in
-        switch result {
-        case .success: emit(["event": "started"])
-        case .failure(let error): finish("error", "\(error)", code: 1)
+    if let firstBoot {
+        startWithFirstBoot(vm, user: firstBoot.user, password: firstBoot.password)
+    } else {
+        vm.start { result in
+            switch result {
+            case .success: emit(["event": "started"])
+            case .failure(let error): finish("error", "\(error)", code: 1)
+            }
         }
     }
     withExtendedLifetime((vm, delegate, term, watch)) { dispatchMain() }
 }
 
+/// An image build's first boot, with no window and no Setup Assistant: creates
+/// the admin, logs it in automatically and turns Remote Login on. Job VMs never
+/// reach this (decision 0038). The framework reads these options only on a macOS 27
+/// host and guest. The compiler check is the macOS 27 SDK, so an older SDK still builds.
+func startWithFirstBoot(_ vm: VZVirtualMachine, user: String, password: String) {
+    #if compiler(>=6.4)
+    if #available(macOS 27, *) {
+        do {
+            let provisioning = VZMacGuestProvisioningOptions()
+            provisioning.fullName = "Nekko Build"
+            provisioning.username = user
+            provisioning.password = password
+            provisioning.logsInAutomatically = true
+            provisioning.enablesRemoteLogin = true
+            let options = VZMacOSVirtualMachineStartOptions()
+            try options.setGuestProvisioning(provisioning)
+            vm.start(options: options) { error in
+                if let error { finish("error", "\(error)", code: 1) }
+                emit(["event": "started"])
+            }
+        } catch {
+            finish("error", "\(error)", code: 1)
+        }
+        return
+    }
+    #endif
+    finish("error", "Update this Mac to macOS 27 to set it up here.", code: 1)
+}
+
+// MARK: capabilities
+
+/// Whether this binary can do a first boot, which only the macOS 27 SDK allows.
+/// nekkod asks before it spends a 25 GB download finding out.
+func capabilities() -> Never {
+    #if compiler(>=6.4)
+    emit(["firstBoot": true])
+    #else
+    emit(["firstBoot": false])
+    #endif
+    exit(0)
+}
+
+// MARK: restore-image
+
+/// Apple's newest restore image for this Mac. Here, not in nekkod, because the
+/// catalog call fails without the virtualization entitlement.
+func restoreImage() -> Never {
+    VZMacOSRestoreImage.fetchLatestSupported { result in
+        switch result {
+        case .success(let image):
+            let v = image.operatingSystemVersion
+            emit([
+                "ok": true, "url": image.url.absoluteString, "build": image.buildVersion,
+                "version": "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)",
+            ])
+            exit(0)
+        case .failure(let error):
+            emit(["ok": false, "error": "\(error)"])
+            exit(1)
+        }
+    }
+    dispatchMain()
+}
+
+// MARK: install
+
+/// Makes a new bundle from an Apple restore image with VZMacOSInstaller: a sparse
+/// disk, fresh identifiers, and a headless install with no network. The bundle
+/// must not exist; a failed install leaves its folder for nekkod to delete.
+func install() -> Never {
+    guard let ipsw = flag("--ipsw"), let bundle = flag("--bundle"), let gb = flag("--disk-gb").flatMap({ UInt64($0) }) else {
+        emit(["ok": false, "error": "install needs --ipsw, --bundle and --disk-gb"]); exit(1)
+    }
+    let url = URL(fileURLWithPath: ipsw)
+    let parent = getppid()
+    VZMacOSRestoreImage.load(from: url) { loaded in
+        DispatchQueue.main.async {
+            do {
+                let image = try loaded.get()
+                guard let req = image.mostFeaturefulSupportedConfiguration, req.hardwareModel.isSupported else {
+                    throw Failure(description: "this Mac cannot install this restore image")
+                }
+                guard mkdir(bundle, 0o755) == 0 else {
+                    throw Failure(description: "cannot create \(bundle): \(String(cString: strerror(errno)))")
+                }
+                let fd = open("\(bundle)/disk.img", O_RDWR | O_CREAT | O_EXCL, 0o644)
+                guard fd >= 0, ftruncate(fd, off_t(gb * 1_000_000_000)) == 0 else {
+                    throw Failure(description: "cannot create disk.img: \(String(cString: strerror(errno)))")
+                }
+                close(fd)
+                _ = try VZMacAuxiliaryStorage(creatingStorageAt: URL(fileURLWithPath: "\(bundle)/nvram.bin"), hardwareModel: req.hardwareModel, options: [])
+                let json: [String: Any] = [
+                    "version": 1, "os": "darwin", "arch": "arm64", "diskFormat": "raw",
+                    "cpuCount": 4, "cpuCountMin": req.minimumSupportedCPUCount,
+                    "memorySize": 8_589_934_592, "memorySizeMin": req.minimumSupportedMemorySize,
+                    "display": ["width": 1024, "height": 768],
+                    "macAddress": VZMACAddress.randomLocallyAdministered().string,
+                    "hardwareModel": req.hardwareModel.dataRepresentation.base64EncodedString(),
+                    "ecid": VZMacMachineIdentifier().dataRepresentation.base64EncodedString(),
+                ]
+                try JSONSerialization.data(withJSONObject: json, options: [.sortedKeys, .withoutEscapingSlashes])
+                    .write(to: URL(fileURLWithPath: "\(bundle)/config.json"))
+                let config = try makeConfiguration(bundle: bundle, cpus: 4, memoryMB: 8192, netFd: nil)
+                let vm = VZVirtualMachine(configuration: config)
+                let installer = VZMacOSInstaller(virtualMachine: vm, restoringFromImageAt: url)
+                let tick = DispatchSource.makeTimerSource(queue: .main)
+                tick.schedule(deadline: .now() + 5, repeating: 5)
+                tick.setEventHandler { emit(["progress": installer.progress.fractionCompleted]) }
+                tick.resume()
+                // Reparented means nekkod is gone; nothing else would end this process.
+                let watch = DispatchSource.makeTimerSource(queue: .main)
+                watch.schedule(deadline: .now() + 1, repeating: 1)
+                watch.setEventHandler { if getppid() != parent { exit(1) } }
+                watch.resume()
+                keep = [vm, installer, tick, watch]
+                installer.install { result in
+                    switch result {
+                    case .success: emit(["ok": true]); exit(0)
+                    case .failure(let error): emit(["ok": false, "error": "\(error)"]); exit(1)
+                    }
+                }
+            } catch {
+                emit(["ok": false, "error": "\(error)"]); exit(1)
+            }
+        }
+    }
+    dispatchMain()
+}
+
 switch args.first {
 case "clone": clone()
 case "run": run()
+case "capabilities": capabilities()
+case "restore-image": restoreImage()
+case "install": install()
 case "count-vms": countVms()
 case "egress": egress()
 case "host": host()
 default:
-    emit(["ok": false, "error": "usage: nekko-vm clone|run|count-vms|egress|host"])
+    emit(["ok": false, "error": "usage: nekko-vm clone|run|capabilities|restore-image|install|count-vms|egress|host"])
     exit(1)
 }

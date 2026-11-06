@@ -19,18 +19,29 @@ export interface PushPayload {
   kind?: string;
   /** The chat's opaque tag (a hash of the session id), so a later `dismiss` can find it. */
   tag?: string;
+  /** Current distinct waiting chats across the token's rooms, not deliveries or unread chats. */
+  badge?: number;
 }
 
 /** The APNs body of an alert push: content-free, plus the kind and the chat's opaque tag (exported for tests). */
 export function alertPayload(payload: PushPayload) {
   const aps: Record<string, unknown> = { alert: { title: payload.title, body: payload.body }, sound: 'default' };
   if (payload.tag) aps['thread-id'] = payload.tag;
+  if (validBadge(payload.badge)) aps.badge = payload.badge;
   return { aps, ...(payload.kind ? { kind: payload.kind } : {}), ...(payload.tag ? { tag: payload.tag } : {}) };
 }
 
 /** A silent push that tells an iPhone to remove the delivered notification for a chat (exported for tests). */
-export function dismissPayload(tag: string) {
-  return { aps: { 'content-available': 1 }, dismiss: tag };
+export function dismissPayload(tag: string, badge?: number) {
+  return { aps: { 'content-available': 1, ...(validBadge(badge) ? { badge } : {}) }, dismiss: tag };
+}
+
+const validBadge = (badge: number | undefined): badge is number => Number.isSafeInteger(badge) && badge! >= 0;
+
+/** Badge-only alert push: iOS applies it without waking a suspended app. No banner or sound. */
+export function badgePayload(badge: number) {
+  if (!validBadge(badge)) throw new Error('invalid badge count');
+  return { aps: { badge } };
 }
 
 /**
@@ -121,7 +132,7 @@ const date = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 
 
 /**
  * The agent's card as a phone at `level` may see it (exported for tests):
- * Minimal blanks the title, step and reply, Standard the reply. Only the
+ * Minimal blanks the titles, step and reply, Standard the reply. Only the
  * fields `LiveCardState` decodes are kept, text clipped, and the last chats
  * (never the focused one) move into `more` while the push would pass 4 KB.
  * Null when the agent sent no card.
@@ -140,6 +151,9 @@ export function cardForLevel(state: unknown, level: CardLevel): CardState | null
       reply: level === 'detailed' ? clip(c.reply, 60) : '',
       closeWord: clip(c.closeWord, 20),
     };
+    // The row title, left out when empty as the phone writes it.
+    const title = level === 'minimal' ? '' : clip(c.title, 40);
+    if (title) chat.title = title;
     if (date(c.finishedAt) !== undefined) chat.finishedAt = c.finishedAt;
     if (date(c.startedAt) !== undefined) chat.startedAt = c.startedAt;
     if (id(c.callId)) chat.callId = c.callId;
@@ -186,7 +200,11 @@ export interface PushSender {
   /** The iPhone's one Live Activity card: `token` is its update token, or its push-to-start token for `start`. */
   sendCard?(token: string, push: CardPush, app?: string): Promise<void>;
   /** A silent push removing a chat's delivered notification (iPhone only). */
-  sendDismiss?(token: string, tag: string, app?: string): Promise<void>;
+  sendDismiss?(token: string, tag: string, app?: string, badge?: number): Promise<void>;
+  /** Badge-only APNs alert, not a background wake-up. */
+  sendBadge?(token: string, badge: number, app?: string): Promise<void>;
+  /** Canonical APNs topic, so aliases of the default app share one count. */
+  apnsTopic?(app?: string): string;
 }
 
 /** The APNs body of a Live Activity push (exported for tests). */
@@ -346,10 +364,20 @@ export function createPushSender(env: NodeJS.ProcessEnv = process.env): PushSend
   return {
     enabled: apnsReady || fcmReady,
     delivers: (platform) => (platform === 'ios' ? apnsReady : fcmReady),
-    async sendDismiss(token, tag, app) {
+    apnsTopic: topicFor,
+    async sendBadge(token, badge, app) {
       try {
         if (!apnsJwt) return;
-        await sendApns(apnsHost, apnsJwt(), topicFor(app), token, dismissPayload(tag), 'background');
+        await sendApns(apnsHost, apnsJwt(), topicFor(app), token, badgePayload(badge), 'alert');
+      } catch (e) {
+        console.warn(`[push] badge failed: ${(e as Error).message}`);
+      }
+    },
+    async sendDismiss(token, tag, app, badge) {
+      try {
+        if (!apnsJwt) return;
+        // A badge is a user-visible update, even with no banner. Do not budget it as a silent wake.
+        await sendApns(apnsHost, apnsJwt(), topicFor(app), token, dismissPayload(tag, badge), validBadge(badge) ? 'alert' : 'background');
         console.log('[push] dismissal sent');
       } catch (e) {
         console.warn(`[push] dismissal failed: ${(e as Error).message}`);

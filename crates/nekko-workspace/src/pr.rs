@@ -24,21 +24,9 @@ fn re(cell: &'static OnceLock<Regex>, src: &str, flags: &str) -> &'static Regex 
     cell.get_or_init(|| Regex::with_flags(src, flags).expect("PR pattern compiles"))
 }
 
-/// `Number(x)` as JSON: an integral value prints without a fraction, and NaN
-/// or an infinity as `null`, as `JSON.stringify` writes them.
-pub fn js_num(f: f64) -> Value {
-    if !f.is_finite() {
-        Value::Null
-    } else if f.fract() == 0.0 && f.abs() < 9_007_199_254_740_992.0 {
-        json!(f as i64)
-    } else {
-        json!(f)
-    }
-}
-
 /// `Number(v ?? 0)`.
 fn num_or_zero(v: Option<&Value>) -> Value {
-    if js::nullish(v) { json!(0) } else { js_num(js::to_number(v)) }
+    if js::nullish(v) { json!(0) } else { js::num(js::to_number(v)) }
 }
 
 /// `(v as string) || fallback`: the value itself when truthy.

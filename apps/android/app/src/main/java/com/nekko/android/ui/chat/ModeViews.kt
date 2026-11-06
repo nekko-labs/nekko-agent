@@ -1,5 +1,6 @@
 package com.nekko.android.ui.chat
 
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -61,11 +62,13 @@ import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
@@ -111,11 +114,17 @@ import com.nekko.protocol.Effort
 import com.nekko.protocol.EngineStatus
 import com.nekko.protocol.MonitorFormat
 import com.nekko.protocol.MonitorTone
+import com.nekko.protocol.PcSettings.ChatMode
+import com.nekko.protocol.RunOption
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 
 /** Test tags the instrumented tests find the controls by. */
 object ModeTags {
@@ -217,6 +226,19 @@ fun effortLabel(e: Effort): String = stringResource(
 // Model, effort and context: the row under the message box
 // ---------------------------------------------------------------------------
 
+/** The tool policy in plain words, as Simple shows it. Same values as the computer's own. */
+fun asksTitleRes(mode: ChatMode) = when (mode) {
+    ChatMode.ASK -> R.string.simple_asks_first
+    ChatMode.GUARDRAILS -> R.string.simple_asks_matters
+    ChatMode.YOLO -> R.string.simple_asks_own
+}
+
+fun asksDetailRes(mode: ChatMode) = when (mode) {
+    ChatMode.ASK -> R.string.simple_asks_detail_first
+    ChatMode.GUARDRAILS -> R.string.simple_asks_detail_matters
+    ChatMode.YOLO -> R.string.simple_asks_detail_own
+}
+
 /** Which halves of the model and effort control show: a chat with no model yet still offers the picker, whatever Simple hides. */
 @Composable
 private fun modelEffortShown(chat: ChatUi): Pair<Boolean, Boolean> {
@@ -224,17 +246,65 @@ private fun modelEffortShown(chat: ChatUi): Pair<Boolean, Boolean> {
     return (simple.shown("model") || chat.modelId == null) to simple.shown("effort")
 }
 
+private val RUN_OPTION_TITLES = mapOf(
+    "autoModel" to "Choose the model automatically",
+    "offline" to "Offline",
+    "cloudOnly" to "Cloud only",
+    "incognito" to "Incognito",
+    "gitIsolation" to "Separate Git branch",
+    "workMode" to "Work mode",
+    "toolApproach" to "Tool style",
+)
+
+private val RUN_VALUE_LABELS = mapOf(
+    "default" to "Default",
+    "better-review" to "Better review",
+    "design" to "Design",
+    "best-output" to "Best output",
+    "list" to "List",
+    "code" to "Code",
+)
+
+/** One run setting: a switch, or a choice of its values. */
+@Composable
+private fun RunOptionRow(option: RunOption, value: JsonElement?, onSet: (JsonElement) -> Unit) {
+    val p = Nekko.palette
+    val title = RUN_OPTION_TITLES[option.key] ?: option.key
+    if (option.values.isEmpty()) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("run.${option.key}"), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+            Switch(checked = (value as? JsonPrimitive)?.booleanOrNull == true, onCheckedChange = { onSet(JsonPrimitive(it)) })
+        }
+    } else {
+        val current = (value as? JsonPrimitive)?.contentOrNull ?: option.values.first()
+        Text(title, style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        Row(Modifier.fillMaxWidth().testTag("run.${option.key}"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            option.values.forEach { v ->
+                FilterChip(selected = v == current, onClick = { onSet(JsonPrimitive(v)) }, label = { Text(RUN_VALUE_LABELS[v] ?: v) })
+            }
+        }
+    }
+}
+
 /** Under the message box: the model and effort control on the left, the context ring on the right, each as Simple allows. */
 @Composable
-fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, modifier: Modifier = Modifier) {
+fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit, asks: ChatMode?, onOpenAsks: () -> Unit, modifier: Modifier = Modifier) {
     val (model, effort) = modelEffortShown(chat)
-    val context = LocalSimple.current.shown("context")
-    if (!model && !effort && !context) return
+    val simple = LocalSimple.current
+    val context = simple.shown("context")
+    // Simple's view of the tool policy; Expert keeps it in More.
+    val plainAsks = asks?.takeIf { !simple.expert && simple.shown("asks") }
+    if (!model && !effort && !context && plainAsks == null) return
     Row(
-        modifier.fillMaxWidth().background(Nekko.palette.paper).padding(horizontal = 8.dp),
+        modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort)
+        if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort && (simple.expert || !model))
+        plainAsks?.let { mode ->
+            TextButton(onClick = onOpenAsks, enabled = enabled, modifier = Modifier.testTag("chat.asksFirst")) {
+                Text(stringResource(asksTitleRes(mode)), style = MaterialTheme.typography.labelMedium, color = Nekko.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
         Spacer(Modifier.weight(1f))
         if (context) ContextRing(chat)
     }
@@ -252,11 +322,11 @@ fun LongChatNudge(tokens: Long, onStartFresh: (() -> Unit)?, onDismiss: () -> Un
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "This chat is getting long. Starting fresh saves about ${MonitorFormat.tokens(tokens)} tokens.",
+            stringResource(R.string.simple_long_note, MonitorFormat.tokens(tokens)),
             style = MaterialTheme.typography.bodySmall, color = p.inkSoft, modifier = Modifier.weight(1f).padding(vertical = 6.dp),
         )
-        if (onStartFresh != null) TextButton(onClick = onStartFresh) { Text("Start fresh", color = p.accent) }
-        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = "Dismiss", tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
+        if (onStartFresh != null) TextButton(onClick = onStartFresh) { Text(stringResource(R.string.simple_start_fresh), color = p.accent) }
+        IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.simple_dismiss), tint = p.inkFaint, modifier = Modifier.size(16.dp)) }
     }
 }
 
@@ -296,10 +366,12 @@ fun ModelEffortSheet(
     computers: ComputersState,
     onSet: suspend (providerId: String?, modelId: String?, effort: Effort?) -> Unit,
     onLoadModels: suspend () -> Unit,
+    onRunOption: suspend (key: String, value: JsonElement) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var picking by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf<Effort?>(null) }
@@ -318,7 +390,7 @@ fun ModelEffortSheet(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                error = e.message ?: "Couldn’t change it."
+                error = e.message ?: resources.getString(R.string.chat_change_failed)
             } finally {
                 busy = null
             }
@@ -359,6 +431,23 @@ fun ModelEffortSheet(
                     style = MaterialTheme.typography.bodySmall,
                     color = p.inkSoft,
                 )
+            }
+            if (LocalSimple.current.shown("run-settings")) {
+                Text("Run settings", style = MaterialTheme.typography.titleSmall, color = p.ink)
+                RunOption.all.forEach { option ->
+                    RunOptionRow(option, chat.runOptions[option.key]) { value ->
+                        error = null
+                        scope.launch {
+                            try {
+                                onRunOption(option.key, value)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                error = e.message ?: resources.getString(R.string.chat_change_failed)
+                            }
+                        }
+                    }
+                }
             }
             error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.danger) }
         }
@@ -764,6 +853,7 @@ fun AgentDetails(
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
+    val resources = LocalResources.current
     var notice by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     Column(Modifier.testTag(ModeTags.MONITOR_SHEET), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionTitle(stringResource(R.string.monitor_hardware))
@@ -787,7 +877,7 @@ fun AgentDetails(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    (e.message ?: "Couldn’t unload it.") to false
+                    (e.message ?: resources.getString(R.string.chat_unload_failed)) to false
                 }
             }
         }

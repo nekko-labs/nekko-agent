@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { DEFAULT_RUNNER_SETTINGS, type RunnerView } from '@nekko-agent/shared';
+import { DEFAULT_RUNNER_SETTINGS, type ImageView, type RunnerView } from '@nekko-agent/shared';
 
 vi.mock('./primitives/index.js', async (original) => ({
   ...await original<typeof import('./primitives/index.js')>(),
@@ -28,6 +28,7 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   awake: true,
   error: null,
   today: { jobs: 14, seconds: 7800 },
+  repos: [], forkApprovalOpen: false, suggestedSize: null,
   host: { ramMb: 32768, cores: 10, recommendedMemoryMb: 16384, runnerMemoryMb: 16384, cpusPerVm: 4, onBattery: false, batteryPct: 100, networkId: 'home', networkTrusted: true },
   recent: [
     { ts: now - 600, runnerId: 'r1', repo: 'nekko-labs/nekko-agent', workflow: 'mobile', job: 'iOS build', result: 'finished', seconds: 660, reason: [] },
@@ -35,9 +36,29 @@ const view = (over: Partial<RunnerView> = {}): RunnerView => ({
   ],
   ...over,
 });
-const render = (v: RunnerView) => renderToStaticMarkup(<RunnerCard view={v} now={now} onSettings={() => {}} beginReply={() => () => {}} />);
+const render = (v: RunnerView, image: ImageView | null = null, onAddTools?: () => Promise<void>) => renderToStaticMarkup(<RunnerCard view={v} now={now} image={image} onSettings={() => {}} onAddTools={onAddTools} beginReply={() => () => {}} />);
+const image = (over: Partial<ImageView> = {}): ImageView => ({
+  state: 'none', kind: null, stage: null, doneStages: [], detail: '', bytes: null, fraction: null, error: null, log: null, info: null, canResume: false, ...over,
+});
+const noImage = view({ state: 'error', error: 'No VM image yet.', slots: [] });
 
 describe('RunnerCard', () => {
+  it('names ready and starting VMs and offers their live logs before they have a job', () => {
+    const html = render(view({ slots: [
+      { state: 'ready', vm: 'ready-mac', job: null, since: now, drainEndsAt: null },
+      { state: 'starting', vm: 'booting-mac', job: null, since: now, drainEndsAt: null },
+    ], recent: [] }));
+    for (const name of ['ready-mac', 'booting-mac']) expect(html).toContain(`data-runner-vm="${name}"`);
+    expect(html.match(/>Live log</g)).toHaveLength(2);
+    expect(html).not.toContain('data-running-job');
+  });
+
+  it('does not invent VM names or log actions for empty slots', () => {
+    const html = render(view({ slots: [], recent: [] }));
+    expect(html).not.toContain('data-runner-vm');
+    expect(html).not.toContain('>Live log<');
+  });
+
   it('running_card_matches_mockup_3', () => {
     const html = render(view());
     for (const s of [
@@ -45,6 +66,49 @@ describe('RunnerCard', () => {
       '8 GB · 4 cores', 'On AC', 'Trusted · home', '14 jobs · 2 h 10 min', 'role="switch" aria-checked="true" aria-label="Runner on for nekko-labs/nekko-agent"',
       'data-runner-card="r1"', 'aria-label="Runner settings for nekko-labs/nekko-agent"', 'ci · darwin daemon · stopped after 2 min',
     ]) expect(html).toContain(s);
+  });
+
+  it('groups jobs as queued, in progress and completed', () => {
+    const html = render(view({
+      queue: [{ repo: 'nekko-labs/nekko-agent', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: new Date((now - 180) * 1000).toISOString(), declined: false, accepted: false }],
+    }));
+    const at = (s: string) => html.indexOf(s);
+    expect(at('Queued · 1')).toBeGreaterThan(-1);
+    expect(at('Queued · 1')).toBeLessThan(at('In progress · 1'));
+    expect(at('In progress · 1')).toBeLessThan(at('Completed'));
+    expect(html).toContain('waiting 3 min');
+    // No group for what is not there.
+    expect(render(view({ slots: [], recent: [] }))).not.toContain('data-runner-jobs');
+  });
+
+  it('a running job says how far it has got, with a real percent', () => {
+    const job = { repo: 'nekko-labs/nekko-agent', runId: 1, jobId: 2, workflow: 'Native iOS', job: 'protocol-and-build', url: 'https://github.com/x/1', steps: { done: 6, total: 12, current: 'Build iOS' } };
+    const html = render(view({ slots: [{ state: 'running', vm: 'nekko-mac1-1', job, since: now - 2940, drainEndsAt: null }] }));
+    expect(html).toContain('Working on <a');
+    expect(html).toContain('Native iOS · protocol-and-build</a>');
+    expect(html).toContain('Step 7 of 12: Build iOS · 50%');
+    expect(html).toMatch(/role="progressbar"[^>]*aria-valuenow="50"/);
+    for (const b of ['>Live log<', '>Re-run<', '>Cancel<']) expect(html).toContain(b);
+  });
+
+  it('a running job without steps shows no made-up bar', () => {
+    const html = render(view());
+    expect(html).toContain('ios-native · PR #904');
+    expect(html).not.toContain('role="progressbar"');
+  });
+
+  it('a queued job can be accepted or declined, and either undone', () => {
+    const q = { repo: 'o/r', runId: 9, jobId: 90, workflow: 'ci', job: 'lint', createdAt: null };
+    const fresh = render(view({ queue: [{ ...q, declined: false, accepted: false }] }));
+    expect(fresh).toContain('>Accept now<');
+    expect(fresh).toContain('>Decline<');
+    const declined = render(view({ queue: [{ ...q, declined: true, accepted: false }] }));
+    expect(declined).toContain('Declined: this Mac starts no VM for it');
+    expect(declined).toContain('>Undo<');
+    expect(render(view({ queue: [{ ...q, declined: false, accepted: true }] }))).toContain('Accepted: a VM starts for it now');
+    // A hard limit Runner first keeps: Accept now is off, with the reason.
+    const hot = render(view({ acceptWhy: ['thermalCritical'], queue: [{ ...q, declined: false, accepted: false }] }));
+    expect(hot).toMatch(/disabled=""[^>]*title="[^"]*hot[^"]*"|title="[^"]*hot[^"]*"[^>]*disabled=""/i);
   });
 
   it('error_card_shows_the_daemons_sentence', () => {
@@ -65,6 +129,10 @@ describe('RunnerCard', () => {
 
   it('rounds the battery percent', () => {
     expect(render(view({ host: { ...view().host, onBattery: true, batteryPct: 61.6 } }))).toContain('On battery, 62%');
+    // An unread charge is not an empty battery.
+    const unread = render(view({ host: { ...view().host, onBattery: true, batteryPct: null } }));
+    expect(unread).toContain('On battery<');
+    expect(unread).not.toContain('On battery, 0%');
   });
 
   it('waiting_card_lists_every_reason', () => {
@@ -83,5 +151,65 @@ describe('RunnerCard', () => {
 
   it('no_em_dash_in_markup', () => {
     expect(render(view())).not.toContain('\u2014');
+  });
+
+  it('a_runner_with_no_image_offers_setup_instead_of_the_error_line', () => {
+    const html = render(noImage, image());
+    expect(html).toContain('Set up this Mac');
+    expect(html).not.toContain('No VM image yet.');
+    expect(html).not.toContain('Connect to a workflow');
+    // With the line gone, nothing may still point at an error.
+    expect(html).not.toContain('error above');
+    expect(html).not.toContain('>Error<');
+    expect(html).toContain('>Waiting<');
+    // Any other error still shows, and a daemon with no builder keeps the line.
+    expect(render(view({ state: 'error', error: 'GitHub refused this app key.' }), image())).toContain('GitHub refused this app key.');
+    expect(render(noImage)).toContain('No VM image yet.');
+  });
+
+  it('an_off_runner_with_no_image_stays_off', () => {
+    // The daemon sends `No VM image yet.` for a switched-off runner too, which is every runner after Confirm.
+    const html = render(view({ state: 'off', error: 'No VM image yet.', slots: [], reasons: ['off'] }), image());
+    expect(html).toContain('>Off<');
+    expect(html).not.toContain('>Waiting<');
+    expect(html).not.toContain('No VM image yet.');
+  });
+
+  it('a_build_shows_its_stage_and_bar', () => {
+    const html = render(noImage, image({ state: 'building', stage: 'download', doneStages: ['check'], bytes: [12_400_000_000, 25_600_000_000] }));
+    expect(html).toContain('Download the macOS image: 12.4 of 25.6 GB');
+    expect(html).toContain('width:48.4375%');
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain('Details');
+    expect(html).not.toContain('No VM image yet.');
+  });
+
+  it('a_waiting_build_gives_its_reason', () => {
+    expect(render(noImage, image({ state: 'waiting', stage: 'install', detail: 'Waiting for power: plug this Mac in' }))).toContain('Install the macOS VM: Waiting for power: plug this Mac in');
+  });
+
+  it('a_failed_build_says_why_and_a_paused_one_resumes', () => {
+    expect(render(noImage, image({ state: 'failed', stage: 'xcode', error: 'This Mac has 18 GB free.' }))).toMatch(/role="alert"[^>]*>Setup stopped: This Mac has 18 GB free\./);
+    expect(render(noImage, image({ canResume: true, stage: 'xcode' }))).toContain('Resume setup');
+  });
+
+  it('an_image_without_job_tools_says_so_and_offers_to_install_them', () => {
+    const info = { macos: '27.2', xcode: 'Xcode 27.2', actionsRunner: '2.338.1', built: '2026-11-01', missingTools: ['node', 'gh'] };
+    const html = render(view(), image({ state: 'ready', info }), async () => {});
+    expect(html).toContain('data-missing-tools="node gh"');
+    expect(html).toContain("node and gh are missing from this Mac&#x27;s runner image. Jobs that need them will fail.");
+    expect(html).toMatch(/<button[^>]*>Install them<\/button>/);
+    expect(html).not.toContain('—');
+    // Nothing missing, or a build under way, shows no notice.
+    expect(render(view(), image({ state: 'ready', info: { ...info, missingTools: [] } }), async () => {})).not.toContain('data-missing-tools');
+    expect(render(view(), image({ state: 'building', kind: 'tools', stage: 'tools', info }), async () => {})).not.toContain('data-missing-tools');
+    expect(render(view(), image({ state: 'ready', info: { ...info, missingTools: ['gh'] } }), async () => {})).toMatch(/<button[^>]*>Install it<\/button>/);
+  });
+
+  it('a_ready_image_offers_the_workflow_and_no_setup', () => {
+    const html = render(view(), image({ state: 'ready' }));
+    expect(html).toContain('Connect to a workflow');
+    expect(html).not.toContain('Set up this Mac');
+    expect(render(view())).not.toContain('Connect to a workflow');
   });
 });

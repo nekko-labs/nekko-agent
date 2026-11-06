@@ -13,9 +13,9 @@ describe('first provider setup', () => {
     expect(needsProviderSetup([{ ...engine, kind: 'chatgpt' }])).toBe(false);
     expect(needsProviderSetup([{ ...engine, kind: 'chatgpt', enabled: false }])).toBe(true);
   });
-  it('offers eight accessible provider cards with bundled brand marks', () => {
+  it('offers accessible local and cloud provider cards with bundled brand marks', () => {
     const html = renderToStaticMarkup(<ProviderChoices value="chatgpt" onPick={() => {}} />);
-    expect((html.match(/<button /g) ?? []).length).toBe(8);
+    expect((html.match(/<button /g) ?? []).length).toBe(11);
     expect((html.match(/aria-pressed="true"/g) ?? []).length).toBe(1);
     expect(html).toContain('./providers/openai.svg');
     expect(html).toContain('billed separately');

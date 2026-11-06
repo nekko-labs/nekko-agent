@@ -1,5 +1,5 @@
 name: Development identity
-# macOS-only: every 6 hours on main, or with the `ci:macos` label on a PR (ci.yml).
+# macOS-only: nightly on main, or with the `deploy:macos` label on a PR (ci.yml).
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -9,7 +9,8 @@ on:
       - 'apps/desktop/src/main/appIdentity*'
       - '.github/workflows/dev-identity.yml'
   schedule:
-    - cron: '57 */6 * * *'
+    # 03:57 JST.
+    - cron: '57 18 * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -18,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   macos-native:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'deploy:macos')
     runs-on: macos-latest
     timeout-minutes: 10
     steps:

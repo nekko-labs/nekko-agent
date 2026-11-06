@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -59,12 +60,21 @@ class BeyondChatTest {
                 if (text != null) queue[0] = JsonPrimitive(text) else queue.removeAt(0)
                 buildJsonObject { put("id", "s1") }
             }
+            Channels.CHAT_QUEUE -> {
+                queue.add(c.args[1])
+                session()
+            }
+            Channels.CHAT_INTERRUPT_QUEUED -> {
+                if (interruptTimesOut) throw RelayException("chat:interruptQueued: timed out", afterSend = true)
+                JsonNull
+            }
             Channels.SESSION_FORK -> buildJsonObject { put("id", "s_fork"); put("title", "New chat") }
             else -> JsonArray(emptyList())
         }
     }
 
     private var conn = RelayState.ONLINE
+    private var interruptTimesOut = false
     private fun TestScope.chat(c: FakeCaller) =
         ChatController("s1", c, backgroundScope, { ChatEnv(conn, null, RemoteDefaults("p", "m"), "Mac") })
 
@@ -98,6 +108,30 @@ class BeyondChatTest {
             assertEquals(ChatController.RECONNECT_TO_EDIT_QUEUE, e.message)
         }
         assertEquals(before, c.calls.count { it.channel == Channels.CHAT_EDIT_QUEUED })
+    }
+
+    @Test fun `interrupt names the prompt and the chat's model`() = runTest {
+        val c = computer()
+        val chat = chat(c)
+        chat.reload()
+        chat.interruptQueued(1)
+        val args = c.calls.last { it.channel == Channels.CHAT_INTERRUPT_QUEUED }.args
+        assertEquals("s1", args[0].jsonPrimitive.content)
+        assertEquals("1", args[1].jsonPrimitive.content)
+        assertTrue(args[2].jsonObject.containsKey("modelId"))
+    }
+
+    @Test fun `an interrupt that outlasts the request is not an error`() = runTest {
+        interruptTimesOut = true
+        val c = computer()
+        val chat = chat(c)
+        chat.reload()
+        chat.interruptQueued(0)
+    }
+
+    @Test fun `only run settings that are set read back`() {
+        val read = com.nekko.protocol.RunOption.values(buildJsonObject { put("autoModel", true); put("title", "x"); put("offline", JsonNull) })
+        assertEquals(setOf("autoModel"), read.keys)
     }
 
     @Test fun `forks before a prompt with its text, or after a reply`() = runTest {

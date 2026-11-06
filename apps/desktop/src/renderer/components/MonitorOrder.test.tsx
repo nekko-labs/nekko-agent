@@ -5,10 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { cssRule, cssValue, stylesheet } from '../tests/css.js';
 import { DEFAULT_WALL_STATE, sanitizeMonitorsDock } from '../commandWall.js';
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
+vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>()), useShown: () => true }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => ({ byToken: {}, answered: new Set() }) }));
 vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
-vi.mock('./ResourceMonitor.js', () => ({ useMonitors: () => ({}), useResourceSample: () => ({ system: null, gpu: null }) }));
+vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useMonitors: () => ({}), useResourceSample: () => ({ system: null, gpu: null }) }));
 import { MonitorsDock } from './MonitorsDock.js';
 
 function render(side: string) {
@@ -33,7 +34,10 @@ describe('dock reorder headers', () => {
     expect(html).not.toContain('monitors-dock__landing');
     expect(html).toContain('data-monitor="hardware"');
     const css = stylesheet('components/monitorsDock.css');
-    expect(cssRule(css, '.monitors-dock__landing[data-open]').height).toBe(cssValue('calc(var(--landing-height) + 12px)'));
+    // The zone opens on a 0fr to 1fr grid row (no height tween); its span is the panel's height plus one gap.
+    expect(cssRule(css, '.monitors-dock__landing')['grid-template-rows']).toBe('0fr');
+    expect(cssRule(css, '.monitors-dock__landing[data-open]')['grid-template-rows']).toBe('1fr');
+    expect(cssRule(css, '.monitors-dock__landing > span')).toMatchObject({ height: 'var(--landing-height)', 'margin-bottom': '12px' });
     expect(Object.values(cssRule(css, '.monitors-dock__landing > span')).join(' ')).toMatch(/\bdashed\b/);
     expect(cssRule(css, '.monitors-dock__monitor[data-monitor-lifted]').display).toBe('none');
   });

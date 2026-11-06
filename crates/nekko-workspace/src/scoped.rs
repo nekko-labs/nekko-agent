@@ -227,6 +227,18 @@ pub fn hash_bytes(bytes: &[u8]) -> String {
     hex(&Sha256::digest(bytes))
 }
 
+/// Times [`Scope::contain`] resolves a path that is mid-replacement before
+/// giving up (waits of 20, 40, 80 and 160 ms between them).
+const REPLACED_TRIES: u32 = 5;
+
+/// Whether a canonical path is in NTFS's `\$Extend\$Deleted` folder, where
+/// Windows keeps a file that was deleted or renamed over while still open
+/// until its last handle closes. Checked on the text so it is testable on
+/// every platform; no other system produces such a path.
+fn replaced_while_open(real: &Path) -> bool {
+    real.to_string_lossy().replace('\\', "/").to_ascii_lowercase().contains("/$extend/$deleted/")
+}
+
 fn io_err(e: &std::io::Error) -> String {
     if e.kind() == std::io::ErrorKind::NotFound {
         fail(codes::NOT_FOUND, "no such file or folder")
@@ -296,11 +308,26 @@ impl Scope {
 
     /// Resolve symlinks and require the result inside the root: the
     /// canonical path and its `/`-separated path relative to the root.
+    ///
+    /// On Windows a file replaced by a rename while someone still has it open
+    /// (two quick saves of one file) resolves for a moment to NTFS's
+    /// `\$Extend\$Deleted` folder. That is not a link leaving the root, so it
+    /// is resolved again after a short wait; if it never settles, the answer
+    /// is a retryable `io` error, never `outside-root`.
     fn contain(&self, path: &Path) -> Result<(PathBuf, String), String> {
-        let real = std::fs::canonicalize(path).map_err(|e| io_err(&e))?;
-        let rel =
-            self.relative(&real).ok_or_else(|| fail(codes::OUTSIDE_ROOT, "a link leads outside the chat's folder"))?;
-        Ok((real, rel))
+        for attempt in 1..=REPLACED_TRIES {
+            let real = std::fs::canonicalize(path).map_err(|e| io_err(&e))?;
+            if !replaced_while_open(&real) {
+                let rel = self
+                    .relative(&real)
+                    .ok_or_else(|| fail(codes::OUTSIDE_ROOT, "a link leads outside the chat's folder"))?;
+                return Ok((real, rel));
+            }
+            if attempt < REPLACED_TRIES {
+                std::thread::sleep(std::time::Duration::from_millis(10 << attempt));
+            }
+        }
+        Err(fail(codes::IO, "the file was being replaced; try again"))
     }
 
     fn relative(&self, real: &Path) -> Option<String> {
@@ -588,7 +615,7 @@ impl Scope {
         }
         Self::refuse_secret(&r.rel, false)?;
         let exists = std::fs::symlink_metadata(&r.path).is_ok();
-        let (target, mode) = if exists {
+        let target = if exists {
             let (real, real_rel) = self.contain(&r.path)?;
             Self::refuse_secret(&real_rel, false)?;
             let meta = std::fs::metadata(&real).map_err(|e| io_err(&e))?;
@@ -608,7 +635,7 @@ impl Scope {
             if expect_hash != Some(hash.as_str()) {
                 return Ok(json!({ "ok": false, "error": "conflict", "hash": hash }));
             }
-            (real, Some(meta.permissions()))
+            real
         } else {
             if expect_hash.is_some() {
                 return Ok(json!({ "ok": false, "error": "conflict", "hash": null }));
@@ -620,9 +647,11 @@ impl Scope {
             }
             Self::refuse_secret(&parent_rel, true)?;
             let name = r.path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
-            (real_parent.join(name), None)
+            real_parent.join(name)
         };
-        write_atomic(&target, content.as_bytes(), mode)?;
+        // Keeping the old file's permissions (an executable script stays one).
+        let opts = nekko_js::fs::AtomicWrite { mode: nekko_js::fs::Mode::Keep, fsync: true, create_dir: false };
+        nekko_js::fs::atomic_write(&target, content.as_bytes(), opts).map_err(|e| fail(codes::IO, e))?;
         let meta = std::fs::metadata(&target).map_err(|e| io_err(&e))?;
         Ok(json!({
             "ok": true,
@@ -631,30 +660,6 @@ impl Scope {
             "mtime": mtime_ms(&meta),
         }))
     }
-}
-
-/// Write beside the file and rename over it, so a reader never sees half a
-/// file, keeping the old file's permissions.
-fn write_atomic(file: &Path, bytes: &[u8], mode: Option<std::fs::Permissions>) -> Result<(), String> {
-    let mut rand = [0u8; 6];
-    getrandom::fill(&mut rand).map_err(|e| fail(codes::IO, e))?;
-    let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    let tmp = file.with_file_name(format!(".{name}.{}.tmp", hex(&rand)));
-    let done = (|| -> std::io::Result<()> {
-        use std::io::Write;
-        let mut f = std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all()?;
-        drop(f);
-        if let Some(p) = mode {
-            std::fs::set_permissions(&tmp, p)?;
-        }
-        std::fs::rename(&tmp, file)
-    })();
-    done.map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        fail(codes::IO, e)
-    })
 }
 
 /// The folder's files as git lists them (tracked and untracked, without the
@@ -967,6 +972,16 @@ mod tests {
         assert!(std::fs::symlink_metadata(root.join("link.sh")).unwrap().file_type().is_symlink());
         assert_eq!(std::fs::read_to_string(root.join("run.sh")).unwrap(), "echo 2");
         assert_eq!(std::fs::metadata(root.join("run.sh")).unwrap().permissions().mode() & 0o777, 0o750);
+    }
+
+    #[test]
+    fn a_file_replaced_while_open_is_not_a_link_outside() {
+        // What canonicalize returns on Windows for a file renamed over while open.
+        assert!(replaced_while_open(Path::new(r"\\?\C:\$Extend\$Deleted\0003000000017B1A6A6C3A1C")));
+        assert!(replaced_while_open(Path::new(r"\\?\D:\$EXTEND\$DELETED\x")));
+        assert!(!replaced_while_open(Path::new(r"\\?\C:\Users\me\chat\a.txt")));
+        assert!(!replaced_while_open(Path::new("/home/me/chat/$Extend/notes.txt")));
+        assert!(!replaced_while_open(Path::new("/etc/passwd")));
     }
 
     #[test]

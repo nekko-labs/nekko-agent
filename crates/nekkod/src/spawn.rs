@@ -30,8 +30,15 @@ fn session_depth(store: &nekko_store::SessionStore, id: &str) -> usize {
     depth
 }
 
+/// A child chat's title: the one it was given, else the start of its task.
+pub fn child_title(title: Option<&str>, task: &str) -> String {
+    let title = title.map(|t| js::trim(t).to_string()).filter(|t| !t.is_empty());
+    let title = title.unwrap_or_else(|| js::slice16(js::trim(task), 40).to_string());
+    if title.is_empty() { "Sub-agent".to_string() } else { title }
+}
+
 /// `getSessionWorkspaceIds(session)`: the folder, then the supporting ones, once each.
-fn workspace_ids(session: &Value) -> Vec<Value> {
+pub fn workspace_ids(session: &Value) -> Vec<Value> {
     let mut out: Vec<Value> = Vec::new();
     let mut push = |v: &Value| {
         if js::truthy(Some(v)) && !out.contains(v) {
@@ -68,8 +75,9 @@ async fn prepare_sub_agent(
     provider_id: &Value,
     model_id: &Value,
     input: &Value,
+    call_id: Option<&str>,
 ) -> Result<Child, String> {
-    let store = ctx.sessions.clone().ok_or("Sub-agents need the data directory.")?;
+    let store = ctx.sessions.clone();
     let parent_id = s(parent, "id").unwrap_or_default().to_string();
     let settings = crate::settings::current(ctx).await;
     let orchestration = settings.get("orchestration").filter(|o| !o.is_null());
@@ -166,13 +174,14 @@ async fn prepare_sub_agent(
     let made =
         crate::routes::create_session(ctx, s(parent, "workspaceId"), Some(&parent_id), Some(json!(supporting))).await?;
     let id = s(&made, "id").unwrap_or_default().to_string();
-    let title = title.and_then(Value::as_str).map(|t| js::trim(t).to_string()).filter(|t| !t.is_empty());
-    let title = title.unwrap_or_else(|| js::slice16(js::trim(&task), 40).to_string());
-    let title = if title.is_empty() { "Sub-agent".to_string() } else { title };
+    let title = child_title(title.and_then(Value::as_str), &task);
     // What the child takes from its parent: its tool policy, nothing it switched
     // off, and its Privacy Shield (a shielded chat's sub-agents are shielded too).
     let mut fields: Vec<(&'static str, Value)> =
         vec![("title", json!(title)), ("providerId", target_provider.clone()), ("modelId", target_model.clone())];
+    if let Some(call) = call_id {
+        fields.push(("spawnCallId", json!(call)));
+    }
     for key in [
         "mode",
         "disabledTools",
@@ -206,15 +215,14 @@ pub async fn prepare(ctx: &Ctx, req: &Value) -> Value {
     let attempt = req.get("attempt").and_then(Value::as_u64).unwrap_or(0);
     let child = match s(req, "childId") {
         None => {
-            match prepare_sub_agent(ctx, &parent, &provider_id, &model_id, req.get("input").unwrap_or(&Value::Null))
-                .await
-            {
+            let input = req.get("input").unwrap_or(&Value::Null);
+            match prepare_sub_agent(ctx, &parent, &provider_id, &model_id, input, s(req, "callId")).await {
                 Ok(c) => c,
                 Err(e) => return json!({ "error": e }),
             }
         }
         Some(child_id) => {
-            let saved = ctx.sessions.as_ref().and_then(|st| st.get(child_id));
+            let saved = ctx.sessions.get(child_id);
             let Some(saved) = saved.filter(|c| s(c, "parentSessionId").is_some_and(|p| Some(p) == s(&parent, "id")))
             else {
                 return json!({ "error": "Unknown child session." });

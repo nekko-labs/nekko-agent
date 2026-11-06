@@ -49,11 +49,13 @@ async fn signed_out_end_to_end() {
         cwd: work,
         session: SessionStart::New(id.clone()),
         model: None,
+        effort: None,
         permission_mode: PermissionMode::Default,
         mcp_config: None,
         permission_prompt_tool: None,
         add_dirs: Vec::new(),
         config_dir: None,
+        env: Vec::new(),
     })
     .expect("spawn");
     let (cancel, steering) = (Cancel::default(), Steering::default());

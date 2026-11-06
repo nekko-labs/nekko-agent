@@ -1,40 +1,47 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isLocalProvider, type ProviderConfig } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
 import { hasAppChrome } from '../chrome.js';
+import { CloudIcon, ComputerIcon } from '../icons.js';
 import { ModelsView } from './ModelsView.js';
 import { ModelServerView } from './ModelServerView.js';
 import { FirstLocalModel } from '../components/engine/FirstLocalModel.js';
 
-/** Keep existing destinations working, with one rail entry and shared subnavigation. */
+/**
+ * Local and cloud models on one page, one section each. The page opens at
+ * the top; moving between the `modelserver` and `models` destinations scrolls
+ * to that section, so it mounts nothing and asks the engine for nothing new.
+ */
 export function ModelsWorkspace() {
   const view = useStore((s) => s.view);
-  const setView = useStore((s) => s.setView);
-  const local = view === 'modelserver';
   const firstRun = useFirstLocalModel();
   const showAll = useCallback(() => firstRun.set(false), [firstRun.set]);
+  const localRef = useRef<HTMLElement>(null);
+  const cloudRef = useRef<HTMLElement>(null);
+  // Arriving opens at the top; a later move between the two destinations
+  // (the command palette, a voice command) scrolls to its section. Comparing
+  // views, not counting runs: StrictMode runs this effect twice on arrival.
+  const shown = useRef(view);
+  useEffect(() => {
+    if (shown.current !== view) (view === 'modelserver' ? localRef : cloudRef).current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    shown.current = view;
+  }, [view]);
   return <div className="models-workspace">
-    <nav className="models-subnav" aria-label="Models">
+    <section ref={localRef} className="models-section" aria-labelledby="models-local-title">
       {!hasAppChrome && <h1 className="view-title">Models</h1>}
-      <button type="button" aria-current={local ? 'page' : undefined} onClick={() => setView('modelserver')}>
-        <span aria-hidden="true">▣</span> Local model server
-      </button>
-      <button type="button" aria-current={!local ? 'page' : undefined} onClick={() => setView('models')}>
-        <span aria-hidden="true">☁</span> Cloud providers
-      </button>
-    </nav>
-    <div className="models-content" key={local ? 'local' : 'cloud'}>
-      {local && firstRun.value === null ? null : local && firstRun.value ? <FirstLocalModel onShowAll={showAll} /> : <>
-        <h2 className="models-section-title">{local ? 'Local model server' : 'Cloud providers'}</h2>
-        {local ? <>
-          <ModelServerView embedded />
-          <div className="models-local-connections">
-            <h3 className="models-section-title">Connected servers</h3>
-            <ModelsView localOnly />
-          </div>
-        </> : <ModelsView />}
+      <h2 id="models-local-title" className="models-section-heading"><ComputerIcon className="h-6 w-6 shrink-0" /> Local model server</h2>
+      {firstRun.value === null ? null : firstRun.value ? <FirstLocalModel onShowAll={showAll} /> : <>
+        <ModelServerView embedded />
+        <div className="models-local-connections">
+          <h3 className="models-section-title">Connected servers</h3>
+          <ModelsView localOnly />
+        </div>
       </>}
-    </div>
+    </section>
+    <section ref={cloudRef} className="models-section models-section-cloud" aria-labelledby="models-cloud-title">
+      <h2 id="models-cloud-title" className="models-section-heading"><CloudIcon className="h-6 w-6 shrink-0" /> Cloud providers</h2>
+      <ModelsView />
+    </section>
   </div>;
 }
 

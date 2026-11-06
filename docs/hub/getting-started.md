@@ -30,15 +30,31 @@ The quickest way to start is the installer.
    - **macOS (Apple silicon):** the `.dmg`
    - **Linux:** the `.AppImage`, or the `.deb` for Debian and Ubuntu
 2. Run it. On macOS, drag Nekko Agent into Applications.
-3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab.
+3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab (the violet brain-and-gear icon in the left navigation). Click a model's name there to make it the default for new chats.
 
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel.
+A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The very first time, a short **Send your first prompt** intro opens over it: three looping demos (start with a question, add your files, send). **Skip**, the ✕, Escape or a click outside closes it, and it does not open again. It stays closed for anyone who turned off contextual tips. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. In Nekko and Indigo, the selected window instead keeps a soft plum gradient into the full conversation, with a gentle violet/rose color crossfade; in Dynamic View only the active agent has that gradient, even while other agents are working. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Agent chat rows in the left panel stay flat, without a tile background or border; the title, status and keyboard focus outline identify the relevant chat. The composer's effort gauge is borderless, and **Suggestions** appears on its own row below the model/action controls when there are suggestions to show. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
+
+## Returning to the latest message
+
+When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
+
+## Reviewing visual changes
+
+For UI work, Nekko is instructed to show the actual before/after screenshots in the agent reply, rather than leaving evidence only in a PR. Matching images labeled **Before: screen name** and **After: screen name** appear as a comparison; the reply's **Next step** section also shows a **Verify the visual changes** panel with those same screenshots. Wide conversations show the pair side by side, while narrow conversations stack it. Evidence stays with the reply and chat where the work happened.
+
+Displaying a screenshot does not mean it has been inspected or approved. The agent reports what it checked and what still needs review. New surfaces may have only an after image. Local screenshots retain Sandbox restrictions, and remote images from sources the chat has not seen still wait for **Load image**. If an image cannot load, its card shows the existing fallback rather than hiding the verification gap.
+
+## Make it yours
+
+In **Settings → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
+
+Open **Custom colors** to adjust the accent and secondary color with the wheel or an exact color value. **Reset to this theme's colors** restores the defaults for the current palette and mode. The same controls appear during first-run setup. Theme circles respond gently to hover and press; the system's reduced-motion preference turns that motion off.
 
 ## Following tool activity
 
@@ -120,16 +136,16 @@ To stop it, press **Enter** or **q** (or Ctrl+C) in the terminal. The app quits 
 
 - Take the [walkthrough](/docs/walkthrough) for a tour of the app.
 - Set up [local models](/docs/local-models) or [sign in with a subscription](/docs/subscriptions).
-- [Pair your phone](/docs/remote) to use the agent away from your desk.
+- [Pair your phone](/docs/remote) to use the agent away from your desk. On iPhone, Nekko sits beside an open chat’s title. Pull **up** past the latest message to refresh without returning to the top; lists still refresh by pulling down. The spinner turns while loading, then Nekko grabs it and pulls it in once the reload finishes.
 - Want to help build it? Read [Contributing](/docs/contributing) and the [architecture](/docs/architecture).
 
 ### Closing the desktop UI and notifications
 
 Closing the desktop window hides it to the tray; the engine and running work remain alive. This is not Quit. **Quit Nekko Agent** stops the service and managed processes; **Stop Nekko service** stops the service while leaving the UI available. This does not promise execution during OS sleep, shutdown or logout.
 
-**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification restores the UI and opens the chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
+**Settings > Notifications > Desktop notifications** is on by default. The desktop's main process listens independently of the page for completed replies, failures, questions and approvals. A user Stop is not a failure. Clicking a native notification, on screen or later from the Windows notification centre, brings the window forward and opens that chat. Turn the toggle off to opt out; notices can include the chat title and question, error or approval text. Browser editions use browser notification permissions instead.
 
-**Games and other full-screen apps (Windows).** While a full-screen app is in front (a game, a presentation, a video), Nekko Agent waits: notices are held and shown together when you leave it, one per chat and kind, and a window that would open or come forward (at launch, from a link, from a second launch) does so when you leave instead. Nekko never takes the foreground from a game, so the game keeps exclusive fullscreen and its frame rate.
+**Full-screen games (Windows).** While a game runs in exclusive fullscreen, Nekko Agent holds its notices and shows them together when you leave the game, one per chat and kind. Windows you open yourself (launching the app, a link, the tray) still open at once.
 
 The 2026-10-13 batch is implemented and unit/fixture interaction tested, not yet landed. Image inspection and native toast delivery/click/permission testing remain pending. Known issue under review: the native listener currently also posts for a focused visible chat.
 
@@ -139,11 +155,25 @@ Hover over the left navigation panel, including its curved top and bottom wings,
 
 Hover over the sidebar **+** to choose **Agent**, **Create or Edit Photos and Videos** or **Terminal**. Moving away closes the menu after a short grace period. Terminal uses your default shell; choose its type in **Settings → Terminal → Default shell**, or leave **Auto-detect** selected. Create or Edit Photos and Videos opens an image session; video generation is not available.
 
+Each terminal has its own Agents-panel row, including terminals opened beside a chat and shells that have exited. It shows the terminal-reported title and activity when available. The strip above terminal output shows working/ready/attention status, reported directory, and an observed GitHub PR link. **Refresh** fetches that PR's current state and checks; until then, the link is explicitly unverified. No terminal output is sent to a model for summaries.
+
+Claude Code users can opt into explicit tool/permission/completion signals using the [terminal hook setup](https://github.com/nekko-labs/nekko-agent/blob/main/docs/terminal-claude-hooks.md). Nekko never installs hooks or approves tools silently. Without integration signals a terminal says **Shell open**, not Working.
+
 ### Approvals and delegated work
 
-When a tool needs permission, its approval card appears in the chat window, not the separate wall composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
+When a tool needs permission, its approval card appears in that agent's own window, above its composer. An unrelated tool finishing does not dismiss that request. Read the exact input before choosing Approve or Deny.
 
-For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the Agent Monitor subagent list instead; the row does not guess which chat to open.
+For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent cards along the bottom of the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
+
+### Model and effort controls
+
+The composer shows the model title without a subscription suffix. Open its menu for provider and account details. Cloud providers appear first under **Cloud**, followed by **Local**; when both exist they occupy independently scrolling columns. Your default model is marked inside its provider group instead of repeated at the top.
+
+**Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog. On a Claude subscription, the choices are the ones Claude Code takes, and it applies the closest level a model has.
+
+In a new chat, prompt-writing **Suggestions** appear on a separate row below the composer controls in Expert only. Ongoing chats keep Suggestions beside the microphone. Model selection and reasoning effort stay in their dedicated composer controls, not in the **Mode** panel. Saved modes remain compatible with their existing model and effort preferences.
+
+Local chats can read and write `~/.nekko-agent` without adding it as a project folder. This is the app data directory and may contain sensitive local state; normal write approvals still apply. This does not grant the rest of your home folder, change the project directory, or expose the host folder to Sandbox containers.
 
 ### Quickly filter the model picker
 
@@ -152,16 +182,38 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
+The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
+(it offers no Auto, so no Fusion).
+
+### How the Agents panel groups your agents
+
+The selected agent has a tinted background across its row, so you can spot the chat you are viewing without hovering. Hovering a chat row adds a soft tinted glow with a quick fade, without switching chats. Keyboard focus gets the same glow and a visible outline; reduced motion removes the fade. Other rows stay flat at rest; their status icons still show whether they are working, waiting or finished.
+
+By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
+
+While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Accessibility > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
 ### Delegated agents in the Agents panel
 
-Delegated subagents appear as compact rows beneath their parent. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
+Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
 
 A turn's working steps fold into one work group whose header says what the agent did, by purpose: for example *Read guidance, looked through the code, edited 3 files*. Hover or keyboard-focus the header to read the complete summary and each purpose group with its number of calls. Click the header to open the steps. Inside it, adjacent calls with one purpose are one row that states the goal, such as *Read the project's guidance · AGENTS.md, CLAUDE.md* or *Ran the tests · passed*. When a call gave its own description (Claude Code's commands do), that description is the goal. Click a group to see its individual calls. A call waiting for your approval, a question for you, and a lone call stay rows of their own. A group with a failed call says *1 failed* and stays open.
 
+### Reading a compaction summary
+
+When older conversation is summarized, a **Conversation compacted** event card shows how many earlier messages were summarized. It starts collapsed, including the newest summary. Click **Show summary** to read it and **Hide summary** to fold it again. Earlier messages remain readable above the card. Expanding or collapsing the card does not change what the model receives.
+
 ### Answering agent questions
 
-When an agent needs a choice, its question opens at the bottom of the conversation. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Choose an option or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. The pixel question-mark icon identifies the question.
+When an agent needs a choice, its question opens at the bottom of the conversation without moving your typing focus, even when another agent asks while you are writing. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Click or Tab into the question to answer it: use the options, arrow and number keys, or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. Moving between steps keeps the keyboard in the question only while you are interacting with it. The pixel question-mark icon identifies the question.
+
+### Links and files in replies
+
+A pull request link in a reply shows as a small chip with GitHub's state icon: open (green), draft (grey), merged (purple) or closed (red). Click it to open the pull request in your browser.
+
+In agent chats, confirmed PR command results also leave inline cards where the interaction happened: created (including draft creation), set to draft, ready for review, auto-merge enabled, queued, merged, closed, reopened, updated, reviewed or viewed. They appear while the agent is working and remain in saved history. **Merge requested** means the command was accepted, not that the PR merged; **PR queued** and **PR merged** require their own confirmation. The first card for an open PR keeps its live status and review actions, while older event labels stay historical. Ambiguous scripts and failed commands do not create success cards. Other web links have a **Preview** button that loads the page inside the message.
+
+Click a file link to open the file in a window beside the chat. Code is coloured by language, and the toolbar shows which language was detected. You can edit the file there: it saves itself a moment after you stop typing (turn **Auto-save** off in the toolbar if you prefer), and **Ctrl+S** (**Cmd+S** on macOS) saves at once. The toolbar tells you when a save happens: *Auto-saved at 9:41* or *Saved at 9:41*.
 
 ### Agent panel shortcuts
 
@@ -176,7 +228,7 @@ The Agent Board header also has a single **+**: hover or click it for the same t
 | New terminal | Cmd+Shift+T | Ctrl+Shift+T |
 | Search chats | Cmd+Shift+F | Ctrl+Shift+F |
 
-Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat.
+Hover or focus the search icon to see its shortcut; opening search shows it beside the input too. The search shortcut returns to the Agent Board and reveals its panel when necessary. Cmd/Ctrl+F still searches within the focused chat. In Dynamic view, click an agent window's transcript, title bar, or composer first to search that window.
 
 
 ### Compact agent row and monitor controls
@@ -192,12 +244,13 @@ In Dynamic View the board is laid out in zones: places that each hold one agent.
 It starts with two side by side. New agents wait in the Agents list instead of
 opening on the board. Click a zone to make it the active one (it gets a heavier
 outline), then click an agent in the Agents list to show it there, or drag the
-agent from the list straight into a zone. The thin plus buttons along the
-board's right and bottom edges add a zone that fits that row or column; the
-plus at the end of an edge, or Shift-click, spans the full height or width.
-Drag a zone by its name bar to move it (hold Shift at a board edge to span the
-whole side) and right-click the name bar to close it. Minimizing or completing
+agent from the list straight into a zone. Clicking an agent that is already on
+the board just switches to its zone. Each zone has a colour, shown as a small
+square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips.
+Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
+whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.
+The composer's borderless action switches from Send to a Stop icon while the agent runs with an empty draft. Type a follow-up and it becomes Send again, queuing the message without interrupting the agent. Clear the draft to get Stop back. To schedule work, open **+ > Automate**; Automate no longer takes up a separate place on the composer.
 In Dynamic View (including Fixed grid), a window also minimizes automatically
 when its agent finishes a successful reply. Errors and requests for input stay
 visible, and Focused View keeps finished replies open. Select the chat in the
@@ -208,7 +261,22 @@ when safe, never silently switch provider or model.
 
 Active watches appear above the chat draft as expandable chips. Open one to see
 its wake condition, follow the PR, or cancel that watcher without stopping the
-chat. Child-agent watchers show their owner. Suggested response buttons are gone;
+chat. Child-agent watchers show their owner.
+
+When an agent opens a pull request, Nekko watches it for you: at the end of the
+turn it arms a watcher on every open PR the chat opened, whichever model or
+harness the chat runs on (Claude Code included). The exception is Claude on a
+Claude plan: Nekko can't start a turn there on its own, so it doesn't watch
+those PRs; Claude with an API key or a cloud account is watched. The agent wakes when checks
+finish, a review arrives or a few hours pass, fixes what it can, and lands the
+PR if you or the repository allow it; otherwise it tells you the PR is
+merge-ready or what is blocking it. The chip reads **Watching until
+merge-ready**. Nekko keeps re-arming it until the PR is merged or closed.
+Cancelling the chip stops it for that PR. To turn it off for every PR, go to
+Settings › Tools, click **Show advanced settings** if it's there, then turn off
+**Watch each PR until it is merge-ready** under Pull requests.
+
+Suggested response buttons are gone;
 the gray draft placeholder and Right Arrow acceptance remain.
 
 ### Reading expanded tool details
@@ -226,7 +294,7 @@ Hover the edge between the agent list and chat wall, or the edge beside Monitors
 
 ### Skills and Connectors shortcuts
 
-Open **Settings** to find large **Skills** and **Connectors** chips at the top. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
 ### Download progress in Model Server
 
@@ -237,3 +305,17 @@ it shows a percentage once all file sizes are known, and stays indeterminate
 until then. **Verifying…** means the files are still being checked or installed.
 Use **Downloads** to cancel a transfer. A failure or cancellation lets you retry;
 other models and runtimes remain available while one downloads.
+
+### Suggested follow-ups
+
+After a reply, **Suggested follow-ups** can offer relevant next messages such as **Inspect the saved PNGs directly** or **Try another image viewer**. Each button sends the words it displays; nothing is sent until you choose one. These suggestions are not questions from you or approval requests from the agent.
+
+When delegation is available, use the small sliding toggle to choose **This chat** (the default) or **Subagent** before choosing a response. If you type your own message instead, the existing **Do it here** and **In a subagent** actions apply to your draft. Suggestions are optional and may not appear after every reply.
+
+Starred models stay listed under their provider as well as in the model picker shortcuts. Either entry selects the same model. To reorder a monitor card, press its header and move the pointer; clicking without movement does not lift it or show a landing preview.
+
+### Text formatting toolbar
+
+Selecting text in the desktop or Local Web UI message editor opens a compact, single-row Markdown formatting toolbar beside the selection. Its pointer identifies the text being edited. The toolbar can extend over a neighboring agent pane, but stays inside the app viewport. Right-click still offers the formatting controls and clipboard actions.
+
+On iOS, tap the keyboard-down button at the right of the message box’s formatting row to hide the keyboard without sending or clearing your draft. It stays available when **Aa** collapses the formatting controls. Tap the message box to continue typing.

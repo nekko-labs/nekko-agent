@@ -1,6 +1,6 @@
 // Agents panel evidence for activity grouping: the default view and the
-// Activity view with one agent waiting, one working and two done, then frames
-// of the working agent finishing and moving to Done, encoded as a GIF. Hidden,
+// Activity view with an agent in each phase of the loop, then frames of one
+// finishing, from Verifying to Done, encoded as a GIF. Hidden,
 // off-screen, non-focusable. Launch through layout-evidence-integration.cjs with
 // NEKKO_LAYOUT_SANDBOX=agent-activity-motion-sandbox.cjs.
 const { app, BrowserWindow, session, screen } = require('electron');
@@ -55,8 +55,9 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     await ready();
-    // b waits on a question, c and a are working, d is done.
-    await run(`localStorage.removeItem('nekko.agentPanelView'); localStorage.setItem('fixture.pending', JSON.stringify({ b: {} })); localStorage.setItem('fixture.running', JSON.stringify(['a', 'c'])); location.reload()`).catch(() => {});
+    // b waits on a question, c and a are working, d has stopped with a watch armed.
+    const phases = { a: { phase: 'building', exchangeCount: 2 }, b: { phase: 'building', exchangeCount: 2 }, c: { phase: 'verifying', exchangeCount: 2 }, d: { phase: 'shipping', exchangeCount: 2, activeWatchCount: 1 } };
+    await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(phases))}); localStorage.removeItem('nekko.agentPanelView'); localStorage.setItem('fixture.pending', JSON.stringify({ b: {} })); localStorage.setItem('fixture.running', JSON.stringify(['a', 'c'])); location.reload()`).catch(() => {});
     await sleep(500); await ready(); await sleep(1200);
     await shot('default-view');
     report.defaultGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group'))");
@@ -64,7 +65,7 @@ app.whenReady().then(async () => {
     await sleep(500); await ready(); await sleep(1200);
     await shot('activity-view');
     report.activityGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + e.querySelectorAll('[role=button][title]').length)");
-    // c finishes: it should leave Working for Done.
+    // c finishes its turn: the card should leave Verifying for Done.
     const frames = [];
     const t0 = Date.now();
     await run(`layoutFixture.emitAgent({ type: 'done', sessionId: 'c' })`);
@@ -72,18 +73,38 @@ app.whenReady().then(async () => {
     report.frames = frames.length;
     report.frameMs = Math.round((Date.now() - t0) / frames.length);
     await shot('activity-after-move');
+    report.afterMoveGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + e.querySelectorAll('[role=button][title]').length)");
+    // A new chat nothing was sent in brings the Draft group with it.
+    const draft = { ...phases, d: { exchangeCount: 0 } };
+    await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(draft))}); layoutFixture.emitAgent({ type: 'session_meta', sessionId: 'd' })`);
+    await sleep(1400);
+    await shot('activity-with-draft');
+    report.draftGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + e.querySelectorAll('[role=button][title]').length)");
+    // Answering b sends it back to its phase, and the empty Needs input group goes with it.
+    await run(`layoutFixture.emitAgent({ type: 'question_resolved', sessionId: 'b' })`);
+    await sleep(1400);
+    await shot('activity-after-answer');
+    report.afterAnswerGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + e.querySelectorAll('[role=button][title]').length)");
+    // A sub-agent has no card, so its question lifts its parent, a, to Needs input.
+    const child = { ...draft, d: { exchangeCount: 1, parentSessionId: 'a' } };
+    await run(`localStorage.setItem('fixture.summaries', ${JSON.stringify(JSON.stringify(child))}); layoutFixture.emitAgent({ type: 'session_meta', sessionId: 'd' })`);
+    await sleep(400);
+    await run(`layoutFixture.emitAgent({ type: 'question', sessionId: 'd' })`);
+    await sleep(1400);
+    await shot('activity-sub-agent-waiting');
+    report.subAgentGroups = await run("Array.from(document.querySelectorAll('[data-agent-group]')).map(e => e.getAttribute('data-agent-group') + ':' + Array.from(e.querySelectorAll('[role=button][title]')).map(c => c.title).join('|'))");
     // toBitmap is BGRA; swap to RGBA for the encoder.
     for (const f of frames) for (let i = 0; i < f.length; i += 4) { const b = f[i]; f[i] = f[i + 2]; f[i + 2] = b; }
     const { width, height } = report.frameSize;
     if (width === crop.width) writeGif(path.join(out, 'activity-move.gif'), frames, width, height, Math.max(2, Math.round(report.frameMs / 10)));
     else {
-      // A HiDPI capture is 2x: downsample to the crop so the GIF stays small.
-      const half = frames.map(f => { const o = Buffer.alloc(crop.width * crop.height * 4); for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) f.copy(o, (y * crop.width + x) * 4, ((y * 2) * width + x * 2) * 4, ((y * 2) * width + x * 2) * 4 + 4); return o; });
+      // Downsample at the actual display scale, including fractional Windows scaling.
+      const half = frames.map(f => { const o = Buffer.alloc(crop.width * crop.height * 4); for (let y = 0; y < crop.height; y++) for (let x = 0; x < crop.width; x++) { const source = (Math.floor(y * height / crop.height) * width + Math.floor(x * width / crop.width)) * 4; f.copy(o, (y * crop.width + x) * 4, source, source + 4); } return o; });
       writeGif(path.join(out, 'activity-move.gif'), half, crop.width, crop.height, Math.max(2, Math.round(report.frameMs / 10)));
     }
     report.hidden = !win.isVisible();
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
-  app.exit(report.captures.length ? 0 : 1);
+  app.exit(report.hidden && report.captures.length && !report.errors.length ? 0 : 1);
 });

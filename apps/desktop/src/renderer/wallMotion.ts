@@ -2,15 +2,16 @@ import type { Direction } from './layout.js';
 
 /**
  * Opening and closing a wall window is one push. The windows beside it slide
- * on their CSS transition (left/top/width/height), and the window itself is
+ * to their new place on a transform (slideWindow: their left/top jump, and a
+ * translate from the old place runs off), and the window itself is
  * revealed from, or folded into, the edge on its far side over the same time
  * and curve, so its moving edge rides the seam with its neighbours. A closing
  * window leaves stardust along the edge it folded into, as a completed row in
  * the Agents panel does.
  */
-export const WALL_PUSH_MS = 280;
-/** Keep in step with --wall-push-ease in commandWallLayouts.css. */
-export const WALL_PUSH_EASE = 'cubic-bezier(.22, 1, .36, 1)';
+export const WALL_PUSH_MS = 220;
+/** A strong ease-out with no overshoot. Keep in step with --wall-push-ease in commandWallLayouts.css. */
+export const WALL_PUSH_EASE = 'cubic-bezier(.23, 1, .32, 1)';
 /** The stardust outlives the fold; it never blocks input. */
 export const EDGE_DUST_MS = 900;
 
@@ -56,6 +57,34 @@ export function edgeClip(side: Direction, radius: string): string {
 }
 
 const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * A window whose box moved from `from` to where it is now slides there on a
+ * composited transform rather than a left/top transition (which lays the
+ * whole wall out every frame). Interruptible: a slide still running is
+ * measured where it is and the new one starts from there.
+ */
+export function slideWindow(el: HTMLElement, from: Pick<Box, 'x' | 'y'>, to: Pick<Box, 'x' | 'y'>): Animation | null {
+  if (reducedMotion() || typeof el.animate !== 'function') return null;
+  let dx = from.x - to.x;
+  let dy = from.y - to.y;
+  const running = slides.get(el);
+  if (running) {
+    const m = new DOMMatrixReadOnly(getComputedStyle(el).transform === 'none' ? undefined : getComputedStyle(el).transform);
+    dx += m.m41; dy += m.m42;
+    running.cancel();
+  }
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) { slides.delete(el); return null; }
+  const slide = el.animate(
+    [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+    { duration: WALL_PUSH_MS, easing: WALL_PUSH_EASE },
+  );
+  slides.set(el, slide);
+  const done = () => { if (slides.get(el) === slide) slides.delete(el); };
+  slide.finished.then(done, done);
+  return slide;
+}
+const slides = new WeakMap<HTMLElement, Animation>();
 
 /** A window that just joined the wall opens out of its `side` edge. */
 export function growWindow(el: HTMLElement, side: Direction): Animation | null {

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { PendingInput, SessionSummary, TerminalInfo } from '@nekko-agent/shared';
 import { allPanes, extent, findPane, isSplit, removePane, type WbPane } from './layout.js';
 import {
-  minimizeFinishedReply,
   DEFAULT_AGENT_PANEL,
   readAgentPanel,
   DEFAULT_WALL_STATE,
@@ -20,6 +19,12 @@ import {
   clearZone,
   fillZone,
   nextZoneName,
+  nextZoneTint,
+  agentZoneTints,
+  renameZone,
+  setZoneTint,
+  zoneTints,
+  openWallPane,
   startZones,
   targetZone,
   autoShape,
@@ -248,7 +253,7 @@ describe('zones', () => {
     const root = two();
     const [za, zb] = allPanes(root);
     const cleared = clearZone(root, za.id);
-    expect(findPane(cleared, za.id)).toEqual({ id: za.id, kind: 'zone', refId: '', zone: 'Zone 1' });
+    expect(findPane(cleared, za.id)).toEqual({ id: za.id, kind: 'zone', refId: '', zone: 'Zone 1', tint: 0 });
     const filled = fillZone(cleared, za.id, 'chat', 'b');
     expect(allPanes(filled).map((p) => `${p.zone}:${p.kind}:${p.refId}`)).toEqual(['Zone 1:chat:b', 'Zone 2:zone:']);
     expect(fillZone(root, zb.id, 'chat', 'b')).toBe(root);
@@ -260,6 +265,37 @@ describe('zones', () => {
     expect(targetZone({ root, activeZone: z2.id })).toBe(z2.id);
     expect(targetZone({ root, activeZone: 'gone' })).toBe(z1.id);
     expect(targetZone({ root: null, activeZone: null })).toBeNull();
+  });
+  it('shows an agent already on the board in its own zone instead of moving it', () => {
+    const root = two();
+    const [z1, z2] = allPanes(root);
+    const state = { ...DEFAULT_WALL_STATE, root, zones: true, activeZone: z1.id, hero: 'a', layout: { ...DEFAULT_WALL_STATE.layout, mode: 'grid' as const } };
+    const shown = openWallPane(state, 'chat', 'b');
+    expect(shown.root).toBe(root);
+    expect(shown.activeZone).toBe(z2.id);
+    // One not on the board still goes into the active zone.
+    const opened = openWallPane(state, 'chat', 'c');
+    expect(allPanes(opened.root).map((p) => p.refId)).toEqual(['c', 'b']);
+  });
+  it('colours each zone, keeps the colour through a swap, and fills in walls saved before colours', () => {
+    const root = two();
+    const [z1, z2] = allPanes(root);
+    expect([...zoneTints(root).values()]).toEqual([0, 1]);
+    expect(nextZoneTint(root)).toBe(2);
+    expect(addZone(root, { edge: 'right' }).root && allPanes(addZone(root, { edge: 'right' }).root).map((p) => p.tint)).toEqual([0, 1, 2]);
+    // The colour belongs to the zone, not the agent in it.
+    const swapped = fillZone(root, z1.id, 'chat', 'b');
+    expect(agentZoneTints(swapped)).toEqual(new Map([['b', 0], ['a', 1]]));
+    const renamed = renameZone(root, z2.id, '  Backend ');
+    expect(allPanes(renamed).map((p) => p.zone)).toEqual(['Zone 1', 'Backend']);
+    expect(renameZone(root, z2.id, '   ')).toBe(root);
+    expect(nextZoneName(renamed)).toBe('Zone 2');
+    const recoloured = setZoneTint(root, z2.id, 4);
+    expect(agentZoneTints(recoloured).get('b')).toBe(4);
+    expect(nextZoneTint(recoloured)).toBe(1);
+    // A wall from before colours: tints are dealt out in reading order, the same every time.
+    const legacy = { ...root, children: allPanes(root).map(({ tint: _, ...p }) => p) };
+    expect([...zoneTints(legacy).values()]).toEqual([0, 1]);
   });
 });
 
@@ -353,7 +389,7 @@ describe('wall preferences and panel migration', () => {
   it('exports the dock descriptors and fresh defaults without tree panels', () => {
     expect(WALL_KINDS).toEqual(['chat', 'terminal']);
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
-    expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true,
+    expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true, simpleShow: false,
       monitorOrder: MONITORS.map(p => p.key),
       minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false },
       monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true, localModels: true } });
@@ -470,38 +506,3 @@ describe('agent panel preferences', () => {
 });
 
 
-describe('automatic reply minimization', () => {
-  const done = { type: 'done' as const, sessionId: 'a', messageId: 'reply', stop: 'complete' as const };
-  const state = () => ({ ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const }, watermark: 1234, root: tileTree([wallPane('chat', 'a'), wallPane('chat', 'b'), wallPane('terminal', 'a')]) });
-  it.each([false, true])('minimizes only the finished chat (fixed grid: %s)', (fixedGrid) => {
-    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'grid' as const, fixedGrid } };
-    const after = minimizeFinishedReply(before, done, {});
-    // The chat leaves; its zone stays, empty.
-    expect(allPanes(after.root).map(p => [p.kind, p.refId])).toEqual([['zone', ''], ['chat', 'b'], ['terminal', 'a']]);
-    expect(after).toEqual({ ...before, root: after.root });
-    expect(allPanes(before.root).map(p => p.kind)).toEqual(['chat', 'chat', 'terminal']);
-  });
-  it('keeps Focused windows visible', () => {
-    const before = { ...state(), layout: { ...DEFAULT_WALL_LAYOUT, mode: 'focus' as const } };
-    expect(minimizeFinishedReply(before, done, {})).toBe(before);
-  });
-  it('keeps errors, loop and runaway stops visible', () => {
-    const before = state();
-    expect(minimizeFinishedReply(before, { type: 'error', sessionId: 'a', message: 'failed' }, {})).toBe(before);
-    for (const stop of ['loop', 'runaway'] as const) expect(minimizeFinishedReply(before, { ...done, stop }, {})).toBe(before);
-  });
-  it('keeps pending input visible but does not block on another chat', () => {
-    const before = state();
-    const input = {} as PendingInput;
-    expect(minimizeFinishedReply(before, done, { a: input })).toBe(before);
-    expect(minimizeFinishedReply(before, done, { b: input })).not.toBe(before);
-  });
-  it('accepts older successful events without stop metadata', () => {
-    expect(refs(minimizeFinishedReply(state(), { ...done, stop: undefined }, {}).root)).toEqual(['', 'b', 'a']);
-  });
-  it('is a no-op for absent panes and leaves a lone zone in place', () => {
-    const before = state();
-    expect(minimizeFinishedReply(before, { ...done, sessionId: 'missing' }, {})).toBe(before);
-    expect(minimizeFinishedReply({ ...before, root: wallPane('chat', 'a') }, done, {}).root).toMatchObject({ kind: 'zone', refId: '' });
-  });
-});

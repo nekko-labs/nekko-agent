@@ -56,22 +56,14 @@ struct PillPlacement: Equatable {
     }
 }
 
-private struct PillMovingKey: EnvironmentKey { static let defaultValue = false }
-
-extension EnvironmentValues {
-    /// The pill is lifted and moving; its switch ignores the touch.
-    var pillMoving: Bool {
-        get { self[PillMovingKey.self] }
-        set { self[PillMovingKey.self] = newValue }
-    }
-}
-
 // MARK: - The pill
 
-/// The Simple and Expert switch and the minimal monitor in a glass capsule
-/// floating over the screen (option B). Tap the gauges and it opens into the
-/// agent's details; touch and hold to move it, or to dock it at a side; swipe it
-/// into its edge to tuck it away as a slim arrow tab, which a tap brings back.
+/// The minimal monitor in a glass capsule floating over the screen (option B),
+/// while the hardware shows. Tap the gauges and it opens into the agent's
+/// details; touch and hold to move it, or to dock it at a side; swipe it into
+/// its edge to tuck it away as a slim arrow tab, which a tap brings back. Simple
+/// and Detailed moved out of it into the menus (`ModeMenuPicker`, 2026-11-05),
+/// so with no gauges there is no pill.
 struct AgentPillLayer: ViewModifier {
     /// The minimal monitor's readings, while the gauges show.
     var gauges: HardwareMonitorModel?
@@ -96,6 +88,11 @@ struct AgentPillLayer: ViewModifier {
     /// The room a screen's scrolling content leaves above itself for the pill under the bar.
     static let topMargin: CGFloat = 52
 
+    /// That room for a screen whose pill shows `gauges`: none with no pill, or with it elsewhere.
+    static func room(_ place: PillPlacement, gauges: HardwareMonitorModel?) -> CGFloat {
+        gauges != nil && place.isStandard ? topMargin : 0
+    }
+
     private var morph: Animation? { reduceMotion ? nil : .spring(duration: 0.45, bounce: 0.24) }
 
     func body(content: Content) -> some View {
@@ -103,11 +100,8 @@ struct AgentPillLayer: ViewModifier {
             .overlay {
                 GeometryReader { geo in
                     ZStack(alignment: .topLeading) {
-                        if expanded {
-                        } else if prefs.pillPlacement.tucked {
-                            tab(in: geo.size)
-                        } else {
-                            pill(in: geo.size)
+                        if !expanded, let gauges {
+                            if prefs.pillPlacement.tucked { tab(in: geo.size) } else { pill(gauges, in: geo.size) }
                         }
                     }
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
@@ -121,12 +115,12 @@ struct AgentPillLayer: ViewModifier {
 
     // MARK: Collapsed
 
-    @ViewBuilder private func pill(in area: CGSize) -> some View {
+    @ViewBuilder private func pill(_ gauges: HardwareMonitorModel, in area: CGSize) -> some View {
         let place = prefs.pillPlacement
         let vertical = place.dock != .across
         let center = finger.map { CGPoint(x: $0.x - grab.width, y: $0.y - grab.height) } ?? Self.center(place, pill: size, area: area)
-        body(vertical: vertical)
-            .padding(4)
+        MiniMonitor(monitor: gauges, open: open, vertical: vertical)
+            .padding(.horizontal, vertical ? 4 : 10).padding(.vertical, vertical ? 10 : 4)
             .background {
                 Capsule().fill(.ultraThinMaterial)
                     .overlay(Capsule().fill(palette.surface.opacity(0.55)))
@@ -137,7 +131,6 @@ struct AgentPillLayer: ViewModifier {
             .fixedSize()
             .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
             .scaleEffect(lifted ? 1.06 : 1)
-            .environment(\.pillMoving, lifted)
             .position(center)
             .offset(hidden && !lifted ? Self.away(place.dock, pill: size) : .zero)
             .opacity(hidden && !lifted ? 0 : 1)
@@ -206,7 +199,7 @@ struct AgentPillLayer: ViewModifier {
             .transition(.opacity)
             .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: hidden)
             .accessibilityElement()
-            .accessibilityLabel("Show the mode switch")
+            .accessibilityLabel("Show the hardware monitor")
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { setTucked(false) }
             .accessibilityIdentifier("chat.pill.tab")
@@ -228,21 +221,6 @@ struct AgentPillLayer: ViewModifier {
         case .leading: return CGPoint(x: 22, y: center(place, pill: CGSize(width: 44, height: 112), area: area).y)
         case .trailing: return CGPoint(x: area.width - 22, y: center(place, pill: CGSize(width: 44, height: 112), area: area).y)
         }
-    }
-
-    @ViewBuilder private func body(vertical: Bool) -> some View {
-        let layout = vertical ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 8))
-        layout {
-            ModeToggle(vertical: vertical)
-            if let gauges {
-                Rectangle().fill(palette.line).frame(width: vertical ? 24 : 0.5, height: vertical ? 0.5 : 20)
-                    .accessibilityHidden(true)
-                MiniMonitor(monitor: gauges, open: open, vertical: vertical)
-                    .padding(vertical ? .vertical : .trailing, 6)
-                    .transition(.opacity.combined(with: .scale(0.8)))
-            }
-        }
-        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: gauges != nil)
     }
 
     /// Touch and hold lifts the pill; it follows the finger and settles where it is let go.

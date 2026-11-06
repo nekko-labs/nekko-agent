@@ -6,11 +6,9 @@
 //! accepting a file just stops tracking it, and reverting is the renderer
 //! writing the snapshot back. In memory only, like the TS store.
 
-use icu_collator::options::CollatorOptions;
-use icu_collator::{Collator, CollatorBorrowed};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 
 /// `FileChange` from `@nekko-agent/shared`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,12 +43,6 @@ fn safe_read(path: &str) -> String {
 
 fn current(path: &str) -> String {
     if crate::nodefs::exists(path) { safe_read(path) } else { String::new() }
-}
-
-/// `a.localeCompare(b)`: V8 hands it to ICU's root collation.
-fn collator() -> Option<&'static CollatorBorrowed<'static>> {
-    static C: OnceLock<Option<CollatorBorrowed<'static>>> = OnceLock::new();
-    C.get_or_init(|| Collator::try_new(Default::default(), CollatorOptions::default()).ok()).as_ref()
 }
 
 impl ChangeTracker {
@@ -99,10 +91,7 @@ impl ChangeTracker {
             })
             .collect();
         // Stable, as Array.prototype.sort is.
-        match collator() {
-            Some(c) => out.sort_by(|a, b| c.compare(&a.path, &b.path)),
-            None => out.sort_by(|a, b| a.path.cmp(&b.path)),
-        }
+        out.sort_by(|a, b| nekko_js::locale_compare(&a.path, &b.path));
         out
     }
 
@@ -126,15 +115,13 @@ impl ChangeTracker {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn sorts_like_locale_compare() {
         // ICU root order: case is a tertiary difference, punctuation sorts
         // before letters, and "_" before "-" (byte order would say otherwise).
-        let c = collator().unwrap();
         let mut v = vec!["b.txt", "B.txt", "a_b", "a-b", "a.b", "ab", "é", "e", "f"];
-        v.sort_by(|a, b| c.compare(a, b));
+        v.sort_by(|a, b| nekko_js::locale_compare(a, b));
         assert_eq!(v, vec!["a_b", "a-b", "a.b", "ab", "b.txt", "B.txt", "e", "é", "f"]);
     }
 }

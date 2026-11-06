@@ -8,8 +8,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
-chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-icu_collator.workspace = true
+chrono.workspace = true
 nekko-js = { path = "../nekko-js" }
 regress.workspace = true
 # Prices like 0.049999999999999996 and costs must parse to the exact double JavaScript has.

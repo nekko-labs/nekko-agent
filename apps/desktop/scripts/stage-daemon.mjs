@@ -15,6 +15,7 @@ import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { copyVcRuntime } from '../../../scripts/vc-runtime.mjs';
+import { signDevDaemon } from './dev-signing.cjs';
 
 const local = process.argv.includes('--local');
 const dev = process.argv.includes('--dev');
@@ -74,13 +75,26 @@ function stageVmHelper(dirs) {
       return false;
     }
   }
+  const caps = spawnSync(out, ['capabilities'], { encoding: 'utf8' });
+  if (!caps.stdout?.includes('"firstBoot":true')) {
+    console.warn('nekko-vm was built without the macOS 27 SDK: this build cannot set up a runner image. Build with Xcode 27.');
+  }
   for (const dir of dirs.slice(1)) copyFileSync(out, join(dir, 'nekko-vm'));
+  // The guest scripts the image builder uploads (crates/nekkod/src/runner/image.rs).
+  for (const dir of dirs) {
+    mkdirSync(join(dir, 'runner-image'), { recursive: true });
+    for (const name of ['provision.sh', 'nekko-runner-boot.sh', 'dev.nekkolabs.runner-boot.plist']) {
+      copyFileSync(join(repo, 'scripts', 'runner-image', name), join(dir, 'runner-image', name));
+    }
+  }
   console.log(`staged nekko-vm -> ${dirs.join(', ')}`);
   return true;
 }
 
 if (dev) {
   execFileSync(cargo, ['build', '--profile', 'dev-daemon', '--locked', '-p', 'nekkod', '--features', 'dev-tools'], { cwd: repo, stdio: 'inherit' });
+  // A stable signature, so the Keychain keeps its answers across rebuilds.
+  signDevDaemon(join(repo, 'target', 'dev-daemon', exe));
   stageSpeechHelper([join(repo, 'target', 'dev-daemon')]);
   stageVmHelper([join(repo, 'target', 'dev-daemon')]);
   process.exit(0);

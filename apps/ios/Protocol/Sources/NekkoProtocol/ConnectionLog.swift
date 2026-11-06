@@ -64,6 +64,9 @@ public struct ConnectionLog: Equatable, Sendable {
 public enum ConnectionAdvice {
     public static func advise(route: RelayRoute, relayHost: String, computer: String, state: RelayState,
                               denied: DenyReason?, detail: String?, tailscaleOn: Bool) -> [String] {
+        if detail == RelayStatus.badPairingKey {
+            return advise(route: route, relayHost: relayHost, computer: computer, state: .denied, denied: .badKey, detail: nil, tailscaleOn: tailscaleOn)
+        }
         switch state {
         case .online, .idle:
             return []
@@ -86,6 +89,12 @@ public enum ConnectionAdvice {
                 "If \(computer) is awake, check it uses the same relay: Settings → Remote access shows it.",
             ]
         case .connecting:
+            if detail == RelayStatus.hostNotFound {
+                return [
+                    "\(relayHost) doesn’t exist anymore, so this iPhone can’t reach \(computer) through it.",
+                    "On \(computer), open Settings → Remote access, change how phones connect (Tailscale works with nothing hosted), then pair this iPhone again.",
+                ]
+            }
             var out: [String] = []
             switch route {
             case .tailscale:

@@ -7,15 +7,16 @@ import XCTest
 /// live stack as LiveRelayTests (apps/ios/scripts/itest-stack.sh): opt-in
 /// with `TEST_RUNNER_NEKKO_ITEST_LINK`, and only on an iPad (a phone is
 /// always one column). Each step is a screenshot attachment.
+@MainActor
 final class PanesTests: XCTestCase {
     /// The faked hinge's thickness (Hinge.thickness in the app).
     private let hinge: CGFloat = 24
 
-    override func setUp() {
+    override func setUp() async throws {
         continueAfterFailure = false
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         XCUIDevice.shared.orientation = .portrait
     }
 

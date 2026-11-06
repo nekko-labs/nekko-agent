@@ -23,12 +23,34 @@ hostname).
 
 ## Endpoints
 
-- `POST /v1/signups` with JSON `{ email, name?, list?, source?, utm?, website? }`.
+- `POST /v1/signups` with JSON `{ email, name?, list?, source?, utm?, marketing?, policyVersion?, website? }`.
+  `marketing` (boolean, default false) is the separate "also send me product
+  updates" consent and `policyVersion` (at most 32 of `A-Za-z0-9._-`) the
+  privacy policy version the form showed; both are stored on the row and a
+  repeat signup replaces them. Beta mail never depends on `marketing`; any
+  product-update mail must go only to `marketing_opt_in` rows.
   `list` defaults to `beta`. `source` keeps a page path only, `utm` keeps
   `utm_*` keys only, anything else is dropped. `website` is a honeypot the form
   hides; a filled one gets a fake success. Always answers `202 {ok:true}` on
   valid input, new or repeat, so the form can't reveal who is on the list.
   Browser calls are accepted only from `ALLOWED_ORIGINS`; 5 per IP per hour.
+  Double opt-in: a pending signup gets one "Confirm you want to join the Nekko
+  Agent beta" email (Resend, from `hello@mail.nekkoagent.com`, reply-to
+  `hello@nekkoagent.com`), at most one per address per day. Without
+  `RESEND_API_KEY` the signup saves and the email is skipped with a log line.
+- `GET /v1/signups/confirm?token=`: uses the email's single-use link (only its
+  SHA-256 is stored; 7 days) and marks the signup `confirmed`; answers a small
+  HTML page. Only the newest email's link works.
+- `GET|POST /v1/signups/unsubscribe?token=`: one-click unsubscribe from the
+  link in every email, and RFC 8058 `List-Unsubscribe-Post` from mail apps.
+  Unsubscribing deletes the address's signup rows and keeps only a SHA-256 of
+  it in `email_suppressions`, which no email is ever sent to (a later signup
+  saves but gets no email).
+- Retention: every 6 hours (and on start) pending signups not confirmed
+  within 30 days of their last confirmation email (never one that wasn't
+  emailed), and any row marked `unsubscribed`, are deleted in one
+  transaction; confirmed, invited and joined rows are never touched.
+  Links point at `PUBLIC_URL` (default `https://nekko-agent-api.fly.dev`).
 - `/v1/sync/*`: end-to-end encrypted sync for Pro and Team (see
   [docs/SYNC-ENCRYPTION.md](../../docs/SYNC-ENCRYPTION.md)). Bearer `nk_` tokens
   (stored as SHA-256); the service stores only ciphertext, opaque ids and
@@ -36,7 +58,15 @@ hostname).
   `pro`/`team` (402 otherwise); reading, revoking and `DELETE /v1/sync` work on
   any plan.
 - `GET /v1/auth/config`, `POST /v1/auth/session`, `GET /v1/auth/me`,
-  `DELETE /v1/auth/session`: sign-in. The app signs in to Supabase Auth and
+  `DELETE /v1/auth/session`: sign-in.
+- `DELETE /v1/account` (Bearer `nk_` token): deletes the account for good
+  (decision 0043). Destroys every cloud machine it had on Fly first (502
+  `machine-teardown-failed` and nothing deleted if one can't be), then in one
+  transaction deletes the user and everything referring to it, deletes its
+  signups and puts the address's hash in `email_suppressions`; last, deletes
+  the Supabase Auth user (`SUPABASE_SERVICE_ROLE_KEY`; a failure waits in
+  `pending_auth_deletions` and is retried hourly). 204, or 401 without a valid
+  token. The app signs in to Supabase Auth and
   trades the access token here for its own `nk_` device token (180 days from
   last use). Supabase proves identity only; accounts, plans and data stay in
   this database.
@@ -61,10 +91,33 @@ hostname).
   `{ message, app? }` (`src/feedback.ts`). Unauthenticated, not request-logged,
   10 per IP per hour (counted in memory). `app` comes only when the sender
   switched on "Include app info", and only `app`, `version`, `os`, `osVersion`
-  and `arch` are kept.
+  and `arch` are kept. A body with `screenshots` is refused here.
+- `POST /v1/feedback/screenshots`: the same note with 1 to 3 screenshots,
+  `{ message, app?, screenshots: [{ type, data }] }`, `data` base64 of a PNG or
+  JPEG up to 5 MB (`src/screenshots.ts`). Each must be a whole, well-formed
+  image of its type (`400 bad-screenshot` with its index otherwise, and nothing
+  is stored); metadata is stripped before storing. Counts against the 10 notes
+  per IP per hour, plus 3 with screenshots per IP per hour and 2 uploads at
+  once (`503 busy`), all checked before the body is read.
 - `GET /healthz`: Fly's health check. The machine stops when idle and wakes on
   the next request in about a second; the signup page should call this on load
   so that happens before anyone presses Join.
+
+## Logs and alerts
+
+Request log lines hold method, path (never the query string), status and
+timing: no client IP, port or host, so the tokens in confirm and unsubscribe
+links stay out of Fly's logs (`LOG_SERIALIZERS` in `src/server.ts`). Rate
+limits count IPs in memory only.
+
+With `ALERT_EMAIL` set (and `RESEND_API_KEY`), a 5xx answer or a failed
+background job emails that address, at most once per 15 minutes, naming only
+the route or job (`src/alerts.ts`). What to do next:
+[the privacy incident runbook](../../docs/runbooks/privacy-incident.md).
+
+```bash
+fly secrets set ALERT_EMAIL='<who gets alerts>'
+```
 
 ## Database
 
@@ -83,9 +136,19 @@ hostname).
 - `feedback`: Send feedback notes (migration `0005`), with no user, device or
   IP column and only the day each arrived. Read them with
   `select received_on, message, app_info from feedback order by received_on desc`.
+- `feedback_screenshots`: a note's screenshots (migration `0013`), cleaned of
+  metadata, with no file name; deleted with the note and 90 days after it
+  arrived (`purgeFeedbackScreenshots`). Read them with
+  `select position, type, encode(data, 'base64') from feedback_screenshots where feedback_id = $1 order by position`
+  and decode the base64 locally.
 - `cloud_machines`: one row per Nekko Cloud machine (migration `0006`): region,
   size, state, the hosting provider's machine id, the relay room, the hashes of
   the pairing key and of the relay access token, the scope, hours used.
+- `machine_usage`: machine seconds per account per month (migration `0007`).
+- `signups.marketing_opt_in`, `signups.policy_version` (migration `0011`):
+  marketing consent apart from the beta, and the policy version agreed to.
+- `pending_auth_deletions` (migration `0012`): Supabase users still to delete
+  after their account was deleted here; only the Supabase user id.
 
 ## Sign-in: Supabase Auth
 
@@ -110,6 +173,17 @@ fly secrets set SUPABASE_URL='https://<project>.supabase.co' SUPABASE_ANON_KEY='
 ```
 
 Without both, the `/v1/auth/*` routes answer 503 and the apps say sign-in isn't switched on.
+
+Account deletion also removes the Supabase Auth user, which needs the
+project's **service-role key** (Project Settings → API keys; server-side only,
+never in an app):
+
+```bash
+fly secrets set SUPABASE_SERVICE_ROLE_KEY='<service_role or secret key>'
+```
+
+Without it, deleted accounts' Supabase users wait in `pending_auth_deletions`
+and are deleted on the first hourly run after the key is set.
 
 Setting a plan by hand until Stripe writes it: `update users set plan = 'pro' where lower(email) = lower('…');`
 

@@ -68,7 +68,10 @@ public struct TermLine: Equatable, Sendable {
     public var text: String { runs.map(\.text).joined() }
 }
 
-public final class TerminalScreen: @unchecked Sendable {
+/// A VT screen: grid, cursor, scrollback and parser state, mutated by `feed`.
+/// Not `Sendable` (it has no lock): it stays in its owner's isolation domain,
+/// the main-actor `TerminalSession`.
+public final class TerminalScreen {
     public private(set) var cols: Int
     public private(set) var rows: Int
     public private(set) var cursorX = 0

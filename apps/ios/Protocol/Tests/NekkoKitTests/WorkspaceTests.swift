@@ -3,6 +3,25 @@ import XCTest
 @testable import NekkoProtocol
 
 final class WorkspaceTests: XCTestCase {
+    func testDefaultFolderSettingsDecodeWithoutHostPaths() {
+        let settings = PcSettings.from(["defaultWorkspaceIds": ["w", "other"], "workspaces": [["path": "/private"]]])
+        XCTAssertEqual(settings.defaultWorkspaceIds, ["w", "other"])
+        XCTAssertEqual(PcSettings.from([:]).defaultWorkspaceIds, [])
+    }
+
+    func testDefaultIntentAndSupportingFoldersSurvivePersistence() {
+        let draft = Draft(text: "Hello", workspaceId: "app", useDefaultFolders: true, supportingWorkspaceIds: ["docs"])
+        XCTAssertEqual(Draft.from(draft.json)?.useDefaultFolders, true)
+        XCTAssertEqual(Draft.from(draft.json)?.supportingWorkspaceIds, ["docs"])
+        XCTAssertEqual(Draft.from(["text": "legacy"])?.supportingWorkspaceIds, [])
+        let restored = Draft().merging(draft)
+        XCTAssertEqual(restored.supportingWorkspaceIds, ["docs"])
+        let explicitNone = Draft(useDefaultFolders: false).merging(draft)
+        XCTAssertNil(explicitNone.workspaceId)
+        XCTAssertTrue(explicitNone.supportingWorkspaceIds.isEmpty)
+        XCTAssertFalse(Draft(useDefaultFolders: false).isEmpty)
+    }
+
     func testPathsAndLegacyFoldersRoundTripThroughCache() {
         let folders = WorkspaceFolder.list([["id": "a", "name": "App", "path": "/Users/me/App"], ["id": "b", "name": "Old"]])
         XCTAssertEqual(folders, [WorkspaceFolder(id: "a", name: "App", path: "/Users/me/App"), WorkspaceFolder(id: "b", name: "Old")])
@@ -26,7 +45,7 @@ final class WorkspaceTests: XCTestCase {
 final class WorkspaceStoreTests: XCTestCase {
     func testSignedAddRemoveFullListAndRefreshedSummaries() async throws {
         let computer = ProofComputer(deviceId: "id-1")
-        let store = await StoreChangeTests().pairedStore(computer)
+        let store = await StoreChangeTests.pairedStore(computer)
         store.changeSigner = SoftwareChangeSigner()
         computer.now = Int64(Date().timeIntervalSince1970 * 1000)
         computer.replies = [Channels.sessionsSummaries: [], Channels.providersList: [], Channels.settingsGet: [:], Channels.workspaceList: []]
@@ -36,6 +55,10 @@ final class WorkspaceStoreTests: XCTestCase {
         try await store.addWorkspace(path: "  /projects/app  ")
         XCTAssertEqual(store.workspaces, [WorkspaceFolder(id: "w", name: "App", path: "/projects/app")])
         XCTAssertEqual(computer.proofs(Channels.workspaceAddByPath), [true])
+        computer.replies[Channels.settingsUpdate] = ["defaultWorkspaceIds": ["w"]]
+        try await store.setDefaultWorkspace("w", included: true)
+        XCTAssertEqual(store.pcSettings.defaultWorkspaceIds, ["w"])
+        XCTAssertEqual(computer.calls.last(where: { $0.0 == Channels.settingsUpdate })?.1, [["defaultWorkspaceIds": ["w"]]])
         computer.replies[Channels.workspaceRemove] = []
         computer.replies[Channels.sessionsSummaries] = [["id": "chat", "title": "Unassigned", "updatedAt": 5]]
         try await store.removeWorkspace("w")
@@ -51,9 +74,25 @@ final class WorkspaceStoreTests: XCTestCase {
         XCTAssertTrue(store.workspaces.isEmpty)
     }
 
+    func testNewChatAttachesSupportingFoldersWithASignedProof() async throws {
+        let computer = ProofComputer(deviceId: "id-1")
+        let store = await StoreChangeTests.pairedStore(computer)
+        store.changeSigner = SoftwareChangeSigner()
+        computer.now = Int64(Date().timeIntervalSince1970 * 1000)
+        computer.replies = [Channels.sessionsSummaries: [], Channels.providersList: [], Channels.settingsGet: [:], Channels.workspaceList: [],
+                            Channels.sessionCreate: ["id": "chat", "messages": []], Channels.sessionSetOptions: .null,
+                            Channels.sessionSetSupportingWorkspaces: .null]
+        computer.online()
+        for _ in 0..<20 { await Task.yield() }
+        let id = try await store.createChat(providerId: "p", modelId: "m", workspaceId: "app", mode: .guardrails, supportingWorkspaceIds: ["docs"])
+        XCTAssertEqual(id, "s-new")
+        XCTAssertEqual(computer.proofs(Channels.sessionSetSupportingWorkspaces), [true])
+        XCTAssertEqual(computer.calls.last(where: { $0.0 == Channels.sessionSetSupportingWorkspaces })?.1, ["s-new", ["docs"]])
+    }
+
     func testOfflineAndRelativePathsDoNotSendChanges() async throws {
         let computer = ProofComputer(deviceId: "id-1")
-        let store = await StoreChangeTests().pairedStore(computer)
+        let store = await StoreChangeTests.pairedStore(computer)
         for path in ["relative", "/absolute"] {
             do { try await store.addWorkspace(path: path); XCTFail("must refuse") } catch {}
         }

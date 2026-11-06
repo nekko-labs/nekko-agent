@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '../tests/browserGlobals.js';
 import { liveStore } from '../tests/liveStore.js';
 import { elementWidthMock, paneWidth } from '../tests/paneWidth.js';
-import { chatSession, renderChatPane, withProvider } from '../tests/renderChatPane.js';
+import { chatSession, composerBox, renderChatPane, withProvider } from '../tests/renderChatPane.js';
 import { loadWall, summary, windowBody } from '../tests/renderWall.js';
 import { useStore } from '../store.js';
 
@@ -20,15 +20,19 @@ beforeEach(() => {
   useStore.setState({ planRailOpen: true, planRailOpenBySession: {} });
 });
 
-describe('focus mode clean start', () => {
-  it('is asked for by the focused wall chat only', async () => {
+describe('wall clean start', () => {
+  it('is asked for by the focused wall chat and every chat in dynamic (grid) mode', async () => {
     const wall = await loadWall();
     const two = { root: { id: 'r', dir: 'row', sizes: [0.5, 0.5], children: [{ id: 'a', kind: 'chat', refId: 'a' }, { id: 'b', kind: 'chat', refId: 'b' }] } as never };
+    // Focus mode: only the hero asks for clean start; parked chats do not.
     const focus = wall.render({ ...two, layout: { mode: 'focus', cols: 2, rows: 1 }, hero: 'a' }, { sessions: [summary('a'), summary('b')] });
     expect(windowBody(focus, 'a')).toContain('data-clean-start="true"');
     expect(windowBody(focus, 'b')).toContain('data-clean-start="false"');
+    // Dynamic (grid) mode: each window hosts its own composer, so each new chat
+    // gets the same greeting + centred composer that focus mode shows.
     const grid = wall.render({ ...two, layout: { mode: 'grid', cols: 2, rows: 1 }, hero: 'a' }, { sessions: [summary('a'), summary('b')] });
-    expect(grid).not.toContain('data-clean-start="true"');
+    expect(windowBody(grid, 'a')).toContain('data-clean-start="true"');
+    expect(windowBody(grid, 'b')).toContain('data-clean-start="true"');
   });
 
   it('lasts only while the chat is empty, on the full surface, with a model and nothing needing the user', () => {
@@ -55,11 +59,21 @@ describe('focus mode clean start', () => {
     expect(clean).toMatch(/<section class="[^"]*\bclean-start justify-center\b/);
   });
 
-  it('still offers the model and effort under the composer', () => {
+  it('still offers the model and effort as the composer\'s bottom row', () => {
     const clean = renderChatPane(empty(), { cleanStart: true });
     const normal = renderChatPane(empty(), { cleanStart: false });
     expect(clean).toContain('data-clean-start-model');
+    // The box's own bottom row, never under it.
+    const box = composerBox(clean);
+    expect(box.indexOf('data-clean-start-model')).toBeGreaterThan(box.indexOf('composer-bar'));
+    const after = clean.slice(clean.indexOf(box) + box.length);
+    expect(after.slice(0, after.indexOf('</section>'))).not.toMatch(/<button/);
     expect(clean).toContain('aria-haspopup="listbox"');
+    // On the wall the bar already carries the model, so no second copy.
+    const wall = renderChatPane(empty(), { commandCenter: true, cleanStart: true });
+    expect(wall).toContain('data-clean-start');
+    expect(composerBox(wall)).toContain('data-composer-foot');
+    expect(wall).not.toContain('data-clean-start-model');
     // Out of the clean start it lives in the footer, not twice.
     expect(normal).not.toContain('data-clean-start-model');
   });

@@ -1,11 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { THEME_PRESETS, appearanceOf, currentPresetAccent, resolveThemePreset, themePresetOf, touchesAppearance, type ThemePreset } from './themes.js';
+import { THEME_PRESETS, currentPresetAccent, resolveThemePreset, themePresetOf, type ThemePreset } from './themes.js';
 
 describe('currentPresetAccent', () => {
   it('upgrades accents a retuned preset used to save', () => {
     expect(currentPresetAccent('nebula', '#a78bfa')).toBe('#9d8ce6');
     expect(currentPresetAccent('nebula', '#F472B6')).toBe('#d98bb6');
     expect(currentPresetAccent('terminal', '#22c55e')).toBe('#3fb96a');
+  });
+  it('moves the base looks off the old violet and cyan onto plum', () => {
+    expect(currentPresetAccent('system', '#6D5EFC')).toBe('#5a2352');
+    expect(currentPresetAccent('system', '#06b6d4')).toBe('#8a4a7f');
+    expect(currentPresetAccent('light', '#6d5efc')).toBe('#5a2352');
+    expect(currentPresetAccent('dark', '#8b7dff')).toBe('#c084b5');
+    expect(currentPresetAccent('dark', '#22d3ee')).toBe('#c99bb3');
   });
   it('keeps the user’s own colors and other presets untouched', () => {
     expect(currentPresetAccent('nebula', '#ff0000')).toBe('#ff0000');
@@ -17,8 +24,8 @@ describe('currentPresetAccent', () => {
 
 describe('resolveThemePreset', () => {
   it('resolves System to Nekko Dark in dark mode and Lilac in light mode', () => {
-    expect(resolveThemePreset('system', true)).toBe('nekko-dark');
-    expect(resolveThemePreset('system', false)).toBe('lilac');
+    expect(resolveThemePreset('system', true)).toBe('x-plum-dark');
+    expect(resolveThemePreset('system', false)).toBe('x-plum-white');
   });
   it('leaves every other preset as it is', () => {
     for (const id of ['light', 'dark', 'nebula', 'lilac', 'nekko-dark']) {
@@ -119,26 +126,23 @@ describe('THEME_PRESETS', () => {
   });
 });
 
-describe('appearanceOf', () => {
-  it('keeps only the look, validated, and nothing else from the settings', () => {
-    const a = appearanceOf({
-      theme: 'dark', themePreset: 'nebula', accent: '#FB923C', accent2: 'red',
-      // Secrets and everything else must never reach the relay.
-      ...({ providers: [{ apiKey: 'sk-secret' }], hfToken: 'hf_x' } as object),
-    });
-    expect(a).toEqual({ theme: 'dark', themePreset: 'nebula', accent: '#fb923c' });
-    expect(JSON.stringify(a)).not.toContain('secret');
-  });
+describe('inkFaint contrast', () => {
+  const luminance = (hex: string): number => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a: string, b: string): number => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
 
-  it('reads anything unknown as system and drops malformed fields', () => {
-    expect(appearanceOf(null)).toEqual({ theme: 'system' });
-    expect(appearanceOf({ theme: 'sepia', themePreset: '<script>', accent: '#12345' })).toEqual({ theme: 'system' });
-  });
-
-  it('knows which patches change it', () => {
-    expect(touchesAppearance({ theme: 'light' })).toBe(true);
-    expect(touchesAppearance({ accent2: '#000000' })).toBe(true);
-    expect(touchesAppearance(null)).toBe(true);
-    expect(touchesAppearance({ providers: [] })).toBe(false);
+  it('passes WCAG AA (4.5:1) on every surface a tinted preset paints', () => {
+    for (const p of THEME_PRESETS) {
+      if (!p.inkFaint) continue;
+      for (const bg of [p.paper, p.surface, p.surface2]) {
+        if (!bg) continue;
+        expect(ratio(p.inkFaint, bg), `${p.id}: ${p.inkFaint} on ${bg}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
   });
 });

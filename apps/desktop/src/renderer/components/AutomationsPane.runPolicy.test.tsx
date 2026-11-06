@@ -18,6 +18,14 @@ const task = (over: Partial<AutomationTask>): AutomationTask => ({
 });
 
 describe('automations pane and the run policy', () => {
+  it('shows the CI entry point even with no scheduled automations', () => {
+    const html = renderToStaticMarkup(<AutomationsPane tasks={[]} running={new Set()} now={NOW} onOpen={() => {}} />);
+    expect(html).toContain('data-ci-runners');
+    expect(html).toContain('View CI runners');
+    expect(html).toContain('Loading CI runners');
+    expect(html).toContain('Nothing scheduled');
+  });
+
   it('says a due task is waiting for you to be away, not "due now"', () => {
     const html = renderToStaticMarkup(
       <AutomationsPane tasks={[task({ nextRunAt: NOW - 600_000, waitingSince: NOW - 600_000 })]} running={new Set()} now={NOW} onOpen={() => {}} />,

@@ -3,12 +3,14 @@
  * each group is in, and what it shows. A per-window preference, remembered like
  * the panel's width, not a setting.
  *
- * The defaults group the cards by activity (what each agent is doing), in the
+ * The defaults group the cards by activity (where each agent is in its loop), in the
  * order cards were dragged into (newest first for the rest), every detail and
  * every group shown.
  */
 
-export type AgentGroupBy = 'project' | 'status' | 'date' | 'none';
+import type { SessionSummary } from '@nekko-agent/shared';
+
+export type AgentGroupBy = 'project' | 'status' | 'date' | 'computer' | 'none';
 export type AgentSortBy = 'manual' | 'updated' | 'created' | 'name';
 export type SortDirection = 'desc' | 'asc';
 
@@ -18,12 +20,14 @@ export type AgentPanelView = {
   direction: SortDirection;
   /** The model, context, git and sub-agent lines under each card's title. */
   showMetadata: boolean;
-  /** The model provider ("Claude", "Local") as subtext under the model. */
-  showProvider: boolean;
   /** Chats an automation started (they carry a task id). */
   showAutomations: boolean;
-  /** Groups with nothing in them, shown with their "No active agents" line. */
+  /** Groups with nothing in them, shown with a muted dash placeholder. */
   showEmptyGroups: boolean;
+  /** Which computer a card's agent runs on, for a card on another computer. */
+  showComputer: boolean;
+  /** A computer's icon on its card and group heading, when it has one. */
+  showComputerIcons: boolean;
 };
 
 export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
@@ -31,15 +35,17 @@ export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
   sortBy: 'manual',
   direction: 'desc',
   showMetadata: true,
-  showProvider: true,
   showAutomations: true,
   showEmptyGroups: true,
+  showComputer: true,
+  showComputerIcons: true,
 };
 
 export const GROUP_BY_LABELS: Record<AgentGroupBy, string> = {
   project: 'Project',
   status: 'Activity',
   date: 'Date',
+  computer: 'Computer',
   none: 'None',
 };
 
@@ -52,7 +58,7 @@ export const SORT_BY_LABELS: Record<AgentSortBy, string> = {
 
 export const AGENT_PANEL_VIEW_KEY = 'nekko.agentPanelView';
 
-const GROUPS: AgentGroupBy[] = ['project', 'status', 'date', 'none'];
+const GROUPS: AgentGroupBy[] = ['project', 'status', 'date', 'computer', 'none'];
 const SORTS: AgentSortBy[] = ['manual', 'updated', 'created', 'name'];
 
 /** Read a saved view, keeping only fields that are still valid. */
@@ -68,9 +74,10 @@ export function parseAgentPanelView(raw: string | null): AgentPanelView {
     sortBy: SORTS.includes(saved.sortBy as AgentSortBy) ? saved.sortBy as AgentSortBy : d.sortBy,
     direction: saved.direction === 'asc' || saved.direction === 'desc' ? saved.direction : d.direction,
     showMetadata: bool(saved.showMetadata, d.showMetadata),
-    showProvider: bool(saved.showProvider, d.showProvider),
     showAutomations: bool(saved.showAutomations, d.showAutomations),
     showEmptyGroups: bool(saved.showEmptyGroups, d.showEmptyGroups),
+    showComputer: bool(saved.showComputer, d.showComputer),
+    showComputerIcons: bool(saved.showComputerIcons, d.showComputerIcons),
   };
 }
 
@@ -126,16 +133,64 @@ export function compareCards(view: Pick<AgentPanelView, 'sortBy' | 'direction'>)
   };
 }
 
-/** The activity groups, most urgent first. */
+/** Chats parked on a question or an approval. Shows only while it has some. */
+export const NEEDS_INPUT_GROUP = 'status:input';
+
+/** Chats nothing has been sent in yet. This group shows only while it has some. */
+export const DRAFT_GROUP = 'status:draft';
+
+/** The activity groups: what needs you first, the agent loop in order, then the stopped. */
 export const STATUS_GROUPS = [
-  { key: 'status:input', name: 'Needs input' },
-  { key: 'status:working', name: 'Working' },
-  { key: 'status:error', name: 'Error' },
+  { key: NEEDS_INPUT_GROUP, name: 'Needs input' },
+  { key: DRAFT_GROUP, name: 'Draft' },
+  { key: 'status:building', name: 'Building' },
+  { key: 'status:verifying', name: 'Verifying' },
+  { key: 'status:watching', name: 'Watching' },
   { key: 'status:done', name: 'Done' },
 ] as const;
 
-export function statusGroupOf(status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
-  return !status || status === 'idle' ? 'status:done' : `status:${status}`;
+/**
+ * What a stopped chat is still watching: its armed watches, and the background
+ * watchers of its Claude Code, which has no `agent_watch`.
+ */
+export function wakeSourcesOf(chat: Pick<SessionSummary, 'activeWatchCount' | 'backgroundWatchCount'> | null | undefined): number {
+  return (chat?.activeWatchCount ?? 0) + (chat?.backgroundWatchCount ?? 0);
+}
+
+/**
+ * A chat's activity group. Any `status` covers a first message on its way, which
+ * no summary shows yet. A chat waiting on you leaves its phase until answered.
+ * A working chat is in its phase, landing work (Shipping) included under
+ * Verifying; one stopped on an error stays there, its glyph saying so. Reading
+ * and changing are one phase, Building, so a chat that has only just been
+ * sent, or only reads, is Building too (an older engine still says
+ * `exploring`). A chat that has stopped is Watching while something can still
+ * wake it, otherwise Done.
+ */
+export function statusGroupOf(chat: Pick<SessionSummary, 'exchangeCount' | 'phase' | 'activeWatchCount' | 'backgroundWatchCount'> | null | undefined, status: 'working' | 'input' | 'error' | 'done' | 'idle' | undefined): string {
+  if (status === 'input') return NEEDS_INPUT_GROUP;
+  if (status !== 'working' && status !== 'error') {
+    if (chat?.exchangeCount === 0) return DRAFT_GROUP;
+    return wakeSourcesOf(chat) > 0 ? 'status:watching' : 'status:done';
+  }
+  const phase: string | undefined = chat?.phase;
+  return phase === 'verifying' || phase === 'shipping' ? 'status:verifying' : 'status:building';
+}
+
+export type GroupActivityKind = 'building' | 'verifying' | 'watching';
+
+/**
+ * What a status group's heading shows as live, given the status of each chat in
+ * it. A phase group is live only while a chat in it works, since a chat stopped
+ * on an error stays in its phase. Watching is live while it holds a chat: the
+ * armed watch is the activity.
+ */
+export function groupActivityOf(key: string, statuses: ReadonlyArray<string | undefined>): GroupActivityKind | null {
+  if (key === 'status:watching') return statuses.length > 0 ? 'watching' : null;
+  if (!statuses.includes('working')) return null;
+  if (key === 'status:building') return 'building';
+  if (key === 'status:verifying') return 'verifying';
+  return null;
 }
 
 /** The date groups, newest first. */

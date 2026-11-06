@@ -33,12 +33,12 @@ function InfoHint({ text }: { text: string }) {
         tabIndex={0}
         role="note"
         aria-label={text}
-        className="grid h-3.5 w-3.5 cursor-help place-items-center rounded-full border border-line text-[8px] font-bold text-ink-faint outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
+        className="grid h-3.5 w-3.5 cursor-help place-items-center rounded-full border border-line text-2xs font-bold text-ink-faint outline-hidden focus-visible:ring-2 focus-visible:ring-(--ring)"
       >
         i
       </span>
       <span
-        className="pointer-events-none absolute left-0 top-5 z-50 hidden w-56 rounded-xl border border-line p-2.5 text-[11px] font-normal normal-case leading-snug tracking-normal text-ink-soft shadow-lg group-focus-within/info:block group-hover/info:block"
+        className="pointer-events-none absolute left-0 top-5 z-50 hidden w-56 rounded-xl border border-line p-3 text-2xs font-normal normal-case leading-snug tracking-normal text-ink-soft shadow-(--shadow-float) group-focus-within/info:block group-hover/info:block"
         style={{ background: 'var(--surface)' }}
       >
         {text}
@@ -87,7 +87,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
   const [openTrees, setOpenTrees] = useState<Set<string>>(new Set());
   // The height you asked for (persisted), and the room there is for it.
   const [explorerH, setExplorerH] = useState(readExplorerHeight);
-  const explorerHRef = useRef(explorerH);
+  const explorerRef = useRef<HTMLElement>(null);
   const [splitH, setSplitH] = useState(0);
   // The area the divider splits (Folders + Context), excluding the pinned dock.
   const splitRef = useRef<HTMLDivElement>(null);
@@ -225,9 +225,6 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
     });
 
   // --- The draggable divider between Folders and Context ---
-  // The pointerup handler closes over the height at drag start, so the live value
-  // is read from a ref when persisting.
-  explorerHRef.current = explorerH;
   // What the Folders section gets on screen: the asked-for height, capped so the
   // Context section below it always keeps a usable minimum.
   const maxExplorerH = Math.max(MIN_EXPLORER_H, (splitH || DEFAULT_EXPLORER_H + MIN_CONTEXT_H) - MIN_CONTEXT_H);
@@ -237,14 +234,21 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
     e.preventDefault();
     const startY = e.clientY;
     const startH = shownExplorerH;
+    const section = explorerRef.current;
+    let latest = startH;
+    // The section's height is written directly while dragging and committed
+    // to state once on release, not a render of the inspector per move.
     const onMove = (ev: PointerEvent) => {
-      setExplorerH(Math.min(maxExplorerH, Math.max(MIN_EXPLORER_H, startH + (ev.clientY - startY))));
+      latest = Math.min(maxExplorerH, Math.max(MIN_EXPLORER_H, startH + (ev.clientY - startY)));
+      if (section) section.style.height = `${latest}px`;
+      else setExplorerH(latest);
     };
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      setExplorerH(latest);
       try {
-        window.localStorage.setItem(EXPLORER_KEY, String(Math.round(explorerHRef.current)));
+        window.localStorage.setItem(EXPLORER_KEY, String(Math.round(latest)));
       } catch { /* best effort */ }
     };
     window.addEventListener('pointermove', onMove);
@@ -285,6 +289,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
       <div ref={splitRef} className="flex min-h-0 flex-1 flex-col">
         {/* ---- Folders + file explorer ---- */}
         <section
+          ref={explorerRef}
           className="flex min-h-0 shrink-0 flex-col"
           style={treesOpen ? { height: shownExplorerH } : undefined}
         >
@@ -343,14 +348,14 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
             <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'var(--surface-2)' }}>
               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct > 85 ? 'var(--danger)' : 'var(--accent)' }} />
             </div>
-            <p className="mt-1.5 text-[11px] text-ink-faint">
+            <p className="mt-1 text-2xs text-ink-faint">
               {Math.round(pct)}% of the {windowTokens.toLocaleString()}-token window · {draftTokens > 0 ? 'includes what you’re typing.' : 'updates as you type.'}
             </p>
           </div>
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
             <Section title="System prompt" info="Standing instructions, user profile, and the server-side per-turn wrapper.">
-              <button className="btn btn-outline w-full py-1.5 text-[12px]" onClick={() => {
+              <button className="btn btn-outline w-full py-1 text-xs" onClick={() => {
                 useStore.getState().setView('settings');
                 const locate = () => {
                   const section = document.getElementById('customization');
@@ -360,7 +365,7 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
               }}>Edit system prompt &amp; customization</button>
             </Section>
             {session?.gitWorktrees && Object.entries(session.gitWorktrees).map(([id, checkout]) => (
-              <div key={id} className="rounded-lg border border-line p-2 text-[11px] text-ink-soft">
+              <div key={id} className="rounded-lg border border-line p-2 text-2xs text-ink-soft">
                 <p className="font-medium">{checkout.branch}</p>
                 <p className="mt-1 break-all">{checkout.path}</p>
                 <p className="mt-1">{checkout.notice}</p>
@@ -370,13 +375,13 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
             {activeSkill && (
               <div className="rounded-xl border border-accent/40 p-3" style={{ background: 'var(--accent-soft)' }}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="skill-pill text-[12px]">
+                  <span className="skill-pill text-xs">
                     <span className="skill-pill-slash">/</span>{activeSkill.name}
                   </span>
-                  <span className="shrink-0 text-[11px] font-medium text-accent">{skillTokens.toLocaleString()} tok</span>
+                  <span className="shrink-0 text-2xs font-medium text-accent">{skillTokens.toLocaleString()} tok</span>
                 </div>
-                <p className="mt-1.5 text-[11px] leading-snug text-ink-soft">{activeSkill.description}</p>
-                <p className="mt-1 text-[11px] text-ink-faint">Added to your message when you send. Not typed into the box.</p>
+                <p className="mt-1 text-2xs leading-snug text-ink-soft">{activeSkill.description}</p>
+                <p className="mt-1 text-2xs text-ink-faint">Added to your message when you send. Not typed into the box.</p>
               </div>
             )}
 
@@ -385,13 +390,13 @@ const HostContextInspector = memo(function HostContextInspector({ sessionId: sho
               <Section title="In the window" info="Everything that enters the model's prompt on the next reply, by source. The conversation grows with every reply, which is what makes a long chat fill the window.">
                 <div className="space-y-1">
                   {breakdown.map(([src, n]) => (
-                    <div key={src} className="flex items-center gap-2 text-[12px]">
+                    <div key={src} className="flex items-center gap-2 text-xs">
                       <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: sourceMeta(src).color }} />
                       <span className="min-w-0 flex-1 truncate text-ink-soft">{sourceMeta(src).label}</span>
                       <span className="shrink-0 text-ink-faint">{n.toLocaleString()} tok</span>
                     </div>
                   ))}
-                  <div className="mt-1 flex items-center gap-2 border-t border-line pt-1.5 text-[12px] font-medium">
+                  <div className="mt-1 flex items-center gap-2 border-t border-line pt-1 text-xs font-medium">
                     <span className="min-w-0 flex-1 text-ink">Total</span>
                     <span className="shrink-0 text-ink">{total.toLocaleString()} tok</span>
                   </div>
@@ -494,23 +499,23 @@ function FolderAccordion({
       className={`group overflow-hidden rounded-lg border ${primary ? 'border-accent/40' : 'border-line'} ${included ? '' : 'opacity-50'}`}
       style={primary ? { background: 'color-mix(in srgb, var(--accent) 5%, transparent)' } : undefined}
     >
-      <div className="flex items-center gap-1 px-1.5 py-1.5">
+      <div className="flex items-center gap-1 px-2 py-1">
         <button
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
           onClick={onToggleExpanded}
           aria-expanded={expanded}
           title={expanded ? 'Collapse files' : 'Browse files'}
         >
           <ChevronIcon className={`h-3 w-3 shrink-0 text-ink-faint transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`} />
           <FolderIcon className={`h-3.5 w-3.5 shrink-0 ${primary ? 'text-accent' : 'text-ink-faint'}`} />
-          <span className="truncate text-[13px] font-medium" title={workspace.path}>{name}</span>
+          <span className="truncate text-sm font-medium" title={workspace.path}>{name}</span>
         </button>
         {included && (
           primary
-            ? <span className="chip shrink-0 text-[10px] uppercase">primary</span>
+            ? <span className="chip shrink-0 text-2xs uppercase">primary</span>
             : (
               <button
-                className="chip chip-action shrink-0 text-[10px] uppercase"
+                className="chip chip-action shrink-0 text-2xs uppercase"
                 onClick={onMakePrimary}
                 title="Make this the primary folder"
               >
@@ -520,7 +525,7 @@ function FolderAccordion({
         )}
         <button
           type="button"
-          className={`shrink-0 rounded-sm p-0.5 transition-opacity focus-visible:opacity-100 ${isDefault ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100'}`}
+          className={`shrink-0 rounded-sm p-0.5 transition-opacity focus-visible:opacity-100 ${isDefault ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink group-hover:opacity-100 touch:opacity-100'}`}
           aria-pressed={isDefault}
           aria-label={isDefault ? `Stop starting new chats in ${name}` : `Start new chats in ${name}`}
           title={isDefault ? 'Default for new chats (click to unset)' : 'Set as default for new chats'}
@@ -529,7 +534,7 @@ function FolderAccordion({
           <StarIcon className="h-3.5 w-3.5" filled={isDefault} />
         </button>
         <button
-          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 transition-opacity hover:text-(--danger) focus-visible:opacity-100 group-hover:opacity-100"
+          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 transition-opacity hover:text-(--danger) focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
           title="Remove this folder"
           onClick={onRemove}
         >
@@ -560,8 +565,8 @@ function SectionHeader({
   title: string; info?: string; onAdd?: () => void; addLabel?: string;
 }) {
   return (
-    <div className="flex items-center justify-between px-4 pb-1.5 pt-3">
-      <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+    <div className="flex items-center justify-between px-4 pb-1 pt-3">
+      <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
         {title}
         {info && <InfoHint text={info} />}
       </span>
@@ -589,8 +594,8 @@ function Section({
 }) {
   return (
     <div>
-      <div className="mb-1.5 flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="flex items-center gap-2 text-xs font-medium text-ink-soft">
           {title}
           {info && <InfoHint text={info} />}
         </span>
@@ -630,18 +635,18 @@ function Row({
 }) {
   return (
     <div
-      className={`group flex items-center gap-2 rounded-lg border px-2 py-1.5 ${
+      className={`group flex items-center gap-2 rounded-lg border px-2 py-1 ${
         active ? 'border-accent/40 bg-accent/5' : 'border-line'
       } ${onClick ? 'cursor-pointer hover:bg-surface-2' : ''} ${included === false ? 'opacity-40' : ''}`}
       onClick={onClick}
     >
       <span className={active ? 'text-accent' : 'text-ink-faint'}>{icon}</span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13px] font-medium">{title}</span>
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium">{title}</span>
           {badge && (badgeAction ? (
             <button
-              className="chip shrink-0 cursor-pointer text-[10px] uppercase hover:text-accent"
+              className="chip shrink-0 cursor-pointer text-2xs uppercase hover:text-accent"
               onClick={(e) => {
                 e.stopPropagation();
                 badgeAction();
@@ -650,14 +655,14 @@ function Row({
             >
               {badge}
             </button>
-          ) : <span className="chip shrink-0 text-[10px] uppercase">{badge}</span>)}
+          ) : <span className="chip shrink-0 text-2xs uppercase">{badge}</span>)}
           {onClick && <ExternalIcon className="h-3 w-3 shrink-0 text-ink-faint opacity-0 group-hover:opacity-100" />}
         </div>
-        {subtitle && <p className="truncate text-[11px] text-ink-faint">{subtitle}</p>}
+        {subtitle && <p className="truncate text-2xs text-ink-faint">{subtitle}</p>}
       </div>
       {onRemove && (
         <button
-          className="shrink-0 text-ink-faint opacity-0 hover:text-(--danger) group-hover:opacity-100"
+          className="shrink-0 text-ink-faint opacity-0 hover:text-(--danger) group-hover:opacity-100 touch:opacity-100"
           title="Remove"
           onClick={(e) => {
             e.stopPropagation();
@@ -682,14 +687,14 @@ function Row({
 }
 
 function Hint({ children }: { children: React.ReactNode }) {
-  return <p className="px-1 text-[11px] leading-snug text-ink-faint">{children}</p>;
+  return <p className="px-1 text-2xs leading-snug text-ink-faint">{children}</p>;
 }
 
 function Empty() {
   return (
     <div className="flex h-full w-80 flex-col items-center justify-center border-l border-line p-6 text-center">
       <h3 className="text-sm font-semibold">Context</h3>
-      <p className="mt-2 text-[12px] text-ink-faint">Start or open a chat to see and manage its context here.</p>
+      <p className="mt-2 text-xs text-ink-faint">Start or open a chat to see and manage its context here.</p>
     </div>
   );
 }

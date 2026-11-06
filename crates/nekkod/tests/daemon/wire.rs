@@ -5,10 +5,8 @@ use crate::common::*;
 #[tokio::test(flavor = "multi_thread")]
 async fn refuses_unknown_channels_and_serves_owned_ones() {
     let d = start();
-    // Without a data directory the chats are not served here, and nothing else serves them.
-    let (status, body) = post(d.port, "sessions:list", json!([1, "two"]), Some(TOKEN)).await;
-    assert_eq!(status, 400);
-    assert_eq!(body["error"], "unknown channel sessions:list");
+    let (status, body) = post(d.port, "sessions:list", json!([]), Some(TOKEN)).await;
+    assert_eq!((status, body), (200, json!([])));
     let (status, body) = post(d.port, "fail:please", json!([]), Some(TOKEN)).await;
     assert_eq!(status, 400);
     assert_eq!(body["error"], "unknown channel fail:please");
@@ -18,7 +16,7 @@ async fn refuses_unknown_channels_and_serves_owned_ones() {
     assert_eq!(info["app"], "nekkod");
     assert!(info.get("backend").is_none(), "{info}");
 
-    // No data directory, so no agent command logs: the daemon's own terminals only.
+    // No chats, so no agent command logs, and no terminals yet.
     let (_, list) = post(d.port, "terminals:list", json!([]), Some(TOKEN)).await;
     assert_eq!(list, json!([]));
 
@@ -35,13 +33,13 @@ async fn refuses_unknown_channels_and_serves_owned_ones() {
 #[tokio::test(flavor = "multi_thread")]
 async fn authenticated_chat_turn_http_body_exceeds_old_limit_without_truncation() {
     let d = start();
-    // Without a data directory the turn stops before anything runs. That 400
-    // proves the complete >2 MiB JSON body reached the turn route.
+    // A chat id no chat can have stops the turn before anything runs. That
+    // 400 proves the complete >2 MiB JSON body reached the turn route.
     let image = format!("data:image/png;base64,{}", "A".repeat(2 * 1024 * 1024));
-    let args = json!([{ "turnId": "large-http", "opts": { "sessionId": "s", "text": "image", "images": [image] } }]);
+    let args = json!([{ "turnId": "large-http", "opts": { "sessionId": "no such chat", "text": "image", "images": [image] } }]);
     let (status, body) = post(d.port, "chat:turn", args.clone(), Some(TOKEN)).await;
     assert_eq!(status, 400, "{body}");
-    assert_eq!(body["error"], "chat:turn needs the daemon to know the data directory", "{body}");
+    assert_eq!(body["error"], "Session not found.", "{body}");
 
     // Authentication rejects before reading the body; keep this request small so
     // the server cannot close the socket while reqwest is still uploading it.
@@ -223,7 +221,7 @@ async fn chat_terminals_tails_viewers_and_ssh() {
     std::fs::set_permissions(&ssh, std::fs::Permissions::from_mode(0o755)).unwrap();
     let path = format!("{}:/usr/bin:/bin", bin.display());
     let home_s = home.to_string_lossy().into_owned();
-    let d = start_with_env(Some(&data), json!({}), &[("HOME", Some(&home_s)), ("PATH", Some(&path))]);
+    let d = start_with_env(&data, json!({}), &[("HOME", Some(&home_s)), ("PATH", Some(&path))]);
 
     // Hosts: the alias and display fields, never the key path.
     let (status, hosts) = post(d.port, "ssh:hosts", json!([]), Some(TOKEN)).await;

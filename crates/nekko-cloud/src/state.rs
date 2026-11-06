@@ -70,10 +70,9 @@ impl State {
     }
 
     pub fn save(&self, dir: &Path) -> Result<(), String> {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        let tmp = dir.join("state.json.tmp");
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
-        std::fs::rename(&tmp, Self::path(dir)).map_err(|e| e.to_string())
+        let text = serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?;
+        let opts = nekko_js::fs::AtomicWrite { create_dir: true, ..Default::default() };
+        nekko_js::fs::atomic_write(&Self::path(dir), &text, opts).map_err(|e| e.to_string())
     }
 
     /// Forget everything about sync (another account signed in, or Delete everything synced).

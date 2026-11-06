@@ -7,9 +7,9 @@ import NekkoProtocol
 /// active computer with its default model and opens it, so a run can be
 /// kicked off hands-free. The phone's app lock still applies when it opens.
 struct AskComputerIntent: AppIntent {
-    static var title: LocalizedStringResource = "Ask my computer"
-    static var description = IntentDescription("Start a chat with Nekko Agent on your computer.")
-    static var openAppWhenRun = true
+    static let title: LocalizedStringResource = "Ask my computer"
+    static let description = IntentDescription("Start a chat with Nekko Agent on your computer.")
+    static let openAppWhenRun = true
 
     @Parameter(title: "Message", requestValueDialog: "What should your computer do?")
     var message: String
@@ -32,9 +32,9 @@ struct AskComputerIntent: AppIntent {
 /// answered from the widget's counts-only snapshot without opening the app,
 /// so it says nothing the Home Screen widget wouldn't.
 struct NeedsYouIntent: AppIntent {
-    static var title: LocalizedStringResource = "What needs me?"
-    static var description = IntentDescription("Hear how many chats on your computer need you or are working. Counts only.")
-    static var openAppWhenRun = false
+    static let title: LocalizedStringResource = "What needs me?"
+    static let description = IntentDescription("Hear how many chats on your computer need you or are working. Counts only.")
+    static let openAppWhenRun = false
 
     init() {}
 

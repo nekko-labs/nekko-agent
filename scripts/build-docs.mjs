@@ -8,6 +8,7 @@
 //   apps/website/docs/search.json   the client-side search index
 //   apps/website/docs/media/        images the pages use
 //   apps/website/llms-full.txt      every page in one file
+//   apps/website/release.json       the latest release, for the download buttons
 // (Committed, they made every docs PR conflict with every other one in the
 // merge queue.) It also rewrites the generated docs section in llms.txt and the
 // docs URLs in sitemap.xml. Those two are committed: they change only with
@@ -20,6 +21,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { basename, dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Marked } from 'marked';
+import { writeContributors } from './build-contributors.mjs';
 
 function stripHtmlTags(input) {
   let prev;
@@ -234,7 +236,7 @@ function layout({ page, rendered, sections, prev, next }) {
     about: { '@id': 'https://nekkoagent.com/#app' },
   };
   return `<!doctype html>
-<html lang="en" data-theme="colour">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -244,8 +246,7 @@ function layout({ page, rendered, sections, prev, next }) {
     <link rel="alternate" type="text/markdown" href="/docs/${pageFile(page.slug)}.md" />
     <link rel="alternate" type="text/plain" href="/llms.txt" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
-    <meta name="theme-color" content="#9d8ce6" />
-    <script>try{var t=localStorage.getItem('nekko-theme');if(t==='white'||t==='dark'){delete document.documentElement.dataset.theme;document.querySelector('meta[name=theme-color]').content='#f3effe';}}catch(e){}</script>
+    <meta name="theme-color" content="#fbf6f8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=nekko-agent-6" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="Nekko Agent" />
@@ -255,14 +256,7 @@ function layout({ page, rendered, sections, prev, next }) {
     <meta property="og:image" content="https://nekkoagent.com/og.png?v=nekko-agent-5" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/docs.css?v=${ASSET_VERSION}" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-      media="print"
-      onload="this.media='all'"
-    />
+    <link rel="stylesheet" href="/fonts.css?v=1" />
     <script type="application/ld+json">${JSON.stringify(jsonLd)}</script>
   </head>
   <body>
@@ -414,6 +408,33 @@ export function write(files = build()) {
   return files;
 }
 
+// The download buttons' release info, fetched here at build time so a visitor's
+// browser never calls api.github.com. Only the tag and each asset's name and URL.
+export function releaseInfo(rel) {
+  return {
+    version: typeof rel?.tag_name === 'string' ? rel.tag_name : '',
+    assets: Object.fromEntries((rel?.assets || []).map((a) => [a.name, a.browser_download_url])),
+  };
+}
+
+// Writes apps/website/release.json (gitignored). Never fails the build: without
+// the file the buttons link to the releases page, as they did when the API was down.
+export async function writeRelease() {
+  const file = join(site, 'release.json');
+  try {
+    const headers = { Accept: 'application/vnd.github+json' };
+    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    const res = await fetch('https://api.github.com/repos/nekko-labs/nekko-agent/releases/latest', { headers, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
+    const info = releaseInfo(await res.json());
+    writeFileSync(file, JSON.stringify(info) + '\n');
+    return `release.json: ${info.version}`;
+  } catch (e) {
+    rmSync(file, { force: true });
+    return `release.json skipped (${e.message}); the download buttons link to the releases page`;
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const files = build();
   if (process.argv.includes('--check')) {
@@ -426,5 +447,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } else {
     write(files);
     console.log(`wrote ${files.size} files to apps/website`);
+    console.log(await writeRelease());
+    console.log(await writeContributors(site));
   }
 }

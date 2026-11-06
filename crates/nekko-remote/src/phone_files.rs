@@ -86,11 +86,6 @@ fn denied_key(key: &str) -> Denied {
     Denied { code: "option-denied", detail: key.to_string() }
 }
 
-/// Length in UTF-16 units, as JavaScript's `s.length`.
-fn len16(s: &str) -> usize {
-    s.encode_utf16().count()
-}
-
 /// `phoneFilesSecret`: `phoneSecretFile` plus git's stored credentials and a
 /// repository's config (the computer's `secret_path` in nekko-workspace).
 pub fn secret_path(path: &str) -> bool {
@@ -114,7 +109,7 @@ fn root(v: Option<&Value>, p: &FilesPolicy) -> Result<Value, Denied> {
     for key in ["sessionId", "workspaceId"] {
         let Some(id) = o.get(key) else { continue };
         match id.as_str() {
-            Some(s) if !s.is_empty() && len16(s) <= p.id_chars => {
+            Some(s) if !s.is_empty() && nekko_js::len16(s) <= p.id_chars => {
                 out.insert(key.to_string(), id.clone());
             }
             _ => return Err(bad("folder")),
@@ -130,7 +125,9 @@ fn root(v: Option<&Value>, p: &FilesPolicy) -> Result<Value, Denied> {
 fn rel_path(v: Option<&Value>, empty: bool, p: &FilesPolicy) -> Result<String, Denied> {
     match v {
         None if empty => Ok(String::new()),
-        Some(Value::String(s)) if len16(s) <= p.path_chars && !s.contains('\0') && (empty || !s.is_empty()) => {
+        Some(Value::String(s))
+            if nekko_js::len16(s) <= p.path_chars && !s.contains('\0') && (empty || !s.is_empty()) =>
+        {
             Ok(s.clone())
         }
         _ => Err(bad("path")),
@@ -172,7 +169,7 @@ pub fn screen(channel: &str, args: &[Value], p: &FilesPolicy) -> Result<Vec<Valu
         "files:search" => {
             let r = root(get(0), p)?;
             let q = match get(1) {
-                Some(Value::String(q)) if !q.trim().is_empty() && len16(q) <= p.query_chars => q.clone(),
+                Some(Value::String(q)) if !q.trim().is_empty() && nekko_js::len16(q) <= p.query_chars => q.clone(),
                 _ => return Err(bad("query")),
             };
             let limit = match get(2) {
@@ -218,7 +215,7 @@ pub fn screen(channel: &str, args: &[Value], p: &FilesPolicy) -> Result<Vec<Valu
         "logs:list" => Vec::new(),
         "logs:read" => {
             let id = match get(0) {
-                Some(Value::String(s)) if !s.is_empty() && len16(s) <= p.id_chars => s.clone(),
+                Some(Value::String(s)) if !s.is_empty() && nekko_js::len16(s) <= p.id_chars => s.clone(),
                 _ => return Err(bad("log id")),
             };
             let o = options(get(1), &["maxMatches", "query", "tailBytes"], "log options")?;
@@ -226,7 +223,7 @@ pub fn screen(channel: &str, args: &[Value], p: &FilesPolicy) -> Result<Vec<Valu
             if let Some(o) = o {
                 if let Some(q) = o.get("query") {
                     match q.as_str() {
-                        Some(s) if len16(s) <= p.query_chars => {
+                        Some(s) if nekko_js::len16(s) <= p.query_chars => {
                             if !s.is_empty() {
                                 out.insert("query".into(), q.clone());
                             }
@@ -255,7 +252,7 @@ fn cut_text(s: &str, n: usize) -> String {
 
 /// `tailText`: the last `n` UTF-16 units, a surrogate pair cut in half dropped.
 fn tail_text(s: &str, n: usize) -> String {
-    let total = len16(s);
+    let total = nekko_js::len16(s);
     if total <= n {
         return s.to_string();
     }
@@ -328,7 +325,7 @@ fn file(r: &Value, p: &FilesPolicy) -> Value {
     }
     let mut out = pick_keys(r, &p.file_view);
     if let Some(Value::String(content)) = o.get("content") {
-        if len16(content) > p.read_bytes {
+        if nekko_js::len16(content) > p.read_bytes {
             out.insert("content".into(), json!(cut_text(content, p.read_bytes)));
             out.insert("truncated".into(), json!(true));
             out.insert("editable".into(), json!(false));
@@ -338,7 +335,7 @@ fn file(r: &Value, p: &FilesPolicy) -> Value {
     }
     if let Some(Value::String(url)) = o.get("imageDataUrl")
         && url.starts_with("data:image/")
-        && len16(url) <= p.image_chars
+        && nekko_js::len16(url) <= p.image_chars
     {
         out.insert("imageDataUrl".into(), json!(url));
     }
@@ -350,7 +347,7 @@ fn log_read(r: &Value, p: &FilesPolicy) -> Value {
     let mut out = pick_keys(r, &keys(&["id", "moreMatches", "query", "size", "truncated", "updatedAt"]));
     if let Some(Value::String(text)) = o.get("text") {
         out.insert("text".into(), json!(tail_text(text, p.log_text_chars)));
-        if len16(text) > p.log_text_chars {
+        if nekko_js::len16(text) > p.log_text_chars {
             out.insert("truncated".into(), json!(true));
         }
     }
@@ -473,7 +470,7 @@ mod tests {
         let content = format!("{}😀tail", "x".repeat(p.read_bytes - 1));
         let v =
             view("files:read", &json!({ "path": "a.txt", "kind": "text", "content": content, "editable": true }), p);
-        assert_eq!(len16(v["content"].as_str().unwrap()), p.read_bytes - 1);
+        assert_eq!(nekko_js::len16(v["content"].as_str().unwrap()), p.read_bytes - 1);
         assert_eq!((v["truncated"].clone(), v["editable"].clone()), (json!(true), json!(false)));
         let text = format!("😀{}", "y".repeat(p.log_text_chars - 1));
         let v = view("logs:read", &json!({ "id": "daemon", "text": text, "truncated": false }), p);

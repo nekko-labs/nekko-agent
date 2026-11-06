@@ -1,4 +1,6 @@
+export { InfoIcon, FolderOpenIcon as FolderIcon, GfTerminalIcon as TerminalIcon, GfServerIcon as ServerIcon, GfSendIcon as SendIcon, GfLockIcon as LockIcon, GfGaugeIcon as GaugeIcon } from './gentleface-icons.js';
 import React from 'react';
+import type { ComputerIcon as ComputerIconName } from '@nekko-agent/shared';
 
 type P = { className?: string };
 /** Standard window-minimize minus, consistent with the app's line icons. */
@@ -30,12 +32,6 @@ export const ChatIcon = (p: P) => (
 export const FeedbackIcon = (p: P) => (
   <S {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M12 7v4M12 14h.01" /></S>
 );
-export const FolderIcon = (p: P) => (
-  <S {...p}><path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></S>
-);
-export const ServerIcon = (p: P) => (
-  <S {...p}><rect x="3" y="4" width="18" height="7" rx="2" /><rect x="3" y="13" width="18" height="7" rx="2" /><path d="M7 7.5h.01M7 16.5h.01" /></S>
-);
 export const PlugIcon = (p: P) => (
   <S {...p}><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-10 0zM12 16v6" /></S>
 );
@@ -45,10 +41,8 @@ export const BrainIcon = (p: P) => (
 export const GearIcon = (p: P) => (
   <S {...p}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H23a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" /></S>
 );
-export const SendIcon = (p: P) => (
-  <S {...p}><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z" /></S>
-);
 export const PlusIcon = (p: P) => (<S {...p}><path d="M12 5v14M5 12h14" /></S>);
+export const MinusIcon = (p: P) => (<S {...p}><path d="M5 12h14" /></S>);
 export const SearchIcon = (p: P) => (<S {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.4-4.4" /></S>);
 export const CalendarIcon = (p: P) => (<S {...p}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></S>);
 export const ChevronUpIcon = (p: P) => (<S {...p}><path d="m6 15 6-6 6 6" /></S>);
@@ -74,7 +68,7 @@ export const CheckIcon = (p: P) => (<S {...p}><path d="M20 6 9 17l-5-5" /></S>);
 export const SunIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></S>);
 /** A tilted instant photo: Nekko's own, not the stock picture glyph. */
 export const PhotoIcon = (p: P) => (<S {...p}><g transform="rotate(-8 12 12)"><rect x="4.5" y="3" width="15" height="18" rx="2" /><rect x="7" y="5.5" width="10" height="9.5" rx="1" /><path d="m7 13.5 3.2-3 2.3 2 1.5-1.2 3 2.5" /><circle cx="14.2" cy="8.4" r="1" /></g></S>);
-export const TerminalIcon = (p: P) => (<S {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3M13 15h4" /></S>);
+/** A prompt and cursor, no frame: a terminal. */
 /** Changes: a plus over a minus in a square, the usual diff glyph. */
 export const DiffIcon = (p: P) => (<S {...p}><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M12 7v6M9 10h6M9 16h6" /></S>);
 /** More: three dots stacked, for an overflow menu. */
@@ -89,6 +83,8 @@ export const WorktreeIcon = (p: P) => (<S {...p}><path d="M3 6.5A1.5 1.5 0 0 1 4
 export const CloseIcon = (p: P) => (<S {...p}><path d="M18 6 6 18M6 6l12 12" /></S>);
 export const ArchiveIcon = (p: P) => (<S {...p}><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></S>);
 export const BinocularsIcon = (p: P) => (<S {...p}><circle cx="6.5" cy="15.5" r="3.5" /><circle cx="17.5" cy="15.5" r="3.5" /><path d="M10 15.5h4M3 15.5 5 6.5a1.5 1.5 0 0 1 3 0v5.5M21 15.5l-2-9a1.5 1.5 0 0 0-3 0v5.5M8 9h8" /></S>);
+/** A price tag: a task in a project-management tool. */
+export const TagIcon = (p: P) => (<S {...p}><path d="M3 9V5a2 2 0 0 1 2-2h4l12 12-6 6L3 9z" /><circle cx="7.5" cy="7.5" r="1.2" /></S>);
 export const RobotIcon = (p: P) => (<S {...p}><rect x="4" y="8" width="16" height="11" rx="2" /><path d="M12 8V4M9 13h.01M15 13h.01M2 13h2M20 13h2" /></S>);
 export const WandIcon = (p: P) => (<S {...p}><path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1zM6 13l1.5 3L11 17.5 7.5 19 6 22l-1.5-3L1 17.5 4.5 16zM20 14l.8 1.6L22.5 16l-1.7.4L20 18l-.8-1.6L17.5 16l1.7-.4z" /></S>);
 /** A horseshoe magnet, poles down, in the theme's ink, with sparks off the tips: snap to grid. */
@@ -147,15 +143,30 @@ export const ControlPanelIcon = (p: P) => <S {...p}><rect x="3" y="3" width="18"
 /* Mode panel glyphs: one per setting and per option, so the panel scans by shape. */
 export const CloudIcon = (p: P) => (<S {...p}><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.6 9.1 4.7 4.7 0 0 0 7 18.5z" /></S>);
 export const PhoneIcon = (p: P) => (<S {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2" /><path d="M11 18.5h2" /></S>);
+export const ComputerIcon = (p: P) => (<S {...p}><rect x="3.5" y="4.5" width="17" height="12" rx="2" /><path d="M9 20.5h6M12 16.5v4" /></S>);
+/** The ready burst's check, on a 16 box because its path is drawn on by dash length. */
+export const ReadyCheckIcon = () => (
+  <svg viewBox="0 0 16 16"><path d="M3 8.5 6.5 12 13 4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+/** A crescent with a small z: Do not disturb. */
+export const MoonIcon = (p: P) => (
+  <S {...p}><path d="M20 14.6A8.6 8.6 0 1 1 9.4 4a7 7 0 0 0 10.6 10.6z" /><path strokeWidth="1.5" d="M15.5 5.5h3l-3 3.5h3" /></S>
+);
+/** Two halves in balance: Balanced. */
+export const YinYangIcon = (p: P) => (
+  <S {...p}>
+    <circle cx="12" cy="12" r="9.2" />
+    <path fill="currentColor" stroke="none" fillRule="evenodd" d="M12 2.8a9.2 9.2 0 0 1 0 18.4 4.6 4.6 0 0 1 0-9.2 4.6 4.6 0 0 0 0-9.2zM12 15.1a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6z" />
+    <circle cx="12" cy="7.4" r="1.3" fill="currentColor" stroke="none" />
+  </S>
+);
 export const LaptopIcon = (p: P) => (<S {...p}><rect x="4" y="4.5" width="16" height="11" rx="1.5" /><path d="M2 19.5h20" /></S>);
 export const CubeIcon = (p: P) => (<S {...p}><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7zM3.5 7 12 11.5 20.5 7M12 11.5v10" /></S>);
 export const HandIcon = (p: P) => (<S {...p}><path d="M8 12V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13c0 4.2-2.7 7.5-6.7 7.5-2.4 0-3.9-1.2-5-3L3.4 14.4a1.5 1.5 0 0 1 2.4-1.8L8 15" /></S>);
 export const ShieldCheckIcon = (p: P) => (<S {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></S>);
 export const RouteIcon = (p: P) => (<S {...p}><circle cx="5.5" cy="18.5" r="2" /><circle cx="18.5" cy="5.5" r="2" /><path d="M7.5 18.5h7a3 3 0 0 0 0-6h-5a3 3 0 0 1 0-6h7" /></S>);
-export const GaugeIcon = (p: P) => (<S {...p}><path d="M3.5 17a8.5 8.5 0 1 1 17 0" /><path d="m12 17 4-5.5" /></S>);
 export const CompassIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m15.5 8.5-2 5-5 2 2-5z" /></S>);
 export const CapIcon = (p: P) => (<S {...p}><path d="M2 9 12 4.5 22 9l-10 4.5zM6 10.8v4.7c1.8 1.5 3.8 2.2 6 2.2s4.2-.7 6-2.2v-4.7M22 9v6" /></S>);
-export const LockIcon = (p: P) => (<S {...p}><rect x="4.5" y="10.5" width="15" height="10" rx="2.5" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" /></S>);
 export const DialIcon = (p: P) => (<S {...p}><circle cx="12" cy="12" r="9" /><path d="m12 12 4.5-4.5" /></S>);
 export const SparkleIcon = (p: P) => (<S {...p}><path d="M11 3c.6 4.6 2.2 6.8 6.5 7.5-4.3.7-5.9 2.9-6.5 7.5-.6-4.6-2.2-6.8-6.5-7.5C8.8 9.8 10.4 7.6 11 3z" /><path d="M19 15.5v5M16.5 18h5" /></S>);
 export const DocTextIcon = (p: P) => (<S {...p}><path d="M14 2.5H6.5a1.5 1.5 0 0 0-1.5 1.5v16a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5V7.5z" /><path d="M14 2.5v5h5M8.5 12h7M8.5 15.5h7M8.5 8.5h3" /></S>);
@@ -165,3 +176,34 @@ export const EffortBarsIcon = ({ level, className }: P & { level: number }) => (
     {[0, 1, 2, 3].map((i) => <rect key={i} x={3.5 + i * 4.6} y={16 - i * 3.6} width={3} height={4.5 + i * 3.6} rx={0.8} fill={i < level ? 'currentColor' : 'none'} />)}
   </svg>
 );
+
+/** The icons a computer can have (`COMPUTER_ICONS`). */
+export const COMPUTER_ICON_GLYPHS: Record<ComputerIconName, (p: P) => React.ReactElement> = {
+  laptop: (p) => <S {...p}><rect x="5" y="5" width="14" height="10" rx="1.5" /><path d="M3 19h18" /></S>,
+  desktop: ComputerIcon,
+  tower: (p) => <S {...p}><rect x="7" y="3" width="10" height="18" rx="1.5" /><path d="M10 7h4M10 10h4" /><circle cx="12" cy="16" r="1" /></S>,
+  mini: (p) => <S {...p}><rect x="4" y="8" width="16" height="8" rx="2.5" /><path d="M8 12h.01" /></S>,
+  server: (p) => <S {...p}><rect x="4" y="4" width="16" height="7" rx="1.5" /><rect x="4" y="13" width="16" height="7" rx="1.5" /><path d="M8 7.5h.01M8 16.5h.01" /></S>,
+  rack: (p) => <S {...p}><rect x="4" y="3" width="16" height="18" rx="1.5" /><path d="M4 9h16M4 15h16M8 6h.01M8 12h.01M8 18h.01" /></S>,
+  cloud: (p) => <S {...p}><path d="M7 18a4 4 0 0 1-.6-7.96A6 6 0 0 1 18 11a3.5 3.5 0 0 1-.5 7H7Z" /></S>,
+  gpu: (p) => <S {...p}><rect x="3" y="7" width="18" height="10" rx="1.5" /><circle cx="9" cy="12" r="2.5" /><circle cx="16" cy="12" r="2.5" /><path d="M5 17v2" /></S>,
+  chip: (p) => <S {...p}><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4" /></S>,
+  home: (p) => <S {...p}><path d="m4 11 8-7 8 7" /><path d="M6 10v10h12V10" /></S>,
+  office: (p) => <S {...p}><rect x="6" y="3" width="12" height="18" rx="1" /><path d="M10 7h.01M14 7h.01M10 11h.01M14 11h.01M10 15h.01M14 15h.01" /></S>,
+  lab: (p) => <S {...p}><path d="M10 3h4M11 3v6l-5.5 9.5A1.7 1.7 0 0 0 7 21h10a1.7 1.7 0 0 0 1.5-2.5L13 9V3" /></S>,
+  bolt: (p) => <S {...p}><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z" /></S>,
+  moon: (p) => <S {...p}><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" /></S>,
+  sun: (p) => <S {...p}><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4" /></S>,
+  star: (p) => <S {...p}><path d="m12 4 2.5 5.3 5.5.8-4 4 1 5.6-5-2.8-5 2.8 1-5.6-4-4 5.5-.8L12 4Z" /></S>,
+  flame: (p) => <S {...p}><path d="M12 3c1 3 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 .5-3-1-5 1-8.5Z" /></S>,
+  leaf: (p) => <S {...p}><path d="M5 19c0-9 6-14 15-14 0 9-5 15-14 15" /><path d="M5 20c2-5 5-8 9-10" /></S>,
+  globe: (p) => <S {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></S>,
+  cube: (p) => <S {...p}><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="m4 7.5 8 4.5 8-4.5M12 12v9" /></S>,
+  rocket: (p) => <S {...p}><path d="M12 3c3 2 5 6 5 10l-2 3H9l-2-3c0-4 2-8 5-10Z" /><path d="M9 16l-2 3M15 16l2 3M12 9h.01" /></S>,
+  shield: (p) => <S {...p}><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z" /></S>,
+  terminal: (p) => <S {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m7 10 3 2-3 2M12 15h5" /></S>,
+  cat: (p) => <S {...p}><path d="M5 5v9a7 7 0 0 0 14 0V5l-4 3a8 8 0 0 0-6 0L5 5Z" /><path d="M9.5 13h.01M14.5 13h.01" /></S>,
+};
+
+/** Hands up: YOLO runs without asking, except for explicit deny rules. */
+export const YoloIcon = ({ className }: { className?: string }) => <span className={className} aria-hidden="true" data-yolo-icon>🙌</span>;

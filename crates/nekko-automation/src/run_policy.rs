@@ -105,7 +105,7 @@ pub fn gate(policy: Policy, activity: Option<&Value>, due_at: f64, now: f64) -> 
     Gate::Wait
 }
 
-/// How a run behaves once started, for the turn's model client (nekko-chat's
+/// How a run behaves once started, for the turn's model client (nekkod's chat_client
 /// `YieldingClient`): `idle` steps aside whenever someone uses the computer;
 /// `lowPriority` only for a chat of theirs on a local model. `None` (always)
 /// never steps aside. Sent in the turn's `chat:send` as `background`.

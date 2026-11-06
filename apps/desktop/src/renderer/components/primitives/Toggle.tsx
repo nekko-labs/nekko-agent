@@ -20,6 +20,7 @@ export function Toggle({
 }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={value}
       aria-label={label}
@@ -30,8 +31,8 @@ export function Toggle({
       onClick={() => onChange(!value)}
     >
       <span
-        className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all"
-        style={{ left: value ? 18 : 2 }}
+        className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform duration-150 ease-(--ease-out)"
+        style={{ transform: value ? 'translateX(16px)' : undefined }}
       />
     </button>
   );

@@ -1,22 +1,29 @@
 import Foundation
+#if canImport(CryptoKit)
+import CryptoKit
+#else
+import Crypto
+#endif
 import XCTest
 @testable import NekkoProtocol
 
 /// The relay client against an in-memory relay + agent. The fake plays the
-/// agent's side of `crates/nekko-remote/src/agent.rs`: it seals a
-/// challenge to each new socket (protocol 4; `challenges = false` plays a
-/// computer from before it), opens sealed frames with the room key, answers
-/// HELLO, checks each request's seq and challenge (re-challenging on a bad
-/// one) and replies. Same cases as Android's `RelayClientTest.kt`.
+/// agent's side of `crates/nekko-remote/src/agent.rs` with `TestComputer`: it
+/// sends a signed challenge to each new socket (`challenges = false` leaves
+/// that to the test), answers the HELLO, checks each request's seq and
+/// challenge (re-challenging on a bad one) and replies, all under the session
+/// key. Same cases as Android's `RelayClientTest.kt`.
 final class RelayClientTests: XCTestCase {
     let key = E2E.randomBytes(32)
 
     final class FakeRelay: WsTransport, @unchecked Sendable {
-        let key: Data
+        let computer: TestComputer
         let lock = NSLock()
         var known: Set<String>
         var code: String?
         var urls: [String] = []
+        /// The `eph` of every answer to a challenge, whether or not it opened.
+        var answers: [String] = []
         var hellos: [JSONValue] = []
         var requests: [JSONValue] = []
         var registrations: [JSONValue] = []
@@ -27,10 +34,14 @@ final class RelayClientTests: XCTestCase {
         var unreachable: [String: Bool] = [:]
         /// The computer's phone protocol version in its welcome; nil sends none (an older computer).
         var welcomeProtocol: Int?
-        /// Seal a challenge to each socket as it opens (a protocol 4 computer).
+        /// Send a challenge to each socket as it opens.
         var challenges = true
-        /// Refuse a HELLO without a challenge with `update-required` (legacy phones turned off).
-        var refuseLegacy = false
+        /// Sign challenges with this instead of the host key: someone who only holds the room secret.
+        var forger: P256.Signing.PrivateKey?
+        /// Hosts (host:port) that say `agent-offline` as a socket opens, instead of a challenge.
+        var sayOffline: Set<String> = []
+        /// Take every HELLO and never answer: a replayed challenge, with nobody behind it.
+        var silent = false
         /// Requests dropped for a stale seq or a wrong challenge.
         var rejected: [JSONValue] = []
         var answer: (JSONValue) -> JSONValue? = { req in
@@ -38,7 +49,13 @@ final class RelayClientTests: XCTestCase {
         }
 
         init(key: Data, known: Set<String> = [], code: String? = nil) {
-            self.key = key
+            computer = TestComputer(room: "abcd1234", roomKey: key)
+            self.known = known
+            self.code = code
+        }
+
+        init(computer: TestComputer, known: Set<String> = [], code: String? = nil) {
+            self.computer = computer
             self.known = known
             self.code = code
         }
@@ -54,8 +71,11 @@ final class RelayClientTests: XCTestCase {
             let handlers: WsHandlers
             let refuse: (Int, String)?
             var hang = false
-            /// The challenge this socket was last sent; nil when the fake never challenged it.
-            var nonce: String?
+            var hostPort = ""
+            /// The challenge this socket was last sent; nil once answered or when the fake never challenged it.
+            var issued: TestComputer.Issued?
+            /// This connection's key, from the last HELLO that opened.
+            var session: Data?
             /// The challenge the welcomed HELLO answered, and the last seq seen since.
             var welcomedChallenge: String?
             var lastSeq: Int64 = 0
@@ -80,15 +100,23 @@ final class RelayClientTests: XCTestCase {
                     self._open = true
                     self.lock.unlock()
                     self.handlers.onOpen()
-                    if self.relay.sync({ self.relay.challenges }) { self.challenge() }
+                    if self.relay.sync({ self.relay.sayOffline.contains(self.hostPort) }) {
+                        self.plain(["type": "agent-offline"])
+                    } else if self.relay.sync({ self.relay.challenges }) {
+                        self.challenge()
+                    }
                 }
             }
 
-            /// Seal a fresh challenge to this socket, as the computer does on client-open.
+            /// Send this socket a fresh signed challenge, as the computer does on
+            /// client-open: it goes back to the handshake and loses its key.
             func challenge() {
-                let n = E2E.randomBytes(18).base64EncodedString()
-                relay.sync { nonce = n }
-                push(["type": "challenge", "challenge": .string(n)])
+                let (issued, frame) = relay.computer.issue(signer: relay.sync { relay.forger })
+                relay.sync {
+                    self.issued = issued
+                    session = nil
+                }
+                pushRoom(frame)
             }
 
             func send(_ text: String) -> Bool {
@@ -97,19 +125,23 @@ final class RelayClientTests: XCTestCase {
                     relay.sync { relay.registrations.append(env) }
                     return true
                 }
-                guard let frame = try? E2E.open(key: relay.key, blob: env.str("enc")!) else { return false }
-                switch frame.str("type") {
-                case "hello":
-                    let id = frame.str("deviceId")!
-                    let pair = frame.str("pair")
-                    relay.sync { relay.hellos.append(frame) }
-                    if let n = relay.sync({ nonce }), frame.str("challenge") != n {
+                if let eph = env.str("eph") {
+                    relay.sync { relay.answers.append(eph) }
+                    guard let issued = relay.sync({ issued }) else {
                         challenge()
                         return true
                     }
-                    if frame["challenge"] == nil, relay.sync({ relay.refuseLegacy }) {
-                        push(["type": "denied", "reason": "update-required"])
-                        drop(4001, "kicked by agent")
+                    guard let (frame, key) = relay.computer.open(env, to: issued) else { return true }
+                    let id = frame.str("deviceId")!
+                    let pair = frame.str("pair")
+                    relay.sync {
+                        relay.hellos.append(frame)
+                        session = key
+                        self.issued = nil // each challenge is used once
+                    }
+                    if relay.sync({ relay.silent }) { return true }
+                    if frame.str("type") != "hello" || frame.str("challenge") != issued.nonce {
+                        challenge()
                         return true
                     }
                     let reply: String? = relay.sync {
@@ -130,11 +162,13 @@ final class RelayClientTests: XCTestCase {
                         relay.sync {
                             welcomedChallenge = frame.str("challenge")
                             lastSeq = 0
-                            nonce = nil // each challenge is used once
                         }
                         push(.object(welcome))
                     }
-                case "req":
+                    return true
+                }
+                guard let key = relay.sync({ session }), let frame = try? E2E.open(key: key, blob: env.str("enc")!) else { return false }
+                if frame.str("type") == "req" {
                     let ok: Bool = relay.sync {
                         guard let seq = frame.long("seq"), seq > lastSeq, frame.str("challenge") == welcomedChallenge else {
                             relay.rejected.append(frame)
@@ -153,16 +187,20 @@ final class RelayClientTests: XCTestCase {
                         return relay.answer(frame)
                     }
                     if let a { push(a) }
-                default:
-                    break
                 }
                 return true
             }
 
             func close(code: Int, reason: String) { drop(code, reason) }
 
-            func push(_ frame: JSONValue) {
-                let sealed = try! E2E.seal(key: relay.key, value: frame)
+            /// `frame` under this connection's key.
+            func push(_ frame: JSONValue) { pushSealed(frame, key: relay.sync { session }!) }
+
+            /// `frame` under the room key, which anyone ever paired could seal.
+            func pushRoom(_ frame: JSONValue) { pushSealed(frame, key: relay.computer.roomKey) }
+
+            func pushSealed(_ frame: JSONValue, key: Data) {
+                let sealed = try! E2E.seal(key: key, value: frame)
                 handlers.onMessage(JSONValue.object(["enc": .string(sealed)]).serialized())
             }
 
@@ -184,6 +222,7 @@ final class RelayClientTests: XCTestCase {
                 let down = unreachable[hostPort]
                 let c = Conn(relay: self, handlers: handlers, refuse: down == false ? (1006, "connection refused") : refuseNext)
                 c.hang = down == true
+                c.hostPort = hostPort
                 if down == nil { refuseNext = nil }
                 current = c
                 return c
@@ -234,10 +273,11 @@ final class RelayClientTests: XCTestCase {
     }
 
     func client(_ relay: FakeRelay, pair: String? = nil, id: String = "dev-1", retryBase: TimeInterval = 0.02,
-                retryMax: TimeInterval = 0.08, challengeWait: TimeInterval = 0.2) -> (RelayClient, Recorder) {
-        var cfg = RelayConfig(relayUrl: "wss://relay.test/", room: "abcd1234", key: "k&e+y", keyBytes: key, deviceId: id,
-                              deviceName: "iPhone", pairCode: pair)
-        cfg.handshakeTimeout = 2
+                retryMax: TimeInterval = 0.08, challengeWait: TimeInterval = 0.2,
+                url: String = "wss://relay.test/", handshakeTimeout: TimeInterval = 2) -> (RelayClient, Recorder) {
+        var cfg = RelayConfig(relayUrl: url, room: "abcd1234", key: "k&e+y", hostKey: relay.computer.publicKey,
+                              keyBytes: key, deviceId: id, deviceName: "iPhone", pairCode: pair)
+        cfg.handshakeTimeout = handshakeTimeout
         cfg.challengeWait = challengeWait
         cfg.requestTimeout = 2
         cfg.retryBase = retryBase
@@ -256,7 +296,8 @@ final class RelayClientTests: XCTestCase {
         let (c, r) = client(relay, pair: "ABCD2345")
         c.connect()
         await r.await(.online)
-        XCTAssertEqual(relay.sync { relay.urls }, ["wss://relay.test/relay?role=client&room=abcd1234&key=k%26e%2By"])
+        // The relay gets the derived credential, never the secret (a hex string, so nothing to escape).
+        XCTAssertEqual(relay.sync { relay.urls }, ["wss://relay.test/relay?role=client&room=abcd1234&key=" + E2E.relayAuth(secret: "k&e+y", room: "abcd1234")])
         XCTAssertEqual(relay.sync { relay.hellos.first?.str("pair") }, "ABCD2345")
         await sleep(0.02)
         XCTAssertEqual(r.lock.sync { r.welcomes.first?.name }, "iPhone")
@@ -334,7 +375,7 @@ final class RelayClientTests: XCTestCase {
         XCTAssertEqual(s?.denied, .badCode)
     }
 
-    func testKickIsTerminalAndFailsInFlightCalls() async {
+    func testAKickFailsInFlightCallsButIsNotTerminal() async {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         relay.answer = { _ in nil } // never answer
         let (c, r) = client(relay)
@@ -345,19 +386,81 @@ final class RelayClientTests: XCTestCase {
         }
         await sleep(0.05)
         relay.sync { relay.current }!.drop(4001, "kicked by agent")
-        let s = await r.await(.denied)
-        XCTAssertEqual(s?.denied, .kicked)
         let e = await inflight.value
         XCTAssertNotNil(e as? RelayError)
+        // A close isn't sealed: anyone with the room credential can send one.
+        await r.await(.online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2)
+        XCTAssertFalse(r.lock.sync { r.statuses.contains { $0.state == .denied } })
+        c.close()
     }
 
-    func testABadPairingKeyIsTerminal() async {
+    func testAKickThenASealedDenialOnTheRedialIsTerminal() async {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        let (c, r) = client(relay)
+        c.connect()
+        await r.await(.online)
+        relay.sync { _ = relay.known.remove("dev-1") }
+        relay.sync { relay.current }!.drop(4001, "kicked by agent")
+        let s = await r.await(.denied)
+        XCTAssertEqual(s?.denied, .unknownDevice)
+        await sleep(0.15)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2, "the sealed denial stops the client")
+    }
+
+    func testABadPairingKeyIsPolledAndSaysWhy() async {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         relay.refuseNext = (1008, "bad pairing key")
         let (c, r) = client(relay)
         c.connect()
-        let s = await r.await(.denied)
-        XCTAssertEqual(s?.denied, .badKey)
+        let s = await r.await(.offline)
+        XCTAssertEqual(s?.detail, RelayStatus.badPairingKey)
+        XCTAssertNil(s?.denied)
+        // The redial keeps the words, or the banner would flicker every poll.
+        await r.await({ $0.state == .connecting && $0.detail == RelayStatus.badPairingKey })
+        await r.await(.online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2)
+        c.close()
+    }
+
+    func testACloseOnALANAddressBeforeTheComputerAnsweredOnlyFailsTheRoute() async {
+        for close in [(4001, "kicked by agent"), (1008, "bad pairing key"), (1008, "room not paired (agent offline)")] {
+            let relay = FakeRelay(key: key, known: ["dev-1"])
+            relay.refuseNext = close
+            let (c, r) = client(relay, url: "ws://192.168.1.20:4400")
+            c.connect()
+            await r.await(.online)
+            XCTAssertNil(c.status.denied)
+            XCTAssertFalse(r.lock.sync { r.statuses.contains { $0.state == .offline } }, close.1)
+            c.close()
+        }
+    }
+
+    func testAKickOnALANAddressAfterTheWelcomeOnlyFailsTheRoute() async {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        let (c, r) = client(relay, url: "ws://192.168.1.20:4400")
+        c.connect()
+        await r.await(.online)
+        relay.sync { relay.current }!.drop(4001, "kicked by agent")
+        await r.await(.online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 2)
+        c.close()
+    }
+
+    /// Off a plain LAN address the relay's word stands: the phone waits on this socket.
+    func testAgentOfflineIsTakenAtItsWordWhereTheRouteCanBeTrusted() async {
+        for (url, host) in [("wss://relay.test", "relay.test"), ("ws://studio.tail1234.ts.net:4400", "studio.tail1234.ts.net:4400"),
+                            ("ws://127.0.0.1:4400", "127.0.0.1:4400")] {
+            let relay = FakeRelay(key: key, known: ["dev-1"])
+            relay.sayOffline = [host]
+            let (c, r) = client(relay, url: url)
+            c.connect()
+            await r.await(.offline)
+            await sleep(0.1)
+            XCTAssertEqual(relay.sync { relay.urls.count }, 1, url)
+            XCTAssertEqual(c.state, .offline, url)
+            c.close()
+        }
     }
 
     func testAnOfflineComputerIsPolledThenTheHandshakeCompletes() async {
@@ -474,6 +577,20 @@ final class RelayClientTests: XCTestCase {
         c.close()
     }
 
+    func testRegistersWholeBadgeManifestAndDistinguishesOptOutFromUnknown() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        let (c, _) = client(relay)
+        c.connect()
+        defer { c.close() }
+        try await c.registerPush(token: "token", kinds: ["needs-you"], badgeRooms: ["aaaa", "bbbb"])
+        try await c.registerPush(token: "token", kinds: [], badgeRooms: [])
+        try await c.registerPush(token: "token", kinds: ["needs-you"], badgeRooms: nil)
+        let regs = relay.sync { relay.registrations }
+        XCTAssertEqual(regs[0]["badgeRooms"], ["aaaa", "bbbb"])
+        XCTAssertEqual(regs[1]["badgeRooms"], [])
+        XCTAssertNil(regs[2]["badgeRooms"], "omitting a manifest is unknown, not a room subtotal")
+    }
+
     func testTheHelloCarriesThePhonesProtocolAndTheWelcomeTheComputers() async throws {
         let relay = FakeRelay(key: key, known: ["dev-1"])
         relay.welcomeProtocol = 3
@@ -533,7 +650,8 @@ final class RelayClientTests: XCTestCase {
 
     func testRegistersTheLiveActivityCard() async throws {
         let relay = FakeRelay(key: key, known: ["dev-1"])
-        var cfg = RelayConfig(relayUrl: "wss://relay.test", room: "abcd1234", key: "k", keyBytes: key, deviceId: "dev-1", deviceName: "iPhone")
+        var cfg = RelayConfig(relayUrl: "wss://relay.test", room: "abcd1234", key: "k", hostKey: relay.computer.publicKey, keyBytes: key,
+                              deviceId: "dev-1", deviceName: "iPhone")
         cfg.app = "dev.nekkolabs.nekkoagent"
         let c = RelayClient(config: cfg, transport: relay)
         c.connect()

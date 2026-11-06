@@ -12,12 +12,60 @@ import UserNotifications
 /// removed once it was handled anywhere (IO-30 dismissal sync).
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
-    static let approvalCategory = "nekko.approval"
-    static let allowAction = "nekko.allow"
-    static let denyAction = "nekko.deny"
+    nonisolated static let approvalCategory = "nekko.approval"
+    nonisolated static let allowAction = "nekko.allow"
+    nonisolated static let denyAction = "nekko.deny"
+    /// `userInfo` key on the note that says an answer did not reach the computer.
+    nonisolated static let unsentKey = "unsent"
 
     var onApprove: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
     var onOpen: ((_ sessionId: String) -> Void)?
+    var onFocusComputer: ((String) -> Void)?
+    var onOpenTag: ((String) -> Void)?
+    var onRemote: ((NativeNotificationInfo) -> Void)?
+    var wants: (PushKind) -> Bool = { _ in true }
+    /// Read at submission time, never an enqueued per-computer count. Nil leaves APNs alone.
+    var badgeCount: () -> Int? = { nil }
+    private let delivery: NotificationDelivery
+    private var badgeWrite: Task<Void, Never>?
+
+    init(delivery: NotificationDelivery? = nil) {
+        self.delivery = delivery ?? SystemNotificationDelivery()
+        super.init()
+    }
+
+    func reconcileBadge() {
+        let previous = badgeWrite
+        badgeWrite = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            let permission = await self.delivery.permission()
+            guard permission.badges, let count = self.badgeCount() else { return }
+            do { try await self.delivery.setBadge(count) }
+            catch { Log.push.error("Badge update failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
+    /// Test seam: wait for serialized badge submissions, not APNs device delivery.
+    func finishBadgeWrites() async { await badgeWrite?.value }
+
+    private var postWrite: Task<Void, Never>?
+    func finishPosts() async { await postWrite?.value }
+
+    private func submit(_ content: UNMutableNotificationContent, identifier: String, trigger: UNNotificationTrigger? = nil) {
+        let previous = postWrite
+        postWrite = Task {
+            await previous?.value
+            let permission = await delivery.permission()
+            let kind = (content.userInfo["kind"] as? String).flatMap(PushKind.init(rawValue:))
+            guard permission.allowed, kind.map({ wants($0) }) ?? true else { return }
+            if !permission.sound { content.sound = nil }
+            // Local notifications never carry a captured badge. One serial writer owns local counts.
+            content.badge = nil
+            try? await delivery.add(UNNotificationRequest(identifier: identifier, content: content, trigger: trigger))
+        }
+    }
+
     private var lastPosted: [String: Date] = [:]
 
     func install() {
@@ -35,11 +83,11 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
     }
 
-    func post(_ e: AgentEvent, chatTitle: String, computer: String, hideContent: Bool) {
+    func post(_ e: AgentEvent, chatTitle: String, computer: String, hideContent: Bool, computerId: String = "") {
         guard let kind = PushKind.of(e) else { return }
         let content = UNMutableNotificationContent()
         content.threadIdentifier = e.sessionId
-        content.userInfo = ["sessionId": e.sessionId, "kind": kind.rawValue, "tag": E2E.activityTag(e.sessionId)]
+        content.userInfo = ["sessionId": e.sessionId, "kind": kind.rawValue, "tag": E2E.activityTag(e.sessionId), "computerId": computerId]
         content.title = hideContent ? computer : chatTitle
         switch e {
         case .approvalRequired(_, let a):
@@ -61,11 +109,10 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
             return
         }
         // One notification per chat and kind at most every few seconds.
-        let key = "\(e.sessionId):\(content.categoryIdentifier):\(content.body)"
+        let key = "\(computerId):\(e.sessionId):\(content.categoryIdentifier):\(content.body)"
         if let last = lastPosted[key], Date().timeIntervalSince(last) < 5 { return }
         lastPosted[key] = Date()
-        let req = UNNotificationRequest(identifier: "\(e.sessionId).\(UUID().uuidString)", content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(req)
+        submit(content, identifier: "\(computerId).\(e.sessionId).\(UUID().uuidString)")
     }
 
     /// *Send a test notification* when the relay can't push: shown by the app, in a second.
@@ -76,7 +123,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
         content.userInfo = ["kind": PushKind.test.rawValue]
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "nekko.test.\(UUID().uuidString)", content: content, trigger: trigger))
+        submit(content, identifier: "nekko.test.\(UUID().uuidString)", trigger: trigger)
+    }
+
+    /// An Allow or Deny from outside the app did not reach the computer: say so,
+    /// so the tool does not wait on an answer the user believes they gave. A tap
+    /// opens the chat, where the approval card still waits.
+    func postUnsent(sessionId: String, allow: Bool, why: String) {
+        let content = UNMutableNotificationContent()
+        content.threadIdentifier = sessionId
+        content.title = allow ? "Allow not sent" : "Deny not sent"
+        content.body = "\(why) Open the chat to answer again."
+        content.sound = .default
+        content.interruptionLevel = .timeSensitive
+        content.userInfo = ["sessionId": sessionId, Self.unsentKey: true]
+        submit(content, identifier: "\(sessionId).unsent.\(UUID().uuidString)")
     }
 
     /// Whether notifications are allowed; asks when it was never asked (only after pairing).
@@ -100,34 +161,58 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func clear(sessionId: String) {
-        let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { list in
-            let ids = list.filter { $0.request.content.threadIdentifier == sessionId }.map(\.request.identifier)
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let ids = await center.deliveredNotifications().filter { $0.request.content.threadIdentifier == sessionId }.map(\.request.identifier)
             center.removeDeliveredNotifications(withIdentifiers: ids)
         }
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async
         -> UNNotificationPresentationOptions {
-        // A test is the one shown over the app: it was asked for here. Otherwise
-        // the chat itself shows it.
-        notification.request.content.userInfo["kind"] as? String == PushKind.test.rawValue ? [.banner, .list, .sound] : []
+        let info = NativeNotificationInfo(notification.request.content.userInfo)
+        return await presentation(info, remote: notification.request.trigger is UNPushNotificationTrigger)
+    }
+
+
+    func presentation(_ info: NativeNotificationInfo, remote: Bool) -> UNNotificationPresentationOptions {
+        if remote { onRemote?(info) }
+        let kind = info.kind.flatMap(PushKind.init(rawValue:))
+        guard kind.map({ wants($0) }) ?? true else { return [] }
+        // There is no opened-chat tracker. Attention must still reach someone
+        // viewing an unrelated chat. Finished replies remain quiet in foreground.
+        let shown = kind == .needsYou || kind == .test || info.unsent
+        return shown ? [.banner, .list, .sound] : []
     }
 
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        let info = response.notification.request.content.userInfo
-        guard let sid = info["sessionId"] as? String else { return }
-        let callId = info["callId"] as? String
+        let info = NativeNotificationInfo(response.notification.request.content.userInfo)
+        if response.notification.request.trigger is UNPushNotificationTrigger { await remoteReceived(info) }
+        guard let sid = info.sessionId else {
+            if let tag = info.tag { await openTag(tag) }
+            return
+        }
+        if let computerId = info.computerId { await focusComputer(computerId) }
+        let callId = info.callId
         let action = response.actionIdentifier
-        await MainActor.run {
-            if let callId, action == Self.allowAction || action == Self.denyAction {
-                let allow = action == Self.allowAction
-                Task { await self.onApprove?(sid, callId, allow) }
-            } else {
-                self.onOpen?(sid)
-            }
+        if let callId, action == Self.allowAction || action == Self.denyAction {
+            // Awaited, not detached: returning tells iOS the action is handled, and
+            // a backgrounded app may be suspended right after, mid-answer.
+            await answer(sid, callId, allow: action == Self.allowAction)
+        } else {
+            await open(sid)
         }
     }
+
+    private func remoteReceived(_ info: NativeNotificationInfo) { onRemote?(info) }
+    private func focusComputer(_ id: String) { onFocusComputer?(id) }
+    private func openTag(_ tag: String) { onOpenTag?(tag) }
+
+    private func answer(_ sessionId: String, _ callId: String, allow: Bool) async {
+        await onApprove?(sessionId, callId, allow)
+    }
+
+    private func open(_ sessionId: String) { onOpen?(sessionId) }
 }
 
 enum Haptics {

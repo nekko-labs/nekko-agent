@@ -28,6 +28,8 @@ object Channels {
     /** Only the phone-settable keys (the computer's PHONE_SETTINGS_KEYS); anything else is refused. */
     const val SETTINGS_UPDATE = "settings:update"
     const val PROVIDERS_LIST = "providers:list"
+    /** Whether someone is using the computer (`PHONE_ACTIVITY_VIEW`), for New chat's Automatic (2026-11-05). */
+    const val ACTIVITY_STATE = "activity:state"
     const val MODELS_LIST = "models:list"
     const val SESSIONS_SUMMARIES = "sessions:summaries"
     const val SESSION_CREATE = "session:create"
@@ -41,6 +43,8 @@ object Channels {
     const val CHAT_SEND = "chat:send"
     const val CHAT_ABORT = "chat:abort"
     const val CHAT_QUEUE = "chat:queue"
+    /** Stop the reply and start the queued prompt at an index. */
+    const val CHAT_INTERRUPT_QUEUED = "chat:interruptQueued"
     const val CHAT_PENDING = "chat:pending"
     const val CHAT_ANSWER = "chat:answer"
     /** Change or remove a queued prompt, only while it still reads what the phone showed ([QueuedPrompt.edit]). */
@@ -74,6 +78,8 @@ object Channels {
     const val TOOL_APPROVE = "tool:approve"
     const val WORKSPACE_LIST = "workspace:list"
     const val APP_INFO = "app:info"
+    /** What a computer says about itself for its page ([MachineSummary]): no paths or addresses. */
+    const val MACHINE_SUMMARY = "machine:summary"
     /** The skills a chat on the computer can run: names and descriptions only, never templates. */
     const val SKILLS_RUNNABLE = "skills:runnable"
     /** What the agent changed in a chat, as a capped read-only diff ([PhoneChanges]); refused unless the computer allows it. */
@@ -85,6 +91,8 @@ object Channels {
     const val GPU_STATS = "gpu:stats"
     const val ENGINE_STATUS = "engine:status"
     const val CONTEXT_PREVIEW = "context:preview"
+    /** A chat's durable `agent_watch`es ([AgentWatch]), for the watch rows' live chips. */
+    const val SESSION_WATCHES = "session:watches"
     /** Agent class without a proof: unloading frees memory, and the next reply loads the model again. */
     const val MODEL_UNLOAD = "model:unload"
     /** SK-7: a single-use step-up challenge and the kinds of method registered ([StepUpChallenge]). Read class. */
@@ -132,8 +140,8 @@ object Channels {
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
-        WORKSPACE_LIST, APP_INFO, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
-        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, MODEL_UNLOAD,
+        WORKSPACE_LIST, APP_INFO, ACTIVITY_STATE, MACHINE_SUMMARY, SKILLS_RUNNABLE, CHANGES_LIST, MONITOR_SUMMARY,
+        SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, MODEL_UNLOAD,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
         FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, LOGS_LIST, LOGS_READ, ARTIFACT_READ, PREVIEW_FETCH,
         PROVIDERS_SEAL_KEY, PROVIDERS_SAVE_SEALED, PROVIDERS_SET_ENABLED,
@@ -236,7 +244,9 @@ data class ChatMessage(
                 content = o.str("content") ?: "",
                 reasoning = o.str("reasoning"),
                 createdAt = o.long("createdAt"),
-                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" } ?: emptyList(),
+                // A saved copy keeps only how many photos a message had (`imageCount`): drawn as tiles.
+                images = o["images"].arr()?.map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: "" }
+                    ?: List(o.long("imageCount")?.toInt()?.coerceIn(0, 64) ?: 0) { "" },
                 skill = skill,
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),
@@ -261,8 +271,35 @@ data class Session(
     val effort: String? = null,
     /** The queue as the computer holds it: what `chat:editQueued` checks against. */
     val queued: List<QueuedPrompt> = emptyList(),
+    /** The chat's own tool policy (`ChatMode`); null follows the computer's default. */
+    val mode: PcSettings.ChatMode? = null,
+    /** The newest prompt ids the computer has taken for this chat: a prompt listed here was delivered. */
+    val clientMessageIds: List<String> = emptyList(),
+    /** A turn is running on the computer (`activeRun`): a prompt sent now waits in its queue. */
+    val running: Boolean = false,
+    /** The chat's run settings ([RunOption]). */
+    val runOptions: Map<String, JsonElement> = emptyMap(),
+    /** The chat that delegated this one; null for a chat of its own. */
+    val parentSessionId: String? = null,
+    /** `image` for an image chat; null for an ordinary one. */
+    val chatType: String? = null,
+    val executionMode: String? = null,
+    val disabledTools: List<String> = emptyList(),
 ) {
+    /** Whether this chat can hand a follow-up to a sub-agent (`canOfferSubagent` in shared/orchestration.ts). */
+    fun canOfferSubagent(strategy: String?): Boolean =
+        strategy != "solo" && chatType != "image" &&
+            messages.any { it.role == "assistant" } &&
+            parentSessionId == null &&
+            (runOptions["incognito"] as? JsonPrimitive)?.booleanOrNull != true &&
+            (runOptions["offline"] as? JsonPrimitive)?.booleanOrNull != true &&
+            executionMode != "sandbox" &&
+            "spawn_agent" !in disabledTools
+
     companion object {
+        /** A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts). */
+        fun inSubagent(text: String): String = "Do this in a subagent, then report back:\n\n$text"
+
         fun from(e: JsonElement?): Session? {
             val o = e.obj() ?: return null
             return Session(
@@ -278,6 +315,14 @@ data class Session(
                 updatedAt = o.long("updatedAt") ?: 0,
                 effort = o.str("effort"),
                 queued = QueuedPrompt.list(o["queue"]),
+                mode = PcSettings.ChatMode.of(o.str("mode")),
+                clientMessageIds = o["clientMessageIds"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                running = o["activeRun"].let { it != null && it !is JsonNull },
+                runOptions = RunOption.values(o),
+                parentSessionId = o.str("parentSessionId"),
+                chatType = o.str("chatType"),
+                executionMode = o.str("executionMode"),
+                disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
             )
         }
     }
@@ -302,6 +347,8 @@ data class SessionSummary(
     /** Manual position from the desktop sidebar's drag order; null when never dragged. */
     val order: Double? = null,
     val activeWatchCount: Long = 0,
+    /** Pinned on the computer (the desktop's pin), from here or there. */
+    val pinned: Boolean = false,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -326,8 +373,13 @@ data class SessionSummary(
                 archivedAt = archivedAt,
                 order = o.dbl("order"),
                 activeWatchCount = o.long("activeWatchCount") ?: 0,
+                pinned = o.bool("pinned"),
             )
         }
+
+        /** The subagent chats [parent] delegated to (the list leaves them out), as the computer lists them. */
+        fun children(list: JsonElement?, parent: String): List<SessionSummary> =
+            list.arr()?.mapNotNull { from(it) }?.filter { it.parentSessionId == parent } ?: emptyList()
 
         /** Every top-level chat, completed ones included, newest first. */
         fun visible(list: JsonElement?): List<SessionSummary> =
@@ -427,6 +479,8 @@ data class PcSettings(
     val prompts: List<SavedPrompt> = emptyList(),
     /** The computer's automations are paused (Settings → Automations there). */
     val automationsPaused: Boolean = false,
+    /** How the computer's agents delegate (`solo`, `balanced`, `swarm`); null from a computer that doesn't say. */
+    val orchestrationStrategy: String? = null,
 ) {
     enum class ChatMode(val wire: String) {
         ASK("ask"), GUARDRAILS("guardrails"), YOLO("yolo");
@@ -461,14 +515,16 @@ data class PcSettings(
                 phoneChanges = o.bool("phoneChanges"),
                 prompts = SavedPrompt.list(o["prompts"]),
                 automationsPaused = o.bool("automationsPaused"),
+                orchestrationStrategy = o["orchestration"].obj()?.str("strategy"),
             )
         }
 
         /** The `settings:update` patch for one change: never more than the phone-settable keys. */
-        fun patch(mode: ChatMode? = null, action: ChatAction? = null, skipConfirm: Boolean? = null) = buildJsonObject {
+        fun patch(mode: ChatMode? = null, action: ChatAction? = null, skipConfirm: Boolean? = null, icon: String? = null) = buildJsonObject {
             mode?.let { put("defaultChatMode", it.wire) }
             action?.let { put("chatPaneAction", it.wire) }
             skipConfirm?.let { put("skipDeleteConfirmation", it) }
+            icon?.let { put("machineIcon", it) }
         }
     }
 }
@@ -650,11 +706,31 @@ data class WorkspaceFolder(
  * (SK-3): only then does the phone offer *Quit Nekko Agent on the computer*.
  * Absent (an older computer) reads as off.
  */
-data class AppInfo(val version: String?, val platform: String?, val quitFromPhone: Boolean = false) {
+data class AppInfo(
+    val version: String?,
+    val platform: String?,
+    val quitFromPhone: Boolean = false,
+    /** The computer's icon, one of [COMPUTER_ICONS]; null when it has none, or one this app doesn't draw. */
+    val machineIcon: String? = null,
+    val hostname: String? = null,
+    val computerName: String? = null,
+) {
     companion object {
-        fun from(e: JsonElement?): AppInfo = e.obj().let { AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true) }
+        fun from(e: JsonElement?): AppInfo = e.obj().let {
+            AppInfo(it?.str("version"), it?.str("platform"), it?.bool("quitFromPhone") == true, it?.str("machineIcon")?.takeIf { i -> i in COMPUTER_ICONS }, it?.str("hostname"), it?.str("computerName"))
+        }
     }
 }
+
+/**
+ * The icons a computer can have, as `COMPUTER_ICONS` in packages/shared/src/computers.ts.
+ * `scripts/computer-icons.test.mjs` fails when this or the app's drawables drift from it.
+ */
+val COMPUTER_ICONS = listOf(
+    "laptop", "desktop", "tower", "mini", "server", "rack", "cloud", "gpu",
+    "chip", "home", "office", "lab", "bolt", "moon", "sun", "star",
+    "flame", "leaf", "globe", "cube", "rocket", "shield", "terminal", "cat",
+)
 
 // ---------------------------------------------------------------------------
 // Ask / approvals
@@ -752,7 +828,8 @@ sealed interface AgentEvent {
                 "retry" -> Retry(sid)
                 "done" -> Done(sid, o.str("messageId"))
                 "error" -> Error(sid, o.str("message") ?: "Something went wrong.")
-                "session_meta" -> SessionMeta(sid)
+                // A message taken at the next step joined the transcript.
+                "session_meta", "steered" -> SessionMeta(sid)
                 null -> null
                 else -> Other(sid, t)
             }
@@ -800,6 +877,8 @@ fun sendOptions(
     text: String,
     skill: SkillSummary? = null,
     images: List<String> = emptyList(),
+    /** The prompt's id: the computer runs a repeat of it once only (`Session.clientMessageIds`). */
+    clientMessageId: String? = null,
 ): JsonObject = buildJsonObject {
     put("sessionId", sessionId)
     put("providerId", providerId)
@@ -807,12 +886,14 @@ fun sendOptions(
     put("text", text)
     if (skill != null) put("skill", skillCall(skill.name, text))
     if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
+    if (clientMessageId != null) put("clientMessageId", clientMessageId)
 }
 
-/** `chat:queue` prompt: plain text, or `{ text, skill, images }` (the computer expands a skill). */
-fun queuePrompt(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()): JsonElement =
-    if (skill == null && images.isEmpty()) JsonPrimitive(text) else buildJsonObject {
+/** `chat:queue` prompt: plain text, or `{ text, skill, images, clientMessageId }` (the computer expands a skill). */
+fun queuePrompt(text: String, skill: SkillSummary? = null, images: List<String> = emptyList(), clientMessageId: String? = null): JsonElement =
+    if (skill == null && images.isEmpty() && clientMessageId == null) JsonPrimitive(text) else buildJsonObject {
         put("text", text)
         if (skill != null) put("skill", skillCall(skill.name, text))
         if (images.isNotEmpty()) put("images", JsonArray(images.map(::JsonPrimitive)))
+        if (clientMessageId != null) put("clientMessageId", clientMessageId)
     }

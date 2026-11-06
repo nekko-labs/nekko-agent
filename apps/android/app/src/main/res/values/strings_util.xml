@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Short relative times in lists ("5 mins"), the desktop's wording (util/Text.kt localAgo). -->
+<resources>
+    <string name="util_ago_now">now</string>
+    <string name="util_ago_min_one">%1$d min</string>
+    <string name="util_ago_min_other">%1$d mins</string>
+    <string name="util_ago_hr_one">%1$d hr</string>
+    <string name="util_ago_hr_other">%1$d hrs</string>
+    <string name="util_ago_day_one">%1$d day</string>
+    <string name="util_ago_day_other">%1$d days</string>
+    <string name="util_ago_month_one">%1$d month</string>
+    <string name="util_ago_month_other">%1$d months</string>
+    <string name="util_ago_yr_one">%1$d yr</string>
+    <string name="util_ago_yr_other">%1$d yrs</string>
+</resources>

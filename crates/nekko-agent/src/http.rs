@@ -123,23 +123,35 @@ pub fn stream_idle() -> Option<Duration> {
 /// Node's fetch; only a connect limit and an idle limit on the body.
 pub struct ReqwestTransport {
     client: reqwest::Client,
+    /// The provider these requests are for, as the user named it, so a
+    /// failure in the log says which provider it is and not only a URL.
+    provider: Option<String>,
 }
 
 impl ReqwestTransport {
     pub fn new(client: reqwest::Client) -> Self {
-        Self { client }
+        Self { client, provider: None }
     }
 
     /// One shared client, so connections to a provider are reused across chats.
-    pub fn shared() -> Arc<dyn Transport> {
-        static SHARED: LazyLock<Arc<ReqwestTransport>> = LazyLock::new(|| {
+    fn client() -> reqwest::Client {
+        static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
             let mut builder = reqwest::Client::builder().no_proxy().connect_timeout(CONNECT_TIMEOUT);
             if let Some(idle) = stream_idle() {
                 builder = builder.read_timeout(idle);
             }
-            Arc::new(ReqwestTransport::new(builder.build().unwrap_or_default()))
+            builder.build().unwrap_or_default()
         });
-        SHARED.clone()
+        CLIENT.clone()
+    }
+
+    pub fn shared() -> Arc<dyn Transport> {
+        Arc::new(ReqwestTransport::new(Self::client()))
+    }
+
+    /// The shared client, logging its failures under `provider`'s name.
+    pub fn for_provider(provider: &str) -> Arc<dyn Transport> {
+        Arc::new(ReqwestTransport { client: Self::client(), provider: Some(provider.to_string()) })
     }
 }
 
@@ -154,6 +166,58 @@ fn causes(e: &dyn std::error::Error) -> String {
         next = c.source();
     }
     out
+}
+
+/// Why a request failed, for the log. A refused connection is the common case
+/// (the provider's app is closed, or its server not started), so it gets a
+/// plain sentence instead of the OS's error chain.
+fn failure_reason(e: &reqwest::Error) -> String {
+    let mut next: Option<&dyn std::error::Error> = Some(e);
+    while let Some(c) = next {
+        if c.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::ConnectionRefused) {
+            return "connection refused, nothing is listening there. Is its server running?".into();
+        }
+        next = c.source();
+    }
+    causes(e)
+}
+
+/// Requests whose last attempt failed, with the reason. Model lists are polled,
+/// so a provider whose server is off (LM Studio closed) would log the same line
+/// on every refresh; this logs it once, then again only when the reason changes,
+/// and says so when the request works again.
+#[derive(Default)]
+struct Failing(std::collections::HashMap<String, String>);
+
+impl Failing {
+    /// The line to log for this outcome of `req`, if any.
+    fn note(&mut self, provider: Option<&str>, req: &HttpRequest, failure: Option<&str>) -> Option<String> {
+        let key = format!("{} {}", req.method, req.url);
+        match failure {
+            Some(why) if self.0.get(&key).map(String::as_str) == Some(why) => None,
+            Some(why) => {
+                self.0.insert(key.clone(), why.to_string());
+                Some(match provider {
+                    Some(name) => format!(
+                        "nekkod: can't reach provider \"{name}\" ({key}): {why} (repeats not logged until it recovers)"
+                    ),
+                    None => format!("nekkod: {key} failed: {why} (repeats not logged until it recovers)"),
+                })
+            }
+            None => self.0.remove(&key).map(|_| match provider {
+                Some(name) => format!("nekkod: provider \"{name}\" is reachable again ({key})"),
+                None => format!("nekkod: {key} works again"),
+            }),
+        }
+    }
+}
+
+fn log_outcome(provider: Option<&str>, req: &HttpRequest, failure: Option<&str>) {
+    static FAILING: LazyLock<std::sync::Mutex<Failing>> = LazyLock::new(Default::default);
+    let line = FAILING.lock().map(|mut f| f.note(provider, req, failure)).unwrap_or(None);
+    if let Some(line) = line {
+        eprintln!("{line}");
+    }
 }
 
 fn network(e: reqwest::Error, message: &str) -> TransportError {
@@ -175,11 +239,12 @@ impl Transport for ReqwestTransport {
             let res = nekko_net::send("model-providers", b).await.map_err(|e| match e {
                 nekko_net::Error::Http(e) => {
                     // The message the user sees is "Can't reach …"; this is why.
-                    eprintln!("nekkod: {} {} failed: {}", req.method, req.url, causes(&e));
+                    log_outcome(self.provider.as_deref(), req, Some(&failure_reason(&e)));
                     network(e, "fetch failed")
                 }
                 blocked => TransportError { message: blocked.to_string(), detail: None },
             })?;
+            log_outcome(self.provider.as_deref(), req, None);
             let headers = res
                 .headers()
                 .iter()
@@ -250,5 +315,52 @@ impl AbortSignal {
             }
         }
         std::future::pending::<()>().await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Failing, HttpRequest, failure_reason};
+
+    #[test]
+    fn a_failing_request_logs_once_until_it_recovers() {
+        let mut f = Failing::default();
+        let models = HttpRequest::get("http://127.0.0.1:1338/v1/models".into(), Vec::new());
+        let tags = HttpRequest::get("http://127.0.0.1:11434/api/tags".into(), Vec::new());
+        assert!(f.note(None, &models, Some("refused")).unwrap().contains("failed: refused"));
+        assert_eq!(f.note(None, &models, Some("refused")), None);
+        assert!(f.note(None, &models, Some("timed out")).unwrap().contains("failed: timed out"));
+        assert_eq!(f.note(None, &tags, None), None);
+        assert_eq!(
+            f.note(None, &models, None).as_deref(),
+            Some("nekkod: GET http://127.0.0.1:1338/v1/models works again")
+        );
+        assert!(f.note(None, &models, Some("refused")).is_some());
+    }
+
+    #[test]
+    fn a_failure_names_the_provider() {
+        let mut f = Failing::default();
+        let models = HttpRequest::get("http://127.0.0.1:1338/v1/models".into(), Vec::new());
+        assert_eq!(
+            f.note(Some("LM Studio"), &models, Some("refused")).as_deref(),
+            Some(
+                "nekkod: can't reach provider \"LM Studio\" (GET http://127.0.0.1:1338/v1/models): refused \
+                 (repeats not logged until it recovers)"
+            )
+        );
+        assert_eq!(
+            f.note(Some("LM Studio"), &models, None).as_deref(),
+            Some("nekkod: provider \"LM Studio\" is reachable again (GET http://127.0.0.1:1338/v1/models)")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_connection_reads_as_one_sentence() {
+        // A port that was free a moment ago: nothing listens on it now.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let e = client.get(format!("http://127.0.0.1:{port}/")).send().await.unwrap_err();
+        assert_eq!(failure_reason(&e), "connection refused, nothing is listening there. Is its server running?");
     }
 }

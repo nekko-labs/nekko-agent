@@ -18,19 +18,19 @@ export function ReasoningBlock({ text, live, duration, stateKey = 'thought-open'
   const label = live ? 'Thinking' : duration != null ? `Thought for ${duration}s` : 'Thought';
   if (fold) {
     return (
-      <div className="msg-ai mt-2" data-chat-thought data-folded={!open || undefined}>
-        <button className="flex items-center gap-2 text-left text-ink-faint hover:text-ink-soft" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <ThoughtIcon className="h-4 w-4 shrink-0" />
-          <span className="text-[13px]">{label}</span>
+      <div className="msg-ai mt-2" data-voice="working" data-chat-thought data-folded={!open || undefined}>
+        <button className="text-left text-ink-faint hover:text-ink-soft" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <ThoughtIcon className="msg-voice-icon" />
+          <span className="text-sm">{label}</span>
         </button>
-        {open && <div className="mt-1 min-w-0 pl-6" data-chat-search-text><Markdown text={text} /></div>}
+        {open && <div className="mt-1 min-w-0" data-chat-search-text><Markdown text={text} /></div>}
       </div>
     );
   }
   return (
-    <div className="msg-ai mt-2 flex items-start gap-2" data-chat-thought aria-label={label}>
-      <ThoughtIcon className="mt-1 h-4 w-4 shrink-0 text-ink-faint" />
-      <div className="min-w-0 flex-1" data-chat-search-text><Markdown text={text} /></div>
+    <div className="msg-ai mt-2" data-voice="working" data-chat-thought aria-label={label}>
+      <ThoughtIcon className="msg-voice-icon" />
+      <div className="min-w-0" data-chat-search-text><Markdown text={text} /></div>
     </div>
   );
 }
