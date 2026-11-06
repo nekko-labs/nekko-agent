@@ -111,7 +111,9 @@ The build takes about 30 minutes plus the download, and runs by itself:
    "Update this Mac to macOS 27 to set it up here."
 2. **Download the macOS image** from Apple.
 3. **Install the macOS VM**: macOS goes into a new VM, not onto this Mac.
-4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator and Homebrew are added.
+4. **Add Xcode and tools.** Your Xcode is copied in, and the iOS simulator, Homebrew, `node`, `gh`
+   and `jq` are added (workflows run these before any setup step of theirs, as on GitHub's
+   hosted Macs).
    With no Xcode on this Mac the sheet offers **macOS only**; install Xcode for iOS jobs.
 5. **Lock the VM down.**
 6. **Test a boot.** Then the image goes in and the runner turns on in the mode you chose.
@@ -139,6 +141,15 @@ space.
 **Update scripts**, beside **Rebuild image**, is for an update to Nekko's own scripts inside the
 image. It copies the image, writes the new scripts in and test-boots the copy, in a few minutes. A new
 macOS or Xcode still needs **Rebuild image**.
+
+### Missing tools
+
+An image set up by an older Nekko may lack `node`, `gh` or `jq`, and a job that runs one
+before its own setup fails in seconds with `command not found`. The runner card then says, for
+example, "node and gh are missing from this Mac's runner image. Jobs that need them will fail."
+Choose **Install them**: Nekko copies the image, starts the copy once to install them with
+Homebrew, checks its disk for them and test-boots it: minutes, not a rebuild's half hour. The image in use keeps
+taking jobs until then, and the sheet shows the stages and any failure like setup does.
 
 ## Use an app you already have
 
