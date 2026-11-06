@@ -22,6 +22,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     var calls: [(String, [JSONValue])] = []
     var replies: [String: ([JSONValue]) throws -> JSONValue] = [:]
     var summariesReply: (@MainActor () async throws -> JSONValue)?
+    var pendingReply: (@MainActor () async throws -> JSONValue)?
     var connected = false
     var closed = false
     var pushTokens: [String] = []
@@ -56,6 +57,10 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
     func registerPush(token: String, kinds: [String]?) async throws {
         lock.withLock { pushTokens.append(token); pushKinds.append(kinds) }
     }
+    var badgeManifests: [[String]?] = []
+    func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws {
+        lock.withLock { pushTokens.append(token); pushKinds.append(kinds); badgeManifests.append(badgeRooms) }
+    }
     private var onControl: (@Sendable (RelayControl) -> Void)?
     func setControlHandler(_ f: (@Sendable (RelayControl) -> Void)?) { onControl = f }
     func control(_ c: RelayControl) { onControl?(c) }
@@ -75,6 +80,7 @@ final class FakeConnection: RemoteConnection, @unchecked Sendable {
             return replies[channel]
         }
         if channel == Channels.sessionsSummaries, let summariesReply { return try await summariesReply() }
+        if channel == Channels.chatPending, let pendingReply { return try await pendingReply() }
         guard let r else { return .null }
         return try r(args)
     }
@@ -204,7 +210,12 @@ final class StoreTests: XCTestCase {
         c.control(.dismiss(tag: E2E.activityTag("s1")))
         await settle()
         XCTAssertEqual(s.relayDelivers, true)
-        XCTAssertEqual(dismissed, [E2E.activityTag("s1")])
+        XCTAssertTrue(dismissed.isEmpty, "a legacy dismiss cannot clear the question still returned by chat:pending")
+        XCTAssertEqual(s.attentionCount, 1)
+        c.replies[Channels.chatPending] = { _ in [:] }
+        await s.refreshAttention()
+        XCTAssertEqual(dismissed, [E2E.activityTag("s1")], "only a fresh empty snapshot proves the chat-wide dismissal")
+        XCTAssertEqual(s.attentionCount, 0)
 
         // The computer answers push:test and the relay can push: the relay path.
         c.replies[Channels.pushTest] = { _ in ["ok": true] }

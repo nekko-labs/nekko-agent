@@ -33,6 +33,9 @@ jobs:
             apps/ios/App/Views/TurnDetailsFixture.swift
             apps/ios/App/Views/TurnDetailsLayoutProbe.swift
             apps/ios/UITests/TurnDetailsTests.swift
+            apps/ios/App/Views/SystemAttentionNotificationsFixture.swift
+            apps/ios/UITests/SystemAttentionNotificationsUITests.swift
+            apps/ios/scripts/attention-baseline-overlay.mjs
           sparse-checkout-cone-mode: false
       - name: Install identical fixture and record exact revisions
         env:
@@ -47,6 +50,8 @@ jobs:
           cp .evidence-harness/apps/ios/App/Views/TurnDetailsFixture.swift apps/ios/App/Views/
           cp .evidence-harness/apps/ios/App/Views/TurnDetailsLayoutProbe.swift apps/ios/App/Views/
           cp .evidence-harness/apps/ios/UITests/TurnDetailsTests.swift apps/ios/UITests/
+          cp .evidence-harness/apps/ios/App/Views/SystemAttentionNotificationsFixture.swift apps/ios/App/Views/
+          cp .evidence-harness/apps/ios/UITests/SystemAttentionNotificationsUITests.swift apps/ios/UITests/
           if [ "$REVISION" = before ]; then
             python3 - <<'PY'
           from pathlib import Path
@@ -61,10 +66,26 @@ jobs:
               s = s.replace('.task(id: spooky) { SpookyIcon.sync(spooky: spooky) }', '.task(id: spooky) { if !ProcessInfo.processInfo.arguments.contains("-uiTestTurnDetails") { SpookyIcon.sync(spooky: spooky) } }')
               p.write_text(s)
           PY
+            node .evidence-harness/apps/ios/scripts/attention-baseline-overlay.mjs apps/ios/App/NekkoApp.swift
           fi
+          # Preserve the actual overlay and prove production delivery was not copied.
+          git diff -- apps/ios/App/NekkoApp.swift > apps/ios/evidence/fixture-overlay.patch
+          git diff --exit-code -- apps/ios/App/Platform/Notifier.swift apps/ios/App/Platform/NotificationDelivery.swift
+          shasum -a 256 apps/ios/App/Platform/Notifier.swift >> apps/ios/evidence/revisions.txt
+      - name: Full Swift package tests (after)
+        if: matrix.revision == 'after'
+        working-directory: apps/ios/Protocol
+        run: |
+          set -euo pipefail
+          swift test 2>&1 | tee ../evidence/swift-package-tests.log
       - run: brew install xcodegen
+        if: ${{ !cancelled() }}
       - name: Create disposable simulator and build native app
+        id: native-build
+        if: ${{ !cancelled() }}
         working-directory: apps/ios
+        env:
+          REVISION: ${{ matrix.revision }}
         run: |
           set -euo pipefail
           xcodegen generate
@@ -80,8 +101,13 @@ jobs:
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl ui "$DEVICE" appearance light
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
-          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData build-for-testing CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO
+          CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG')
+          if [ "$REVISION" = before ]; then
+            CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG NEKKO_ATTENTION_BASELINE')
+          fi
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData build-for-testing CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO "${CONDITIONS[@]}" 2>&1 | tee evidence/native-build.log
       - name: Capture matched surface and run after-only regression tests
+        if: ${{ !cancelled() && steps.native-build.outcome == 'success' }}
         working-directory: apps/ios
         env:
           REVISION: ${{ matrix.revision }}
@@ -90,11 +116,35 @@ jobs:
           TESTS=(-only-testing:NekkoNativeUITests/TurnDetailsTests/testCaptureFixture)
           if [ "$REVISION" = after ]; then
             TESTS=(-only-testing:NekkoNativeTests/TurnDetailsRowTests -only-testing:NekkoNativeUITests/TurnDetailsTests)
-            if [ -f Tests/NotifierTests.swift ]; then
-              TESTS+=(-only-testing:NekkoNativeTests/NotifierTests -only-testing:NekkoNativeUITests/AttentionNotificationsUITests)
-            fi
+            test -f Tests/NotifierTests.swift
+            TESTS+=(-only-testing:NekkoNativeTests/NotifierTests -only-testing:NekkoNativeUITests/AttentionNotificationsUITests)
           fi
-          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData -resultBundlePath evidence/attention.xcresult test-without-building "${TESTS[@]}" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM=""
+          CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG')
+          if [ "$REVISION" = before ]; then
+            CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG NEKKO_ATTENTION_BASELINE')
+          fi
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData -resultBundlePath evidence/attention.xcresult test-without-building "${TESTS[@]}" -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" "${CONDITIONS[@]}" 2>&1 | tee evidence/recorder-and-turn-tests.log
+      - name: Real OS permission, delivery, category and SpringBoard badge evidence
+        if: ${{ !cancelled() && steps.native-build.outcome == 'success' }}
+        working-directory: apps/ios
+        env:
+          REVISION: ${{ matrix.revision }}
+        run: |
+          set -euo pipefail
+          CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG')
+          BASELINE=0
+          if [ "$REVISION" = before ]; then
+            BASELINE=1
+            CONDITIONS=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG NEKKO_ATTENTION_BASELINE')
+          fi
+          # Reset only the disposable simulator's installed app, so XCTest must
+          # accept the real permission prompt, not inherit a recorder/test grant.
+          xcrun simctl uninstall "$DEVICE" dev.nekkolabs.nekkoagent
+          xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/system-attention.mp4 > evidence/video.log 2>&1 &
+          VIDEO=$!
+          trap 'kill -INT "$VIDEO"; wait "$VIDEO" || true' EXIT
+          TEST_RUNNER_NEKKO_SYSTEM_ATTENTION_EVIDENCE=1 TEST_RUNNER_NEKKO_ATTENTION_BASELINE="$BASELINE" \
+            xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData -resultBundlePath evidence/system-attention.xcresult test-without-building -only-testing:NekkoNativeUITests/SystemAttentionNotificationsUITests -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" "${CONDITIONS[@]}" 2>&1 | tee evidence/system-attention-tests.log
       - name: Export screenshots and remove owned simulator
         if: always()
         working-directory: apps/ios
@@ -104,10 +154,14 @@ jobs:
             xcrun simctl shutdown "$DEVICE" || true
             xcrun simctl delete "$DEVICE" || true
           fi
-          if [ -d evidence/attention.xcresult ]; then
-            xcrun xcresulttool export attachments --path evidence/attention.xcresult --output-path evidence/shots
-          fi
-          test -n "$(find evidence/shots -name '*.png' -print -quit)"
+          for RESULT in attention system-attention; do
+            if [ -d "evidence/$RESULT.xcresult" ]; then
+              xcrun xcresulttool export attachments --path "evidence/$RESULT.xcresult" --output-path "evidence/shots/$RESULT"
+              xcrun xcresulttool get test-results summary --path "evidence/$RESULT.xcresult" > "evidence/$RESULT-summary.json"
+            fi
+          done
+          test -n "$(find evidence/shots/system-attention -name '*.png' -print -quit)"
+          echo 'Captured native OS evidence is not visual inspection or approval.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         if: always()
         with:

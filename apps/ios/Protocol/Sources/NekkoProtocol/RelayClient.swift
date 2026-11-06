@@ -420,11 +420,18 @@ public final class RelayClient: @unchecked Sendable {
     /// `kinds`: the pushes this phone wants (`PushKind` raw values); nil asks for all.
     /// The relay answers with `RelayControl.pushRegistered`.
     public func registerPush(token: String, kinds: [String]?) async throws {
+        try await registerPush(token: token, kinds: kinds, badgeRooms: nil)
+    }
+
+    public func registerPush(token: String, kinds: [String]?, badgeRooms: [String]?) async throws {
         try await awaitReady()
         var frame: JSONValue = ["type": "register-push", "token": .string(token), "platform": .string(config.platform),
                                 "deviceId": .string(config.deviceId)]
         if let app = config.app, case .object(var o) = frame { o["app"] = .string(app); frame = .object(o) }
         if let kinds, case .object(var o) = frame { o["kinds"] = .array(kinds.map { .string($0) }); frame = .object(o) }
+        if let badgeRooms, case .object(var o) = frame {
+            o["badgeRooms"] = .array(badgeRooms.map(JSONValue.string)); frame = .object(o)
+        }
         guard let c = locked({ conn }), c.send(frame.serialized()) else { throw RelayError("Could not reach your computer.") }
     }
 
