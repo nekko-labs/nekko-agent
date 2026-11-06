@@ -62,6 +62,51 @@ describe('tinted dark presets', () => {
   });
 });
 
+describe.each(['x-plum-white', 'x-indigo-white'])('light brand palette %s', (id) => {
+  const vars = THEMES[`light/${id}`];
+  const preset = THEME_PRESETS.find(p => p.id === id)!;
+  const family = ":is([data-preset^='x-plum'], [data-preset^='x-indigo'])";
+  const baseGlow = block(`:root${family}`);
+  const lightGlow = { ...baseGlow, ...block(`:root[data-theme='light']${family}`) };
+
+  it('uses the dark palette glow hue, at a light-safe strength', () => {
+    expect(lightGlow['--nekko-glow-rgb']).toBe(baseGlow['--nekko-glow-rgb']);
+    expect(Number(lightGlow['--nekko-glow-alpha'])).toBeGreaterThan(0.1);
+    expect(Number(lightGlow['--nekko-glow-alpha'])).toBeLessThan(Number(baseGlow['--nekko-glow-alpha']));
+  });
+
+  it('keeps CSS surfaces and shared picker tokens in sync', () => {
+    for (const [token, value] of Object.entries({ '--paper': preset.paper, '--surface': preset.surface, '--surface-2': preset.surface2, '--line': preset.line, '--ink-soft': preset.inkSoft, '--ink-faint': preset.inkFaint })) {
+      expect(vars[token], token).toBe(value);
+    }
+    expect(preset.swatch).toContain(preset.surface2);
+  });
+
+  it('keeps every text role readable across surfaces, selections and the layered gradient', () => {
+    const win = parseColor(vars['--win']);
+    const base = composite(parseColor(`rgb(${lightGlow['--nekko-glow-rgb']} / ${lightGlow['--nekko-glow-alpha']})`), win);
+    const overlay = rules(css, `${family} .command-wall-window > .panel::before`)[0];
+    const background = overlay.nodes.find(n => n.type === 'decl' && n.prop === 'background') as { value: string };
+    const colours = [...background.value.matchAll(/rgb\([^)]+\)/g)].map(m => parseColor(m[0]));
+    expect(colours).toHaveLength(2);
+    // Conservative bound: both radial peaks at full overlay opacity, even though
+    // they occupy opposite corners and the actual cycle peaks at .9. Include
+    // the darkest grain pixel at its shipped opacity rather than ignoring it.
+    const layered = colours.reduceRight((bg, colour) => composite(colour, bg), base);
+    const grain = rules(css, '[data-clean-start] .clean-start::after')[0];
+    const opacity = grain.nodes.find(n => n.type === 'decl' && n.prop === 'opacity') as { value: string };
+    const strongest = composite(parseColor(`rgba(0, 0, 0, ${opacity.value})`), layered);
+    const selection = /^color-mix\(in srgb, (#[\da-f]+) ([\d.]+)%, var\(--surface\)\)$/.exec(vars['--accent-soft']);
+    expect(selection).not.toBeNull();
+    const selected = mix(selection![1], Number(selection![2]) / 100, vars['--surface']);
+    for (const bg of [win, base, strongest, selected, ...['--paper', '--surface', '--surface-2'].map(t => parseColor(vars[t]))]) {
+      for (const ink of [vars['--ink'], vars['--ink-soft'], vars['--ink-faint'], preset.accent]) {
+        expect(contrastRatio(parseColor(ink), bg), `${ink} on ${toHex(bg)}`).toBeGreaterThanOrEqual(AA);
+      }
+    }
+  });
+});
+
 describe('faint ink', () => {
   // --ink-faint carries timestamps, hints, counts and labels on every screen,
   // much of it at 11 to 12px, so it is held to the same AA bar as body text.
