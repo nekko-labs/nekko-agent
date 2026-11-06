@@ -384,6 +384,20 @@ impl Mcp {
         json!({ "specs": specs, "servers": state })
     }
 
+    /// Whether the server of `mcp__<id>__<tool>` marks that tool read-only
+    /// (`annotations.readOnlyHint`, MCP 2025-03-26). The server's own claim:
+    /// the egress gate trusts it only in a chat that has not read untrusted
+    /// content (decisions 0054 and 0063).
+    pub fn read_only(&self, name: &str) -> bool {
+        let Some((id, tool)) = name.strip_prefix("mcp__").and_then(|r| r.split_once("__")) else {
+            return false;
+        };
+        let servers = lock(&self.servers);
+        servers.get(id).is_some_and(|srv| {
+            lock(&srv.tools).iter().any(|t| t["name"] == tool && t["annotations"]["readOnlyHint"] == Value::Bool(true))
+        })
+    }
+
     /// `mcp:call`: run an `mcp__<id>__<tool>` call on its server.
     pub async fn call(&self, call: &Value) -> Value {
         let call_id = call["id"].clone();
