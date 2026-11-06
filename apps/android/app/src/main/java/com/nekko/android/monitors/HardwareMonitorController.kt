@@ -6,6 +6,7 @@ import com.nekko.protocol.Channels
 import com.nekko.protocol.ENGINE_PROVIDER_ID
 import com.nekko.protocol.EngineStatus
 import com.nekko.protocol.GpuStats
+import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PhoneRefusal
 import com.nekko.protocol.RelayException
 import com.nekko.protocol.SystemStats
@@ -36,7 +37,14 @@ data class HardwareState(
     val error: String? = null,
     /** The model being unloaded. */
     val unloading: String? = null,
+    /** The Model Server's models, for Load a model. */
+    val library: List<ModelInfo> = emptyList(),
 ) {
+    /** The library's models the Model Server doesn't hold now. */
+    val loadable: List<ModelInfo> get() {
+        val held = (engine?.resident.orEmpty().map { it.id } + engine?.loading.orEmpty().map { it.id }).toSet()
+        return library.filter { it.id !in held }
+    }
     /** The Model Server holds at least one model: Simple then shows the monitors too. */
     val localModelLoaded: Boolean get() = engine?.resident?.isNotEmpty() == true
 }
@@ -49,6 +57,8 @@ data class HardwareState(
  */
 class HardwareMonitorController(
     private val caller: Caller,
+    /** A change-class call, signed with the screen lock when the computer asks (`ComputersRepository.callRaising`). */
+    private val change: suspend (String, List<JsonElement>) -> JsonElement = { ch, args -> caller.call(ch, *args.toTypedArray()) },
     private val computerName: () -> String,
 ) {
     private val _state = MutableStateFlow(HardwareState())
@@ -133,6 +143,37 @@ class HardwareMonitorController(
         }
     }
 
+    /** The Model Server's models, read when the sheet opens. A failed read keeps the last list. */
+    suspend fun loadLibrary() {
+        val list = try {
+            ModelInfo.list(caller.call(Channels.MODELS_LIST, JsonPrimitive(ENGINE_PROVIDER_ID)))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return
+        }
+        _state.update { it.copy(library = list) }
+    }
+
+    /** Load a model now. Like every model setting it needs the change proof, and it is refused while the server keeps its own settings. */
+    suspend fun load(id: String) {
+        change(Channels.MODEL_LOAD, listOf(JsonPrimitive(ENGINE_PROVIDER_ID), JsonPrimitive(id)))
+        refresh()
+    }
+
+    suspend fun unloadAll() {
+        change(Channels.ENGINE_UNLOAD_ALL, emptyList())
+        refresh()
+    }
+
+    /** Change how the Model Server keeps models (`maxLoaded`, `idleTtlSeconds`, `jitLoad`). */
+    suspend fun setServer(patch: JsonObject) {
+        change(Channels.ENGINE_SETTINGS, listOf(patch))
+        refresh()
+    }
+
+    val actions = ServerActions(::load, ::unloadAll, ::setServer, ::loadLibrary)
+
     companion object {
         /** The desktop samples hardware every few seconds. */
         const val POLL_MS: Long = 3_000
@@ -141,3 +182,11 @@ class HardwareMonitorController(
         const val ENGINE_POLL_MS: Long = 10_000
     }
 }
+
+/** What the Model Server section of the agent's details can do. */
+class ServerActions(
+    val load: suspend (String) -> Unit,
+    val unloadAll: suspend () -> Unit,
+    val set: suspend (JsonObject) -> Unit,
+    val loadLibrary: suspend () -> Unit,
+)

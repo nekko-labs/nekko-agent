@@ -684,6 +684,53 @@ impl Turns {
         }
     }
 
+    /// Whether the Claude policy enables `capability` for this Claude Code
+    /// provider's auth, as `claude:capability` reports it. Fails closed: no
+    /// router, an error, an unread sign-in or a row awaiting approval is no.
+    async fn claude_allows(&self, provider: &Value, capability: &str) -> bool {
+        let Some(d) = self.dispatch.get().cloned() else { return false };
+        let id = provider.get("id").cloned().unwrap_or(Value::Null);
+        let row = d("claude:capability".into(), vec![id, json!(capability)]).await;
+        crate::harness::policy_enabled(row.as_ref().ok())
+    }
+
+    /// `POST /harness/tool`: a Nekko tool Claude Code called through a chat's
+    /// bridge. `None` when the token is not a live bridge's. Runs only a tool
+    /// that launch offered, and only while the Claude policy still allows it
+    /// for the chat's provider (the user's approval can be turned off, or a
+    /// signed policy can change, after launch).
+    pub async fn claude_code_tool(self: &Arc<Self>, token: &str, call: &Value) -> Option<Value> {
+        let entry = self.harness.bridge_session(token)?;
+        let fail = |message: &str| json!({ "ok": false, "error": message });
+        let name = str_at(call, "name").unwrap_or_default();
+        if !entry.tools.iter().any(|t| t == name) {
+            return Some(fail(&format!("Nekko Agent does not offer {name} to this chat.")));
+        }
+        let store = self.store.clone();
+        let id = entry.session_id.clone();
+        let session = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
+        let Some(session) = session else { return Some(fail("Chat no longer exists")) };
+        let provider_id = session.get("providerId").cloned().unwrap_or(Value::Null);
+        let settings = self.settings.shared();
+        let provider = settings
+            .get("providers")
+            .and_then(Value::as_array)
+            .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(&provider_id)).cloned())
+            .unwrap_or(Value::Null);
+        if !(self.claude_allows(&provider, "nekko_tools").await
+            && self.claude_allows(&provider, "unattended_runs").await)
+        {
+            return Some(fail(
+                "Nekko's watch is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
+            ));
+        }
+        let input = call.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        Some(match self.watches.tool(&entry.session_id, &input).await {
+            Ok(text) => json!({ "ok": true, "text": text }),
+            Err(e) => fail(&e),
+        })
+    }
+
     /// `getSession(id)?.mode ?? settings.defaultChatMode ?? 'guardrails'`.
     async fn live_mode(&self, shared: &Shared) -> String {
         let store = self.store.clone();
@@ -1309,6 +1356,14 @@ impl Turns {
                 ctx
             })
         };
+        // Its own statement: the session lock must be released before the
+        // fields below take it again.
+        let taint = {
+            let s = lock(&session);
+            crate::taint::Taint::from_messages(
+                s.get("messages").and_then(Value::as_array).map(Vec::as_slice).unwrap_or_default(),
+            )
+        };
         let runner = TurnTools {
             sandbox: sandbox.then(|| self.sandboxes.clone()),
             // The decision runner the host picked; the local one is this daemon's.
@@ -1338,6 +1393,7 @@ impl Turns {
             decide_with: facts.get("decideWith").and_then(Value::as_str).map(str::to_string),
             unattended_ms: (settings.get("unattendedQuestionMinutes").and_then(Value::as_f64).unwrap_or(0.0).max(0.0)
                 * 60_000.0) as u64,
+            taint: Mutex::new(taint),
         };
 
         let mut history: Vec<Value> =
@@ -1450,7 +1506,24 @@ impl Turns {
         // A wake-up reads the child that woke, whatever it was launched with:
         // its work is already running, and a change of model, mode or folders
         // applies at the next message (#1408).
-        let reuse = slot.session.as_mut().is_some_and(|s| s.alive() && (wake || wanted.matches(&s.spec)));
+        // Nekko's own tools ride on the same bridge, only where the Claude
+        // policy allows them for this provider's auth (`nekko_tools`); the
+        // watch also needs its wake-up allowed (`unattended_runs`). Never
+        // in incognito or training-run chats, as in a Nekko engine chat.
+        let training = js::truthy(lock(session).get("trainingRunId"));
+        let mut tools = Vec::new();
+        if !incognito
+            && !training
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "unattended_runs").await
+        {
+            tools.push(crate::harness::BRIDGE_WATCH.to_string());
+        }
+        // A child launched with other Nekko tools is relaunched (a provider
+        // switch, or the policy changed), so its bridge lists the right ones.
+        let same_tools = self.harness.bridge_tools(&session_id).as_deref() == Some(&tools[..]);
+        let reuse =
+            slot.session.as_mut().is_some_and(|s| s.alive() && (wake || (wanted.matches(&s.spec) && same_tools)));
         if wake && !reuse {
             // The child that woke is gone: drop it, or its unread line would
             // wake the chat again at once.
@@ -1470,7 +1543,7 @@ impl Turns {
             let mut spec = wanted.launch(bin, stored.as_deref());
             // Every permission prompt goes to Nekko through the bridge; with
             // no bridge Claude Code does not start (fail closed).
-            match self.harness.prepare_bridge(&session_id, &paths) {
+            match self.harness.prepare_bridge_with(&session_id, &paths, &tools) {
                 Ok(config) => spec.mcp_config = Some(config),
                 Err(e) => return fail(&e, &history),
             }
@@ -2210,7 +2283,14 @@ struct TurnTools {
     allow_spawn: bool,
     /// Which decision runner `decide` uses (`facts.decideWith`): `local`, `typesafe`, or none.
     decide_with: Option<String>,
+    /// Whether this chat has read untrusted content, and the addresses it
+    /// was shown (the egress gate, decision 0054).
+    taint: Mutex<crate::taint::Taint>,
 }
+
+/// Why a call in a tainted chat asks (decision 0054).
+const TAINT_NOTE: &str =
+    "This chat has read content from the web or a tool, which can carry instructions to the agent.";
 
 fn result(id: &str, output: impl Into<String>) -> Value {
     json!({ "toolCallId": id, "output": output.into() })
@@ -2372,7 +2452,26 @@ impl TurnTools {
         }
     }
 
+    /// A call run for the user, then noted for the egress gate: a tool that
+    /// brought in outside text taints the chat, and every address in any
+    /// output counts as shown to it.
     async fn attended(&self, call: &Value) -> Result<Value, String> {
+        let out = self.dispatch(call).await;
+        if let Ok(v) = &out {
+            let name = str_at(call, "name").unwrap_or_default();
+            let text = v.get("output").map(js::display).unwrap_or_default();
+            lock(&self.taint).observe(name, &text, js::truthy(v.get("isError")));
+        }
+        out
+    }
+
+    /// Decision 0054: this chat has read untrusted content and is not in
+    /// YOLO, so a call that can send data out asks first.
+    fn gated(&self) -> bool {
+        self.mode != "yolo" && lock(&self.taint).tainted()
+    }
+
+    async fn dispatch(&self, call: &Value) -> Result<Value, String> {
         if let Some(sandboxes) = &self.sandbox {
             return Ok(self.sandbox_tool(sandboxes, call).await);
         }
@@ -2384,7 +2483,7 @@ impl TurnTools {
         }
         match name {
             "set_chat_title" => return Ok(self.set_title(id, &input).await),
-            "remember" => return Ok(self.remember(id, &input).await),
+            "remember" => return Ok(self.remember(call, id, &input).await),
             "complete_session" => return Ok(self.complete(id, &input).await),
             "ask_user" => return Ok(result(id, self.ask(call).await)),
             "update_plan" if !self.training => return Ok(self.update_plan(id, &input).await),
@@ -2591,9 +2690,27 @@ impl TurnTools {
                 return error(id, LOCAL_FETCH_REFUSED);
             }
             approved.insert(host);
-        } else if asks && !self.turns.request_approval(&self.shared, call, &format!("Fetch {url}"), &json!("low")).await
-        {
-            return error(id, "Fetch not approved by user.");
+        } else {
+            // In a tainted chat, a public address the chat was never shown
+            // (a new query string included) can carry data out.
+            let unseen = self.gated() && !lock(&self.taint).allows(&url);
+            let ask = if asks {
+                Some((format!("Fetch {url}"), "low"))
+            } else if unseen {
+                Some((
+                    format!(
+                        "Fetch {url}? {TAINT_NOTE} This address did not appear in it or in your messages, and a request can carry data out. Approve only if you expected the agent to go there."
+                    ),
+                    "high",
+                ))
+            } else {
+                None
+            };
+            if let Some((reason, severity)) = ask
+                && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
+            {
+                return error(id, "Fetch not approved by user.");
+            }
         }
         let cancel = nekko_tools::Cancel::new();
         let c2 = cancel.clone();
@@ -2717,8 +2834,21 @@ impl TurnTools {
             MAX_CHILD_RESUMES, can_resume_child_failure, child_interrupted_message, sub_agent_answer, sub_agent_failure,
         };
         let id = str_at(call, "id").unwrap_or_default().to_string();
-        if let Some(reason) = turn::host_tool_approval("spawn_agent", Some(&self.mode), self.sandbox_mode.as_deref())
-            && !self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
+        // A sub-agent starts without this chat's history, so this chat's
+        // taint does not follow it: in a tainted chat, delegating asks.
+        let ask = match turn::host_tool_approval("spawn_agent", Some(&self.mode), self.sandbox_mode.as_deref()) {
+            Some(reason) => Some((reason, "medium")),
+            None => self.gated().then(|| {
+                (
+                    format!(
+                        "Delegate work to a sub-agent? {TAINT_NOTE} The sub-agent starts without this chat's history, so this chat's checks do not follow it."
+                    ),
+                    "high",
+                )
+            }),
+        };
+        if let Some((reason, severity)) = ask
+            && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
         {
             return error(&id, "Call not approved by user.");
         }
@@ -2794,12 +2924,31 @@ impl TurnTools {
     /// An MCP call in the daemon: ask first when the policy says so, then run it.
     async fn call_mcp(&self, mcp: &Mcp, call: &Value, name: &str) -> Value {
         let id = str_at(call, "id").unwrap_or_default();
-        if let Some(reason) = turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref())
-            && !self.turns.request_approval(&self.shared, call, &reason, &json!("medium")).await
+        // An MCP tool can send data out, and its server alone says whether
+        // it only reads: in a tainted chat every call asks, unless the user
+        // chose "Always allow this tool" for it in this chat.
+        let ask = match turn::host_tool_approval(name, Some(&self.mode), self.sandbox_mode.as_deref()) {
+            Some(reason) => Some((reason, "medium")),
+            None if self.gated() && !self.mcp_tool_allowed(name).await => {
+                Some((format!("Call {name}? {TAINT_NOTE} An MCP tool can send data out of this computer."), "high"))
+            }
+            None => None,
+        };
+        if let Some((reason, severity)) = ask
+            && !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await
         {
             return error(id, "Call not approved by user.");
         }
         mcp.call(call).await
+    }
+
+    /// The user chose "Always allow this tool" for MCP tool `name` in this
+    /// chat (`allowedMcpTools`). Read from disk, so a choice made on the
+    /// approval bar applies to the next call of the same turn.
+    async fn mcp_tool_allowed(&self, name: &str) -> bool {
+        self.disk().await.is_some_and(|s| {
+            s.get("allowedMcpTools").and_then(Value::as_array).is_some_and(|a| a.iter().any(|t| t == name))
+        })
     }
 
     async fn disk(&self) -> Option<Value> {
@@ -2833,10 +2982,21 @@ impl TurnTools {
 
     /// `remember`: a global memory note. The chat's memory card reads the
     /// call's title and body and this result's first word after "Memory".
-    async fn remember(&self, id: &str, input: &Value) -> Value {
+    async fn remember(&self, call: &Value, id: &str, input: &Value) -> Value {
         let dir = self.turns.data_dir.clone();
         let text = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default().to_string();
         let (title, body) = (text("title"), text("body"));
+        // A note applies to every later chat: in a tainted chat, it could be
+        // an attacker's instruction that outlives it.
+        if self.gated() {
+            let reason = format!(
+                "Save to memory: \"{}\"? {TAINT_NOTE} A memory note applies to every later chat; approve only if you asked for it.",
+                js::slice16(&title, 80)
+            );
+            if !self.turns.request_approval(&self.shared, call, &reason, &json!("high")).await {
+                return error(id, "Memory was not saved: not approved by user.");
+            }
+        }
         let saved = tokio::task::spawn_blocking(move || nekko_workspace::memory::remember(&dir, &title, &body))
             .await
             .unwrap_or_else(|e| Err(e.to_string()));
