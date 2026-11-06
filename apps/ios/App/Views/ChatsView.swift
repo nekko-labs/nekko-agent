@@ -806,7 +806,11 @@ struct ComputerMenu: View {
                     // Every computer reads "Computers", not "All computers": the wider pill pushed
                     // Nekko off the centre of the title bar (ChatStatusTests, run 41844125733).
                     // The menu's Show chats from still says All computers.
+                    // A long computer name (a CI Mac's is 40 characters with no spaces) widened the
+                    // pill until iOS 26 folded the whole toolbar, New chat included, into More.
                     Text(showsPhone ? ChatPlace.phoneName : shown?.name ?? String(localized: "Computers")).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 150, alignment: .leading)
                     if shown == nil, !showsPhone, let online = Self.online(states.filter { $0 == .online }.count, of: states.count) {
                         Text(online).font(.caption2).foregroundStyle(palette.inkSoft).lineLimit(1)
                     }
