@@ -409,6 +409,13 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
                 .map(Value::String)
                 .or_else(|e| Ok(json!({ "error": e })))
         }
+        "watch:cancelSession" => {
+            let id = str_arg(&args, 0).unwrap_or_default();
+            if let Some(w) = &ctx.turns.watches {
+                w.cancel_session(id).await?;
+            }
+            stop_chat(ctx, id).await
+        }
         "session:nextWatch" if ctx.turns.watches.is_some() => {
             Ok(ctx.turns.watches.as_ref().expect("checked").next_wake_at(str_arg(&args, 0).unwrap_or_default()))
         }
@@ -474,6 +481,14 @@ pub async fn route(ctx: &Ctx, channel: &str, args: Vec<Value>) -> Result<Value, 
             None => Err(NO_SESSIONS.into()),
         },
         c if SESSION_CHANNELS.contains(&c) && ctx.sessions.is_some() => {
+            let closing = c == "session:delete" || (c == "session:setOptions" && js::truthy(arg(&args, 1).get("archivedAt")));
+            if closing {
+                let id = str_arg(&args, 0).unwrap_or_default();
+                if let Some(w) = &ctx.turns.watches {
+                    w.cancel_session(id).await?;
+                }
+                stop_chat(ctx, id).await?;
+            }
             // A deleted Claude Agent chat's Claude Code child goes with it.
             if c == "session:delete"
                 && let Some(id) = args.first().and_then(Value::as_str)

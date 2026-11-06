@@ -167,6 +167,7 @@ pub struct Watches {
     /// One tick at a time (`polling`), and one writer at a time.
     polling: AtomicBool,
     write: tokio::sync::Mutex<()>,
+    deliveries: std::sync::Mutex<std::collections::HashMap<String, nekko_loop::Cancel>>,
 }
 
 impl Watches {
@@ -186,6 +187,7 @@ impl Watches {
             now,
             polling: AtomicBool::new(false),
             write: tokio::sync::Mutex::new(()),
+            deliveries: std::sync::Mutex::default(),
         })
     }
 
@@ -208,6 +210,27 @@ impl Watches {
 
     fn save(&self, watches: &[Value]) -> Result<(), String> {
         nekko_settings::write_json_atomic(&self.path, &Value::Array(watches.to_vec())).map_err(|e| e.to_string())
+    }
+
+    /// Cancel durable watches and interrupt polling or delivery before returning.
+    pub async fn cancel_session(&self, session_id: &str) -> Result<(), String> {
+        let _guard = self.write.lock().await;
+        let mut watches = self.list(None)?;
+        for w in &mut watches {
+            if str_of(w, "sessionId") != Some(session_id) {
+                continue;
+            }
+            if let Some(cancel) = self.deliveries.lock().unwrap().get(str_of(w, "id").unwrap_or_default()) {
+                cancel.cancel();
+            }
+            if str_of(w, "status") == Some("active") {
+                w["status"] = json!("cancelled");
+                if let Some(obj) = w.as_object_mut() {
+                    obj.shift_remove("pending");
+                }
+            }
+        }
+        self.save(&watches)
     }
 
     /// `nextWakeAt(sessionId)`: the earliest deadline of an armed watch.
@@ -277,6 +300,10 @@ impl Watches {
                 return Err("No watch with that id belongs to this chat".into());
             };
             w["status"] = json!("cancelled");
+            w.as_object_mut().unwrap().shift_remove("pending");
+            if let Some(cancel) = self.deliveries.lock().unwrap().get(str_of(w, "id").unwrap_or_default()) {
+                cancel.cancel();
+            }
             let id = str_of(w, "id").unwrap_or_default().to_string();
             self.save(&watches)?;
             return Ok(format!("Cancelled watch {id}"));
@@ -316,6 +343,9 @@ impl Watches {
             None => None,
         };
         let _guard = self.write.lock().await;
+        if !self.host.exists(session_id) {
+            return Err("Chat no longer exists".into());
+        }
         let mut watches = self.list(None)?;
         let same = |w: &Value| {
             str_of(w, "sessionId") == Some(session_id)
@@ -368,6 +398,11 @@ impl Watches {
         if self.polling.swap(true, Ordering::AcqRel) {
             return;
         }
+        struct PollGuard<'a>(&'a AtomicBool);
+        impl Drop for PollGuard<'_> {
+            fn drop(&mut self) { self.0.store(false, Ordering::Release); }
+        }
+        let _poll = PollGuard(&self.polling);
         let watches = self.list(None).unwrap_or_default();
         for w in watches {
             let id = str_of(&w, "id").unwrap_or_default().to_string();
@@ -382,7 +417,21 @@ impl Watches {
             if self.host.busy(turns, &session_id).await {
                 continue;
             }
-            if let Err(e) = self.deliver(turns, &w, &id, &session_id).await {
+            let cancel = nekko_loop::Cancel::default();
+            {
+                let _guard = self.write.lock().await;
+                if !self.list(None).unwrap_or_default().iter().any(|v| str_of(v, "id") == Some(&id) && str_of(v, "status") == Some("active")) {
+                    continue;
+                }
+                self.deliveries.lock().unwrap().insert(id.clone(), cancel.clone());
+            }
+            let result = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => Ok(()),
+                result = self.deliver(turns, &w, &id, &session_id) => result,
+            };
+            self.deliveries.lock().unwrap().remove(&id);
+            if let Err(e) = result {
                 let failures = num(&w, "failures") + 1.0;
                 let failures = if failures.is_nan() { 1.0 } else { failures };
                 let backoff = (60_000.0 * 2f64.powf(failures.min(4.0))).min(900_000.0);
@@ -394,7 +443,7 @@ impl Watches {
                 self.patch(&id, patch).await;
             }
         }
-        self.polling.store(false, Ordering::Release);
+
     }
 
     async fn deliver(&self, turns: Option<&Turns>, w: &Value, id: &str, session_id: &str) -> Result<(), String> {
