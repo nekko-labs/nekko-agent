@@ -35,9 +35,14 @@ type ActivityGroupProps = { items: Activity[]; streaming?: boolean; turnRunning?
 
 /** Thoughts stay visible in conversation order, outside collapsible tool groups. */
 export const ActivityGroup = memo(function ActivityGroup({ items, ...props }: ActivityGroupProps) {
-  // Simple keeps a turn's thoughts and tool steps behind one line (Settings > Simple mode).
-  const showSteps = useShown('thinking');
-  const [stepsOpen, setStepsOpen] = useRowState('simple-steps-open', false);
+  // Simple uses the same purpose summary and caret as Expert, minus the
+  // reasoning rows (Settings > Simple mode > Reasoning). A turn that only
+  // thought draws nothing: its answer follows.
+  const showReasoning = useShown('thinking');
+  if (!showReasoning) {
+    const tools = items.filter((item) => item.kind !== 'reasoning');
+    return tools.length ? <ToolActivityGroup items={tools} {...props} /> : null;
+  }
   const parts: React.ReactNode[] = [];
   let tools: Activity[] = [];
   const flush = (index: number) => {
@@ -53,26 +58,8 @@ export const ActivityGroup = memo(function ActivityGroup({ items, ...props }: Ac
     } else tools.push(item);
   });
   flush(items.length);
-  if (showSteps) return <>{parts}</>;
-  return (
-    <div className="mt-1" data-simple-steps>
-      <div className="flex min-w-0 items-center gap-2 text-xs text-ink-faint">
-        {props.streaming ? <LeadDots /> : <ThoughtIcon className="h-3 w-3 shrink-0" />}
-        <span className="min-w-0 truncate">{simpleStepsSummary(items, !!props.streaming)}</span>
-        <button type="button" className="shrink-0 text-accent hover:underline" aria-expanded={stepsOpen} onClick={() => setStepsOpen(!stepsOpen)}>{stepsOpen ? 'Hide steps' : 'Show steps'}</button>
-      </div>
-      {stepsOpen && <div className="mt-1">{parts}</div>}
-    </div>
-  );
+  return <>{parts}</>;
 });
-
-/** Simple's one line for a turn's work: "Took 4 steps", or "Working · 2 steps so far". */
-export function simpleStepsSummary(items: Activity[], running: boolean): string {
-  const n = items.filter((i) => i.kind === 'tool').length;
-  const steps = `${n} step${n === 1 ? '' : 's'}`;
-  if (running) return n ? `Working · ${steps} so far` : 'Working';
-  return n ? `Took ${steps}` : 'Thought it through';
-}
 
 const ToolActivityGroup = memo(function ToolActivityGroup({ items, streaming = false, toolActivity, pendingCallId, turnRunning = streaming, stateKey = 'group-open' }: { stateKey?: string; items: Activity[]; streaming?: boolean; turnRunning?: boolean; toolActivity?: LiveActivity; pendingCallId?: string }) {
   // Open while the turn runs (watching it work is the point), folded away

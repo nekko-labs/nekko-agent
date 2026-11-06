@@ -33,7 +33,7 @@ In the message box's bottom row, Simple shows the folder, the model, how the age
 - **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**. Each choice has the same icon as in Expert's Mode panel (a hand, a shield and a bolt) and a one-line description.
 - **Incognito and Automate** are in the **+** menu.
 - **The Agent Monitor** appears while agents are working in the background.
-- **In replies:** each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them.
+- **In replies:** the agent's steps sit under the same one-line summary as in Detailed, such as *Read guidance*. Click the arrow beside it to see each step. The model's thinking stays out of sight; Detailed shows it. On a phone, each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them.
 
 Simple keeps these for Detailed:
 
