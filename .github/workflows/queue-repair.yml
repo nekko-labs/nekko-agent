@@ -1,20 +1,21 @@
 name: Queue repair
 
-# Gets stuck ready PRs back into the merge queue without waiting on the agent
-# that opened them. auto-merge.yml queues a PR and queue-sweeper.yml re-queues
-# an ejected one and re-runs a flaky `gate` once; both leave the rest "for the
-# author", and the author is often an agent session that has ended. This takes
-# over from there (scripts/queue-repair.mjs has the details):
+# Gets stuck ready PRs merging without waiting on the agent that opened them.
+# auto-merge.yml arms native auto-merge and queue-sweeper.yml re-arms a missing
+# request and re-runs a flaky `gate` once; both leave the rest "for the author",
+# and the author is often an agent session that has ended. This takes over from
+# there (scripts/queue-repair.mjs has the details). The name predates
+# 2026-11-06, when the merge queue was removed.
 #
 #   - A PR that conflicts with main gets main merged in on the runner. Conflicts
 #     in files every PR appends to (spec/README.md, TASKS.md, perf-history,
 #     llms.txt, sitemap.xml) are settled by rule and the merge is pushed.
 #   - Anything that needs judgment (a code conflict, `gate` still red after the
-#     sweeper's re-run, a second ejection at the same commit) goes to Codex: a
+#     sweeper's re-run) goes to Codex: a
 #     `@codex` comment posted with CODEX_TRIGGER_TOKEN starts a Codex cloud task
 #     on the maintainer's ChatGPT plan, which pushes its fix to the branch. Codex
 #     runs in its own sandbox; no ChatGPT credential ever reaches this runner.
-#   - A failure every job of which also fails in other PRs' merge groups is
+#   - A failure every job of which also fails in other PRs' CI runs is
 #     main's (a flaky budget, say): Codex is not asked and no budget is spent.
 #     The PR is retried once that failure stops, at most twice per head.
 #   - When Codex is not set up, pushes nothing within an hour, or has been asked
@@ -35,12 +36,8 @@ name: Queue repair
 
 on:
   schedule:
-    # Between the sweeper's runs (7,22,37,52), so its re-queues and re-runs land first.
+    # Between the sweeper's runs (7,22,37,52), so its re-runs land first.
     - cron: '14,29,44,59 * * * *'
-  # Right after the queue drops a PR. pull_request_target runs this file from
-  # main, so it works for PRs opened before it existed.
-  pull_request_target:
-    types: [dequeued]
   workflow_dispatch:
     inputs:
       pr:
@@ -66,7 +63,6 @@ concurrency:
 
 jobs:
   repair:
-    if: github.event_name != 'pull_request_target' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -83,7 +79,7 @@ jobs:
 
       # Pushes use the repo's App token, not GITHUB_TOKEN: a push made with
       # GITHUB_TOKEN starts no workflow run, so CI would never check the merge
-      # and auto-merge.yml would never re-queue it (same reason as docs-site.yml).
+      # and `gate` would never go green for auto-merge (same reason as docs-site.yml).
       - name: Create repository-scoped App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
@@ -101,6 +97,6 @@ jobs:
           PUSH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           CODEX_TOKEN: ${{ secrets.CODEX_TRIGGER_TOKEN }}
-          PR: ${{ inputs.pr || github.event.pull_request.number }}
+          PR: ${{ inputs.pr }}
           DRY_RUN: ${{ inputs.dry-run && '--dry-run' || '' }}
         run: node scripts/queue-repair.mjs $DRY_RUN

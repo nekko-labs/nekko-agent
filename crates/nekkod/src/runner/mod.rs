@@ -420,6 +420,8 @@ impl<S: Sense, V: Vm, P: Provider> Runners<S, V, P> {
                     reasons: Vec::new(),
                     available: 0,
                     limit: None,
+                    linux_available: 0,
+                    linux_error: None,
                     awake: false,
                     error: None,
                     today: Default::default(),

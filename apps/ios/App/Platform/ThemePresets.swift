@@ -4,9 +4,9 @@
 
 extension ThemePreset {
     static let all: [ThemePreset] = [
-        ThemePreset(id: "system", label: "System", mode: .system, accent: 0x6D5EFC, accent2: 0x06B6D4, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
-        ThemePreset(id: "light", label: "Light", mode: .light, accent: 0x6D5EFC, accent2: 0x06B6D4, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
-        ThemePreset(id: "dark", label: "Dark", mode: .dark, accent: 0x8B7DFF, accent2: 0x22D3EE, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "system", label: "System", mode: .system, accent: 0x5A2352, accent2: 0x8A4A7F, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "light", label: "Light", mode: .light, accent: 0x5A2352, accent2: 0x8A4A7F, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "dark", label: "Dark", mode: .dark, accent: 0xC084B5, accent2: 0xC99BB3, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
         ThemePreset(id: "nebula", label: "Nebula", mode: .dark, accent: 0x9D8CE6, accent2: 0xD98BB6, family: nil, paper: 0x0B0A12, surface: 0x15131F, surface2: 0x1E1B2B, ink: 0xECE9F5, inkSoft: 0xA7A1BB, inkFaint: 0x88839B, line: 0x262334),
         ThemePreset(id: "terminal", label: "Terminal", mode: .dark, accent: 0x3FB96A, accent2: 0x8FBF3A, family: nil, paper: 0x080A08, surface: 0x111711, surface2: 0x192019, ink: 0xE8F5E8, inkSoft: 0x8FAB8F, inkFaint: 0x7A8C7A, line: 0x1F281F),
         ThemePreset(id: "nord", label: "Nord", mode: .dark, accent: 0x88C0D0, accent2: 0x81A1C1, family: nil, paper: 0x1E222A, surface: 0x252A33, surface2: 0x2E3440, ink: 0xECEFF4, inkSoft: 0x9CA6B6, inkFaint: 0x969FAB, line: 0x3B4252),

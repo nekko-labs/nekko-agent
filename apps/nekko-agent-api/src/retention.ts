@@ -37,3 +37,16 @@ export async function purgeSignups(db: Db): Promise<{ unconfirmed: number; unsub
     return { unconfirmed: p.rows.length, unsubscribed: u.rows.length };
   });
 }
+
+export const FEEDBACK_SCREENSHOT_DAYS = 90;
+
+/** Deletes Send feedback screenshots 90 days after their note arrived; the note itself stays. */
+export async function purgeFeedbackScreenshots(db: Db): Promise<number> {
+  const { rows } = await db.query(
+    `delete from feedback_screenshots s using feedback f
+     where s.feedback_id = f.id and f.received_on < current_date - ${FEEDBACK_SCREENSHOT_DAYS}
+     returning s.feedback_id`,
+    [],
+  );
+  return rows.length;
+}

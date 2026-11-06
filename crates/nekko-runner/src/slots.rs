@@ -8,6 +8,17 @@ use crate::settings::{Priority, RunnerSettings};
 
 /// Apple's limit on concurrent macOS guests per Mac.
 pub const MAX_MACOS_VMS: u8 = 2;
+/// Linux guests have no Apple cap; this only keeps a typo from asking for dozens.
+pub const MAX_LINUX_VMS: u8 = 8;
+
+/// Which operating system a runner VM boots.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Guest {
+    #[default]
+    Macos,
+    Linux,
+}
 
 /// Most of RAM all runner VMs together may take, whatever the setting says,
 /// so the owner's Mac always keeps a quarter for itself.
@@ -60,6 +71,15 @@ pub fn macos_slots_available(s: &RunnerSettings, host: &HostFacts) -> u8 {
     let by_memory = runner_memory_mb(s, host) / u64::from(s.memory_per_vm_mb.max(1));
     let by_cap = MAX_MACOS_VMS.saturating_sub(host.other_macos_vms);
     s.macos_slots.min(by_cap).min(by_memory.min(u64::from(MAX_MACOS_VMS)) as u8)
+}
+
+/// Linux slots that may run now: the request, bounded by the runner memory left once the
+/// macOS slots that may run (`macos_available`) have theirs, so Linux never takes a macOS VM's place.
+/// Apple's cap does not apply to Linux guests.
+pub fn linux_slots_available(s: &RunnerSettings, host: &HostFacts, macos_available: u8) -> u8 {
+    let by_memory =
+        (runner_memory_mb(s, host) / u64::from(s.memory_per_vm_mb.max(1))).saturating_sub(u64::from(macos_available));
+    s.linux_slots.min(MAX_LINUX_VMS).min(by_memory.min(u64::from(MAX_LINUX_VMS)) as u8)
 }
 
 /// Which bound cut the slot count.

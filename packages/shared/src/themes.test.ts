@@ -7,6 +7,13 @@ describe('currentPresetAccent', () => {
     expect(currentPresetAccent('nebula', '#F472B6')).toBe('#d98bb6');
     expect(currentPresetAccent('terminal', '#22c55e')).toBe('#3fb96a');
   });
+  it('moves the base looks off the old violet and cyan onto plum', () => {
+    expect(currentPresetAccent('system', '#6D5EFC')).toBe('#5a2352');
+    expect(currentPresetAccent('system', '#06b6d4')).toBe('#8a4a7f');
+    expect(currentPresetAccent('light', '#6d5efc')).toBe('#5a2352');
+    expect(currentPresetAccent('dark', '#8b7dff')).toBe('#c084b5');
+    expect(currentPresetAccent('dark', '#22d3ee')).toBe('#c99bb3');
+  });
   it('keeps the user’s own colors and other presets untouched', () => {
     expect(currentPresetAccent('nebula', '#ff0000')).toBe('#ff0000');
     expect(currentPresetAccent('dark', '#a78bfa')).toBe('#a78bfa');
