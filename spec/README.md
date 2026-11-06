@@ -55,7 +55,7 @@ The chat surface: transcript, composer, replies, artifacts, approvals inside a c
 - [One copy of the reply being written](chat/one-copy-of-the-reply-being-written.md) (1 KB)
 - [Per-step plan working icons (2026-10-17)](chat/per-step-plan-working-icons.md) (2 KB)
 - [Sleeping chats and image-bearing replies](chat/sleeping-chats-and-image-bearing-replies.md) (2 KB)
-- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (8 KB)
+- [Tool calls grouped by what they are for](chat/tool-calls-grouped-by-purpose.md) (11 KB)
 - [Workspace context commands and connected composer](chat/workspace-context-commands-and-connected-composer.md) (4 KB)
 
 ### desktop
@@ -67,7 +67,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Agent board: pick up and drop windows](desktop/agent-board-pick-up-and-drop.md) (3 KB)
 - [Agent window controls refresh (2026-10-15)](desktop/agent-window-controls-refresh.md) (6 KB)
 - [Composer and desktop rail regression fixes (2026-10-07)](desktop/composer-and-desktop-rail-regression-fixes.md) (3 KB)
-- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (2 KB)
+- [Empty wall opens the new-chat screen; glass prism composer (2026-10-18)](desktop/empty-wall-opens-the-new-chat-screen-glass-prism-composer.md) (3 KB)
 - [Focused mode transitions, calmer focus ring and layout controls (2026-10-17)](desktop/focused-mode-transitions-calmer-focus-ring-and-layout-controls.md) (7 KB)
 - [Grid model selection and chat-mode menus (2026-10-07)](desktop/grid-model-selection-and-chat-mode-menus.md) (1 KB)
 - [Inline agent-window creation](desktop/inline-agent-window-creation.md) (3 KB)
@@ -75,7 +75,7 @@ The desktop shell: wall, windows, navigation rail, layouts, settings.
 - [Model picker, tool categories, Artifacts tab and wall polish (2026-10-15)](desktop/model-picker-tool-categories-artifacts-tab-and-wall-polish.md) (5 KB)
 - [Nav wings and wall action clarity](desktop/nav-wings-and-wall-action-clarity.md) (1 KB)
 - [Navigation panel, media fade and macOS app menu (2026-10-16)](desktop/navigation-panel-media-fade-and-macos-app-menu.md) (2 KB)
-- [New agent window defaults](desktop/new-agent-window-defaults.md) (2 KB)
+- [New agent window defaults](desktop/new-agent-window-defaults.md) (5 KB)
 - [Search within Settings (desktop)](desktop/search-within-settings-desktop.md) (2 KB)
 - [Settings section nav and phone pairing placement (desktop)](desktop/settings-section-nav.md) (3 KB)
 - [Slim wave rail, tighter Agents spacing, composer snap points](desktop/slim-wave-rail-tighter-agents-spacing-composer-snap-points.md) (4 KB)

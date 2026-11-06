@@ -286,6 +286,12 @@ export interface AppSettings {
   savedModes?: import('./saved-modes.js').SavedMode[];
   /** The saved mode new chats start in. Unset = new chats keep the last-used defaults. */
   defaultSavedModeId?: string;
+  /** Last changed Mode choices, merged by field by the daemon, snapshotted for new chats. Null clears a choice. */
+  defaultSessionOptions?: Partial<Pick<import('./chat.js').Session,
+    'executionMode' | 'gitIsolation' | 'mode' | 'offline' | 'cloudOnly' | 'incognito' |
+    'disabledTools' | 'workMode' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' |
+    'memory' | 'guidance' | 'toolApproach' | 'autoModel' | 'autoProviderSwitch'>>;
+
   /** Contextual UI tips are enabled by default. */
   showTips?: boolean;
   completionTipSeen?: boolean;

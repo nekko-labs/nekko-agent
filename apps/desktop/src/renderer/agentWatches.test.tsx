@@ -111,7 +111,9 @@ describe('activity summary readability', () => {
   });
 
   it('reads a guidance, explore, edit and test turn as its goals, and opens to purpose groups', () => {
-    const tool = (id: string, name: string, input: Record<string, unknown>, failed = false) => ({ kind: 'tool' as const, call: { id, name, input }, ...(failed ? { failed } : {}) });
+    // These steps already returned; missing results now correctly mean an
+    // unfinished parallel call, even when a newer call has arrived.
+    const tool = (id: string, name: string, input: Record<string, unknown>, failed = false) => ({ kind: 'tool' as const, call: { id, name, input }, result: { toolCallId: id, output: failed ? 'failed' : 'done' }, ...(failed ? { failed } : {}) });
     const items = [
       tool('1', 'read_file', { path: 'AGENTS.md' }),
       tool('2', 'read_file', { path: 'CLAUDE.md' }),
