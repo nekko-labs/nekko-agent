@@ -123,8 +123,8 @@ export function ApprovalBar({ approval, onDecide, computerName }: { approval: Pe
           {offersToolScope(approval.call.name) && (
             <button disabled={busy} className={`${buttonClass} btn-outline`} data-approval-scope="tool" onClick={() => void decide(true, 'tool')} title={`Approve, and stop asking for ${approval.call.name} in this chat. Other tools still ask.`}>Always allow this tool</button>
           )}
-          <button disabled={busy} className={`${buttonClass} btn-outline`} onClick={() => void decide(true, 'session')} title="Allow all for the rest of this chat (YOLO). Deny rules still block.">Allow all this session</button>
-          <button disabled={busy} className={`${buttonClass} btn-outline`} onClick={() => void decide(true, 'always')} title="Allow all in this chat and set Settings → Chat modes to YOLO for new chats. Deny rules still block.">Always allow all</button>
+          <button disabled={busy} className={`${buttonClass} btn-outline`} onClick={() => void decide(true, 'session')} title="Allow all for the rest of this chat (No restrictions). Deny rules still block.">Allow all this session</button>
+          <button disabled={busy} className={`${buttonClass} btn-outline`} onClick={() => void decide(true, 'always')} title="Allow all in this chat and set Settings → Chat modes to No restrictions for new chats. Deny rules still block.">Always allow all</button>
         </div>
 
       </div>

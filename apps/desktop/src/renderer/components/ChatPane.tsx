@@ -1,3 +1,4 @@
+import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
 import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
@@ -24,7 +25,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, inSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, inSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -84,7 +85,7 @@ import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
 import { UsageLimitsChip } from './UsageLimitsChip.js';
 import { PaneActions, PaneMetadata, useInPaneFrame } from './PaneFrame.js';
 import { ContextWarning } from './ContextWarning.js';
-import { ChatControls, InternetToggle, McpMenu, MODE_LABEL, ToolsMenu } from './ChatControls.js';
+import { ChatControls, InternetToggle, McpMenu, ToolsMenu } from './ChatControls.js';
 import { useElementCompact } from './agent-console/useElementWidth.js';
 import { PromptAnalyzer } from './PromptAnalyzer.js';
 import { ScheduleTaskModal } from './ScheduleTaskModal.js';
@@ -92,7 +93,6 @@ import { PrCard } from './PrCard.js';
 import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
-import { Modal } from './primitives/index.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker } from './FolderPicker.js';
 import { summarizeChanges } from '../changeSummary.js';
@@ -768,6 +768,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // The model menu's open state lives here so the nudge below the transcript can
   // open the very picker it points at.
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const contextChangeNoticeEnabled = useStore(s => showContextChangeNotice(s.settings));
   const [contextChangeNotice, setContextChangeNotice] = useState(false);
   const contextNoticeTrigger = useRef<HTMLElement | null>(null);
   const closeContextNotice = () => {
@@ -2544,19 +2545,18 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       ringOnly={!expertMode}
     />
   ) : null;
-  // The Mode button and Privacy Shield are what the strip above the box is for; without them Simple drops it.
-  const stripShown = expertMode || showMode || showPrivacy;
+  // Privacy Shield is what the strip above the box is for; without it Simple drops it. The Mode button sits under the box.
+  const stripShown = expertMode || showPrivacy;
   // On the wall there is no strip either, so Automate moves there in Simple as well.
-  const plusCarries = !expertMode && !showMode && !showPrivacy;
+  const plusCarries = !expertMode && !showPrivacy;
   const toggleIncognito = () => {
     window.nekko.setSessionOptions(sessionId, { incognito: !session?.incognito }).then(setSession).catch((e) => useStore.getState().pushToast('error', String(e)));
   };
-  // The Mode button already says this; the plain selector is for when it is out of sight.
-  const asksFirst = showAsks && !showMode && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} /> : null;
+  const asksFirst = showAsks && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} /> : null;
   const effortProps = {
     metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
-    onChanged: () => { if (session?.messages.length) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } },
+    onChanged: () => { if (session?.messages.length && contextChangeNoticeEnabled) { contextNoticeTrigger.current = document.activeElement as HTMLElement; setContextChangeNotice(true); } },
   };
   const autoQualityControl = modelId === AUTO_MODEL_ID ? (
     <AutoQualityMenu
@@ -2594,7 +2594,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       </>}
       onProvider={setProviderId}
       onModel={(pid, v) => {
-        if (session?.messages.length && (pid !== providerId || v !== modelId)) {
+        if (session?.messages.length && contextChangeNoticeEnabled && (pid !== providerId || v !== modelId)) {
           contextNoticeTrigger.current = paneRef.current?.querySelector('button[aria-haspopup="listbox"]') ?? null;
           setContextChangeNotice(true);
         }
@@ -2645,13 +2645,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     <MarkdownSandbox.Provider value={session?.executionMode === 'sandbox'}>
     <ChatImages.Provider value={chatImages}>
     <div ref={paneRef} onContextMenu={(e) => { if (surface === 'composer' || e.defaultPrevented || (e.target as HTMLElement).closest('a, img, textarea, [contenteditable], [data-agent-logs]')) return; e.preventDefault(); const picked = window.getSelection(); setChatMenu({ x: e.clientX, y: e.clientY, selection: picked && e.currentTarget.contains(picked.anchorNode) ? picked.toString() : '' }); }} data-session-id={sessionId} data-chat-surface={surface} data-clean-start={cleanStart || undefined} data-chat-expanding={expanding || undefined} onAnimationEnd={expanding ? (e) => { if (e.animationName === 'composer-expand-in') setExpanding(false); } : undefined} className="relative flex h-full min-h-0 min-w-0 overflow-hidden">
-      {contextChangeNotice && <Modal title="Context on your next reply" zIndex={100} overlayClassName="p-4" className="w-full max-w-md rounded-xl border border-line bg-surface p-5 text-ink shadow-(--shadow-float)" onClose={closeContextNotice}>
-            <h2 className="font-semibold">Context on your next reply</h2>
-            <p className="mt-3 text-sm text-ink-soft">Your selection is saved. Changing the model or effort does not send a request now or change an already-running reply. The next reply sends the assembled chat context again, as ordinary follow-up replies do.</p>
-            <p className="mt-3 text-sm text-ink-soft">{ctx ? 'Estimated input context: ~' + ctxUsed.toLocaleString() + ' tokens.' : 'Input context estimate is unavailable.'} History may be compacted or trimmed; caching and billing depend on the provider. A different model may not reuse cached context. Effort applies to all chats.</p>
-            <p className="mt-3 text-sm text-ink-soft">To reduce input tokens, you can open a new chat instead and include only the information it needs.</p>
-            <button className="btn btn-primary mt-4" onClick={closeContextNotice}>Got it</button>
-      </Modal>}
+      {contextChangeNotice && <ContextChangeNotice tokens={ctx ? ctxUsed : undefined} onClose={closeContextNotice} />}
       {chatMenu && <ContextMenu x={chatMenu.x} y={chatMenu.y} onClose={() => setChatMenu(null)}>
         {chatMenu.selection && <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMenu.selection).catch(() => useStore.getState().pushToast('error', "Couldn't copy text.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy</ContextAction>}
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
@@ -2710,7 +2704,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             >
               {compact ? <TerminalIcon className="h-4 w-4" /> : 'Logs'}
             </button>}
-
         </ChatHeader>
         )}
         {/* A sub-agent says so across the top, with a way back to the chat that spawned it. */}
@@ -2944,7 +2937,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 >
                   <span className="composer-summary-model">{imageMode ? 'Image' : modelId === AUTO_MODEL_ID ? 'Auto' : selectedModelInfo?.name ?? modelId ?? 'Pick a model'}</span>
                   <span className="composer-summary-meta">
-                    {!imageMode && ` \u00b7 ${MODE_LABEL[session?.mode ?? settings?.defaultChatMode ?? 'guardrails']}`}
+                    {!imageMode && ` \u00b7 ${CHAT_MODE_LABEL[session?.mode ?? settings?.defaultChatMode ?? 'guardrails']}`}
                     {session?.offline && ' \u00b7 Offline'}
                     {session?.incognito && ' \u00b7 Incognito'}
                   </span>
@@ -2965,7 +2958,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-line px-2 py-1">
               <div className="min-w-0 shrink">
               <ChatControls
-                hideMode={!showMode}
+                hideMode
                 hidePrivacy={!showPrivacy}
                 session={session}
                 isCloudModel={isCloudModel}
@@ -3414,12 +3407,16 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       }}
                     />
                   </div>
+                  {!expertMode && <div className="composer-folders min-w-0">
+                    <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
+                  </div>}
+                  {!expertMode && asksFirst}
                   </>)}
                   {(header || wallWindow) && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       {wallWindow && !imageMode && modelControls}
-                      {wallWindow && !imageMode && asksFirst}
-                      <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" hideMode={!showMode} />
+                      {wallWindow && !imageMode && expertMode && asksFirst}
+                      <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" hideMode={wallWindow || !showMode} />
                       {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />}
                     </div>
                   )}
@@ -3441,63 +3438,76 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 </div>
                 {cleanStart && promptSuggestions}
               </div>
+                {wallWindow && !imageMode && showMode && <div className="composer-foot-row flex min-w-0 border-t border-line px-2 py-1" data-composer-mode-row>
+                  <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
+                </div>}
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}
                 {!cleanStart && !imageMode && surface !== 'composer' && (!wallWindow || modelHint) && (
                   <div className={`composer-details ${detailsShown ? 'is-open' : ''}`} data-composer-details aria-label="Chat details">
                     {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
-                    {!wallWindow && <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                      {detailsShown && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
-                      {modelControls}
-                      {asksFirst}
-                      {detailsShown && expertMode && usageGauge}
-                      {detailsShown && showCost && (
-                        <LiveUsageChip
-                          sessionId={sessionId}
-                          marks={marks}
-                          measured={turnCostMeasured}
-                          pendingIn={pendingIn}
-                          model={modelForCostRef.current}
-                          provider={activeProvider}
-                          session={session ?? undefined}
-                          cost={cost}
-                          avoidedCosts={avoidedCosts}
-                          running={streaming}
-                          unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
-                        />
-                      )}
-                      <div className="agent-footer-reach ml-auto flex shrink-0 items-center gap-1" data-agent-footer-controls>
-                        {/* Incognito has no strip to show on in Simple, and it should not be forgotten. */}
-                        {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-neutral whitespace-nowrap" data-incognito-on title="Don't save this chat or update memory"><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
-                        {detailsShown && session && showTools && <>
-                          <ToolsMenu session={session} onChange={setSession} />
-                          {session?.executionMode === 'sandbox' ? <span className="text-2xs text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
-                        </>}
-                        {detailsShown && (showInternet || session?.offline) && <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />}
-                        {!expertMode && usageGauge}
-                        {expertMode && <button
-                          type="button"
-                          className="composer-details-toggle"
-                          onClick={toggleDetails}
-                          aria-expanded={detailsOpen}
-                          aria-label={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
-                          title={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
-                        >
-                          {detailsOpen ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronUpIcon className="h-3.5 w-3.5" />}
-                        </button>}
+                    {!wallWindow && <>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2" data-composer-primary-row>
+                        {detailsShown && expertMode && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
+                        <div className="min-w-0 max-w-full shrink-0">{modelControls}</div>
+                        {detailsShown && expertMode && asksFirst}
+                        <div className="ml-auto flex shrink-0 items-center gap-1">
+                          {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-neutral whitespace-nowrap" data-incognito-on title="Don't save this chat or update memory"><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
+                          {!expertMode && usageGauge}
+                          {expertMode && <button
+                            type="button"
+                            className="composer-details-toggle"
+                            onClick={toggleDetails}
+                            aria-expanded={detailsOpen}
+                            aria-label={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
+                            title={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
+                          >
+                            {detailsOpen ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronUpIcon className="h-3.5 w-3.5" />}
+                          </button>}
+                        </div>
                       </div>
-                    </div>}
+                      {detailsShown && (showMode || expertMode || showCost || showTools || showInternet || session?.offline) && <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2" data-composer-mode-row>
+                        {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />}
+                        {expertMode && usageGauge}
+                        {showCost && (
+                          <LiveUsageChip
+                            sessionId={sessionId}
+                            marks={marks}
+                            measured={turnCostMeasured}
+                            pendingIn={pendingIn}
+                            model={modelForCostRef.current}
+                            provider={activeProvider}
+                            session={session ?? undefined}
+                            cost={cost}
+                            avoidedCosts={avoidedCosts}
+                            running={streaming}
+                            unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
+                          />
+                        )}
+                        <div className="agent-footer-reach ml-auto flex flex-wrap items-center gap-1" data-agent-footer-controls>
+                          {session && showTools && <>
+                            <ToolsMenu session={session} onChange={setSession} />
+                            {session?.executionMode === 'sandbox' ? <span className="text-2xs text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
+                          </>}
+                          {(showInternet || session?.offline) && <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />}
+                        </div>
+                      </div>}
+                    </>}
                   </div>
                 )}
                 {/* Nothing renders under the message box: a new chat keeps only
                     the model, as the box's own bottom row, and a wall window
                     already carries it in the bar above. */}
                 {cleanStart && !wallWindow && (
-                  <div className="clean-start-model composer-foot-row flex border-t border-line px-2 py-1" data-clean-start-model>
+                  <div className="clean-start-model composer-foot-row flex flex-wrap items-center gap-2 border-t border-line px-2 py-1" data-clean-start-model>
                     {modelControls}
+                    {expertMode && asksFirst}
                   </div>
                 )}
+                {cleanStart && !wallWindow && showMode && session?.chatType !== 'image' && <div className="composer-foot-row flex px-2 pb-1" data-composer-mode-row>
+                  <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
+                </div>}
             </div>
           </div>
         </div>

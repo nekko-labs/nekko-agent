@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PrInfo } from '@nekko-agent/shared';
+import { GfIcon, type GfIconName } from '../gentleface-icons.js';
 
 /**
  * The PR a chat is about, as a chip at the bottom right of its sidebar card:
@@ -39,19 +40,17 @@ export function prTone(pr: PrInfo): string {
   return STATUS_TONE[prStatus(pr)];
 }
 
-/** GitHub's four PR glyphs, so the state reads at a glance before the colour does. */
+const PR_GLYPH: Record<PrStatus, GfIconName> = {
+  open: 'git-pull-request',
+  unknown: 'git-pull-request',
+  draft: 'git-pull-request-draft',
+  merged: 'git-merge',
+  closed: 'git-pull-request-closed',
+};
+
+/** GitHub's four PR glyphs (from Gentleface), so the state reads at a glance before the colour does. */
 export function PrStatusIcon({ status, className = 'h-3.5 w-3.5' }: { status: PrStatus; className?: string }) {
-  const common = { className: `${className} shrink-0`, viewBox: '0 0 16 16', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true, 'data-pr-glyph': status };
-  if (status === 'merged') {
-    return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="8" r="1.75" /><path d="M4.5 5.25v5.5M4.5 5.5c0 2.5 2 2.5 5.25 2.5" /></svg>;
-  }
-  if (status === 'closed') {
-    return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5M11.5 6.5v4.25M9.75 2.25l3.5 3.5M13.25 2.25l-3.5 3.5" /></svg>;
-  }
-  if (status === 'draft') {
-    return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5" /><path d="M11.5 3v.5M11.5 6.5v1M11.5 9.5v1" /></svg>;
-  }
-  return <svg {...common}><circle cx="4.5" cy="3.5" r="1.75" /><circle cx="4.5" cy="12.5" r="1.75" /><circle cx="11.5" cy="12.5" r="1.75" /><path d="M4.5 5.25v5.5M11.5 10.75V6.5a2 2 0 0 0-2-2H7.5" /><path d="m9 3-1.5 1.5L9 6" /></svg>;
+  return <span className="inline-flex shrink-0" data-pr-glyph={status}><GfIcon name={PR_GLYPH[status]} className={className} /></span>;
 }
 
 /** Still in flight beats finished: open, then draft, then merged, then closed. */

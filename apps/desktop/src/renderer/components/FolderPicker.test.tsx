@@ -27,6 +27,18 @@ describe('composer folder picker', () => {
     } finally { useStore.setState({ settings: prev.settings, sessions: prev.sessions }); }
   });
 
+  it('summarizes primary and supporting folders without duplicating the primary', () => {
+    const prev = useStore.getState();
+    useStore.setState({ settings: { ...prev.settings, workspaces: folders } as any, sessions: [{ id: 's', workspaceId: 'a', supportingWorkspaceIds: ['a', 'b', 'gone'] } as any] });
+    try {
+      const html = renderToStaticMarkup(<FolderPicker sessionId="s" session={null} selectedSummary onChange={() => {}} />);
+      expect(html).toContain('Selected folders: nekko-agent, hypergate');
+      expect(html).toContain('>nekko-agent, hypergate<');
+      expect(html).toContain('/code/hypergate');
+      expect(html).not.toContain('gone');
+    } finally { useStore.setState({ settings: prev.settings, sessions: prev.sessions }); }
+  });
+
   it('lists a folder saved twice (any case or trailing slash) once', () => {
     const prev = useStore.getState();
     const dupes = [...folders, { id: 'c', name: 'code', path: 'C:\\Users\\p\\code', addedAt: 0 }, { id: 'd', name: 'code', path: 'c:\\users\\p\\code\\', addedAt: 0 }];

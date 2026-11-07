@@ -64,8 +64,27 @@ and `NEKKO_LAYOUT_SANDBOX=<name>-sandbox.cjs` picks the capture script (default
 - For a GIF without ffmpeg, encode the PNG frames with `pngjs` and `omggif`
   (both in `node_modules`). Build the palette from the frames' own most common
   colors; a fixed color cube washes pale tints out to white.
-- The stub bridge logs a few console errors of its own. Compare the report's
-  `errors` against a run on `main` before blaming your change.
+- The synthetic bridge supplies an empty `RunnerView[]` for `listRunners`,
+  because the real App mounts the CI-runner panel even in unrelated journeys.
+  `layout-evidence-fixture.node-test.cjs` exercises that bridge without launching
+  Electron. Do not silence renderer errors or make unknown responses all return
+  arrays: compare the report's `errors` against a run on `main`, then repair a
+  broken fixture contract separately from the feature under test (#2012).
+
+### Wall-composer journey
+
+Run the shared layout launcher with `NEKKO_LAYOUT_SANDBOX=wall-composers-sandbox.cjs`.
+The current plan starts expanded: the journey explicitly folds it, checks the
+working step/pass/position and the individual sub-agent cards, reopens it, then
+opens a completed step before checking its task and sub-agent links. It retains
+the per-window composer, voice-island and selection-height checks (#2072).
+A failed journey returns a nonzero Electron status (covered by a registered
+Node regression); `app.quit()` alone does not preserve `process.exitCode`.
+Console diagnostics are still collected in `report.errors` and must be inspected
+alongside assertions. Existing ResizeObserver scheduling warnings are tracked in
+#360, not filtered out or claimed fixed by this harness repair. Baseline capture
+mode (`NEKKO_TEST_SOURCE`) intentionally records assertions without enforcing them;
+use the normal mode to validate a change.
 
 ## Running the Local Web UI for verification
 

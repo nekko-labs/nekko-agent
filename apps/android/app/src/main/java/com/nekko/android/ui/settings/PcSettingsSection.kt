@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.ui.components.PermissionIcon
 import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.SectionHeader
@@ -137,6 +138,7 @@ fun PcSettingsSection(deps: SettingsDeps) {
                         selected = pc.effectiveMode == m,
                         enabled = enabled,
                         danger = m == ChatMode.YOLO,
+                        mode = m,
                     ) {
                         // YOLO runs everything without asking: the YOLO warning first.
                         if (YoloWarning.needed(pc.effectiveMode, m, skipWarning)) askYolo = true
@@ -204,9 +206,9 @@ internal fun stepUpAction(patch: JsonObject, computer: String): String {
 
 @StringRes
 internal fun modeTitleRes(m: ChatMode) = when (m) {
-    ChatMode.ASK -> R.string.settings_mode_ask
-    ChatMode.GUARDRAILS -> R.string.settings_mode_guardrails
-    ChatMode.YOLO -> R.string.settings_mode_yolo
+    ChatMode.ASK -> R.string.permission_always_ask
+    ChatMode.GUARDRAILS -> R.string.permission_ask_when_matters
+    ChatMode.YOLO -> R.string.permission_no_restrictions
 }
 
 /** [modeDetail] as a string resource. */
@@ -219,9 +221,9 @@ internal fun modeDetailRes(m: ChatMode) = when (m) {
 
 /** English; on screen use [modeTitleRes]. */
 internal fun modeTitle(m: ChatMode) = when (m) {
-    ChatMode.ASK -> "Ask"
-    ChatMode.GUARDRAILS -> "Guardrails"
-    ChatMode.YOLO -> "YOLO"
+    ChatMode.ASK -> "Always ask"
+    ChatMode.GUARDRAILS -> "Ask when it matters"
+    ChatMode.YOLO -> "No restrictions"
 }
 
 /** The desktop's own descriptions (SettingsView CHAT_MODES). */
@@ -232,7 +234,7 @@ internal fun modeDetail(m: ChatMode) = when (m) {
 }
 
 @Composable
-private fun Choice(title: String, detail: String, selected: Boolean, enabled: Boolean, danger: Boolean = false, onClick: () -> Unit) {
+private fun Choice(title: String, detail: String, selected: Boolean, enabled: Boolean, danger: Boolean = false, mode: ChatMode? = null, onClick: () -> Unit) {
     val p = Nekko.palette
     Row(
         Modifier
@@ -245,6 +247,7 @@ private fun Choice(title: String, detail: String, selected: Boolean, enabled: Bo
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        mode?.let { PermissionIcon(it) }
         Column(Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = if (danger) p.danger else p.ink)
             Text(detail, style = MaterialTheme.typography.bodySmall, color = p.inkFaint)

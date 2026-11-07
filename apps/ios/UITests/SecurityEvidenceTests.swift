@@ -2,7 +2,7 @@ import XCTest
 
 /// Decision 0054 on the iPhone, over the real ChatView and an in-memory computer
 /// (`-uiTestSecurityEvidence`): an MCP approval offers "Always allow this tool",
-/// and choosing YOLO in Simple's tool picker shows the warning first.
+/// and choosing No restrictions in Simple's tool picker shows the warning first.
 @MainActor
 final class SecurityEvidenceTests: XCTestCase {
     func testAlwaysAllowAndYoloWarningEvidence() {
@@ -21,7 +21,7 @@ final class SecurityEvidenceTests: XCTestCase {
         XCTAssertTrue(app.buttons["Allow"].exists)
         attach(app, "always-allow-tool")
 
-        // (b) Simple's "when the agent asks you" picker: YOLO warns before anything changes.
+        // (b) Simple's "when the agent asks you" picker: No restrictions warns before anything changes.
         let picker = app.buttons["chat.asksFirst"]
         XCTAssertTrue(picker.waitForExistence(timeout: 5))
         picker.tap()
@@ -29,11 +29,11 @@ final class SecurityEvidenceTests: XCTestCase {
         XCTAssertTrue(yolo.waitForExistence(timeout: 5))
         yolo.tap()
         let title = app.staticTexts["yoloWarning.title"]
-        XCTAssertTrue(title.waitForExistence(timeout: 5), "choosing YOLO shows the warning first")
-        XCTAssertEqual(title.label, "Turn on YOLO?")
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "choosing No restrictions shows the warning first")
+        XCTAssertEqual(title.label, "Turn on No restrictions?")
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "The agent will run commands")).firstMatch.exists)
         XCTAssertTrue(app.buttons["yoloWarning.cancel"].exists)
-        XCTAssertTrue(app.buttons["yoloWarning.confirm"].exists)
+        XCTAssertEqual(app.buttons["yoloWarning.confirm"].label, "Turn on No restrictions")
         XCTAssertTrue(app.switches["yoloWarning.dontWarn"].exists)
         attach(app, "yolo-warning")
 
@@ -41,7 +41,7 @@ final class SecurityEvidenceTests: XCTestCase {
         app.buttons["yoloWarning.cancel"].tap()
         expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: title)
         waitForExpectations(timeout: 5)
-        XCTAssertEqual(picker.value as? String, "Asks when it matters")
+        XCTAssertEqual(picker.value as? String, "Ask when it matters")
     }
 
     /// "Always allow this tool" from outside the chat: the Lock Screen card offers it

@@ -20,6 +20,9 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.data.PrefStore
 import com.nekko.android.ui.chat.ApprovalCard
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.rememberSimpleView
+import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.chat.ChatModeDialog
 import com.nekko.android.ui.security.LocalPhonePrefs
 import com.nekko.android.ui.security.YoloWarning
@@ -95,6 +98,26 @@ class SecurityEvidenceTest {
         compose.onNodeWithTag("chat.approval.alwaysAllow").assertDoesNotExist()
     }
 
+    // The same harness runs on base/head. Stable wire tags, no references to renamed resources.
+    @Test fun permissionChoicesSimple() = permissionChoices(expert = false)
+    @Test fun permissionChoicesDetailed() = permissionChoices(expert = true)
+
+    private fun permissionChoices(expert: Boolean) {
+        prefs.set(EXPERT_MODE, expert)
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                CompositionLocalProvider(LocalPhonePrefs provides prefs, LocalSimple provides rememberSimpleView(prefs)) {
+                    Surface(color = Nekko.palette.paper, modifier = Modifier.fillMaxSize()) {
+                        ChatModeDialog(ChatMode.GUARDRAILS, ChatMode.GUARDRAILS, "Studio", onDismiss = {}, onPick = {})
+                    }
+                }
+            }
+        }
+        ChatMode.entries.forEach { compose.onNodeWithTag("chat.toolMode.${it.wire}").assertIsDisplayed() }
+        settle()
+        shot("permission-choices-${if (expert) "detailed" else "simple"}")
+    }
+
     @Test fun yoloWarning() {
         val picked = CopyOnWriteArrayList<ChatMode>()
         compose.setContent {
@@ -109,7 +132,7 @@ class SecurityEvidenceTest {
         // Keep asking changes nothing.
         compose.onNodeWithTag("chat.toolMode.yolo").performClick()
         compose.onNodeWithTag(YoloWarning.Tags.DIALOG).assertIsDisplayed()
-        assertTrue(compose.onAllNodes(hasText("Turn on YOLO?")).fetchSemanticsNodes().isNotEmpty())
+        if (!evidence) assertTrue(compose.onAllNodes(hasText("Turn on No restrictions?")).fetchSemanticsNodes().isNotEmpty())
         settle()
         shot("yolo-warning")
         compose.onNodeWithTag(YoloWarning.Tags.KEEP_ASKING).performClick()

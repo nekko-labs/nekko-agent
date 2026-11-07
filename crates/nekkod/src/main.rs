@@ -17,6 +17,7 @@ mod artifacts;
 mod audit;
 mod auto_continue;
 mod automation;
+mod awake;
 mod background;
 
 mod boot;
