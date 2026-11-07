@@ -860,7 +860,7 @@ public final class CloudSync {
             loadLinks()
             fleetSession = (accountId, t)
         } catch {
-            if generation == fleetGeneration { resetFleet() }
+            if generation == fleetGeneration, account?.id == accountId, secrets.get("cloud.token") == t { resetFleet() }
             throw error
         }
     }
@@ -938,13 +938,21 @@ public final class CloudSync {
         var h = headers
         if let token { h["Authorization"] = "Bearer \(token)" }
         if json != nil { h["Content-Type"] = "application/json" }
+        let generation = fleetGeneration
+        let accountId = account?.id
+        // An obsolete request must not disconnect a newer fleet session.
+        func invalidateFleet() {
+            guard let token, let accountId, generation == fleetGeneration,
+                  account?.id == accountId, secrets.get("cloud.token") == token else { return }
+            resetFleet()
+        }
         let status: Int
         let data: Data
         do { (status, data) = try await http.send(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
-        catch { resetFleet(); throw error }
+        catch { invalidateFleet(); throw error }
         let v = (try? JSONValue.parse(data)) ?? .null
         guard (200..<300).contains(status) else {
-            resetFleet()
+            invalidateFleet()
             let code = v.str("error") ?? v.str("error_code") ?? ""
             let message = v.str("message") ?? v.str("msg") ?? (status == 402 ? "Sync needs a Pro or Team plan." : status == 401 ? "You're signed out of Nekko Cloud." : "Nekko Cloud answered \(status).")
             throw CloudError(status: status, code: code, message: message)

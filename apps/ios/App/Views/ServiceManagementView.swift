@@ -37,10 +37,9 @@ struct ComputerServiceSection: View {
                 if model.shouldPoll { await model.pollUpdate() }
             }
         }
-        .confirmationDialog(model?.pendingConfirmation?.title ?? "Confirm service action",
+        .alert(model?.pendingConfirmation?.title ?? "Confirm service action",
                             isPresented: Binding(get: { model?.pendingConfirmation != nil },
-                                                 set: { if !$0 { model?.cancelConfirmation() } }),
-                            titleVisibility: .visible) {
+                                                 set: { if !$0 { model?.cancelConfirmation() } })) {
             if let action = model?.pendingConfirmation {
                 Button(action.title, role: .destructive) { model?.confirm() }
                     .accessibilityIdentifier("service.confirm")

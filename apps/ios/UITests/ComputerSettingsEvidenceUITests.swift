@@ -43,7 +43,8 @@ final class ComputerSettingsEvidenceUITests: XCTestCase {
         let toggle = app.switches.matching(NSPredicate(format: "identifier BEGINSWITH %@", "computer.connection.")).firstMatch
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))
         XCTAssertEqual(toggle.value as? String, "1")
-        toggle.tap()
+        // SwiftUI exposes the labelled row as a switch; tap the trailing switch itself.
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         XCTAssertEqual(toggle.value as? String, "0")
         openComputer(app)
         let detailToggle = app.switches.matching(NSPredicate(format: "identifier BEGINSWITH %@", "computer.connection.")).firstMatch

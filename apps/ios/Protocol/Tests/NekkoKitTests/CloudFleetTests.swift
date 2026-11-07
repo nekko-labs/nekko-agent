@@ -171,6 +171,148 @@ final class CloudFleetTests: XCTestCase {
         XCTAssertFalse(cloud.fleet(pairedComputerIds: []).visible)
     }
 
+    enum FleetFailure: Sendable {
+        case transport
+        case unavailable
+    }
+
+    actor DelayedFailureHTTP: CloudHTTP {
+        let failure: FleetFailure
+        private var delayedPath: String?
+        private var continuation: CheckedContinuation<Void, Never>?
+        private(set) var waiting = false
+
+        init(_ failure: FleetFailure) { self.failure = failure }
+
+        func delayNextRequest(_ path: String) {
+            delayedPath = path
+            waiting = false
+        }
+
+        func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
+            if url.path == delayedPath {
+                delayedPath = nil
+                waiting = true
+                await withCheckedContinuation { continuation = $0 }
+                switch failure {
+                case .transport: throw URLError(.notConnectedToInternet)
+                case .unavailable: return (503, Data("{\"error\":\"unavailable\"}".utf8))
+                }
+            }
+            if url.path == "/v1/auth/me" {
+                return (200, Data("{\"account\":{\"id\":\"account-1\"}}".utf8))
+            }
+            return (200, Data("{\"machines\":[{\"id\":\"current\",\"state\":\"running\"}],\"relayUrl\":\"wss://current.test\"}".utf8))
+        }
+
+        func resume() { continuation?.resume(); continuation = nil }
+    }
+
+    private func assertFailure(_ fetch: Task<Void, Error>, _ failure: FleetFailure) async {
+        do {
+            try await fetch.value
+            XCTFail("request should fail")
+        } catch {
+            switch failure {
+            case .transport: XCTAssertEqual((error as? URLError)?.code, .notConnectedToInternet)
+            case .unavailable: XCTAssertEqual((error as? CloudError)?.status, 503)
+            }
+        }
+    }
+
+    private func assertObsoleteFailureRetainsNewFleet(_ failure: FleetFailure) async throws {
+        // Exercise suspension in either request of F1, before or after its account check.
+        for path in ["/v1/auth/me", "/v1/machines"] {
+            let http = DelayedFailureHTTP(failure)
+            let cloud = client(http, Secrets())
+            cloud.fleetEnabled = true
+            await http.delayNextRequest(path)
+            let first = Task { try await cloud.loadMachines() }
+            while !(await http.waiting) { await Task.yield() }
+            cloud.fleetEnabled = false
+            cloud.fleetEnabled = true
+            try await cloud.loadMachines() // F2 succeeds while F1 is still suspended.
+            cloud.link(cloud.machines[0], computer: "paired")
+            let machines = cloud.machines
+            let links = cloud.machineLinks
+            XCTAssertTrue(cloud.fleetConnected)
+            await http.resume()
+            await assertFailure(first, failure)
+            XCTAssertTrue(cloud.fleetConnected, path)
+            XCTAssertEqual(cloud.machines, machines, path)
+            XCTAssertEqual(cloud.machinesRelay, "wss://current.test", path)
+            XCTAssertEqual(cloud.machineLinks, links, path)
+            XCTAssertEqual(cloud.fleetExcludedComputerIds(pairedComputerIds: ["paired"]), ["paired"], path)
+        }
+    }
+
+    func testObsoleteTransportFailureRetainsNewFleet() async throws {
+        try await assertObsoleteFailureRetainsNewFleet(.transport)
+    }
+
+    func testObsolete503RetainsNewFleet() async throws {
+        try await assertObsoleteFailureRetainsNewFleet(.unavailable)
+    }
+
+    func testOldTokenFailuresCannotClearReconnectedFleet() async throws {
+        for failure in [FleetFailure.transport, .unavailable] {
+            let http = DelayedFailureHTTP(failure)
+            let secrets = Secrets()
+            let cloud = client(http, secrets)
+            cloud.fleetEnabled = true
+            try await cloud.loadMachines()
+            let machine = cloud.machines[0]
+            await http.delayNextRequest("/v1/machines/current/stop")
+            let oldSession = Task { try await cloud.stopMachine(machine) }
+            while !(await http.waiting) { await Task.yield() }
+            // No feature toggle: the generation alone cannot detect a token change.
+            secrets.set("cloud.token", "new-token")
+            XCTAssertFalse(cloud.fleetConnected)
+            try await cloud.loadMachines()
+            cloud.link(cloud.machines[0], computer: "paired")
+            XCTAssertTrue(cloud.fleetConnected)
+            await http.resume()
+            await assertFailure(oldSession, failure)
+            XCTAssertTrue(cloud.fleetConnected)
+            XCTAssertEqual(cloud.machines.map(\.id), ["current"])
+            XCTAssertEqual(cloud.machinesRelay, "wss://current.test")
+            XCTAssertEqual(cloud.machineLinks, ["current": "paired"])
+            XCTAssertEqual(cloud.fleetExcludedComputerIds(pairedComputerIds: ["paired"]), ["paired"])
+        }
+    }
+
+    private func assertCurrentFailureClearsFleet(_ failure: FleetFailure) async throws {
+        let http = DelayedFailureHTTP(failure)
+        let cloud = client(http, Secrets())
+        cloud.fleetEnabled = true
+        try await cloud.loadMachines()
+        cloud.link(cloud.machines[0], computer: "paired")
+        let machine = cloud.machines[0]
+        // A mutation has no loadMachines catch, so this proves request-level invalidation.
+        await http.delayNextRequest("/v1/machines/current/stop")
+        let stop = Task { try await cloud.stopMachine(machine) }
+        while !(await http.waiting) { await Task.yield() }
+        XCTAssertTrue(cloud.fleetConnected)
+        await http.resume()
+        await assertFailure(stop, failure)
+        XCTAssertTrue(cloud.signedIn)
+        XCTAssertTrue(cloud.fleetEnabled)
+        XCTAssertFalse(cloud.fleetConnected)
+        XCTAssertTrue(cloud.machines.isEmpty)
+        XCTAssertNil(cloud.machinesRelay)
+        XCTAssertTrue(cloud.machineLinks.isEmpty)
+        XCTAssertFalse(cloud.fleet(pairedComputerIds: ["paired"]).visible)
+        XCTAssertTrue(cloud.fleetExcludedComputerIds(pairedComputerIds: ["paired"]).isEmpty)
+    }
+
+    func testCurrentTransportFailureClearsFleet() async throws {
+        try await assertCurrentFailureClearsFleet(.transport)
+    }
+
+    func testCurrent503ClearsFleet() async throws {
+        try await assertCurrentFailureClearsFleet(.unavailable)
+    }
+
     actor DelayedHTTP: CloudHTTP {
         private var continuation: CheckedContinuation<Void, Never>?
         private(set) var waiting = false

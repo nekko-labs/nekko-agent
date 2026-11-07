@@ -731,12 +731,15 @@ public final class ComputersStore {
         }
     }
 
-    /// Make `id` the active computer and (re)connect to it. With `stayConnected`
-    /// the computer left behind keeps its link in the fleet, and a computer the
-    /// fleet already reaches is taken over as it is, with no new connection.
+    /// Make `id` active, restoring its local content even when explicitly disconnected.
+    /// Only enabled computers dial. With `stayConnected` the computer left behind
+    /// keeps its link in the fleet, and an existing fleet link is taken over as it is.
     public func connect(_ id: String) {
+        guard let computer = computers.first(where: { $0.id == id }) else { return }
         defer { syncFleet(); registerPushNow() }
-        guard connectionEnabled(id) else { return }
+        let enabled = connectionEnabled(id)
+        // Reopening disabled details must not reload drafts or discard the list still on screen.
+        if !enabled, activeId == id, offlineComputer == id { return }
         let leaving = id != activeId ? active : nil
         if id == activeId { invalidateAttention(id) }
         // The computer left behind must not push (or start) a card on this phone any more:
@@ -755,10 +758,8 @@ public final class ComputersStore {
             if keep { adopt(computer.id, old, as: leftBehind(), suspended: suspended) }
         }
         disconnect()
-        guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
-              let keyBytes = E2E.fromHex(secret.keyHex) else { return }
         // Already reached by the fleet: carry on with its link and what it knows.
-        let taken = stayConnected ? takeLink(id) : nil
+        let taken = enabled && stayConnected ? takeLink(id) : nil
         store.set(Self.activeKey, id)
         if offlineComputer != id {
             drafts.load(id)
@@ -767,7 +768,6 @@ public final class ComputersStore {
             offlineComputer = id
         }
         activeId = id
-        conn = .connecting
         denied = nil
         connDetail = nil
         if loggedComputer != id {
@@ -776,18 +776,7 @@ public final class ComputersStore {
             loggedComputer = id
         }
         route = nil
-        connectionLog.record(.connecting)
         clearComputerState()
-        guard let hostKey = secret.pinned else {
-            // Paired before the computer replaced its pairing secret (decision 0036) or could prove
-            // itself (decision 0041): it no longer answers on this pairing, so ask for a fresh QR
-            // instead of dialing.
-            conn = .denied
-            denied = .badKey
-            connectionLog.record(.denied, denied: .badKey)
-            taken?.client.close()
-            return
-        }
         if let peer = taken?.peer {
             // The fleet's list and who is running stay on screen while the computer is read again.
             activity = peer.activity
@@ -802,6 +791,23 @@ public final class ComputersStore {
             summaries = saved.summaries
             workspaces = saved.folders
             savedListAt = saved.savedAt
+        }
+        // Selection and local persistence do not require a socket (or valid dialing credentials).
+        guard enabled, let secret = secret(id), let keyBytes = E2E.fromHex(secret.keyHex) else {
+            taken?.client.close()
+            return
+        }
+        conn = .connecting
+        connectionLog.record(.connecting)
+        guard let hostKey = secret.pinned else {
+            // Paired before the computer replaced its pairing secret (decision 0036) or could prove
+            // itself (decision 0041): it no longer answers on this pairing, so ask for a fresh QR
+            // instead of dialing.
+            conn = .denied
+            denied = .badKey
+            connectionLog.record(.denied, denied: .badKey)
+            taken?.client.close()
+            return
         }
         let c: RemoteConnection
         if let taken {
