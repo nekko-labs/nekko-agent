@@ -106,7 +106,7 @@ final class NotifierTests: XCTestCase {
         let delivery = Delivery()
         let notifier = Notifier(delivery: delivery)
         func approval(_ id: String, _ name: String) throws -> AgentEvent {
-            try XCTUnwrap(AgentEvent.from(["type": "tool_approval_required", "sessionId": "s_\(id)",
+            try XCTUnwrap(AgentEvent.from(["type": "tool_approval_required", "sessionId": .string("s_\(id)"),
                                            "call": ["id": .string(id), "name": .string(name), "input": [:]], "reason": "r", "severity": "high"]))
         }
         notifier.post(try approval("c1", "mcp__slack__post_message"), chatTitle: "Chat", computer: "Mac", hideContent: false)
