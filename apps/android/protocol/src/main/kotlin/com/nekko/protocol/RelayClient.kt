@@ -68,6 +68,12 @@ data class RelayStatus(val state: RelayState, val detail: String? = null, val de
          * so this is a hint and never a denial: the phone keeps polling, and says to pair again.
          */
         const val BAD_KEY = "bad pairing key"
+
+        /**
+         * [detail] when the relay's name doesn't resolve: the paired address is gone.
+         * The same text whatever the phone's language, like the iPhone's `RelayStatus.hostNotFound`.
+         */
+        const val HOST_NOT_FOUND = "host not found"
     }
 }
 
@@ -774,8 +780,9 @@ class RelayClient(
             retryJob = scope.launch {
                 delay(delayMs)
                 synchronized(lock) { retryJob = null }
-                // What an offline poll is about stays said while it dials again.
-                dial(detail.takeIf { offline })
+                // The redial keeps saying why the last one failed (an offline poll's
+                // reason too), or the banner drops to a bare "Connecting…" between attempts.
+                dial(detail)
             }
         }
         if (!offline) setStatus(RelayStatus(RelayState.CONNECTING, detail))

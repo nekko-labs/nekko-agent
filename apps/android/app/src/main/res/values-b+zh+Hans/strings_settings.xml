@@ -76,6 +76,8 @@
     <string name="settings_connected">已连接</string>
     <string name="settings_what_to_try">可以尝试</string>
     <string name="settings_try_again_now">立即重试</string>
+    <string name="settings_advice_host_gone">%1$s 已不存在，因此此手机无法通过它连接到 %2$s。</string>
+    <string name="settings_advice_host_gone_fix">在 %1$s 上打开 设置 → 远程访问，更改手机的连接方式（Tailscale 无需任何托管服务），然后重新配对此手机。</string>
     <string name="settings_routes">线路</string>
     <string name="settings_checking">正在检查…</string>
     <string name="settings_check_routes">检查线路</string>

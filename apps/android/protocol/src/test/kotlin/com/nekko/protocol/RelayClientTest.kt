@@ -770,6 +770,28 @@ class RelayClientTest {
         c.close()
     }
 
+    @Test fun `a relay name that doesn't resolve stays said across retries`() = runBlocking {
+        // Every dial fails the way a gone name does; what each redial says while it dials is recorded.
+        lateinit var c: RelayClient
+        val whileDialing = CopyOnWriteArrayList<String?>()
+        val gone = object : WsTransport {
+            override fun open(url: String, listener: WsListener): WsConnection {
+                whileDialing += c.status.value.detail
+                scope.launchSoon { listener.onClosed(1006, RelayStatus.HOST_NOT_FOUND) }
+                return object : WsConnection {
+                    override fun send(text: String) = false
+                    override fun close(code: Int, reason: String) {}
+                }
+            }
+        }
+        c = client(FakeRelay(), transport = gone)
+        c.connect()
+        until("three redials") { whileDialing.size >= 4 }
+        c.close()
+        assertNull("the first dial has no reason yet", whileDialing.first())
+        assertEquals("every redial keeps the last reason", listOf(RelayStatus.HOST_NOT_FOUND), whileDialing.drop(1).distinct())
+    }
+
     @Test fun `a close on a LAN address before the computer answered only fails the route`() = runBlocking {
         for (close in listOf(4001 to "kicked by agent", 1008 to "bad pairing key", 1008 to "room not paired (agent offline)")) {
             val relay = FakeRelay(known = mutableSetOf("dev-1"))

@@ -66,7 +66,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
 | Simple/Detailed in the menus, chat-title mascot, pull-up refresh | Mode still in the pill | [#2117](https://github.com/nekko-labs/nekko-agent/issues/2117) |
 | Dark launcher icon and Spooky seasonal icon | Neither; Android can swap launcher icons with an activity alias | [#2118](https://github.com/nekko-labs/nekko-agent/issues/2118) |
-| Say when Nekko Cloud is unreachable while pairing | Can sit on Connecting | [#2119](https://github.com/nekko-labs/nekko-agent/issues/2119) |
 | Pixel build-up before unlocking | Biometric lock without the opening | [#2120](https://github.com/nekko-labs/nekko-agent/issues/2120) |
 | Always allow an MCP tool from the notification and live card (iPhone since 2026-11-08) | Allow and Deny only there; the chat's own card has it | [#2065](https://github.com/nekko-labs/nekko-agent/issues/2065) |
 | Push notifications | No push; the keep-alive service covers an open connection | [#2121](https://github.com/nekko-labs/nekko-agent/issues/2121) |
