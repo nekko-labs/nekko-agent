@@ -329,8 +329,28 @@ impl Table {
             &["tool:approve"],
             handler!(|ctx, channel, args| {
                 let (sid, cid) = (str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
-                ctx.turns.pending.approve(sid, cid, arg(&args, 2) == &json!(true));
+                // Who answered, for the chat's audit trail: the phone gate and
+                // the messaging bridges say so in a fourth argument; the UI on
+                // this computer sends none.
+                let by = match arg(&args, 3) {
+                    Value::Object(o) if o.get("via").is_some_and(Value::is_string) => Value::Object(o.clone()),
+                    _ => json!({ "via": "this computer" }),
+                };
+                ctx.turns.pending.approve_by(sid, cid, arg(&args, 2) == &json!(true), by);
                 Ok(Value::Null)
+            }),
+        );
+        // The chat's audit trail (crate::audit): what the agent did and who allowed it.
+        t.add(
+            &["audit:read"],
+            handler!(|ctx, channel, args| {
+                let (store, id) = (ctx.sessions.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
+                let trail = tokio::task::spawn_blocking(move || {
+                    store.dir().parent().map(|data| crate::audit::read(data, &id)).unwrap_or_default()
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                Ok(Value::Array(trail))
             }),
         );
         t.add(
@@ -1159,7 +1179,13 @@ async fn session_op(
     let channel = channel.to_string();
     tokio::task::spawn_blocking(move || {
         let id = str_arg(&args, 0).unwrap_or_default();
-        let delete_log = |id: &str| delete_agent_log(logs.as_deref(), id);
+        // A chat's agent log and audit trail go with it.
+        // The store keeps `<data>/sessions`; the trail is `<data>/audit`.
+        let data = store.dir().parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let delete_log = |id: &str| {
+            crate::audit::delete(&data, id);
+            delete_agent_log(logs.as_deref(), id)
+        };
         let or_null = |r: Result<Option<Value>, String>| r.map(|v| v.unwrap_or(Value::Null));
         match channel.as_str() {
             "sessions:summaries" | "sessions:list" => {

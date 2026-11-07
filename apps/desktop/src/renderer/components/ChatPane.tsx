@@ -97,6 +97,8 @@ import { FolderPicker } from './FolderPicker.js';
 import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
+import { AuditTrail } from './AuditTrail.js';
+import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
 
@@ -725,6 +727,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Right-click menu for a chat image (copy / save / link), placed at the pointer.
   const [imageMenu, setImageMenu] = useState<{ x: number; y: number; item: ChatImageItem } | null>(null);
   const [changeSummary, setChangeSummary] = useState({ files: 0, added: 0, removed: 0 });
+  const [auditOpen, setAuditOpen] = useState(false);
   const [chatMenu, setChatMenu] = useState<{ x: number; y: number; selection: string } | null>(null);
   const [doneSummary, setDoneSummary] = useState<string | null>(null);
   // What the model thinks the user will say next: the composer's ghost text.
@@ -2616,7 +2619,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {chatMenu.selection && <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMenu.selection).catch(() => useStore.getState().pushToast('error', "Couldn't copy text.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy</ContextAction>}
         <ContextAction onClick={() => { void navigator.clipboard.writeText(chatMarkdown()).catch(() => useStore.getState().pushToast('error', "Couldn't copy chat.")); setChatMenu(null); }}><CopyIcon className="mr-2 inline h-3.5 w-3.5" />Copy chat</ContextAction>
         <ContextAction onClick={() => { exportChat(); setChatMenu(null); }}><DownloadIcon className="mr-2 inline h-3.5 w-3.5" />Export as Markdown</ContextAction>
+        <ContextAction onClick={() => { setAuditOpen(true); setChatMenu(null); }}><ShieldCheckIcon className="mr-2 inline h-3.5 w-3.5" />Audit trail</ContextAction>
       </ContextMenu>}
+      {auditOpen && <AuditTrail sessionId={sessionId} incognito={Boolean(session?.incognito)} onClose={() => setAuditOpen(false)} />}
       <section className={`relative isolate flex min-w-0 w-full flex-1 flex-col overflow-x-hidden ${cleanStart ? 'clean-start justify-center' : ''}`}>
         {emptyWave && <PixelWaveBackground wave={emptyWave} visible={paneShown} />}
         {/* The new-chat colour drift: three static palettes crossfaded by

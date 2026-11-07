@@ -284,6 +284,7 @@ const api: NekkoApi = {
   readLog: (id, opts) => inv(IpcChannels.logsRead, id, opts ?? {}),
   fetchRemoteImage: (url) => inv(IpcChannels.imageFetch, url),
 
+  readAudit: (sessionId) => inv(IpcChannels.auditRead, sessionId),
   listChanges: (sessionId) => inv(IpcChannels.changesList, sessionId),
   acceptChange: (sessionId, path) => inv(IpcChannels.changeAccept, sessionId, path),
   acceptAllChanges: (sessionId) => inv(IpcChannels.changeAcceptAll, sessionId),
