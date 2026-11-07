@@ -330,6 +330,8 @@ export interface AppSettings {
    * Settings → Remote access; never settable from a phone.
    */
   quitFromPhone?: boolean;
+  /** Explicit desktop opt-in for signed phone service actions. Absent means false. */
+  manageServiceFromPhone?: boolean;
   /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
   machineIcon?: string;
   /** Display name shared with paired devices; blank uses the system hostname. */

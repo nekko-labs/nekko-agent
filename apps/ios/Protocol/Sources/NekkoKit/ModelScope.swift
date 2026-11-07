@@ -26,6 +26,13 @@ public enum ModelScope: String, CaseIterable, Sendable, Identifiable {
     /// The computer's provider groups this tab lists, in their order.
     public func groups(_ groups: [ModelGroup]) -> [ModelGroup] { groups.filter { includes($0.provider) } }
 
+    /// Computer settings use the same provider-locality filter as the model picker.
+    public func models(_ models: [ModelInfo], providers: [PublicProvider]) -> [ModelInfo] {
+        models.filter { model in
+            self == .all || providers.contains { $0.id == model.providerId && includes($0) }
+        }
+    }
+
     /// The starred `provider::model` keys whose provider is on, and in this tab.
     public func favorites(_ keys: [String], providers: [PublicProvider]) -> [String] {
         keys.filter { key in providers.contains { $0.enabled && includes($0) && key.hasPrefix($0.id + "::") } }

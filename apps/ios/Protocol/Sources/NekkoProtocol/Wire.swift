@@ -42,6 +42,14 @@ public enum Channels {
     public static let workspaceAddByPath = "workspace:addByPath"
     public static let workspaceRemove = "workspace:remove"
     public static let appInfo = "app:info"
+    /// Service discovery is Read; updater reads additionally require the owner's opt-in.
+    public static let serviceStatus = "service:status"
+    public static let serviceUpdateState = "service:updateState"
+    public static let serviceRestart = "service:restart"
+    public static let serviceUpdateCheck = "service:updateCheck"
+    public static let serviceUpdateDownload = "service:updateDownload"
+    public static let serviceUpdateInstall = "service:updateInstall"
+    public static let serviceChange: Set<String> = [serviceRestart, serviceUpdateCheck, serviceUpdateDownload, serviceUpdateInstall]
     /// Whether someone is using the computer (`PHONE_ACTIVITY_VIEW`), for New chat's Auto (2026-11-05).
     public static let activityState = "activity:state"
     /// SK-2: a single-use step-up challenge (read class).
@@ -122,7 +130,7 @@ public enum Channels {
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
@@ -131,6 +139,7 @@ public enum Channels {
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
+        serviceStatus, serviceUpdateState, serviceRestart, serviceUpdateCheck, serviceUpdateDownload, serviceUpdateInstall,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,

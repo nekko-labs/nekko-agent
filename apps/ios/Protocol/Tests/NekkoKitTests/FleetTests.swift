@@ -46,6 +46,76 @@ final class FleetTests: XCTestCase {
         for _ in 0..<20 { await Task.yield() }
     }
 
+    func testManualDisconnectSurvivesNavigationRefreshAndRelaunch() async throws {
+        let s = makeStore()
+        s.load()
+        let a = try await s.pair(link("aaaa"))
+        let ca = try XCTUnwrap(connections.last)
+        ca.online()
+        let b = try await s.pair(link("bbbb"))
+        let cb = try XCTUnwrap(connections.last)
+        cb.online()
+        await settle()
+
+        s.setConnectionEnabled(a, false)
+        XCTAssertTrue(ca.closed)
+        XCTAssertFalse(s.connectionEnabled(a))
+        XCTAssertEqual(s.activeId, b, "the other computer stays selected")
+        XCTAssertEqual(s.state(of: b), .online)
+        s.connect(a) // Opening a computer page must not override its toggle.
+        s.reconnect(computer: a)
+        s.nudge()
+        s.networkChanged(.local)
+        XCTAssertEqual(connections.count, 2)
+        XCTAssertEqual(s.computers.count, 2, "disconnect is not forget")
+        XCTAssertNotNil(s.secret(a))
+
+        s.setConnectionEnabled(b, false)
+        XCTAssertTrue(cb.closed)
+        XCTAssertEqual(s.conn, .idle)
+        connections = []
+        let restored = makeStore()
+        restored.load()
+        restored.nudge()
+        XCTAssertTrue(connections.isEmpty, "disabled pairings must not dial at launch")
+        XCTAssertFalse(restored.connectionEnabled(a))
+        XCTAssertFalse(restored.connectionEnabled(b))
+        restored.setConnectionEnabled(a, true)
+        XCTAssertEqual(connections.count, 1)
+        XCTAssertEqual(connections.last?.config.room, "aaaa")
+        XCTAssertFalse(restored.connectionEnabled(b))
+    }
+
+    func testBackgroundClosesFleetWhenActiveComputerIsManuallyDisconnected() async throws {
+        let s = makeStore()
+        s.load()
+        let a = try await s.pair(link("aaaa"))
+        let peer = try XCTUnwrap(connections.last)
+        peer.online()
+        let b = try await s.pair(link("bbbb"))
+        connections.last?.online()
+        await settle()
+        s.setConnectionEnabled(b, false)
+        s.enterBackground(grace: 0)
+        XCTAssertTrue(peer.closed)
+        s.resume()
+        XCTAssertEqual(peer.connects, 2)
+        XCTAssertTrue(s.connectionEnabled(a))
+        XCTAssertFalse(s.connectionEnabled(b))
+        XCTAssertEqual(connections.count, 2)
+    }
+
+    func testRepairExplicitlyReenablesDisconnectedComputer() async throws {
+        let s = makeStore()
+        s.load()
+        let a = try await s.pair(link("aaaa"))
+        s.setConnectionEnabled(a, false)
+        let repaired = try await s.pair(link("aaaa"))
+        XCTAssertEqual(repaired, a)
+        XCTAssertTrue(s.connectionEnabled(a))
+        XCTAssertEqual(connections.count, 2)
+    }
+
     func testRepairAnInactiveComputerDiscardsItsOldFleetConnection() async throws {
         let s = makeStore()
         s.load()

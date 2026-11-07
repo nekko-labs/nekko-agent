@@ -5,6 +5,7 @@ import SwiftUI
 /// Paired computers: rename, forget, and how each is reached. Every one stays
 /// connected on its own (2026-11-04); one that can't be reached offers Reconnect.
 struct ComputersView: View {
+    @Environment(CloudSync.self) private var cloud
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -12,10 +13,15 @@ struct ComputersView: View {
     @State private var name = ""
     @State private var forgetting: Computer?
 
+    private var localComputers: [Computer] {
+        let excluded = cloud.fleetExcludedComputerIds(pairedComputerIds: Set(store.computers.map(\.id)))
+        return store.computers.filter { !excluded.contains($0.id) }
+    }
+
     var body: some View {
         List {
             Section {
-                ForEach(store.computers) { c in
+                ForEach(localComputers) { c in
                     // A tap opens the computer's page (2026-10-24); the actions stay on swipe and touch-and-hold.
                     NavigationLink(value: Route.computer(c.id)) {
                         HStack(spacing: 10) {
@@ -47,11 +53,13 @@ struct ComputersView: View {
                         Button { name = c.name; renaming = c } label: { Label("Rename", systemImage: "pencil") }
                         Button(role: .destructive) { forgetting = c } label: { Label("Forget", systemImage: "trash") }
                     }
+                    ComputerConnectionToggle(computer: c)
                 }
             } footer: {
                 Text("Forgetting deletes this iPhone’s pairing keys. To stop the computer accepting this phone, remove it in Settings → Remote access there too.")
                     .foregroundStyle(palette.inkSoft)
             }
+            CloudFleetSection()
             Section { NavigationLink(value: Route.pair) { Label("Pair another computer", systemImage: "plus") } }
         }
         .appBackground()
@@ -70,7 +78,7 @@ struct ComputersView: View {
 
     /// Not reachable now: offer to dial at once rather than wait for the next try.
     private func canReconnect(_ id: String) -> Bool {
-        ([.offline, .denied, .idle] as [RelayState]).contains(store.state(of: id))
+        store.connectionEnabled(id) && ([.offline, .denied, .idle] as [RelayState]).contains(store.state(of: id))
     }
 
     private func dot(_ state: RelayState) -> Color {
@@ -81,6 +89,24 @@ struct ComputersView: View {
         case .denied: return palette.danger
         case .idle: return palette.inkFaint
         }
+    }
+}
+
+/// Connection intent, not reachability: an offline host can still be enabled.
+struct ComputerConnectionToggle: View {
+    let computer: Computer
+    var focusOnConnect = false
+    @Environment(ComputersStore.self) private var store
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { store.connectionEnabled(computer.id) }, set: { enabled in
+            store.setConnectionEnabled(computer.id, enabled)
+            if enabled && focusOnConnect && store.activeId != computer.id { store.connect(computer.id) }
+        })) {
+            Text("Connect to \(computer.name)")
+        }
+        .accessibilityIdentifier("computer.connection.\(computer.id)")
+        .accessibilityHint("Disconnecting keeps the pairing and stops automatic reconnects.")
     }
 }
 

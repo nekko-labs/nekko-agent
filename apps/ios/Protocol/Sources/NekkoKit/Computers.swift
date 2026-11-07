@@ -68,6 +68,8 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
     public var icon: String?
     /// True only for a phone-local nickname; nil migrates older saved names.
     public var nameIsCustom: Bool?
+    /// An explicit phone-local disconnect; missing on older pairings means connected.
+    public var connectionDisabled: Bool?
 
     public init(id: String, name: String, relayUrl: String, pairedAt: Int64, platform: String? = nil, alts: [String] = [], icon: String? = nil) {
         self.id = id
@@ -91,6 +93,7 @@ public struct Computer: Codable, Equatable, Sendable, Identifiable {
         alts = try c.decodeIfPresent([String].self, forKey: .alts) ?? []
         icon = try c.decodeIfPresent(String.self, forKey: .icon)
         nameIsCustom = try c.decodeIfPresent(Bool.self, forKey: .nameIsCustom)
+        connectionDisabled = try c.decodeIfPresent(Bool.self, forKey: .connectionDisabled)
     }
 
     /// Every address, best first (the order the client tries them).
@@ -666,6 +669,7 @@ public final class ComputersStore {
             // A fresh QR carries the computer's routes as they are now.
             computers[i].relayUrl = link.relayUrl
             computers[i].alts = link.alts
+            computers[i].connectionDisabled = false
             saveIndex()
         }
         dropLink(id) // A fleet link still holds the old credentials and routes.
@@ -710,11 +714,29 @@ public final class ComputersStore {
 
     // MARK: Connection
 
+    public func connectionEnabled(_ id: String) -> Bool {
+        computers.first { $0.id == id }.map { $0.connectionDisabled != true } ?? false
+    }
+
+    /// Keep pairing and saved chats, but close this computer's link until explicitly enabled.
+    public func setConnectionEnabled(_ id: String, _ enabled: Bool) {
+        guard let i = computers.firstIndex(where: { $0.id == id }) else { return }
+        computers[i].connectionDisabled = !enabled
+        saveIndex()
+        if enabled {
+            if id == activeId || !stayConnected { connect(id) } else { reconnect(computer: id) }
+        } else {
+            if id == activeId { disconnect() } else { dropLink(id) }
+            registerPushNow()
+        }
+    }
+
     /// Make `id` the active computer and (re)connect to it. With `stayConnected`
     /// the computer left behind keeps its link in the fleet, and a computer the
     /// fleet already reaches is taken over as it is, with no new connection.
     public func connect(_ id: String) {
         defer { syncFleet(); registerPushNow() }
+        guard connectionEnabled(id) else { return }
         let leaving = id != activeId ? active : nil
         if id == activeId { invalidateAttention(id) }
         // The computer left behind must not push (or start) a card on this phone any more:
@@ -962,7 +984,7 @@ public final class ComputersStore {
     /// involved: the grace fits in the app's ordinary background time.
     public func enterBackground(grace: TimeInterval = 30) {
         graceTask?.cancel()
-        guard client != nil, !suspended else { return }
+        guard client != nil || !links.isEmpty, !suspended else { return }
         let anyOnline = conn == .online || peers.values.contains { $0.conn == .online }
         guard anyOnline, grace > 0 else { return suspend() }
         graceTask = Task { @MainActor [weak self] in
