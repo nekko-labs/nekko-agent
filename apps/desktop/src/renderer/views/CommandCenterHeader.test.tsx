@@ -54,7 +54,8 @@ describe('Agents header placement', () => {
     expect(html).not.toContain('on the wall');
     expect(html).not.toContain('0 agents');
     expect(html).not.toContain('0 terminals');
-    for (const label of ['Wall layout', 'Focused', 'Dynamic', 'Snap to grid']) expect(html).toContain(label);
+    expect(html).toContain('data-wall-view-toggle');
+    for (const label of ['Focused', 'Dynamic', 'Snap to grid']) expect(html).not.toContain(label);
     // The All/Agents/Terminals filter and the Monitors button left the toolbar;
     // the monitors panel shows and hides from its own corner.
     expect(html).not.toContain('aria-label="Show"');
@@ -69,38 +70,10 @@ describe('Agents header placement', () => {
     for (const label of ['New agent', 'New image session', 'New terminal']) expect(html).not.toContain(`aria-label="${label}"`);
     for (const label of ['Add window', 'Changes', 'Browser', 'Files']) expect(html).not.toContain(`aria-label="${label}"`);
     // The add bar leads the controls, left of the layout switcher.
-    expect(html.indexOf('aria-label="Add to the wall"')).toBeLessThan(html.indexOf('aria-label="Wall layout"'));
+    expect(html.indexOf('aria-label="Add to the wall"')).toBeLessThan(html.indexOf('data-wall-view-toggle'));
   });
-  it.each(['focus', 'grid', 'fixed'] as const)('only exposes snap to grid in free-form Dynamic (%s)', (mode) => {
-    const layout = { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' };
-    const html = renderToStaticMarkup(<WallToolbar wall={{ ...DEFAULT_WALL_STATE, layout }} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
-    expect(html).toContain(`class="wall-auto-arrange" data-visible="${mode === 'grid'}"`);
-    expect(html).toContain(`tabindex="${mode === 'grid' ? 0 : -1}"`);
-    // A coloured magnet with sparks off its poles, not the old wand.
-    expect(html).toContain('M6 12.5V10a6 6 0 0 1 12 0v2.5');
-    expect(html).toContain('--magnet-spark');
-    // Two layouts only: Grid is now Dynamic's Fixed grid setting.
-    expect(html).not.toContain('>Grid<');
-    expect(html).toContain('aria-label="Snap to grid"');
-    // The agent panel's own controls moved into the panel; the title bar has none.
-    expect(html).not.toContain('agent panel');
-  });
-  it('shows the magnet pressed while snap to grid is on, with its meaning in a tooltip', () => {
-    const off = toolbar();
-    expect(off).toContain('aria-pressed="false"');
-    expect(off).toContain('data-hover-tip="Snap to grid: keep windows evenly spaced"');
-    const on = renderToStaticMarkup(<WallToolbar wall={{ ...DEFAULT_WALL_STATE, snap: true }} setWall={() => {}} addOpen={false} setAddOpen={() => {}} onAdd={() => {}} />);
-    expect(on).toMatch(/aria-label="Snap to grid" aria-pressed="true"/);
-    // The tip is a hover tooltip, not a native title that duplicates it.
-    expect(on).not.toContain('title="Snap');
-  });
-  it('names the two layout modes Focused and Dynamic without migrating keys', () => {
-    expect(LAYOUT_LABEL).toEqual({ focus: 'Focused', grid: 'Dynamic' });
-    const html = toolbar();
-    expect(html).toMatch(/title="Dynamic \((Ctrl|⌘)\+Shift\+2\)"/);
-    expect(html).not.toContain('title="Grid');
-    expect(html).not.toContain('Grid size');
-    expect(html).toContain('M13 2 4 14h6l-1 8 9-12h-6z');
+  it('renames layout labels without migrating keys', () => {
+    expect(LAYOUT_LABEL).toEqual({ focus: 'Single agent', grid: 'Multi-agent' });
   });
   it('leaves the agent panel controls out of the title bar, open or closed', () => {
     const closed = { ...DEFAULT_WALL_STATE, agentPanel: { show: false, orientation: 'vertical' as const } };

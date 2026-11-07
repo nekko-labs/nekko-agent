@@ -45,7 +45,7 @@ jobs:
       - name: Focused protocol tests
         if: matrix.revision == 'after'
         working-directory: apps/ios/Protocol
-        run: swift test --filter 'ChatListLayoutTests|ToolPurposeTests'
+        run: swift test --filter 'ChatListLayoutTests|CardDetailsTests|ToolPurposeTests'
       - run: brew install xcodegen
       - name: Build and capture real native views
         working-directory: apps/ios

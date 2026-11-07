@@ -18,6 +18,8 @@ struct ChatView: View {
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
+    /// A switch of this chat to YOLO, waiting on the warning.
+    @State private var yoloAsk: YoloAsk?
     @State private var showGit = false
     @State private var showGitScreen = false
     @State private var showTerminals = false
@@ -299,7 +301,8 @@ struct ChatView: View {
                             Menu {
                                 ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
                                     Button {
-                                        act { try await chat.setOptions(mode: m) }
+                                        let current = chat.session?.mode.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? store.pcSettings.effectiveMode
+                                        yoloAsk = prefs.gateYolo(from: current, to: m) { act { try await chat.setOptions(mode: m) } }
                                     } label: {
                                         if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
                                     }
@@ -357,13 +360,16 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+        .yoloWarning($yoloAsk)
     }
 
     /// The approval and question cards, the queue, the PR chip and the composer.
     private func bottomBar(_ chat: ChatModel) -> some View {
         VStack(spacing: 8) {
             if let a = chat.turn.approval {
-                ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
+                ApprovalCard(approval: a, answer: { ok in try await chat.approve(ok) },
+                             alwaysAllow: ChatModel.offersAlwaysAllow(a.call) ? { try await chat.alwaysAllowTool() } : nil)
+                    .id(a.call.id)
             }
             if let q = chat.turn.question {
                 // A new question starts with nothing picked.
@@ -779,6 +785,9 @@ private struct Voiced: ViewModifier {
 struct ApprovalCard: View {
     let approval: Approval
     var answer: (Bool) async throws -> Void
+    /// "Always allow this tool", offered for MCP tools only (decision 0054): saves the
+    /// tool for this chat, then allows the call. Never switches the chat to YOLO.
+    var alwaysAllow: (() async throws -> Void)? = nil
     @Environment(\.palette) private var palette
     @State private var busy = false
     @State private var failed: String?
@@ -814,6 +823,22 @@ struct ApprovalCard: View {
             }
             .controlSize(.large)
             .disabled(busy)
+            if alwaysAllow != nil {
+                // Its own full-width row, so a long translation wraps instead of squeezing Deny and Allow.
+                Button { decide(true, always: true) } label: {
+                    Text("Always allow this tool").font(.subheadline.weight(.semibold)).multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(palette.accent)
+                        .padding(.vertical, 8).padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: 8).stroke(palette.accent.opacity(0.6)))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+                .accessibilityHint("Allows this call and stops asking for this tool in this chat. Other tools still ask.")
+                .accessibilityIdentifier("approval.alwaysAllow")
+            }
         }
         .padding(14)
         // A card, because it needs you; tinted by its risk rather than outlined.
@@ -822,11 +847,13 @@ struct ApprovalCard: View {
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
     }
 
-    private func decide(_ ok: Bool) {
+    private func decide(_ ok: Bool, always: Bool = false) {
         busy = true
         failed = nil
         Task {
-            do { try await answer(ok) } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
+            do {
+                if always, let alwaysAllow { try await alwaysAllow() } else { try await answer(ok) }
+            } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
             busy = false
         }
     }
@@ -1014,18 +1041,6 @@ struct Composer: View {
                 .padding(.horizontal, 10).padding(.vertical, 4).background(palette.accent.opacity(0.15), in: Capsule()).foregroundStyle(palette.accent)
                 .accessibilityIdentifier("chat.savedPrompt")
             }
-            if loadingPhotos {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Adding photos…").font(.caption)
-                }.foregroundStyle(palette.inkSoft)
-            }
-            if !images.isEmpty {
-                ComposerPhotos(photos: images) { index in
-                    images.remove(at: index)
-                    photos = []
-                }
-            }
             if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
@@ -1073,6 +1088,21 @@ struct Composer: View {
             }
             // One box the width of the screen: the message on top, + and Send below it, then model and context.
             VStack(alignment: .leading, spacing: 0) {
+                if loadingPhotos {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Adding photos…").font(.caption)
+                    }
+                    .foregroundStyle(palette.inkSoft)
+                    .padding(.horizontal, 12).padding(.top, 10)
+                }
+                if !images.isEmpty {
+                    ComposerPhotos(photos: images) { index in
+                        images.remove(at: index)
+                        photos = []
+                    }
+                    .padding(.horizontal, 12).padding(.top, 10)
+                }
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
                 // "Hide keyboard" action is on the text view itself.
                 MarkdownComposerField(text: $text, focused: $focused,

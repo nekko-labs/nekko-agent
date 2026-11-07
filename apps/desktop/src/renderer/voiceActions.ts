@@ -5,7 +5,7 @@ import { useStore } from './store.js';
 import { describeRun, getLiveRun } from './liveRuns.js';
 import { displaysBridge } from './displays.js';
 import { runPrAction } from './components/PrCard.js';
-import { splitVoiceSegments, splitWakeTail, type VoiceIntent } from './voiceCommands.js';
+import { spellNekko, splitVoiceSegments, splitWakeTail, type VoiceIntent } from './voiceCommands.js';
 import { startVoiceCapture } from './voiceCapture.js';
 import { createSegmentQueue } from './voiceSegments.js';
 import { loadDraft, saveDraft } from './composerDrafts.js';
@@ -253,9 +253,10 @@ async function act(intent: VoiceIntent): Promise<void> {
   }
 }
 
-async function applyText(text: string): Promise<void> {
+async function applyText(transcript: string): Promise<void> {
   const voice = useStore.getState().settings?.voice;
   if (!voice?.enabled) return;
+  const text = spellNekko(transcript);
   set({ heard: text });
   if (voice.commandsEnabled === false) { await act({ kind: 'dictation', text }); return; }
   const carry = carried && Date.now() - carried.at <= WAKE_CARRY_MS ? `${carried.wake} ` : '';

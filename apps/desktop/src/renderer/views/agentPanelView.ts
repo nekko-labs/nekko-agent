@@ -5,7 +5,7 @@
  *
  * The defaults group the cards by activity (where each agent is in its loop), in the
  * order cards were dragged into (newest first for the rest), every detail and
- * every group shown.
+ * empty groups hidden.
  */
 
 import type { SessionSummary } from '@nekko-agent/shared';
@@ -20,6 +20,13 @@ export type AgentPanelView = {
   direction: SortDirection;
   /** The model, context, git and sub-agent lines under each card's title. */
   showMetadata: boolean;
+  showModel: boolean;
+  showContext: boolean;
+  showPullRequests: boolean;
+  showGit: boolean;
+  showSubagents: boolean;
+  showWindows: boolean;
+  showUpdated: boolean;
   /** Chats an automation started (they carry a task id). */
   showAutomations: boolean;
   /** Groups with nothing in them, shown with a muted dash placeholder. */
@@ -35,8 +42,15 @@ export const DEFAULT_AGENT_PANEL_VIEW: AgentPanelView = {
   sortBy: 'manual',
   direction: 'desc',
   showMetadata: true,
+  showModel: true,
+  showContext: true,
+  showPullRequests: true,
+  showGit: true,
+  showSubagents: true,
+  showWindows: true,
+  showUpdated: true,
   showAutomations: true,
-  showEmptyGroups: true,
+  showEmptyGroups: false,
   showComputer: true,
   showComputerIcons: true,
 };
@@ -74,6 +88,13 @@ export function parseAgentPanelView(raw: string | null): AgentPanelView {
     sortBy: SORTS.includes(saved.sortBy as AgentSortBy) ? saved.sortBy as AgentSortBy : d.sortBy,
     direction: saved.direction === 'asc' || saved.direction === 'desc' ? saved.direction : d.direction,
     showMetadata: bool(saved.showMetadata, d.showMetadata),
+    showModel: bool(saved.showModel, d.showModel),
+    showContext: bool(saved.showContext, d.showContext),
+    showPullRequests: bool(saved.showPullRequests, d.showPullRequests),
+    showGit: bool(saved.showGit, d.showGit),
+    showSubagents: bool(saved.showSubagents, d.showSubagents),
+    showWindows: bool(saved.showWindows, d.showWindows),
+    showUpdated: bool(saved.showUpdated, d.showUpdated),
     showAutomations: bool(saved.showAutomations, d.showAutomations),
     showEmptyGroups: bool(saved.showEmptyGroups, d.showEmptyGroups),
     showComputer: bool(saved.showComputer, d.showComputer),

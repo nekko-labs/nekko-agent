@@ -85,6 +85,9 @@ class DictationTest {
         // Whisper's markers for silence or noise are not words.
         assertEquals("" to 0, Dictation.insert("", 0, " [BLANK_AUDIO]"))
         assertEquals("ok go" to 5, Dictation.insert("ok", 2, "(music) go"))
+        // Recognizers write the name as they hear it; "necklace" only starts the same way.
+        assertEquals("Ask Nekko's helper, Nekko" to 25, Dictation.insert("", 0, "Ask Necco's helper, neco"))
+        assertEquals("a Necklace" to 10, Dictation.insert("", 0, "a Necklace"))
         for (tag in listOf("[BLANK_AUDIO]", " [ Silence ]", "[Music]", "[MUSIC PLAYING]", "(wind blowing)")) {
             assertEquals(tag, "", Dictation.clean(tag))
         }

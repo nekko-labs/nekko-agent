@@ -6,8 +6,8 @@ export type VoiceIntent = { kind: 'dictation'; text: string } | { kind: 'new-ses
 /** Only an explicit leading address can turn dictation into an app action. */
 export function parseVoiceIntent(text: string): VoiceIntent {
   const trimmed = text.trim();
-  // Recognizers spell the wake word as they hear it: Nekko, Neko, Neco, Necko.
-  const address = /^ne[ck]k?o\b[\s,:.!?-]*/i.exec(trimmed);
+  // Recognizers spell the wake word as they hear it: Nekko, Neko, Neco, Necko, Necco.
+  const address = /^ne[ck][ck]?o\b[\s,:.!?-]*/i.exec(trimmed);
   if (!address) return { kind: 'dictation', text: trimmed };
   const command = trimmed.slice(address[0].length).toLowerCase().replace(/\u2019/g, "'").replace(/[.!?]+$/, '').trim();
   if (/^(?:(?:create|start|open)(?: a)? new (?:session|chat|agent)|new (?:agent )?(?:session|chat|agent)|let's (?:make|start|create) a new (?:change|session|chat|task))$/.test(command)) return { kind: 'new-session' };
@@ -52,7 +52,10 @@ function parseGo(command: string): GoTarget | null {
   return /desktop|space/.test(to[1]) ? { kind: 'desktop', n } : { kind: 'screen', n };
 }
 
-const WAKE_ONLY = /^ne[ck]k?o\b[\s,:.!?-]*$/i;
+const WAKE_ONLY = /^ne[ck][ck]?o\b[\s,:.!?-]*$/i;
+
+/** The name is in no recognizer's vocabulary: Apple's writes "Neco", even with "Nekko" given as a contextual string. */
+export const spellNekko = (text: string): string => text.replace(/\bne[ck][ck]?o\b/gi, 'Nekko');
 
 /** Splits a transcript at sentence ends and parses each piece; adjacent dictation pieces rejoin. */
 export function splitVoiceSegments(text: string): VoiceIntent[] {
@@ -74,6 +77,6 @@ export function splitVoiceSegments(text: string): VoiceIntent[] {
  * `wake` is carried to the next segment, `rest` is applied now.
  */
 export function splitWakeTail(text: string): { rest: string; wake: string } {
-  const tail = /(?:^|(?<=[.!?])\s+)(ne[ck]k?o\b[\s,:.!?-]*)$/i.exec(text.trim());
+  const tail = /(?:^|(?<=[.!?])\s+)(ne[ck][ck]?o\b[\s,:.!?-]*)$/i.exec(text.trim());
   return tail ? { rest: text.trim().slice(0, tail.index).trim(), wake: tail[1].trim() } : { rest: text.trim(), wake: '' };
 }

@@ -16,10 +16,13 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,7 +69,11 @@ import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -84,6 +91,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
@@ -102,6 +110,7 @@ import kotlin.math.min
 import kotlinx.coroutines.launch
 
 const val PILL_TAG = "simple.pill"
+const val PILL_TAB_TAG = "simple.pill.tab"
 
 /** How long a finger rests on the pill before it lifts to be moved. */
 private const val LIFT_MS = 350L
@@ -156,7 +165,9 @@ fun rememberModePill(atStart: () -> Boolean): ModePillState {
  * root coordinates) or wherever it was moved: a long press lifts it, and let go near a side it
  * docks upright there. It moves between the bar and [floor] (the message box's top, root
  * coordinates; null for the screen's bottom). Tapping the gauges opens it into a card with
- * [details]. [visible] false (the chats list's search) slides it away.
+ * [details]. A swipe into its edge (a side, or up into the bar) tucks it away as a slim arrow
+ * tab; a tap on the tab, or a swipe back out, brings it back. [visible] false (the chats list's
+ * search) slides it away.
  */
 @Composable
 fun ModePill(
@@ -221,6 +232,15 @@ fun ModePill(
     val currentSize by rememberUpdatedState(size)
     val snapPx = with(density) { 72.dp.toPx() }
     val moveTo: (PillPlace) -> Unit = { if (it != place) simple.setPill(it) }
+    val currentPlace by rememberUpdatedState(place)
+    val swipePx = with(density) { 32.dp.toPx() }
+    val setTucked: (Boolean) -> Unit = { tucked ->
+        val at = currentPlace
+        if (at.canTuck && at.tucked != tucked) {
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            simple.setPill(at.copy(tucked = tucked))
+        }
+    }
 
     val morph = BoundsTransform { _, _ -> if (still) snap() else spring(dampingRatio = 0.76f, stiffness = 420f) }
     val fadeInContent = if (still) EnterTransition.None else fadeIn(tween(220, delayMillis = 60))
@@ -242,7 +262,7 @@ fun ModePill(
             val gone = away && hide >= 1f && !state.expanded
             if (!gone) {
                 AnimatedVisibility(
-                    !state.expanded,
+                    !state.expanded && !place.tucked,
                     modifier = Modifier.offset { pos.value.round() }.graphicsLayer { alpha = if (placed) 1f else 0f },
                     enter = EnterTransition.None,
                     exit = ExitTransition.None,
@@ -250,6 +270,7 @@ fun ModePill(
                     val moveTop = stringResource(R.string.pill_move_top)
                     val dockLeft = stringResource(R.string.pill_dock_left)
                     val dockRight = stringResource(R.string.pill_dock_right)
+                    val tuckAway = stringResource(R.string.pill_tuck)
                     Box(
                         Modifier
                             .graphicsLayer {
@@ -282,7 +303,7 @@ fun ModePill(
                                     CustomAccessibilityAction(moveTop) { moveTo(PillPlace.DEFAULT); true },
                                     CustomAccessibilityAction(dockLeft) { moveTo(PillPlace(PillDock.LEFT, place.y)); true },
                                     CustomAccessibilityAction(dockRight) { moveTo(PillPlace(PillDock.RIGHT, place.y)); true },
-                                )
+                                ) + if (place.canTuck) listOf(CustomAccessibilityAction(tuckAway) { setTucked(true); true }) else emptyList()
                             }
                             .pointerInput(Unit) {
                                 liftAndDrag(
@@ -298,6 +319,7 @@ fun ModePill(
                                             pos.snapTo(Offset(next.x.coerceIn(0f, (b.width - s.width).toFloat().coerceAtLeast(0f)), next.y.coerceIn(t, t + r)))
                                         }
                                     },
+                                    onSwipe = { d -> if (currentPlace.swipesIn(d.x, d.y, swipePx)) setTucked(true) },
                                     onDrop = { grab ->
                                         scope.launch {
                                             val (t, r, b) = now
@@ -332,6 +354,78 @@ fun ModePill(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Tucked: a slim tab against its edge, the pill shrunk into it.
+            val tabTouch = with(density) { 44.dp.toPx() }
+            val tabLong = with(density) { 64.dp.toPx() }
+            AnimatedVisibility(
+                place.tucked && !state.expanded && !away,
+                modifier = Modifier.offset {
+                    when (place.dock) {
+                        PillDock.TOP -> Offset((box.width - tabLong) / 2f, barBottom - origin.y)
+                        PillDock.LEFT -> Offset(0f, top + place.y * (bottom - top - tabLong).coerceAtLeast(0f))
+                        PillDock.RIGHT -> Offset(box.width - tabTouch, top + place.y * (bottom - top - tabLong).coerceAtLeast(0f))
+                    }.round()
+                },
+                enter = EnterTransition.None,
+                exit = ExitTransition.None,
+            ) {
+                val across = place.dock == PillDock.TOP
+                val show = stringResource(R.string.pill_show)
+                Box(
+                    Modifier
+                        .size(if (across) 64.dp else 44.dp, if (across) 44.dp else 64.dp)
+                        .systemGestureExclusion()
+                        .pointerInput(place) {
+                            var total = Offset.Zero
+                            detectDragGestures(onDragStart = { total = Offset.Zero }, onDragEnd = {
+                                // Swiped back out of its edge.
+                                if (PillPlace(place.dock, place.y).swipesIn(-total.x, -total.y, swipePx)) setTucked(false)
+                            }) { change, delta ->
+                                change.consume()
+                                total += delta
+                            }
+                        }
+                        .clickable(onClickLabel = show) { setTucked(false) }
+                        .semantics { contentDescription = show }
+                        .testTag(PILL_TAB_TAG),
+                    contentAlignment = when (place.dock) {
+                        PillDock.TOP -> Alignment.TopCenter
+                        PillDock.LEFT -> Alignment.CenterStart
+                        PillDock.RIGHT -> Alignment.CenterEnd
+                    },
+                ) {
+                    val shape = TabShape(place.dock)
+                    Box(
+                        Modifier
+                            .sharedBounds(
+                                rememberSharedContentState(PILL_TAG), this@AnimatedVisibility,
+                                enter = fadeInContent, exit = fadeOutContent, boundsTransform = morph,
+                                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds,
+                                clipInOverlayDuringTransition = clip,
+                            )
+                            .size(if (across) 56.dp else 18.dp, if (across) 18.dp else 56.dp)
+                            .shadow(4.dp, shape, clip = false)
+                            .background(p.surface.copy(alpha = 0.96f), shape)
+                            .border(1.dp, p.line, shape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        val ink = p.inkSoft
+                        Canvas(Modifier.size(if (across) 14.dp else 5.dp, if (across) 5.dp else 14.dp)) {
+                            val w = this.size.width
+                            val h = this.size.height
+                            val arrow = Path().apply {
+                                when (place.dock) {
+                                    PillDock.TOP -> { moveTo(0f, 0f); lineTo(w / 2, h); lineTo(w, 0f) }
+                                    PillDock.LEFT -> { moveTo(0f, 0f); lineTo(w, h / 2); lineTo(0f, h) }
+                                    PillDock.RIGHT -> { moveTo(w, 0f); lineTo(0f, h / 2); lineTo(w, h) }
+                                }
+                            }
+                            drawPath(arrow, ink, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                         }
                     }
                 }
@@ -390,6 +484,13 @@ fun ModePill(
     }
 }
 
+/** The tab's shape: flush against its edge, rounded on the inner corners only. */
+private fun TabShape(dock: PillDock) = when (dock) {
+    PillDock.TOP -> RoundedCornerShape(bottomStart = 9.dp, bottomEnd = 9.dp)
+    PillDock.LEFT -> RoundedCornerShape(topEnd = 9.dp, bottomEnd = 9.dp)
+    PillDock.RIGHT -> RoundedCornerShape(topStart = 9.dp, bottomStart = 9.dp)
+}
+
 /**
  * A swipe up the card, once its content can't scroll further, pulls it up ([pull] goes negative);
  * far enough or fast enough closes it, and a swipe back down puts it back.
@@ -430,21 +531,38 @@ private fun rememberPullToClose(pull: () -> Float, setPull: (Float) -> Unit, onC
 /**
  * A long press ([LIFT_MS]) lifts the pill, then it follows the finger until let go. It watches
  * before the switch and the gauges do, so a press on either still lifts it; a tap, or a finger
- * that moves first, is left to them. Once lifted the touch is the pill's alone. [onDrop] gets
- * where on the pill the finger held it.
+ * that moves first, is left to them, and a finger that moves first is a swipe: [onSwipe] gets how
+ * far it went once let go. Once lifted the touch is the pill's alone. [onDrop] gets where on the
+ * pill the finger held it.
  */
-private suspend fun PointerInputScope.liftAndDrag(onLift: () -> Unit, onMove: (Offset) -> Unit, onDrop: (Offset) -> Unit) {
+private suspend fun PointerInputScope.liftAndDrag(onLift: () -> Unit, onMove: (Offset) -> Unit, onSwipe: (Offset) -> Unit, onDrop: (Offset) -> Unit) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        val early = withTimeoutOrNull(LIFT_MS) {
-            var gone = false
-            while (!gone) {
+        var last = down.position
+        val swiped = withTimeoutOrNull(LIFT_MS) {
+            var moved: Boolean? = null
+            while (moved == null) {
                 val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
-                gone = c == null || !c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop
+                if (c == null || !c.pressed) {
+                    moved = false
+                } else {
+                    last = c.position
+                    if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                }
             }
-            true
+            moved
         }
-        if (early == true) return@awaitEachGesture
+        if (swiped == false) return@awaitEachGesture
+        if (swiped == true) {
+            // Follow the swipe to its end without taking it from anything else.
+            while (true) {
+                val c = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                last = c.position
+                if (!c.pressed) break
+            }
+            onSwipe(last - down.position)
+            return@awaitEachGesture
+        }
         onLift()
         var grab = down.position
         while (true) {

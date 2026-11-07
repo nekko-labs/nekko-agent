@@ -644,6 +644,10 @@ impl Table {
             );
         }
         t.add(
+            crate::service_management::CHANNELS,
+            handler!(|ctx, channel, args| crate::service_management::route(ctx, channel, &args).await),
+        );
+        t.add(
             crate::small_services::CHANNELS,
             handler!(|ctx, channel, args| crate::small_services::route(ctx, channel, &args).await),
         );

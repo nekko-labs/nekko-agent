@@ -49,8 +49,46 @@ async function drawDialog(kind: ShellDialog, o: Record<string, any>): Promise<un
  * The bridge's window-shell half (see `startAgentBrowser({ shell })`): what
  * nekkod still needs from main once it owns the native channels.
  */
-export function shellBridge(quit: () => void): ShellBridge {
+const serviceActions = new WeakSet<EngineProcess>();
+
+export function shellBridge(quit: () => void, getEngine: () => EngineProcess | null = () => null): ShellBridge {
   return {
+    serviceStatus: () => {
+      const engine = getEngine();
+      const available = Boolean(engine?.running && !serviceActions.has(engine));
+      return { protocolVersion: 1, agentRunning: engine?.running ?? false, restart: available, updateInstall: available };
+    },
+    serviceRestart: () => {
+      const engine = getEngine();
+      if (!engine?.running) throw new Error('service-unavailable: no running supervised engine');
+      if (serviceActions.has(engine)) throw new Error('service-busy: a service action is in progress');
+      serviceActions.add(engine);
+      // Acknowledge before stopping the requesting daemon. This timer belongs
+      // to Electron, so the restart survives the daemon's disconnection.
+      setTimeout(() => {
+        void (async () => {
+          try {
+            if (getEngine() !== engine || !engine.running) return;
+            await engine.stop();
+            // App quit clears the engine reference. Never bring it back then.
+            if (getEngine() !== engine) return;
+            engine.start();
+            await engine.endpoint();
+          } catch (error) { console.error('Remote service restart failed', error); }
+          finally { serviceActions.delete(engine); }
+        })();
+      }, 300);
+      return { restarting: true };
+    },
+    servicePrepareInstall: () => {
+      const engine = getEngine();
+      if (!engine?.running) throw new Error('service-unavailable: no running supervised engine');
+      if (serviceActions.has(engine)) throw new Error('service-busy: a service action is in progress');
+      // Do not release on an ambiguous installer failure: it may have already
+      // launched. The host must quit/relaunch or be inspected locally.
+      serviceActions.add(engine);
+      return { prepared: true };
+    },
     nativeWindow: () => {
       const win = appWindow();
       if (!win || win.isDestroyed()) return null;
@@ -96,13 +134,12 @@ export function registerIpc(engine: EngineProcess, isAppWindow: (sender: WebCont
       return null;
     }
   });
-  let controlling = false;
   ipcMain.handle(SERVICE_CONTROL_CHANNEL, async (event, action: ServiceAction) => {
     if (!fromAppMainFrame(event, isAppWindow)) throw new Error('Service controls are only available to the application window.');
     if (!['status', 'start', 'stop', 'restart', 'model-start', 'model-stop'].includes(action)) throw new Error('Unknown service action');
     if (action !== 'status') {
-      if (controlling) throw new Error('A service action is already in progress');
-      controlling = true;
+      if (serviceActions.has(engine)) throw new Error('A service action is already in progress');
+      serviceActions.add(engine);
       try {
         if (action === 'stop' || action === 'restart') await engine.stop();
         if (action === 'start' || action === 'restart') { engine.start(); await engine.endpoint(); }
@@ -114,7 +151,7 @@ export function registerIpc(engine: EngineProcess, isAppWindow: (sender: WebCont
           if ('error' in result && result.error) throw new Error(result.error);
           if ('ok' in result && !result.ok) throw new Error(result.message || 'Could not stop model server');
         }
-      } finally { controlling = false; }
+      } finally { serviceActions.delete(engine); }
     }
     const model = engine.running ? await engine.call<EngineStatus>(IpcChannels.engineStatus) : null;
     return { agentRunning: engine.running, modelRunning: model?.running ?? false,

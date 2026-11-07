@@ -172,6 +172,7 @@ final class LiveRelayTests: XCTestCase {
         app.launchArguments = defaults + ["-onboarded", "YES", "-liveActivityLevel", "standard"]
         app.launch()
         XCTAssertTrue(waitOnline(app, busyWait), "back online after the relaunch")
+        expandDoneGroup(in: app)
         let chatRow = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
         XCTAssertTrue(chatRow.waitForExistence(timeout: busyWait))
         chatRow.tap()
@@ -357,6 +358,7 @@ final class LiveRelayTests: XCTestCase {
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-theme", "light", "-onboarded", "YES"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["chats.savedList"].waitForExistence(timeout: 10), "the saved list, at once")
+        expandDoneGroup(in: app)
         let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
@@ -456,6 +458,7 @@ final class LiveRelayTests: XCTestCase {
 
         // The chat list, with its view menu (group, sort, show) in place of the old Continue card.
         app.navigationBars.buttons.element(boundBy: 0).tap()
+        expandDoneGroup(in: app)
         XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch.waitForExistence(timeout: 15), "the chats")
         // A navigation-bar button: no hit point for XCTest, so tap its centre (as the computer menu).
         let viewMenu = app.buttons["chats.view"].firstMatch
@@ -589,6 +592,7 @@ final class LiveRelayTests: XCTestCase {
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-theme", "light", "-expertMode", "YES", "-uiTestLocalModel"]
         app.launch()
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer again")
+        expandDoneGroup(in: app)
         let row = app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10), "the chat is still in the list")
         row.tap()
@@ -606,11 +610,31 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertGreaterThan(panel.frame.midX, window.frame.width * 0.7, "the pill docks on the right")
         XCTAssertGreaterThan(panel.frame.height, panel.frame.width, "docked at a side, the gauges stack")
         attach(app, "modes-3b-docked-right")
+        // A swipe into the edge tucks it away as a slim tab; a tap on the tab brings it back.
+        let tab = app.buttons["chat.pill.tab"]
+        // A real swipe's length: XCUITest's swipeRight stays inside the slim docked pill.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.995, dy: 0.4)), withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe into the side tucks the pill away")
+        XCTAssertFalse(panel.exists)
+        settle()
+        attach(app, "modes-3c-tucked-right")
+        tab.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5), "the tab brings the pill back")
+        settle()
         // And back under the bar, across.
         panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.14)))
         settle()
         XCTAssertLessThan(panel.frame.height, panel.frame.width, "back across the top")
+        // Under the bar, a swipe up tucks it into the bar.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.02)), withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe up tucks the pill under the bar")
+        attach(app, "modes-3d-tucked-top")
+        tab.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        settle()
         // A tap opens the pill into the agent's details.
         panel.tap()
         // The pill opens into the agent's details.
@@ -858,6 +882,7 @@ final class LiveRelayTests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         // Both chats in one list, each naming where it runs.
+        expandDoneGroup(in: app)
         let rows = app.descendants(matching: .any).matching(identifier: "chats.row")
         XCTAssertTrue(rows.element(boundBy: 1).waitForExistence(timeout: 15), "both chats in the list")
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "On This iPhone")).firstMatch.exists,
@@ -887,6 +912,20 @@ final class LiveRelayTests: XCTestCase {
         onlyHere.tap()
         XCTAssertTrue(waitGone(rows.element(boundBy: 1), 10), "only the iPhone's chat")
         attach(app, "fleet-6-only-this-iphone")
+    }
+
+    /// Fresh lists fold status groups, including after an online or offline relaunch.
+    /// Open the completed chats as a user would; still assert their rows and contents below.
+    private func expandDoneGroup(in app: XCUIApplication) {
+        let done = app.buttons["chats.group.status:done"].firstMatch
+        guard done.waitForExistence(timeout: busyWait) else {
+            XCTFail("the completed chats have a Done group")
+            return
+        }
+        // SwiftUI can append the status icon's Selected trait to the disclosure value.
+        if (done.value as? String ?? "").hasPrefix("Collapsed") { done.tap() }
+        let open = expectation(for: NSPredicate(format: "value BEGINSWITH %@", "Expanded"), evaluatedWith: done)
+        wait(for: [open], timeout: busyWait)
     }
 
     private func allowSystemAlerts() {

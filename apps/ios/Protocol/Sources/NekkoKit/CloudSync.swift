@@ -192,6 +192,7 @@ public final class CloudSync {
         let v = try await request("POST", path("/v1/auth/session"), json: .object(["accessToken": .string(accessToken), "label": .string(deviceLabel)]))
         guard let token = v.str("token") else { throw CloudError(message: "Nekko Cloud sent no token.") }
         let a = Self.account(v["account"])
+        resetFleet()
         if let old = state.keysAccount ?? state.account?.id, old != a.id {
             // Another account's keys and chats never mix with this one's.
             forgetKeys()
@@ -206,9 +207,8 @@ public final class CloudSync {
     }
 
     public func signOut() async {
-        if let t = secrets.get("cloud.token") {
-            _ = try? await request("DELETE", path("/v1/auth/session"), token: t)
-        }
+        resetFleet()
+        let t = secrets.get("cloud.token")
         secrets.set("cloud.token", nil)
         state.keysAccount = state.keysAccount ?? state.account?.id
         state.account = nil
@@ -216,6 +216,9 @@ public final class CloudSync {
         devices = []
         boundDevice = nil
         save()
+        if let t {
+            _ = try? await request("DELETE", path("/v1/auth/session"), token: t)
+        }
     }
 
     // MARK: State from the server
@@ -224,6 +227,7 @@ public final class CloudSync {
         let t = try token()
         let me = try await request("GET", path("/v1/auth/me"), token: t)
         let a = Self.account(me["account"])
+        if account?.id != a.id { resetFleet() }
         state.account = a
         account = a
         let remote = try await request("GET", path("/v1/sync/state"), token: t)
@@ -710,6 +714,9 @@ public final class CloudSync {
 
     /// Forget this iPhone's sync: keys, synced chats and sign-in (Settings → Forget everything).
     public func forgetAll() {
+        resetFleet()
+        secrets.set("cloud.machines", nil)
+        secrets.set("cloud.machines.account", nil)
         forgetKeys()
         secrets.set("cloud.token", nil)
         state = State()
@@ -768,6 +775,29 @@ public final class CloudSync {
         }
     }
 
+    /// Hosted computers are not released yet. Sync and third-party providers do not use this flag.
+    public var fleetEnabled = false {
+        didSet { if oldValue != fleetEnabled { resetFleet() } }
+    }
+    private var fleetSession: (account: String, token: String)?
+    private var fleetGeneration = UUID()
+    private var fleetLoading = false
+
+    /// Only a successful authenticated fleet fetch for this session opens the gate.
+    public var fleetConnected: Bool {
+        fleetEnabled && signedIn && fleetSession?.account == account?.id
+            && fleetSession?.token == secrets.get("cloud.token") && fleetSession != nil
+    }
+
+    private func resetFleet() {
+        fleetGeneration = UUID()
+        fleetLoading = false
+        fleetSession = nil
+        machines = []
+        machinesRelay = nil
+        machineLinks = [:]
+    }
+
     public private(set) var machines: [Machine] = []
     /// The relay Nekko Cloud's machines meet the phone on.
     public private(set) var machinesRelay: String?
@@ -779,31 +809,66 @@ public final class CloudSync {
         return o.compactMapValues(\.string)
     }
 
-    private func loadLinks() { machineLinks = Self.decodeLinks(secrets.get("cloud.machines")) }
+    private func loadLinks() {
+        // Legacy links have no account owner, so they cannot safely classify a computer.
+        machineLinks = secrets.get("cloud.machines.account") == account?.id
+            ? Self.decodeLinks(secrets.get("cloud.machines")) : [:]
+    }
 
     private func saveLinks() {
+        secrets.set("cloud.machines.account", account?.id)
         secrets.set("cloud.machines", JSONValue.object(machineLinks.mapValues(JSONValue.string)).serialized())
     }
 
     /// The machine a paired computer on this iPhone is, if it is one.
     public func machine(forComputer computerId: String) -> Machine? {
+        guard fleetConnected else { return nil }
         guard let id = machineLinks.first(where: { $0.value == computerId })?.key else { return nil }
         return machines.first { $0.id == id }
     }
 
     /// The computer id a machine was paired as on this iPhone.
-    public func computerId(for machine: Machine) -> String? { machineLinks[machine.id] }
+    public func computerId(for machine: Machine) -> String? { fleetConnected ? machineLinks[machine.id] : nil }
 
     public func loadMachines() async throws {
-        loadLinks()
-        let v = try await request("GET", path("/v1/machines"), token: token())
-        machines = (v["machines"]?.array ?? []).compactMap(Machine.from)
-        machinesRelay = v.str("relayUrl")
+        // Also enforce this below the UI, so an accidental task cannot contact the fleet.
+        guard fleetEnabled else { return }
+        guard signedIn, let accountId = account?.id, !accountId.isEmpty else {
+            resetFleet()
+            throw CloudError(message: "Sign in to Nekko Cloud first.")
+        }
+        guard !fleetLoading else { return }
+        let t = try token()
+        let generation = fleetGeneration
+        fleetLoading = true
+        defer { if generation == fleetGeneration { fleetLoading = false } }
+        do {
+            let me = try await request("GET", path("/v1/auth/me"), token: t)
+            guard Self.account(me["account"]).id == accountId else {
+                throw CloudError(message: "Your Nekko Cloud account changed. Sign in again.")
+            }
+            guard generation == fleetGeneration, fleetEnabled, account?.id == accountId,
+                  secrets.get("cloud.token") == t else { return }
+            let v = try await request("GET", path("/v1/machines"), token: t)
+            guard generation == fleetGeneration, fleetEnabled, account?.id == accountId,
+                  secrets.get("cloud.token") == t else { return }
+            guard let list = v["machines"]?.array else {
+                throw CloudError(message: "Nekko Cloud sent no fleet list.")
+            }
+            machines = list.compactMap(Machine.from)
+            machinesRelay = v.str("relayUrl")
+            loadLinks()
+            fleetSession = (accountId, t)
+        } catch {
+            if generation == fleetGeneration, account?.id == accountId, secrets.get("cloud.token") == t { resetFleet() }
+            throw error
+        }
     }
 
     /// Make a machine. Nekko Cloud answers the pairing link once; the caller
     /// pairs it like any computer and records the link with `link(_:computer:)`.
     public func createMachine(name: String, region: String, scope: MachineScope) async throws -> (machine: Machine, link: PairingLink) {
+        try requireFleetConnection()
         let body: JSONValue = .object(["name": .string(name), "region": .string(region), "scope": scope.json])
         let v = try await request("POST", path("/v1/machines"), json: body, token: token())
         guard let m = Machine.from(v["machine"]), let raw = v.str("pairingLink"), let link = Pairing.parse(raw) else {
@@ -814,31 +879,40 @@ public final class CloudSync {
     }
 
     public func link(_ machine: Machine, computer computerId: String) {
+        guard fleetConnected, machines.contains(where: { $0.id == machine.id }) else { return }
         machineLinks[machine.id] = computerId
         saveLinks()
     }
 
     public func setScope(_ machine: Machine, _ scope: MachineScope) async throws {
+        try requireFleetConnection()
         let v = try await request("PUT", path("/v1/machines/\(machine.id)/scope"), json: scope.json, token: token())
         if let m = Machine.from(v["machine"]), let i = machines.firstIndex(where: { $0.id == m.id }) { machines[i] = m }
     }
 
     public func stopMachine(_ machine: Machine) async throws {
+        try requireFleetConnection()
         let v = try await request("POST", path("/v1/machines/\(machine.id)/stop"), token: token())
         if let m = Machine.from(v["machine"]), let i = machines.firstIndex(where: { $0.id == m.id }) { machines[i] = m }
     }
 
     public func startMachine(_ machine: Machine) async throws {
+        try requireFleetConnection()
         let v = try await request("POST", path("/v1/machines/\(machine.id)/start"), token: token())
         if let m = Machine.from(v["machine"]), let i = machines.firstIndex(where: { $0.id == m.id }) { machines[i] = m }
     }
 
     /// Delete the machine, its disk and its pairing on Nekko Cloud; the caller forgets the computer here.
     public func deleteMachine(_ machine: Machine) async throws {
+        try requireFleetConnection()
         try await request("DELETE", path("/v1/machines/\(machine.id)"), token: token())
         machines.removeAll { $0.id == machine.id }
         machineLinks[machine.id] = nil
         saveLinks()
+    }
+
+    private func requireFleetConnection() throws {
+        guard fleetConnected else { throw CloudError(message: "Connect to Nekko Cloud fleet first.") }
     }
 
     private func token() throws -> String {
@@ -864,9 +938,21 @@ public final class CloudSync {
         var h = headers
         if let token { h["Authorization"] = "Bearer \(token)" }
         if json != nil { h["Content-Type"] = "application/json" }
-        let (status, data) = try await http.send(method, url, headers: h, body: json.map { Data($0.serialized().utf8) })
+        let generation = fleetGeneration
+        let accountId = account?.id
+        // An obsolete request must not disconnect a newer fleet session.
+        func invalidateFleet() {
+            guard let token, let accountId, generation == fleetGeneration,
+                  account?.id == accountId, secrets.get("cloud.token") == token else { return }
+            resetFleet()
+        }
+        let status: Int
+        let data: Data
+        do { (status, data) = try await http.send(method, url, headers: h, body: json.map { Data($0.serialized().utf8) }) }
+        catch { invalidateFleet(); throw error }
         let v = (try? JSONValue.parse(data)) ?? .null
         guard (200..<300).contains(status) else {
+            invalidateFleet()
             let code = v.str("error") ?? v.str("error_code") ?? ""
             let message = v.str("message") ?? v.str("msg") ?? (status == 402 ? "Sync needs a Pro or Team plan." : status == 401 ? "You're signed out of Nekko Cloud." : "Nekko Cloud answered \(status).")
             throw CloudError(status: status, code: code, message: message)

@@ -101,6 +101,7 @@ extension ComputersStore {
     /// Dial a computer again now, active or not (the Reconnect button). A fleet
     /// link is opened afresh, keeping the list it showed meanwhile.
     public func reconnect(computer id: String) {
+        guard connectionEnabled(id) else { return }
         if id == activeId {
             if conn == .denied || client == nil { connect(id) } else { reconnect() }
             return
@@ -130,13 +131,14 @@ extension ComputersStore {
     /// A link for every paired computer but the active one; none for a forgotten one.
     func syncFleet() {
         guard stayConnected else { return }
-        let wanted = Set(fleetOrder)
+        let wanted = Set(fleetOrder.filter { connectionEnabled($0) })
         for id in Set(links.keys).union(peers.keys) where !wanted.contains(id) { dropLink(id) }
-        for id in fleetOrder where links[id] == nil && peers[id] == nil { openLink(id) }
+        for id in fleetOrder where wanted.contains(id) && links[id] == nil && peers[id] == nil { openLink(id) }
     }
 
     /// Dial one fleet computer, showing its saved list until it answers.
     func openLink(_ id: String) {
+        guard connectionEnabled(id) else { return }
         invalidateAttention(id)
         guard let computer = computers.first(where: { $0.id == id }), let secret = secret(id),
               let keyBytes = E2E.fromHex(secret.keyHex) else { return }
@@ -241,6 +243,7 @@ extension ComputersStore {
             if s.state == .online {
                 Task { await refreshPeer(id) }
                 registerPush(peer: id)
+                withdrawCard(peer: id)
             }
         case .welcome(let version):
             peers[id]?.hostProtocol = version
