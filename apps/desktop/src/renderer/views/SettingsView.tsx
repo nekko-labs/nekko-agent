@@ -491,6 +491,11 @@ export function SettingsView() {
                     <p className="text-2xs text-ink-faint">Desktop only. Show agent and model server toggles and Restart server in the top-right title bar. Off by default.</p></div>
                   <Toggle aria-label="Show server controls" on={settings.developer?.serverControls === true} onChange={(v) => update({ developer: { ...settings.developer, serverControls: v } })} />
                 </div>
+                <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
+                  <div><span className="text-sm">Show model-switch token notice</span>
+                    <p className="text-2xs text-ink-faint">Explain estimated input tokens for the next turn when you change the model or effort in an existing chat. On by default.</p></div>
+                  <Toggle aria-label="Show model-switch token notice" on={settings.developer?.showContextChangeNotice !== false} onChange={(v) => update({ developer: { ...settings.developer, showContextChangeNotice: v } })} />
+                </div>
               </section>
 
               {/* Experimental */}

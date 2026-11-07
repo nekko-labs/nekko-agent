@@ -45,7 +45,7 @@ app.whenReady().then(async () => {
       await click('[data-chat-mode-button]'); await shot(`mode-panel-${width}`); await click('[data-chat-mode-button]');
     }
     win.setContentSize(1100, 720);
-    await scene('simple'); await click('[data-asks-first]'); await shot('simple-menu');
+    await scene('simple'); if (!baseline) await check('Simple has one icon-only approvals control', `document.querySelectorAll('[data-asks-first]').length===1 && document.querySelector('[data-asks-first]').classList.contains('composer-permissions')`); await click('[data-asks-first]'); await shot('simple-menu');
     if (!baseline) {
       await check('Exactly three named choices with Gentleface icons', `(()=>{const m=document.querySelector('[data-asks-menu]'); return m.querySelectorAll('[role="menuitemradio"]').length===3 && ['Always ask','Ask when it matters','No restrictions'].every(t=>m.textContent.includes(t)) && ['hand','shield-check','running'].every(n=>m.querySelector('[data-gf-icon="'+n+'"]'))})()`);
     }

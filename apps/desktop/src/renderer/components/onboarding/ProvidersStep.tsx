@@ -32,7 +32,6 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
   const [found, setFound] = useState<ProviderConfig[]>([]);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [tests, setTests] = useState<Record<string, TestState>>({});
-  const [chatgptModel, setChatgptModel] = useState('');
 
   // Refresh what's already configured, then probe localhost for running model
   // servers. `probeProviders` is read-only (unlike `discoverProviders`, which
@@ -63,8 +62,8 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
   // A completed subscription sign-in only hands back a sanitized status; save
   // it as an auth:'subscription' provider (same path as the Models tab).
   const connectSubscription =
-    (oauthProvider: 'claude' | 'chatgpt', customModelId?: string) => async (status: OAuthStatus) => {
-      await window.nekko.saveProvider(subscriptionProviderConfig(status, { customModelId }));
+    (oauthProvider: 'claude' | 'chatgpt') => async (status: OAuthStatus) => {
+      await window.nekko.saveProvider(subscriptionProviderConfig(status));
       pushToast('success', `Signed in with your ${oauthProvider === 'claude' ? 'Claude' : 'ChatGPT'} subscription.`);
       await refresh();
     };
@@ -152,17 +151,8 @@ export function ProvidersStep({ onExit }: { onExit?: (after?: () => void) => voi
             <SubscriptionSignIn
               oauthProvider="chatgpt"
               label="Sign in with ChatGPT"
-              onConnected={connectSubscription('chatgpt', chatgptModel)}
+              onConnected={connectSubscription('chatgpt')}
             />
-            <label className="mt-3 block text-xs font-medium text-ink-soft">
-              Custom model id (optional)
-              <input
-                className="input mt-1 text-xs"
-                value={chatgptModel}
-                onChange={(e) => setChatgptModel(e.target.value)}
-                placeholder="Override the curated list, e.g. gpt-5-codex"
-              />
-            </label>
             <ApiKeyDisclosure kind="openai" onSaved={refresh} />
           </OnlineCard>
           {/* Claude runs on an Anthropic API key. Claude plan sign-in is only offered
