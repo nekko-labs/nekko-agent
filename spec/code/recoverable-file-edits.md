@@ -38,9 +38,9 @@ Before beta, compare established coding/personal agents and implement the most v
 - Valid Unicode/CRLF/dependent/literal batches succeed; later failure, malformed forms, ambiguity, size/count limits, approval denial, jail/read-only/Git guards leave source unchanged.
 - Execute the actual Python helper on Unix CI as well as native Rust tests. Windows native tests do not prove Docker execution or Unix permissions.
 
-## Verification record (2026-11-11)
+## Verification record (2026-11-08 JST)
 
-- Windows: `cargo test -p nekko-tools -p nekko-store -p nekko-turn -p nekko-sandbox -p nekkod --locked`: 632 passed, zero failed, two existing real-model tests ignored (live llama-server round trip and injection evaluation).
+- Windows: `cargo test -p nekko-tools -p nekko-store -p nekko-turn -p nekko-sandbox -p nekkod --locked`: 635 passed, zero failed, two existing real-model tests ignored (live llama-server round trip and injection evaluation).
 - A freshly built worktree daemon passed all five journeys in `node scripts/itest-file-recovery.mjs`: actual restart recovery, acceptance, incognito transition/restart, deletion/recreation rejection, and corrupt snapshot error/explicit discard. Each run uses a disposable data directory and home, no configured provider, and cleans up its processes/profile.
 - The same daemon journey runs in the required loopback integration job. Unix-only helper execution and owner-only permission assertions require the Linux daemon job (`deploy:linux`); Windows results do not substitute for it.
 - No visual change. The actual daemon checks prove backend integration, not packaged desktop acceptance, provider schema acceptance or a physical-device journey. Those broader checks remain unverified.
