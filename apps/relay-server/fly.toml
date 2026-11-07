@@ -4,9 +4,10 @@
 #   fly deploy -c apps/relay-server/fly.toml --dockerfile apps/relay-server/Dockerfile .
 # Keep it at ONE machine (fly scale count 1): rooms live in a machine's memory,
 # so the agent and its phones must land on the same instance.
-# Secrets (only if enabling push / the paid gate):
-#   fly secrets set APNS_KEY_P8=... APNS_KEY_ID=... APNS_TEAM_ID=... \
-#     FCM_SERVICE_ACCOUNT=... NEKKO_RELAY_AUTHZ_URL=https://cloud.nekko-agent.com/api/relay/authorize
+# Push (optional):
+#   fly secrets set APNS_KEY_P8=... APNS_KEY_ID=... APNS_TEAM_ID=... FCM_SERVICE_ACCOUNT=...
+# Agents must hold a Nekko Cloud machine's token (the gate below); phones and
+# other clients are unaffected.
 
 app = "nekko-agent-relay"
 primary_region = "nrt"
@@ -17,6 +18,7 @@ primary_region = "nrt"
 [env]
   NEKKO_RELAY_PORT = "4400"
   NEKKO_RELAY_HOST = "0.0.0.0"
+  NEKKO_RELAY_AUTHZ_URL = "https://nekko-agent-api.fly.dev/v1/relay/authorize"
 
 [http_service]
   internal_port = 4400

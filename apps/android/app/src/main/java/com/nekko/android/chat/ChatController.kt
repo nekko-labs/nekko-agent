@@ -21,6 +21,7 @@ import com.nekko.protocol.RelayState
 import com.nekko.protocol.RemoteDefaults
 import com.nekko.protocol.Session
 import com.nekko.protocol.SkillSummary
+import com.nekko.protocol.StepUpProof
 import com.nekko.protocol.Transcript
 import com.nekko.protocol.queuePrompt
 import com.nekko.protocol.sendOptions
@@ -102,6 +103,8 @@ data class ChatUi(
     val effort: Effort? = null,
     /** The chat's run settings ([RunOption]). */
     val runOptions: Map<String, JsonElement> = emptyMap(),
+    /** The tools this chat may not call. */
+    val disabledTools: List<String> = emptyList(),
     /** The chat's own tool policy; null follows the computer's default. */
     val mode: PcSettings.ChatMode? = null,
     /** The transcript is the phone's saved copy, saved then: read-only until the computer answers (OF-5). */
@@ -134,6 +137,12 @@ class ChatController(
     private val outbox: Outbox? = null,
     /** The last chats opened, kept to read offline (OF-5); null keeps none. */
     private val saved: SavedTranscripts? = null,
+    /**
+     * A guarded `session:setOptions` (one that widens what the agent may do without asking): sent
+     * the way a mode raise is, signed with this phone's Change proof, and with [StepUpProof] when the
+     * computer asked for one. Null sends it plain (tests, previews).
+     */
+    private val guarded: (suspend (channel: String, args: List<JsonElement>, stepUp: StepUpProof?) -> JsonElement)? = null,
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -375,6 +384,30 @@ class ChatController(
         caller.call(Channels.TOOL_APPROVE, JsonPrimitive(sessionId), JsonPrimitive(a.call.id), JsonPrimitive(ok))
     }
 
+    /**
+     * **Always allow this tool** (decision 0054), for an MCP call only ([offersToolScope]): save the
+     * tool in the chat's `allowedMcpTools` (what the chat already allows, plus this one) before
+     * releasing the call, so the computer stops asking for it in this chat. Never switches the chat
+     * to YOLO. A refused or failed save throws and approves nothing, and the card stays; a
+     * `step-up-required` refusal is thrown for the step-up sheet, which calls this again with [stepUp].
+     */
+    suspend fun alwaysAllowTool(stepUp: StepUpProof? = null) {
+        val a = _state.value.turn.approval ?: return
+        val name = a.call.name
+        require(offersToolScope(name)) { "Only an MCP tool can be always allowed." }
+        val allowed = ((_state.value.session?.allowedMcpTools ?: emptyList()) + name).distinct()
+        val args = listOf(JsonPrimitive(sessionId), buildJsonObject { put("allowedMcpTools", JsonArray(allowed.map(::JsonPrimitive))) })
+        val g = guarded
+        if (g != null) g(Channels.SESSION_SET_OPTIONS, args, stepUp) else caller.call(Channels.SESSION_SET_OPTIONS, *args.toTypedArray())
+        _state.update { s ->
+            s.copy(
+                session = s.session?.copy(allowedMcpTools = allowed),
+                turn = if (s.turn.approval?.call?.id == a.call.id) s.turn.copy(approval = null) else s.turn,
+            )
+        }
+        caller.call(Channels.TOOL_APPROVE, JsonPrimitive(sessionId), JsonPrimitive(a.call.id), JsonPrimitive(true))
+    }
+
     suspend fun answer(answers: List<AskAnswer>) {
         val q = _state.value.turn.question ?: return
         _state.update { it.copy(turn = it.turn.copy(question = null)) }
@@ -465,6 +498,9 @@ class ChatController(
         /** Editing the computer's queue needs the computer. */
         const val RECONNECT_TO_EDIT_QUEUE = "Reconnect to change the queue. The computer may start the prompt meanwhile."
 
+        /** Only MCP tools offer **Always allow this tool**: their server alone says what they do (`offersToolScope` on the desktop). */
+        fun offersToolScope(toolName: String): Boolean = toolName.startsWith("mcp__")
+
         /** The session's own model, else the computer's default (never the `__auto__` sentinel). */
         fun resolveModel(session: Session?, defaults: RemoteDefaults): Pair<String?, String?> {
             val providerId = session?.providerId ?: defaults.defaultProviderId
@@ -534,6 +570,7 @@ class ChatController(
                 modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
                 effort = Effort.parse(state.session?.effort),
                 runOptions = state.session?.runOptions ?: emptyMap(),
+                disabledTools = state.session?.disabledTools ?: emptyList(),
                 mode = state.session?.mode,
                 context = state.context,
                 contextTokens = liveTokens(state.context, turn),

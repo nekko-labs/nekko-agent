@@ -19,7 +19,7 @@ The source of truth for **what** Nekko Agent does and **why**: one file per feat
 
 Vision, users, product names, scope boundaries, open questions and policies.
 
-- [Claude policy (2026-10-19)](product/claude-policy.md) (10 KB)
+- [Claude policy (2026-10-19)](product/claude-policy.md) (11 KB)
 - [Contributing: how changes land (2026-10-17)](product/contributing-how-changes-land.md) (3 KB)
 - [Editions, same engine + UI, different runtime](product/editions-same-engine-ui-different-runtime.md) (2 KB)
 - [Open Questions](product/open-questions.md) (2 KB)
@@ -126,7 +126,7 @@ Agents panel, monitors, subagents and delegation.
 - [Subagent transcript identity](agents/subagent-transcript-identity.md) (2 KB)
 - [Subagents in Claude chats](agents/claude-code-subagents.md) (2 KB)
 - [Watch lifecycle and delegation failure recovery](agents/watch-lifecycle-and-delegation-recovery.md) (2 KB)
-- [Watch PRs until they are merge-ready, by default](agents/watch-prs-until-merge-ready.md) (3 KB)
+- [Watch PRs until they are merge-ready, by default](agents/watch-prs-until-merge-ready.md) (4 KB)
 - [Watch rows and subagent models](agents/watch-rows-and-subagent-models.md) (5 KB)
 
 ### context

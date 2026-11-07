@@ -30,11 +30,11 @@ describe('phone monitor channels', () => {
     expect(calls).toEqual([['system:stats', []], ['gpu:stats', []]]);
   });
 
-  it('sends the Model Server without its paths, log or settings', async () => {
+  it('sends the Model Server without its paths or log, and only the settings a device may change', async () => {
     const { dispatch } = host({
       'engine:status': {
         install: { binPath: 'C:/secret/llama-server.exe', version: 'b1' },
-        running: true, port: 8080, log: ['C:/models/x.gguf loaded'], settings: { modelsDir: 'C:/models' },
+        running: true, port: 8080, log: ['C:/models/x.gguf loaded'], settings: { modelsDir: 'C:/models', bind: 'lan', apiKey: 'k', port: 8080, maxLoaded: 2, jitLoad: true, idleTtlSeconds: 900, clientModelSettings: false },
         resident: [{ id: 'google/gemma-4-e4b', contextLength: 32768, vramBytes: 5e9, loadedOn: 'gpu', gpuLayers: 42, totalLayers: 42, path: 'C:/models/gemma.gguf' }],
         loading: [{ id: 'qwen', phase: 'loading', startedAt: 1, progress: 0.5, path: 'x' }],
         memory: { budgetBytes: 24e9, kind: 'vram' },
@@ -45,6 +45,7 @@ describe('phone monitor channels', () => {
       resident: [{ id: 'google/gemma-4-e4b', contextLength: 32768, vramBytes: 5e9, loadedOn: 'gpu', gpuLayers: 42, totalLayers: 42 }],
       loading: [{ id: 'qwen', phase: 'loading', startedAt: 1, progress: 0.5 }],
       memory: { budgetBytes: 24e9, kind: 'vram' },
+      settings: { maxLoaded: 2, jitLoad: true, idleTtlSeconds: 900, clientModelSettings: false },
     });
     expect(await callFromPhone(host({ 'engine:status': { install: {}, running: false, resident: [] } }).dispatch, 'engine:status', []))
       .toEqual({ running: false, installed: false, resident: [], loading: [] });

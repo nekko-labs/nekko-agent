@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { allowModeChange } from '../components/YoloWarning.js';
 import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -295,6 +296,13 @@ export function SettingsView() {
                   <span className="text-sm">Confirm deletions</span>
                   <Toggle aria-label="Confirm deletions" on={settings.skipDeleteConfirmation !== true} onChange={(v) => update({ skipDeleteConfirmation: !v })} />
                 </div>
+                <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-sm">Warn before YOLO</span>
+                    <p className="text-2xs text-ink-faint">Explain what YOLO lets through before a chat or the default switches to it.</p>
+                  </div>
+                  <Toggle aria-label="Warn before YOLO" on={settings.skipYoloWarning !== true} onChange={(v) => update({ skipYoloWarning: !v })} />
+                </div>
                 <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-3">
                   <div className="min-w-0">
                     <span className="text-sm">Setup wizard</span>
@@ -353,7 +361,7 @@ export function SettingsView() {
                   {CHAT_MODES.map((m) => {
                     const active = (settings.defaultChatMode ?? 'guardrails') === m.value;
                     return (
-                      <button key={m.value} onClick={() => update({ defaultChatMode: m.value })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
+                      <button key={m.value} onClick={() => void allowModeChange(settings.defaultChatMode, m.value).then((ok) => { if (ok) update({ defaultChatMode: m.value }); })} className={`card p-3 text-left ${active ? 'border-accent' : ''}`}>
                         <div className="text-sm font-medium">{m.label}</div>
                         <div className="mt-0.5 text-2xs text-ink-faint">{m.desc}</div>
                       </button>

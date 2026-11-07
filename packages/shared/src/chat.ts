@@ -85,8 +85,19 @@ export interface ChatMessage {
    * before it. The earlier messages stay in the transcript so the chat can
    * still show them, but from here on a model is sent this summary and what
    * follows it, never what came before (`sinceCompaction`).
+   *
+   * `by: 'claude-code'` marks a compaction Claude Code made itself in a
+   * Claude Agent chat: `trigger` says whether it did so on its own near the
+   * window (`auto`) or for a typed `/compact` (`manual`), and `tokensBefore` /
+   * `tokensAfter` are its context size either side, as it reported them.
    */
-  compaction?: { summarized: number };
+  compaction?: {
+    summarized: number;
+    by?: 'claude-code';
+    trigger?: 'auto' | 'manual';
+    tokensBefore?: number;
+    tokensAfter?: number;
+  };
   /**
    * Measurements for the reply this message ends, recorded by the host when the
    * turn finishes. On the last assistant message of a turn only. Counts and
@@ -342,6 +353,12 @@ export interface Session {
    * this chat's turns; the servers keep running for other chats.
    */
   disabledMcpServers?: string[];
+  /**
+   * MCP tools (`mcp__<server>__<tool>`) the user chose "Always allow this tool"
+   * for in this chat: once the chat has read untrusted content, other MCP calls
+   * ask first (the egress gate, decision 0054); these run without asking.
+   */
+  allowedMcpTools?: string[];
   /** Connector kinds whose context this chat's turns do not fetch. */
   disabledConnectors?: string[];
   /**
@@ -527,7 +544,13 @@ export type AgentEvent =
    * commands, sub-agents). It keeps working after the turn's `done` and wakes
    * on its own when one finishes, so the chat says so meanwhile.
    */
-  | { type: 'claude_code_background'; sessionId: string; tasks: number };
+  | { type: 'claude_code_background'; sessionId: string; tasks: number }
+  /**
+   * Claude Code is compacting a Claude Agent chat's context (on its own near
+   * the window, or for a typed `/compact`): `running` while it summarizes,
+   * then `done`, or `failed` with Claude Code's reason.
+   */
+  | { type: 'claude_code_compacting'; sessionId: string; state: 'running' | 'done' | 'failed'; error?: string };
 
 /**
  * What a session is waiting on a person for, right now.

@@ -9,8 +9,12 @@ FROM node:22-slim AS build
 WORKDIR /repo
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY apps/relay-server/package.json apps/relay-server/package.json
+COPY packages/shared/package.json packages/shared/package.json
 # --include-workspace-root pulls the root devDeps (typescript, @types/node).
-RUN npm ci -w @nekko-agent/relay-server --include-workspace-root
+RUN npm ci -w @nekko-agent/relay-server -w @nekko-agent/shared --include-workspace-root
+# The relay imports @nekko-agent/shared (brandEnv), so it is built first.
+COPY packages/shared packages/shared
+RUN npx tsc -p packages/shared/tsconfig.json
 COPY apps/relay-server apps/relay-server
 RUN npx tsc -p apps/relay-server/tsconfig.json
 
@@ -18,13 +22,17 @@ FROM node:22-slim AS deps
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY apps/relay-server/package.json apps/relay-server/package.json
-RUN npm ci -w @nekko-agent/relay-server --omit=dev
+COPY packages/shared/package.json packages/shared/package.json
+RUN npm ci -w @nekko-agent/relay-server -w @nekko-agent/shared --omit=dev
 
 FROM node:22-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=build /repo/apps/relay-server/dist ./dist
+# node_modules/@nekko-agent/shared links to packages/shared.
+COPY --from=build /repo/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /repo/packages/shared/dist ./packages/shared/dist
 COPY apps/relay-server/package.json ./package.json
 USER node
 EXPOSE 4400

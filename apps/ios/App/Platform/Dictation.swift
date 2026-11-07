@@ -507,7 +507,7 @@ final class Dictation {
             let text: String?
             if let transcribe { text = try await transcribe(wav) } else { text = try await onEngines(wav) }
             failing = false
-            let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let words = spellNekko((text ?? "").trimmingCharacters(in: .whitespacesAndNewlines))
             let range = NSRange(words.startIndex..., in: words)
             guard !Self.annotation.stringByReplacingMatches(in: words, range: range, withTemplate: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

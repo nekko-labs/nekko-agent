@@ -5,7 +5,7 @@ const live = vi.hoisted(() => ({ run: undefined as unknown }));
 vi.mock('../../liveRuns.js', () => ({ useLiveRun: () => live.run }));
 vi.mock('../../paneVisibility.js', () => ({ usePaneVisible: () => true }));
 vi.mock('../Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => <p>{text}</p> }));
-vi.mock('./ActivityGroup.js', () => ({ ActivityGroup: () => <div>Steps</div> }));
+vi.mock('./ActivityGroup.js', async (importOriginal) => ({ ...await importOriginal<object>(), ActivityGroup: () => <div>Steps</div> }));
 vi.mock('./rowState.js', () => ({ useRowState: (_key: string, value: unknown) => [value, vi.fn()] }));
 import type { LiveRun } from '../../liveRuns.js';
 import { LiveTurn } from './LiveTurn.js';
@@ -21,7 +21,9 @@ describe('voices in the reply being written', () => {
 
   it('leaves the newest text open and settles what came before it', () => {
     live.run = run('Reading the test.', 'Should I fix signup too?', 'Still working');
-    expect(voices(renderToStaticMarkup(<LiveTurn sessionId="s" held={null} />))).toEqual(['working', 'attention', undefined]);
+    const html = renderToStaticMarkup(<LiveTurn sessionId="s" held={null} />);
+    expect(voices(html)).toEqual(['working', 'attention', undefined]);
+    expect(html).toContain('data-turn-activity');
   });
 
   it('keeps lifecycle cards between live text and identical in the held handoff', () => {
@@ -56,7 +58,9 @@ describe('voices in the reply being written', () => {
   });
 
   it('a held run has finished, so its last text is the reply', () => {
-    expect(voices(renderToStaticMarkup(<LiveTurn sessionId="s" held={run('Reading.', 'Fixed.')} />))).toEqual(['working', 'reply']);
+    const html = renderToStaticMarkup(<LiveTurn sessionId="s" held={run('Reading.', 'Fixed.')} />);
+    expect(voices(html)).toEqual(['working', 'reply']);
+    expect(html).not.toContain('data-turn-activity');
   });
 
   it('a held run with no tools matches the plain reply that replaces it', () => {

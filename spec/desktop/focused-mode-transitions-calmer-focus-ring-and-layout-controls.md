@@ -65,3 +65,13 @@ Implemented and verified with 25 focused tests, desktop typecheck and production
 - Acceptance: matched light/dark 1400px and 760px captures, simple navigation
   reveal, panel enter/exit and rapid reversal checks, focused tests, typecheck
   and production build. Packaged builds and non-macOS platforms remain unverified.
+
+## Consolidated View dropdown
+
+Implemented; 102 focused tests and desktop typecheck pass. Matching 1440px/460px dark-theme captures were inspected; 15 isolated Electron checks cover layout/snap/dismissal, keyboard opening and focus return, screen-toggle and placement bridge callbacks, and 460×400 short-window scrolling. Desktop production build passes. Physical display placement and packaged builds have not been exercised.
+
+The Agents toolbar has a **View** button immediately to the right of **+**. Its viewport-bounded dropdown consolidates **Single agent** (formerly Focused), **Multi-agent** (formerly Dynamic), **Snap to grid**, and desktop screen/desktop selection and new-agent placement. Screen controls are embedded, not another nested popup; the Local Web UI omits desktop-only controls. The dropdown opens by click or keyboard, closes on Escape/outside click or focus leaving, and scrolls within short windows. Single/Multi-agent retain the saved `focus`/`grid` keys and Cmd/Ctrl+Shift+1/2 shortcuts. This changes how many agents are visible, not how many may run.
+
+Snap to grid remains available only in free-form Multi-agent; Single agent and Fixed grid disable it without clearing the saved preference. The divider's magnetic capture range is reduced by 25%, from 4% to 3% of its containing split on either side of an evenly spaced boundary. Pane sizes, equal-spacing targets and persistence do not change.
+
+Acceptance: View follows + at wide/narrow widths; selection and snap controls update the existing wall; screens and placement call the existing bridge; Escape restores trigger focus; the popover fits the viewport; a divider within 2.9% snaps and one 3.5% away does not. No new data access, network calls, OS permissions or automatic monitor changes are introduced. Actual physical multi-monitor window placement remains the existing implementation, not a new capability.

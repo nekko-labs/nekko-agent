@@ -153,7 +153,7 @@ Philip's rule, recorded in the [desktop spec](../desktop/desktop-simple-and-expe
 - **Changes** (Show by default) needs changed files, in both modes, and says how many. The phone reads `changes:list` when a chat opens and after each turn. iPhone: *3 files changed* in More. Android: the header icon with a count badge, spoken as *3 files changed*, because the bar has no room for the words.
 - **PR status** (`pr-status`, Show by default) needs a PR: the PR chip, its sheet, and the iPhone plan sheet's PR chips. `ph-git` keeps the rest: More > Git and Commit or open a PR on the iPhone, and More > Git on Android, which is new there.
 - **Monitors** (`hardware`, `ph-monitors`) are off by default in both modes and appear only while a local model runs on the computer the phone is connected to. **Always** pins them on. A model on a further computer that one is linked to is not reported to a phone: `computers:*` answers the desktop window only.
-- **Run settings** (`run-settings`, Expert only): main's offline, incognito, Git branch and tool style choices, in the model dropdown.
+- **Run settings** (`run-settings`, Expert only): main's offline, incognito, Git branch, tool style, memory, project rules, Privacy Shield and tools choices, in the model dropdown.
 - **Strings:** every new string is in the seven languages. On Android, everything this branch had in English moved to `strings_simple.xml`.
 
 ## Not yet

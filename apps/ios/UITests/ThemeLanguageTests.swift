@@ -58,6 +58,19 @@ final class ThemeLanguageTests: XCTestCase {
         attach(app, "mode-label-full-preview")
     }
 
+    /// Same real chat fixture on both app revisions, with no paired computer or network.
+    func testLightPaletteEvidence() {
+        for preset in ["x-plum-white", "x-indigo-white", "x-plum-dark", "x-indigo-dark"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
+                                   "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", preset, "-uiTestMarkdownLab"]
+            app.launch()
+            XCTAssertTrue(app.staticTexts["Release checklist"].waitForExistence(timeout: 15), "the real reply is drawn")
+            attach(app, "light-themes-\(preset)")
+            app.terminate()
+        }
+    }
+
     func testRunsInJapanese() {
         let app = XCUIApplication()
         app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-splash", "NO",

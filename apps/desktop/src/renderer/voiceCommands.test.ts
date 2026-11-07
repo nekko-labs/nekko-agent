@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
-import { parseVoiceIntent, splitVoiceSegments, splitWakeTail, type VoiceIntent } from './voiceCommands.js';
+import { parseVoiceIntent, spellNekko, splitVoiceSegments, splitWakeTail, type VoiceIntent } from './voiceCommands.js';
 
 interface Fixture { cases: Array<{ say: string; intent: VoiceIntent; platforms?: string[] }> }
 // The fixture the Swift grammar on iOS runs too.
@@ -70,9 +70,19 @@ describe('splitVoiceSegments', () => {
   });
 });
 
+describe('spellNekko', () => {
+  it.each(['Neco', 'Necco', 'Necko', 'Neko', 'neco', 'NECCO'])('writes %s as Nekko wherever it stands', (heard) => {
+    expect(spellNekko(`${heard}, send it. Then ask ${heard}'s helper.`)).toBe("Nekko, send it. Then ask Nekko's helper.");
+  });
+  it('leaves words that only start the same way', () => {
+    expect(spellNekko('Necklace and necktie on a neck, a nectar economy.')).toBe('Necklace and necktie on a neck, a nectar economy.');
+  });
+});
+
 describe('splitWakeTail', () => {
   it('takes a wake word said alone at the end, so the next segment can carry it', () => {
     expect(splitWakeTail('Nekko.')).toEqual({ rest: '', wake: 'Nekko.' });
+    expect(splitWakeTail('Necco.')).toEqual({ rest: '', wake: 'Necco.' });
     expect(splitWakeTail('Fix the bug. Neko?')).toEqual({ rest: 'Fix the bug.', wake: 'Neko?' });
     expect(splitWakeTail('Tell Nekko.')).toEqual({ rest: 'Tell Nekko.', wake: '' });
     expect(splitWakeTail('Nekko, send it.')).toEqual({ rest: 'Nekko, send it.', wake: '' });

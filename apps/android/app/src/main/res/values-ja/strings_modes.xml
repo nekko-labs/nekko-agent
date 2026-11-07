@@ -69,4 +69,11 @@
     <string name="pill_move_top">上部に移動</string>
     <string name="pill_dock_left">左にドック</string>
     <string name="pill_dock_right">右にドック</string>
+    <string name="yolo_warning_title">YOLO をオンにしますか？</string>
+    <string name="yolo_warning_text">エージェントは事前に確認せずに、コマンドの実行、ファイルの編集、アドレスの取得、ツールの呼び出しを行います。読み込んだ Web ページ、検索結果、ツールの出力に指示が含まれていることがあり、YOLO ではそれがファイルやデータをこのコンピューターの外へ送るのを止めるものがありません。拒否ルールは引き続き適用されます。</string>
+    <string name="yolo_warning_recommend">ガードレールは必要なときだけ確認する、おすすめのモードです。</string>
+    <string name="yolo_warning_skip">今後は警告しない</string>
+    <string name="yolo_warning_skip_detail">この電話のみ。警告は 設定 → セキュリティ で再びオンにできます。</string>
+    <string name="yolo_warning_keep_asking">確認を続ける</string>
+    <string name="yolo_warning_turn_on">YOLO をオンにする</string>
 </resources>

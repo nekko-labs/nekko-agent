@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { planStepKind, type ChatMessage, type PlanStep, type PlanStepKind, type PrInfo, type Session, type SessionSummary } from '@nekko-agent/shared';
+import type { ChatMessage, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
 import { sheetPlan } from '../claudeAgentPlan.js';
-import { VERIFY_GROUP_ID, groupVerification } from '../planVerifyGroup.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
 import { CheckIcon, CloseIcon, RocketIcon, TagIcon, WarningIcon } from '../icons.js';
@@ -122,9 +121,6 @@ function CiChips({ info }: { info: PrInfo }) {
   </>;
 }
 
-const KIND_LABEL: Record<PlanStepKind, string> = { build: 'Build', verify: 'Verify', ship: 'Ship' };
-
-/** The step's place in the loop, a small caps word before its title. */
 /**
  * A pill-shaped caret the whole plan toggles on, so the fold affordance reads
  * as a button rather than a stray glyph. "down" points to the detail about to
@@ -136,13 +132,6 @@ function PlanCaret({ direction, label }: { direction: 'up' | 'down'; label: stri
       {direction === 'down' ? <path d="m4 6 4 4 4-4" /> : <path d="m4 10 4-4 4 4" />}
     </svg>
   </span>;
-}
-
-function Kind({ kind: saved, current }: { kind?: PlanStepKind; current?: boolean }) {
-  // A plan saved before looking became part of Build still says `explore`.
-  const kind = planStepKind(saved);
-  if (!kind) return null;
-  return <span className="plan-sheet-kind" data-plan-kind={kind} data-current={current || undefined}>{KIND_LABEL[kind]}</span>;
 }
 
 /** "Pass 2": Verify sent the work back to this step. */
@@ -215,12 +204,11 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
  * The agent's plan as a sheet tucked behind the composer's top edge, with
  * curved shoulders into it and a slightly different tint.
  *
- * Folded (the default) it is one or two lines: the step being worked (its loop
- * kind, title, pass and place in the plan) and a row of chips for it: the
- * sub-agents as one count, then the step's PRs, task links, verification and
- * files. Clicking it opens the whole plan, every step with its own chips
- * underneath: task links, sub-agents (each opens its chat), verification, CI
- * checks, PRs and files. Each step with details opens and closes on its own
+ * Folded it is one or two lines: the step being worked (its title, pass
+ * and place in the plan) and its PR, task and file chips. Sub-agent cards
+ * stay below it. Clicking it opens the whole flat plan, every step with its
+ * own report and related chips underneath: task links, sub-agents (each opens
+ * its chat), CI checks, PRs and files. Each step with details opens and closes on its own
  * title: unfinished steps start open, finished ones closed, except the last
  * step that has results for the user (PRs, files, links), which starts open.
  */
@@ -276,12 +264,12 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, liveVersion]);
   const messages = planSession?.messages;
-  const fullPlan = useMemo(() => sheetPlan(planSession, providers), [planSession, providers]);
+  const plan = useMemo(() => sheetPlan(planSession, providers) ?? [], [planSession, providers]);
   const childSessions = useMemo(() => (sessions ?? []).filter((s) => s.parentSessionId === sessionId), [sessions, sessionId]);
-  // Chips land on the plan's own steps; then every check folds into one Verify step.
-  const { steps: plan, checks: verifyChecks, links } = useMemo(
-    () => groupVerification(fullPlan ?? [], planStepLinks(messages ?? [], fullPlan, basePath, childSessions)),
-    [messages, fullPlan, basePath, childSessions]);
+  // Keep the published order and each report on its own step. Related results
+  // still share that step's disclosure, without a synthetic phase wrapper.
+  const links = useMemo(() => planStepLinks(messages ?? [], plan, basePath, childSessions),
+    [messages, plan, basePath, childSessions]);
   if (!plan.length) return null;
   const running = new Set(runningSessionIds());
   const childById = new Map(childSessions.map((c): [string, Child] => [c.id, { id: c.id, title: c.title || 'Sub-agent', running: running.has(c.id) || !!getLiveRun(c.id) || !!c.activeRun }]));
@@ -330,7 +318,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
       <button type="button" className="plan-sheet-fold" onClick={() => setCollapsed(false)} aria-expanded={false} title="Show the whole plan">
         <span className="plan-sheet-line">
           <StepMark step={current} paused={paused} />
-          <Kind kind={current.kind} current={current.status === 'active'} />
           <span className={`min-w-0 flex-1 truncate ${current.status === 'done' ? 'text-ink-soft' : 'text-ink'}`} title={current.title}>{current.title}</span>
           <Pass step={current} />
           <span className="shrink-0 tabular-nums text-2xs text-ink-faint">{position} of {plan.length}</span>
@@ -356,16 +343,12 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
         const own = links.get(step.id);
         const checks = ci.get(step.id) ?? [];
         const stepKids = kids(own);
-        // The grouped Verify step shows each check as a sub-bullet, each with its own report.
-        const subs = step.id === VERIFY_GROUP_ID ? verifyChecks : [];
-        const report = subs.length ? undefined : step.verification;
         const chips = !!((prsShown && own?.prs.length) || own?.artifacts.length || own?.projects.length || stepKids.length || checks.length);
-        const detail = subs.length ? step.note : report?.detail || step.note;
+        const detail = step.verification?.detail || step.note;
         const squeezed = step.status === 'done' || step.status === 'skipped';
-        const more = !!(detail || chips || subs.length);
+        const more = !!(detail || chips);
         const isOpen = more && (stepOpen[step.id] ?? (!squeezed || step.id === resultStep));
         const line = <>
-          <Kind kind={step.kind} current={step.status === 'active'} />
           <span className={`min-w-0 flex-1 truncate ${squeezed ? 'text-ink-soft' : 'text-ink'}${step.status === 'skipped' ? ' line-through' : ''}`} title={step.title}>{step.title}</span>
           <Pass step={step} />
         </>;
@@ -380,20 +363,6 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
               : <p className="plan-sheet-line">{line}</p>}
             {more && <div className="plan-sheet-more" data-plan-more hidden={!isOpen}>
               {detail && <p className="truncate text-xs text-ink-faint" title={detail}>{detail}</p>}
-              {subs.length > 0 && <ul className="plan-sheet-substeps" data-plan-substeps>
-                {subs.map(sub => {
-                  const subDetail = sub.verification?.detail || sub.note;
-                  return <li key={sub.id} className="plan-sheet-substep" data-plan-substep={sub.id}>
-                    <StepMark step={sub} paused={paused} />
-                    <div className="min-w-0 flex-1">
-                      <p className="plan-sheet-line">
-                        <span className={`min-w-0 flex-1 truncate ${sub.status === 'done' || sub.status === 'skipped' ? 'text-ink-soft' : 'text-ink'}${sub.status === 'skipped' ? ' line-through' : ''}`} title={sub.title}>{sub.title}</span>
-                      </p>
-                      {subDetail && <p className="truncate text-xs text-ink-faint" title={subDetail}>{subDetail}</p>}
-                    </div>
-                  </li>;
-                })}
-              </ul>}
               {chips && <div className="plan-sheet-chips">
                 {own?.projects.map(link => <ProjectChip key={link.url} link={link} />)}
                 {stepKids.map(child => <SubagentChip key={child.id} child={child} onOpen={openChild} />)}

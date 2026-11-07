@@ -41,6 +41,8 @@ export interface LiveActivity {
   tail: string;
   /** An image turn's stage ("Loading the image model"), which is all it reports. */
   image?: string;
+  /** Claude Code is compacting the chat's context: nothing else moves meanwhile. */
+  compacting?: boolean;
   /** Reasoning streamed since the last step, not yet folded into one. */
   thinking: string;
   startedAt: number;
@@ -100,6 +102,15 @@ export function reduceLiveActivity(
       });
       break;
     }
+
+    case 'claude_code_compacting':
+      a.compacting = event.state === 'running';
+      if (event.state === 'running') {
+        push(a, { id: `compact_${now}_${a.steps.length}`, kind: 'note', label: 'Compacting', detail: 'Claude Code is summarizing the conversation to free up context', at: now });
+      } else if (event.state === 'failed') {
+        push(a, { id: `compact_${now}_${a.steps.length}`, kind: 'note', label: 'Compaction failed', detail: truncateWords((event.error ?? '').replace(/\s+/g, ' '), 50), at: now });
+      }
+      break;
 
     case 'image_status':
       // An image turn has no narration; its stage is the whole story.
@@ -276,6 +287,8 @@ function firstWords(text: string, words = SHORT_STATUS_WORDS): string {
  */
 export function shortLiveStatus(a: LiveActivity | undefined): string {
   if (!a) return '';
+  // A compaction holds the whole turn until it ends, however long it takes.
+  if (a.compacting) return 'Compacting context';
 
   const last = a.steps[a.steps.length - 1];
   if (last?.kind === 'tool' && last.status === 'running') {

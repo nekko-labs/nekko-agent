@@ -8,7 +8,7 @@ import { loadWall, summary, windowTag } from '../tests/renderWall.js';
 
 vi.mock('../store.js', (original) => liveStore(original as never));
 vi.mock('../liveRuns.js', async (original) => ({ ...(await original<object>()), useLiveRun: () => undefined }));
-vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useMonitors: () => ({}), useResourceSample: () => ({ system: null, gpu: null }) }));
+vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useWatchedComputer: () => null, useMonitors: () => ({}), useResourceSample: () => ({ system: null, gpu: null }) }));
 
 const styles = stylesheet('styles.css');
 const FOCUS_WINDOW = ".command-wall-layout[data-wall-layout='focus'] .command-wall-window";

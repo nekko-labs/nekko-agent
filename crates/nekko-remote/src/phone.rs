@@ -40,6 +40,7 @@ pub struct Policy {
     pub machine_view: Vec<String>,
     pub machine_resident_view: Vec<String>,
     pub skill_view: Vec<String>,
+    pub tool_view: Vec<String>,
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
@@ -110,6 +111,28 @@ pub struct Policy {
     pub step_up: crate::step_up::Limits,
 }
 
+/// `allowedMcpTools` from a phone: MCP tool names (`mcp__<server>__<tool>`) only,
+/// as `isMcpToolList` in packages/shared/src/phone-access.ts.
+/// A `tool:approve` that passed the gate, with who answered as its fourth
+/// argument for the chat's audit trail. Whatever the device sent there is
+/// replaced: a device never names itself.
+fn with_approver(channel: &str, args: Value, via: &str, device: &str) -> Value {
+    if channel != "tool:approve" {
+        return args;
+    }
+    let mut list = args.as_array().cloned().unwrap_or_default();
+    list.truncate(3);
+    list.push(json!({ "via": via, "device": device }));
+    Value::Array(list)
+}
+
+fn mcp_tool_list(v: &Value) -> bool {
+    v.as_array().is_some_and(|a| {
+        a.len() <= 200
+            && a.iter().all(|t| t.as_str().is_some_and(|s| s.starts_with("mcp__") && s.encode_utf16().count() <= 200))
+    })
+}
+
 fn strings(v: &Value) -> Vec<String> {
     v.as_array().map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default()
 }
@@ -132,6 +155,7 @@ pub fn policy() -> &'static Policy {
             machine_view: strings(&v["machineView"]),
             machine_resident_view: strings(&v["machineResidentView"]),
             skill_view: strings(&v["skillView"]),
+            tool_view: strings(&v["toolView"]),
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
@@ -463,6 +487,10 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
             if let Some(mode) = arg(1).get("mode") {
                 chat_mode(mode, "mode")?;
             }
+            // "Always allow this tool" (decision 0054): MCP tool names only.
+            if arg(1).get("allowedMcpTools").is_some_and(|v| !mcp_tool_list(v)) {
+                return Err(denied("value-invalid", "allowedMcpTools"));
+            }
             if let Some(effort) = arg(1).get("effort")
                 && !effort.as_str().is_some_and(|e| has(&policy().effort_levels, e))
             {
@@ -610,6 +638,10 @@ pub fn redact(channel: &str, result: Value) -> Value {
             Value::Array(list) => Value::Array(list.iter().map(|s| pick(s, &policy().skill_view)).collect()),
             _ => json!([]),
         },
+        "tools:list" => match result {
+            Value::Array(list) => Value::Array(list.iter().map(|t| pick(t, &policy().tool_view)).collect()),
+            _ => json!([]),
+        },
         "session:get" | "chat:steer" => session_view(result),
         // One photo's data URL, nothing else.
         "session:photo" => match result {
@@ -652,7 +684,14 @@ pub fn redact(channel: &str, result: Value) -> Value {
         "limits:get" => crate::phone_views::limits(&result, &policy().views),
         "system:stats" => crate::phone_views::system(&result, &policy().views),
         "gpu:stats" => crate::phone_views::gpu(&result, &policy().views),
-        "engine:status" => crate::phone_views::engine(&result, &policy().views),
+        "engine:status" => {
+            // With what a device may set, so reading the Model Server's choices needs no change proof.
+            let mut view = crate::phone_views::engine(&result, &policy().views);
+            if let (Some(o), Some(s)) = (view.as_object_mut(), result.get("settings").filter(|s| s.is_object())) {
+                o.insert("settings".into(), pick(s, &policy().model_server_view));
+            }
+            view
+        }
         "context:preview" => crate::phone_views::context(&result, &policy().views),
         "engine:settings" => pick(&result, &policy().model_server_view),
         "activity:state" => pick(&result, &policy().activity_view),
@@ -1125,6 +1164,7 @@ impl Gate {
                     self.record(&who, &channel, Err(d.code.to_string()));
                     return Err(d.to_string());
                 }
+                let args = with_approver(&channel, args, "phone", &who.device_id);
                 let result = call(&self.run, channel.clone(), args).await;
                 self.record(&who, &channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
                 result
@@ -1198,6 +1238,7 @@ impl Gate {
             self.record(who, channel, Err(d.code.to_string()));
             return Some(Err(d.to_string()));
         }
+        let args = with_approver(channel, args, "paired computer", &who.device_id);
         let result = (self.run)(channel.to_string(), args).await;
         self.record(who, channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
         Some(result)
@@ -1649,6 +1690,16 @@ mod tests {
                             "pending": false, "failures": 1, "lastError": "x".repeat(600) }]);
         assert_eq!(got, want);
         assert_eq!(redact("session:watches", Value::Null), json!([]));
+    }
+
+    #[test]
+    fn tools_reach_a_phone_as_names_and_what_they_do() {
+        let raw = json!([{ "name": "bash", "description": "Run a command", "inputSchema": { "type": "object" } }, { "name": "mcp__gh__issue" }]);
+        assert_eq!(
+            redact("tools:list", raw),
+            json!([{ "name": "bash", "description": "Run a command" }, { "name": "mcp__gh__issue" }])
+        );
+        assert_eq!(redact("tools:list", Value::Null), json!([]));
     }
     use super::*;
     use std::sync::Mutex;
@@ -2235,8 +2286,13 @@ mod tests {
                 json!({ "incognito": true }),
                 json!({ "memory": "all" }),
                 json!({ "guidance": "off" }),
+                json!({ "allowedMcpTools": ["mcp__slack__post_message"] }),
             ] {
                 assert!(set(guarded.clone()).unwrap_err().contains("proof-required"), "{guarded}");
+            }
+            // "Always allow this tool" names MCP tools only, whatever the proof.
+            for bad in [json!({ "allowedMcpTools": ["bash"] }), json!({ "allowedMcpTools": "mcp__x__y" })] {
+                assert!(set(bad.clone()).unwrap_err().contains("value-invalid"), "{bad}");
             }
             assert_eq!(calls.lock().unwrap().iter().filter(|(c, _)| c == "session:setOptions").count(), 1);
         }
@@ -3117,10 +3173,10 @@ mod tests {
         }
 
         #[test]
-        fn sends_the_model_server_without_paths_log_or_settings() {
+        fn sends_the_model_server_without_paths_or_log_and_only_settable_settings() {
             let results = json!({ "engine:status": {
                 "install": { "binPath": "C:/secret/llama-server.exe" }, "running": true, "port": 8080, "log": ["C:/models/x.gguf"],
-                "settings": { "modelsDir": "C:/models" },
+                "settings": { "modelsDir": "C:/models", "bind": "lan", "apiKey": "k", "maxLoaded": 2, "jitLoad": true, "clientModelSettings": false },
                 "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu", "path": "C:/m.gguf" }],
                 "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1, "path": "x" }],
                 "memory": { "budgetBytes": 24, "kind": "vram" },
@@ -3133,6 +3189,7 @@ mod tests {
                     "resident": [{ "id": "google/gemma-4-e4b", "contextLength": 32768, "loadedOn": "gpu" }],
                     "loading": [{ "id": "qwen", "phase": "loading", "startedAt": 1 }],
                     "memory": { "budgetBytes": 24, "kind": "vram" },
+                    "settings": { "maxLoaded": 2, "jitLoad": true, "clientModelSettings": false },
                 })
             );
             let (got, _) =

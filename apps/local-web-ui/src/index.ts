@@ -6,7 +6,7 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
-import { parseCloudScope, runRelayAgent } from './relay-agent.js';
+import { IDLE_STOP_MS, parseCloudScope, runRelayAgent } from './relay-agent.js';
 import { runCli } from 'nekko-agent/run';
 import { isLoopbackHost, tokenMatches, validateBindSecurity } from './security.js';
 import { createApiSecurityHook, isOriginForm, type RequestSecurityOptions } from './request-security.js';
@@ -81,6 +81,7 @@ async function main() {
       pairCode,
       hostKey,
       scope: parseCloudScope(env('CLOUD_SCOPE')),
+      idleStopMs: env('CLOUD_MACHINE') ? IDLE_STOP_MS : undefined,
     });
     return;
   }

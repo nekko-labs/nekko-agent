@@ -149,6 +149,40 @@ extension FleetTests {
         }
     }
 
+    /// The phone was away when a question was answered there: the resolving event
+    /// never reached it, so the reconnect read alone must clear the chat's row.
+    func testReconnectReadClearsNeedsYouThePhoneMissedOnActiveAndFleet() async throws {
+        for fleet in [false, true] {
+            secure = MemoryStore()
+            connections = []
+            let s = makeStore()
+            s.load()
+            let a = try await s.pair(link("aaaa"))
+            let ca = try XCTUnwrap(connections.last)
+            ca.replies[Channels.chatPending] = { _ in [:] }
+            ca.online()
+            await settle()
+            if fleet {
+                _ = try await s.pair(link("bbbb"))
+                let cb = try XCTUnwrap(connections.last)
+                cb.replies[Channels.chatPending] = { _ in [:] }
+                cb.online()
+                await settle()
+            }
+            ca.event(["type": "question", "sessionId": "aaaa1", "request": ["callId": "q", "questions": []]])
+            await settle()
+            XCTAssertEqual(s.activity(on: a)["aaaa1"], .needsYou)
+            // Away: answered on the computer, and the phone never hears of it.
+            ca.status(RelayStatus(.connecting))
+            await settle()
+            ca.online()
+            await settle()
+            XCTAssertNil(s.activity(on: a)["aaaa1"], "nothing waits there any more")
+            XCTAssertEqual(s.attentionCount, 0)
+            s.disconnect()
+        }
+    }
+
     func testResolutionReadFromOldLinkCannotDismissAfterReconnect() async throws {
         for fleet in [false, true] {
             secure = MemoryStore()
