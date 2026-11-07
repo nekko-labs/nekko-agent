@@ -248,7 +248,7 @@ opening on the board. Click a zone to make it the active one (it gets a heavier
 outline), then click an agent in the Agents list to show it there, or drag the
 agent from the list straight into a zone. Clicking an agent that is already on
 the board just switches to its zone. Each zone has a colour, shown as a small
-square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips.
+square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips. You can also choose **+ > Add agent zone** in the board toolbar to add and select an empty right-hand column without creating an agent or switching views.
 Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
 whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.

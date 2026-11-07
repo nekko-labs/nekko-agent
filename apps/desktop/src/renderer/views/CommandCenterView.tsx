@@ -30,6 +30,7 @@ import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '..
 
 import { allPanes, type PaneKind } from '../layout.js';
 import {
+  addZone,
   applySnap,
   DEFAULT_ASPECT,
   openWallPane,
@@ -687,7 +688,10 @@ export function WallToolbar({
             terminal of its own. An agent's Changes, Files and Browser live in that agent's own
             header beside Logs. The empty wall can still open the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
-          <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} />
+          <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} onAddZone={() => setWall((w) => {
+            const { root, id } = addZone(w.root, { edge: 'right' });
+            return id ? { ...w, root, activeZone: id } : w;
+          })} />
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
         <div className="wall-layout-control">
