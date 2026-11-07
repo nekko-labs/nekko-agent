@@ -1014,18 +1014,6 @@ struct Composer: View {
                 .padding(.horizontal, 10).padding(.vertical, 4).background(palette.accent.opacity(0.15), in: Capsule()).foregroundStyle(palette.accent)
                 .accessibilityIdentifier("chat.savedPrompt")
             }
-            if loadingPhotos {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Adding photos…").font(.caption)
-                }.foregroundStyle(palette.inkSoft)
-            }
-            if !images.isEmpty {
-                ComposerPhotos(photos: images) { index in
-                    images.remove(at: index)
-                    photos = []
-                }
-            }
             if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
@@ -1073,6 +1061,21 @@ struct Composer: View {
             }
             // One box the width of the screen: the message on top, + and Send below it, then model and context.
             VStack(alignment: .leading, spacing: 0) {
+                if loadingPhotos {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Adding photos…").font(.caption)
+                    }
+                    .foregroundStyle(palette.inkSoft)
+                    .padding(.horizontal, 12).padding(.top, 10)
+                }
+                if !images.isEmpty {
+                    ComposerPhotos(photos: images) { index in
+                        images.remove(at: index)
+                        photos = []
+                    }
+                    .padding(.horizontal, 12).padding(.top, 10)
+                }
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
                 // "Hide keyboard" action is on the text view itself.
                 MarkdownComposerField(text: $text, focused: $focused,
