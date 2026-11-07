@@ -14,6 +14,7 @@ struct ChatView: View {
     @State private var chat: ChatModel?
     @State private var showModels = false
     @State private var showChanges = false
+    @State private var showAudit = false
     @State private var changedFiles = 0
     @State private var renaming = false
     @State private var renameText = ""
@@ -322,6 +323,9 @@ struct ChatView: View {
                             Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
                                 .accessibilityIdentifier("chat.terminals")
                         }
+                        // Who allowed what in this chat: read only, value-free.
+                        Button { showAudit = true } label: { Label("Audit trail", systemImage: "checkmark.shield") }
+                            .accessibilityIdentifier("chat.audit")
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
@@ -337,6 +341,9 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
+        .sheet(isPresented: $showAudit) {
+            AuditTrailView(load: { try await chat.auditTrail() }, incognito: chat.session?.runOptions["incognito"]?.bool == true)
+        }
         // Read with the chat and after each turn: Changes shows only with something in it.
         .task(id: chat.session?.updatedAt) {
             guard store.pcSettings.phoneChanges, let c = try? await chat.changes() else { return }

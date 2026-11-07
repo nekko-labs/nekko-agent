@@ -56,6 +56,8 @@ public enum Channels {
     /// What the agent changed in a chat, as a capped read-only diff (`PhoneChanges`);
     /// refused unless the computer allows it (`phoneChanges`).
     public static let changesList = "changes:list"
+    /// A chat's audit trail (`AuditEvent`): who allowed what, never what was read or sent.
+    public static let auditRead = "audit:read"
     /// Change or remove a queued prompt, checked against the text the phone showed.
     public static let chatEditQueued = "chat:editQueued"
     /// A new chat with this one's conversation before a message.
@@ -127,7 +129,7 @@ public enum Channels {
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
         sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
-        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList,
+        chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList, auditRead,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
