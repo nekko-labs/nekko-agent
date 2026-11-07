@@ -34,6 +34,7 @@ import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
 import { StyleSection } from './StyleSection.js';
+import { openCustomize } from '../components/CustomizeExperience.js';
 import { SimpleModeSettings } from '../components/SimpleModeSettings.js';
 import { useExpertMode, useShown } from '../simpleMode.js';
 
@@ -183,6 +184,7 @@ export function SettingsView() {
       <aside className="settings-rail">
         {!hasAppChrome && <h1 className="view-title">{tr('settings.title')}</h1>}
         <div aria-label="Skills and connectors" className="settings-shortcuts">
+          <button className="settings-nav-item" onClick={openCustomize}>Customize</button>
           {([{ view: 'skills', label: tr('nav.skills'), Icon: SkillsColorIcon }, { view: 'connectors', label: tr('nav.connectors'), Icon: ConnectorsColorIcon }] as const).map(({ view, label, Icon }) => (
             <button key={view} type="button" onClick={() => useStore.getState().setView(view)} className="settings-nav-item">
               <Icon className="h-4 w-4 shrink-0" />{label}<span aria-hidden="true" className="ml-auto text-ink-faint">↗</span>

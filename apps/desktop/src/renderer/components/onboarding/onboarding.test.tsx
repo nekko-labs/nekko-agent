@@ -271,10 +271,12 @@ describe('onboarding state machine', () => {
   });
 
   it('marks intermediate steps skipped when jumping forward via dots', () => {
-    const { state } = wizardTransition(initial, { type: 'goTo', to: 3 });
-    expect(state.index).toBe(3);
+    const target = ONBOARDING_STEPS.findIndex(s => s.id === 'integrations');
+    const { state } = wizardTransition(initial, { type: 'goTo', to: target });
+    expect(state.index).toBe(target);
     expect(state.steps['welcome']).toBe('skipped');
     expect(state.steps['theme']).toBe('skipped');
+    expect(state.steps['experience']).toBe('skipped');
     expect(state.steps['providers']).toBe('skipped');
     expect(state.steps['integrations']).toBeUndefined();
   });
@@ -284,7 +286,7 @@ describe('onboarding state machine', () => {
       wizardTransition(initial, { type: 'next' }).state,
       { type: 'next' },
     ).state;
-    const jumped = wizardTransition(atProviders, { type: 'goTo', to: 3 }).state;
+    const jumped = wizardTransition(atProviders, { type: 'goTo', to: ONBOARDING_STEPS.findIndex(s => s.id === 'integrations') }).state;
     expect(jumped.steps['welcome']).toBe('done');
     expect(jumped.steps['theme']).toBe('done');
     expect(jumped.steps['providers']).toBe('skipped');
@@ -297,7 +299,7 @@ describe('onboarding state machine', () => {
   });
 
   it('completes with skipped on skip-all', () => {
-    const { state, complete } = wizardTransition({ index: 2, steps: { theme: 'done' } } as WizardState, { type: 'skipAll' });
+    const { state, complete } = wizardTransition({ index: ONBOARDING_STEPS.findIndex(s => s.id === 'providers'), steps: { theme: 'done' } } as WizardState, { type: 'skipAll' });
     expect(complete).toBe(true);
     expect(state.steps['providers']).toBe('skipped');
   });

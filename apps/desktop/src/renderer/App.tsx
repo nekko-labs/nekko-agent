@@ -32,6 +32,7 @@ import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
 import { DesignBoardView } from './views/DesignBoardView.js';
 import { ArtifactsView } from './views/ArtifactsView.js';
+import { CustomizeExperience } from './components/CustomizeExperience.js';
 import { SkillsView } from './views/SkillsView.js';
 import { TrainingView } from './views/TrainingView.js';
 import { WorkflowsView } from './views/WorkflowsView.js';
@@ -394,6 +395,7 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
+      <ErrorBoundary label="Customize"><CustomizeExperience /></ErrorBoundary>
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>

@@ -12,6 +12,7 @@ import {
 } from '../components/onboarding/onboardingMachine.js';
 import { WelcomeStep } from '../components/onboarding/WelcomeStep.js';
 import { ThemeStep } from '../components/onboarding/ThemeStep.js';
+import { ExperienceStep } from '../components/onboarding/ExperienceStep.js';
 import { ProvidersStep } from '../components/onboarding/ProvidersStep.js';
 import { IntegrationsStep } from '../components/onboarding/IntegrationsStep.js';
 import { WorkTrackingStep } from '../components/onboarding/WorkTrackingStep.js';
@@ -172,6 +173,7 @@ export function OnboardingView() {
     >
       {step.id === 'welcome' && <WelcomeStep />}
       {step.id === 'theme' && <ThemeStep />}
+      {step.id === 'experience' && <ExperienceStep />}
       {step.id === 'providers' && <ProvidersStep onExit={close} />}
       {step.id === 'integrations' && <IntegrationsStep commitRef={stepCommitRef} />}
       {step.id === 'tracking' && <WorkTrackingStep commitRef={stepCommitRef} />}

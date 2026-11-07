@@ -37,6 +37,9 @@ final class LiveRelayTests: XCTestCase {
         let intro = app.buttons["firstRun.continue"]
         XCTAssertTrue(intro.waitForExistence(timeout: 10))
         intro.tap()
+        let experience = app.buttons["experience.continue"]
+        XCTAssertTrue(experience.waitForExistence(timeout: 5))
+        experience.tap()
         // Pair through the paste field; testPairFromADeepLink covers the link path.
         // On a freshly made simulator the first tap after install can land while
         // the screen is still settling (the light pass, #831): tap Continue again

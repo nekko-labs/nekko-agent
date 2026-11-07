@@ -34,6 +34,7 @@ struct ChatsView: View {
     @State private var showPanel = false
     /// The search field shows under the title.
     @State private var searching = false
+    @State private var viewOptionsOpen = false
     /// The pill scrolled away.
     @State private var pillHidden = false
     @Environment(Prefs.self) private var prefs
@@ -258,8 +259,15 @@ struct ChatsView: View {
 
     /// Group by, sort by, and what is shown: the desktop Agents panel's view menu.
     private var viewMenu: some View {
-        Menu {
-            ModeMenuPicker()
+        Button { viewOptionsOpen = true } label: {
+            Image(systemName: view.isStandard ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+        }
+        .accessibilityLabel("View options")
+        .accessibilityIdentifier("chats.view")
+        .popover(isPresented: $viewOptionsOpen) {
+          Form {
+            ExperienceModePicker()
+            Button("Customize…") { viewOptionsOpen = false; open(.customize) }
             Picker("Group by", selection: bind(\.groupBy)) {
                 // By computer, as the desktop offers it, once chats come from more than one place.
                 ForEach(ChatListView.GroupBy.allCases.filter { $0 != .computer || places.count > 1 }, id: \.self) {
@@ -289,15 +297,14 @@ struct ChatsView: View {
                 }
             }
             if view.canReorderGroups {
-                Button { reorderingGroups = true } label: { Label("Reorder groups…", systemImage: "arrow.up.arrow.down") }
+                Button { viewOptionsOpen = false; reorderingGroups = true } label: { Label("Reorder groups…", systemImage: "arrow.up.arrow.down") }
             }
             Divider()
             Button("Reset to defaults") { app.prefs.chatListView = .standard }.disabled(view.isStandard)
-        } label: {
-            Image(systemName: view.isStandard ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+          }
+          .frame(minWidth: 300, idealWidth: 340, minHeight: 420)
+          .presentationCompactAdaptation(.popover)
         }
-        .accessibilityLabel("View options")
-        .accessibilityIdentifier("chats.view")
     }
 
     private var view: ChatListView { app.prefs.chatListView }

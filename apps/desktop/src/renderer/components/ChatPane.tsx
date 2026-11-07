@@ -2626,7 +2626,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
         {surface !== 'composer' && !cleanStart && (
-        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} lead={hasAppChrome ? undefined : <ModeSwitch />} metadata={
+        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter}  metadata={
             git && showWorktree && (
               <span className="flex min-w-0 shrink items-center gap-1 text-2xs">
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}

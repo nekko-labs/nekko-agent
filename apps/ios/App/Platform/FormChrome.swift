@@ -15,6 +15,44 @@ extension View {
     }
 }
 
+/// A separate trailing control above the software keyboard, outside composer actions.
+private struct FloatingKeyboardDismiss: ViewModifier {
+    @Environment(\.palette) private var palette
+    @State private var visible = false
+
+    func body(content: Content) -> some View {
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if visible {
+                    HStack {
+                        Spacer()
+                        Button(action: hideKeyboard) {
+                            Image(systemName: "keyboard.chevron.compact.down")
+                                .font(.system(size: 20))
+                                .foregroundStyle(palette.ink)
+                                .frame(width: 44, height: 44)
+                                .background(.regularMaterial, in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Hide keyboard")
+                        .accessibilityIdentifier("composer.hideKeyboard")
+                    }
+                    .padding(.trailing, 12).padding(.vertical, 4)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                // A hardware keyboard's small assistant bar isn't an open software keyboard.
+                visible = frame.height > 100 && frame.minY < UIScreen.main.bounds.maxY
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in visible = false }
+    }
+}
+
+extension View {
+    func floatingKeyboardDismiss() -> some View { modifier(FloatingKeyboardDismiss()) }
+}
+
 /// A Form section header in the app's ink, in sentence case: the system's
 /// small grey capitals fall short of WCAG AA contrast.
 struct SectionHeader: View {
