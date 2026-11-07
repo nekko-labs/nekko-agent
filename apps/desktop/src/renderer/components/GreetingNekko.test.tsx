@@ -1,4 +1,5 @@
 import React from 'react';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { cssRule, stylesheet } from '../tests/css.js';
@@ -61,5 +62,13 @@ describe('Per-chat Nekko', () => {
     const css = stylesheet('styles.css');
     expect(cssRule(css, '.chat-mascot')).toMatchObject({ position: 'absolute', left: '4px', top: '-62.5px', width: '80px', height: '75px' });
     expect(cssRule(css, '.composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock')).toMatchObject({ 'margin-left': 'max(8%,92px)' });
+  });
+
+  // Source pin: an approval arrives from the host, which a server render never
+  // applies. His head sits 62.5px over the composer, right where the approval
+  // bar puts Deny, so he steps away until the user has answered.
+  it('steps away while an approval waits, so he never covers Deny (source pin)', () => {
+    const source = readFileSync(new URL('./ChatPane.tsx', import.meta.url), 'utf8');
+    expect(source).toMatch(/<ChatMascot\s+enabled=\{\(settings\?\.mascotEnabled \?\? true\) && !approval\}/);
   });
 });
