@@ -2928,9 +2928,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </div>}
             {/* The per-chat Nekko peeks over the composer's left end and watches
                 its caret; wall windows and the lone composer surface already
-                carry their own picker, and a new chat has the greeting cat. */}
+                carry their own picker, and a new chat has the greeting cat.
+                He steps away while an approval waits: his head would sit over
+                the approval bar's buttons, Deny included. */}
             {surface === 'full' && !cleanStart && <ChatMascot
-              enabled={settings?.mascotEnabled ?? true}
+              enabled={(settings?.mascotEnabled ?? true) && !approval}
               working={streaming || hasLive}
               wizardHat={settings?.themePreset === 'autumn'}
             />}
