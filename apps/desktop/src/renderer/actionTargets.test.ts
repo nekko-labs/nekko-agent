@@ -11,6 +11,6 @@ describe('comfortable action targets', () => {
 
   it('limits the compact height exception to native caption-strip chrome', () => {
     expect(cssRule(sheet, '#command-titlebar-slot .btn')['min-height']).toBe('28px');
-    expect(cssRule(sheet, '.composer-mic-slot')['flex']).toBe('0 0 44px');
+    expect(cssRule(sheet, '.voice-island')['flex']).toBe('0 0 44px');
   });
 });
