@@ -81,10 +81,11 @@ impl TurnStats {
 }
 
 /// `attachTurnStats(messages, fromIndex, stats)`: put the stats on the last
-/// assistant message from `from` on; false when the turn has none.
+/// assistant message from `from` on; false when the turn has none. A
+/// compaction summary (Claude Code's, landing mid-turn) is not a reply.
 pub fn attach_turn_stats(messages: &mut [Value], from: usize, stats: &Value) -> bool {
     for m in messages.iter_mut().skip(from).rev() {
-        if m.get("role").and_then(Value::as_str) == Some("assistant") {
+        if m.get("role").and_then(Value::as_str) == Some("assistant") && m.get("compaction").is_none() {
             if let Some(obj) = m.as_object_mut() {
                 obj.insert("turnStats".into(), stats.clone());
             }

@@ -1,0 +1,150 @@
+name: iOS draft photos and dark icon evidence
+# Manual evidence only. Does not replace or change Native iOS/Android checks.
+# Dispatch at the feature commit: both app revisions use that exact test harness.
+# Use full commit SHAs for both inputs so a moving branch cannot change the comparison.
+on:
+  workflow_call:
+    inputs:
+      baseline_ref:
+        required: true
+        type: string
+      source_ref:
+        required: true
+        type: string
+      harness_ref:
+        required: false
+        type: string
+        default: ''
+      ios_runtime:
+        required: false
+        type: string
+        default: ''
+      ios_test_file:
+        required: false
+        type: string
+        default: apps/ios/UITests/PhotoPreviewTests.swift
+      ios_only_testing:
+        required: false
+        type: string
+        default: NekkoNativeUITests/PhotoPreviewTests
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: 'Before app commit (full SHA, normally the PR merge base)'
+        required: true
+        type: string
+      source_ref:
+        description: 'After app commit (full SHA, normally the pushed PR head)'
+        required: true
+        type: string
+      harness_ref:
+        description: 'Commit whose evidence test files run on both revisions (default: this workflow run''s commit)'
+        required: false
+        type: string
+        default: ''
+      ios_runtime:
+        description: 'Exact simulator runtime identifier for matched evidence; empty uses the existing auto-selection'
+        required: false
+        type: string
+        default: ''
+      ios_test_file:
+        description: 'iOS UI test file to overlay'
+        required: false
+        type: string
+        default: apps/ios/UITests/PhotoPreviewTests.swift
+      ios_only_testing:
+        description: 'xcodebuild -only-testing identifier'
+        required: false
+        type: string
+        default: NekkoNativeUITests/PhotoPreviewTests
+permissions:
+  contents: read
+jobs:
+  ios:
+    # The existing ios-native.yml hosted image, never the owner-runner picker.
+    runs-on: xcode-27
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.revision == 'before' && inputs.baseline_ref || inputs.source_ref }}
+          persist-credentials: false
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.harness_ref || github.sha }}
+          path: .evidence-harness
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.ios_test_file }}
+          sparse-checkout-cone-mode: false
+      - name: Overlay tests only and record revisions
+        env:
+          BASELINE: ${{ inputs.baseline_ref }}
+          SOURCE: ${{ inputs.source_ref }}
+          IOS_TEST_FILE: ${{ inputs.ios_test_file }}
+        run: |
+          set -euo pipefail
+          [[ "$BASELINE" =~ ^[0-9a-fA-F]{40}$ && "$SOURCE" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$IOS_TEST_FILE" =~ ^apps/ios/UITests/[A-Za-z0-9_]+\.swift$ ]]
+          mkdir -p apps/ios/evidence
+          {
+            echo "app=$(git rev-parse HEAD)"
+            echo "harness=$(git -C .evidence-harness rev-parse HEAD)"
+            xcodebuild -version
+            xcrun simctl list runtimes -j
+          } > apps/ios/evidence/revisions.txt
+          mkdir -p "$(dirname "$IOS_TEST_FILE")"
+          cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+      - name: Draft persistence regression tests
+        working-directory: apps/ios/Protocol
+        run: swift test --filter DraftStoreTests
+      - run: brew install xcodegen
+      - name: Generate project and create simulator (optionally pinned for matched evidence)
+        working-directory: apps/ios
+        env:
+          IOS_RUNTIME: ${{ inputs.ios_runtime }}
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          # Fail closed if a requested runtime is missing; never silently compare different OS versions.
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'requested = ENV.fetch("IOS_RUNTIME", ""); JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") && (requested.empty? || r["identifier"] == requested) }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          test -n "$RUNTIME" && test -n "$TYPE"
+          DEVICE=$(xcrun simctl create Nekko-Mode-Evidence "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
+      - name: Build and capture the evidence test
+        working-directory: apps/ios
+        env:
+          ONLY_TESTING: ${{ inputs.ios_only_testing }}
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl ui "$DEVICE" appearance dark
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
+          COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
+          xcodebuild "${COMMON[@]}" build-for-testing
+          xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
+            "-only-testing:$ONLY_TESTING"
+      - name: Export attachments and clean up owned simulator
+        if: always()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -n "${DEVICE:-}" ]; then
+            xcrun simctl shutdown "$DEVICE" || true
+            xcrun simctl delete "$DEVICE" || true
+          fi
+          if [ -d evidence/mode-label.xcresult ]; then
+            xcrun xcresulttool export attachments --path evidence/mode-label.xcresult --output-path evidence/shots
+          fi
+          test -n "$(find evidence/shots -name '*.png' -print -quit)"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ios-draft-photos-${{ matrix.revision }}
+          path: apps/ios/evidence/**
+          if-no-files-found: error

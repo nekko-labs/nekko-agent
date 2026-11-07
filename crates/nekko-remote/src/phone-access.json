@@ -1,9 +1,16 @@
 {
  "channels": [
+  "service:status",
+  "service:updateState",
+  "service:restart",
+  "service:updateCheck",
+  "service:updateDownload",
+  "service:updateInstall",
   "activity:state",
   "app:info",
   "app:quit",
   "artifact:read",
+  "audit:read",
   "changes:list",
   "chat:abort",
   "chat:answer",
@@ -95,7 +102,6 @@
  "alwaysDenied": {
   "channels": [
    "attachment:import",
-   "audit:read",
    "changes:accept",
    "changes:acceptAll",
    "connector:connect",
@@ -153,6 +159,9 @@
   ]
  },
  "readChannels": [
+  "service:status",
+  "service:updateState",
+  "audit:read",
   "changes:list",
   "chat:pending",
   "limits:get",
@@ -200,6 +209,10 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "service:restart",
+  "service:updateCheck",
+  "service:updateDownload",
+  "service:updateInstall",
   "session:setSupportingWorkspaces",
   "workspace:addByPath",
   "workspace:remove",
@@ -1037,6 +1050,10 @@
    "channels": [
     "session:setOptions",
     "settings:update"
+   ],
+   "serviceChannels": [
+    "service:restart",
+    "service:updateInstall"
    ]
   },
   "desktopGuarded": {

@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { ProviderConfig } from '@nekko-agent/shared';
-import { ClaudeConnectFlow, ClaudeHowItWorks, ClaudeSetup, claudeFlowStep, claudeInstallCommand, claudeSourceLine } from './ClaudeSetup.js';
+import { ClaudeConnectFlow, ClaudeHowItWorks, ClaudeSetup, claudeFlowStep, claudeInstallCommand, claudeSourceLine, claudeIdentityLine } from './ClaudeSetup.js';
 
 const noop = () => {};
 const setup = (props: Partial<React.ComponentProps<typeof ClaudeSetup>> = {}) =>
@@ -117,4 +117,10 @@ describe('Claude setup helpers', () => {
     expect(claudeSourceLine(p('bedrock', { baseUrl: 'https://bedrock-mantle.eu-west-1.api.aws/anthropic' }))).toBe('API · Amazon Bedrock · eu-west-1');
     expect(claudeSourceLine(p('anthropic'))).toBe('API · Anthropic API key');
   });
+});
+
+it('distinguishes an organization sharing the same email in the compact identity', () => {
+  const status = { installed: true, version: '2.1.319', loggedIn: true, authMethod: 'claude.ai', auth: 'subscription', email: 'same@example.test', subscriptionType: 'team', orgName: 'Work org' } as const;
+  expect(claudeIdentityLine(status)).toBe('same@example.test · Work org · Team plan');
+  expect(claudeIdentityLine({ ...status, orgName: 'Personal', subscriptionType: 'pro' })).toBe('same@example.test · Personal · Pro plan');
 });

@@ -28,3 +28,7 @@ area: models
 **Nekko Cloud account** `[updated 2026-11-03]`: the one account that is not a provider. It is signed into and deleted in Settings > Sync (**Delete account**, with the account's email typed to confirm); see [End-to-end encrypted sync](../chat/end-to-end-encrypted-sync-for-pro-and-team.md). Provider accounts are removed by removing the provider, and Settings > System > Delete everything removes every sign-in on the computer.
 
 **Not yet:** Claude Agent chats on another computer (today an SSH terminal from Terminal → SSH hosts reaches another machine's Claude Code, as a terminal, not a chat); a live check with two signed-in Claude Code accounts on macOS and Windows.
+
+## Same-email personal and organization subscriptions (#2094, 2026-11-07)
+
+The existing named-profile path is the supported implementation: the same email with a different organization remains a distinct account. Connected-card identity now includes the organization name when Claude Code reports it. The documented `auth status` describes only the current profile; no documented membership-list command was found. Nekko therefore does not list unconnected organizations from one saved login, reuse credentials, or silently choose a billing organization. The user signs in separately through unmodified Claude Code for each named profile, selecting the intended subscription in Anthropic's browser flow where offered. Real same-email multi-organization sign-in remains unverified; [sources, limitations, and manual verification](../../docs/claude-account-selection.md).

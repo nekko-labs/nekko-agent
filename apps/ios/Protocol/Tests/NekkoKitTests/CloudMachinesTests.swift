@@ -16,6 +16,9 @@ final class CloudMachinesTests: XCTestCase {
     final class FakeMachines: CloudHTTP, @unchecked Sendable {
         var machines: [JSONValue] = []
         var calls: [(String, String, JSONValue)] = []
+        var accountId = "account-1"
+        var fleetStatus = 200
+        var malformedFleet = false
         let lock = NSLock()
         func send(_ method: String, _ url: URL, headers: [String: String], body: Data?) async throws -> (Int, Data) {
             reply(method, url, headers: headers, body: body)
@@ -28,8 +31,10 @@ final class CloudMachinesTests: XCTestCase {
             guard headers["Authorization"] == "Bearer nk_test" else { return (401, Data("{\"error\":\"unauthenticated\"}".utf8)) }
             let answer: (Int, JSONValue)
             switch (method, url.path) {
+            case ("GET", "/v1/auth/me"):
+                answer = (200, .object(["account": .object(["id": .string(accountId), "canSync": .bool(true)])]))
             case ("GET", "/v1/machines"):
-                answer = (200, .object(["machines": .array(machines), "relayUrl": .string("wss://relay.test"), "hoursIncluded": .int(40)]))
+                answer = (fleetStatus, malformedFleet ? .null : .object(["machines": .array(machines), "relayUrl": .string("wss://relay.test"), "hoursIncluded": .int(40)]))
             case ("POST", "/v1/machines"):
                 let m: JSONValue = .object(["id": .string("m-1"), "name": b["name"] ?? .string("Nekko Cloud"), "region": b["region"] ?? .string("nrt"),
                                             "state": .string("running"), "room": .string("abcdef0123456789abcd"), "scope": b["scope"] ?? .object([:]),
@@ -58,8 +63,12 @@ final class CloudMachinesTests: XCTestCase {
 
     private func client(_ http: FakeMachines, _ secrets: MemorySecrets) -> CloudSync {
         secrets.set("cloud.token", "nk_test")
-        return CloudSync(api: URL(string: "https://api.test")!, http: http, secrets: secrets, files: nil, deviceLabel: "iPhone",
-                         key: { SyncCrypto.SoftwareKey() })
+        let state = CloudSync.State(account: .init(id: "account-1", email: "test@example.test", plan: "pro", canSync: true), keysAccount: "account-1")
+        secrets.set("cloud.state", String(decoding: try! JSONEncoder().encode(state), as: UTF8.self))
+        let cloud = CloudSync(api: URL(string: "https://api.test")!, http: http, secrets: secrets, files: nil, deviceLabel: "iPhone",
+                              key: { SyncCrypto.SoftwareKey() })
+        cloud.fleetEnabled = true
+        return cloud
     }
 
     func testMakesPairsScopesStopsAndDeletesAMachine() async throws {
@@ -105,6 +114,7 @@ final class CloudMachinesTests: XCTestCase {
         let http = FakeMachines()
         let secrets = MemorySecrets()
         let cloud = CloudSync(api: URL(string: "https://api.test")!, http: http, secrets: secrets, files: nil, deviceLabel: "iPhone", key: { SyncCrypto.SoftwareKey() })
+        cloud.fleetEnabled = true
         do {
             try await cloud.loadMachines()
             XCTFail("needs a token")

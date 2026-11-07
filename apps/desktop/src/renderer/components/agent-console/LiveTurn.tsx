@@ -7,6 +7,7 @@ import { usePaneVisible } from '../../paneVisibility.js';
 import { ActivityGroup } from './ActivityGroup.js';
 import { MessageBubble } from './MessageBubble.js';
 import { midTurnVoice } from './transcript.js';
+import { TurnActivityStatus } from './TurnActivityStatus.js';
 
 /**
  * The reply being written right now: its working steps and its text, read
@@ -65,6 +66,7 @@ export const LiveTurn = memo(function LiveTurn({
             : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} voice={i < last ? midTurnVoice(block.text) : !live && run.tools.length ? 'reply' : undefined} onImageClick={onImageClick} chronological />}
         </Fragment>
       ))}
+      {live && <TurnActivityStatus run={live} pendingCallId={pendingCallId} />}
     </>
   );
 });

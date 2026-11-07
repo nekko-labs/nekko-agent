@@ -119,3 +119,17 @@ Acceptance: actual pointer hover/leave restores the resting state, selected and 
 ## First-class terminal rows
 
 Implemented: terminal entries come from the terminal registry, not only terminal-anchored workspaces. Every real terminal has one row, including split, minimized and exited terminals; read-only agent command logs stay out. Terminals retain the dedicated Terminals activity group, existing project/date/name sorting, and drag-to-zone behavior. Rows use terminal-reported smart titles with saved-title fallback, explicit activity/attention/exit state, and a PR-number hint. The active terminal keeps its selection highlight rather than jumping to a chat. Working shell Close uses the existing confirmation before stopping processes. See [terminal session context](terminal-session-context.md) for signal boundaries, verification and limitations.
+
+
+## Independent card details (2026-11-06, #2000)
+
+Implemented in source; native visual acceptance is pending the linked evidence runs:
+
+- View > Card details exposes independent Model, Context window, Pull requests and Last reply time (Last updated on phones) switches. Desktop/Local Web UI also expose Git branch, Sub-agent count and Window count. Existing preview/computer choices stay in Show. The desktop Metadata switch remains as a legacy master for the metadata rows; PR and reply time follow their own switches even with Metadata off.
+- Missing or malformed detail keys default on. Explicit saved booleans, including legacy Metadata off and Always show groups on, are preserved. Reset restores all details on and empty groups off. Preferences are device-local, not host settings.
+- Hiding a model does not hide context or PRs. The PR chip follows the last visible detail row, or the title if none remain. Titles, pins, activity, attention and pending offline prompts are never hidden by detail choices. A context compaction label follows the context toggle.
+- All clients default empty groups off (iOS already did); an explicit saved opt-in survives.
+- iOS chat-list row/section separators are hidden. Its group headings use the desktop's accent chevron and medium label; only live Building/Verifying/Watching show Nekko's activity mark after the label and a green count capsule. Other collapsed headings use a neutral count; expanded inactive headings omit it. Native activity marks use still frames, not the desktop animation.
+- Phone rows project existing summary model IDs, transcript token estimates and model-matched Claude-reported used/window counts. A missing window stays unknown (used tokens only); no model capacity is invented. Android PR numbers come from summary URLs; iOS retains state-aware PR badges. Neither toggle changes model requests, context budgeting or PR fetching.
+
+Acceptance: preference migration and roundtrip tests on all three clients; desktop server-render matrix for independent visibility and PR relocation; native real-view UI toggle tests plus matching baseline/head screenshots. Native simulator evidence and published media remain required before landing. Full live context-gauge parity on phones (catalog capacity and open-chat bundle estimates) is not implemented by this change.

@@ -350,6 +350,11 @@ impl Table {
                 })
                 .await
                 .map_err(|e| e.to_string())?;
+                let mut trail = trail;
+                // Who answered by name: the registry's current name, never stored in the trail.
+                if let Ok(devices) = ctx.remote.route("remote:devices", &[]).await {
+                    crate::audit::name_devices(&mut trail, &devices);
+                }
                 Ok(Value::Array(trail))
             }),
         );
@@ -638,6 +643,10 @@ impl Table {
                 }),
             );
         }
+        t.add(
+            crate::service_management::CHANNELS,
+            handler!(|ctx, channel, args| crate::service_management::route(ctx, channel, &args).await),
+        );
         t.add(
             crate::small_services::CHANNELS,
             handler!(|ctx, channel, args| crate::small_services::route(ctx, channel, &args).await),

@@ -40,6 +40,8 @@ app.whenReady().then(async () => {
       await shot(`board-${width}-${theme}`);
       await run('layoutFixture.showComposer("window")'); await sleep(400);
       await shot(`composer-${width}-${theme}`);
+      report.composerTargets ??= [];
+      report.composerTargets.push({ width, theme, targets: await run(`Array.from(document.querySelectorAll('[data-composer-action], [aria-label="Start listening"], [aria-label="Add a photo, video, file, folder, or skill"]')).map(e=>({label:e.getAttribute('aria-label'),rect:e.getBoundingClientRect().toJSON()}))`) });
       await check(`composer targets ${width} ${theme}`, `Array.from(document.querySelectorAll('[data-composer-action], [aria-label="Start listening"], [aria-label="Add a photo, video, file, folder, or skill"]')).every(e=>{const r=e.getBoundingClientRect();return r.width>=44&&r.height>=44&&r.left>=0&&r.right<=innerWidth})`);
       await load(theme); await run('ctaQuestionFixture.showAnswer(true)'); await sleep(400);
       await shot(`answer-live-${width}-${theme}`);

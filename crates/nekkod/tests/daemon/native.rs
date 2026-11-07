@@ -57,9 +57,19 @@ async fn fake_shell_bridge(answers: Value) -> (String, std::sync::Arc<std::sync:
                     Some("nativeWindow") => json!({ "handle": null }),
                     Some("dialog") => json!({ "result": answers[body.0["kind"].as_str().unwrap_or("")].clone() }),
                     Some("quitForUpdate") => json!({ "ok": true }),
+                    Some("serviceStatus") => answers["serviceStatus"].clone(),
+                    Some("serviceRestart") => json!({ "restarting": true }),
+                    Some("servicePrepareInstall") => {
+                        answers.get("servicePrepareInstall").cloned().unwrap_or(json!({ "prepared": true }))
+                    }
                     _ => json!({ "error": "unknown" }),
                 };
-                axum::Json(reply)
+                let status = if reply.get("error").is_some() {
+                    axum::http::StatusCode::BAD_REQUEST
+                } else {
+                    axum::http::StatusCode::OK
+                };
+                (status, axum::Json(reply))
             }
         }),
     );
@@ -305,4 +315,129 @@ async fn updates_from_a_release_feed_with_checksums_and_events() {
     assert_eq!(state["state"], "none", "{state}");
     drop(d);
     let _ = std::fs::remove_dir_all(&data);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_management_uses_native_updater_and_persisted_opt_in() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path();
+    let bytes = if cfg!(windows) { std::fs::read(fake_installer()).unwrap() } else { b"test download only".to_vec() };
+    let sha = nekko_native::update::sha512_base64(&bytes);
+    let ext = if cfg!(windows) {
+        "exe"
+    } else if cfg!(target_os = "macos") {
+        "zip"
+    } else {
+        "AppImage"
+    };
+    let name = format!("NekkoAgent-0.9.0-x64.{ext}");
+    let (feed, log) = fake_feed("0.9.0", &name, bytes, sha).await;
+    let (bridge, seen) = fake_shell_bridge(json!({ "serviceStatus": {
+        "protocolVersion": 1, "agentRunning": true, "restart": true, "updateInstall": true
+    }}))
+    .await;
+    let config = json!({ "isPackaged": cfg!(windows), "exePath": if cfg!(windows) { fake_installer().to_string_lossy().into_owned() } else { "x".into() },
+        "appPid": std::process::id(), "updateFeedUrl": feed, "updateCacheDir": data.join("cache"), "dialogs": "bridge" });
+    let d = native_daemon(data, &bridge, config.clone());
+    let (code, _) = post(d.port, "service:status", json!([]), None).await;
+    assert_eq!(code, 401, "no daemon authentication");
+    let (_, status) = post(d.port, "service:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status["protocolVersion"], 1);
+    assert_eq!(status["manageServiceFromPhone"], false);
+    assert_eq!(status["capabilities"]["restart"]["supported"], true);
+    for channel in [
+        "service:restart",
+        "service:updateState",
+        "service:updateCheck",
+        "service:updateDownload",
+        "service:updateInstall",
+    ] {
+        let (code, error) = post(d.port, channel, json!([]), Some(TOKEN)).await;
+        assert_eq!(code, 400, "{error}");
+        assert!(error["error"].as_str().unwrap().starts_with("service-disabled:"));
+    }
+    assert!(log.lock().unwrap().is_empty());
+    assert!(!seen.lock().unwrap().iter().any(|v| v["tool"] == "serviceRestart"));
+    post(d.port, "settings:update", json!([{ "manageServiceFromPhone": true, "quitFromPhone": false }]), Some(TOKEN))
+        .await;
+    drop(d);
+    // The independent opt-in survives a real daemon restart and disk read.
+    let d = native_daemon(data, &bridge, config.clone());
+    let (_, status) = post(d.port, "service:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(status["manageServiceFromPhone"], true);
+    let (_, settings) = post(d.port, "settings:get", json!([]), Some(TOKEN)).await;
+    assert_eq!(settings["quitFromPhone"], false);
+    let (code, accepted) = post(d.port, "service:restart", json!([]), Some(TOKEN)).await;
+    assert_eq!(code, 200, "{accepted}");
+    assert_eq!(accepted, json!({ "restarting": true }));
+    let (code, _) = post(d.port, "service:restart", json!(["reboot"]), Some(TOKEN)).await;
+    assert_eq!(code, 400);
+    let (_, initial) = post(d.port, "service:updateState", json!([]), Some(TOKEN)).await;
+    assert_eq!(initial["state"], "idle");
+    let (_, available) = post(d.port, "service:updateCheck", json!([]), Some(TOKEN)).await;
+    assert_eq!(available["state"], "available", "{available}");
+    let (_, downloaded) = post(d.port, "service:updateDownload", json!([]), Some(TOKEN)).await;
+    assert_eq!(downloaded["state"], "downloaded", "{downloaded}");
+    let (_, state) = post(d.port, "service:updateState", json!([]), Some(TOKEN)).await;
+    assert_eq!(state, downloaded);
+    // Only the fake Windows installer may be launched; no live install on any platform.
+    let (code, installed) = post(d.port, "service:updateInstall", json!([]), Some(TOKEN)).await;
+    if cfg!(windows) {
+        assert_eq!(code, 200, "{installed}");
+        assert_eq!(installed, json!({ "installing": true }));
+        assert!(seen.lock().unwrap().iter().any(|v| v["tool"] == "servicePrepareInstall"));
+        for action in ["service:updateInstall", "service:restart"] {
+            let (code, _) = post(d.port, action, json!([]), Some(TOKEN)).await;
+            assert_eq!(code, 400, "an accepted install cannot be duplicated or raced by restart");
+        }
+        let (_, caps) = post(d.port, "service:status", json!([]), Some(TOKEN)).await;
+        assert_eq!(caps["capabilities"]["updateInstall"]["reason"], "install-already-requested");
+        assert_eq!(caps["capabilities"]["restart"]["supported"], false);
+        let ran = data.join("cache/pending").join(&name).with_extension("ran.json");
+        wait_for("the remote stand-in installer", || ran.is_file()).await;
+        assert!(seen.lock().unwrap().iter().any(|v| v["tool"] == "quitForUpdate"));
+    } else {
+        assert_eq!(code, 400, "development install must stay disabled");
+    }
+    drop(d);
+
+    if cfg!(windows) {
+        let (busy_bridge, denied_seen) = fake_shell_bridge(json!({
+            "serviceStatus": { "protocolVersion": 1, "agentRunning": true, "restart": true, "updateInstall": true },
+            "servicePrepareInstall": { "error": "service-busy: restart in progress" },
+        }))
+        .await;
+        let mut denied_config = config.clone();
+        denied_config["updateCacheDir"] = json!(data.join("denied-cache"));
+        let d = native_daemon(data, &busy_bridge, denied_config);
+        post(d.port, "service:updateCheck", json!([]), Some(TOKEN)).await;
+        let (_, downloaded) = post(d.port, "service:updateDownload", json!([]), Some(TOKEN)).await;
+        assert_eq!(downloaded["state"], "downloaded");
+        let (code, error) = post(d.port, "service:updateInstall", json!([]), Some(TOKEN)).await;
+        assert_eq!(code, 400, "{error}");
+        assert_eq!(error["error"], "service-busy: restart in progress");
+        assert!(denied_seen.lock().unwrap().iter().any(|v| v["tool"] == "servicePrepareInstall"));
+        assert!(!denied_seen.lock().unwrap().iter().any(|v| v["tool"] == "quitForUpdate"));
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            !data.join("denied-cache/pending").join(&name).with_extension("ran.json").exists(),
+            "reservation failure must not launch the installer"
+        );
+        drop(d);
+    }
+
+    // Old Electron and headless hosts fail safely, while discovery still works.
+    let (old_bridge, _) = fake_shell_bridge(json!({})).await;
+    let d = native_daemon(data, &old_bridge, json!({ "isPackaged": false }));
+    let (_, old) = post(d.port, "service:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(old["capabilities"]["restart"]["reason"], "supervisor-unavailable");
+    let (code, _) = post(d.port, "service:restart", json!([]), Some(TOKEN)).await;
+    assert_eq!(code, 400);
+    drop(d);
+    let d = start_with(data);
+    let (_, headless) = post(d.port, "service:status", json!([]), Some(TOKEN)).await;
+    assert_eq!(headless["capabilities"]["restart"]["reason"], "supervisor-unavailable");
+    assert_eq!(headless["capabilities"]["updateInstall"]["reason"], "native-updater-unavailable");
+    let (code, _) = post(d.port, "service:restart", json!([]), Some(TOKEN)).await;
+    assert_eq!(code, 400);
 }

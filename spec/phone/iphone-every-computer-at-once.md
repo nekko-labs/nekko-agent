@@ -13,23 +13,23 @@ Philip asked (2026-11-04):
 
 - The main screen should not be about one computer. It is always an aggregate view of the fleet, and can be filtered to one computer.
 - Starting a new chat, the user picks the computer it runs on, or Nekko Cloud, right from the phone. Opened from one computer's list, New chat starts on that computer.
-- No **Connect** button for a computer (Reconnect is fine when it can't be reached). The phone reconnects by itself and stays connected to every paired computer.
+- Originally, no **Connect** button for a computer (Reconnect is fine when it can't be reached), and every paired computer reconnects by itself. Issue #2053 retains this as the default but adds an explicit per-computer opt-out.
 
 ## What the user sees
 
 - **The chat list** shows the chats of every paired computer together, grouped and sorted as before (project folders of every computer, a Needs you group across all of them). With more than one computer paired, each row names its computer.
 - **The computer pill** above the list reads *Computers* with how many are online (*2 of 3 online*), or the one computer it is filtered to. Its menu starts with **Show chats from**: *All computers* or one computer, each with its connection state. The filter is kept on the phone; forgetting the filtered computer goes back to all. Picking one computer also makes it the active one, so the menu's other items (Files, Logs, Automations, Usage, Settings, the safety exits) act on it.
-- **No Connect anywhere.** Every paired computer stays connected and reconnects by itself. Opening a chat on any computer works straight away: the chat's computer becomes the active one over the link the phone already holds. A computer's page opens the same way. The computer menu's per-computer submenu (Connect, Forget) is gone; forgetting is on the computer's page and in Computers.
-- **Reconnect** shows only while a computer can't be reached: a line above the list for each such computer (*Studio PC is offline. This phone keeps trying.* with **Reconnect**, or **Pair again** when it refused this phone), in Computers (touch and hold), and on the computer's page. It dials at once instead of waiting for the next try.
+- **Connected by default, with an explicit opt-out (#2053, in progress).** Each paired computer has a persistent connection toggle in Computers and on its page. Turning it off closes its link but retains the pairing and saved data. Launch, navigation, foregrounding, network changes and fleet refreshes must not dial it while off. Turn it on to reconnect; explicitly re-pairing also enables it. Enabled computers reconnect automatically as before. Opening a chat or page does not override an off switch. Forgetting remains a separate action.
+- **Reconnect** shows only for an enabled computer that can't be reached: a line above the list for each such computer (*Studio PC is offline. This phone keeps trying.* with **Reconnect**, or **Pair again** when it refused this phone), in Computers (touch and hold), and on the computer's page. It dials at once instead of waiting for the next try.
 - **Computers** shows each computer's own state (Online, Connecting, Computer offline, Refused), not only the active one's.
 - **New chat → Run on** is offered whenever more than one computer is paired (before, only for a local model), each with its state; Nekko Cloud stays beside it. New chat starts on the computer the list is filtered to, or with every computer in view on the one used last. Choosing another computer shows its models and folders at once.
 - Swipe and touch-and-hold actions on a row (complete, restore, pin, rename, delete) work on any computer's chat, over that computer's link; a computer that isn't connected says so and nothing is sent.
 
 ## How it works
 
-- `ComputersStore(stayConnected: true)` keeps a `PeerLink` for every paired computer other than the active one (`Fleet.swift`). A link reads `sessions:summaries`, `workspace:list`, `chat:pending` and `app:info` when it comes online, re-reads the list when a turn ends there, and tracks running and needs-you from the event stream. It registers the phone's push token, so a chat that needs you on any computer notifies.
+- `ComputersStore(stayConnected: true)` keeps a `PeerLink` for each enabled paired computer other than the active one (`Fleet.swift`). A link reads `sessions:summaries`, `workspace:list`, `chat:pending` and `app:info` when it comes online, re-reads the list when a turn ends there, and tracks running and needs-you from the event stream. It registers the phone's push token, so a chat that needs you on any computer notifies.
 - One socket per computer, never two. Making a computer active takes its link over with the socket still open (its list and activity stay on screen); the computer left behind gets its socket back as a link. Its Live Activity card registration is withdrawn as before.
-- Links close with the active connection in the background (after the grace) and reopen with it; network changes reach every link.
+- Links close with the active connection in the background (after the grace) and reopen with it for enabled computers; network changes reach enabled links only.
 - Unchanged: the outbox, drafts, saved transcripts, models, providers, settings, Files, terminals and the Live Activity card belong to the active computer.
 
 ## Acceptance

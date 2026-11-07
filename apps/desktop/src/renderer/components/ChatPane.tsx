@@ -1348,6 +1348,39 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // streaming transcript included. The ceiling follows the pane and the
   // composer's controls through a ResizeObserver, which reads after layout.
   const hasDraft = !!draft;
+  // The plan floats over the transcript's foot (styles.css) instead of taking
+  // a full-width row above the composer, so the conversation keeps scrolling
+  // behind it. The transcript's bottom padding follows the plan's height
+  // (`--chat-plan-clearance`) so its last row can still scroll clear. Only the
+  // column's own children are watched: the plan mounting, folding or opening,
+  // never the editor's text, so typing costs no layout here.
+  useLayoutEffect(() => {
+    const pane = paneRef.current;
+    const column = composerSectionRef.current?.querySelector<HTMLElement>(':scope > .composer-column');
+    if (!pane || !column || surface !== 'full') return;
+    let plan: HTMLElement | null = null;
+    let clearance = '';
+    const measure = () => {
+      const next = plan ? `${Math.ceil(plan.getBoundingClientRect().height) + 16}px` : '';
+      if (next === clearance) return;
+      clearance = next;
+      if (next) pane.style.setProperty('--chat-plan-clearance', next);
+      else pane.style.removeProperty('--chat-plan-clearance');
+    };
+    const resize = new ResizeObserver(measure);
+    const track = () => {
+      const next = column.querySelector<HTMLElement>(':scope > .plan-sheet-dock');
+      if (next === plan) return;
+      if (plan) resize.unobserve(plan);
+      plan = next;
+      if (plan) resize.observe(plan);
+      measure();
+    };
+    const children = new MutationObserver(track);
+    children.observe(column, { childList: true });
+    track();
+    return () => { resize.disconnect(); children.disconnect(); pane.style.removeProperty('--chat-plan-clearance'); };
+  }, [sessionId, surface, readOnly]);
   useLayoutEffect(() => {
     const el = composerRef.current;
     const pane = paneRef.current;
@@ -2519,7 +2552,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     window.nekko.setSessionOptions(sessionId, { incognito: !session?.incognito }).then(setSession).catch((e) => useStore.getState().pushToast('error', String(e)));
   };
   // The Mode button already says this; the plain selector is for when it is out of sight.
-  const asksFirst = showAsks && !showMode && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} /> : null;
+  const asksFirst = showAsks && !showMode && session && session.chatType !== 'image' ? <AsksFirstMenu session={session} onChange={setSession} iconOnly={!expertMode} /> : null;
   const effortProps = {
     metadata: selectedModelInfo?.effort,
     session, onSessionChange: setSession, modelId: autoPick?.modelId ?? (modelId === AUTO_MODEL_ID ? undefined : modelId ?? undefined),
@@ -2848,6 +2881,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           )}
           {showJump && (
             <button
+              data-scroll-latest
               className="fade-in absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-line px-3 py-1 text-xs font-medium text-ink-soft shadow-(--shadow-md) hover:text-ink"
               style={{ background: 'var(--surface)' }}
               onClick={jumpToLatest}
@@ -3380,11 +3414,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       }}
                     />
                   </div>
+                  {!expertMode && <div className="composer-folders min-w-0">
+                    <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
+                  </div>}
+                  {!expertMode && asksFirst}
                   </>)}
                   {(header || wallWindow) && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       {wallWindow && !imageMode && modelControls}
-                      {wallWindow && !imageMode && asksFirst}
+                      {wallWindow && !imageMode && expertMode && asksFirst}
                       <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" hideMode={!showMode} />
                       {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />}
                     </div>
@@ -3414,9 +3452,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <div className={`composer-details ${detailsShown ? 'is-open' : ''}`} data-composer-details aria-label="Chat details">
                     {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
                     {!wallWindow && <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                      {detailsShown && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
+                      {detailsShown && expertMode && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
                       {modelControls}
-                      {asksFirst}
+                      {expertMode && asksFirst}
                       {detailsShown && expertMode && usageGauge}
                       {detailsShown && showCost && (
                         <LiveUsageChip

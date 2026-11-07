@@ -10,6 +10,7 @@ Tracked by #2079 (CTA sizing) and #2082 (questions and visible replies).
 ## Implemented in this change
 
 - Shared desktop (macOS, Windows, Linux) and Local Web UI `.btn` controls reserve a real 44 × 44 CSS-pixel minimum layout target. Composer attachment, dictation, send/stop, and question option/navigation controls use the same minimum without enlarging their glyphs. Expanded dictation still collapses to a 44px target.
+- On narrow composers, the folder summary may truncate down to a 44px minimum before pushing attachment, dictation, or send/stop targets outside the viewport. Target and glyph sizes stay unchanged.
 - The native desktop caption/titlebar strip remains a compact chrome exception; these are not primary CTAs. This does not claim every bespoke icon in the app has been audited.
 - Desktop/web, iOS, and Android show one question per page. A compact Back icon is at the top left, the page count in the middle, and Skip at the top right. Back is disabled on the first page. The bottom action is Next, then Send answers on the final page.
 - Back retains picks and free text. Skip clears only the current page and advances; on the last page it submits answers from all other pages. Skipped questions are omitted from the answer payload and the host formats them as `(not answered)`. Skipping every page resolves the request with an empty answer list.
