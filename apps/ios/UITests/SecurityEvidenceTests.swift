@@ -44,6 +44,32 @@ final class SecurityEvidenceTests: XCTestCase {
         XCTAssertEqual(picker.value as? String, "Asks when it matters")
     }
 
+    /// "Always allow this tool" from outside the chat: the Lock Screen card offers it
+    /// for an MCP approval, and its link (also the notification action's) opens the
+    /// chat, whose card runs its own "Always allow" for that call. This fixture phone
+    /// has no Change key, so the save is refused, as a cancelled Face ID would be:
+    /// the card shows why, and the call still waits, approved by nobody.
+    func testAlwaysAllowFromTheLockScreenOrANotificationEvidence() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestSecurityEvidence", "-splash", "NO", "-appLock", "NO", "-onboarded", "YES",
+                               "-theme", "light", "-expertMode", "NO", "-simpleChoices", "{}",
+                               "-securityEvidenceCard", "YES",
+                               "-securityEvidenceOpen", "nekko-agent://chat/security-evidence?alwaysAllow=post",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        let waiting = app.buttons["approval.alwaysAllow"]
+        XCTAssertTrue(waiting.waitForExistence(timeout: 10), "the chat's approval card")
+        let refused = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Couldn’t send that")).firstMatch
+        let ran = refused.waitForExistence(timeout: 8)
+        // Photographed before the checks, so the revision without the feature is captured too.
+        attach(app, "always-allow-from-outside")
+
+        XCTAssertTrue(app.staticTexts["Always allow"].exists, "the Lock Screen card offers Always allow for an MCP approval")
+        XCTAssertTrue(ran, "the link ran the card's own Always allow")
+        XCTAssertTrue(waiting.exists, "a refused save approves nothing: the call still waits")
+    }
+
     private func attach(_ app: XCUIApplication, _ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = name

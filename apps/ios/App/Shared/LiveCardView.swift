@@ -50,6 +50,19 @@ struct LiveCardView: View {
         return c.url!
     }
 
+    /// "Always allow this tool" (an MCP tool only): open the chat, which saves the
+    /// tool for that chat and then allows the call, as its own card does. It
+    /// opens the app because the save is signed with Face ID or the passcode,
+    /// which a Lock Screen button can't do in the background.
+    static func alwaysAllowURL(_ sessionId: String, callId: String) -> URL {
+        var c = URLComponents()
+        c.scheme = "nekko-agent"
+        c.host = "chat"
+        c.path = "/" + sessionId
+        c.queryItems = [URLQueryItem(name: "alwaysAllow", value: callId)]
+        return c.url!
+    }
+
     private var focus: LiveChat? { state.chats.first { $0.id == state.focusId } ?? state.chats.first }
     private var showsText: Bool { level == .standard || level == .detailed }
 
@@ -143,15 +156,17 @@ struct LiveCardView: View {
         }
     }
 
-    private enum ChipButton: Hashable { case deny, allow, close, mic }
+    private enum ChipButton: Hashable { case deny, allow, alwaysAllow, close, mic }
 
-    /// What a chip carries: Deny (and Allow from Standard up) while its tool
-    /// waits, the close check once it finished, and at Detailed the mic on the
-    /// focused chat. A working chat has none: Stop is in the app.
+    /// What a chip carries: Deny (and Allow from Standard up, plus Always allow
+    /// for an MCP tool) while its tool waits, the close check once it finished,
+    /// and at Detailed the mic on the focused chat. A working chat has none:
+    /// Stop is in the app.
     private func chipButtons(_ chat: LiveChat, focused: Bool) -> [ChipButton] {
         var out: [ChipButton] = []
         switch chat.state {
-        case .needsYou where chat.callId != nil: out = showsText ? [.deny, .allow] : [.deny]
+        case .needsYou where chat.callId != nil:
+            out = showsText ? [.deny, .allow] + (chat.alwaysAllow ? [.alwaysAllow] : []) : [.deny]
         case .done, .failed: out = [.close]
         default: break
         }
@@ -175,6 +190,20 @@ struct LiveCardView: View {
                     round(CheckGlyph(), fill: Self.accent, ink: Self.onAccent)
                 }
                 .accessibilityLabel(Text("Allow"))
+            }
+        case .alwaysAllow:
+            // Opens the chat (`alwaysAllowURL`): the save needs Face ID or the
+            // passcode, which a Lock Screen button cannot ask for.
+            if let callId = chat.callId {
+                link(Self.alwaysAllowURL(chat.id, callId: callId)) {
+                    Text("Always allow")
+                        .font(.system(size: 11, weight: .medium)).lineLimit(1)
+                        .foregroundStyle(Self.accent)
+                        .padding(.horizontal, 8)
+                        .frame(height: Self.buttonSize)
+                        .background(Self.raised, in: Capsule())
+                }
+                .accessibilityHint(Text("Opens the chat to allow this call and stop asking for this tool in it"))
             }
         case .close:
             let failed = chat.state == .failed
@@ -297,6 +326,12 @@ struct LiveCardView: View {
             .foregroundStyle(ink)
             .frame(maxWidth: .infinity).frame(height: 28)
             .background(fill, in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    /// A link that opens the app; the Settings preview draws the same thing inert.
+    @ViewBuilder
+    private func link(_ url: URL, @ViewBuilder label: () -> some View) -> some View {
+        if interactive { Link(destination: url, label: label) } else { label() }
     }
 
     /// A real intent button on the card; the Settings preview draws the same thing inert.
