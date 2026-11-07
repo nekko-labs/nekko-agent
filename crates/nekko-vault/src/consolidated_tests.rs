@@ -262,3 +262,51 @@ fn native_keychain_public_handles_share_one_profile_item() {
     let again = super::vault(dir.path(), "settings");
     assert_eq!(again.get("token").as_deref(), Some("synthetic settings token"));
 }
+
+/// A store that records whether each call it gets is counted as waiting.
+#[derive(Default)]
+struct Watched {
+    uncounted: AtomicUsize,
+    calls: AtomicUsize,
+}
+
+impl Watched {
+    fn note(&self) {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if crate::waits::longest().is_none() {
+            self.uncounted.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+}
+
+impl Store for Arc<Watched> {
+    fn read(&self) -> Result<Option<String>, String> {
+        self.note();
+        Ok(None)
+    }
+    fn write(&self, _: &str) -> Result<(), String> {
+        self.note();
+        Ok(())
+    }
+    fn legacy(&self, _: &str, _: &str) -> Result<Option<String>, String> {
+        self.note();
+        Ok(None)
+    }
+    fn remove_legacy(&self, _: &str, _: &str) {
+        self.note();
+    }
+}
+
+/// nekkod tells the app it is waiting on a Keychain dialog only from these
+/// counts. Uncounted, the app kills the daemon at its ready timeout and the
+/// next start shows the same dialog again.
+#[test]
+fn every_keychain_call_counts_as_a_wait() {
+    let watched = Arc::new(Watched::default());
+    let v = ConsolidatedVault { shared: Arc::new(Shared::new(Box::new(watched.clone()))), service: "svc".into() };
+    assert_eq!(v.get("missing"), None);
+    let _ = v.set("name", "value");
+    v.delete("name");
+    assert!(watched.calls.load(Ordering::SeqCst) >= 4);
+    assert_eq!(watched.uncounted.load(Ordering::SeqCst), 0);
+}
