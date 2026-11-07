@@ -86,6 +86,24 @@ alongside assertions. Existing ResizeObserver scheduling warnings are tracked in
 mode (`NEKKO_TEST_SOURCE`) intentionally records assertions without enforcing them;
 use the normal mode to validate a change.
 
+### Grid model and mode-menu journey
+
+`npm run test:grid-bugs -w @nekko-agent/desktop` exercises model selection and
+mode menus in the wall at desktop/narrow widths and light/dark themes. Switching
+to a single agent opens the shipped View menu, selects its focus radio, checks
+both the radio and wall layout, then dismisses the menu with Escape (#2152).
+Missing controls or an unapplied selection fail the journey, not a silent no-op.
+The legacy Focused toolbar button is not part of this path.
+
+For a strict comparison against an unchanged current renderer, set
+`NEKKO_TEST_REVISION=<base-commit>` and `NEKKO_GRID_ASSERT_FIXED=1`. This uses the
+same harness with archived renderer sources, including the fixture's StoreSidebar
+imports, and keeps all grid-bugs behavior assertions enabled. Without that explicit override, historical revision captures
+retain their existing capture-only checks. Inspect `status.json`, including
+`errors` and `background`; generated PNGs are not automatically visually reviewed.
+This harness repair does not change the separate performance setup or establish
+the cause of its newest-message failures.
+
 ## Running the Local Web UI for verification
 
 The server reads only `NEKKO_`-prefixed variables (`ENV_PREFIXES` in
