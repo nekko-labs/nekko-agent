@@ -10,7 +10,8 @@ describe('agent panel view', () => {
   it('defaults to grouping by activity', () => {
     expect(DEFAULT_AGENT_PANEL_VIEW).toEqual({
       groupBy: 'status', sortBy: 'manual', direction: 'desc',
-      showMetadata: true, showAutomations: true, showEmptyGroups: true,
+      showMetadata: true, showAutomations: true, showEmptyGroups: false,
+      showModel: true, showContext: true, showPullRequests: true, showGit: true, showSubagents: true, showWindows: true, showUpdated: true,
       showComputer: true,
       showComputerIcons: true,
     });
@@ -120,5 +121,19 @@ describe('agent panel view', () => {
     expect(dateGroupOf(new Date(2026, 9, 12).getTime(), now)).toBe('date:week');
     expect(dateGroupOf(new Date(2026, 8, 25).getTime(), now)).toBe('date:month');
     expect(dateGroupOf(new Date(2026, 0, 1).getTime(), now)).toBe('date:older');
+  });
+});
+
+
+describe('card detail preferences', () => {
+  it('defaults empty groups off and preserves saved opt-ins and legacy metadata off', () => {
+    expect(DEFAULT_AGENT_PANEL_VIEW.showEmptyGroups).toBe(false);
+    expect(parseAgentPanelView('{"showEmptyGroups":true,"showMetadata":false}')).toMatchObject({ showEmptyGroups: true, showMetadata: false, showModel: true });
+  });
+  it('round trips independent choices, resetting missing or invalid fields only', () => {
+    const view = { ...DEFAULT_AGENT_PANEL_VIEW, showModel: false, showContext: false, showPullRequests: false, showGit: false, showSubagents: false, showWindows: false, showUpdated: false };
+    expect(parseAgentPanelView(JSON.stringify(view))).toEqual(view);
+    expect(parseAgentPanelView('{"showModel":false,"showContext":"false","showUpdated":null}')).toEqual({ ...DEFAULT_AGENT_PANEL_VIEW, showModel: false });
+    expect(isDefaultView(view)).toBe(false);
   });
 });

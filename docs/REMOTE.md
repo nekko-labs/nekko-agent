@@ -868,3 +868,7 @@ Nekko sits at the top center of the iOS Chats screen, outside the toolbar chips.
 pixel cat for a brief greeting. This is a local animation, not a message to an
 agent. The mascot respects Reduce Motion and pauses its animation in the
 background.
+
+### Card details
+
+View options → Card details lets you independently hide model, context window, PRs and update time on iOS and Android. Choices persist on the phone. Empty groups default off; explicit saved choices are preserved. Context uses reported summary counts and never invents an unknown window size. iOS groups are separator-free and use desktop-style chevrons, activity motifs and count capsules.
