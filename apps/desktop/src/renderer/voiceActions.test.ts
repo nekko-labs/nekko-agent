@@ -262,6 +262,23 @@ describe('voiceListener', () => {
     expect(voiceListener.snapshot().heard).toBe('Fix the bug. Nekko, send it.');
     off();
   });
+  it('runs a command the recognizer misspelled and writes the name as Nekko in anything it types', async () => {
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    await voiceListener.start('s1');
+    // What Apple's recognizer really returns for "Nekko, send it." and a phrase that is no command.
+    nekko.voiceTranscribe.mockResolvedValue('Ask Neco to fix it. Necco, send it.');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    expect(a.text).toEqual(['Ask Nekko to fix it.']);
+    expect(a.calls).toEqual(['text', 'send']);
+    expect(voiceListener.snapshot().heard).toBe('Ask Nekko to fix it. Nekko, send it.');
+    nekko.voiceTranscribe.mockResolvedValue('Neco, do a little dance.');
+    capture.onSegment!([2]);
+    await voiceListener.drain();
+    expect(a.text).toEqual(['Ask Nekko to fix it.', 'Nekko, do a little dance.']);
+    off();
+  });
   it('sends text to the chat focused when the segment applies', async () => {
     const a = target('s1'); const b = target('s2');
     const offA = voiceListener.register('s1', () => a); const offB = voiceListener.register('s2', () => b);
