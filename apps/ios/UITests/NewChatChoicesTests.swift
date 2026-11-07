@@ -16,6 +16,14 @@ final class NewChatChoicesTests: XCTestCase {
             }
             attach(app, "permission-choices-\(raw)")
             app.buttons["tools.\(raw)"].tap()
+            // The same harness runs on cdd7340d4, which has no warning sheet.
+            let confirm = app.buttons["yoloWarning.confirm"]
+            if raw == "yolo", confirm.waitForExistence(timeout: 5) {
+                attach(app, "permission-no-restrictions-warning")
+                confirm.tap()
+                expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: confirm)
+                waitForExpectations(timeout: 5)
+            }
             XCTAssertFalse((picker.value as? String ?? "").isEmpty)
             attach(app, "permission-selected-\(raw)")
         }
@@ -40,6 +48,9 @@ final class NewChatChoicesTests: XCTestCase {
         XCTAssertFalse(app.buttons["Computer default"].exists)
         attach(app, "iphone-tools-after")
         app.buttons["tools.yolo"].tap()
+        // Turning No restrictions on warns first (decision 0054).
+        XCTAssertTrue(app.buttons["yoloWarning.confirm"].waitForExistence(timeout: 5))
+        app.buttons["yoloWarning.confirm"].tap()
         XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "No restrictions")
         app.buttons["newChat.tools"].tap()
         XCTAssertTrue(app.buttons["tools.guardrails"].exists)
@@ -118,7 +129,8 @@ final class NewChatChoicesTests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
-                               "-theme", "computer", "-AppleLanguages", "(en)", "-uiTestNewChat", "-expertMode", "YES"] + extra
+                               "-theme", "computer", "-AppleLanguages", "(en)", "-uiTestNewChat", "-expertMode", "YES",
+                               "-skipYoloWarning", "NO"] + extra
         app.launch()
         return app
     }

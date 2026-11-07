@@ -34,10 +34,16 @@ export function groupByTurn(trail: AuditEvent[]): AuditTurn[] {
 /** Who answered, in words. */
 export function describeBy(by: AuditBy | null | undefined): string {
   if (!by) return 'nobody answered';
+  // By its current name; a device no longer paired keeps its id.
+  const on = (kind: string) => {
+    const name = by.deviceName?.trim();
+    if (name) return `on ${name} (${kind})`;
+    return by.device ? `on a ${kind} (${by.device})` : `on a ${kind}`;
+  };
   switch (by.via) {
     case 'this computer': return 'on this computer';
-    case 'phone': return by.device ? `on a phone (${by.device})` : 'on a phone';
-    case 'paired computer': return by.device ? `on a paired computer (${by.device})` : 'on a paired computer';
+    case 'phone': return on('phone');
+    case 'paired computer': return on('paired computer');
     case 'telegram': return 'in Telegram';
     case 'yolo': return 'by YOLO, without asking';
     case 'workflow policy': return "by the workflow's policy";

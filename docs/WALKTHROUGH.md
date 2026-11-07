@@ -537,3 +537,12 @@ top and bottom. Hover, keyboard focus or pin expands the navigation and reveals
 its labels together. Reduced motion disables these transitions.
 
 Mermaid diagrams blend into chat on a dotted, borderless canvas with a subtle shadow and theme-matched colors. Hover or focus the diagram for Copy and Expand; the expanded view supports zoom, pan, and Escape to close.
+
+
+### Choose agent-card details
+
+Open **View options → Card details** to show or hide the model, context window, pull requests, and last reply/update time independently. Desktop and Local Web UI also offer git branch, sub-agent count, and window count. Your choices stay on that device. Titles and essential activity/attention indicators stay visible.
+
+On desktop, **Show → Metadata** is still the master switch for detail rows. Turn it on to see the individual model/context/git/count choices. PR and reply time have their own switches. **Reset to defaults** shows all details and hides empty groups; previously saved explicit choices are retained until reset.
+
+The phones show reported summary context usage where available, not a guessed model limit: a count without a denominator means the host did not report a matching context-window capacity. iOS group headings match desktop colours, count capsules and activity motifs, without list separator lines.

@@ -2,6 +2,7 @@ package com.nekko.android.chat
 
 import com.nekko.android.git.GitController
 import com.nekko.protocol.SavedPrompt
+import com.nekko.protocol.Audit
 import com.nekko.protocol.Block
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -340,6 +341,26 @@ class ChatViewModel(
                 throw e
             } catch (e: Exception) {
                 ChangesLoad(_changes.value.changes, e.message ?: "Couldn’t load changes.")
+            }
+        }
+    }
+
+    /** The Audit trail sheet's state: loading (null fields), loaded, or the reason it couldn't. */
+    data class AuditLoad(val trail: List<Audit.Event>? = null, val error: String? = null)
+
+    private val _audit = MutableStateFlow(AuditLoad())
+    val audit: StateFlow<AuditLoad> = _audit.asStateFlow()
+
+    /** This chat's audit trail: who allowed what, never what was read or sent. Needs the phone's Read access. */
+    fun loadAudit() {
+        _audit.update { it.copy(error = null) }
+        viewModelScope.launch {
+            _audit.value = try {
+                AuditLoad(Audit.parse(repo.caller.callWithTimeout(30_000, Channels.AUDIT_READ, JsonPrimitive(sessionId))))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AuditLoad(_audit.value.trail, e.message ?: "Couldn’t read the audit trail.")
             }
         }
     }

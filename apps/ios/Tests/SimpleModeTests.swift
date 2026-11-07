@@ -194,6 +194,29 @@ final class SimpleModeTests: XCTestCase {
         XCTAssertFalse(PillPlacement(dock: .across, y: 0.4).isStandard)
     }
 
+    func testThePillTucksOnlyWhenSwipedIntoItsEdge() {
+        let none = CGSize.zero
+        let right = PillPlacement(dock: .trailing, y: 0.4)
+        XCTAssertTrue(right.swipesIn(CGSize(width: 40, height: 6), predicted: none))
+        XCTAssertTrue(right.swipesIn(CGSize(width: 10, height: 0), predicted: CGSize(width: 140, height: 0)), "a flick is enough")
+        XCTAssertFalse(right.swipesIn(CGSize(width: -40, height: 0), predicted: none), "away from the edge")
+        XCTAssertFalse(right.swipesIn(CGSize(width: 30, height: 60), predicted: none), "mostly down is not into the side")
+        XCTAssertTrue(PillPlacement(dock: .leading, y: 1).swipesIn(CGSize(width: -40, height: 0), predicted: none))
+        XCTAssertTrue(PillPlacement.standard.swipesIn(CGSize(width: 0, height: -40), predicted: none))
+        XCTAssertFalse(PillPlacement.standard.swipesIn(CGSize(width: 40, height: 0), predicted: none))
+        XCTAssertFalse(PillPlacement(dock: .across, y: 0.5).swipesIn(CGSize(width: 0, height: -40), predicted: none),
+                       "across the middle there is no edge to tuck into")
+
+        var tucked = right
+        tucked.tucked = true
+        XCTAssertEqual(PillPlacement.parse(tucked.encoded), tucked)
+        XCTAssertEqual(PillPlacement.parse("across:0.5:tucked"), PillPlacement(dock: .across, y: 0.5), "only at an edge")
+        XCTAssertEqual(PillPlacement.parse("trailing:0.5:folded"), .standard)
+        var top = PillPlacement.standard
+        top.tucked = true
+        XCTAssertFalse(top.isStandard, "tucked under the bar, content takes the room back")
+    }
+
     func testThePillScrollsAwayOnTheWayOnAndBackOnTheWayBack() {
         XCTAssertEqual(PillScrollHide.next(hidden: true, from: 40, to: 2, scrolling: false), false, "at the top it always shows")
         XCTAssertEqual(PillScrollHide.next(hidden: false, from: 100, to: 140, scrolling: true), true)

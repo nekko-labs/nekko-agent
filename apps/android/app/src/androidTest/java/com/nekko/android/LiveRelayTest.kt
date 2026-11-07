@@ -139,6 +139,9 @@ class LiveRelayTest {
             shot("5-approval")
             tap(hasText("Deny"))
             waitGone(hasText("Deny"), 15_000)
+            // Deny clears the card optimistically, before the computer ends the
+            // turn. Finish that turn before sending the next independent prompt.
+            waitGone(hasContentDescription("Stop"), 30_000)
             shot("6-denied")
 
             send("ask me which platform")

@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import { main, pick } from './pick-runner.mjs';
 
 const r = (o = {}) => ({ status: 'online', busy: false, labels: [{ name: 'self-hosted' }, { name: 'macOS' }, { name: 'ARM64' }, { name: 'nekko-cloud-mac' }], ...o });
@@ -54,7 +55,7 @@ test('main_in_org_mode_falls_back_on_403_and_bad_org', async () => {
 });
 
 test('cli_writes_runs_on_and_never_prints_the_token', () => {
-  const script = new URL('./pick-runner.mjs', import.meta.url).pathname;
+  const script = fileURLToPath(new URL('./pick-runner.mjs', import.meta.url));
   const run = (extra) => {
     const out = join(mkdtempSync(join(tmpdir(), 'pick-')), 'out');
     const p = spawnSync(process.execPath, [script], { env: { PATH: process.env.PATH, GITHUB_OUTPUT: out, PICK_REPO: 'a/b', ...extra }, encoding: 'utf8' });
@@ -75,7 +76,7 @@ test('ios_native_calls_the_picker_only_for_trusted_events', () => {
   const y = readFileSync(new URL('../.github/workflows/ios-native.yml', import.meta.url), 'utf8');
   const pickIf = y.match(/\n  pick:\n(?:.*\n)*?    if: (.*)\n/)[1];
   // Baseline evidence uses hosted runners, never the owner's trusted Mac.
-  assert.match(pickIf, /^\$\{\{ !inputs\.baseline_ref && !inputs\.groups_baseline_ref && !inputs\.automatic_baseline_ref && vars\.NEKKO_MAC_RUNNERS == 'on' && /);
+  assert.match(pickIf, /^\$\{\{ !inputs\.photos_baseline_ref && !inputs\.baseline_ref && !inputs\.groups_baseline_ref && !inputs\.automatic_baseline_ref && vars\.NEKKO_MAC_RUNNERS == 'on' && /);
   assert.match(pickIf, / \}\}$/);
   // Only refs the runner group allows; a labeled PR always runs hosted.
   assert.match(pickIf, /\(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\)/);
@@ -85,5 +86,5 @@ test('ios_native_calls_the_picker_only_for_trusted_events', () => {
   assert.match(pickBlock(y), /\n    continue-on-error: true\n/);
   assert.match(y, /token: \$\{\{ secrets\.MAC_RUNNER_STATUS_TOKEN \}\}/);
   assert.match(y, /runs-on: \$\{\{ fromJSON\(needs\.pick\.outputs\.runs-on \|\| '"xcode-27"'\) \}\}/);
-  assert.match(y, /needs: pick\n    # .*\n    if: \$\{\{ !inputs\.baseline_ref && !inputs\.groups_baseline_ref && !cancelled\(\) && /);
+  assert.match(y, /needs: pick\n    # .*\n    if: \$\{\{ !inputs\.photos_baseline_ref && !inputs\.baseline_ref && !inputs\.groups_baseline_ref && !cancelled\(\) && /);
 });

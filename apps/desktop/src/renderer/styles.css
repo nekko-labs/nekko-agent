@@ -2838,8 +2838,18 @@
 .composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock { width: auto; margin-left: max(8%, 92px); margin-right: 8%; }
 /* The note sits right above the box, where the cat peeks: it starts clear of him. */
 .composer-column:has(> .composer > .chat-mascot) .chat-long-note { margin-left: 92px; }
+/* In a chat pane the plan floats over the transcript's foot instead of taking
+   a row of its own, so the conversation scrolls on behind it and the cat.
+   It still rises out from under the composer: the clip stops at the
+   composer's top edge (the dock's last 10px are tucked under it) rather than
+   painting over the box. ChatPane sets --chat-plan-clearance from the plan's
+   height so the last row can scroll clear of it. */
+[data-chat-surface="full"] .composer-column { position: relative; }
+[data-chat-surface="full"] .composer-column > .plan-sheet-dock { position: absolute; bottom: 100%; left: 0; right: 0; z-index: 1; clip-path: inset(-2px -14px 10px -14px); }
+[data-chat-surface="full"] [data-transcript-scroll] { padding-bottom: max(1.25rem, var(--chat-plan-clearance, 0px)); }
+[data-chat-surface="full"] [data-scroll-latest] { bottom: max(0.75rem, var(--chat-plan-clearance, 0px)); }
 /* The transcript's last row stops above his ears. */
-[data-session-id]:has(.composer > .chat-mascot) [data-transcript-scroll] { padding-bottom: 68px; }
+[data-session-id]:has(.composer > .chat-mascot) [data-transcript-scroll] { padding-bottom: max(68px, var(--chat-plan-clearance, 0px)); }
 .plan-sheet-dock::before, .plan-sheet-dock::after { content: ''; position: absolute; bottom: 10px; width: 12px; height: 12px; pointer-events: none; }
 .plan-sheet-dock::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
@@ -4282,3 +4292,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .save-spinner, .save-flash { animation: none; }
 }
+
+/* The Agents View popover is portaled out of the draggable title bar. */
+.wall-view-menu { position: fixed; z-index: 1000; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-float); -webkit-app-region: no-drag; }
+.wall-view-layout { border: 0; padding: 0; margin: 0; min-width: 0; }
+.wall-view-menu .screens-option[aria-disabled='true'] { opacity: .55; cursor: default; }
+.screens-embedded { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
+.screens-embedded .screens-row { overflow-x: auto; padding-bottom: 4px; }
+.screens-embedded .screens-tile { flex-shrink: 0; }

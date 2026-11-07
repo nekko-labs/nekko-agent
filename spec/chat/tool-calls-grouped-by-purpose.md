@@ -133,6 +133,16 @@ Parent evidence scenarios: keep the same default theme, viewport and seeded even
 
 Verification for #1107: focused timing/activity tests and desktop typecheck pass. Matching unchanged-base/working-tree Electron captures and an approximately six-second frame recording show the older parallel tool timer advancing, completed timers freezing, model-wait continuation, public-thinking preview and turn completion. The synthetic fixture runs the real ActivityGroup with deterministic events in a hidden, off-screen, non-focusable, separate-profile window and blocks network/permissions. Reproduce with `node apps/desktop/scripts/tool-timing-integration.cjs`; set `NEKKO_TEST_SOURCE` to an unchanged archive for the baseline. Live provider cadence, packaged builds and other desktop platforms remain unverified.
 
+## Whole-turn visibility (#2048)
+
+Implemented; 38 focused tests, desktop typecheck and hidden LiveTurn interaction checks at 820px/460px pass. Matched screenshots and timing recordings captured, but visual inspection is blocked by screenshot-tool timeout/UnknownVizError. Not yet shipped; PR #2050 remains draft pending inspection and required CI.
+
+- A live reply has a separate status line outside all collapsed tool/thinking groups, in both Simple and Expert modes. It distinguishes running tools, observed thinking/model response, model wait, approval, pause and retry states.
+- **Turn elapsed** measures the entire reply. Individual tool durations remain frozen when their results arrive, including failures; explanatory text explicitly distinguishes the two clocks. A 1.1-second completed tool must not imply that the ongoing reply has only run for 1.1 seconds.
+- The status remains present after narration and disappears when the live run ends, including the held-transcript handoff. It does not claim that a quiet provider is hung or that an external CI job is running based merely on tool-output text.
+- Presentation uses existing public lifecycle events only. No new provider access, telemetry, permissions or changes to approval behavior.
+- Verification uses synthetic events in the real LiveTurn, isolated hidden Electron profiles with networking and permissions denied. Real sessions, physical devices and live-provider cadence remain outside this verification.
+
 ## Activity-specific transcript icons
 
 `[implemented; focused tests and isolated renderer checks passed; desktop dark/light screenshots reviewed at 1000px and 460px]`

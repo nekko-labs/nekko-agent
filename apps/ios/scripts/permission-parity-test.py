@@ -53,6 +53,22 @@ class PermissionParityTests(unittest.TestCase):
         for label in ("Always ask", "Ask when it matters", "No restrictions"):
             self.assertIn(f'String(localized: "{label}")', source)
 
+    def test_incoming_warning_names_match_and_fall_back_to_english(self):
+        catalog = json.loads((IOS / "Localizable.xcstrings").read_text(), object_pairs_hook=unique_keys)["strings"]
+        warning = (IOS / "Views/YoloWarningView.swift").read_text()
+        settings = (IOS / "Views/SettingsView.swift").read_text()
+        resources = {el.get("name"): el.text for el in ET.parse(ANDROID / "values/strings_modes.xml").getroot() if el.tag == "string"}
+        for suffix in ("title", "text", "recommend", "turn_on"):
+            copy = resources[f"no_restrictions_warning_{suffix}"]
+            self.assertIn(f'Text("{copy}")', warning)
+            self.assertEqual(catalog[copy].get("localizations"), {})
+        self.assertIn('Toggle("Warn before No restrictions"', settings)
+        self.assertEqual(catalog["Warn before No restrictions"].get("localizations"), {})
+        self.assertNotRegex(warning + settings, r'(?:Text|Toggle)\("[^"\n]*(?:YOLO|Guardrails)')
+        for identifier in ("title", "confirm", "cancel", "dontWarn"):
+            self.assertIn(f'.accessibilityIdentifier("yoloWarning.{identifier}")', warning)
+        self.assertIn('if dontWarn { prefs.skipYoloWarning = true }', warning)
+
     def test_android_changed_copy_is_explicitly_english_only(self):
         resources = {}
         for path in (ANDROID / "values").glob("strings*.xml"):

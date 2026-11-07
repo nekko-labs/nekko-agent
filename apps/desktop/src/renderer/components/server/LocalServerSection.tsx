@@ -17,7 +17,7 @@ import {
 import { useStore } from '../../store.js';
 import { Badge, Toggle } from '../primitives/index.js';
 import { CheckIcon, CopyIcon, TerminalIcon } from '../../icons.js';
-import { ServerPowerPill } from './ServerPowerPill.js';
+import { ServerPowerSwitch } from './ServerPowerSwitch.js';
 
 /**
  * Nekko Agent as something other programs can drive, as one block on the Models
@@ -83,11 +83,13 @@ export function LocalServerSection() {
   const url = status.clientUrl;
 
   return (
-    <section className="min-w-0">
-      {/* Same header shape as the model server's: the power pill and the
+    // Four rows (header, description, status, the rest) on the grid it shares
+    // with the model server, so the two panels' matching rows line up.
+    <section className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
+      {/* Same header shape as the model server's: the power switch and the
           launch toggle, so the two servers on this page switch the same way.
-          The pill reads `running` (is it listening) but flips `enabled` (should
-          it be), which is the setting the backend acts on. */}
+          The switch reads `running` (is it listening) but flips `enabled`
+          (should it be), which is the setting the backend acts on. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent-2)' }} />
         <h2 className="text-base font-semibold">Agent server</h2>
@@ -95,12 +97,11 @@ export function LocalServerSection() {
           {status.available === false && <span className="chip">this edition</span>}
           {canToggle && (
             <>
-              <ServerPowerPill
+              <ServerPowerSwitch
                 running={running}
                 busy={busy}
                 onToggle={() => void save({ enabled: !settings.enabled })}
                 labelWhat="agent server"
-                color="var(--accent-2)"
               />
               <label
                 className="flex items-center gap-2 text-xs text-ink-soft"
@@ -123,20 +124,21 @@ export function LocalServerSection() {
         over MCP.
       </p>
 
-      <div className="card mt-3 p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusDot running={running} busy={busy} />
-          <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
-          {running && (
-            <span className="text-2xs text-ink-faint">
-              {status.requests} request{status.requests === 1 ? '' : 's'}
-              {status.clients > 0 ? ` · ${status.clients} listening` : ''}
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            {running && <CopyPill value={`${url}/api`} title="Copy the address other tools should point at" />}
-          </div>
+      <div className="mt-3 flex min-h-7 flex-wrap items-center gap-2 self-start">
+        <StatusDot running={running} busy={busy} />
+        <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
+        {running && (
+          <span className="text-2xs text-ink-faint">
+            {status.requests} request{status.requests === 1 ? '' : 's'}
+            {status.clients > 0 ? ` · ${status.clients} listening` : ''}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          {running && <CopyPill value={`${url}/api`} title="Copy the address other tools should point at" />}
         </div>
+      </div>
+
+      <div className="min-w-0">
 
         {status.error && (
           <p className="mt-2 text-xs" style={{ color: 'var(--danger)' }}>

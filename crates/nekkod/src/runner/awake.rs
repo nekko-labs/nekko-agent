@@ -1,5 +1,8 @@
-//! Keeping the Mac awake while the supervisor says so, with `caffeinate`.
+//! Keeping the computer awake while someone says so: the runner's supervisor,
+//! and agents running with *Keep this computer awake while agents run* on.
+//! Idle sleep only: a closed lid or the power button still sleeps it.
 
+#[cfg(not(windows))]
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 
@@ -8,36 +11,101 @@ pub trait Awake: Send + Sync {
     fn set(&self, hold: bool);
 }
 
-/// Holds a `caffeinate -i -w <nekkod pid>` child while `true`: `-w` ends it
-/// with nekkod, so a crash never leaves the Mac held awake.
+/// The hold, while `true`. On macOS a `caffeinate -i -w <nekkod pid>` child and
+/// on Linux `systemd-inhibit` around a `tail --pid`: both end with nekkod, so a
+/// crash never leaves the computer held awake. On Windows a thread that keeps
+/// `ES_SYSTEM_REQUIRED` set until it is told to stop (the OS drops it with the process).
 #[derive(Default)]
-pub struct Caffeinate(Mutex<Option<Child>>);
+pub struct Hold(Mutex<Option<Held>>);
 
-impl Awake for Caffeinate {
-    fn set(&self, hold: bool) {
-        let Ok(mut child) = self.0.lock() else { return };
-        // A child that exited (killed by someone else) is replaced.
-        if child.as_mut().is_some_and(|c| !matches!(c.try_wait(), Ok(None))) {
-            *child = None;
+#[cfg(not(windows))]
+type Held = Child;
+#[cfg(windows)]
+type Held = std::sync::mpsc::Sender<()>;
+
+#[cfg(not(windows))]
+fn hold_command() -> Command {
+    let pid = std::process::id().to_string();
+    if cfg!(target_os = "macos") {
+        let mut c = Command::new("/usr/bin/caffeinate");
+        c.args(["-i", "-w", &pid]);
+        c
+    } else {
+        let mut c = Command::new("systemd-inhibit");
+        c.args([
+            "--what=idle:sleep",
+            "--who=Nekko Agent",
+            "--why=Agents are running",
+            "--mode=block",
+            "tail",
+            "--pid",
+            &pid,
+            "-f",
+            "/dev/null",
+        ]);
+        c
+    }
+}
+
+#[cfg(not(windows))]
+fn start() -> Option<Held> {
+    match hold_command().stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() {
+        Ok(c) => Some(c),
+        Err(e) => {
+            eprintln!("nekkod: cannot keep the computer awake: {e}");
+            None
         }
-        match (hold, child.is_some()) {
-            (true, false) => {
-                let pid = std::process::id().to_string();
-                match Command::new("/usr/bin/caffeinate")
-                    .args(["-i", "-w", &pid])
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-                {
-                    Ok(c) => *child = Some(c),
-                    Err(e) => eprintln!("runner: cannot keep the Mac awake: {e}"),
-                }
-            }
+    }
+}
+
+#[cfg(windows)]
+fn start() -> Option<Held> {
+    use windows_sys::Win32::System::Power::{ES_CONTINUOUS, ES_SYSTEM_REQUIRED, SetThreadExecutionState};
+    let (tx, rx) = std::sync::mpsc::channel::<()>();
+    std::thread::Builder::new()
+        .name("keep-awake".into())
+        .spawn(move || {
+            // SAFETY: only sets this thread's execution state flags.
+            unsafe { SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED) };
+            let _ = rx.recv(); // until the sender is dropped
+            unsafe { SetThreadExecutionState(ES_CONTINUOUS) };
+        })
+        .map_err(|e| eprintln!("nekkod: cannot keep the computer awake: {e}"))
+        .ok()?;
+    Some(tx)
+}
+
+#[cfg(not(windows))]
+fn stop(mut c: Held) {
+    let _ = c.kill();
+    let _ = c.wait();
+}
+
+#[cfg(windows)]
+fn stop(_tx: Held) {}
+
+/// A hold that ended on its own (killed by someone else) is replaced.
+#[cfg(not(windows))]
+fn ended(c: &mut Held) -> bool {
+    !matches!(c.try_wait(), Ok(None))
+}
+
+#[cfg(windows)]
+fn ended(_tx: &mut Held) -> bool {
+    false
+}
+
+impl Awake for Hold {
+    fn set(&self, hold: bool) {
+        let Ok(mut held) = self.0.lock() else { return };
+        if held.as_mut().is_some_and(ended) {
+            *held = None;
+        }
+        match (hold, held.is_some()) {
+            (true, false) => *held = start(),
             (false, true) => {
-                if let Some(mut c) = child.take() {
-                    let _ = c.kill();
-                    let _ = c.wait();
+                if let Some(h) = held.take() {
+                    stop(h);
                 }
             }
             _ => {}
@@ -45,7 +113,7 @@ impl Awake for Caffeinate {
     }
 }
 
-impl Drop for Caffeinate {
+impl Drop for Hold {
     fn drop(&mut self) {
         self.set(false);
     }
@@ -62,7 +130,7 @@ mod tests {
 
     #[test]
     fn caffeinate_holds_and_releases() {
-        let c = Caffeinate::default();
+        let c = Hold::default();
         c.set(true);
         c.set(true);
         let pid = c.0.lock().unwrap().as_ref().map(Child::id).expect("a caffeinate child");
