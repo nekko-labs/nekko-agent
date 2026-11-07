@@ -6,6 +6,8 @@ import com.nekko.protocol.VoiceInstall
 import com.nekko.protocol.wavArg
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +60,7 @@ class DictationController(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     private var job: Job? = null
+    @Volatile private var generation = 0L
 
     /** Tap on the mic: start, or stop and transcribe what was said. */
     fun toggle(onText: (String) -> Unit) {
@@ -70,6 +73,7 @@ class DictationController(
 
     /** Leave without keeping anything (screen closed, permission refused). */
     fun cancel() {
+        generation++
         job?.cancel()
         hardware.stopRecording()
         hardware.stopPhone()
@@ -87,10 +91,17 @@ class DictationController(
 
     private fun start(onText: (String) -> Unit) {
         _error.value = null
+        val token = ++generation
+        val previous = job
         job = scope.launch {
             try {
+                // A cancelled recorder must release its hardware before the next one starts.
+                previous?.join()
+                currentCoroutineContext().ensureActive()
                 val (choice, language) = settings()
                 val pc = if (choice == EngineChoice.PHONE) ComputerVoice.UNKNOWN else computer()
+                currentCoroutineContext().ensureActive()
+                if (token != generation) return@launch
                 val phone = hardware.phoneAvailable()
                 val engine = Dictation.engine(choice, pc, phone)
                 if (engine == null) {
@@ -98,12 +109,14 @@ class DictationController(
                     return@launch
                 }
                 val text = when (engine) {
-                    Engine.COMPUTER -> viaComputer()
+                    Engine.COMPUTER -> viaComputer(token)
                     Engine.PHONE -> {
                         _state.value = MicState.Recording(Engine.PHONE, 0, 0f)
-                        hardware.phoneListen(language) { lvl -> _state.update { if (it is MicState.Recording) it.copy(level = lvl) else it } }
+                        hardware.phoneListen(language) { lvl -> if (token == generation) _state.update { if (it is MicState.Recording) it.copy(level = lvl) else it } }
                     }
                 }
+                currentCoroutineContext().ensureActive()
+                if (token != generation) return@launch
                 if (text != null) {
                     // Silence comes back as "[BLANK_AUDIO]" and the like: that is nothing heard.
                     if (Dictation.clean(text).isEmpty()) _error.value = "Didn’t catch anything. Try again a little closer to the phone."
@@ -112,17 +125,19 @@ class DictationController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _error.value = e.message?.takeIf { it.isNotBlank() } ?: "Dictation failed."
+                if (token == generation) _error.value = e.message?.takeIf { it.isNotBlank() } ?: "Dictation failed."
             } finally {
-                _state.value = MicState.Idle
+                if (token == generation) _state.value = MicState.Idle
             }
         }
     }
 
     /** Record, then send the WAV to the computer's Whisper. Null when too short to be speech. */
-    private suspend fun viaComputer(): String? {
+    private suspend fun viaComputer(token: Long): String? {
         _state.value = MicState.Recording(Engine.COMPUTER, 0, 0f)
-        val samples = hardware.record { n, lvl -> _state.value = MicState.Recording(Engine.COMPUTER, n, lvl) }
+        val samples = hardware.record { n, lvl -> if (token == generation) _state.value = MicState.Recording(Engine.COMPUTER, n, lvl) }
+        currentCoroutineContext().ensureActive()
+        if (token != generation) return null
         if (samples.size < Wav.MIN_SAMPLES) {
             _error.value = "That was too short. Hold on a moment longer."
             return null

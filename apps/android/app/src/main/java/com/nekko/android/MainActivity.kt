@@ -159,7 +159,9 @@ class MainActivity : FragmentActivity() {
         return WindowInspector.getGlobalWindowViews().any { it !== decor && it.hasWindowFocus() }
     }
 
-    private companion object {
+    companion object {
+        const val TALK_TO_NEKKO = "com.nekko.android.TALK_TO_NEKKO"
+        const val OPEN_DASHBOARD = "com.nekko.android.OPEN_DASHBOARD"
         /** When to look again for an in-app popup that took focus late. */
         val FOCUS_RECHECK_MS = longArrayOf(50, 150, 400)
     }
@@ -172,6 +174,8 @@ class MainActivity : FragmentActivity() {
 
     private fun handle(intent: Intent?) {
         when (intent?.action) {
+            TALK_TO_NEKKO -> incomingLink.value = DeepLink.Talk
+            OPEN_DASHBOARD -> incomingLink.value = DeepLink.Dashboard
             Intent.ACTION_VIEW -> intent.data?.let(DeepLink::from)?.let { incomingLink.value = it }
             Intent.ACTION_SEND -> {
                 // Only plain text and links; files and images are not taken (no URI read permission asked).

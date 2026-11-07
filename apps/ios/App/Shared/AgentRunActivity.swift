@@ -28,6 +28,9 @@ enum IntentRouter {
     static var focus: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     static var dismiss: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
     static var talk: (@MainActor @Sendable (_ sessionId: String) async -> Void)?
+    /// App-wide voice is explicitly scoped to the computer on the tapped card.
+    static var talkToNekko: (@MainActor @Sendable (_ computerId: String) async -> Void)?
+    static var finishTalk: (@MainActor @Sendable () async -> Void)?
     static var cancelTalk: (@MainActor @Sendable () async -> Void)?
 }
 
@@ -159,6 +162,35 @@ struct TalkToChatIntent: LiveActivityIntent {
 /// stops the recording unless a Live Activity is up, and the card it was tapped on is.
 @available(iOS 18, *)
 extension TalkToChatIntent: AudioRecordingIntent {}
+
+/// The primary card action. Authentication precedes all microphone access.
+struct TalkToNekkoIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Talk to Nekko"
+    static let isDiscoverable = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
+    @Parameter(title: "Computer") var computerId: String
+    init() {}
+    init(computerId: String) { self.computerId = computerId }
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.talkToNekko?(computerId)
+        return .result()
+    }
+}
+
+@available(iOS 18, *)
+extension TalkToNekkoIntent: AudioRecordingIntent {}
+
+struct FinishTalkIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Finish listening"
+    static let isDiscoverable = false
+    static let authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+    init() {}
+    func perform() async throws -> some IntentResult {
+        await IntentRouter.finishTalk?()
+        return .result()
+    }
+}
 
 /// Cancel while listening: nothing is sent.
 struct CancelTalkIntent: LiveActivityIntent {

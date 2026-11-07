@@ -2,6 +2,8 @@ package com.nekko.android
 
 /** What an incoming URI asks the app to do. */
 sealed interface DeepLink {
+    data object Talk : DeepLink
+    data object Dashboard : DeepLink
     /** A pairing link: open the pair screen pre-filled and ask before pairing. */
     data class Pair(val raw: String) : DeepLink
 

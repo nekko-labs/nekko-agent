@@ -4,4 +4,7 @@
     <string name="widget_description">有多少聊天需要你、有多少正在工作。只显示数量，从不显示内容。</string>
     <string name="shortcut_new_chat">新聊天</string>
     <string name="shortcut_new_chat_long">在你的电脑上新建聊天</string>
+    <string name="dashboard_talk">与 Nekko 对话</string>
+    <string name="dashboard_open">打开应用</string>
+    <string name="dashboard_voice_fallback">语音会打开应用。解锁后点击“聆听”。</string>
 </resources>
