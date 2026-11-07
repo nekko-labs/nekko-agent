@@ -42,3 +42,5 @@ Native movie (from `apps/desktop`):
 ```sh
 npx -y -p @remotion/cli@4.0.535 remotion render scripts/experience-render/entry.tsx Experience ../ios/App/Resources/experience-intro.mp4 --codec=h264 --crf=28 --pixel-format=yuv420p
 ```
+
+- Matched harness-correction run [42420948988](https://github.com/nekko-labs/nekko-agent/actions/runs/42420948988) dispatched with unchanged baseline app `a61cc20007b41a32a1ccadded3731654d697cb8e`, unchanged feature app `1a2e5f84acf4950c319d2651a4c588fe37396e45`, shared harness `6b5a5b6cc1b605332202d75b330ec9b8e279d8b7`, and pinned iOS 27.2. Results and actual manifests remain pending. This is a changed-harness experiment, not a rerun of unchanged failing tests. No visual change in this continuation; existing required visual acceptance is still blocked.
