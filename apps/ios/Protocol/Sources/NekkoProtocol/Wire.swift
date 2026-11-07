@@ -42,6 +42,14 @@ public enum Channels {
     public static let workspaceAddByPath = "workspace:addByPath"
     public static let workspaceRemove = "workspace:remove"
     public static let appInfo = "app:info"
+    /// Service discovery is Read; updater reads additionally require the owner's opt-in.
+    public static let serviceStatus = "service:status"
+    public static let serviceUpdateState = "service:updateState"
+    public static let serviceRestart = "service:restart"
+    public static let serviceUpdateCheck = "service:updateCheck"
+    public static let serviceUpdateDownload = "service:updateDownload"
+    public static let serviceUpdateInstall = "service:updateInstall"
+    public static let serviceChange: Set<String> = [serviceRestart, serviceUpdateCheck, serviceUpdateDownload, serviceUpdateInstall]
     /// Whether someone is using the computer (`PHONE_ACTIVITY_VIEW`), for New chat's Auto (2026-11-05).
     public static let activityState = "activity:state"
     /// SK-2: a single-use step-up challenge (read class).
@@ -122,7 +130,7 @@ public enum Channels {
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
@@ -131,6 +139,7 @@ public enum Channels {
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
         providersSealKey, providersSaveSealed, providersSetEnabled,
+        serviceStatus, serviceUpdateState, serviceRestart, serviceUpdateCheck, serviceUpdateDownload, serviceUpdateInstall,
         workspaceGitStatus, gitDiff, gitLog, gitShow, gitBranches, gitCompare, prChecks, prDiff,
         gitStage, gitUnstage, gitCommit, gitCommitMessage, gitPush, gitSwitch, gitMergeAbort, prCreate, prAction,
         filesList, filesSearch, filesRead, filesWrite, logsList, logsRead,
@@ -389,6 +398,9 @@ public struct Session: Equatable, Sendable {
     public var chatType: String?
     public var executionMode: String?
     public var disabledTools: [String] = []
+    /// MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in
+    /// this chat (decision 0054): the egress gate stops asking for them.
+    public var allowedMcpTools: [String] = []
 
     /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
     public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
@@ -421,7 +433,8 @@ public struct Session: Equatable, Sendable {
             agentPlan: PlanStep.list(v["agentPlan"]),
             runOptions: RunOption.values(of: v),
             parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), executionMode: v.str("executionMode"),
-            disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [])
+            disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [],
+            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [])
     }
 }
 
@@ -453,6 +466,9 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var phase: String? = nil
     /// The pull requests its transcript names (`prUrls`): the rows look these up for their state.
     public var prUrls: [String] = []
+    public var transcriptTokens: Int64? = nil
+    public var contextUsed: Int64? = nil
+    public var contextWindow: Int64? = nil
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -468,7 +484,10 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0,
             createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false,
             exchangeCount: v.long("exchangeCount"), phase: v.str("phase"),
-            prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [])
+            prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [],
+            transcriptTokens: v.long("transcriptTokens").flatMap { $0 > 0 ? $0 : nil },
+            contextUsed: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("used").flatMap { $0 >= 0 ? $0 : nil } : nil,
+            contextWindow: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("window").flatMap { $0 > 0 ? $0 : nil } : nil)
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.

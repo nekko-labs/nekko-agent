@@ -172,6 +172,8 @@ public struct PhoneRefusal: Equatable, Sendable {
         case "value-invalid" where detail == "secret file": return "This file may hold secrets, so it never leaves \(computer)."
         // SK-6: the step-up refusals and the safety exit the owner kept off.
         case let c where StepUp.isStepUpCode(c): return StepUpCode(rawValue: c)?.message(computer: computer)
+        case "service-disabled":
+            return "Service management from a phone is turned off on \(computer). Turn on Manage service from phone there in Settings → System."
         case "quit-disabled":
             return "Quitting from a phone is turned off on \(computer). Turn it on there in Settings → Remote access."
         default: return nil

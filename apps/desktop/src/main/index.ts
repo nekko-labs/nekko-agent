@@ -651,7 +651,7 @@ app.whenReady().then(async () => {
   // The bridge also carries what nekkod asks of the window shell: the app
   // window's handle for owning its dialogs, dialogs it cannot draw (macOS),
   // and quitting so an update can install.
-  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit()), guard: (s) => guardSession(s, 'web-tools', readConnections) });
+  const agentBrowser = await startAgentBrowser({ pickFolder: pickFolderDialog, shell: shellBridge(() => app.quit(), () => quitting ? null : engine), guard: (s) => guardSession(s, 'web-tools', readConnections) });
   app.once('will-quit', () => agentBrowser.close());
   engine = new EngineProcess({
     browserBridge: { url: agentBrowser.url, token: agentBrowser.token },

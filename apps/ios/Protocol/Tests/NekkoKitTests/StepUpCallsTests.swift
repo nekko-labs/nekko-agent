@@ -259,6 +259,8 @@ final class StepUpCallsTests: XCTestCase {
         }, "Switch “Refactor auth” to Guardrails on Studio")
         XCTAssertEqual(StepUp.actionName(channel: Channels.settingsUpdate, args: [["defaultChatMode": "yolo"]], computer: "Studio"),
                        "Make YOLO the default for new chats on Studio")
+        XCTAssertEqual(StepUp.actionName(channel: Channels.sessionSetOptions, args: ["s1", ["allowedMcpTools": ["mcp__slack__post"]]],
+                                         computer: "Studio"), "Always allow a tool in this chat on Studio")
         XCTAssertEqual(StepUp.actionName(channel: "security:phoneRegister", args: [], computer: "Studio"),
                        "Add a security key or passkey on Studio")
     }

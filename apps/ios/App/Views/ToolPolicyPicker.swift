@@ -1,11 +1,18 @@
+import NekkoKit
 import NekkoProtocol
 import SwiftUI
 
 /// A real-width popover instead of the system Picker's narrow, wrapping menu.
+/// Choosing YOLO from another mode shows the YOLO warning first (decision 0054),
+/// so every place that uses it (Simple's chat picker, New chat) warns.
 struct ToolPolicyPicker: View {
     @Binding var selection: PcSettings.ChatMode
     @Environment(\.palette) private var palette
+    @Environment(Prefs.self) private var prefs
     @State private var open = false
+    /// YOLO was picked and needs the warning, shown once the popover has gone.
+    @State private var wantsYolo = false
+    @State private var yoloAsk: YoloAsk?
 
     static func icon(_ mode: PcSettings.ChatMode) -> String {
         switch mode {
@@ -32,7 +39,11 @@ struct ToolPolicyPicker: View {
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(PcSettings.ChatMode.allCases, id: \.self) { mode in
                     Button {
-                        selection = mode
+                        if YoloWarning.needed(from: selection, to: mode, skipped: prefs.skipYoloWarning) {
+                            wantsYolo = true
+                        } else {
+                            selection = mode
+                        }
                         open = false
                     } label: {
                         HStack(spacing: 10) {
@@ -53,6 +64,13 @@ struct ToolPolicyPicker: View {
             }
             .padding(8).frame(width: 300)
             .presentationCompactAdaptation(.popover)
+            // One presentation at a time: the warning waits for the popover to close.
+            .onDisappear {
+                guard wantsYolo else { return }
+                wantsYolo = false
+                yoloAsk = YoloAsk { selection = .yolo }
+            }
         }
+        .yoloWarning($yoloAsk)
     }
 }

@@ -25,6 +25,7 @@ import { useT, LANGUAGES } from '../i18n.js';
 import { loadWallState, saveWallState, toWallSetting } from '../commandWall.js';
 import { hasAppChrome } from '../chrome.js';
 import { ServiceLoadState } from '../components/ServiceLoadState.js';
+import { ServiceManagement } from '../components/ServiceManagement.js';
 import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
@@ -479,6 +480,7 @@ export function SettingsView() {
               </AdvancedFold>
             </SettingsGroup>
             <SettingsGroup id="system">
+              <ErrorBoundary label="Nekko Agent service"><ServiceManagement settings={settings} update={update} /></ErrorBoundary>
               {/* Updates */}
               <ErrorBoundary label="Updates"><UpdatesSection settings={settings} update={update} /></ErrorBoundary>
               <section className="card mt-5 p-5">

@@ -52,6 +52,31 @@ class PillPlaceTest {
     }
 
     @Test
+    fun `a swipe into its edge tucks it, anything else does not`() {
+        val right = PillPlace(PillDock.RIGHT, 0.4f)
+        assertTrue(right.swipesIn(60f, 10f, min = 40f))
+        assertFalse(right.swipesIn(-60f, 0f, min = 40f))
+        assertFalse(right.swipesIn(50f, 90f, min = 40f))
+        assertFalse(right.swipesIn(30f, 0f, min = 40f))
+        assertTrue(PillPlace(PillDock.LEFT, 1f).swipesIn(-60f, 0f, min = 40f))
+        assertTrue(PillPlace.DEFAULT.swipesIn(0f, -60f, min = 40f))
+        assertFalse(PillPlace.DEFAULT.swipesIn(60f, 0f, min = 40f))
+        // Lying across the middle there is no edge to tuck into.
+        assertFalse(PillPlace(PillDock.TOP, 0.5f).swipesIn(0f, -60f, min = 40f))
+        assertFalse(PillPlace(tucked = true).atTop)
+    }
+
+    @Test
+    fun `a tucked place is saved and read back, only at an edge`() {
+        val store = MapPrefStore()
+        PhonePrefs(store).set(PillPlace.KEY, PillPlace(PillDock.RIGHT, 0.4f, tucked = true))
+        assertEquals("RIGHT:0.4:TUCKED", store.map["pill.place"])
+        assertEquals(PillPlace(PillDock.RIGHT, 0.4f, tucked = true), PhonePrefs(store).get(PillPlace.KEY))
+        assertEquals(PillPlace(PillDock.TOP, 0.5f), PhonePrefs(MapPrefStore(mutableMapOf("pill.place" to "TOP:0.5:TUCKED"))).get(PillPlace.KEY))
+        assertEquals(PillPlace.DEFAULT, PhonePrefs(MapPrefStore(mutableMapOf("pill.place" to "TOP:0.0:FOLDED"))).get(PillPlace.KEY))
+    }
+
+    @Test
     fun `an unreadable or out-of-range place reads as home or clamps`() {
         assertEquals(PillPlace.DEFAULT, PhonePrefs(MapPrefStore()).get(PillPlace.KEY))
         for (bad in listOf("", "SIDEWAYS:0.5", "LEFT", "LEFT:abc", "LEFT:NaN")) {

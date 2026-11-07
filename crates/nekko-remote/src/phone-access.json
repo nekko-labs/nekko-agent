@@ -1,5 +1,11 @@
 {
  "channels": [
+  "service:status",
+  "service:updateState",
+  "service:restart",
+  "service:updateCheck",
+  "service:updateDownload",
+  "service:updateInstall",
   "activity:state",
   "app:info",
   "app:quit",
@@ -154,6 +160,8 @@
  },
  "readChannels": [
   "audit:read",
+  "service:status",
+  "service:updateState",
   "changes:list",
   "chat:pending",
   "limits:get",
@@ -201,6 +209,10 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "service:restart",
+  "service:updateCheck",
+  "service:updateDownload",
+  "service:updateInstall",
   "session:setSupportingWorkspaces",
   "workspace:addByPath",
   "workspace:remove",
@@ -1038,6 +1050,10 @@
    "channels": [
     "session:setOptions",
     "settings:update"
+   ],
+   "serviceChannels": [
+    "service:restart",
+    "service:updateInstall"
    ]
   },
   "desktopGuarded": {

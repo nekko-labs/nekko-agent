@@ -161,8 +161,12 @@ public final class DraftStore {
     public func set(_ key: String, _ draft: Draft) {
         let next: Draft? = draft.isEmpty ? nil : draft
         guard drafts[key] != next else { return }
+        let photosChanged = (drafts[key]?.images ?? []) != (next?.images ?? [])
         drafts[key] = next
-        scheduleSave()
+        // Photo edits are discrete: persist them before returning, rather than
+        // losing a newly attached photo if the process ends during the typing debounce.
+        if photosChanged { flush() }
+        else { scheduleSave() }
     }
 
     /// The prompt was sent (it is in the outbox now), or the user cleared it.

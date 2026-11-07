@@ -1,5 +1,6 @@
 package com.nekko.android.data
 
+import com.nekko.protocol.Activity
 import com.nekko.protocol.AgentEvent
 import com.nekko.protocol.PendingInput
 
@@ -47,6 +48,10 @@ data class AttentionState(
         }
         return copy(pending = merged, known = true, changed = emptyMap(), snapshotVersion = null)
     }
+
+    /** Replace only the needs-you rows, keeping running and failed ones. */
+    fun projecting(activity: Map<String, Activity>): Map<String, Activity> =
+        activity.filterValues { it != Activity.NEEDS_YOU } + pending.keys.associateWith { Activity.NEEDS_YOU }
 
     private fun replace(id: String, input: PendingInput?): AttentionState = copy(
         pending = if (input?.approval == null && input?.question == null) pending - id else pending + (id to input),
