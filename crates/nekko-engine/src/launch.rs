@@ -590,6 +590,12 @@ pub fn explain_load_error(log: &[String]) -> String {
 
 /// One image request as stable-diffusion.cpp's server takes it, or why it is
 /// refused (`imageGenerationBody`).
+/// At most this many pictures to edit from, as the Photo composer allows.
+pub const MAX_REF_IMAGES: usize = 4;
+/// Their data URLs together, under the engine router's 25 MB request limit.
+const MAX_REF_BYTES: usize = 20 * 1024 * 1024;
+const REF_PROBLEM: &str = "Attach up to 4 pictures to edit, each a PNG, JPEG or WebP image, 20 MB in all.";
+
 pub fn image_generation_body(request: &Value) -> Result<String, String> {
     let problem = || {
         "Use a prompt, dimensions from 256 to 2048 in multiples of 64, 1 to 100 steps and CFG from 0 to 30.".to_string()
@@ -614,9 +620,24 @@ pub fn image_generation_body(request: &Value) -> Result<String, String> {
     if !ok {
         return Err(problem());
     }
-    let extra = nekko_js::stringify(
-        &json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed }),
-    );
+    // Pictures to edit: sd.cpp's reference images, as data URLs (`ref_images`).
+    let refs: Vec<Value> = match request.get("refImages") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(list)) => list.clone(),
+        Some(_) => return Err(REF_PROBLEM.into()),
+    };
+    let ref_ok = refs.len() <= MAX_REF_IMAGES
+        && refs.iter().all(|r| r.as_str().is_some_and(|s| s.starts_with("data:image/") && s.contains(";base64,")))
+        && refs.iter().filter_map(Value::as_str).map(str::len).sum::<usize>() <= MAX_REF_BYTES;
+    if !ref_ok {
+        return Err(REF_PROBLEM.into());
+    }
+    let mut native =
+        json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed });
+    if !refs.is_empty() {
+        native["ref_images"] = Value::Array(refs);
+    }
+    let extra = nekko_js::stringify(&native);
     let mut body = Map::new();
     if let Some(m) = request.get("modelId") {
         body.insert("model".into(), m.clone());

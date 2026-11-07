@@ -164,3 +164,44 @@ fn qwen_image_edit_2509_skips_the_2511_switch() {
     let set = set_of("image/QuantStack_Qwen-Image-Edit-2509-GGUF/Qwen-Image-Edit-2509-Q4_K_S.gguf");
     assert!(!set["launchArgs"].as_array().unwrap().iter().any(|a| a == "--model-args"));
 }
+
+fn body(extra: Value) -> Result<Value, String> {
+    let mut request = json!({ "modelId": "m", "prompt": "make the sky orange", "width": 1024, "height": 768, "steps": 4, "cfgScale": 1, "seed": 7 });
+    for (k, v) in extra.as_object().unwrap() {
+        request[k] = v.clone();
+    }
+    launch::image_generation_body(&request).map(|b| serde_json::from_str(&b).unwrap())
+}
+
+/// The native settings embedded in the prompt.
+fn native(body: &Value) -> Value {
+    let p = body["prompt"].as_str().unwrap();
+    let start = p.find("<sd_cpp_extra_args>").unwrap() + "<sd_cpp_extra_args>".len();
+    serde_json::from_str(&p[start..p.find("</sd_cpp_extra_args>").unwrap()]).unwrap()
+}
+
+#[test]
+fn pictures_to_edit_go_to_sd_cpp_as_reference_images() {
+    let photo = "data:image/jpeg;base64,/9j/4AAQ";
+    let b = body(json!({ "refImages": [photo, "data:image/png;base64,iVBOR"] })).unwrap();
+    assert_eq!(native(&b)["ref_images"], json!([photo, "data:image/png;base64,iVBOR"]));
+    assert!(b["prompt"].as_str().unwrap().starts_with("make the sky orange\n"));
+    assert_eq!(b["size"], "1024x768");
+    // Without pictures the request is what it always was.
+    let plain = body(json!({})).unwrap();
+    assert_eq!(native(&plain).get("ref_images"), None);
+    assert_eq!(body(json!({ "refImages": null })).unwrap(), plain);
+}
+
+#[test]
+fn pictures_to_edit_are_checked() {
+    let one = json!("data:image/png;base64,AAAA");
+    let problem = "Attach up to 4 pictures to edit, each a PNG, JPEG or WebP image, 20 MB in all.";
+    assert_eq!(body(json!({ "refImages": [one, one, one, one, one] })).unwrap_err(), problem);
+    assert_eq!(body(json!({ "refImages": ["https://example.com/a.png"] })).unwrap_err(), problem);
+    assert_eq!(body(json!({ "refImages": ["/Users/me/a.png"] })).unwrap_err(), problem);
+    assert_eq!(body(json!({ "refImages": "data:image/png;base64,AAAA" })).unwrap_err(), problem);
+    let huge = format!("data:image/png;base64,{}", "A".repeat(21 * 1024 * 1024));
+    assert_eq!(body(json!({ "refImages": [huge] })).unwrap_err(), problem);
+    assert!(body(json!({ "refImages": [one, one, one, one] })).is_ok());
+}

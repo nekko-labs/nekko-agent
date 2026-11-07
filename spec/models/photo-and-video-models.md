@@ -68,6 +68,16 @@ An empty Photo chat with no picture model on this computer shows **Choose a pict
 - **Supporting files follow every picture download:** when any image model with a companion set finishes downloading, whether from Models, a recommendation or the Photo setup, the daemon queues its text encoders and VAE itself. Files already on disk are skipped.
 - **Offload follows the recommendation, wherever the model came from:** when a Photo chat chooses a picture model (including the first one it picks on its own), Nekko turns on its **Offload weights to CPU** preset if this machine's recommendations say it only fits that way. The rest of the preset is kept.
 
+## Editing a photo in Photo `[implemented 2026-11-08 (#2177); unit-, turn- and engine-tested, captured in an isolated renderer fixture with a stub engine; not yet run against a real sd-server]`
+
+Decision 0067, as built:
+
+- **A photo in the composer means edit.** A Photo chat takes photos to edit from the photo button beside the composer, a paste or a drop: PNG, JPEG and WebP only, at most four, each scaled to 1536 px on its longest side before it is attached (sd.cpp decodes references at their own size). **Edit** under any picture the chat made attaches it the same way.
+- **The engine gets them as reference images.** The turn keeps the photos on the user message, so the transcript shows what was changed, and sends them as `refImages`; the request carries them to sd-server as `ref_images` inside `sd_cpp_extra_args` on the same `/v1/images/generations` call (sd.cpp's native schema takes data URLs there). The engine refuses more than four, anything that is not a `data:image/...;base64,` URL, or over 20 MB in all, under the router's 25 MB request limit.
+- **The edit keeps the photo's shape:** made at about the chat's pixel count, in the photo's proportions, in multiples of 64 (256-2048). That size is the turn's only; the chat's own size is unchanged.
+- **A model that cannot edit is never sent a photo.** Before sending, the chat reads the model's capabilities. Without `edit` (or with no known set) the photo and prompt stay in the composer and an offer opens above it: a picture model already on this computer that edits (**Use FLUX.2 klein 4B**, its supporting files fetched first when missing), else the **Edit photos** picks for this machine (Qwen Image Edit 2511, FLUX.2 klein 4B) with the same one-press download as the first picture model. Once the chat has an edit model, sending again is all that is left. **Not now** closes it.
+- **The other way round:** a prompt with no photo to a model that only edits says so instead of making a picture it is not built for.
+
 ## What the pinned engine can already do `[checked against the sd.cpp README and docs at 37bc88b, 2026-11-08; not run]`
 
 - **Images:** SD 1.x/2.x/XL, SD 3/3.5, FLUX.1, FLUX.2 dev/klein, Z-Image, Qwen Image and 2.1, HiDream-O1, Chroma and more.
@@ -159,7 +169,7 @@ Each is one PR (a stack where noted). Tracked in the issue linked from this file
 3. **Recommendations: image rows** `[implemented, see above]`: download sizes from Hugging Face, memory needed, fit per machine, offload when needed. Still open: a measured peak memory per family to replace the 2 GiB allowance, and measured seconds per image. Video rows come with step 7.
 4. **Photo: choose a model from the chat** `[implemented, see above]`: the cards, the hand-off to the shared download job, inline progress. The introduction's **Choose your first model** step follows when #2149 lands.
 5. **Models: Image and Video filters** `[implemented, see above]`: kind filters, picture picks in Best for this machine, supporting files fetched after any picture download, offload set from the recommendation.
-6. **Photo: edit an existing photo:** attachments and **Edit** on a reply, the edit request to `sd-server`, the capability check and the edit-model offer.
+6. **Photo: edit an existing photo** `[implemented, see above]`: attachments and **Edit** on a reply, reference images to sd-server, the capability check and the edit-model offer.
 7. **Video: local generation (experimental, stack):** the Wan companion set, the video turn on `/sdcpp/v1/vid_gen`, job progress and recovery, the video reply in chat, the hardware gate.
 8. **Cloud image and video providers:** bring-your-own-key providers, privacy prompts under decision 0065.
 9. **Phones:** the same menu, introductions and model choice on iOS and Android, driving the computer; a gaps row in [iOS and Android stay in step](../phone/ios-and-android-stay-in-step.md) for anything that lands on desktop first.
