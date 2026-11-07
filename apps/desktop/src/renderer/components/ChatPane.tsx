@@ -2676,7 +2676,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             >
               {compact ? <TerminalIcon className="h-4 w-4" /> : 'Logs'}
             </button>}
-
         </ChatHeader>
         )}
         {/* A sub-agent says so across the top, with a way back to the chat that spawned it. */}
@@ -3423,45 +3422,42 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         <div className="ml-auto flex shrink-0 items-center gap-1">
                           {plusCarries && session?.incognito && <span className="ctl-toggle ctl-toggle-neutral whitespace-nowrap" data-incognito-on title="Don't save this chat or update memory"><IncognitoIcon className="h-3.5 w-3.5" /> Incognito</span>}
                           {!expertMode && usageGauge}
-                        {expertMode && <button
-                          type="button"
-                          className="composer-details-toggle"
-                          onClick={toggleDetails}
-                          aria-expanded={detailsOpen}
-                          aria-label={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
-                          title={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
-                        >
-                          {detailsOpen ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronUpIcon className="h-3.5 w-3.5" />}
-                        </button>}
-
+                          {expertMode && <button
+                            type="button"
+                            className="composer-details-toggle"
+                            onClick={toggleDetails}
+                            aria-expanded={detailsOpen}
+                            aria-label={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
+                            title={detailsOpen ? 'Shrink the chat details' : 'Show the chat details'}
+                          >
+                            {detailsOpen ? <ChevronDownIcon className="h-3.5 w-3.5" /> : <ChevronUpIcon className="h-3.5 w-3.5" />}
+                          </button>}
                         </div>
                       </div>
                       {detailsShown && (showMode || expertMode || showCost || showTools || showInternet || session?.offline) && <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2" data-composer-mode-row>
                         {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />}
                         {expertMode && usageGauge}
-                      {detailsShown && showCost && (
-                        <LiveUsageChip
-                          sessionId={sessionId}
-                          marks={marks}
-                          measured={turnCostMeasured}
-                          pendingIn={pendingIn}
-                          model={modelForCostRef.current}
-                          provider={activeProvider}
-                          session={session ?? undefined}
-                          cost={cost}
-                          avoidedCosts={avoidedCosts}
-                          running={streaming}
-                          unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
-                        />
-                      )}
-
+                        {showCost && (
+                          <LiveUsageChip
+                            sessionId={sessionId}
+                            marks={marks}
+                            measured={turnCostMeasured}
+                            pendingIn={pendingIn}
+                            model={modelForCostRef.current}
+                            provider={activeProvider}
+                            session={session ?? undefined}
+                            cost={cost}
+                            avoidedCosts={avoidedCosts}
+                            running={streaming}
+                            unpriced={!!avoidedCosts?.unpricedTokens || (streaming && !getModelPrice(modelForCostRef.current ?? undefined))}
+                          />
+                        )}
                         <div className="agent-footer-reach ml-auto flex flex-wrap items-center gap-1" data-agent-footer-controls>
-                        {detailsShown && session && showTools && <>
-                          <ToolsMenu session={session} onChange={setSession} />
-                          {session?.executionMode === 'sandbox' ? <span className="text-2xs text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
-                        </>}
-                        {detailsShown && (showInternet || session?.offline) && <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />}
-
+                          {session && showTools && <>
+                            <ToolsMenu session={session} onChange={setSession} />
+                            {session?.executionMode === 'sandbox' ? <span className="text-2xs text-ink-faint">MCP unavailable in Sandbox</span> : <McpMenu />}
+                          </>}
+                          {(showInternet || session?.offline) && <InternetToggle session={session} cloudModel={isCloudModel} onToggle={() => { void window.nekko.setSessionOptions(sessionId, { offline: !session?.offline }).then(setSession).catch(e => useStore.getState().pushToast('error', String(e))); }} />}
                         </div>
                       </div>}
                     </>}

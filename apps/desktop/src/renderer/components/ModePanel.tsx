@@ -346,7 +346,7 @@ export function ModePanel({
     <button role="switch" aria-checked={on} aria-label={label} className="mode-switch" disabled={disabled} onClick={onClick} />
   );
   const tiles = <T extends string>(label: string, value: T, options: Array<[T, string, ReactNode, Record<string, string>?]>, pick: (v: T) => void) => (
-    <div className="mode-tiles" role="radiogroup" aria-label={label}>
+    <div className={`mode-tiles${label === 'Approvals' ? ' mode-approval-tiles' : ''}`} role="radiogroup" aria-label={label}>
       {options.map(([v, l, icon, data]) => (
         <button key={v} role="radio" aria-checked={value === v} onClick={() => pick(v)} {...data}>{icon}<span>{l}</span></button>
       ))}

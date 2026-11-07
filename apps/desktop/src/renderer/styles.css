@@ -3959,6 +3959,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 }
 .mode-tiles button[aria-checked="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: var(--shadow-sm); }
 .mode-tiles button[aria-checked="true"] svg { color: var(--accent); }
+/* Approval names must remain readable in the narrow Mode panel columns. */
+.mode-approval-tiles { flex-direction: column; min-width: 0; }
+.mode-approval-tiles button { flex-direction: row; gap: 8px; padding: 6px 8px; text-align: left; }
+.mode-approval-tiles button span { white-space: normal; overflow-wrap: anywhere; }
 
 .mode-folders { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .mode-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 24px; padding: 0 4px 0 8px; border-radius: 7px; background: var(--surface-2); font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-soft); }

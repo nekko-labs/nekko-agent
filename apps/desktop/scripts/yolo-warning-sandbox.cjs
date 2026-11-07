@@ -25,10 +25,12 @@ app.whenReady().then(async () => {
     await run(`document.querySelector('[aria-label="Confirm deletions"]').closest('div').scrollIntoView({ block: 'center' })`);
     await sleep(300);
     await shot('yolo-settings-row');
-    report.hasWarnToggle = await run(`!!document.querySelector('[aria-label="Warn before No restrictions"]')`);
+    await run(`[...document.querySelectorAll('button')].find(b => b.textContent.includes('Run everything without confirming')).scrollIntoView({block:'center'})`);
+    await sleep(300); await shot('permission-settings-choices');
+    report.hasWarnToggle = await run(`!!document.querySelector('[aria-label="Warn before No restrictions"], [aria-label="Warn before YOLO"]')`);
     if (report.hasWarnToggle) {
       // Choose YOLO as the default for new chats: the warning opens first.
-      await run(`[...document.querySelectorAll('button')].find(b => b.textContent.startsWith('No restrictions') && b.textContent.includes('Run everything')).click()`);
+      await run(`[...document.querySelectorAll('button')].find(b => (b.textContent.startsWith('No restrictions') || b.textContent.startsWith('YOLO')) && b.textContent.includes('Run everything')).click()`);
       await sleep(500);
       await check('the warning opened', `!!document.getElementById('yolo-warning-title')`);
       await shot('yolo-warning-dialog');

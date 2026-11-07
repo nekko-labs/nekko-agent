@@ -26,7 +26,7 @@ app.whenReady().then(async () => {
   const wait = async selector => { for (let i = 0; i < 60; i++) { if (await has(selector)) return; await sleep(100); } throw Error('Missing ' + selector); };
   const click = async selector => { await wait(selector); await run(`document.querySelector(${js(selector)}).click()`); await sleep(250); };
   const check = async (name, code) => { const passed = !!(await run(code)); report.checks.push({ name, passed }); if (!passed) throw Error(name); };
-  const shot = async name => { await sleep(500); const file = path.join(dir, `${baseline ? 'before' : 'after'}-${name}.png`); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
+  const shot = async name => { await sleep(500); await win.capturePage(undefined, { stayHidden: true }); await sleep(200); const file = path.join(dir, `${baseline ? 'before' : 'after'}-${name}.png`); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
   const scene = async (mode, extra = {}) => {
     await run(`localStorage.removeItem('nekko.composer.details'); localStorage.removeItem('nekko.simpleChoices'); localStorage.setItem('nekko.chatMode',${js(mode)}); localStorage.setItem('fixture.scene',${js(JSON.stringify({ local: false, changes: 0, long: false, ...extra }))}); location.hash=''; location.reload()`).catch(() => {});
     await sleep(300); await wait('[data-session-id="alpha"] .composer'); await sleep(1000);
