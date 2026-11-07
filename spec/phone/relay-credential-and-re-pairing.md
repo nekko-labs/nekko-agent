@@ -32,6 +32,12 @@ The relay that connects a phone to its computer only forwards sealed frames. It 
 - A phone-local nickname (the existing Rename control) wins over the computer's shared name, including when deliberately named “Mac”. The local-name flag persists across app restarts and re-pairing; older non-generic saved names are treated as nicknames. A failed info read keeps the last learned name.
 - Verification: desktop focused tests, Swift protocol/store/fleet tests, Android repository/protocol tests, and hidden Electron settings interactions at 1000 and 390 logical pixels. Desktop dark-mode before/after evidence uses the real component and an in-memory bridge with network denied. No managed-relay or physical-phone pairing was performed; native phone views are unchanged.
 
+## iOS callback-order recovery (#2098)
+
+Implemented, verification pending: an open callback arriving after a verified challenge or welcome must not re-arm the challenge watchdog. iOS now checks the current socket, stopped state and handshake progress under the same lock before arming it, matching Android's existing `afterOpen` guard. The original welcome deadline remains active while waiting for welcome; missing or forged challenges still time out. No request is retried or replayed by this change.
+
+Two fake-transport regressions deliver the first open callback after HELLO and after welcome. `scripts/relay-handshake-regression.sh` overlays those tests on a supplied base revision, requires assertion failures (not build errors), then runs the complete relay-client test class on the fix. Real gomi incident attribution and physical-device verification remain unverified without contemporaneous diagnostics.
+
 ## Acceptance
 
 - The same vector (`secret`, `room` to `relayAuth`) passes in `crates/nekko-remote/tests/golden/crypto.json`, `packages/shared/src/e2e.test.ts`, the Android `E2ETest` and the iPhone `E2ETests`.

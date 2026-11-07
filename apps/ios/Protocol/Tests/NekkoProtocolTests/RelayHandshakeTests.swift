@@ -174,6 +174,41 @@ extension RelayClientTests {
         c.close()
     }
 
+    func testLateOpenDoesNotDisconnectAWelcomedSocket() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.deferOpenCallback = true
+        let (c, r) = client(relay, challengeWait: 0.05)
+        defer { c.close() }
+        c.connect()
+        await r.await(.online)
+        let conn = try XCTUnwrap(relay.sync { relay.current })
+        // Simulate an open callback scheduled behind receive callbacks.
+        conn.handlers.onOpen()
+        await sleep(0.15)
+        XCTAssertEqual(c.state, .online)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 1, "a late open must not re-arm the challenge watchdog")
+        let reply = try await c.call(Channels.appInfo)
+        XCTAssertEqual(reply, "ok:app:info")
+    }
+
+    func testLateOpenDoesNotShortenTheWelcomeDeadline() async throws {
+        let relay = FakeRelay(key: key, known: ["dev-1"])
+        relay.deferOpenCallback = true
+        relay.silent = true
+        let (c, _) = client(relay, challengeWait: 0.05)
+        defer { c.close() }
+        c.connect()
+        let opened = await waitOpen(relay)
+        let conn = try XCTUnwrap(opened)
+        let deadline = Date().addingTimeInterval(1)
+        while relay.sync({ relay.hellos.isEmpty }), Date() < deadline { await sleep(0.005) }
+        XCTAssertEqual(relay.sync { relay.hellos.count }, 1)
+        conn.handlers.onOpen()
+        await sleep(0.15)
+        XCTAssertEqual(relay.sync { relay.urls.count }, 1, "HELLO already sent; wait for welcome, not another challenge")
+        XCTAssertEqual(c.state, .connecting)
+    }
+
     func testASocketWithNoChallengeFailsWithoutSendingTheCode() async {
         let relay = FakeRelay(key: key, code: "ABCD2345")
         relay.challenges = false
