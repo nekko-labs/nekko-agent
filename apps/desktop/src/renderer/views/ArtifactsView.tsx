@@ -22,7 +22,7 @@ const when = (at: number) => {
 /**
  * Everything the agents have made, in one place: docs, web pages, designs,
  * diagrams, data and office files, grouped by kind. Each item names the chat
- * it came from and opens it on the Agents wall in Focused view.
+ * it came from and opens it on the Agents wall in Single agent view.
  */
 export function ArtifactsView() {
   const { sessions, workspaces, refreshSessions, focusChatOnWall } = useStore(useShallow((s) => ({
@@ -122,7 +122,7 @@ export function ArtifactsView() {
                 <p className="truncate text-sm font-semibold">{selected.title}</p>
                 <p className="truncate font-mono text-2xs text-ink-faint" title={selected.path}>{selected.path}</p>
               </div>
-              <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Focused view`}>
+              <button type="button" className="btn btn-primary gap-2 py-1 text-xs" onClick={() => focusChatOnWall(selected.sessionId)} title={`Open “${selected.sessionTitle}” on the Agents wall in Single agent view`}>
                 <FocusLayoutIcon className="h-3.5 w-3.5" /> Open chat
               </button>
               <button type="button" className="btn btn-outline gap-2 py-1 text-xs" onClick={() => window.nekko.openPath(selected.path)} title="Open with the system's default app">
@@ -137,7 +137,7 @@ export function ArtifactsView() {
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
             <h2 className="text-xl font-semibold">What your agents made</h2>
             <p className="max-w-sm text-sm text-ink-faint">
-              Reports, pages, designs and diagrams from every chat, grouped by kind. Pick one to preview it, or open the chat it came from in Focused view.
+              Reports, pages, designs and diagrams from every chat, grouped by kind. Pick one to preview it, or open the chat it came from in Single agent view.
             </p>
           </div>
         )}

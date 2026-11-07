@@ -13,9 +13,6 @@ import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { BoltIcon, MagnetIcon } from '../icons.js';
-import { FocusIcon } from '../gentleface-icons.js';
-import { HoverTip } from '../components/HoverTip.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
 import { type Vitals } from '../components/InsightsBox.js';
@@ -24,7 +21,8 @@ import { MonitorsDock } from '../components/MonitorsDock.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { hasAppChrome } from '../chrome.js';
 import { claimAgent, displaysBridge, isScreenWindow, openerMode, useDisplays, wallStorageKey, windowKey } from '../displays.js';
-import { ScreensControl } from '../components/ScreensControl.js';
+import { WallViewMenu } from '../components/WallViewMenu.js';
+export { LAYOUT_LABEL } from '../components/WallViewMenu.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
 import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
 
@@ -68,18 +66,6 @@ export function wallLayoutShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'ctrl
   if (e.defaultPrevented || e.repeat || e.isComposing || e.altKey || !e.shiftKey || !(e.ctrlKey || e.metaKey) || (e.ctrlKey && e.metaKey)) return null;
   const digit = /^Digit[12]$/.test(e.code) ? e.code.slice(-1) : /^[12]$/.test(e.key) ? e.key : null;
   return digit === '1' ? 'focus' : digit === '2' ? 'grid' : null;
-}
-
-/**
- * What each saved layout mode is called. The tiled wall reads as Dynamic
- * (even rows and columns are its Fixed grid setting). Saved values keep their
- * original keys so existing walls load unchanged.
- */
-export const LAYOUT_LABEL: Record<'focus' | 'grid', string> = { focus: 'Focused', grid: 'Dynamic' };
-
-function layoutShortcutLabel(mode: 'focus' | 'grid') {
-  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-  return `${mac ? '⌘' : 'Ctrl'}+Shift+${mode === 'focus' ? 1 : 2}`;
 }
 
 /**
@@ -612,27 +598,6 @@ export function CommandCenterView() {
 
 /* ---------- toolbar ---------- */
 
-/** Focused / Dynamic. The selected pill slides under whichever one the pointer is over, uncommitted until a click. */
-function LayoutSegments({ mode, onPick }: { mode: 'focus' | 'grid'; onPick: (mode: 'focus' | 'grid') => void }) {
-  const [hover, setHover] = useState<'focus' | 'grid' | null>(null);
-  const buttons = useRef<Partial<Record<'focus' | 'grid', HTMLButtonElement | null>>>({});
-  const [pill, setPill] = useState<{ x: number; width: number } | null>(null);
-  const lit = hover ?? mode;
-  useLayoutEffect(() => {
-    const b = buttons.current[lit];
-    if (b) setPill({ x: b.offsetLeft, width: b.offsetWidth });
-  }, [lit, mode]);
-  return (
-    <div className="wall-layout-segments" role="group" aria-label="Wall layout" data-pill={pill ? '' : undefined} onMouseLeave={() => setHover(null)}>
-      {pill && <span className="wall-layout-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.x}px)` }} />}
-      {(['focus', 'grid'] as const).map((m) => (
-        <button key={m} ref={(el) => { buttons.current[m] = el; }} type="button" title={`${LAYOUT_LABEL[m]} (${layoutShortcutLabel(m)})`} aria-pressed={mode === m} data-lit={lit === m ? '' : undefined}
-          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
-      ))}
-    </div>
-  );
-}
-
 export function WallToolbar({
   wall,
   setWall,
@@ -650,8 +615,6 @@ export function WallToolbar({
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const snapOn = !!wall.snap;
-  const snapAvailable = wall.layout.mode === 'grid' && !wall.layout.fixedGrid;
   // In the desktop shell the controls share the title bar's row with the
   // Agents heading instead of costing a row of their own.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -690,23 +653,7 @@ export function WallToolbar({
           <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} />
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
-        <div className="wall-layout-control">
-          <LayoutSegments mode={wall.layout.mode} onPick={(mode) => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))} />
-          {/* Snap to grid, only in free-form Dynamic (a Fixed grid is already
-              even). Its space stays reserved so revealing it never shifts the controls. */}
-          <div className="wall-auto-arrange" data-visible={snapAvailable}>
-            <HoverTip label={snapOn ? 'Snap to grid is on: windows stay evenly spaced' : 'Snap to grid: keep windows evenly spaced'}>
-              <button type="button" className="wall-snap-toggle" aria-label="Snap to grid" aria-pressed={snapOn}
-                tabIndex={snapAvailable ? 0 : -1} disabled={!snapAvailable}
-                onClick={() => setWall((w) => ({ ...w, snap: !w.snap }))}>
-                <MagnetIcon className="h-4 w-4" />
-              </button>
-            </HoverTip>
-          </div>
-        </div>
-        {/* Multi-monitor, in either mode, at the end of the toolbar (the
-            Monitors toggle now lives in the panel's own header). */}
-        <ScreensControl mode={wall.layout.mode} />
+        <WallViewMenu wall={wall} setWall={setWall} />
       </div>
     </div>
   );

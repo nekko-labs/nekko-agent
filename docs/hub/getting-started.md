@@ -225,6 +225,9 @@ Click the plus button in the Agents panel to open a new agent window. Hover over
 
 The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
 
+Immediately to its right, **View** brings together **Single agent** (one focused chat), **Multi-agent** (tiled chats), **Snap to grid**, and desktop screen/desktop controls. Cmd/Ctrl+Shift+1 and +2 still switch the two views. Snap to grid is available in free-form Multi-agent view; it keeps windows evenly spaced and attracts dividers only when they are within 3% of a grid boundary. The menu scrolls on smaller windows. Desktop screen selection and new-agent placement keep their existing behavior; these controls are not shown in the Local Web UI.
+
+
 | Action | macOS | Windows/Linux |
 | --- | --- | --- |
 | New agent | Cmd+T | Ctrl+T |

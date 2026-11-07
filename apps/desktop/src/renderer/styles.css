@@ -4278,3 +4278,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .save-spinner, .save-flash { animation: none; }
 }
+
+/* The Agents View popover is portaled out of the draggable title bar. */
+.wall-view-menu { position: fixed; z-index: 1000; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-float); -webkit-app-region: no-drag; }
+.wall-view-layout { border: 0; padding: 0; margin: 0; min-width: 0; }
+.wall-view-menu .screens-option[aria-disabled='true'] { opacity: .55; cursor: default; }
+.screens-embedded { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
+.screens-embedded .screens-row { overflow-x: auto; padding-bottom: 4px; }
+.screens-embedded .screens-tile { flex-shrink: 0; }
