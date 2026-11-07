@@ -146,13 +146,17 @@ export const GfIcon = ({ name, className, title }: P & { name: GfIconName }) => 
     const hover = (event: Event) => {
       if ((event as PointerEvent).pointerType !== 'touch') play();
     };
-    stop();
+    // A newly inserted SVG starts at zero. Pause it before paint, but don't
+    // seek: setCurrentTime synchronously recalculates page styles for each icon.
+    svg.pauseAnimations();
     control?.addEventListener('pointerenter', hover);
     control?.addEventListener('focus', play);
     control?.addEventListener('click', play);
     media.addEventListener('change', stop);
     return () => {
-      stop();
+      // The SVG is leaving; seeking its discarded clock only forces more style
+      // work. Cancel the callback so it cannot later touch the detached tree.
+      clearTimeout(timer);
       control?.removeEventListener('pointerenter', hover);
       control?.removeEventListener('focus', play);
       control?.removeEventListener('click', play);
@@ -168,7 +172,7 @@ export const GfIcon = ({ name, className, title }: P & { name: GfIconName }) => 
     <span ref={wrapper} data-gf-icon={name} className={'gf-icon ' + (className ?? '')} aria-hidden={title ? undefined : true} role={title ? 'img' : undefined}>
       {title ? <span className="sr-only">{title}</span> : null}
       {motionBody ? (
-        <svg className="gf-icon-motion" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.001" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: motionBody }} />
+        <svg key={name} className="gf-icon-motion" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.001" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: motionBody }} />
       ) : <>
         <svg className="gf-icon-line" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.line }} />
         <svg className="gf-icon-solid" viewBox="0 0 16 16" fill="currentColor" width="16" height="16" dangerouslySetInnerHTML={{ __html: v.solid }} />

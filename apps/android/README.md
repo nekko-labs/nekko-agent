@@ -18,7 +18,8 @@ CI have been removed. Remaining native feature gaps below stay tracked separatel
   provider's list in one picker, opening on its default or latest-used model)
   and folder; live streamed
   replies; Stop; prompts sent during a run are queued; **Allow / Deny** cards
-  that show the exact command; the agent's questions as choices with a free-text
+  that show the exact command, plus **Always allow this tool** on an MCP call
+  (saves the tool in the chat's `allowedMcpTools`, signed, before allowing); the agent's questions as choices with a free-text
   answer. Transcripts are re-read after each turn and after reconnecting.
 
 - **App lock:** fingerprint, face or the phone's screen lock every time the app
@@ -50,7 +51,8 @@ CI have been removed. Remaining native feature gaps below stay tracked separatel
   finishes or fails; never in silent mode or Do Not Disturb.
 
 - **The computer's settings:** *Settings → On <computer>* sets its default chat
-  mode (YOLO allowed after a confirmation), the long-press action (Complete or
+  mode (YOLO after the YOLO warning, as for a chat's own mode; *Settings →
+  Security → Warn before YOLO* turns it back on), the long-press action (Complete or
   Delete) and delete confirmation; a long-press on a chat runs that action.
 
 - **The + menu:** left of the message box, Send on the right. **Dictate**,

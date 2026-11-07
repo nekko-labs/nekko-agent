@@ -5,6 +5,7 @@ import { useStore } from '../store.js';
 import { saveSettings } from '../settingsIndex.js';
 import { CheckIcon, HandIcon, ShieldCheckIcon, YoloIcon } from '../icons.js';
 import { usePopover } from './ModeViews.js';
+import { allowModeChange } from './YoloWarning.js';
 
 /** The tool policy in plain words. Same values and behaviour as Expert's Mode panel; its Approvals tiles' icons, except the hands-up emoji for yolo. */
 export const ASKS_FIRST: ReadonlyArray<{ mode: ChatMode; label: string; hint: string; icon: (p: { className?: string }) => React.ReactElement }> = [
@@ -27,6 +28,7 @@ export function AsksFirstMenu({ session, onChange }: { session: Session; onChang
   const pick = async (next: ChatMode) => {
     pop.setOpen(false);
     if (next === mode) return;
+    if (!await allowModeChange(mode, next)) return;
     try {
       const updated = await window.nekko.setSessionOptions(session.id, { mode: next });
       onChange(updated);

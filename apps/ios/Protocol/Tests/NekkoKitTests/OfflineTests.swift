@@ -199,6 +199,25 @@ final class DraftStoreTests: XCTestCase {
         XCTAssertTrue(third.drafts.isEmpty)
     }
 
+    func testPhotoChangesSurviveRestartWithoutWaitingForTypingDebounce() {
+        let files = MemoryOfflineFiles()
+        let store = DraftStore(files: files, debounce: 60)
+        store.load("c1")
+        let photo = "data:image/jpeg;base64," + String(repeating: "A", count: 200_000)
+        for key in ["s1", DraftStore.newChat] {
+            store.set(key, Draft(text: "Keep this", images: [photo]))
+            let restarted = DraftStore(files: files)
+            restarted.load("c1")
+            XCTAssertEqual(restarted.draft(key), Draft(text: "Keep this", images: [photo]))
+
+            store.set(key, Draft(text: "Keep this"))
+            let removed = DraftStore(files: files)
+            removed.load("c1")
+            XCTAssertEqual(removed.draft(key).text, "Keep this")
+            XCTAssertTrue(removed.draft(key).images.isEmpty)
+        }
+    }
+
     func testTypingIsSavedAfterAPauseAndAtOnceOnFlush() async {
         let files = MemoryOfflineFiles()
         let d = DraftStore(files: files, debounce: 60)

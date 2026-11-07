@@ -94,7 +94,8 @@ enum NativeFixtureRoute {
         #if DEBUG
         let flags = ["-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
                      "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
-                     "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications", "-uiTestRunSettings"]
+                     "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications",
+                     "-uiTestSecurityEvidence", "-uiTestRunSettings"]
         return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
         #else
         return false
@@ -122,6 +123,7 @@ private struct NativeAppContent: View {
         if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") { PhoneComposerFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") { PhoneParityFixture() } else
+        if ProcessInfo.processInfo.arguments.contains("-uiTestModelServer") { ModelServerFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestRunSettings") { RunSettingsFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhotoPreviews") {
             PhotoPreviewFixture()
@@ -141,6 +143,8 @@ private struct NativeAppContent: View {
             TurnDetailsFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") {
             ModelTabsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") {
+            SecurityEvidenceFixture()
         } else { RootView() }
         #else
         RootView()

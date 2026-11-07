@@ -253,6 +253,7 @@ export const IpcChannels = {
   imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
+  auditRead: 'audit:read',
   changeAccept: 'changes:accept',
   changeAcceptAll: 'changes:acceptAll',
 
@@ -551,6 +552,25 @@ export interface AgentReplay {
 }
 
 /** The typed API the preload bridge exposes as window.nekko. */
+/** Who answered an approval or decided a permission (`audit.rs`). */
+export interface AuditBy {
+  via: string;
+  device?: string;
+}
+
+/**
+ * One event of a chat's audit trail, as the engine writes it: value-free by
+ * design (no arguments, URLs, reasons, output or message text).
+ */
+export type AuditEvent = { at: number; turnId?: string } & (
+  | { type: 'turn'; mode?: string; provider?: string | null; model?: string | null; claudeCode?: boolean }
+  | { type: 'tool'; callId?: string; tool: string; isError?: boolean; ms?: number; outputChars?: number; detail?: Record<string, unknown> }
+  | { type: 'approval'; callId?: string; tool?: string; severity?: string; answer: 'approved' | 'denied' | 'unanswered'; by: AuditBy | null }
+  | { type: 'permission'; tool: string; executedBy?: string; decision: string; by: AuditBy | null; detail?: Record<string, unknown> }
+  | { type: 'taint'; callId?: string; by: string }
+  | { type: 'redactions'; counts: Record<string, number> }
+);
+
 export interface NekkoApi {
   /** Nekko Cloud sign-in and end-to-end encrypted sync (crates/nekko-cloud). */
   cloudStatus(): Promise<import('./cloud.js').CloudStatus>;
@@ -916,7 +936,7 @@ export interface NekkoApi {
   specPath(sessionId: string): Promise<string | null>;
   setSessionOptions(
     id: string,
-    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure'>>,
+    patch: Partial<Pick<Session, 'title' | 'pinned' | 'tags' | 'order' | 'mode' | 'disabledTools' | 'effort' | 'disabledMcpServers' | 'disabledConnectors' | 'memory' | 'guidance' | 'toolApproach' | 'offline' | 'cloudOnly' | 'incognito' | 'executionMode' | 'gitIsolation' | 'autoModel' | 'autoQuality' | 'autoProviderSwitch' | 'workMode' | 'thinking' | 'providerId' | 'modelId' | 'chatType' | 'imageParams' | 'archivedAt' | 'privacy' | 'turnFailure' | 'allowedMcpTools'>>,
   ): Promise<Session | null>;
   truncateSession(id: string, messageId: string): Promise<Session | null>;
   /** Delete chats within a window; returns how many were removed. */
@@ -1015,6 +1035,8 @@ export interface NekkoApi {
    */
   fetchRemoteImage(url: string): Promise<RemoteImage>;
 
+  /** The chat's audit trail: what the agent did and who allowed it, never the data (crates/nekkod/src/audit.rs). */
+  readAudit(sessionId: string): Promise<AuditEvent[]>;
   /** Files the agent changed this session (diff/approve). */
   listChanges(sessionId: string): Promise<FileChange[]>;
   /** Keep a file's changes, stop tracking it. */
@@ -1222,7 +1244,9 @@ export interface NekkoApi {
   /** Its Model Server, as the phone view reports it. Null with Read off over there. */
   computerEngineStatus(id: string): Promise<{ running: boolean; installed?: boolean; resident: unknown[] } | null>;
   /** What a connected computer's monitors read, through the computer's own gate (its phone views). */
-  computerRead(id: string, channel: 'providers:list' | 'limits:get' | 'usage:summary', args?: unknown[]): Promise<unknown>;
+  computerRead(id: string, channel: 'providers:list' | 'limits:get' | 'usage:summary' | 'models:list', args?: unknown[]): Promise<unknown>;
+  /** How a connected computer's Model Server loads and keeps models; its gate refuses these while it keeps its own settings. */
+  computerModelServer(id: string, channel: 'model:load' | 'model:unload' | 'engine:unloadAll' | 'engine:settings', args?: unknown[]): Promise<unknown>;
   /** A new chat on that computer, in one of its folders. */
   createSessionOn(computerId: string, workspaceId?: string): Promise<Session>;
   /** Set the icon in that machine's own settings; empty removes it. */

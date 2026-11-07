@@ -39,6 +39,40 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Flat agent plan (#2013, 2026-11-06)
+
+Area: renderer. Result: an older cold-frame differential did not reproduce in two additional matched pairs; no speedup or zero-effect claim.
+Conditions: all comparisons use Linux 4-thread runners, Chrome/156.0.8078.79, 1440x1000, the full latency workload (1000 + 12x400-message chats), 33 cold switches per phase, one unprofiled attempt in base/head/head/base order. Do not compare different CPUs as a speedup time series.
+
+| Comparison | Runner | Base first / last p95 | Head first / second p95 |
+|---|---|---|---|
+| Original CI attempt 1 | AMD EPYC 7763 | 35.6 / 38.8 ms | 41.5 / 38.1 ms |
+| Original CI attempt 2 | AMD EPYC 9V74 | 33.9 / 32.9 ms | 35.8 / 37.2 ms |
+| Additional exact-current pairs | AMD EPYC 7763 | 38.9 / 40.2 ms | 38.3 / 39.9 ms |
+
+Original [CI 42223817760](https://github.com/nekko-labs/nekko-agent/actions/runs/42223817760) measured unchanged base `b05c1d5567af38cd9c76b690b5cc7c7d5560eb11` against synthetic merge `e37af938958756a2b1fc769705227b17c5efd690`, containing feature head `5ffd683ae48cf238c9d7e3c104f5349355326b25`. Attempt 1 reproduced the former 33 ms baseline failure. The single permitted retry showed both head controls slower than both base controls, requiring further matched measurements rather than another blind retry. Original attempt-1 full-contract cold-frame p95 samples were 42.6 / 40.7 / 42.4 ms, n=33 each; other measured timing/memory rows passed and terminal latency was skipped.
+
+[Additional diagnostic 42232720879](https://github.com/nekko-labs/nekko-agent/actions/runs/42232720879) measured exact base `0c80faed99a2978e0f30bbb30ddc0f3b6db52b8c` and refreshed feature head `28701069386a3cdabff25fd2372c54cf45e22082`. Harness and daemon sources were identical, and every phase used one release daemon (SHA256 `1dac40c3ffce48c39233c4c92f4949683b234a6918562ad9ab814234372b6b1a`), Node 22.23.4, no GPU. Raw nearest-rank p95s and revisions were checked. The head slowdown does not reproduce in either additional pair. Separate timeline-instrumented base/head cold-frame p95 was 43.3 / 41.6 ms; both cold-switch traces were parsed with Layout/Paint events. Trace overhead means those values are not equivalent to the unprofiled controls, and event counts do not establish per-click causality. Artifact 13510119925 ZIP SHA256 was verified as `fec19f422b25ac48ddd940d85d35345558381de97117af3598d95d9435878da8`.
+
+Why: #2013 removes presentation-only plan phase/group wrappers while retaining per-step details. Its refreshed feature patch has the same stable patch ID as the tested original; normal current-head [CI 42232970013](https://github.com/nekko-labs/nekko-agent/actions/runs/42232970013) passed build, perf, integration tests and gate. The differential hold was cleared after inspecting the additional pairs, not merely because the separately approved #1999 recalibrated the gate to 48 ms. Neither the 8.3 ms product target nor the actual remount cost improved here; optimization remains #1998. The original runner-specific differential is not causally explained. Source: [original baseline evidence](https://github.com/nekko-labs/nekko-agent/issues/712#issuecomment-6686247689), [additional measurements](https://github.com/nekko-labs/nekko-agent/issues/712#issuecomment-6687599109), [landed PR #2013](https://github.com/nekko-labs/nekko-agent/pull/2013). This entry was added in the documentation-only #2028 follow-up because it was omitted before feature landing. Temporary diagnostic refs must never merge.
+
+## Cold-switch frame gate recalibrated on the six-zone board, 33 to 48 ms (#712, 2026-11-06)
+
+Area: perf harness. Result: measurement fix (gate recalibration); product target unchanged.
+Approval: Philip explicitly approved the separate 33 to 48 ms recalibration on 2026-11-06. This supersedes the earlier instruction to keep 33 ms for #712, not the 8.3 ms product target or the remount optimization in #1998.
+Conditions: the `perf` job logs of 778 CI reports from 2026-11-03 04:04 to 2026-11-06 10:30 UTC (pull request, merge-queue, scheduled and dispatched runs; mostly PRs that do not touch the renderer), all after #1521 moved the harness onto the six-zone board. GitHub Linux runners, 4 threads, Chrome 156, 33 cold switches per attempt, up to three attempts per report.
+
+| Best-of-three cold first-frame p95 | Value |
+|---|---|
+| Median | 36.9 ms |
+| p90 / p95 / p99 | 42.8 / 44.0 / 46.9 ms |
+| Max | 51.2 ms (AMD EPYC 7763, run 41750085139) |
+| Reports over 33 / 44 / 48 ms | 512 / 38 / 2 of 778 |
+| First attempts over 48 ms (a second attempt needed) | 34 of 778 |
+
+By runner, median best-of-three p95 / max: AMD EPYC 7763 40.2 / 51.2 ms (326 reports), AMD EPYC 9V74 33.0 / 45.6 (165), AMD EPYC 9V45 31.0 / 37.3 (152), Xeon Platinum 8370C 43.4 / 47.4 (38), Xeon 6975P-C 31.4 / 33.0 (30), Xeon 6973P-C 33.7 / 36.4 (11), CPU not printed 36.3 / 43.3 (56).
+
+Why: the 33 ms gate was set on 2026-10-17 on the board the app converted to two zones; the step to the real six-zone board came from the harness (#1521; analysis in #1997), not from app code, and left unchanged `main` failing it in about two reports out of three. 48 ms sits about a third above the median, the sensitivity the 2026-10-17 calibration chose, rather than that calibration's max-plus-10% (56 ms), which would have followed the single 51.2 ms outlier. The figures include PRs, so a real regression among them would make the gate looser, not tighter. The remount that costs the extra time is a real product cost, tracked in #1998; lower the gate again when that lands. Source: #712, #1998, CI job logs in that window.
 ## Cold-switch step of 2026-11-03: the harness, not the app (#712, 2026-11-06)
 
 Area: perf harness. Result: measurement change; no app regression found in the window.
@@ -227,6 +261,16 @@ Threads worth an article, with the entries that tell each story:
   performance problem.
 
 ## 2026-11
+
+### #2021 Light-theme alignment: baseline cold-paint failure (2026-11-06)
+Area: renderer. Result: no regression demonstrated; unchanged base also fails.
+Conditions: AMD EPYC 7763 (4 threads), Linux, Chrome/156.0.8078.79, 1440x1000; 33 cold switches per unprofiled attempt, base/head/head/base order on one runner.
+
+| Metric | Before (base-1 / base-2) | After (head-1 / head-2) |
+|---|---|---|
+| Cold chat first frame p95, 33 ms gate | 40.0 / 41.9 ms | 39.6 / 39.6 ms |
+
+Why: the light palette changes do not demonstrate a cold-switch regression in these matched runs; this does not establish a speedup or zero impact. Base `3a82ab9e19d9e3d25c9b5419ca801b37ce6dd7be` fails twice; synthetic PR merge `e1ce917179516a7ce49e319c2351dc070319a52d` is faster in both pairs. The original contract failed only cold first-frame paint (p95 attempts 38.0 / 39.8 / 42.3 ms); other measured budgets passed. Raw samples were recomputed and both cold-switch browser traces contain Layout and Paint events. Source: [CI run 42233008104](https://github.com/nekko-labs/nekko-agent/actions/runs/42233008104), `perf-report` artifact (matched reports and traced pair), baseline issue #712. No budget was changed and no causal claim is made from the traces alone.
 
 ### #1894 iPhone: pixel build-up before Face ID, about a second in all (2026-11-06)
 Area: renderer
@@ -1466,3 +1510,91 @@ After merging concurrent main changes (base `974ad4e8`, which already scopes the
 
 
 Final scheduling refinement: keep the CSS transform animation paused and advance its Web Animations timeline only on a dot-step boundary (625 ms for Lilac), stopping the timer on blur, hidden document/pane, or reduced motion. No per-frame canvas draw or JS animation dependency. On the current merged renderer, the same six-second fixture measured unfocused GPU-process/renderer CPU 0.7196434521826046/1.7811896034655113%, focused 2.752915694768412/5.78202265911363%. This reduced the previous candidate's 7.275287452091319% focused renderer overhead, but is still not a controlled improvement over the 4.137214725970347% newer-base sample (the intervening main merge also changed monitor styling). Treat performance attribution as diagnostic, not a guaranteed win. The acceptance assertions additionally check that the paused timeline actually advances while focused and stays frozen while offscreen/unfocused, not just its CSS play-state.
+
+## 2026-11-06 — reject cold-pane containment; compare browser versions (#1998)
+
+Source `bdd59fa3870f52e5dff3884308a782b14e372db6`, Apple M1 Max, HeadlessChrome156.0.8078.4, full six-zone `--only latency --no-gpu` workload. Diagnostic `.command-wall-window .command-wall-content { contain: layout paint; }` measured cold-frame p95 **18.4 ms**. The traced base initially measured20.2ms, but the matched uninstrumented base control measured **17.3 ms**. Reject containment: the apparent gain was instrumentation noise, not a demonstrated repair. Other uninstrumented rows: base/diagnostic history39.1/37.7ms, warm10.1/9.0ms, typing4.8/5.5ms. Terminal skipped (no pty from the reused debug host); memory and streaming-frame phases not requested. This local debug-daemon result is not Linux/release proof. No production CSS or budget changed.
+
+A hidden, network-blocked synthetic Electron fixture passed six checks for zone replacement, board cardinality, newest message, separate editor/draft, outgoing draft restoration, and narrow horizontal fit; baseline PNGs were captured/inspected, motion frames captured but not yet reviewed. No after-state exists. [Same-runner unchanged-source Chrome155/156/155 diagnostic](https://github.com/nekko-labs/nekko-agent/actions/runs/42230357748) is pending; report its result before accepting the browser-version hypothesis or choosing another renderer candidate. Initial dispatch42230171853 failed before samples because checkout interpreted a short SHA as a branch; corrected input uses the full SHA. No blind gate retry or budget increase.
+
+## 2026-11-06 — matched Linux browser control and SVG attribution (#1998)
+
+Result: Chrome 156 slowdown not supported; SVG clock candidate under test, not gate clearance.
+Conditions: exact `bdd59fa3870f52e5dff3884308a782b14e372db6`, single Linux AMD EPYC 9V74 runner, release daemon, unchanged full six-zone latency workload, headless no-GPU, one attempt, 33 cold samples per phase. Official Chrome shells 155.0.8035.0 / 156.0.8078.4.
+
+| Phase | Cold-frame p95 | Newest-history p95 | Warm p95 | Composer p95 |
+|---|---|---|---|---|
+| 155 before | 32.9 ms | 50.2 ms | 10.6 ms | 5.9 ms |
+| 156 middle | 29.6 ms | 50.1 ms | 10.0 ms | 5.9 ms |
+| 155 after | 31.1 ms | 50.1 ms | 9.7 ms | 5.9 ms |
+| 155 traced | 32.1 ms | 50.0 ms | 11.6 ms | 6.6 ms |
+| 156 traced | 34.5 ms | 50.0 ms | 11.2 ms | 7.0 ms |
+
+All raw-sample p95s recomputed. The report-only job passed despite traced 156 exceeding the unchanged **33 ms** gate. Do not infer gate clearance or pin a browser from these data. The first dispatch failed abbreviated-SHA checkout and collected no samples; corrected run: [42230357748](https://github.com/nekko-labs/nekko-agent/actions/runs/42230357748). The temporary workflow-only branch must not merge.
+
+A separate local Apple M1 Max / Chrome 156 CPU-profiled baseline (same debug daemon and full workload as above) attributed 78.7 ms across cold switches to SVG `setCurrentTime` under icon mount/unmount layout effects. Cold-frame p95 16.5 ms, history 33.7 ms, warm 7.6 ms, composer 4.1 ms. This is attribution with instrumentation, not an uninstrumented before/after result. The candidate removes redundant initial/discarded-clock seeks, leaving actual playback/reset unchanged; paired uninstrumented and Linux candidate validation remain pending. Reports and provenance: [investigation](../reports/cold-chat-paint-investigation.md), ignored `.shots/cold-mount/{linux-browser-compare,base-cpu}/`.
+
+
+## 2026-11-06 — SVG clock candidate local checkpoint (#1998)
+
+Same M1 Max / Chrome156.0.8078.4 / debug daemon, full six-zone latency workload, immutable base/head renderer builds, uninstrumented, one attempt and33 cold samples each. No concurrent tests or builds. All p95s recomputed from raw samples. Milliseconds:
+
+| Phase | Cold p50 | Cold p95 | History p95 | Warm p95 | Composer p95 |
+|---|---|---|---|---|---|
+| base-1 | 16 | 20.3 | 33.5 | 11.8 | 3.9 |
+| head-1 | 13.4 | 20.2 | 29.7 | 12.7 | 4.3 |
+| head-2 | 12.6 | 17.9 | 31.9 | 10.4 | 3.5 |
+| base-2 | 15.2 | 22 | 33.7 | 11.6 | 4.1 |
+
+The median improved in both pairs; p95 was nearly unchanged in the first pair and lower in the reverse pair. Promising but insufficient for a Linux repair claim. Raw data: `.shots/cold-mount/icon-paired/`; base/head bundles in `icon-builds/`.
+
+Candidate-only five-lap memory check: heap12.4→12.8MB (0.10MB/lap), DOM2401→2401, listeners2252→2252; six/six windows working, tile memory197.80MB. Worst animated-layer/clip ratio unavailable, not a measured zero; no native GPU claim. Raw report inspected, not accepted from report-only exit status.
+
+65 focused tests pass (10 lifecycle,5 artwork,36 CommandWall,6 composer,8 drafts). No VirtualTranscript test file exists at this revision; none counted. Desktop typecheck, web builds, sandbox syntax, spec-index and diff checks pass. Enhanced hidden Electron baseline/candidate each pass11 checks, including replacing an actively playing icon and waiting past its unmounted timer deadline. The six-zone fixture passes6 isolation/history/horizontal-fit checks.
+
+Resting/reduced-motion native PNGs are byte-identical. Inspected baseline/candidate resting artwork,8 sampled native motion frames each, and matching dark wide/narrow full-chat screenshots. Both narrow screenshots share the existing absence of a visibly accessible composer at this fixture size; the fit check verifies horizontal bounds only. Native keyboard focus, light theme, real-device motion and native GPU remain unverified. Review browser/server closed; no further screenshot replays needed to decide this candidate.
+
+Matched Linux base/head/head/base plus CPU profiles: [run42243393085](https://github.com/nekko-labs/nekko-agent/actions/runs/42243393085), only the candidate icon file applied to exact bdd59fa source. Pending actual results inspection. The33ms gate and full harness are unchanged.
+
+
+## 2026-11-06 — Linux SVG candidate evidence-upload failure (#1998)
+
+Area: renderer / diagnostic workflow. Result: promising log-only comparison, not gate clearance; artifact retention failure.
+Conditions: exact base `bdd59fa3870f52e5dff3884308a782b14e372db6`, only `gentleface-icons.tsx` from candidate `806629f807b9006f6ca16f966c70fc83cdbecd7c`, single Linux runner, same release daemon, official Chrome156.0.8078.4, full six-zone latency workload, 33 cold samples per phase, one attempt, no GPU. Job-log values only:
+
+| Cold frame | base-1 | head-1 | head-2 | base-2 |
+|---|---|---|---|---|
+| p50 | 27.2 ms | 25.3 ms | 25.6 ms | 27.9 ms |
+| p95 | 36.9 ms | 33.7 ms | 32.9 ms | 36.1 ms |
+
+Separate profiled base/head p95: 43.9/40.8 ms, not interchangeable with plain runs. Head-1 still fails the original 33 ms acceptance budget. [Run 42243393085](https://github.com/nekko-labs/nekko-agent/actions/runs/42243393085) was report-only green, but upload-artifact excluded its hidden output folder and retained **zero artifacts** (confirmed by API). Raw percentile recomputation and Linux CPU attribution are therefore unavailable for this run. Diagnostic commit `fd869553b` fixes retention and makes missing evidence fail; [recovery 42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142) repeats the exact comparison once to recover raw data, not to select a green timing. No app/budget/harness changes; do not merge the diagnostic workflow. Source: [investigation](../reports/cold-chat-paint-investigation.md).
+
+
+### #1998 Full local candidate contract checkpoint (2026-11-06)
+Area: renderer. Result: all measured local rows pass; no Linux repair or before/after speedup claim.
+Conditions: M1 Max, macOS, Chrome156.0.8078.4, reused debug nekkod, candidate `a3a7df7bd`, full workload (not quick), one attempt, no GPU. Cold33 samples, warm40, composer150, streaming359 frames over6s.
+
+| Metric | Candidate p95 |
+|---|---|
+| Cold frame / history | 22.9 / 35.1 ms |
+| Warm / composer | 10.6 / 4.1 ms |
+| Streaming main-thread frame work | 3.44 ms |
+
+Five-lap retention: heap12.5056→12.9589MB (0.11334MB/lap), DOM2579→2579, listeners2275→2275; all six windows working, software tile memory184.359375MB. Missing clip-layer attribution is unavailable, not zero overdraw. Terminal keypress skipped (no pane opened). Exit zero and raw samples inspected, but this does not prove Linux release-daemon or native GPU performance. Source: `.shots/cold-mount/candidate-full-contract/`, [investigation](../reports/cold-chat-paint-investigation.md).
+
+
+## 2026-11-06 — Linux SVG lifecycle attribution confirmed; cold p95 mixed (#1998)
+
+Area: renderer. Result: redundant synchronous SVG seeks eliminated; partial mount-cost reduction, not a reliable33ms repair or a claimed p95 speedup.
+Conditions: Linux AMD EPYC9V74 (4 threads), Chrome156.0.8078.4, Node22.23.4, one release daemon, full six-zone latency workload,1440×1000, no GPU, one attempt and33 cold samples per phase. Exact base `bdd59fa3870f52e5dff3884308a782b14e372db6` with only icon source from `806629f807b9006f6ca16f966c70fc83cdbecd7c`. Raw nearest-rank values independently recomputed, milliseconds:
+
+| Phase | Base first | Head first | Head second | Base last |
+|---|---:|---:|---:|---:|
+| Cold frame p50 |23.5|23.7|23.3|25.3|
+| Cold frame p95 |30.9|32.2|29.2|33.0|
+| Cold frame max |31.6|32.4|29.8|42.1|
+| Cold history p95 |58.1|46.7|46.8|50.1|
+
+Separate profiled base/head cold p95:39.6/36.3ms, not gate-equivalent. Sampled `setCurrentTime` self-time fell175.837→0ms (113.407ms mount,62.430ms deletion across33 base switches). In-click style-recalculation total fell156.822→0ms; click duration median18.459→12.457ms. Whole-profile style/layout/paint still present; do not sum overlapping trace totals or infer a per-frame gain from cumulative CPU samples.
+
+Why: pause fresh SVGs without redundant zero-time seeks; cancel timers/listeners without seeking discarded SVGs; replace motion SVG by icon identity. Playback/reset and synchronous first-frame requirements unchanged. Both recovered head p95s meet33ms but first pair is slower; prior log-only head33.7ms misses. #1998 stays open; no budget reduction or increase in this PR. Main's separate48ms gate is not acceptance of this repair. Terminal skipped; Linux streaming/memory not requested. Source: [run42251252142](https://github.com/nekko-labs/nekko-agent/actions/runs/42251252142), artifact13521343207 ZIP SHA256 `0910a63aad23d1dfd6945c6cb37e224cb733147a64851de8e0bbfeb7f45add46`, [detailed provenance/limitations](../reports/cold-chat-paint-investigation.md). Diagnostic branch must never merge.

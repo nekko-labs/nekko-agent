@@ -710,7 +710,7 @@ class ComputersRepository(
                 c.events.collect { (channel, payload) ->
                     if (links[id] !== link || channel != Events.AGENT_EVENT) return@collect
                     val e = AgentEvent.from(payload) ?: return@collect
-                    updatePeer(id) { p -> p.copy(activity = ActivityTracker.next(p.activity, e)) }
+                    updatePeer(id) { p -> p.copy(activity = ActivityTracker.next(p.activity, e), attention = p.attention.next(e)) }
                     // The list stays fresh when a turn ends there, as the active computer's does.
                     if (e is AgentEvent.Done || e is AgentEvent.SessionMeta) schedulePeerSummaries(id, link)
                 }
@@ -721,10 +721,15 @@ class ComputersRepository(
     /** Read what the list shows from one fleet computer. */
     private suspend fun refreshPeer(id: String, link: PeerLink) {
         val c = link.client
+        // A ticket, as the active computer's read takes: a question that arrives
+        // during the read outlives its older "nothing waits", and an answer that
+        // arrives during it makes the read unable to say what is left.
+        var ticket: Long? = null
+        updatePeer(id) { p -> p.attention.beginSnapshot().let { a -> ticket = a.version; p.copy(attention = a) } }
         val r = coroutineScope {
             val summaries = async { orNull { SessionSummary.visible(c.call(Channels.SESSIONS_SUMMARIES)) } }
             val folders = async { orNull { WorkspaceFolder.list(c.call(Channels.WORKSPACE_LIST)) } }
-            val pending = async { orNull { PendingInput.map(c.call(Channels.CHAT_PENDING)) } }
+            val pending = async { readPending(c) }
             val info = async { orNull { AppInfo.from(c.call(Channels.APP_INFO)) } }
             PeerRead(summaries.await(), folders.await(), pending.await(), info.await())
         }
@@ -733,9 +738,12 @@ class ComputersRepository(
             var n = p
             r.summaries?.let { n = n.copy(summaries = it, loaded = true, savedAt = null) }
             r.folders?.let { n = n.copy(workspaces = it) }
-            // Approvals and questions already waiting when the link (re)connects.
-            r.pending?.forEach { (sid, q) ->
-                if (q.approval != null || q.question != null) n = n.copy(activity = n.activity + (sid to Activity.NEEDS_YOU))
+            // What waits on the user when the link (re)connects, and what no longer
+            // does: the event that ended a wait reaches only a connected phone.
+            ticket?.let { t ->
+                val attention = n.attention.reconcile(r.pending, t)
+                n = n.copy(attention = attention)
+                if (attention.known && attention !== p.attention) n = n.copy(activity = attention.projecting(n.activity))
             }
             n
         }
@@ -1237,30 +1245,31 @@ class ComputersRepository(
             }
         }
         val requestedAt = ticket ?: return
-        val snapshot = orNull {
-            // Both bound the RPC and protect fake/legacy transports that ignore its timeout.
-            withTimeoutOrNull(5_000) {
-                val raw = c.callWithTimeout(5_000, Channels.CHAT_PENDING) as? JsonObject
-                raw?.takeIf { it.size <= 4096 }?.let { objectValue ->
-                    val parsed = PendingInput.map(objectValue)
-                    parsed.takeIf {
-                        parsed.size == objectValue.size && objectValue.all { (id, value) ->
-                            val input = value as? JsonObject ?: return@all false
-                            val p = parsed[id]
-                            (input["approval"] == null || input["approval"] == JsonNull || p?.approval != null) &&
-                                (input["question"] == null || input["question"] == JsonNull || p?.question != null)
-                        }
-                    }
-                }
-            }
-        }
+        val snapshot = readPending(c)
         if (client !== c || attentionLink != link) return
         _state.update { s ->
             if (client !== c || attentionLink != link) return@update s
             val attention = s.attention.reconcile(snapshot, requestedAt)
-            val activity = s.activity.filterValues { it != Activity.NEEDS_YOU }.toMutableMap()
-            attention.pending.keys.forEach { activity[it] = Activity.NEEDS_YOU }
-            s.copy(attention = attention, activity = activity)
+            s.copy(attention = attention, activity = attention.projecting(s.activity))
+        }
+    }
+
+    /** One complete `chat:pending` map, or null when the computer could not say (never an empty guess). */
+    private suspend fun readPending(c: Remote): Map<String, PendingInput>? = orNull {
+        // Both bound the RPC and protect fake/legacy transports that ignore its timeout.
+        withTimeoutOrNull(5_000) {
+            val raw = c.callWithTimeout(5_000, Channels.CHAT_PENDING) as? JsonObject
+            raw?.takeIf { it.size <= 4096 }?.let { objectValue ->
+                val parsed = PendingInput.map(objectValue)
+                parsed.takeIf {
+                    parsed.size == objectValue.size && objectValue.all { (id, value) ->
+                        val input = value as? JsonObject ?: return@all false
+                        val p = parsed[id]
+                        (input["approval"] == null || input["approval"] == JsonNull || p?.approval != null) &&
+                            (input["question"] == null || input["question"] == JsonNull || p?.question != null)
+                    }
+                }
+            }
         }
     }
 

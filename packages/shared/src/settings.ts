@@ -317,6 +317,8 @@ export interface AppSettings {
    */
   notices?: AppNotice[];
   skipDeleteConfirmation?: boolean;
+  /** Turning YOLO on skips its warning (Settings > General, "Warn before YOLO"). */
+  skipYoloWarning?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
    * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,
@@ -328,6 +330,12 @@ export interface AppSettings {
    * Settings → Remote access; never settable from a phone.
    */
   quitFromPhone?: boolean;
+  /**
+   * Hold off idle sleep while any agent runs here, so a run another device
+   * started does not stop when nobody touches this one. Off unless the owner
+   * turns it on under Settings > Computers; never settable from another device.
+   */
+  keepAwakeWhileAgentsRun?: boolean;
   /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
   machineIcon?: string;
   /** Display name shared with paired devices; blank uses the system hostname. */

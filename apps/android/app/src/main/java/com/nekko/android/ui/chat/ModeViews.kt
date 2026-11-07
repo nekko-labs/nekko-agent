@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -116,6 +117,8 @@ import com.nekko.protocol.MonitorFormat
 import com.nekko.protocol.MonitorTone
 import com.nekko.protocol.PcSettings.ChatMode
 import com.nekko.protocol.RunOption
+import com.nekko.protocol.ModelServerSettings
+import com.nekko.android.monitors.ServerActions
 import com.nekko.protocol.ToolInfo
 import kotlin.math.cos
 import kotlin.math.min
@@ -126,6 +129,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** Test tags the instrumented tests find the controls by. */
 object ModeTags {
@@ -871,6 +876,7 @@ fun AgentDetails(
     computer: String,
     modelName: (String) -> String,
     onUnload: suspend (String) -> String,
+    server: ServerActions? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -904,6 +910,12 @@ fun AgentDetails(
         }
         if (state.engine?.resident?.isNotEmpty() == true) Footnote(stringResource(R.string.monitor_unload_footer, computer))
         notice?.let { (text, ok) -> Text(text, style = MaterialTheme.typography.bodySmall, color = if (ok) p.ink else p.danger) }
+        val e = state.engine
+        val settings = e?.server
+        if (server != null && e != null && e.installed && e.running && settings != null) {
+            SectionTitle("Model Server")
+            ModelServerControls(state, settings, server, computer, modelName) { notice = it }
+        }
         if (chat != null) {
             SectionTitle(stringResource(R.string.monitor_this_chat))
             BreakdownRow(stringResource(R.string.model_section), chat.modelName ?: chat.modelId ?: stringResource(R.string.model_choose), null)
@@ -960,6 +972,59 @@ private fun Models(state: HardwareState, computer: String, modelName: (String) -
         }
         LinearProgressIndicator(progress = { (e.memFraction ?: 0.0).toFloat() }, modifier = Modifier.fillMaxWidth(), color = toneColor(MonitorTone.of(e.memFraction)))
     }
+}
+
+/** Load a model, unload them all, and how the Model Server keeps models, while it lets devices choose. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModelServerControls(
+    state: HardwareState,
+    settings: ModelServerSettings,
+    server: ServerActions,
+    computer: String,
+    modelName: (String) -> String,
+    report: (Pair<String, Boolean>?) -> Unit,
+) {
+    val p = Nekko.palette
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    val enabled = !busy && settings.devicesChoose
+    LaunchedEffect(Unit) { server.loadLibrary() }
+    fun run(work: suspend () -> Unit) {
+        busy = true
+        report(null)
+        scope.launch {
+            try { work() } catch (e: CancellationException) { throw e } catch (e: Exception) { report((e.message ?: "Couldn’t change that.") to false) } finally { busy = false }
+        }
+    }
+    if (state.loadable.isNotEmpty()) {
+        Text("Load a model", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.testTag("monitor.load")) {
+            state.loadable.forEach { m -> AssistChip(enabled = enabled, onClick = { run { server.load(m.id) } }, label = { Text(modelName(m.id).takeIf { it != m.id } ?: m.name) }) }
+        }
+    }
+    if (state.engine?.resident?.isNotEmpty() == true) {
+        TextButton(enabled = enabled, onClick = { run { server.unloadAll() } }, modifier = Modifier.testTag("monitor.unloadAll")) { Text("Unload all", color = p.danger) }
+    }
+    val kept = settings.maxLoaded ?: 1
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("monitor.maxLoaded"), verticalAlignment = Alignment.CenterVertically) {
+        Text("Models kept loaded", style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+        TextButton(enabled = enabled && kept > 1, onClick = { run { server.set(buildJsonObject { put("maxLoaded", kept - 1) }) } }) { Text("−") }
+        Text("$kept", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+        TextButton(enabled = enabled && kept < 8, onClick = { run { server.set(buildJsonObject { put("maxLoaded", kept + 1) }) } }) { Text("+") }
+    }
+    Text("Unload when idle", style = MaterialTheme.typography.bodyMedium, color = p.ink)
+    Row(Modifier.fillMaxWidth().testTag("monitor.idleTtl"), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ModelServerSettings.IDLE_CHOICES.forEach { t ->
+            FilterChip(enabled = enabled, selected = t == (settings.idleTtlSeconds ?: 900), onClick = { run { server.set(buildJsonObject { put("idleTtlSeconds", t) }) } },
+                label = { Text(when (t) { 0 -> "Never"; 300 -> "5 min"; 3600 -> "1 hour"; else -> "15 min" }) })
+        }
+    }
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("monitor.jitLoad"), verticalAlignment = Alignment.CenterVertically) {
+        Text("Load when a chat asks", style = MaterialTheme.typography.bodyMedium, color = p.ink, modifier = Modifier.weight(1f))
+        Switch(enabled = enabled, checked = settings.jitLoad ?: true, onCheckedChange = { on -> run { server.set(buildJsonObject { put("jitLoad", on) }) } })
+    }
+    Footnote(if (settings.devicesChoose) "Each change asks for your screen lock." else "$computer’s Model Server keeps its own model settings. Change them there, or turn on Connected devices choose model settings.")
 }
 
 /** One model the Model Server holds: where it runs, its context and memory, and Unload. */

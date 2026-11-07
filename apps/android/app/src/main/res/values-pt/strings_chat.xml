@@ -72,9 +72,6 @@
     <string name="chat_title">Título</string>
     <string name="chat_rename">Renomear</string>
     <string name="chat_cancel">Cancelar</string>
-    <string name="chat_use_yolo_title">Usar YOLO neste chat?</string>
-    <string name="chat_use_yolo_body">Este chat vai executar comandos e editar arquivos em %1$s sem perguntar antes. Suas regras de negação continuam bloqueando.</string>
-    <string name="chat_use_yolo">Usar YOLO</string>
     <string name="chat_chat_mode">Modo do chat</string>
     <string name="chat_follows_default">Este chat segue o padrão de %1$s: %2$s.</string>
     <string name="chat_waiting_to_send_one">Aguardando envio</string>
@@ -237,4 +234,7 @@
     <string name="chat_card_allow">Permitir</string>
     <string name="chat_card_stop">Parar</string>
     <string name="chat_card_next">Próximo</string>
+    <string name="chat_always_allow_tool">Sempre permitir esta ferramenta</string>
+    <string name="chat_always_allowing_tool">Permitindo…</string>
+    <string name="chat_always_allow_tool_detail">Permite esta chamada e para de perguntar por esta ferramenta neste chat. As outras ferramentas continuam perguntando.</string>
 </resources>

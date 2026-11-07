@@ -4,6 +4,7 @@ import { COMPUTER_ICON_GLYPHS, ComputerIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { ComputerGlyph } from './ComputerChip.js';
 import { pairingAlts } from './RemoteAccess.js';
+import { Toggle } from './primitives/Toggle.js';
 
 const STATE_LABEL: Record<ComputerState, string> = {
   connecting: 'Connecting',
@@ -200,6 +201,31 @@ export function ComputersSection() {
           </div>
         )}
       </div>
+      <KeepAwakeSwitch />
     </section>
+  );
+}
+
+/**
+ * *Keep this computer awake while agents run* (`keepAwakeWhileAgentsRun`): off
+ * by default, and set only here, since it is this machine's battery.
+ */
+function KeepAwakeSwitch() {
+  const on = useStore((s) => s.settings?.keepAwakeWhileAgentsRun === true);
+  const set = (v: boolean) => {
+    void window.nekko.updateSettings({ keepAwakeWhileAgentsRun: v })
+      .then(() => useStore.getState().refreshSettings())
+      .catch((e) => useStore.getState().pushToast('error', String(e)));
+  };
+  return (
+    <div data-shot="keep-awake" className="mt-4 flex items-start justify-between gap-3 border-t border-line pt-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">Keep this computer awake while agents run</div>
+        <p className="mt-0.5 text-xs text-ink-faint">
+          While any agent runs here, this computer doesn't go to sleep on its own, so a run started from another computer or a phone carries on. Closing the lid still sleeps it.
+        </p>
+      </div>
+      <Toggle value={on} onChange={set} label="Keep this computer awake while agents run" />
+    </div>
   );
 }

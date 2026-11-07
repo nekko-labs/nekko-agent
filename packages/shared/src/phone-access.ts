@@ -295,6 +295,8 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
   terminal: { channels: [], prefixes: ['terminal:', 'terminals:'] },
   undecided: {
     channels: [
+      // A chat's audit trail (who allowed what) stays on the computer until a phone view is decided.
+      'audit:read',
       // Makes this computer fetch an arbitrary URL; a phone shows remote images itself.
       'image:fetch',
       // Making, changing or deleting automations stays on the computer; a phone may run one.
@@ -516,6 +518,11 @@ export const PHONE_MODE_PROOF = {
   fallback: 'guardrails',
 } as const;
 
+/** `allowedMcpTools` from a phone: MCP tool names (`mcp__<server>__<tool>`) only. */
+export function isMcpToolList(value: unknown): boolean {
+  return Array.isArray(value) && value.length <= 200 && value.every((t) => typeof t === 'string' && t.startsWith('mcp__') && t.length <= 200);
+}
+
 /** Whether moving from `current` (a mode, or nothing) to `next` raises the mode. An unknown mode counts as the most permissive. */
 export function phoneRaisesMode(next: unknown, current: unknown): boolean {
   const rank = (m: unknown) => {
@@ -693,6 +700,7 @@ export const PHONE_PROVIDER_VIEW = ['enabled', 'id', 'kind', 'label'] as const;
  * isolation or offline/incognito.
  */
 export const PHONE_SESSION_OPTION_KEYS = [
+  'allowedMcpTools',
   'archivedAt',
   'autoModel',
   'autoProviderSwitch',
@@ -724,11 +732,12 @@ export const PHONE_SESSION_OPTION_KEYS = [
 ] as const;
 
 /**
- * Options that change what an agent may touch or where its data goes. They take
+ * Options that change what an agent may touch or where its data goes (`allowedMcpTools`:
+ * "Always allow this tool", decision 0054). They take
  * the same signed proof as raising a mode, in either direction, since the gate
  * can't always rank two values.
  */
-export const PHONE_GUARDED_OPTION_KEYS = ['cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'memory', 'offline', 'privacy'] as const;
+export const PHONE_GUARDED_OPTION_KEYS = ['allowedMcpTools', 'cloudOnly', 'disabledConnectors', 'disabledMcpServers', 'disabledTools', 'executionMode', 'gitIsolation', 'guidance', 'incognito', 'memory', 'offline', 'privacy'] as const;
 
 /** The values a closed chat option may take (the store checks the rest). */
 export const PHONE_OPTION_VALUES = {
@@ -1108,6 +1117,7 @@ export function screenPhoneCall(
         if (!(PHONE_SESSION_OPTION_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
       if (own(patch, 'mode')) chatMode(patch.mode, 'mode');
+      if (own(patch, 'allowedMcpTools') && !isMcpToolList(patch.allowedMcpTools)) throw new PhoneAccessError('value-invalid', 'allowedMcpTools');
       if (own(patch, 'effort') && !(PHONE_EFFORT_LEVELS as readonly unknown[]).includes(patch.effort)) throw new PhoneAccessError('value-invalid', 'effort');
       for (const [key, allowed] of Object.entries(PHONE_OPTION_VALUES)) {
         if (own(patch, key) && !(allowed as readonly unknown[]).includes(patch[key])) throw new PhoneAccessError('value-invalid', key);
@@ -1259,8 +1269,12 @@ export function redactPhoneResult(channel: string, result: unknown): unknown {
       return phoneSystemView(result);
     case 'gpu:stats':
       return phoneGpuView(result);
-    case 'engine:status':
-      return phoneEngineView(result);
+    case 'engine:status': {
+      // With what a device may set, so reading the Model Server's choices needs no change proof.
+      const view = phoneEngineView(result);
+      if (view && isObj(result) && isObj(result.settings)) view.settings = pick(result.settings, PHONE_MODEL_SERVER_VIEW);
+      return view;
+    }
     case 'context:preview':
       return phoneContextView(result);
     case 'model:unload':

@@ -284,6 +284,7 @@ const api: NekkoApi = {
   readLog: (id, opts) => inv(IpcChannels.logsRead, id, opts ?? {}),
   fetchRemoteImage: (url) => inv(IpcChannels.imageFetch, url),
 
+  readAudit: (sessionId) => inv(IpcChannels.auditRead, sessionId),
   listChanges: (sessionId) => inv(IpcChannels.changesList, sessionId),
   acceptChange: (sessionId, path) => inv(IpcChannels.changeAccept, sessionId, path),
   acceptAllChanges: (sessionId) => inv(IpcChannels.changeAcceptAll, sessionId),
@@ -427,6 +428,7 @@ const api: NekkoApi = {
   computerStats: (id) => inv(IpcChannels.computersStats, id),
   computerEngineStatus: (id) => inv(IpcChannels.computersCall, id, 'engine:status', []),
   computerRead: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
+  computerModelServer: (id, channel, args = []) => inv(IpcChannels.computersCall, id, channel, args),
   createSessionOn: (computerId, workspaceId) => inv(IpcChannels.computersCreateSession, computerId, workspaceId),
   computerCatalog: (id) => inv(IpcChannels.computersCatalog, id),
   listRemoteDevices: () => inv(IpcChannels.remoteDevices),

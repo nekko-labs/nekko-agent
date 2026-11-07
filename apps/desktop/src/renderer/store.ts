@@ -131,6 +131,7 @@ export interface Workspace {
   activePaneId: string | null;
 }
 
+const SETTINGS_ERROR = 'Could not load settings: ';
 const PLAN_RAIL_KEY = 'nekko.planRail';
 const PLAN_RAIL_SESSIONS_KEY = 'nekko.planRail.sessions';
 
@@ -741,6 +742,7 @@ export const useStore = create<UiState>((set, get) => ({
       // A second screen's window never opens the setup wizard; the main window does.
       const onboardingOpen = autoOpenOnboarding && !isScreenWindow ? shouldAutoOpenOnboarding(settings) : get().onboardingOpen;
       set({ settings, onboardingOpen, settingsLoaded: true, settingsError: null });
+      for (const t of get().toasts) if (t.message.startsWith(SETTINGS_ERROR)) get().dismissToast(t.id);
       get().applyTheme();
       void get().loadCustomFonts();
       if (!get().activeProviderId && settings.defaultProviderId) {
@@ -752,7 +754,8 @@ export const useStore = create<UiState>((set, get) => ({
       // unblock the UI and let surfaces fall back to their empty states.
       const settingsError = e instanceof Error ? e.message : 'Nekko service is unavailable.';
       set({ settingsLoaded: true, settingsError });
-      get().pushToast('error', `Could not load settings: ${settingsError}`);
+      const message = `${SETTINGS_ERROR}${settingsError}`;
+      if (!get().toasts.some((t) => t.message === message && !t.leaving)) get().pushToast('error', message);
       get().applyTheme();
     }
   },

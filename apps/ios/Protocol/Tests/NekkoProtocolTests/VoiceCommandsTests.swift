@@ -63,8 +63,17 @@ final class VoiceCommandsTests: XCTestCase {
         XCTAssertEqual(splitVoiceSegments("  "), [])
     }
 
+    func testSpellNekko() {
+        for heard in ["Neco", "Necco", "Necko", "Neko", "neco", "NECCO"] {
+            XCTAssertEqual(spellNekko("\(heard), send it. Then ask \(heard)'s helper."), "Nekko, send it. Then ask Nekko's helper.")
+        }
+        let others = "Necklace and necktie on a neck, a nectar economy."
+        XCTAssertEqual(spellNekko(others), others)
+    }
+
     func testSplitWakeTail() {
         XCTAssertEqual(splitWakeTail("Nekko."), WakeTail(rest: "", wake: "Nekko."))
+        XCTAssertEqual(splitWakeTail("Necco."), WakeTail(rest: "", wake: "Necco."))
         XCTAssertEqual(splitWakeTail("Fix the bug. Neko?"), WakeTail(rest: "Fix the bug.", wake: "Neko?"))
         XCTAssertEqual(splitWakeTail("Tell Nekko."), WakeTail(rest: "Tell Nekko.", wake: ""))
         XCTAssertEqual(splitWakeTail("Nekko, send it."), WakeTail(rest: "Nekko, send it.", wake: ""))

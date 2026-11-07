@@ -20,7 +20,7 @@ adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 094
 adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged true
 adb install -r -t apps/android/app/build/outputs/apk/debug/app-debug.apk
 adb install -r -t apps/android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell am instrument -w -e class "$cls" -e nekkoModeEvidence true -e nekkoDevice phone "$pkg.test/androidx.test.runner.AndroidJUnitRunner" > "$out/instrumentation.txt" 2>&1
+adb shell am instrument -w -e class "$cls" -e nekkoModeEvidence true -e nekkoDevice phone -e nekkoRevision "${NEKKO_EVIDENCE_REVISION:-unspecified}" "$pkg.test/androidx.test.runner.AndroidJUnitRunner" > "$out/instrumentation.txt" 2>&1
 cat "$out/instrumentation.txt"
 adb pull "/sdcard/Android/data/$pkg/files/evidence/." "$out/shots/"
 # adb can exit zero even when JUnit fails or the process crashes.

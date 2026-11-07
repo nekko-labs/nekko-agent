@@ -69,4 +69,11 @@
     <string name="pill_move_top">Nach oben verschieben</string>
     <string name="pill_dock_left">Links andocken</string>
     <string name="pill_dock_right">Rechts andocken</string>
+    <string name="yolo_warning_title">YOLO einschalten?</string>
+    <string name="yolo_warning_text">Der Agent führt Befehle aus, bearbeitet Dateien, ruft Adressen ab und nutzt Tools, ohne dich vorher zu fragen. Eine Webseite, ein Suchergebnis oder eine Tool-Ausgabe, die er liest, kann Anweisungen enthalten, und in YOLO hält nichts sie davon ab, deine Dateien oder Daten von diesem Computer nach außen zu senden. Deine Verbotsregeln blockieren weiterhin.</string>
+    <string name="yolo_warning_recommend">Leitplanken fragt nur, wenn es darauf ankommt, und ist der empfohlene Modus.</string>
+    <string name="yolo_warning_skip">Nicht mehr warnen</string>
+    <string name="yolo_warning_skip_detail">Nur auf diesem Telefon. Du kannst die Warnung unter Einstellungen → Sicherheit wieder einschalten.</string>
+    <string name="yolo_warning_keep_asking">Weiter fragen</string>
+    <string name="yolo_warning_turn_on">YOLO einschalten</string>
 </resources>

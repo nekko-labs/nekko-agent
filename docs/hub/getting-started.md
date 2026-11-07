@@ -54,6 +54,8 @@ Displaying a screenshot does not mean it has been inspected or approved. The age
 
 In **Settings → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
 
+On desktop and the Local Web UI, light **Nekko** and **Indigo** use pale rose and indigo surfaces, tinted selections, and the same plum/violet/rose gradient colors as their dark counterparts. The selected chat keeps its color field from the greeting into the conversation; other panes stay quiet. Dark themes are unchanged, and reduced motion keeps a static field.
+
 Open **Custom colors** to adjust the accent and secondary color with the wheel or an exact color value. **Reset to this theme's colors** restores the defaults for the current palette and mode. The same controls appear during first-run setup. Theme circles respond gently to hover and press; the system's reduced-motion preference turns that motion off.
 
 ## Following tool activity
@@ -203,6 +205,8 @@ A turn's working steps fold into one work group whose header says what the agent
 
 When older conversation is summarized, a **Conversation compacted** event card shows how many earlier messages were summarized. It starts collapsed, including the newest summary. Click **Show summary** to read it and **Hide summary** to fold it again. Earlier messages remain readable above the card. Expanding or collapsing the card does not change what the model receives.
 
+In a Claude Agent chat, Claude Code compacts the conversation itself: on its own when the context nears its limit, or when you type `/compact`. The card then reads **Claude Code compacted the conversation** and says which of the two it was, how far the context fell (for example `968k → 41k tokens`), and how many messages the summary replaces. That is why the context gauge drops sharply after a compaction: Claude Code carries on from the summary, not from the full history.
+
 ### Answering agent questions
 
 When an agent needs a choice, its question opens at the bottom of the conversation without moving your typing focus, even when another agent asks while you are writing. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Click or Tab into the question to answer it: use the options, arrow and number keys, or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. Moving between steps keeps the keyboard in the question only while you are interacting with it. The pixel question-mark icon identifies the question.
@@ -220,6 +224,9 @@ Click a file link to open the file in a window beside the chat. Code is coloured
 Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
 
 The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
+
+Immediately to its right, **View** brings together **Single agent** (one focused chat), **Multi-agent** (tiled chats), **Snap to grid**, and desktop screen/desktop controls. Cmd/Ctrl+Shift+1 and +2 still switch the two views. Snap to grid is available in free-form Multi-agent view; it keeps windows evenly spaced and attracts dividers only when they are within 3% of a grid boundary. The menu scrolls on smaller windows. Desktop screen selection and new-agent placement keep their existing behavior; these controls are not shown in the Local Web UI.
+
 
 | Action | macOS | Windows/Linux |
 | --- | --- | --- |
@@ -246,7 +253,7 @@ opening on the board. Click a zone to make it the active one (it gets a heavier
 outline), then click an agent in the Agents list to show it there, or drag the
 agent from the list straight into a zone. Clicking an agent that is already on
 the board just switches to its zone. Each zone has a colour, shown as a small
-square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips.
+square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips. You can also choose **+ > Add agent zone** in the board toolbar to add and select an empty right-hand column without creating an agent or switching views.
 Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
 whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.

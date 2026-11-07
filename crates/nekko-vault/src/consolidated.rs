@@ -83,6 +83,7 @@ pub(crate) struct ConsolidatedVault {
 
 impl Vault for ConsolidatedVault {
     fn get(&self, name: &str) -> Option<String> {
+        let _call = super::waits::begin();
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(value) = self.shared.load(&mut state).ok()?.get(&self.service).and_then(|m| m.get(name)) {
             return value.clone();
@@ -113,6 +114,7 @@ impl Vault for ConsolidatedVault {
     }
 
     fn set(&self, name: &str, value: &str) -> Result<(), String> {
+        let _call = super::waits::begin();
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
         self.shared.save(&mut state, &self.service, name, Some(value.into()))?;
         state.legacy.remove(&(self.service.clone(), name.into()));
@@ -123,6 +125,7 @@ impl Vault for ConsolidatedVault {
     }
 
     fn delete(&self, name: &str) {
+        let _call = super::waits::begin();
         let mut state = self.shared.state.lock().unwrap_or_else(|e| e.into_inner());
         // Persist a tombstone: an old item that cannot be removed must not return
         // after a restart. A denied or corrupt vault is never overwritten.

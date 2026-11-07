@@ -231,7 +231,11 @@ impl Messaging {
                     self.call("chat:send", vec![opts], move |me, r| me.with(|b| b.sent(req, r)));
                 }
                 Effect::Approve { session_id, call_id, approved } => {
-                    self.call("tool:approve", vec![json!(session_id), json!(call_id), json!(approved)], |_, _| {});
+                    self.call(
+                        "tool:approve",
+                        vec![json!(session_id), json!(call_id), json!(approved), json!({ "via": "telegram" })],
+                        |_, _| {},
+                    );
                 }
                 Effect::Answer { session_id, call_id, answers } => {
                     self.call("chat:answer", vec![json!(session_id), call_id, answers], |_, _| {});
