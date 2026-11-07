@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
+import type { IssueInfo, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 const state = vi.hoisted(() => ({ sessions: [] as unknown[] }));
 vi.mock('../store.js', () => ({ useStore: (selector: (state: unknown) => unknown) => selector(state) }));
 const linked = vi.hoisted(() => ({ links: null as Map<string, unknown> | null }));
@@ -9,7 +9,7 @@ vi.mock('../planStepLinks.js', async (original) => {
   const real = await original<typeof import('../planStepLinks.js')>();
   return { ...real, planStepLinks: (...args: Parameters<typeof real.planStepLinks>) => linked.links ?? real.planStepLinks(...args) };
 });
-import { PlanSheet, subagentCardState } from './PlanSheet.js';
+import { PlanSheet, issueLook, subagentCardState } from './PlanSheet.js';
 import { stylesheet } from '../tests/css.js';
 
 const now = 1_800_000_000_000;
@@ -174,6 +174,9 @@ describe('sub-agent cards', () => {
     expect(row).toContain('aria-label="Trace lookup, Working. Open sub-agent"');
     expect(row).not.toContain('Unrelated helper');
     expect(html).not.toContain('data-plan-running-subagents');
+    // The row leads with its own label and the agents glyph.
+    expect(row.indexOf('plan-sheet-agents-head')).toBeLessThan(row.indexOf('data-subagent-card'));
+    expect(row).toContain('data-gf-icon="bots"');
   });
   it('keeps the cards on the folded plan', () => {
     kids();
@@ -203,5 +206,15 @@ describe('chip type labels', () => {
     }]]);
     const html = render([{ id: 'build', title: 'Build', status: 'active', createdAt: now, updatedAt: now }]);
     for (const label of ['PR #9', 'Task: o/r#4', 'File: report.html', 'Preview: localhost:3000/demo']) expect(html).toContain(label);
+  });
+});
+
+describe('task chips', () => {
+  const issue = (state: 'open' | 'closed', stateReason: string | null = null) => ({ kind: 'issue', url: 'u', owner: 'o', repo: 'r', number: 1, title: 't', state, stateReason }) as IssueInfo;
+  it('draws a GitHub issue as GitHub does: green open, purple done, grey not planned', () => {
+    expect(issueLook(issue('open'))).toMatchObject({ icon: 'record', tone: 'var(--success)' });
+    expect(issueLook(issue('closed', 'completed'))).toMatchObject({ icon: 'check-circle', tone: 'var(--merged-ink)' });
+    expect(issueLook(issue('closed'))).toMatchObject({ icon: 'check-circle', label: 'Done' });
+    expect(issueLook(issue('closed', 'not_planned'))).toMatchObject({ icon: 'ban', tone: 'var(--ink-faint)' });
   });
 });

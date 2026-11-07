@@ -83,7 +83,13 @@ app.whenReady().then(async () => {
         if (surface === 'window') await check('Model title is not clipped by control group ' + width, `document.querySelector('[data-model-chip-name]').getBoundingClientRect().right <= document.querySelector('.composer-foot-controls').getBoundingClientRect().right`);
         await check('One permission control only ' + surface + width, `document.querySelectorAll('[data-asks-first]').length === 1`);
         await check('Both folder names visible ' + width, `document.querySelector('[aria-label^="Selected folders"]')?.textContent.includes('nekko-agent, docs')`);
-        await check('Icon-only permission with divider ' + width, `(() => { const b = document.querySelector('[data-asks-first]'); return b && !b.textContent.trim() && b.getAttribute('aria-label')?.includes('Permissions') && b.previousElementSibling?.hasAttribute('data-permissions-divider'); })()`);
+        await check('Icon-only permission without divider ' + width, `(() => { const b = document.querySelector('[data-asks-first]'); return b && !b.textContent.trim() && b.getAttribute('aria-label')?.includes('Permissions') && !document.querySelector('[data-permissions-divider]'); })()`);
+        await check('Borderless content-sized folder ' + surface + width, `(() => { const b = document.querySelector('[aria-label^="Selected folders"]'); const style = getComputedStyle(b); const parent = b.closest('.composer-folders').getBoundingClientRect(); return style.borderTopWidth === '0px' && style.borderRightWidth === '0px' && style.paddingLeft === '4px' && Math.abs(parent.width - b.getBoundingClientRect().width) <= 1; })()`);
+        await check('Compact folder permission gap ' + surface + width, `(() => { const folder = document.querySelector('[aria-label^="Selected folders"]').getBoundingClientRect(); const permission = document.querySelector('[data-asks-first]').getBoundingClientRect(); return permission.left - folder.right >= 0 && permission.left - folder.right <= 5; })()`);
+        await run(`document.querySelector('[aria-label^="Selected folders"]').click()`); await sleep(100);
+        await check('Folder menu opens ' + surface + width, `!!document.querySelector('[role="menu"][aria-label="Primary folder"]')`);
+        await run(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);
+        await check('Folder Escape returns focus ' + surface + width, `document.activeElement?.getAttribute('aria-label')?.startsWith('Selected folders:') && !document.querySelector('[role="menu"][aria-label="Primary folder"]')`);
         await run(`document.querySelector('[data-asks-first]').click()`); await sleep(150);
         await check('Permission options open ' + width, `document.querySelectorAll('[data-asks-menu] [role="menuitemradio"]').length === 3`);
         await shot('permissions-' + surface + '-' + width);
