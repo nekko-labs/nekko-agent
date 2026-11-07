@@ -72,5 +72,6 @@ In Detailed on the desktop, the bottom row (folder, model, effort, context, cost
 - **Changes** is in **More** on the iPhone and an icon with a count on Android, once the agent has changed files.
 - **The pill:** it shows while the hardware gauges do (on Android it also holds the switch). Tap the gauges and the pill opens into the agent's details (hardware, loaded models, this chat). Point at one gauge with a mouse for its reading in full. The pill slides away while you scroll on and comes back when you scroll back.
 - **Moving the pill:** touch and hold it, then drag. Let go near the left or right edge to dock it there, stacked; anywhere else it lies across the screen at that height. Drag it back near the top to put it under the bar again.
+- **Tucking the pill away:** swipe it into its edge (a side it is docked at, or up into the bar) and only a slim arrow tab stays. Tap the tab, or swipe it back out, to bring the pill back.
 - **Search** is in the computer menu at the top left: **Search chats**.
 - **Logs** in the same menu are grouped: what this phone logged, then each computer.

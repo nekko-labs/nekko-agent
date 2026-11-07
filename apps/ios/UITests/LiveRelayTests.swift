@@ -610,11 +610,31 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertGreaterThan(panel.frame.midX, window.frame.width * 0.7, "the pill docks on the right")
         XCTAssertGreaterThan(panel.frame.height, panel.frame.width, "docked at a side, the gauges stack")
         attach(app, "modes-3b-docked-right")
+        // A swipe into the edge tucks it away as a slim tab; a tap on the tab brings it back.
+        let tab = app.buttons["chat.pill.tab"]
+        // A real swipe's length: XCUITest's swipeRight stays inside the slim docked pill.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.995, dy: 0.4)), withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe into the side tucks the pill away")
+        XCTAssertFalse(panel.exists)
+        settle()
+        attach(app, "modes-3c-tucked-right")
+        tab.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5), "the tab brings the pill back")
+        settle()
         // And back under the bar, across.
         panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.14)))
         settle()
         XCTAssertLessThan(panel.frame.height, panel.frame.width, "back across the top")
+        // Under the bar, a swipe up tucks it into the bar.
+        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.02)), withVelocity: .fast, thenHoldForDuration: 0)
+        XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe up tucks the pill under the bar")
+        attach(app, "modes-3d-tucked-top")
+        tab.tap()
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        settle()
         // A tap opens the pill into the agent's details.
         panel.tap()
         // The pill opens into the agent's details.

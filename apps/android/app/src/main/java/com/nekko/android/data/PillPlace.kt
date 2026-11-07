@@ -7,9 +7,20 @@ enum class PillDock { TOP, LEFT, RIGHT }
  * Where the mode pill rests, one place for the whole phone (chats and the chats list alike).
  * [y] is how far down its room the pill sits: 0 just under the top bar, 1 on the message box
  * (or the bottom of the list). [atTop] is the default, where the content makes room for it.
+ * [tucked]: swiped into its edge (a side, or the top bar), only a slim arrow tab shows.
  */
-data class PillPlace(val dock: PillDock = PillDock.TOP, val y: Float = 0f) {
-    val atTop: Boolean get() = dock == PillDock.TOP && y == 0f
+data class PillPlace(val dock: PillDock = PillDock.TOP, val y: Float = 0f, val tucked: Boolean = false) {
+    val atTop: Boolean get() = dock == PillDock.TOP && y == 0f && !tucked
+
+    /** It rests against an edge it can be swiped into: a side, or the top bar. */
+    val canTuck: Boolean get() = dock != PillDock.TOP || y == 0f
+
+    /** Whether a swipe of ([dx], [dy]) goes into the pill's edge, at least [min] along it. */
+    fun swipesIn(dx: Float, dy: Float, min: Float): Boolean = canTuck && when (dock) {
+        PillDock.TOP -> -dy > min && -dy > kotlin.math.abs(dx)
+        PillDock.LEFT -> -dx > min && -dx > kotlin.math.abs(dy)
+        PillDock.RIGHT -> dx > min && dx > kotlin.math.abs(dy)
+    }
 
     companion object {
         val DEFAULT = PillPlace()
@@ -17,14 +28,15 @@ data class PillPlace(val dock: PillDock = PillDock.TOP, val y: Float = 0f) {
         /** Let go within this share of the width from a side, the pill docks upright on that side. */
         const val EDGE = 0.22f
 
-        val KEY: PhonePrefs.Key<PillPlace> = PhonePrefs.key("pill.place", DEFAULT, { "${it.dock.name}:${it.y}" }, ::decode)
+        val KEY: PhonePrefs.Key<PillPlace> = PhonePrefs.key("pill.place", DEFAULT, { "${it.dock.name}:${it.y}" + if (it.tucked) ":TUCKED" else "" }, ::decode)
 
         internal fun decode(stored: String): PillPlace? {
             val parts = stored.split(':')
-            if (parts.size != 2) return null
+            if (parts.size != 2 && !(parts.size == 3 && parts[2] == "TUCKED")) return null
             val dock = PillDock.entries.firstOrNull { it.name == parts[0] } ?: return null
             val y = parts[1].toFloatOrNull()?.takeIf { it.isFinite() } ?: return null
-            return PillPlace(dock, y.coerceIn(0f, 1f))
+            val place = PillPlace(dock, y.coerceIn(0f, 1f))
+            return place.copy(tucked = parts.size == 3 && place.canTuck)
         }
 
         /**
