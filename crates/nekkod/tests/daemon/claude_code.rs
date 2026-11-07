@@ -171,6 +171,14 @@ pub fn fake_claude() {
             tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
             out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
             out(result("planned", "completed"));
+        } else if text == "compact first" {
+            // Claude Code compacting before it answers, as it prints the status around it.
+            out(json!({ "type": "system", "subtype": "status", "status": "compacting", "session_id": session }));
+            out(
+                json!({ "type": "system", "subtype": "status", "status": null, "compact_result": "success", "session_id": session }),
+            );
+            out(assistant("m_cf", json!([{ "type": "text", "text": "compacted" }])));
+            out(result("compacted", "completed"));
         } else if text == "background later" || text == "watch later" {
             // A background task that finishes only once the test says so (a
             // `wake-now` file in the workspace), so the chat can change first.
@@ -1010,4 +1018,18 @@ async fn a_background_watcher_is_in_the_chat_summary_until_it_ends() {
         (summaries[0]["backgroundWatchCount"] == 0).then_some(())
     })
     .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_code_compacting_reaches_the_chat_as_it_runs() {
+    let rig = rig("compacting", "guardrails", true);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cf1", "compact first")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (events, end) = turn_record(&rig, "cf1", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    let states: Vec<_> =
+        events.iter().filter(|e| e["type"] == "claude_code_compacting").map(|e| e["state"].clone()).collect();
+    assert_eq!(states, [json!("running"), json!("done")]);
+    let k = kinds(&events);
+    assert!(k.ends_with(&["usage".into(), "done".into()]), "{k:?}");
 }

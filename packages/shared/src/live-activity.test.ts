@@ -5,6 +5,7 @@ import {
   LIVE_TAIL_CHARS,
   describeLiveActivity,
   reduceLiveActivity,
+  shortLiveStatus,
   type LiveActivity,
 } from './live-activity.js';
 
@@ -130,5 +131,24 @@ describe('describeLiveActivity', () => {
   it('falls back to the narration, then to nothing at all', () => {
     expect(describeLiveActivity(fold([text('Rebuilding the index now.')]))).toBe('Rebuilding the index now.');
     expect(describeLiveActivity(undefined)).toBe('');
+  });
+});
+
+describe('Claude Code compacting', () => {
+  const compacting = (state: 'running' | 'done' | 'failed', error?: string): AgentEvent =>
+    ({ type: 'claude_code_compacting', sessionId: S, state, ...(error ? { error } : {}) });
+
+  it('says so while it lasts, over whatever ran before it', () => {
+    const running = fold([toolCall('t1', 'bash', { command: 'npm test' }), toolResult('t1', 'ok'), compacting('running')]);
+    expect(shortLiveStatus(running)).toBe('Compacting context');
+    expect(running!.steps.at(-1)).toMatchObject({ kind: 'note', label: 'Compacting' });
+    const after = fold([compacting('running'), compacting('done'), text('Carrying on.')]);
+    expect(shortLiveStatus(after)).toBe('Writing reply');
+  });
+
+  it('records a failed compaction with its reason', () => {
+    const a = fold([compacting('running'), compacting('failed', 'Not enough messages to compact.')]);
+    expect(a!.compacting).toBe(false);
+    expect(a!.steps.at(-1)).toMatchObject({ label: 'Compaction failed', detail: 'Not enough messages to compact.' });
   });
 });
