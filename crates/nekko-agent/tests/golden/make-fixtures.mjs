@@ -182,9 +182,11 @@ const nd = (obj) => `${JSON.stringify(obj)}\n`;
 const oa = (delta, extra = {}) => sse({ choices: [{ delta, ...extra }] });
 const finish = (reason, usage) => sse({ choices: [{ delta: {}, finish_reason: reason }], ...(usage ? { usage } : {}) });
 const hex = (s) => Buffer.from(s, 'utf8').toString('hex');
-// Ollama's `/api/show`, asked before a request with `think: true`.
+// Ollama's `/api/show`, asked before a request with `think: true`, and after a
+// failed chat that sent tools.
 const showing = (capabilities) => ({ body: JSON.stringify({ capabilities }) });
 const olReply = { chunks: [nd({ message: { content: 'Rayleigh.' } }), nd({ done: true })] };
+const olNoTools = (model = 'qwen3-coder-30b') => ({ status: 400, body: JSON.stringify({ error: `"${model}" does not support tools` }) });
 
 const streams = [
   // OpenAI-compatible
@@ -665,6 +667,29 @@ const streams = [
   { name: 'ol-think-off-model-can', provider: 'ollama', request: 'think-off', responses: [olReply] },
   { name: 'ol-http-400-reason', provider: 'ollama', responses: [{ status: 400, body: '{"error":"\\"qwen2.5:3b\\" does not support thinking"}' }] },
   { name: 'ol-http-502-no-reason', provider: 'ollama', responses: [{ status: 502, body: '<html>Bad Gateway</html>' }] },
+  { name: 'ol-tools-model-cant', provider: 'ollama', request: 'system-and-tools', responses: [olNoTools(), showing(['completion'])] },
+  { name: 'ol-tools-model-can', provider: 'ollama', request: 'system-and-tools', responses: [olNoTools(), showing(['completion', 'tools'])] },
+  { name: 'ol-tools-capabilities-missing', provider: 'ollama', request: 'system-and-tools', responses: [olNoTools(), { body: '{"details":{}}' }] },
+  { name: 'ol-tools-show-404', provider: 'ollama', request: 'system-and-tools', responses: [olNoTools(), { status: 404, body: `{"error":"model 'qwen3-coder-30b' not found"}` }] },
+  { name: 'ol-tools-show-network-error', provider: 'ollama', request: 'system-and-tools', responses: [olNoTools(), { networkError: 'fetch failed' }] },
+  { name: 'ol-tools-chat-ok-no-show', provider: 'ollama', request: 'system-and-tools', responses: [olReply] },
+  { name: 'ol-tools-empty-no-show', provider: 'ollama', request: 'wrap-up-no-tools', responses: [olNoTools('m')] },
+  // `requestExtra` adds fields to the named request for this case alone: request
+  // fixtures run on every provider, and these two only mean anything on Ollama.
+  {
+    name: 'ol-tools-and-think-model-can',
+    provider: 'ollama',
+    request: 'think-on',
+    requestExtra: { tools },
+    responses: [showing(['completion', 'tools', 'thinking']), olReply],
+  },
+  {
+    name: 'ol-tools-and-think-model-cant',
+    provider: 'ollama',
+    request: 'think-on',
+    requestExtra: { tools },
+    responses: [showing(['completion']), olNoTools('qwen3-8b'), showing(['completion'])],
+  },
 ];
 
 for (const request of ['cache-on', 'cache-off']) {
