@@ -533,7 +533,13 @@ export type AgentEvent =
    * commands, sub-agents). It keeps working after the turn's `done` and wakes
    * on its own when one finishes, so the chat says so meanwhile.
    */
-  | { type: 'claude_code_background'; sessionId: string; tasks: number };
+  | { type: 'claude_code_background'; sessionId: string; tasks: number }
+  /**
+   * Claude Code is compacting a Claude Agent chat's context (on its own near
+   * the window, or for a typed `/compact`): `running` while it summarizes,
+   * then `done`, or `failed` with Claude Code's reason.
+   */
+  | { type: 'claude_code_compacting'; sessionId: string; state: 'running' | 'done' | 'failed'; error?: string };
 
 /**
  * What a session is waiting on a person for, right now.

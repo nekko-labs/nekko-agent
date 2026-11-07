@@ -178,6 +178,8 @@ const STARTS_RUN = new Set<AgentEvent['type']>([
   // A first call that fails before its first token is still a turn in flight,
   // and the rail should say it is being retried rather than nothing at all.
   'retry',
+  // Claude Code may compact before the turn's first call, when the context is already full.
+  'claude_code_compacting',
 ]);
 
 /**

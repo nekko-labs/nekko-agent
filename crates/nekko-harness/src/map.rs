@@ -15,6 +15,7 @@
 //! | `parent_tool_use_id` set (a sub-agent's own lines) | [`Subagent::Line`], for the child chat's own mapper |
 //! | the delegating call's `tool_result`, or `system/task_notification` for a background one | [`Subagent::Ended`] |
 //! | `system/api_retry` | `retry` |
+//! | `system/status` `compacting`, then `status: null` with `compact_result` | `claude_code_compacting` (`running`, then `done` or `failed`) |
 //! | `system/permission_denied` | the call's `tool_result` marked `denied` |
 //! | `assistant` with `is_api_error_message` | `error` |
 //! | `command_lifecycle` (a message Nekko wrote, queued / started / completed), its `isReplay` echo | [`Mapped::Command`] |
@@ -436,6 +437,23 @@ impl Mapper {
                     version: str_at(v, "claude_code_version").map(str::to_string),
                     api_key_source: str_at(v, "apiKeySource").map(str::to_string),
                 }));
+            }
+            // Claude Code is compacting its context (near the window, or a
+            // typed `/compact`): the chat says so while it lasts. Other
+            // statuses (a permission mode change) say nothing to show.
+            Some("status") => {
+                let compacting = str_at(v, "status") == Some("compacting");
+                let result = str_at(v, "compact_result");
+                let fields = match (compacting, result) {
+                    (true, _) => json!({ "state": "running" }),
+                    (false, Some("success")) => json!({ "state": "done" }),
+                    (false, Some(_)) => {
+                        let why = str_at(v, "compact_error").filter(|e| !e.trim().is_empty());
+                        json!({ "state": "failed", "error": why.unwrap_or("Claude Code could not compact the conversation.") })
+                    }
+                    (false, None) => return,
+                };
+                out.push(self.event("claude_code_compacting", fields));
             }
             Some("api_retry") => {
                 // Whatever the failed call streamed is discarded and redone.
@@ -869,6 +887,32 @@ mod tests {
         let mut sub_result = result("t3", false);
         sub_result["parent_tool_use_id"] = json!("agent_1");
         assert!(!m.map(&sub_result).iter().any(|o| matches!(o, Mapped::Plan(_))));
+    }
+
+    #[test]
+    fn claude_codes_compaction_status_is_an_event() {
+        let mut m = Mapper::new("s");
+        let status = |extra: Value| {
+            let mut v = json!({ "type": "system", "subtype": "status", "status": null, "session_id": "x" });
+            v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            v
+        };
+        let state = |out: Vec<Mapped>| match out.as_slice() {
+            [Mapped::Event(e)] if e["type"] == "claude_code_compacting" => Some(e.clone()),
+            _ => None,
+        };
+        // As Claude Code 2.1.319 printed them for a `/compact`.
+        assert_eq!(state(m.map(&status(json!({ "status": "compacting" })))).unwrap()["state"], "running");
+        assert_eq!(state(m.map(&status(json!({ "compact_result": "success" })))).unwrap()["state"], "done");
+        let failed =
+            state(m.map(&status(json!({ "compact_result": "failed", "compact_error": "Not enough messages" }))))
+                .unwrap();
+        assert_eq!((failed["state"].as_str(), failed["error"].as_str()), (Some("failed"), Some("Not enough messages")));
+        let bare = state(m.map(&status(json!({ "compact_result": "failed" })))).unwrap();
+        assert_eq!(bare["error"], "Claude Code could not compact the conversation.");
+        // Any other status (a permission mode change, a request starting) shows nothing.
+        assert!(m.map(&status(json!({ "status": "requesting" }))).is_empty());
+        assert!(m.map(&status(json!({ "permissionMode": "plan" }))).is_empty());
     }
 
     #[test]
