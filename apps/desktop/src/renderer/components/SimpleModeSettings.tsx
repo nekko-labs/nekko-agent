@@ -4,7 +4,7 @@ import { useExpertMode, useSimpleChoices } from '../simpleMode.js';
 import { ChatIcon, CodeIcon, FolderIcon, GlobeIcon, PlusIcon } from '../icons.js';
 
 /*
- * Settings > Simple mode: per control, Show (both modes, when it applies),
+ * Settings > Customize > Simple mode: per control, Show (both modes, when it applies),
  * Detailed only, or Hide; a monitor offers When running (its default), Always or
  * Hide. Each area is drawn beside its switches, and a control the previewed
  * mode leaves out keeps a dashed outline where it would be.
@@ -75,7 +75,7 @@ const PREVIEWS: Record<string, () => React.JSX.Element> = {
     <div className="sm-frame"><div className="sm-row"><M>Qwen3 8B · Load</M><M id="engine">Detailed load flags</M></div><div className="sm-row"><M id="engine" wide>Model server settings</M></div></div>
   ),
   Settings: () => (
-    <div className="sm-frame"><div className="sm-row"><M>General</M><M>Style</M><M>Agents</M><M>Safety</M><M id="set-tools">Tools</M></div></div>
+    <div className="sm-frame"><div className="sm-row"><M>General</M><M>Customize</M><M>Agents</M><M>Safety</M><M id="set-tools">Tools</M></div></div>
   ),
 };
 
