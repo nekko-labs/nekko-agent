@@ -1,27 +1,28 @@
 import React from 'react';
+import { ProviderMark } from './ProviderMark.js';
 import { isLocalProvider } from '@nekko-agent/shared';
 import { providerSetupDefaults, type ProviderSetupKind } from './providerPresets.js';
 
 // Claude is one choice: its setup offers the user's subscription (through their
 // own Claude Code) or an API account (Anthropic, Bedrock, Vertex, Foundry).
-const choices: { kind: ProviderSetupKind; icon?: string; glyph?: string; description: string }[] = [
-  { kind: 'chatgpt', icon: 'openai', description: 'Sign in with your ChatGPT plan' },
-  { kind: 'anthropic', icon: 'anthropic', description: 'Your subscription or an API account' },
-  { kind: 'openrouter', icon: 'openrouter', description: 'Many models · pay for what you use' },
-  { kind: 'openai', icon: 'openai', description: 'Use an API key · billed separately' },
-  { kind: 'gemini', icon: 'google', description: 'Google AI Studio API key · Gemini models' },
-  { kind: 'vertex', icon: 'google', description: 'Claude on your Google Cloud project' },
-  { kind: 'ollama-cloud', icon: 'ollama', description: 'Hosted models · Ollama Cloud API key' },
-  { kind: 'ollama', icon: 'ollama', description: 'Connect Ollama on your computer' },
-  { kind: 'lmstudio', icon: 'lmstudio', description: 'Connect your LM Studio server' },
-  { kind: 'vllm', icon: 'vllm', description: 'Connect an existing vLLM server' },
+const choices: { kind: ProviderSetupKind; description: string }[] = [
+  { kind: 'chatgpt', description: 'Sign in with your ChatGPT plan' },
+  { kind: 'anthropic', description: 'Your subscription or an API account' },
+  { kind: 'openrouter', description: 'Many models · pay for what you use' },
+  { kind: 'openai', description: 'Use an API key · billed separately' },
+  { kind: 'gemini', description: 'Google AI Studio API key · Gemini models' },
+  { kind: 'vertex', description: 'Claude on your Google Cloud project' },
+  { kind: 'ollama-cloud', description: 'Hosted models · Ollama Cloud API key' },
+  { kind: 'ollama', description: 'Connect Ollama on your computer' },
+  { kind: 'lmstudio', description: 'Connect your LM Studio server' },
+  { kind: 'vllm', description: 'Connect an existing vLLM server' },
   { kind: 'openai-compat', description: 'Other services · custom connection' },
 ];
 
 export function ProviderChoices({ value, onPick, scope = 'all' }: { value?: ProviderSetupKind; onPick: (kind: ProviderSetupKind) => void; scope?: 'all' | 'cloud' | 'local' }) {
   return <div className="provider-choices" role="group" aria-label="Choose a model provider">
-    {choices.filter(({ kind }) => scope === 'all' || isLocalProvider(providerSetupDefaults(kind).kind) === (scope === 'local')).map(({ kind, icon, glyph, description }) => <button key={kind} type="button" className="provider-choice" aria-pressed={value === kind} onClick={() => onPick(kind)}>
-      <span className="provider-choice-icon" aria-hidden="true">{icon ? <img src={`./providers/${icon}.svg`} alt="" width="28" height="28" /> : <span className={glyph ? 'provider-choice-glyph' : undefined}>{glyph ?? '↗'}</span>}</span>
+    {choices.filter(({ kind }) => scope === 'all' || isLocalProvider(providerSetupDefaults(kind).kind) === (scope === 'local')).map(({ kind, description }) => <button key={kind} type="button" className="provider-choice" aria-pressed={value === kind} onClick={() => onPick(kind)}>
+      <ProviderMark kind={kind} tile />
       <span><strong>{kind === 'anthropic' ? 'Claude' : providerSetupDefaults(kind).label}</strong><small>{description}</small></span>
     </button>)}
   </div>;
