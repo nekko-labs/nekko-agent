@@ -73,7 +73,8 @@ concurrency:
 jobs:
   relay-regression:
     if: github.event_name == 'workflow_dispatch' && inputs.relay_baseline_ref != ''
-    runs-on: xcode-27
+    # Pure Swift package tests need no iOS simulator or custom Xcode runner.
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
