@@ -775,7 +775,7 @@ impl Turns {
         let store = self.store.clone();
         let id = entry.session_id.clone();
         let session = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
-        let Some(session) = session else { return Some(fail("Chat no longer exists")) };
+        let Some(session) = session.map(|s| s.into_value()) else { return Some(fail("Chat no longer exists")) };
         let provider_id = session.get("providerId").cloned().unwrap_or(Value::Null);
         let settings = self.settings.shared();
         let provider = settings
@@ -783,6 +783,47 @@ impl Turns {
             .and_then(Value::as_array)
             .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(&provider_id)).cloned())
             .unwrap_or(Value::Null);
+        let input = call.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        if name == crate::harness::BRIDGE_TITLE {
+            if !self.claude_title_allowed(&provider, &session).await {
+                return Some(fail("Automatic naming is not available for this chat and Claude sign-in."));
+            }
+            // Naming belongs to the ordinary turn, never an extra or idle turn.
+            let shared = lock(&self.running)
+                .values()
+                .find(|s| {
+                    s.session_id == entry.session_id && s.active.load(Ordering::SeqCst) && !s.cancel.is_cancelled()
+                })
+                .cloned();
+            let Some(shared) = shared else { return Some(fail("Automatic naming requires an active turn.")) };
+            let title = str_at(&input, "title")
+                .map(|t| js::slice16(&js::fold_space(js::trim(t)), 64).to_string())
+                .unwrap_or_default();
+            if title.is_empty() {
+                return Some(fail("A nonblank title is required."));
+            }
+            let (store, id) = (self.store.clone(), entry.session_id.clone());
+            let landed = tokio::task::spawn_blocking(move || {
+                // Re-read privacy/eligibility after the async capability checks.
+                if !store.meta(&id).is_some_and(|s| claude_title_eligible(&s.into_value())) {
+                    return Ok(false);
+                }
+                store.set_auto_title(&id, &title)
+            })
+            .await;
+            return Some(match landed {
+                Ok(Ok(true)) => {
+                    shared.emit(json!({ "type": "session_meta", "sessionId": entry.session_id }));
+                    json!({ "ok": true, "text": "Chat title updated." })
+                }
+                Ok(Ok(false)) => fail("The chat is no longer eligible for automatic naming; it was not changed."),
+                Ok(Err(e)) => fail(&e),
+                Err(e) => fail(&e.to_string()),
+            });
+        }
+        if name != crate::harness::BRIDGE_WATCH {
+            return Some(fail("Unknown Nekko tool."));
+        }
         if !(self.claude_allows(&provider, "nekko_tools").await
             && self.claude_allows(&provider, "unattended_runs").await)
         {
@@ -790,11 +831,17 @@ impl Turns {
                 "Nekko's watch is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
             ));
         }
-        let input = call.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
         Some(match self.watches.tool(&entry.session_id, &input).await {
             Ok(text) => json!({ "ok": true, "text": text }),
             Err(e) => fail(&e),
         })
+    }
+
+    async fn claude_title_allowed(&self, provider: &Value, session: &Value) -> bool {
+        claude_title_eligible(session)
+            && str_at(provider, "kind") == Some("claude-code")
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "context_note").await
     }
 
     /// `getSession(id)?.mode ?? settings.defaultChatMode ?? 'guardrails'`.
@@ -1006,7 +1053,7 @@ impl Turns {
         if !js::truthy(fresh.get("incognito"))
             && !crate::connections::offline(&fresh)
             && fresh.get("titleAuto") == Some(&Value::Bool(true))
-            && spec.pointer("/facts/provider").is_some_and(Value::is_object)
+            && sideband_title_supported(&spec["facts"]["provider"])
             && let Some(flight) = self.title_flights.claim(&session_id)
         {
             tokio::spawn(generate_title(hub.clone(), store.clone(), self.accounts.clone(), spec.clone(), flight));
@@ -1598,6 +1645,10 @@ impl Turns {
         {
             tools.push(crate::harness::BRIDGE_WATCH.to_string());
         }
+        let title_session = lock(session).clone();
+        if !incognito && self.claude_title_allowed(provider, &title_session).await {
+            tools.push(crate::harness::BRIDGE_TITLE.to_string());
+        }
         // A child launched with other Nekko tools is relaunched (a provider
         // switch, or the policy changed), so its bridge lists the right ones.
         let same_tools = self.harness.bridge_tools(&session_id).as_deref() == Some(&tools[..]);
@@ -1681,7 +1732,11 @@ impl Turns {
             ))
         });
         let input = TurnInput {
-            content: if wake { None } else { user.as_ref().map(nekko_harness::user_content) },
+            content: if wake {
+                None
+            } else {
+                user.as_ref().map(|u| claude_turn_content(u, tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE)))
+            },
             cancel: &shared.cancel,
             steering: &shared.steering,
             interrupt_grace: INTERRUPT_GRACE,
@@ -1824,6 +1879,39 @@ impl Turns {
     }
 }
 
+/// Claude Code has no completion sideband; naming stays in its ordinary turn.
+fn sideband_title_supported(provider: &Value) -> bool {
+    provider.is_object() && str_at(provider, "kind") != Some("claude-code")
+}
+
+fn claude_title_eligible(session: &Value) -> bool {
+    session.get("titleAuto") == Some(&Value::Bool(true))
+        && !js::truthy(session.get("incognito"))
+        && !crate::connections::offline(session)
+        && !js::truthy(session.get("parentSessionId"))
+        && !js::truthy(session.get("trainingRunId"))
+}
+
+/// A context note on the existing user message, not a system flag, extra
+/// message or persisted user edit. Both policy capabilities gate `name_chat`.
+fn claude_turn_content(user: &Value, name_chat: bool) -> Value {
+    let mut content = nekko_harness::user_content(user);
+    // Leave CLI commands such as /compact intact.
+    if !name_chat || str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
+        return content;
+    }
+    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a concise, specific 3-6 word title describing the user's task. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
+    match &mut content {
+        Value::String(text) => {
+            text.push_str("\n\n");
+            text.push_str(NOTE);
+        }
+        Value::Array(blocks) => blocks.push(json!({ "type": "text", "text": NOTE })),
+        _ => {}
+    }
+    content
+}
+
 /// A Claude Agent chat's `agentPlan` after Claude Code changed its own plan
 /// (nekko_harness::PlanCall), through the same rules as `update_plan`;
 /// `None` when nothing changed.
@@ -1905,7 +1993,7 @@ async fn generate_title(
     if js::truthy(fresh.get("incognito"))
         || crate::connections::offline(&fresh)
         || fresh.get("titleAuto") != Some(&Value::Bool(true))
-        || !facts.get("provider").is_some_and(Value::is_object)
+        || !sideband_title_supported(&facts["provider"])
     {
         return;
     }
@@ -3264,6 +3352,42 @@ impl TurnTools {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_naming_eligibility_preserves_manual_titles_and_private_chats() {
+        assert!(claude_title_eligible(&json!({ "titleAuto": true })));
+        for title in [Value::Null, json!(false), json!("true")] {
+            assert!(!claude_title_eligible(&json!({ "titleAuto": title })));
+        }
+        for field in ["incognito", "offline", "parentSessionId", "trainingRunId"] {
+            let mut session = json!({ "titleAuto": true });
+            session[field] = json!(true);
+            assert!(!claude_title_eligible(&session), "{field}");
+        }
+        assert!(!sideband_title_supported(&json!({ "kind": "claude-code" })));
+        assert!(!sideband_title_supported(&Value::Null));
+        assert!(sideband_title_supported(&json!({ "kind": "anthropic" })));
+    }
+
+    #[test]
+    fn claude_naming_note_uses_only_the_existing_user_content() {
+        let user = json!({ "content": "Fix the login form" });
+        assert_eq!(claude_turn_content(&user, false), user["content"]);
+        let named = claude_turn_content(&user, true);
+        let text = named.as_str().unwrap();
+        assert!(text.starts_with("Fix the login form\n\n"));
+        assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
+        assert!(text.contains("Never overwrite a user-chosen title"));
+        assert!(text.contains("do not start another turn"));
+        assert_eq!(user["content"], "Fix the login form");
+        let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });
+        let original = nekko_harness::user_content(&image);
+        let named = claude_turn_content(&image, true);
+        assert_eq!(named[0], original[0]);
+        assert_eq!(named[1], original[1]);
+        assert!(named[2]["text"].as_str().unwrap().contains("Nekko chat naming note"));
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true), json!("/compact"));
+    }
 
     #[test]
     fn claude_question_returns_original_input_with_answers_by_question_text() {
