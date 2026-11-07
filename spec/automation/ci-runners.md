@@ -177,6 +177,8 @@ None can stop sleep when the lid closes on battery, when Low Power Mode turns on
 
 **How the guest gets its config.** `nekkod` mints the single-use JIT runner config and puts it on a read-only seed disk attached to the VM. The host never connects into the guest: no SSH, no host-to-guest network.
 
+**First seed mount** `[implemented 2026-11-07, #2169; verified with stubbed macOS commands on Linux, not in a real macOS guest]`. If the macOS seed directory is absent or empty, the boot script attempts a read-only `NEKKOSEED` mount and rechecks its contents before declaring the seed wait expired. This includes a first directory probe that crosses Bash's whole-second deadline. A seed arriving during that attempt still passes the existing file/type/size validation before any job runs. If no seed is present, the guest stays up without starting a runner or shutting down. The default 120-second wait and poll interval are unchanged; a zero wait still permits one mount attempt, not an extra timed waiting period.
+
 ### GitLab guest `[implemented in the Layer E image scripts; untested in a real guest]`
 
 What the golden image must hold for a GitLab runner, read by the image work (T214, Layer E):
