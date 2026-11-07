@@ -37,7 +37,6 @@ export function AsksFirstMenu({ session, onChange, iconOnly = false }: { iconOnl
   };
   return (
     <>
-      {iconOnly && <span className="h-4 w-px shrink-0 bg-line" aria-hidden="true" data-permissions-divider />}
       <button ref={pop.anchor} type="button" className={`ctl-menu min-w-0 whitespace-nowrap ${iconOnly ? 'composer-permissions' : ''}`} aria-label={`Permissions: ${current.label}`} data-asks-first={mode} disabled={sandbox} aria-haspopup="menu" aria-expanded={pop.open} title={sandbox ? 'A sandbox always asks first' : `${current.label}: ${current.hint}`} onClick={() => pop.setOpen((o) => !o)}>
         <current.icon className="h-3 w-3 shrink-0 text-ink-faint" />
         {!iconOnly && <><span className="min-w-0 truncate text-ink">{current.label}</span>
