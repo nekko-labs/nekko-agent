@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Truncated, bytesPerToken, kvGeometry, parseGgufHeader, quantFiles, sameFiles } from './model-feed.mjs';
+import { Truncated, bytesPerToken, kvGeometry, parseGgufHeader, quantFiles, sameFiles, sameImageFiles } from './model-feed.mjs';
 
 /** A GGUF v3 header: `meta` as [key, type, value] and tensors as [name, dims, offset]. */
 function gguf(meta, tensors) {
@@ -95,4 +95,14 @@ test('reuses a built model only while its files are the same', () => {
   assert.equal(sameFiles(built, { ...source, quants: ['Q4_K_M'] }), false);
   assert.equal(sameFiles(built, { ...source, projector: undefined }), false);
   assert.equal(sameFiles(undefined, source), false);
+});
+
+test('reuses a built image model only while its weights and companion files are the same', () => {
+  const companions = [{ repo: 'c/vae', file: 'vae.safetensors' }, { repo: 'c/llm', file: 'llm-Q4_K_M.gguf' }];
+  const built = { repo: 'o/img', quants: [{ label: 'Q8_0' }, { label: 'Q4_K' }], companions: companions.map(c => ({ ...c, sizeBytes: 1 })) };
+  const source = { repo: 'o/img', quants: ['Q8_0', 'Q4_K'], companions };
+  assert.equal(sameImageFiles(built, source), true);
+  assert.equal(sameImageFiles(built, { ...source, quants: ['Q4_K'] }), false);
+  assert.equal(sameImageFiles(built, { ...source, companions: companions.slice(1) }), false);
+  assert.equal(sameImageFiles(undefined, source), false);
 });

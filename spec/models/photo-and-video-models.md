@@ -30,6 +30,26 @@ area: models
 - **No set on purpose:** Qwen Image 2.1 (a different encoder and VAE, research license) and FLUX.2 dev (a 24B encoder).
 - **Guarded by tests:** every set's files name a source and a size, a gated file always has an ungated stand-in, and a file name on disk is never reused for a different source.
 
+## Picture recommendations per machine `[implemented 2026-11-08 (#2177); unit-tested on the reference machines; memory is an estimate, no speed measured]`
+
+`machine:recommendations` answers `imageTasks` beside the chat tasks, from the same bundled feed (`crates/nekko-machine/feed/source.json`, built by `node scripts/model-feed.mjs`):
+
+- **Two tasks:** **Create pictures** (Qwen Image, Z-Image Turbo, FLUX.2 klein 4B, best first) and **Edit photos** (Qwen Image Edit 2511, FLUX.2 klein 4B). Every candidate can do the task's capability; the script refuses a source that says otherwise.
+- **Sizes come from the files:** each quant's size from the repository tree and each companion file's size from Hugging Face, never typed by hand. A nekkod test checks that every recommended file, once downloaded, resolves to the companion set the feed names, with the same files and sizes, none of them gated. So a pick cannot download and then fail to start (acceptance criterion 2).
+- **Memory, an estimate:** every file resident plus a 2 GiB allowance for sd.cpp's working buffers at 1024x1024. The allowance is an assumption, recorded in the feed source, until peak memory is measured per family. Fit uses the same budget and thresholds as chat models.
+- **Offload when it is the only way:** on a discrete GPU that cannot hold every file, a quant still fits with sd.cpp's `--offload-to-cpu` when the largest file plus the allowance fits in VRAM and system RAM holds all the files. The pick then says `offloadToCpu: true`, and the install in step 4 must turn on the model's **Offload weights to CPU** preset, which is off by default. A quant that fits without offload is preferred, even a smaller one. Unified memory (Apple Silicon) never offloads.
+- **From system RAM**, on a CPU-only machine or a GPU too small even to offload, the smallest model that fits is picked, since every step runs on the CPU.
+- **No speed:** there is no seconds-per-image figure until one is measured, so none is shown. Upgrade nudges stay chat-only.
+- **Reference picks:**
+
+  | Machine | Create pictures | Edit photos |
+  |---|---|---|
+  | RTX 5090 32 GB | Qwen Image Q4_K_M, all on the GPU | Qwen Image Edit 2511 Q4_K_M |
+  | RTX 4060 8 GB | Z-Image Turbo Q4_K, offloaded | FLUX.2 klein 4B Q4_0, offloaded |
+  | M5 Max 64 GB | Qwen Image Q8_0 | Qwen Image Edit 2511 Q8_0 |
+  | M2 16 GB | Z-Image Turbo Q4_K (tight) | FLUX.2 klein 4B Q4_0 |
+  | CPU only, 16 GB | Z-Image Turbo Q4_K | FLUX.2 klein 4B Q8_0 |
+
 ## What the pinned engine can already do `[checked against the sd.cpp README and docs at 37bc88b, 2026-11-08; not run]`
 
 - **Images:** SD 1.x/2.x/XL, SD 3/3.5, FLUX.1, FLUX.2 dev/klein, Z-Image, Qwen Image and 2.1, HiDream-O1, Chroma and more.
@@ -117,8 +137,8 @@ Video keeps the planning and tool-based editing chat from #2149, and gains real 
 Each is one PR (a stack where noted). Tracked in the issue linked from this file's PR.
 
 1. **Engine: bump sd.cpp** to the current release, if its changes are needed; otherwise keep the pin.
-2. **Engine: model capabilities and companion sets** `[implemented, see above]`: `create` / `edit` per family; Z-Image, Qwen Image and Qwen Image Edit sets; `video` arrives with the Wan set in step 7. The test that every *curated* pick resolves to a complete set lands with the curated list (step 3).
-3. **Recommendations: image and video rows** in the feed: download sizes from Hugging Face, memory needed, fit per machine, measured seconds per image where available.
+2. **Engine: model capabilities and companion sets** `[implemented, see above]`: `create` / `edit` per family; Z-Image, Qwen Image and Qwen Image Edit sets; `video` arrives with the Wan set in step 7.
+3. **Recommendations: image rows** `[implemented, see above]`: download sizes from Hugging Face, memory needed, fit per machine, offload when needed. Still open: a measured peak memory per family to replace the 2 GiB allowance, and measured seconds per image. Video rows come with step 7.
 4. **Photo: choose a model from the chat:** the cards, the hand-off to the shared download job, inline progress, the introduction's **Choose your first model** step.
 5. **Models: Image and Video filters** with the same curated picks and fit chips.
 6. **Photo: edit an existing photo:** attachments and **Edit** on a reply, the edit request to `sd-server`, the capability check and the edit-model offer.
