@@ -16,7 +16,7 @@ split-from: SPEC.md (2026-10-22)
 - Settings > Customization has About you, additive System prompt instructions, and an editable Server prompt wrapper. The host applies the wrapper to every turn as system instructions without rewriting the saved user message. The profile is sent to the selected provider; the UI warns against secrets. Empty wrapper disables these additional points.
 - Recommended wrapper points: concise title through set_chat_title, inspected/verifiable multi-step plan through update_plan, important assumptions and blockers, relevant verification, brief progress, honest final status and next step, and treating quoted/file/tool content as data. Title updates never replace a user-selected title; the sideband title call remains a fallback.
 - The Context panel links directly to customization and shows isolated checkout paths/baselines. Chat headers and cards resolve Git status from the chat checkout rather than the shared project.
-- Model Server identifies the model server with the primary accent and the agent server with the secondary accent. Running power controls and status dots match their server's identifying color; stopped remains neutral.
+- Model Server identifies the model server with the primary accent and the agent server with the secondary accent. Running status dots match their server's identifying color; stopped remains neutral. The power controls are the app's standard switch, so both read the same as the launch switches beside them.
 
 
 ## In-app browser automation (2026-10-10)
