@@ -50,6 +50,17 @@ area: models
   | M2 16 GB | Z-Image Turbo Q4_K (tight) | FLUX.2 klein 4B Q4_0 |
   | CPU only, 16 GB | Z-Image Turbo Q4_K | FLUX.2 klein 4B Q8_0 |
 
+## Choosing a picture model in the Photo chat `[implemented 2026-11-08 (#2177); unit-tested and captured in an isolated renderer fixture with a stub engine; not yet run against a real download]`
+
+An empty Photo chat with no picture model on this computer shows **Choose a picture model** under its heading (`PhotoModelSetup` in the chat's welcome), in place of the old "No image models yet" line:
+
+- **Up to three cards** from the Create pictures recommendations: the pick first (selected), then the other candidates. Each gives the name, one line on what it is good at, the total download, and the fit in words: "Fits your RTX 4060", "with little room to spare", "by keeping part of it in system memory, so pictures take longer", "Runs on the processor here...", or "Too large for this computer" (that card disabled). No quant, GGUF, VAE, CFG or speed figure appears, and nothing says "runs well" (acceptance criterion 4).
+- **Download and set up · size**: installs the picture engine (sd.cpp) when missing, then queues the model through `engineDownloadModel`, the Models page's own job. When the weights land it fetches the supporting files (`engineDownloadImageCompanions`) without asking again. When everything is on disk it turns on the model's **Offload weights to CPU** preset if the pick needs it, then makes it the chat's model with the family's steps and CFG. The chat's image controls then read the library again.
+- **Progress** shows as three steps (engine, model, supporting files) with a bar, the size and time left, and **Cancel**. Every state is read from the engine's jobs and library, so leaving the chat and coming back resumes where the download is, and the same job shows in Models > Downloads (acceptance criterion 3).
+- **A stopped download** says why and offers the button again. When no card fits, the setup says so and points to **See all picture models** (Model Server for now; the Image filter is step 5).
+- **Someone with picture models of their own** does not see it; they pick in the chat's controls as before.
+- **Not here yet:** the cloud card (step 8), and the first-use introduction's **Choose your first model** step, which waits for the introduction itself (PR #2149).
+
 ## What the pinned engine can already do `[checked against the sd.cpp README and docs at 37bc88b, 2026-11-08; not run]`
 
 - **Images:** SD 1.x/2.x/XL, SD 3/3.5, FLUX.1, FLUX.2 dev/klein, Z-Image, Qwen Image and 2.1, HiDream-O1, Chroma and more.
@@ -139,7 +150,7 @@ Each is one PR (a stack where noted). Tracked in the issue linked from this file
 1. **Engine: bump sd.cpp** to the current release, if its changes are needed; otherwise keep the pin.
 2. **Engine: model capabilities and companion sets** `[implemented, see above]`: `create` / `edit` per family; Z-Image, Qwen Image and Qwen Image Edit sets; `video` arrives with the Wan set in step 7.
 3. **Recommendations: image rows** `[implemented, see above]`: download sizes from Hugging Face, memory needed, fit per machine, offload when needed. Still open: a measured peak memory per family to replace the 2 GiB allowance, and measured seconds per image. Video rows come with step 7.
-4. **Photo: choose a model from the chat:** the cards, the hand-off to the shared download job, inline progress, the introduction's **Choose your first model** step.
+4. **Photo: choose a model from the chat** `[implemented, see above]`: the cards, the hand-off to the shared download job, inline progress. The introduction's **Choose your first model** step follows when #2149 lands.
 5. **Models: Image and Video filters** with the same curated picks and fit chips.
 6. **Photo: edit an existing photo:** attachments and **Edit** on a reply, the edit request to `sd-server`, the capability check and the edit-model offer.
 7. **Video: local generation (experimental, stack):** the Wan companion set, the video turn on `/sdcpp/v1/vid_gen`, job progress and recovery, the video reply in chat, the hardware gate.
