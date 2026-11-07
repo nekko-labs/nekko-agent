@@ -24,6 +24,10 @@ data class AskForm(
 
     fun note(q: AskQuestion, text: String): AskForm = copy(notes = notes + (q.id to text))
 
+    fun skip(q: AskQuestion): AskForm = copy(picked = picked - q.id, notes = notes - q.id)
+
+    fun hasAnswer(q: AskQuestion) = !picked[q.id].isNullOrEmpty() || !notes[q.id].isNullOrBlank()
+
     fun isPicked(q: AskQuestion, label: String) = picked[q.id]?.contains(label) == true
 
     /** Every question has a pick or a note (shared/ask.ts `isAskComplete`). */
