@@ -35,6 +35,26 @@ nekko-agent --url http://127.0.0.1:1440 --token "$NEKKO_TOKEN" status --json
 `--url` can also be supplied as `NEKKO_URL`; `--token` can be supplied as
 `NEKKO_TOKEN`.
 
+### CLI commands from the Local Web UI package
+
+The self-hosted package also includes the same CLI. Run it with no arguments to
+start the web server; supply a command or flags to run the CLI instead:
+
+```bash
+npx nekko-agent-local-web-ui
+npx nekko-agent-local-web-ui --help
+npx nekko-agent-local-web-ui --version
+npx nekko-agent-local-web-ui scheduled-task list --json
+npx nekko-agent-local-web-ui local list --json
+npx nekko-agent-local-web-ui computer list --json
+npx nekko-agent-local-web-ui --url http://127.0.0.1:1440 scheduled-task runs --json
+```
+
+All CLI commands and aliases are available, including `scheduled-tasks`,
+`workflow`, `workflows`, and `migrate`. Target flags may come before the command.
+Unknown commands report a usage error instead of starting a server. Commands use
+the exit codes below; server startup failures keep exit code 1. Server configuration
+still uses environment variables, not CLI flags.
 
 ## A computer with no window
 
@@ -82,6 +102,8 @@ chat "<prompt>" [--session ID] [--new] [--workspace ID] [--provider ID] [--model
 workspace list|add PATH|remove ID|index ID|search ID QUERY [--json]
 prompts [--json]
 tasks list|add|run ID|delete ID [--json]
+scheduled-task list|run NAME|trigger COMMAND|runs [--json]
+  aliases: scheduled-tasks, workflow, workflows
 skills [--json]
 skills install ID [--target nekko-agent|claude|codex] [--json]
 tools [--json]

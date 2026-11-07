@@ -622,6 +622,7 @@ function makeWebClient(): NekkoApi {
     createPr: (workspaceId, opts) => call(IpcChannels.prCreate, workspaceId, opts),
     getPrChecks: (url) => call(IpcChannels.prChecks, url),
     getPrInfo: (url) => call(IpcChannels.prInfo, url),
+    getIssueInfo: (url) => call(IpcChannels.prInfo, url),
 
     gitDiff: (workspaceId, opts) => call(IpcChannels.gitDiff, workspaceId, opts),
     gitLog: (workspaceId, opts) => call(IpcChannels.gitLog, workspaceId, opts),

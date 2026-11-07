@@ -1072,6 +1072,8 @@ export interface NekkoApi {
   getPrChecks(url: string): Promise<import('./pr.js').PrCheckList>;
   /** Live state of any GitHub PR by URL (cached for a minute), or null when unreadable. */
   getPrInfo(url: string): Promise<import('./pr.js').PrInfo | null>;
+  /** A GitHub issue's live state (open, completed, not planned), cached like a PR. */
+  getIssueInfo(url: string): Promise<import('./pr.js').IssueInfo | null>;
 
   /**
    * Git in a workspace's folder (IO-33 FA-2). `workspaceId` is a saved folder's
