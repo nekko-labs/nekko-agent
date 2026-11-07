@@ -16,6 +16,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -53,7 +54,9 @@ import java.util.Date
 fun AuditSheet(trail: List<Audit.Event>?, error: String?, onRefresh: () -> Unit, onDismiss: () -> Unit) {
     val p = Nekko.palette
     var onlyDecisions by rememberSaveable { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = p.paper, modifier = Modifier.testTag("chat.audit.sheet")) {
+    // Open in full: the trail is a list to read, not a quick glance.
+    val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = p.paper, modifier = Modifier.testTag("chat.audit.sheet")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.chat_audit_trail), style = MaterialTheme.typography.titleMedium, color = p.ink, modifier = Modifier.weight(1f).semantics { heading() })
             TextButton(onClick = onRefresh) { Text(stringResource(R.string.chat_refresh)) }
