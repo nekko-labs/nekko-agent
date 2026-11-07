@@ -131,6 +131,10 @@ test('task queries find canonical guides, including facts beyond the old 600-cha
     ['offline shell', '/docs/context-memory-safety'],
     ['tool loops', '/docs/features'],
     ['folding phone', '/docs/features'],
+    ['editable prototypes', '/docs/features'],
+    ['reusable skills', '/docs/features'],
+    ['sub-agents', '/docs/features'],
+    ['local-first', '/docs/features'],
     ['MCP server', '/docs/cli'],
     ['scheduled tasks', '/docs/workflows'],
   ];

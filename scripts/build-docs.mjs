@@ -186,7 +186,8 @@ function plain(raw) {
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/<[^>]+>/g, ' ')
-    .replace(/[`*_>#|-]+/g, ' ')
+    .replace(/[`*_>#|]+/g, ' ')
+    .replace(/(^|\s)-+(?=\s|$)/g, ' ') // Markdown separators, not words such as "sub-agents".
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -21,6 +21,9 @@ This is a capability guide, not a promise that every provider, platform or insta
 | Use browser tools for research or testing | [Browser automation](/docs/browser-automation): navigate, inspect and interact in a chat-owned browser | Browser permissions and native-driver availability have their own limits |
 | Let another agent use my local models | [CLI and MCP](/docs/cli): connect Claude Code, Codex, Cursor or another MCP client | Configure the client; these are not bundled native integrations |
 | Work with many tools without large intermediate results | [Code mode](/docs/code-mode): scripts call enabled tools in a sandbox | Tool permissions still apply; provider support varies |
+| Create reports, diagrams or editable prototypes | [Reports and artifacts](/docs/walkthrough#reports-and-artifacts-in-chat): linked documents, Mermaid diagrams, images and HTML previews | A generated artifact is not automatically reviewed, published or a full native design-editor file |
+| Reuse a way of working | [Modes, skills and project rules](/docs/walkthrough): saved settings, reusable skills and repository instructions | Skills do not override tool permissions or make untrusted repository instructions safe |
+| Delegate an independent part of a task | [Agent Monitor and sub-agents](/docs/chat-progress): follow child tasks and their returned results | Children have separate context; provider selection, permissions and chat policy still matter |
 | Dictate rather than type | [Voice](/docs/voice): local speech transcription | Dictation is available; general hands-free computer control is planned |
 | Continue from a phone or folding phone | [Phone remote control](/docs/remote) and [foldable layouts](/docs/two-chats-on-a-folding-phone) | Native apps are beta; check platform and device-verification status |
 | Check inference speed and model cost | [Benchmarks](/docs/benchmarks) and [usage limits/prices](/docs/usage-limits) | Benchmarks are workload-specific; estimates are not provider invoices |
@@ -50,5 +53,5 @@ The native agent loop detects repeated tool calls or errors, nudges the model to
 - Whole-workspace checkpoints, binary-perfect backup and multi-file transactional rollback are not provided by file-review originals.
 - Local-first does not mean every provider, tool or terminal command is offline, encrypted at rest or automatically safe.
 - Phone beta support does not establish feature parity, app-store availability or verification on every device, including foldables.
-- General voice-driven computer control and automatic per-request model routing are planned, not capabilities to recommend as available.
+- General voice-driven computer control is planned, not available. Settings explicitly marked **Coming soon** are not capabilities to recommend as implemented; model selection and routing depend on the active mode and provider.
 - The [current release notes](https://github.com/nekko-labs/nekko-agent/releases) and each guide's availability notes take priority over a broad feature summary.
