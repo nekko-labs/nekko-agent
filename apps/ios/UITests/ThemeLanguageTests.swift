@@ -76,6 +76,7 @@ final class ThemeLanguageTests: XCTestCase {
             attach(app, "customize-view-options-detailed")
             app.buttons["Customize…"].tap()
             XCTAssertTrue(app.buttons["customize.Experience"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["settings.theme"].waitForExistence(timeout: 5), "Customize reuses the existing theme picker")
             attach(app, "customize-experience")
             app.buttons["customize.Connectors"].tap()
             attach(app, "customize-connectors")

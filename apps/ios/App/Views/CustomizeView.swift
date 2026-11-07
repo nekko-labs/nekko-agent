@@ -58,9 +58,7 @@ struct CustomizeView: View {
                 Text("Applies to the next reply from models running on this iPhone. Computer-hosted agents keep that computer’s tone and standing instructions.")
             }
             Section {
-                Picker("Theme", selection: Binding(get: { prefs.theme }, set: { prefs.theme = $0 })) {
-                    ForEach(ThemeChoice.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
+                ThemePicker(selection: Binding(get: { prefs.theme }, set: { prefs.theme = $0 }))
                 NavigationLink(value: Route.settings) { Label("Text size and accessibility", systemImage: "textformat.size") }
             } header: { SectionHeader("Visual experience") }
             Section {
