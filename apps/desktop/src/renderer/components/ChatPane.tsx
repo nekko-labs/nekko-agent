@@ -72,7 +72,7 @@ import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messag
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider, formatContextTokens } from './ChatMetrics.js';
 import { AsksFirstMenu } from './AsksFirstMenu.js';
-import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.js';
+import { ExpertMonitor, useExpertMode, useShown } from './ModeViews.js';
 import { hasAppChrome } from '../chrome.js';
 import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';

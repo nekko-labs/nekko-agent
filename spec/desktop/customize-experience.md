@@ -29,7 +29,7 @@ A destination shared by desktop and iPhone, inspired by the supplied tabbed refe
 - Desktop PNGs captured at `.shots/layout-evidence/customize-before` and `customize-after`; inspection blocked by browser screenshot timeout and capture `UnknownVizError`. Capture alone is not acceptance.
 - Native compilation, interaction, keyboard position/motion and limit-state evidence remain required. Baseline: `a61cc20007b41a32a1ccadded3731654d697cb8e`; matched workflow: `native-mode-evidence.yml` with `ThemeLanguageTests/testCustomizeEvidence`.
 - The iOS video rendered successfully (240 frames, 30fps, 640×380, about 32 KB). Remotion reported an existing Zod version mismatch warning; output exists but has not been visually inspected.
-- **Unfinished:** phone tone editing is not wired: the existing phone settings protocol does not expose computer standing-instruction edits. UI says where to manage them, rather than pretending a save works. Phone-local tone support is also not added.
+- **Unfinished:** phone tone editing is not wired: the existing phone settings protocol does not expose computer standing-instruction edits. UI says where to manage them, rather than pretending a save works. Phone-local tone presets now persist in the existing offline store and append to the existing phone identity on the next request; new native persistence/request tests are pending CI.
 - **Unfinished:** Android Customize/onboarding parity. Existing Android mode behavior is untouched; a matching native evidence run can establish baseline but does not prove new Android support.
 - **Unfinished:** screenshots/reference-image publication and linked documentation PR; all release evidence must be inspected and linked before ready/merge.
 

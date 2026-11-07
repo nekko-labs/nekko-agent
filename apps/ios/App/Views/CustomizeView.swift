@@ -6,6 +6,7 @@ import SwiftUI
 struct CustomizeView: View {
     @Environment(Prefs.self) private var prefs
     @Environment(ComputersStore.self) private var store
+    @Environment(PhoneChats.self) private var phone
     @Environment(\.palette) private var palette
     @State private var tab = "Experience"
 
@@ -47,6 +48,14 @@ struct CustomizeView: View {
                 NavigationLink(value: Route.simpleMode) { Label("Visible controls and monitors", systemImage: "slider.horizontal.3") }
             } header: { SectionHeader("Agent output") } footer: {
                 Text("Simple folds working steps away. Detailed shows them. Both have the same capabilities and permissions. This choice stays on this iPhone.")
+            }
+            Section {
+                Picker("Tone", selection: Binding(get: { phone.tone }, set: { phone.setTone($0) })) {
+                    ForEach(PhoneTone.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                }
+                .accessibilityIdentifier("customize.tone")
+            } header: { SectionHeader("Phone-hosted chats") } footer: {
+                Text("Applies to the next reply from models running on this iPhone. Computer-hosted agents keep that computer’s tone and standing instructions.")
             }
             Section {
                 Picker("Theme", selection: Binding(get: { prefs.theme }, set: { prefs.theme = $0 })) {

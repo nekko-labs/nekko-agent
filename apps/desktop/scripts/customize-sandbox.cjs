@@ -18,6 +18,8 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let n = 0; n < 50 && !(await run("!!document.querySelector('[aria-label=\"Agent panel view options\"]')")); n++) await sleep(200);
+    await sleep(600);
+    await run("document.querySelector('.zones-intro button[aria-label=\"Close\"]')?.click()");
     await shot('agents');
     await run("document.querySelector('[aria-label=\"Agent panel view options\"]').click()");
     await shot('view-options');
@@ -31,10 +33,12 @@ app.whenReady().then(async () => {
       await run("document.querySelector('[aria-label=\"Agent tone\"]').value = 'Concise'; document.querySelector('[aria-label=\"Agent tone\"]').dispatchEvent(new Event('change', {bubbles:true}))");
       await sleep(300);
       report.toneSaved = await run("layoutFixture.store.getState().settings.systemInstructions?.includes('<nekko-tone>')");
+      if (!report.detailedSaved || !report.toneSaved) throw new Error('Mode/tone persistence failed');
     }
     report.hidden = !win.isVisible();
     report.text = await run('document.body.innerText');
   } catch (e) { report.errors.push(String(e.stack || e)); process.exitCode = 1; }
+  if (report.errors.length || !report.hidden) process.exitCode = 1;
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   app.exit(process.exitCode || 0);
