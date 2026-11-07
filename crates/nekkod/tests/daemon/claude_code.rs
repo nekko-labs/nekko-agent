@@ -149,6 +149,13 @@ pub fn fake_claude() {
             let reply = format!("woke: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m_w2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "/compact" {
+            // What Claude Code prints for a typed `/compact`: no model call of the chat's own.
+            out(json!({ "type": "system", "subtype": "compact_boundary", "session_id": session,
+                "compact_metadata": { "trigger": "manual", "pre_tokens": 21_002, "post_tokens": 4_600 } }));
+            out(json!({ "type": "user", "isSynthetic": true, "parent_tool_use_id": null, "session_id": session,
+                "message": { "role": "user", "content": "This session is being continued from a previous conversation.\n\nSummary:\nWe said hello." } }));
+            out(result("", "completed"));
         } else if text == "plan" {
             // Claude Code's own plan: two tasks, the first started.
             let tool = |id: &str, name: &str, input: Value, output: &str| {
@@ -532,6 +539,30 @@ async fn claude_codes_own_plan_is_the_chats_plan() {
         ]
     );
     assert_eq!(plan[0]["note"], "Find the parser");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_codes_compaction_lands_as_the_chats_divider() {
+    let rig = rig("compact", "guardrails", true);
+    for (turn, text) in [("cm1", "hello"), ("cm2", "/compact")] {
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, turn, text)]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+    }
+    let session = saved(&rig);
+    let messages = session["messages"].as_array().unwrap();
+    let divider = messages.iter().find(|m| m["compaction"].is_object()).expect("the compaction is in the transcript");
+    assert_eq!(divider["content"], "We said hello.");
+    // The first turn's question and reply, and the `/compact` itself.
+    assert_eq!(divider["compaction"]["summarized"], 3, "{divider}");
+    assert_eq!(
+        (divider["compaction"]["by"].clone(), divider["compaction"]["tokensAfter"].clone()),
+        (json!("claude-code"), json!(4_600))
+    );
+    assert!(divider.get("turnStats").is_none(), "a summary is not the turn's reply");
+    // The gauge drops to the size after the compaction, with no model call to report it.
+    assert_eq!(session["claudeCodeContext"]["used"], 4_600);
 }
 
 #[tokio::test(flavor = "multi_thread")]

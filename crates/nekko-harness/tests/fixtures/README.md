@@ -4,6 +4,12 @@
   `scripts/claude-code-probe.mjs` (H0), with an isolated config directory and a
   workspace-scoped test API key (`api-key/`) or no credentials (`signed-out/`).
   Local paths are scrubbed to `C:\work\...`; nothing else is edited.
+- `subscription/compact.jsonl`: recorded from Claude Code 2.1.319 on macOS,
+  signed in with a Claude plan: a one-line `claude -p` turn, then `/compact`
+  sent with `--resume` (`system/status` compacting, `compact_boundary`, the
+  synthetic summary message). The working folder is scrubbed to `/work/probe`,
+  the home folder to `/Users/me` and the account email to `me@example.com`;
+  nothing else is edited.
 - `synthetic/`: hand-written, for shapes no probe run recorded yet (a tool
   round trip with partial messages, a sub-agent, `system/api_retry`). Field
   names follow the recorded events and Claude Code's SDK types; replace them

@@ -205,6 +205,8 @@ A turn's working steps fold into one work group whose header says what the agent
 
 When older conversation is summarized, a **Conversation compacted** event card shows how many earlier messages were summarized. It starts collapsed, including the newest summary. Click **Show summary** to read it and **Hide summary** to fold it again. Earlier messages remain readable above the card. Expanding or collapsing the card does not change what the model receives.
 
+In a Claude Agent chat, Claude Code compacts the conversation itself: on its own when the context nears its limit, or when you type `/compact`. The card then reads **Claude Code compacted the conversation** and says which of the two it was, how far the context fell (for example `968k → 41k tokens`), and how many messages the summary replaces. That is why the context gauge drops sharply after a compaction: Claude Code carries on from the summary, not from the full history.
+
 ### Answering agent questions
 
 When an agent needs a choice, its question opens at the bottom of the conversation without moving your typing focus, even when another agent asks while you are writing. Scroll the conversation to read the reply and question together; the question has no separate scrollbar. Click or Tab into the question to answer it: use the options, arrow and number keys, or type something else, then send your answer. Multiple questions show one step at a time, with Back and Next. Moving between steps keeps the keyboard in the question only while you are interacting with it. The pixel question-mark icon identifies the question.
