@@ -3,11 +3,17 @@ import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ToolCall } from '@nekko-agent/shared';
 import { ShieldQuestionIcon } from '../../gentleface-icons.js';
 import { offersToolScope, type ApprovalScope } from './approval-decision.js';
+import { confirmYolo } from '../YoloWarning.js';
 
 export interface PendingApproval {
   call: ToolCall;
   reason: string;
   severity: 'low' | 'medium' | 'high';
+}
+
+/** A tool-only MCP grant does not change the chat's approval mode. */
+export function approvalNeedsYoloConfirmation(approved: boolean, scope: ApprovalScope): boolean {
+  return approved && (scope === 'session' || scope === 'always');
 }
 
 /** True when a single-line element's content is cut off horizontally. */
@@ -61,6 +67,8 @@ export function ApprovalBar({ approval, onDecide, computerName }: { approval: Pe
   // Do not steal focus from another chat; shortcuts require focus inside this prompt.
   const decide = async (ok: boolean, scope: ApprovalScope = 'once') => {
     if (deciding.current) return;
+    // Both "Allow all" choices switch the chat to YOLO.
+    if (approvalNeedsYoloConfirmation(ok, scope) && !await confirmYolo()) return;
     deciding.current = true;
     setBusy(true);
     setError(null);

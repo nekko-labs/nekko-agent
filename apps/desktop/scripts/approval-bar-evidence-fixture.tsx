@@ -15,10 +15,13 @@ const bash = {
   reason: 'Run command',
   severity: 'medium' as const,
 };
+const decisions: { approved: boolean; scope: string | undefined }[] = [];
+Object.assign(window, { approvalDecisions: decisions });
+const onDecide = async (approved: boolean, scope?: string) => { decisions.push({ approved, scope }); };
 createRoot(document.getElementById('root')!).render(
   <main className="min-h-screen bg-surface text-ink">
-    <div data-approval="mcp"><ApprovalBar approval={mcp} onDecide={async () => {}} /></div>
+    <div data-approval="mcp"><ApprovalBar approval={mcp} onDecide={onDecide} /></div>
     <div className="h-6" />
-    <div data-approval="bash"><ApprovalBar approval={bash} onDecide={async () => {}} /></div>
+    <div data-approval="bash"><ApprovalBar approval={bash} onDecide={onDecide} /></div>
   </main>,
 );
