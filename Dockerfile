@@ -12,6 +12,8 @@ RUN apt-get update \
 # rust-toolchain.toml pins the compiler; rustup installs it on first use.
 COPY rust-toolchain.toml Cargo.toml Cargo.lock ./
 COPY crates ./crates
+# The CI runner's provisioning scripts are compiled into nekkod (include_str!).
+COPY scripts/runner-image ./scripts/runner-image
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build -p nekkod --release --locked \

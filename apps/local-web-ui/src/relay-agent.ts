@@ -53,6 +53,24 @@ export function armsMintedCode(devices: unknown[]): boolean {
   return devices.length === 0;
 }
 
+/** A Nekko Cloud machine stops itself after this long with no device connected and no chat running. */
+export const IDLE_STOP_MS = 15 * 60_000;
+
+/** Idle: no paired device on the relay (`remote:status`) and no chat running (`chat:running`). */
+export function isIdle(status: { connected?: unknown } | null | undefined, running: unknown): boolean {
+  const any = (v: unknown) => Array.isArray(v) && v.length > 0;
+  return !any(status?.connected) && !any(running);
+}
+
+/** Feed it whether the machine is idle at each check; it says when the machine has been idle for `limitMs`. */
+export function idleClock(limitMs: number, start = Date.now()): (idle: boolean, at?: number) => boolean {
+  let since = start;
+  return (idle, at = Date.now()) => {
+    if (!idle) since = at;
+    return at - since >= limitMs;
+  };
+}
+
 export async function runRelayAgent(opts: {
   relayUrl: string;
   room: string;
@@ -65,6 +83,11 @@ export async function runRelayAgent(opts: {
   hostKey?: string;
   /** A Nekko Cloud machine's scope, applied before the relay is joined. */
   scope?: CloudScope | null;
+  /**
+   * A Nekko Cloud machine's idle limit: past it the agent exits cleanly, and
+   * the host (restart only on failure) leaves the machine stopped, disk kept.
+   */
+  idleStopMs?: number;
 }): Promise<void> {
   const { daemon } = await startNekkod({ here: opts.here, dataDir: opts.dataDir });
   const stop = () => void daemon.stop().finally(() => process.exit(0));
@@ -96,6 +119,21 @@ export async function runRelayAgent(opts: {
       await daemonRequest(daemon, 'remote:pair', opts.pairCode);
     }
     console.log(`   serving this machine's model + tools to paired devices (data: ${opts.dataDir})\n`);
+    if (opts.idleStopMs) {
+      // shortcut: scheduled tasks don't keep the machine awake; add them here when cloud machines run schedules.
+      const limit = opts.idleStopMs;
+      const overLimit = idleClock(limit);
+      setInterval(async () => {
+        // A failed check counts as busy: never stop a machine we can't see into.
+        const idle = await Promise.all([daemonRequest(daemon, 'remote:status'), daemonRequest(daemon, 'chat:running')])
+          .then(([status, running]) => isIdle(status as { connected?: unknown }, running))
+          .catch(() => false);
+        if (overLimit(idle)) {
+          console.log(`[nekko-agent] idle for ${Math.round(limit / 60_000)} minutes, stopping this machine`);
+          stop();
+        }
+      }, Math.min(60_000, limit)).unref();
+    }
   } catch (e) {
     await daemon.stop();
     throw e;

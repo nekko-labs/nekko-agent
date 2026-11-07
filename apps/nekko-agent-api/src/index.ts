@@ -4,7 +4,7 @@ import { createPgDb } from "./db.js";
 import { expireDonations } from "./donations.js";
 import { migrate } from "./migrate.js";
 import { FlyDriver } from "./fly.js";
-import { sweepMachineHours } from "./machines.js";
+import { deleteUnusedMachines, sweepMachineHours } from "./machines.js";
 import { resendMailer } from "./confirmations.js";
 import { purgeFeedbackScreenshots, purgeSignups } from "./retention.js";
 import { buildServer, DEFAULT_ORIGINS } from "./server.js";
@@ -74,6 +74,7 @@ const machines = flyToken && flyApp
   : undefined;
 // Machine hours are counted on every state change; this also counts long-running machines and stops the ones past their plan hours.
 if (machines) setInterval(() => sweepMachineHours(db, machines.driver).catch(failed("machine hours sweep")), 10 * 60 * 1000).unref();
+if (machines) setInterval(() => deleteUnusedMachines(db, machines.driver).catch(failed("unused machine sweep")), 60 * 60 * 1000).unref();
 if (!machines) console.warn("FLY_API_TOKEN / FLY_MACHINES_APP not set: Nekko Cloud machines are off (the /v1/machines routes are absent).");
 // Account deletion removes the Supabase Auth user with the project's service-role key (server-side only, never sent to an app).
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
