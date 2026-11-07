@@ -312,7 +312,7 @@ function WorkspaceCardImpl({
       data-zone-tint={zoneTint}
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
-      <div className="flex items-center gap-2">
+      <div className="agent-chip-heading flex items-center gap-2">
         {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
@@ -326,9 +326,10 @@ function WorkspaceCardImpl({
           </time>
         )}
         {prChip('title')}
+        <span className="agent-chip-actions shrink-0 items-center gap-2">
         {isChat && onRenameStart && !renaming && (
           <button
-            className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
+            className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink"
             title="Rename this chat"
             aria-label={`Rename ${title}`}
             onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
@@ -340,7 +341,7 @@ function WorkspaceCardImpl({
             deleting and then the chat was nowhere to be found. Archived chats
             stay readable until explicitly deleted. A shell has nothing to keep, so it closes. */}
         <button
-          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
+          className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink"
           title={isChat ? 'Complete this chat (kept until you delete it)' : 'Close this agent'}
           aria-label={isChat ? `Complete ${title}` : `Close ${title}`}
           onClick={async (e) => {
@@ -355,6 +356,7 @@ function WorkspaceCardImpl({
           <CloseIcon className={isChat ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
 
         </button>
+        </span>
       </div>
 
       {terminalView && <div className="mt-0.5 truncate pl-3 text-2xs leading-[15px]" style={{ color: terminalView.tone }} title={terminalView.detail || terminalView.status}>{terminalView.status}{showMetadata && terminalView.detail ? ` · ${terminalView.detail}` : ''}</div>}
