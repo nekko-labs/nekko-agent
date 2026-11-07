@@ -50,7 +50,7 @@ result="$(adb shell "am instrument -w -e class com.nekko.android.SecurityEvidenc
 echo "$result"
 mkdir -p "$out/security"
 adb pull "/sdcard/Android/data/$pkg/files/evidence/." "$out/security/" >/dev/null 2>&1 || echo "no security screenshots"
-if ! grep -q "OK (3 tests)" <<<"$result" || [ ! -s "$out/security/always-allow-tool.png" ] || [ ! -s "$out/security/yolo-warning.png" ]; then
+if ! grep -q "OK (5 tests)" <<<"$result" || [ ! -s "$out/security/always-allow-tool.png" ] || [ ! -s "$out/security/yolo-warning.png" ] || [ ! -s "$out/security/permission-choices-simple.png" ] || [ ! -s "$out/security/permission-choices-detailed.png" ]; then
   echo "Security evidence tests or screenshots failed"
   status=1
 fi

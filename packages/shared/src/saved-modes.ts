@@ -12,7 +12,7 @@
  * Folders are not part of a mode. They belong to the task, not the way of
  * working, so switching modes never re-wires a chat's folders.
  */
-import type { ChatMode, ExecutionMode, GuidanceLevel, ChatMemory, Session, ToolApproach } from './chat.js';
+import { CHAT_MODE_LABEL, type ChatMode, type ExecutionMode, type GuidanceLevel, type ChatMemory, type Session, type ToolApproach } from './chat.js';
 import { getExecutionMode } from './chat.js';
 import { chatEffort } from './chat-scope.js';
 import type { EffortLevel } from './settings.js';
@@ -218,7 +218,7 @@ export function savedModeSummary(options: SavedModeOptions): string {
   const models = options.models ? MODEL_SCOPE_LABEL[options.models] : '';
   // Local models are offline by definition, and a sandbox has no network.
   const offline = options.offline && options.models !== 'local' ? (options.executionMode === 'sandbox' ? 'no network' : 'offline') : '';
-  return [where, models, options.mode === 'guardrails' ? '' : options.mode, offline, options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? '', options.memory && options.memory !== 'all' ? `memory ${options.memory}` : '', options.guidance && options.guidance !== 'rules' ? `rules ${options.guidance}` : '', options.toolApproach === 'code' ? 'code mode' : ''].filter(Boolean).join(' · ');
+  return [where, models, options.mode === 'guardrails' ? '' : CHAT_MODE_LABEL[options.mode]?.toLowerCase(), offline, options.incognito ? 'incognito' : '', options.effort === 'normal' ? '' : options.effort ?? '', options.memory && options.memory !== 'all' ? `memory ${options.memory}` : '', options.guidance && options.guidance !== 'rules' ? `rules ${options.guidance}` : '', options.toolApproach === 'code' ? 'code mode' : ''].filter(Boolean).join(' · ');
 }
 
 /** A fresh id for a mode the user is saving, unique among `modes`. */
