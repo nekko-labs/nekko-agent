@@ -20,13 +20,24 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 100 && !(await run('!!window.layoutFixture && !!window.ctaQuestionFixture')); i++) await sleep(100);
     await sleep(300);
-    await run(`document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+    if (theme !== 'dark' && theme !== 'light') throw Error('Unsupported fixture theme');
+    await run(theme === 'dark' ? "document.documentElement.dataset.theme='dark'" : "document.documentElement.dataset.theme='light'");
   };
   const motion = [];
   let recordMotion = false;
   const click = async selector => {
-    selector = '#question-fixture ' + selector;
-    const p = await run(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.x+3),y:Math.round(r.y+r.height/2)}})()`);
+    // Keep selectors as data: never construct executable source from input.
+    const targets = await run(`(() => {
+      const selectors = ['[role="radio"]', '[role="checkbox"]', '[data-question-next]', '[data-question-back]', '[data-question-skip]', '[data-question-submit]'];
+      return Object.fromEntries(selectors.map(selector => {
+        const element = document.querySelector('#question-fixture ' + selector);
+        if (!element) return [selector, null];
+        const r = element.getBoundingClientRect();
+        return [selector, { x: Math.round(r.x + 3), y: Math.round(r.y + r.height / 2) }];
+      }));
+    })()`);
+    const p = targets[selector];
+    if (!p) throw Error(`Missing fixture target: ${selector}`);
     if (!win.webContents.debugger.isAttached()) win.webContents.debugger.attach('1.3');
     await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...p });
     await win.webContents.debugger.sendCommand('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...p });

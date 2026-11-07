@@ -434,8 +434,13 @@ export interface AppSettings {
   engineBinPath?: string;
   /** Experimental feature toggles (Settings → Experimental). Off = surface hidden. */
   experimental?: ExperimentalFlags;
-  /** Desktop developer controls; absent means disabled. */
-  developer?: { serverControls?: boolean };
+  /** Developer controls; each preference documents its own default. */
+  developer?: {
+    /** Desktop server controls, off by default. */
+    serverControls?: boolean;
+    /** Explain next-turn tokens after model/effort changes. On unless explicitly false. */
+    showContextChangeNotice?: boolean;
+  };
   /** First-run setup wizard progress (undefined on installs that predate it). */
   onboarding?: OnboardingState;
   /**

@@ -2903,13 +2903,8 @@
 .plan-sheet-agent-line { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .plan-sheet-agent-detail { display: block; padding-left: 18px; font-size: var(--text-2xs); color: var(--ink-faint); }
 @media (hover: hover) { .plan-sheet-agent:hover { background: var(--surface); border-color: color-mix(in srgb, var(--ink) 16%, transparent); } }
-/* The small CI/state icon on a PR chip. `is-pending` spins so a watcher can see
- * the checks are still running even if the colour reads the same as another
- * state's tone. */
-.plan-sheet-status { display: inline-grid; place-items: center; width: 12px; height: 12px; flex-shrink: 0; }
-.plan-sheet-status.is-pending svg { animation: plan-sheet-spin 1.4s linear infinite; transform-origin: 50% 50%; }
-@keyframes plan-sheet-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .plan-sheet-status.is-pending svg { animation: none; } }
+/* The row's label on its left; it stays put while the cards scroll under it. */
+.plan-sheet-agents-head { position: sticky; left: 0; z-index: 1; display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-right: 4px; background: var(--plan-sheet-bg); font-size: var(--text-2xs); font-weight: 600; color: var(--ink-soft); }
 
 /* A PR wears its three actions as rounded pills: Approve, Decline, Merge.
  * They fade in when the pointer or keyboard focus is on the chip (or its
@@ -4310,12 +4305,13 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-add-revealed { animation: provider-reveal 160ms ease-out both; }
 @keyframes provider-reveal { from { opacity: 0; transform: scale(.7); width: 0; } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .models-add-revealed { animation: none; } }
-.composer-folders { flex: 0 1 240px; min-width: min(96px, 35%); max-width: 35%; }
+.composer-bar:has(> .composer-folders) { gap: 4px; }
+.composer-folders { flex: 0 1 auto; min-width: 0; max-width: min(240px, 35%); }
 .composer-folders > div, .composer-folders button { max-width: 100%; }
+.composer-folders .ctl-menu { height: 28px; gap: 6px; border: 0; padding: 4px; }
 .composer-permissions { flex-shrink: 0; justify-content: center; width: 28px; height: 28px; padding: 0; border-color: transparent; background: transparent; }
 
 @container (max-width: 520px) {
-  .composer-bar:has(> .composer-folders) { gap: 4px; }
   /* Let the folder summary truncate before pushing the 44px actions outside. */
   .composer-bar > .composer-folders { min-width: 44px; }
   .composer-bar:has(> .composer-folders) .composer-foot-controls { min-width: 80px; }
