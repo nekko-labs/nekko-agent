@@ -68,7 +68,7 @@ Implemented and verified with 25 focused tests, desktop typecheck and production
 
 ## Consolidated View dropdown
 
-Implemented; 102 focused tests and desktop typecheck pass. Matching 1440px/460px dark-theme captures were inspected; isolated Electron layout/snap/dismissal checks pass. Physical display placement and packaged builds have not been exercised.
+Implemented; 102 focused tests and desktop typecheck pass. Matching 1440px/460px dark-theme captures were inspected; 15 isolated Electron checks cover layout/snap/dismissal, keyboard opening and focus return, screen-toggle and placement bridge callbacks, and 460×400 short-window scrolling. Desktop production build passes. Physical display placement and packaged builds have not been exercised.
 
 The Agents toolbar has a **View** button immediately to the right of **+**. Its viewport-bounded dropdown consolidates **Single agent** (formerly Focused), **Multi-agent** (formerly Dynamic), **Snap to grid**, and desktop screen/desktop selection and new-agent placement. Screen controls are embedded, not another nested popup; the Local Web UI omits desktop-only controls. The dropdown opens by click or keyboard, closes on Escape/outside click or focus leaving, and scrolls within short windows. Single/Multi-agent retain the saved `focus`/`grid` keys and Cmd/Ctrl+Shift+1/2 shortcuts. This changes how many agents are visible, not how many may run.
 
