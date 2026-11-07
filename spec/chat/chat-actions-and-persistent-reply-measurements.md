@@ -115,3 +115,8 @@ Acceptance: `node apps/desktop/scripts/input-focus-integration.cjs` covers the r
 ## Agent composer opening focus
 
 Implemented with focused helper tests: opening a visible agent composer places the caret after its restored draft once the editor is usable. Readiness follows whether the chat can compose, not the number of configured providers, so enabling an existing provider can unlock opening focus. Background session, provider and streaming updates do not repeat a consumed opening attempt. If the user is already typing in another visible input, textarea or editable element when the attempt runs, it is skipped permanently for that opening. Hiding and showing a kept-mounted pane permits a new opening attempt; hiding or unmounting cancels pending focus. Focusing uses preventScroll and changes no stored data or permissions. Native desktop focus and full-app opening interactions remain unverified for this fix.
+
+
+## Agent-row title space and timestamps (#2096)
+
+Implemented; focused renderer checks and isolated macOS Electron captures verify the layout at 720px and 360px in light and dark themes. Invisible Rename and Complete buttons no longer reserve width after the last-reply timestamp. On a resting mouse-driven row, the timestamp ends at the card’s right inset and the title recovers the buttons’ former 50px reservation. Hover or keyboard focus replaces the timestamp with the actions; touch/coarse-pointer devices keep actions visible. Titles still truncate when needed, and the existing title-only PR-chip priority is unchanged. Rename and Complete remain separately operable without opening the chat. Real touch hardware and Windows/Linux desktop evidence remain unverified; the sandbox exercises Chromium touch emulation.

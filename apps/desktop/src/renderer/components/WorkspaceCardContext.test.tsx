@@ -27,6 +27,16 @@ const card = (status?: 'working' | 'done' | 'idle', chat: SessionSummary = sessi
 );
 
 describe('workspace card completion control', () => {
+  it('groups row actions outside timestamp space with hover, keyboard and touch access', () => {
+    const html = card('idle', { ...session, lastReplyAt: -60_000 } as SessionSummary);
+    expect(html).toContain('agent-chip-actions');
+    expect(html).not.toContain('opacity-0');
+    const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+    expect(css).toContain('.agent-chip-actions { display: none; }');
+    expect(css).toContain('.agent-chip:is(:hover, :focus-within) .agent-chip-actions { display: flex; }');
+    expect(css).toContain('@media (hover: none), (pointer: coarse)');
+  });
+
   it('shows an X for completion, keeping the Complete name and retention title', () => {
     const html = card();
     expect(html).toContain('aria-label="Complete Chat"');

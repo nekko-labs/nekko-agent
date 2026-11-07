@@ -3590,6 +3590,16 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Rows stay flat at rest; pointer/focus feedback is a wash and soft light,
    not a raised card. The inset glow survives the group's overflow clipping. */
+/* Hidden row actions must not reserve title space beyond the timestamp.
+   Focus reveals them before keyboard navigation enters the row's buttons. */
+.agent-chip-actions { display: none; }
+.agent-chip:is(:hover, :focus-within) .agent-chip-actions { display: flex; }
+.agent-chip:is(:hover, :focus-within) .agent-chip-heading > time { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .agent-chip-actions { display: flex; }
+  .agent-chip-heading > time { display: none; }
+}
+
 .agent-chip-chat {
   background: transparent; border: 0; box-shadow: none;
   transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
