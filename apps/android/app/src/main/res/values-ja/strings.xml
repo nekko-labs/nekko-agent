@@ -4,4 +4,9 @@
     <string name="widget_description">あなたを待っているチャットと作業中のチャットの数。数だけで、内容は表示しません。</string>
     <string name="shortcut_new_chat">新しいチャット</string>
     <string name="shortcut_new_chat_long">コンピュータで新しいチャット</string>
+    <string name="chats_showmodel">モデル</string>
+    <string name="chats_card_details">カードの詳細</string>
+    <string name="chats_showupdated">更新時刻</string>
+    <string name="chats_showcontext">コンテキストウィンドウ</string>
+    <string name="chats_showpullrequests">プルリクエスト</string>
 </resources>
