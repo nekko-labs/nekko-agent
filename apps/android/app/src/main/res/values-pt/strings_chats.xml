@@ -199,6 +199,12 @@
     <string name="chats_no_providers">Nenhum provedor de modelos está ativado no Nekko Agent do seu computador. Adicione ou ative um nas configurações de Modelos.</string>
     <string name="chats_search_models">Buscar modelos</string>
     <string name="chats_starred">Favoritos</string>
+    <string name="chats_model_source">Origem do modelo</string>
+    <string name="chats_scope_all">Todos</string>
+    <string name="chats_scope_cloud">Nuvem</string>
+    <string name="chats_scope_local">Local</string>
+    <string name="chats_scope_no_local">Nenhum servidor de modelos local neste computador.</string>
+    <string name="chats_scope_no_cloud">Nenhum provedor na nuvem neste computador.</string>
     <string name="chats_list_models_failed">Não foi possível listar os modelos. %1$s</string>
     <string name="chats_retry">Tentar novamente</string>
     <string name="chats_asking">Perguntando ao seu computador…</string>
