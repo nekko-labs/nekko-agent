@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { posixFixture } from '../../posix-fixture.mjs';
 
 const dir = 'scripts/runner-image/linux';
 const boot = join(dir, 'nekko-runner-boot.sh');
@@ -64,7 +65,7 @@ function runBoot(r, env = {}) {
   return { ...res, calls };
 }
 
-test('a_github_seed_runs_run_sh_once_then_powers_off', () => {
+test('a_github_seed_runs_run_sh_once_then_powers_off', posixFixture, () => {
   const r = rig();
   writeFileSync(join(r.seed, 'jit-config'), 'QUJD\n');
   const { stdout, calls } = runBoot(r);
@@ -74,7 +75,7 @@ test('a_github_seed_runs_run_sh_once_then_powers_off', () => {
   assert.ok(!existsSync(join(r.home, '.nekko', 'jit-config')), 'the seed copy is gone before the job');
 });
 
-test('the_clock_moves_forward_to_the_seed_never_back', () => {
+test('the_clock_moves_forward_to_the_seed_never_back', posixFixture, () => {
   const r = rig();
   writeFileSync(join(r.seed, 'jit-config'), 'QUJD\n');
   assert.ok(runBoot(r).calls.includes('date -s @4000000000'));
@@ -83,7 +84,7 @@ test('the_clock_moves_forward_to_the_seed_never_back', () => {
   assert.ok(!runBoot(back, { FAKE_SEED_SECS: '1600000000' }).calls.some((c) => c.startsWith('date -s')));
 });
 
-test('usage_samples_land_after_the_stats_header', () => {
+test('usage_samples_land_after_the_stats_header', posixFixture, () => {
   const r = rig();
   writeFileSync(join(r.seed, 'jit-config'), 'QUJD\n');
   const disk = join(r.dev, 'vdd');
@@ -101,7 +102,7 @@ test('usage_samples_land_after_the_stats_header', () => {
   assert.equal(readFileSync(join(r.dev, 'vdc')).toString('utf8').replace(/\0/g, ''), '', 'other disks untouched');
 });
 
-test('the_test_seed_powers_off_without_a_runner', () => {
+test('the_test_seed_powers_off_without_a_runner', posixFixture, () => {
   const r = rig();
   writeFileSync(join(r.seed, 'nekko-test'), 'test\n');
   const { stdout, calls } = runBoot(r);
@@ -110,7 +111,7 @@ test('the_test_seed_powers_off_without_a_runner', () => {
   assert.equal(calls.at(-1), 'poweroff');
 });
 
-test('unexpected_seeds_run_nothing_and_power_off', () => {
+test('unexpected_seeds_run_nothing_and_power_off', posixFixture, () => {
   for (const files of [['jit-config', 'extra'], ['evil.sh']]) {
     const r = rig();
     for (const f of files) writeFileSync(join(r.seed, f), 'x\n');
@@ -121,7 +122,7 @@ test('unexpected_seeds_run_nothing_and_power_off', () => {
   }
 });
 
-test('no_seed_stays_up', () => {
+test('no_seed_stays_up', posixFixture, () => {
   const r = rig();
   const { stdout, calls } = runBoot(r);
   assert.match(stdout, /no seed: no runner, staying up/);
