@@ -46,6 +46,7 @@ data class LicenseGroup(val license: String, val components: List<String>, @RawR
  */
 val OpenSourceLicenses: List<LicenseGroup> = listOf(
     LicenseGroup("MIT License", listOf("Nekko Agent (this app), © 2026 Nekko Labs"), R.raw.license_nekko_mit),
+    LicenseGroup("MIT License (Gentleface)", listOf("Gentleface 0.3.0 permission icons, © 2026 andaja"), R.raw.license_gentleface_mit),
     LicenseGroup(
         "Apache License 2.0",
         listOf(

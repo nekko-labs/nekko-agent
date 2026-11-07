@@ -811,7 +811,7 @@ export function PhoneAccessView({
         <span className="font-medium text-ink-soft">Read</span>: see chats, files, git, logs and boards.{' '}
         <span className="font-medium text-ink-soft">Change</span>: send prompts, approve tools, run automations, edit
         and save files, commit and push, type in terminals. File, git and terminal changes, and switching a chat to
-        Guardrails or YOLO, need Face ID or the passcode on the phone within the last 5 minutes. Every change is listed
+        Ask when it matters or No restrictions, need Face ID or the passcode on the phone within the last 5 minutes. Every change is listed
         here. Revoke a phone to stop everything.
       </p>
       <ul className="mt-2 divide-y divide-line">
