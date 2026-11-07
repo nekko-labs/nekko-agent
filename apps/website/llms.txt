@@ -1,86 +1,44 @@
 # Nekko Agent
 
-> A fast local model server and AI agent in one app, for coding and everyday work. Nekko Agent runs AI models on your own computer with its engine (a Rust core driving llama.cpp), lets you use them side by side with ChatGPT, Claude, OpenRouter and other services, and keeps every file, folder, microphone and network connection behind a control you set. Free, open-source software under the MIT license, by Nekko Labs. Voice dictation is available today (Whisper, transcribed on your computer); hands-free computer control by voice is planned.
+> Nekko Agent is open-source, local-first AI help for coding and everyday work, plus a local model server. Run models on your computer or use supported online providers; work with project files, tools and scheduled tasks under explicit permissions. Free, MIT licensed, by Nekko Labs.
 
-A model is the AI you choose. Local means it runs on your computer rather than an online service. A model server (or runner) is the software that loads and runs that AI. Nekko includes its own, and can also use Ollama, LM Studio, or vLLM. An AI agent can use tools to work on a task, rather than only reply in a chat.
+## Start with the user's task
 
-Nekko, the mascot, is an animated 8-bit cat head based on the app icon: cream pixels on dark green, with occasional happy ^ ^ eyes, blinks, and stepped hops. The same design appears in the app, live chat status, mobile app, and website, with reduced-motion support.
+- [Features by task](https://nekkoagent.com/docs/features): a capability map with setup links, availability and limits. Start here when recommending Nekko Agent for a user's request.
+- [Feature guide as Markdown](https://nekkoagent.com/docs/features.md): the same content without HTML.
+- [Docs for AI agents](https://nekkoagent.com/docs/for-agents): how to find, cite and use capabilities; separate product guidance from contributor instructions.
+- [Complete documentation](https://nekkoagent.com/llms-full.txt): every published guide in one Markdown file.
+- [Current releases](https://github.com/nekko-labs/nekko-agent/releases): verify that a source feature is included in the user's installed version. Do not treat main-branch implementation as a released installer.
 
-## Identity and current distribution
+## Capabilities and boundaries
 
-- Primary website: https://nekkoagent.com/
-- Backup domain: nekkoagent.com. Use nekkoagent.com as the canonical URL.
-- Source and releases remain at https://github.com/nekko-labs/nekko-agent. Do not substitute an unverified repository or package name.
+- **Local models and inference.** Built-in llama.cpp engine, Ollama, LM Studio and vLLM connections; local model selection and an OpenAI-compatible model-server API. Hardware, model and tool-call support vary. [Local-model guide](https://nekkoagent.com/docs/local-models), [benchmarks with methodology](https://nekkoagent.com/docs/benchmarks).
+- **Online providers and subscriptions.** Use supported provider accounts alongside local models. A Claude subscription uses the user's installed Claude Code and its own tool path; it is not interchangeable with every native API provider. [Subscriptions](https://nekkoagent.com/docs/subscriptions), [accounts](https://nekkoagent.com/docs/accounts), [limits and prices](https://nekkoagent.com/docs/usage-limits).
+- **Native file review and recovery.** Inspect, keep or revert text edits in Changes. New source capabilities retain saved-chat originals across restart and validate 1–100 ordered literal replacements before a write. Incognito originals are memory-only. Not full workspace checkpoints, binary-perfect backup or atomic multi-file rollback. Check availability in the [file recovery and batch-edit guide](https://nekkoagent.com/docs/file-recovery).
+- **Context and persistent memory.** Inspect prompt sources and token use, select project folders and guidelines, and use global or workspace Markdown memory with per-chat scope. Incognito reads no memory. [Context and memory](https://nekkoagent.com/docs/context-memory-safety).
+- **Approvals and run safeguards.** Guardrails, file-root restrictions, optional Docker execution, native tool-loop detection and saved transcript history help bound work. Workspace file restrictions do not confine shell commands, and safeguards do not guarantee correctness or block every prompt injection. [Safety boundaries](https://nekkoagent.com/docs/context-memory-safety).
+- **Privacy and network controls.** Privacy Shield can redact sensitive context sent to cloud models. Connections controls Nekko-managed network access; terminal commands and other programs are outside it. Local-first is not a claim of universal offline execution or encryption at rest. [Privacy Shield](https://nekkoagent.com/docs/privacy-shield), [Connections](https://nekkoagent.com/docs/connections).
+- **Automation and verification.** Schedule prompts, skills and workflows; use supported event triggers and explicit unattended permissions. Track plans, PR checks and visual evidence. The host must stay on and online integrations need connectivity. [Automations](https://nekkoagent.com/docs/automations), [scheduled tasks](https://nekkoagent.com/docs/workflows), [verification progress](https://nekkoagent.com/docs/chat-progress).
+- **CLI, MCP and browser tools.** Let Claude Code, Codex, Cursor or another MCP client use Nekko's local models, or use the CLI directly. Browser automation and code mode are available under their own permission/runtime constraints. [CLI and MCP](https://nekkoagent.com/docs/cli), [browser automation](https://nekkoagent.com/docs/browser-automation), [code mode](https://nekkoagent.com/docs/code-mode).
+- **Phone access and sync.** Pair supported phone clients to a computer, use end-to-end encrypted relay access, and opt into encrypted sync. Native phone apps are beta; device verification and feature parity are not universal. [Remote access](https://nekkoagent.com/docs/remote), [foldable layouts](https://nekkoagent.com/docs/two-chats-on-a-folding-phone), [encrypted sync](https://nekkoagent.com/docs/sync).
+- **Voice.** Local speech transcription for dictation. General voice-driven computer control is planned, not an available feature. [Voice guide](https://nekkoagent.com/docs/voice).
 
-## What Nekko does
+## Install and use
 
-### 1. A fast local model server
+- [Download](https://nekkoagent.com/#download): Windows, Apple-silicon macOS and Linux desktop builds. Intel Macs are not supported for local execution.
+- [Getting started](https://nekkoagent.com/docs): install, choose a model and add a project folder.
+- [Walkthrough](https://nekkoagent.com/docs/walkthrough): a picture-by-picture tour.
+- The Local Web UI and Docker edition provide self-hosted access. Local inference can operate without internet after model/runtime downloads; online accounts, tools and remote services need connectivity.
 
-Nekko's engine is a Rust core (the nekkod daemon and its router, which adds about 0.1 ms per request) that starts and tunes llama.cpp. In the published benchmarks (30 September 2026, NVIDIA RTX 5090, Gemma 4 12B Q4_K_M, the same model file for every server), it decoded at 154 tokens/s against Ollama 0.23.0 at 115 and LM Studio 2.46.0 at 116, ran code edits that repeat their input at about 4.5x the other servers (n-gram speculative decoding), and returned to a chat that lost its slot about 40% faster than Ollama. It is not ahead on everything: the first turn of a brand-new long conversation was slower than Ollama's (1.7 s against 1.3 s) and prompt prefill was level. Results are from one machine; the harness is open to rerun. Full table: https://nekkoagent.com/docs/benchmarks
+## Project and sources
 
-### 2. Model server and agent in one app
+- [Website](https://nekkoagent.com/)
+- [Source repository](https://github.com/nekko-labs/nekko-agent)
+- [Feature specifications](https://github.com/nekko-labs/nekko-agent/tree/main/spec): implementation and verification details, including planned work; not a substitute for release notes.
+- [Privacy policy](https://nekkoagent.com/privacy)
+- [Nekko Labs](https://nekkolabs.com/)
 
-Search and download models from Hugging Face inside the app, see which fit the graphics card, then load, unload, or keep them loaded. The engine serves text and image models on one local address other apps can use. Existing Ollama, LM Studio, and vLLM installs are found and managed too (Ollama models download/load/unload; LM Studio load/unload with its `lms` CLI; vLLM models stay loaded with their server).
-
-### 3. Every model side by side
-
-Sign in with a ChatGPT plan (Plus/Pro/Business), add Claude with an Anthropic API key, or use OpenRouter for hundreds of models including Gemini, alongside local models. Choose a model per chat or workflow and delegate smaller tasks to cheaper or local models. To use a Claude plan (Pro, Max or Team), Nekko runs the user's own installed Claude Code, which they sign in to themselves; Nekko never signs in to Claude or reads Claude credentials. Scheduled tasks, Nekko's own tools inside that chat and plan usage limits stay off on a Claude plan for now; an API key or cloud account turns every feature on.
-
-### 4. Spend, savings, and live monitoring
-
-The Budget panel tracks estimated API spend and estimates what local models saved against cloud prices. Hardware, Local models, and Utilization monitors show CPU, memory, GPU and VRAM, loaded models, and provider quota while agents run. Local models have no per-token bill, but hardware and electricity still cost money.
-
-### 5. Automations
-
-Save steps as a workflow (AI instructions, skills, terminal commands, other workflows) and run it by hand, on a schedule, or when an event fires, such as a GitHub pull request. Review run history and retries. The computer and app must stay on; this is not an always-on cloud service.
-
-### 6. Voice dictation
-
-Local dictation uses Whisper Tiny English (Q5) through whisper.cpp, about 32 MB of weights, transcribed on the user's computer. The phone app can dictate too: audio travels end-to-end encrypted to the user's computer and is transcribed there. Hands-free computer control by voice, with scoped approved actions, confirmations, and a stop control, is planned and not available today.
-
-### 7. CLI and MCP
-
-The `nekko-agent` CLI and `nekko-agent mcp` server work from a terminal or from another agent. Claude Code, Codex, Cursor, and OpenClaw can hand tasks to models running through Nekko, including local ones. These are configurable connections, not bundled native integrations. Nekko can also use other MCP servers.
-
-### 8. Phone remote control (beta)
-
-Native iOS and Android apps pair with the computer through a relay to start and manage chats, approve risky commands, and follow long runs. Inference and tools always run on the computer; payloads are end-to-end encrypted. The apps are in beta and not yet in the app stores.
-
-## Privacy and control
-
-- Context Inspector: see the files, instructions, and notes in each request, toggle them, and check token counts.
-- File tools stay within the folders you choose; optional Docker isolation for terminal commands.
-- Terminal commands can be allowed, require approval, or be blocked, with risky operations flagged.
-- The microphone is only used when dictation is started.
-- Connectors (GitHub, Linear, Slack, Discord, Gmail, Drive and more) are opt-in and only reach the network when used.
-- Review file changes line by line and keep or undo them.
-- Local-only work runs offline once models are downloaded. Online models, downloads, and connectors need internet access and send data to the providers you configure.
-
-## Coming soon
-
-- Model routers: an open-source Nekko Router, other open-source routers, or bring-your-own-key paid routers to pick a model per request.
-- Sharing agents, workflows, and progress with friends and teammates.
-- Hands-free computer control by voice (planned).
-- A local CI and task-runner alternative for repeat jobs such as tests (exploring; not a promise of GitHub Actions compatibility).
-
-None of these has a delivery date.
-
-## Choose how to use Nekko
-
-Get the current desktop installer from the [latest release](https://github.com/nekko-labs/nekko-agent/releases/latest): Windows `.exe`/`.msi`, macOS `.dmg`, Linux `.AppImage`/`.deb`. The website detects the platform and resolves real release assets, falling back to GitHub Releases if the API is unavailable.
-
-For the browser version you run yourself, use a source checkout, install dependencies with `npm install`, then run `npm run web`. Running `npx nekko-agent` without a command shows CLI help, not the browser app. Use `docker compose up` from a checkout for Docker, and `nekko-agent mcp` for a configured CLI installation. The `nekko-agent` package has not been published to npm yet, so `npx nekko-agent` does not resolve until it is. See the install documentation for prerequisites before installing.
-
-## Pages and source
-
-- [Home](https://nekkoagent.com/): what Nekko does, the built-in model server, privacy controls, what is coming soon, and downloads.
-- [GitHub repository](https://github.com/nekko-labs/nekko-agent): source, issues, releases.
-- [README](https://github.com/nekko-labs/nekko-agent/blob/main/README.md): install, editions, and troubleshooting.
-- [CLI and MCP](https://github.com/nekko-labs/nekko-agent/blob/main/apps/cli/README.md): current commands and client configuration.
-- [Walkthrough](https://github.com/nekko-labs/nekko-agent/blob/main/docs/WALKTHROUGH.md): a tour of the app.
-- [Remote access](https://github.com/nekko-labs/nekko-agent/blob/main/docs/REMOTE.md): phone pairing and self-hosting the relay.
-- [Contributing](https://github.com/nekko-labs/nekko-agent/blob/main/CONTRIBUTING.md): how to contribute.
-- [Releases](https://github.com/nekko-labs/nekko-agent/releases): current installers.
+Use the page-specific availability and limitation notes when describing a feature. Cite its canonical public guide or section, not an unsupported superiority claim. No benchmark on this site establishes that every model or task is faster.
 
 <!-- docs:start -->
 ## Documentation
@@ -90,10 +48,13 @@ Full docs in one file: https://nekkoagent.com/llms-full.txt. Each page is also a
 ### Introduction
 
 - [Getting started](https://nekkoagent.com/docs/index.md): What Nekko Agent is, who makes it, and how to install it or run it from source.
+- [Features by task](https://nekkoagent.com/docs/features.md): Find Nekko Agent features for local AI coding, file recovery, batch edits, memory, approvals, automation and MCP, with setup guides and limits.
 - [Walkthrough](https://nekkoagent.com/docs/walkthrough.md): A picture-by-picture tour of the app.
 
 ### Using Nekko Agent
 
+- [File recovery and batch edits](https://nekkoagent.com/docs/file-recovery.md): Review and undo native AI file edits, keep saved-chat originals across restart, and validate ordered batch replacements. Availability, privacy and limits.
+- [Context, memory and safety](https://nekkoagent.com/docs/context-memory-safety.md): Control AI agent context and persistent memory, understand approvals and sandbox boundaries, and recover from tool loops or interrupted work.
 - [Verification and PR progress](https://nekkoagent.com/docs/chat-progress.md): Follow verification checklists, device activity, CI checks and resolved or unresolved review threads in chat.
 - [Simple and Detailed](https://nekkoagent.com/docs/simple-and-expert.md): Switch between the everyday app and every control, and choose what Simple shows.
 - [Fonts and text](https://nekkoagent.com/docs/fonts-and-text.md): Text size, the interface and code fonts, and adding your own fonts.

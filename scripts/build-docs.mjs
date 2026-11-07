@@ -342,7 +342,8 @@ export function build() {
         section: page.section,
         url: pageUrl(page.slug) + (s.id ? `#${s.id}` : ''),
         heading: s.id ? s.heading : '',
-        text: s.text.trim().slice(0, 600),
+        // Keep the whole section searchable; the UI bounds result previews.
+        text: s.text.trim(),
       });
     }
   });

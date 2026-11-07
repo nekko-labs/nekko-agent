@@ -88,3 +88,59 @@ test('no page loads fonts or release info from a third party', () => {
   for (const file of ['index.html', 'privacy.html', 'site.js']) pages.push(readFileSync(new URL(`../apps/website/${file}`, import.meta.url), 'utf8'));
   for (const html of pages) assert.doesNotMatch(html, /fonts\.googleapis\.com|fonts\.gstatic\.com|api\.github\.com/);
 });
+
+test('feature guides ship consistent crawlable HTML and agent-readable discovery surfaces', () => {
+  const files = build();
+  const { pages } = loadNav();
+  const full = files.get('llms-full.txt');
+  const llms = files.get('llms.txt');
+  const sitemap = files.get('sitemap.xml');
+  for (const slug of ['features', 'file-recovery', 'context-memory-safety']) {
+    const page = pages.find((p) => p.slug === slug);
+    assert.ok(page, slug);
+    const html = files.get(`docs/${slug}.html`);
+    const md = files.get(`docs/${slug}.md`);
+    const url = `https://nekkoagent.com/docs/${slug}`;
+    const headline = md.split('\n').find((line) => line.startsWith('# ')).slice(2);
+    assert.equal((html.match(/<h1>/g) ?? []).length, 1);
+    assert.ok(html.includes(`<link rel="canonical" href="${url}"`));
+    assert.ok(html.includes('content="index,follow,max-image-preview:large,max-snippet:-1"'));
+    assert.ok(html.includes(`type="text/markdown" href="/docs/${slug}.md"`));
+    assert.ok(html.includes(`<meta name="description" content="${page.description}"`));
+    const data = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+    assert.equal(data['@type'], 'TechArticle');
+    assert.equal(data.headline, headline);
+    assert.equal(data.description, page.description);
+    assert.equal(data.url, url);
+    assert.ok(full.includes(md.trim()), `full Markdown includes ${slug}`);
+    assert.ok(llms.includes(url), `llms links ${slug}`);
+    assert.ok(sitemap.includes(`<loc>${url}</loc>`), `sitemap includes ${slug}`);
+    assert.ok(files.get('docs/index.html').includes(`href="/docs/${slug}"`));
+    assert.ok(files.get('docs/for-agents.html').includes(`href="/docs/${slug}"`));
+  }
+});
+
+test('task queries find canonical guides, including facts beyond the old 600-character cutoff', () => {
+  const files = build();
+  const index = JSON.parse(files.get('docs/search.json'));
+  const queries = [
+    ['persistent memory', '/docs/context-memory-safety'],
+    ['prompt injection', '/docs/context-memory-safety'],
+    ['batch replacements', '/docs/file-recovery'],
+    ['restart originals', '/docs/file-recovery'],
+    ['offline shell', '/docs/context-memory-safety'],
+    ['tool loops', '/docs/features'],
+    ['folding phone', '/docs/features'],
+    ['MCP server', '/docs/cli'],
+    ['scheduled tasks', '/docs/workflows'],
+  ];
+  for (const [query, target] of queries) {
+    const words = query.toLowerCase().split(/\s+/);
+    assert.ok(index.some((s) => s.url.split('#')[0] === target && words.every((w) => `${s.page} ${s.heading} ${s.text}`.toLowerCase().includes(w))), query);
+  }
+  const table = index.find((s) => s.url === '/docs/features#what-can-nekko-agent-help-me-do');
+  assert.ok(table.text.indexOf('Check inference speed') > 600, 'late table rows are searchable, not lost after a preview');
+  assert.match(files.get('docs/file-recovery.md'), /not assert that every published installer contains it/);
+  assert.match(files.get('docs/features.md'), /not an operating-system firewall/);
+  assert.match(files.get('docs/context-memory-safety.md'), /Workspace file reads do not currently/);
+});
