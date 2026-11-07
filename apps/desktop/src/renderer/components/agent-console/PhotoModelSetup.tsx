@@ -15,6 +15,7 @@ import { WarningIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { groupDownloads, isActive, type DownloadGroup } from '../engine/downloadGroups.js';
 import { Progress, Step } from '../engine/FirstLocalModel.js';
+import { ensureRecommendedOffload } from './imageOffload.js';
 
 /**
  * A Photo chat with no picture model: two or three models picked for this
@@ -180,12 +181,10 @@ export function PhotoModelSetup({ session, onReady, onShown }: { session: Sessio
   useEffect(() => {
     if (phase.kind !== 'finish' || applied.current.has(phase.model.id)) return;
     applied.current.add(phase.model.id);
-    const { model, option } = phase;
+    const { model } = phase;
     void (async () => {
       try {
-        if (option.offloadToCpu && !model.preset?.diffusion?.offloadToCpu) {
-          await window.nekko.engineSaveModelPreset(model.id, { ...model.preset, diffusion: { ...model.preset?.diffusion, offloadToCpu: true } });
-        }
+        await ensureRecommendedOffload(model, recs);
         const defaults = companions?.defaults;
         const params = { ...DEFAULT_IMAGE_CHAT_PARAMS, ...session.imageParams, modelId: model.id, ...(defaults ? { steps: defaults.steps, cfgScale: defaults.cfgScale } : {}) };
         const next = await window.nekko.setSessionOptions(session.id, { imageParams: params });

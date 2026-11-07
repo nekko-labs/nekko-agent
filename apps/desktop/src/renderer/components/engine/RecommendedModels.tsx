@@ -1,7 +1,7 @@
 import { ModelDownloadButton } from './ModelDownloadButton.js';
 import { useStore } from '../../store.js';
 import { useEffect, useState } from 'react';
-import type { LocalModel, Recommendations, TaskRecommendation } from '@nekko-agent/shared';
+import type { ImageRecommendedOption, LocalModel, Recommendations, TaskRecommendation } from '@nekko-agent/shared';
 import { CheckIcon, ChevronIcon } from '../../icons.js';
 import { formatBytes } from '../runtimes/verdict.js';
 import { fitText, hardwareText, isDownloaded, memoryText, nudgeTitle, speedText } from './recommendationText.js';
@@ -38,7 +38,7 @@ export function RecommendedModels({ models, onQueued }: { models: LocalModel[]; 
   };
   useEffect(() => load(false), []);
 
-  const download = (_task: TaskRecommendation, res?: { ok: boolean; message: string }) => {
+  const download = (_task: { task: string }, res?: { ok: boolean; message: string }) => {
     if (!res) return;
     pushToast(res.ok ? 'info' : 'error', res.message);
     if (res.ok) onQueued();
@@ -135,10 +135,11 @@ export function RecommendationList({
   checking?: boolean;
   /** Per task, what happened to its download request. */
   queued?: Record<string, string>;
-  onDownload: (task: TaskRecommendation, result?: { ok: boolean; message: string }) => void;
+  onDownload: (task: { task: string }, result?: { ok: boolean; message: string }) => void;
   onRecheck: () => void;
 }) {
   const picked = recs.tasks.filter(t => t.pick);
+  const pictures = (recs.imageTasks ?? []).filter(t => t.pick);
   return (
     <details className="group card mb-5 p-4" open={open} data-recommendations>
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1">
@@ -146,7 +147,7 @@ export function RecommendationList({
         <span className="text-sm font-semibold">Best for this machine</span>
         <span className="text-xs text-ink-faint">{hardwareText(recs)}</span>
         <span className="ml-auto text-xs text-ink-faint group-open:hidden">
-          {picked.length} pick{picked.length === 1 ? '' : 's'}
+          {picked.length + pictures.length} pick{picked.length + pictures.length === 1 ? '' : 's'}
         </span>
       </summary>
       <div className="mt-3 divide-y divide-line">
@@ -209,6 +210,10 @@ export function RecommendationList({
             </div>
           );
         })}
+        {pictures.map(t => (
+          <ImageRecommendationRow key={t.task} label={t.label} p={t.pick!} recs={recs} have={isDownloaded(t.pick!, models)} state={queued[t.task]}
+            onDownload={res => onDownload({ task: t.task }, res)} />
+        ))}
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-2xs text-ink-faint">
         <span>
@@ -219,5 +224,71 @@ export function RecommendationList({
         </button>
       </div>
     </details>
+  );
+}
+
+/** "4.6 GB of 7 GB (estimated)": a picture model's memory is not measured yet, so it says so. */
+export function imageFitText(p: ImageRecommendedOption): { text: string; title: string } {
+  if (p.offloadToCpu) {
+    return { text: p.fit === 'fits' ? 'fits with offload' : 'tight, with offload', title: 'Fits only by keeping part of it in system memory (CPU offload), so pictures take longer. Nekko turns that on when a Photo chat first uses it.' };
+  }
+  return p.fit === 'fits'
+    ? { text: 'fits', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: picture models are not measured yet.` }
+    : { text: 'tight fit', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: it should run, with little to spare.` };
+}
+
+/** One picture task's pick: no speed (none is measured), and its supporting files counted in the download. */
+function ImageRecommendationRow({
+  label,
+  p,
+  recs,
+  have,
+  state,
+  onDownload,
+}: {
+  label: string;
+  p: ImageRecommendedOption;
+  recs: Recommendations;
+  have: boolean;
+  state?: string;
+  onDownload: (result?: { ok: boolean; message: string }) => void;
+}) {
+  const fit = imageFitText(p);
+  const ok = p.fit === 'fits' && !p.offloadToCpu;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2" data-recommendation={p.modelId} data-image-recommendation>
+      <div className="w-[118px] shrink-0 text-xs text-ink-faint">{label}</div>
+      <div className="min-w-[180px] flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium">{p.name}</span>
+          <span className="chip" title={`${p.repo}: ${p.files.join(', ')}`}>{p.quant}</span>
+          <span
+            className="rounded-full px-2 py-0.5 text-2xs"
+            style={{ background: `color-mix(in srgb, ${ok ? 'var(--success)' : 'var(--warning, #d1a054)'} 16%, transparent)`, color: ok ? 'var(--success)' : 'var(--warning, #d1a054)' }}
+            title={fit.title}
+          >
+            {fit.text}
+          </span>
+        </div>
+        <p className="mt-0.5 text-2xs text-ink-faint">
+          <span title="Every file plus working room, or with offload the largest file plus working room. Not measured yet.">
+            ~{formatBytes(p.memoryBytes)} of {formatBytes(recs.budget.bytes)}
+          </span>
+          {' · '}
+          {formatBytes(p.downloadBytes)} download, with its supporting files · {p.license}
+        </p>
+      </div>
+      <div className="shrink-0">
+        {have ? (
+          <span className="inline-flex items-center gap-1 text-xs text-success">
+            <CheckIcon className="h-3.5 w-3.5" /> Downloaded
+          </span>
+        ) : state ? (
+          <span className="text-xs text-ink-faint" role="status">{state}</span>
+        ) : (
+          <ModelDownloadButton modelId={p.repo} quant={p.downloadLabel} onResult={onDownload} />
+        )}
+      </div>
+    </div>
   );
 }
