@@ -24,6 +24,8 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
 
+**Keeping a computer awake for its agents.** A run you start on another computer stops when that computer falls asleep. On the computer that runs the agents, turn on *Keep this computer awake while agents run* (Settings, Computers). While any agent runs there it won't go to sleep on its own, and once the last one finishes it sleeps as usual. Closing the lid still sleeps it.
+
 ## How it works
 
 ```
