@@ -332,6 +332,12 @@ export interface AppSettings {
   quitFromPhone?: boolean;
   /** Explicit desktop opt-in for signed phone service actions. Absent means false. */
   manageServiceFromPhone?: boolean;
+  /**
+   * Hold off idle sleep while any agent runs here, so a run another device
+   * started does not stop when nobody touches this one. Off unless the owner
+   * turns it on under Settings > Computers; never settable from another device.
+   */
+  keepAwakeWhileAgentsRun?: boolean;
   /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
   machineIcon?: string;
   /** Display name shared with paired devices; blank uses the system hostname. */

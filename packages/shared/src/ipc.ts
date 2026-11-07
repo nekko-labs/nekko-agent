@@ -253,6 +253,7 @@ export const IpcChannels = {
   imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
+  auditRead: 'audit:read',
   changeAccept: 'changes:accept',
   changeAcceptAll: 'changes:acceptAll',
 
@@ -559,6 +560,25 @@ export interface AgentReplay {
 }
 
 /** The typed API the preload bridge exposes as window.nekko. */
+/** Who answered an approval or decided a permission (`audit.rs`). */
+export interface AuditBy {
+  via: string;
+  device?: string;
+}
+
+/**
+ * One event of a chat's audit trail, as the engine writes it: value-free by
+ * design (no arguments, URLs, reasons, output or message text).
+ */
+export type AuditEvent = { at: number; turnId?: string } & (
+  | { type: 'turn'; mode?: string; provider?: string | null; model?: string | null; claudeCode?: boolean }
+  | { type: 'tool'; callId?: string; tool: string; isError?: boolean; ms?: number; outputChars?: number; detail?: Record<string, unknown> }
+  | { type: 'approval'; callId?: string; tool?: string; severity?: string; answer: 'approved' | 'denied' | 'unanswered'; by: AuditBy | null }
+  | { type: 'permission'; tool: string; executedBy?: string; decision: string; by: AuditBy | null; detail?: Record<string, unknown> }
+  | { type: 'taint'; callId?: string; by: string }
+  | { type: 'redactions'; counts: Record<string, number> }
+);
+
 export interface NekkoApi {
   /** Nekko Cloud sign-in and end-to-end encrypted sync (crates/nekko-cloud). */
   cloudStatus(): Promise<import('./cloud.js').CloudStatus>;
@@ -1023,6 +1043,8 @@ export interface NekkoApi {
    */
   fetchRemoteImage(url: string): Promise<RemoteImage>;
 
+  /** The chat's audit trail: what the agent did and who allowed it, never the data (crates/nekkod/src/audit.rs). */
+  readAudit(sessionId: string): Promise<AuditEvent[]>;
   /** Files the agent changed this session (diff/approve). */
   listChanges(sessionId: string): Promise<FileChange[]>;
   /** Keep a file's changes, stop tracking it. */

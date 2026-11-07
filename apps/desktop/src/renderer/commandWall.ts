@@ -287,7 +287,7 @@ export function splitBoundary(node: WbNode | null, splitId: string, index: numbe
 }
 
 /** How close (as a share of its split) a dragged divider must come to even spacing to snap to it. */
-export const SNAP_RANGE = 0.04;
+export const SNAP_RANGE = 0.03;
 
 /** A dragged divider's position, pulled onto `target` when it is within reach. */
 export function snapFraction(value: number, target: number | null, range = SNAP_RANGE): number {

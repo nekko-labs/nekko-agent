@@ -93,6 +93,8 @@ object Dictation {
      */
     fun clean(spoken: String): String =
         spoken.replace(Regex("""\[[^\]\n]{1,40}]|\([^)\n]{1,40}\)"""), " ").replace(Regex("""\s+"""), " ").trim()
+            // The name is in no recognizer's vocabulary: they write what they hear (Neco, Necco, Neko).
+            .replace(Regex("""\bne[ck][ck]?o\b""", RegexOption.IGNORE_CASE), "Nekko")
 
     /** "0:07 / 0:30" for the recording bar. */
     fun clock(samples: Int): String {

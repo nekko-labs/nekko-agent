@@ -1152,6 +1152,24 @@ public final class ComputersStore {
         }
     }
 
+    /// A fleet computer is not the active one, so it must not push or start a
+    /// card on this phone: each time its link comes online it withdraws the card
+    /// registration its relay may still hold from when it was active (or from a
+    /// switch it never heard), and turns its card off (`card:set`). Otherwise its
+    /// relay push-starts a second card while iOS has the app suspended. In line
+    /// with the active computer's registrations, so a computer made active
+    /// meanwhile ends registered.
+    func withdrawCard(peer id: String) {
+        guard peers[id]?.conn == .online, let c = links[id]?.client, let computer = computers.first(where: { $0.id == id }) else { return }
+        let previous = cardRegistration
+        cardRegistration = Task { [weak self] in
+            await previous?.value
+            guard let self, self.activeId != id else { return }
+            try? await c.registerCard(token: nil, startToken: nil, level: .none, computerId: computer.id, computerName: computer.name)
+            _ = try? await c.call(Channels.cardSet, [["level": "none"]], timeout: 3)
+        }
+    }
+
     /// A chip tap (`focus`) or the close button under a finished chat (`dismiss`) on
     /// the card, so the card the computer pushes shows the same. A computer from
     /// before `card:set` refuses it; the card on this phone has it either way.

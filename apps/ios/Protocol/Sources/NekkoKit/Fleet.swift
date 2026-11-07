@@ -243,6 +243,7 @@ extension ComputersStore {
             if s.state == .online {
                 Task { await refreshPeer(id) }
                 registerPush(peer: id)
+                withdrawCard(peer: id)
             }
         case .welcome(let version):
             peers[id]?.hostProtocol = version

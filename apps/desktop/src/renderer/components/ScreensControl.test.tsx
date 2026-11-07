@@ -38,13 +38,12 @@ describe('Screens dropdown', () => {
     expect(html).not.toContain('role="dialog"');
   });
 
-  it('ends the wall toolbar, after the layout and snap controls, in both modes', () => {
-    const view = readFileSync(new URL('../views/CommandCenterView.tsx', import.meta.url), 'utf8');
-    const screens = view.indexOf('<ScreensControl mode={wall.layout.mode} />');
-    expect(screens).toBeGreaterThan(-1);
-    expect(view.indexOf('className="wall-snap-toggle"')).toBeGreaterThan(-1);
-    expect(view.indexOf('className="wall-snap-toggle"')).toBeLessThan(screens);
-    expect(view.indexOf('export function WallToolbar(')).toBeLessThan(screens);
+  it('embeds screens in View without a nested button or dialog', () => {
+    const html = renderToStaticMarkup(<ScreensMenu state={state} embedded open onToggle={() => {}} onPlacement={() => {}} />);
+    expect(html).not.toContain('data-screens-button');
+    expect(html).not.toContain('role="dialog"');
+    expect(html).toContain('aria-label="Screens to use"');
+    expect(html).toContain('Prioritize empty windows');
   });
   it('keeps the dropdown out of the title bar drag region, so hover and clicks reach it', () => {
     // The toolbar is portaled into the draggable title bar; without no-drag the OS

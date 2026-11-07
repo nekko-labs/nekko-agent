@@ -41,6 +41,7 @@ Found by comparing the two codebases on 2026-11-02, not a full audit: a gap miss
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
 | Computer controls: persistent connection opt-out, Models disclosure and filters, Cloud fleet group, and service management | Not implemented on Android; follow-up needed | [Android parity #2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
+| Immediate draft photo saves | Verify photo add/remove durability and composer containment | [#2043](https://github.com/nekko-labs/nekko-agent/issues/2043) |
 | Apple Watch glance | No Wear OS app | needs an issue |
 | Push notifications | No push; the keep-alive service covers an open connection | AN-6 |
 | Nekko Cloud machines | No Cloud screens (the iPhone's `CloudViews.swift`) | needs an issue |

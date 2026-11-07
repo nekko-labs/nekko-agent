@@ -149,6 +149,13 @@ pub fn fake_claude() {
             let reply = format!("woke: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m_w2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "/compact" {
+            // What Claude Code prints for a typed `/compact`: no model call of the chat's own.
+            out(json!({ "type": "system", "subtype": "compact_boundary", "session_id": session,
+                "compact_metadata": { "trigger": "manual", "pre_tokens": 21_002, "post_tokens": 4_600 } }));
+            out(json!({ "type": "user", "isSynthetic": true, "parent_tool_use_id": null, "session_id": session,
+                "message": { "role": "user", "content": "This session is being continued from a previous conversation.\n\nSummary:\nWe said hello." } }));
+            out(result("", "completed"));
         } else if text == "plan" {
             // Claude Code's own plan: two tasks, the first started.
             let tool = |id: &str, name: &str, input: Value, output: &str| {
@@ -171,6 +178,14 @@ pub fn fake_claude() {
             tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
             out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
             out(result("planned", "completed"));
+        } else if text == "compact first" {
+            // Claude Code compacting before it answers, as it prints the status around it.
+            out(json!({ "type": "system", "subtype": "status", "status": "compacting", "session_id": session }));
+            out(
+                json!({ "type": "system", "subtype": "status", "status": null, "compact_result": "success", "session_id": session }),
+            );
+            out(assistant("m_cf", json!([{ "type": "text", "text": "compacted" }])));
+            out(result("compacted", "completed"));
         } else if text == "background later" || text == "watch later" {
             // A background task that finishes only once the test says so (a
             // `wake-now` file in the workspace), so the chat can change first.
@@ -527,6 +542,30 @@ async fn claude_codes_own_plan_is_the_chats_plan() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn claude_codes_compaction_lands_as_the_chats_divider() {
+    let rig = rig("compact", "guardrails", true);
+    for (turn, text) in [("cm1", "hello"), ("cm2", "/compact")] {
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, turn, text)]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+    }
+    let session = saved(&rig);
+    let messages = session["messages"].as_array().unwrap();
+    let divider = messages.iter().find(|m| m["compaction"].is_object()).expect("the compaction is in the transcript");
+    assert_eq!(divider["content"], "We said hello.");
+    // The first turn's question and reply, and the `/compact` itself.
+    assert_eq!(divider["compaction"]["summarized"], 3, "{divider}");
+    assert_eq!(
+        (divider["compaction"]["by"].clone(), divider["compaction"]["tokensAfter"].clone()),
+        (json!("claude-code"), json!(4_600))
+    );
+    assert!(divider.get("turnStats").is_none(), "a summary is not the turn's reply");
+    // The gauge drops to the size after the compaction, with no model call to report it.
+    assert_eq!(session["claudeCodeContext"]["used"], 4_600);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn plan_usage_claude_code_printed_is_its_limits() {
     let rig = rig("usage", "guardrails", true);
     let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
@@ -624,6 +663,16 @@ async fn permission_prompts_reach_nekko_approvals() {
     assert_eq!(assistant_texts(&s).last().unwrap(), "done: allow");
     let tool = s["messages"].as_array().unwrap().iter().find(|m| m["role"] == "tool").unwrap();
     assert_eq!(tool["toolResult"]["output"], "removed");
+
+    // The chat's audit trail keeps the permission, how it was decided and who answered.
+    let (_, trail) = post(rig.d.port, "audit:read", json!(["s_cc"]), Some(TOKEN)).await;
+    let asked: Vec<&Value> = trail.as_array().unwrap().iter().filter(|e| e["type"] == "permission").collect();
+    assert_eq!(asked.len(), 1, "{trail}");
+    assert_eq!(asked[0]["tool"], "Bash");
+    assert_eq!(asked[0]["executedBy"], "claude-code");
+    assert_eq!(asked[0]["decision"], "approved");
+    assert_eq!(asked[0]["by"], json!({ "via": "this computer" }));
+    assert_eq!(asked[0]["detail"], json!({}), "a Claude Code command line is never kept");
 
     // The daemon's own token is not a bridge token, and a browser may not call it.
     let client = reqwest::Client::new();
@@ -1000,4 +1049,18 @@ async fn a_background_watcher_is_in_the_chat_summary_until_it_ends() {
         (summaries[0]["backgroundWatchCount"] == 0).then_some(())
     })
     .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_code_compacting_reaches_the_chat_as_it_runs() {
+    let rig = rig("compacting", "guardrails", true);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cf1", "compact first")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (events, end) = turn_record(&rig, "cf1", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    let states: Vec<_> =
+        events.iter().filter(|e| e["type"] == "claude_code_compacting").map(|e| e["state"].clone()).collect();
+    assert_eq!(states, [json!("running"), json!("done")]);
+    let k = kinds(&events);
+    assert!(k.ends_with(&["usage".into(), "done".into()]), "{k:?}");
 }

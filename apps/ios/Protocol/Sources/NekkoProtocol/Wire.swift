@@ -398,6 +398,9 @@ public struct Session: Equatable, Sendable {
     public var chatType: String?
     public var executionMode: String?
     public var disabledTools: [String] = []
+    /// MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in
+    /// this chat (decision 0054): the egress gate stops asking for them.
+    public var allowedMcpTools: [String] = []
 
     /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
     public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
@@ -430,7 +433,8 @@ public struct Session: Equatable, Sendable {
             agentPlan: PlanStep.list(v["agentPlan"]),
             runOptions: RunOption.values(of: v),
             parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), executionMode: v.str("executionMode"),
-            disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [])
+            disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [],
+            allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [])
     }
 }
 
@@ -462,6 +466,9 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var phase: String? = nil
     /// The pull requests its transcript names (`prUrls`): the rows look these up for their state.
     public var prUrls: [String] = []
+    public var transcriptTokens: Int64? = nil
+    public var contextUsed: Int64? = nil
+    public var contextWindow: Int64? = nil
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -477,7 +484,10 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             order: v.dbl("order"), pinned: v.flag("pinned"), activeWatchCount: v.long("activeWatchCount") ?? 0,
             createdAt: v.long("createdAt"), running: v["activeRun"].map { !$0.isNull } ?? false,
             exchangeCount: v.long("exchangeCount"), phase: v.str("phase"),
-            prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [])
+            prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [],
+            transcriptTokens: v.long("transcriptTokens").flatMap { $0 > 0 ? $0 : nil },
+            contextUsed: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("used").flatMap { $0 >= 0 ? $0 : nil } : nil,
+            contextWindow: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("window").flatMap { $0 > 0 ? $0 : nil } : nil)
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.

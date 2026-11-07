@@ -33,9 +33,16 @@ export function DictationButton(props: VoiceTarget) {
   const shown = voiceListener.displaySessionId() === sessionId;
   const pending = shown ? snap.pending : null;
   const busy = snap.busy === 'starting' ? 'Checking local speech…' : snap.busy === 'transcribing' ? 'Transcribing locally…' : '';
+  const island = shown && (snap.listening || !!busy);
   return (
-    <div className="relative shrink-0">
-      <button type="button" className={`grid h-9 w-9 place-items-center rounded-xl hover:bg-surface-2 disabled:opacity-40 ${snap.listening ? 'text-(--danger)' : 'text-ink-soft'}`}
+    <div className={`voice-island ${island ? 'is-open' : ''}`} data-voice-island>
+      {island && <div role="status" className="voice-island-status" data-voice-strip>
+        <span className="voice-island-meter" aria-hidden="true">
+          <span className="block h-full w-full origin-left rounded-full bg-(--danger) transition-transform duration-100" style={{ transform: `scaleX(${Math.max(0, Math.min(1, snap.level))})` }} />
+        </span>
+        <span className="min-w-0 truncate">{busy || (snap.heard ? `Heard: ${snap.heard}` : 'Listening locally… Say ‘Nekko…’ for commands.')}</span>
+      </div>}
+      <button type="button" className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl hover:bg-surface-2 disabled:opacity-40 ${snap.listening ? 'text-(--danger)' : 'text-ink-soft'}`}
         onClick={() => void toggle()} disabled={snap.busy === 'starting'} aria-pressed={snap.listening}
         aria-label={snap.listening ? 'Stop listening' : 'Start listening'} title="Always-on local dictation · Say ‘Nekko…’ for app commands">
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
@@ -44,14 +51,8 @@ export function DictationButton(props: VoiceTarget) {
       </button>
       {intro && <Suspense fallback={null}><VoiceIntro onClose={() => setIntro(false)} onTurnOn={() => void listen()} /></Suspense>}
       {setup && <div className="absolute bottom-full right-0 z-40 mb-2 w-80 rounded-xl border border-line bg-surface p-3 shadow-(--shadow-float)"><VoiceSettings compact /><button className="mt-2 text-xs" onClick={() => setSetup(false)}>Close setup</button></div>}
-      {shown && (snap.listening || busy || pending || snap.error) && <div className="absolute bottom-full right-0 z-40 mb-2 w-72 rounded-xl border border-line bg-surface p-3 shadow-(--shadow-float)" data-voice-strip>
-        {(snap.listening || busy) && <div role="status" className="flex items-center gap-2 text-xs text-ink-soft">
-          <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
-            <span className="block h-full w-full origin-left rounded-full bg-(--danger) transition-transform duration-100" style={{ transform: `scaleX(${Math.max(0, Math.min(1, snap.level))})` }} />
-          </span>
-          <span className="min-w-0 truncate">{busy || (snap.heard ? `Heard: ${snap.heard}` : 'Listening locally… Say ‘Nekko…’ for commands.')}</span>
-        </div>}
-        {pending && <div className={snap.listening || busy ? 'mt-2' : ''}>
+      {shown && (pending || snap.error) && <div className="absolute bottom-full right-0 z-40 mb-2 w-72 rounded-xl border border-line bg-surface p-3 shadow-(--shadow-float)">
+        {pending && <div>
           <p className="text-xs">{pending.message}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {pending.kind === 'confirm'

@@ -339,6 +339,43 @@ final class FleetTests: XCTestCase {
         XCTAssertEqual(ca.callsTo(Channels.sessionGet).count, 1, "the active computer is now the first one")
     }
 
+    /// One Live Activity card (#1912): a computer that is not active must not push or
+    /// start a card on this phone, so its link withdraws the card registration as it
+    /// comes online; made active again, it registers once more.
+    func testAComputerThatIsNotActiveWithdrawsItsCard() async throws {
+        let s = makeStore()
+        s.load()
+        s.cardLevel = .standard
+        s.cardStartToken = "cd34"
+        let a = try await s.pair(link("aaaa"))
+        let ca = try XCTUnwrap(connections.last)
+        // The second computer becomes active before the first was ever online: the switch told it nothing.
+        let b = try await s.pair(link("bbbb"))
+        let cb = try XCTUnwrap(connections.last)
+        cb.online()
+        await settle()
+        XCTAssertTrue(ca.cards.isEmpty)
+        XCTAssertEqual(cb.cards.last?["level"], "standard")
+        XCTAssertEqual(cb.cards.last?["startToken"], "cd34")
+
+        ca.online()
+        await settle()
+        let withdrawn = try XCTUnwrap(ca.cards.last)
+        XCTAssertEqual([withdrawn["token"], withdrawn["startToken"], withdrawn["level"], withdrawn["computerId"]],
+                       [.null, .null, "none", .string(a)])
+        XCTAssertEqual(ca.callsTo(Channels.cardSet).last, [["level": "none"]])
+        XCTAssertEqual(cb.cards.last?["level"], "standard", "the active computer keeps its card")
+
+        // Opening a chat there makes it active: it registers, and the one left behind withdraws.
+        s.focus(chat: "aaaa1")
+        await settle()
+        XCTAssertEqual(s.activeId, a)
+        XCTAssertEqual(ca.cards.last?["level"], "standard")
+        XCTAssertEqual(ca.cards.last?["startToken"], "cd34")
+        XCTAssertEqual(cb.cards.last?["level"], "none")
+        XCTAssertEqual(cb.cards.last?["computerId"], .string(b))
+    }
+
     func testChatActionsReachAComputerThatIsNotActive() async throws {
         let s = makeStore()
         s.load()

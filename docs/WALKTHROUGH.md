@@ -391,9 +391,23 @@ tool in this chat; other tools still ask, and a new chat starts asking again. Ev
 it has not written to in this chat, the approval names it. Once you approve, that
 recipient is known for the rest of the chat.
 
+**Private data on its way out** asks too, in every Guardrails chat. Before an MCP call (a
+read-only search included) or a fetch, Nekko looks inside what the call would send with the
+Privacy Shield's detectors: an API key or token, a card or ID number, an email, a phone
+number, or one of your private terms. If it finds one, the approval says what kind of data
+it is, never the value, so a search for "the deploy token ghp_…" does not leave unasked.
+
 The approval names the address or tool so you can tell whether you expected it. Ask
 mode already asks for all of these; YOLO never asks. Files in your project folders do
 not count as outside content.
+
+**Audit trail.** Right-click a chat and choose **Audit trail** to see what the agent did
+in it and who allowed it: each turn, each tool it ran and what that touched (a file, a
+host, a program, an MCP server), each approval and whether it was given on this computer,
+on a phone, in Telegram or skipped by YOLO, when the chat first read outside content, and
+what the Privacy Shield hid. **Approvals** shows only the decisions. The trail never holds
+what the agent read or sent, an incognito chat keeps none, and it is deleted with the
+chat.
 
 ---
 
@@ -523,3 +537,12 @@ top and bottom. Hover, keyboard focus or pin expands the navigation and reveals
 its labels together. Reduced motion disables these transitions.
 
 Mermaid diagrams blend into chat on a dotted, borderless canvas with a subtle shadow and theme-matched colors. Hover or focus the diagram for Copy and Expand; the expanded view supports zoom, pan, and Escape to close.
+
+
+### Choose agent-card details
+
+Open **View options → Card details** to show or hide the model, context window, pull requests, and last reply/update time independently. Desktop and Local Web UI also offer git branch, sub-agent count, and window count. Your choices stay on that device. Titles and essential activity/attention indicators stay visible.
+
+On desktop, **Show → Metadata** is still the master switch for detail rows. Turn it on to see the individual model/context/git/count choices. PR and reply time have their own switches. **Reset to defaults** shows all details and hides empty groups; previously saved explicit choices are retained until reset.
+
+The phones show reported summary context usage where available, not a guessed model limit: a count without a denominator means the host did not report a matching context-window capacity. iOS group headings match desktop colours, count capsules and activity motifs, without list separator lines.

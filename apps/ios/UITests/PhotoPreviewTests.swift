@@ -2,6 +2,31 @@ import XCTest
 
 @MainActor
 final class PhotoPreviewTests: XCTestCase {
+    func testComposerAndHomeIconEvidence() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["composer.photo.0"].waitForExistence(timeout: 30))
+        attach(app, "draft-photos-composer")
+        app.terminate()
+        let newChat = launch(newChat: true)
+        XCTAssertTrue(newChat.buttons["composer.photo.0"].waitForExistence(timeout: 30))
+        attach(newChat, "draft-photos-new-chat")
+        XCUIDevice.shared.press(.home)
+        let home = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        var visible = false
+        for page in 0..<3 {
+            let icons = home.icons.matching(identifier: "Nekko Agent")
+            visible = icons.allElementsBoundByIndex.contains { $0.isHittable && $0.frame.height > 80 && home.frame.contains($0.frame) }
+            if visible { break }
+            if page < 2 { home.swipeLeft() }
+        }
+        XCTAssertTrue(visible, "The labeled Home Screen icon must be visible")
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "dark-home-icon"
+        shot.lifetime = .keepAlways
+        add(shot)
+        newChat.terminate()
+    }
+
     func testComposerAndSentPhotos() {
         let app = launch()
         XCTAssertTrue(app.buttons["Send"].waitForExistence(timeout: 30))

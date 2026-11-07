@@ -14,6 +14,7 @@
     { "say": "Neco, open settings.", "intent": { "kind": "navigate", "view": "settings" } },
     { "say": "Neko open settings", "intent": { "kind": "navigate", "view": "settings" } },
     { "say": "Necko open settings", "intent": { "kind": "navigate", "view": "settings" } },
+    { "say": "Necco, open settings.", "intent": { "kind": "navigate", "view": "settings" } },
     { "say": "Nekko go to the model server tab", "intent": { "kind": "navigate", "view": "modelserver" } },
     { "say": "Nekko open settings", "intent": { "kind": "navigate", "view": "settings" } },
     { "say": "Nekko show agents", "intent": { "kind": "navigate", "view": "command" } },

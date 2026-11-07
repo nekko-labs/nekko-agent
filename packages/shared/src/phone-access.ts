@@ -297,6 +297,8 @@ export const PHONE_DENIED_FOR_NOW: Record<'files' | 'git' | 'terminal' | 'undeci
   terminal: { channels: [], prefixes: ['terminal:', 'terminals:'] },
   undecided: {
     channels: [
+      // A chat's audit trail (who allowed what) stays on the computer until a phone view is decided.
+      'audit:read',
       // Makes this computer fetch an arbitrary URL; a phone shows remote images itself.
       'image:fetch',
       // Making, changing or deleting automations stays on the computer; a phone may run one.

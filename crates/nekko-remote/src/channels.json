@@ -5,6 +5,7 @@
  "app:quit",
  "artifact:read",
  "attachment:import",
+ "audit:read",
  "changes:accept",
  "changes:acceptAll",
  "changes:list",

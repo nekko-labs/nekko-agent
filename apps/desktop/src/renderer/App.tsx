@@ -9,6 +9,7 @@ import { startDesktopNotifications } from './notifications.js';
 import { startCompactionStatus } from './compactionStatus.js';
 import { useT } from './i18n.js';
 import { SHORTCUTS } from './shortcuts.js';
+import { loadStartup } from './startupLoad.js';
 import { hasAppChrome } from './chrome.js';
 import { TitleBar } from './components/TitleBar.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
@@ -75,7 +76,7 @@ const NAV: Array<{ view: View; labelKey: string; Icon: (p: { className?: string 
 const MOBILE_NAV: View[] = ['command', 'training', 'workflows', 'settings'];
 
 export function App() {
-  const { view, setView, settings, settingsLoaded, providers, providersLoaded, onboardingOpen, refreshSettings, refreshProviders, refreshSessions, refreshTerminals } = useStore(
+  const { view, setView, settings, settingsLoaded, providers, providersLoaded, onboardingOpen, refreshSessions, refreshTerminals } = useStore(
     useShallow((s) => ({
       view: s.view,
       setView: s.setView,
@@ -84,8 +85,6 @@ export function App() {
       providers: s.providers,
       providersLoaded: s.providersLoaded,
       onboardingOpen: s.onboardingOpen,
-      refreshSettings: s.refreshSettings,
-      refreshProviders: s.refreshProviders,
       refreshSessions: s.refreshSessions,
       refreshTerminals: s.refreshTerminals,
     })),
@@ -162,7 +161,7 @@ export function App() {
 
   useEffect(() => {
     // Restore the saved provider/model before catalog loading chooses a fallback.
-    void refreshSettings().then(() => refreshProviders());
+    const stopLoad = loadStartup();
     refreshSessions();
     refreshTerminals();
     useStore.getState().refreshSkills();
@@ -200,6 +199,7 @@ export function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => {
+      stopLoad();
       mq.removeEventListener('change', onChange);
       window.removeEventListener('keydown', onKey);
     };
