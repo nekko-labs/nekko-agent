@@ -20,6 +20,10 @@ app.whenReady().then(async () => {
     for (let n = 0; n < 50 && !(await run("!!document.querySelector('[aria-label=\"Agent panel view options\"]')")); n++) await sleep(200);
     await sleep(600);
     await run("document.querySelector('.zones-intro button[aria-label=\"Close\"]')?.click()");
+    await sleep(600);
+    await run("document.querySelector('[data-first-prompt-intro-skip]')?.click()");
+    await sleep(300);
+    if (await run("!!document.querySelector('[role=dialog]')")) throw new Error('Unexpected intro dialog blocks the baseline surface');
     await shot('agents');
     await run("document.querySelector('[aria-label=\"Agent panel view options\"]').click()");
     await shot('view-options');
@@ -34,6 +38,11 @@ app.whenReady().then(async () => {
       await sleep(300);
       report.toneSaved = await run("layoutFixture.store.getState().settings.systemInstructions?.includes('<nekko-tone>')");
       if (!report.detailedSaved || !report.toneSaved) throw new Error('Mode/tone persistence failed');
+      for (const tab of ['Connectors', 'Skills', 'Experience']) {
+        await run(`document.getElementById('customize-${tab}').click()`);
+        await shot(`tab-${tab.toLowerCase()}`);
+        if (!(await run(`document.getElementById('customize-${tab}').getAttribute('aria-selected') === 'true'`))) throw new Error(`Tab ${tab} did not activate`);
+      }
     }
     report.hidden = !win.isVisible();
     report.text = await run('document.body.innerText');

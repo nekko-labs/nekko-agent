@@ -5,6 +5,8 @@ area: phone
 
 # iPhone: Simple and Expert modes (2026-10-24)
 
+**In progress (#2052), not released:** [Customize experience](../desktop/customize-experience.md) adds Experience / Connectors / Skills, the segmented Simple/Detailed toggle atop View options, phone-local tone, a shared Remotion onboarding example, provider usage bars and composer polish. Native compilation and screenshot/motion inspection remain pending; do not infer these changes are covered by the historical verification below.
+
 **User intent:** Philip asked (2026-10-24) for the phone's chat to get a mode switch at the top left, like the desktop's, toggling between **Simple** and **Expert**. In Simple mode the user picks the model and effort, from one control at the bottom with the model's name and a gauge for the effort. Expert mode adds a monitor panel of gauges for the computer's hardware, and a models monitor like the desktop's: the models loaded, unloading them, the hardware they use and their context size. The chat's context usage is shown in both modes, always.
 
 **Status `[implemented 2026-10-24 on the native iPhone app and the computer's phone gate; the gate's TS and Rust editions unit-tested; the Swift package tests (protocol parsing, the monitor store, the chat's context and effort) pass on Linux and macOS; the hardware store is named HardwareMonitorModel to coexist with the folding-phone Monitors pane; the views driven in the simulator by LiveRelayTests/testSimpleAndExpertModes against a live stack (2026-10-25); Android implemented 2026-10-25 (T217b), see *Android* below]`**
