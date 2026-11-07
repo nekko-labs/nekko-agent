@@ -146,10 +146,10 @@ function Mic({ on, press = 0, size = 64 }: { on: number; press?: number; size?: 
   </div>;
 }
 
-const COMPOSER = { x: 200, y: 340, w: 880, h: 120 };
+const COMPOSER = { x: 200, y: 320, w: 880, h: 170 };
 
-/** The chat composer: a title chip, the draft and the mic. */
-function Composer({ draft, on, press = 0, chat = 'Fix login bug', caret = true }: { draft: string; on: number; press?: number; chat?: string; caret?: boolean }) {
+/** The chat composer: a title chip, the draft, and under it the mic with its island. */
+function Composer({ draft, on, press = 0, chat = 'Fix login bug', caret = true, island }: { draft: string; on: number; press?: number; chat?: string; caret?: boolean; island?: IslandProps }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = pop(frame, 2, fps, theme.spring.smooth);
@@ -159,25 +159,30 @@ function Composer({ draft, on, press = 0, chat = 'Fix login bug', caret = true }
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '6px 12px', borderRadius: 999, background: theme.colors.win, border: `1px solid ${theme.colors.line}`, fontSize: 17, fontWeight: 600, color: theme.colors.soft }}>
       <span style={{ width: 8, height: 8, borderRadius: 4, background: theme.colors.accent }} />{chat}
     </div>
-    <div style={{ height: COMPOSER.h, borderRadius: 22, background: theme.colors.win, border: `1px solid ${theme.colors.line}`, boxShadow: `0 18px 40px ${theme.colors.shadow}`, display: 'flex', alignItems: 'center', gap: 20, padding: '0 22px 0 30px' }}>
+    <div style={{ height: COMPOSER.h, borderRadius: 22, background: theme.colors.win, border: `1px solid ${theme.colors.line}`, boxShadow: `0 18px 40px ${theme.colors.shadow}`, display: 'flex', flexDirection: 'column', padding: '18px 22px 16px 30px' }}>
       <div style={{ flex: 1, minWidth: 0, fontSize: 26, lineHeight: 1.35, color: draft ? theme.colors.ink : theme.colors.faint }}>
         {draft || 'Message Nekko'}
         <span style={{ display: 'inline-block', width: 2, height: 28, marginLeft: 3, verticalAlign: 'text-bottom', background: theme.colors.accent, opacity: blink ? 1 : 0 }} />
       </div>
-      <Mic on={on} press={press} />
+      <div style={{ alignSelf: 'flex-end', display: 'flex', alignItems: 'center', borderRadius: 999, background: island ? `rgb(0 0 0 / ${Math.min(1, island.show)})` : 'transparent' }}>
+        {island && <Island {...island} />}
+        <Mic on={on} press={press} />
+      </div>
     </div>
   </div>;
 }
 
-/** The strip above the mic: level meter and the last thing heard. */
-function Strip({ show, text, loud = 1 }: { show: number; text: string; loud?: number }) {
+interface IslandProps { show: number; text: string; loud?: number }
+
+/** Grows left out of the mic, as the composer's does: level meter and the last thing heard. */
+function Island({ show, text, loud = 1 }: IslandProps) {
   const frame = useCurrentFrame();
   const bars = Array.from({ length: 9 }, (_, i) => 0.25 + Math.abs(Math.sin(frame / 4 + i * 1.3) * Math.cos(frame / 11 + i)) * 0.75 * loud);
-  return <div style={{ position: 'absolute', right: W - COMPOSER.x - COMPOSER.w, top: COMPOSER.y - 30, width: 560, padding: '14px 18px', borderRadius: 16, background: theme.colors.win, border: `1px solid ${theme.colors.line}`, boxShadow: `0 12px 30px ${theme.colors.shadow}`, display: 'flex', alignItems: 'center', gap: 14, opacity: show, transform: `translateY(${(1 - show) * 14 - 60}px) scale(${mix(0.95, 1, show)})`, transformOrigin: 'bottom right' }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 3, height: 26 }}>
+  return <div style={{ width: mix(0, 620, show), paddingLeft: 24 * show, boxSizing: 'border-box', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 14, opacity: Math.min(1, show) }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, height: 26, flexShrink: 0 }}>
       {bars.map((b, i) => <span key={i} style={{ width: 4, height: 26 * b, borderRadius: 2, background: theme.colors.hot }} />)}
     </div>
-    <span style={{ fontSize: 18, color: theme.colors.soft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{text}</span>
+    <span style={{ minWidth: 0, fontSize: 18, color: 'rgb(255 255 255 / 0.82)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{text}</span>
   </div>;
 }
 
@@ -210,14 +215,13 @@ function TapScene({ scene }: { scene: VoiceIntroScene }) {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const at = useAt();
-  const mic = { x: COMPOSER.x + COMPOSER.w - 22 - 32, y: COMPOSER.y + 38 + COMPOSER.h / 2 };
+  const mic = { x: COMPOSER.x + COMPOSER.w - 22 - 32, y: COMPOSER.y + 38 + COMPOSER.h - 16 - 32 };
   const glide = tween(frame, [at(0.6), at(1.4)], [0, 1]);
   const leave = tween(frame, [at(2.0), at(2.8)], [0, 1]);
   const cursor = { x: mix(mix(980, mic.x, glide), mic.x + 70, leave), y: mix(mix(660, mic.y, glide), mic.y + 90, leave) };
   const on = tween(frame, [at(1.55), at(1.75)], [0, 1], theme.ease.out);
   return <Scene>
-    <Composer draft="" on={on} press={tap(frame, at(1.45), fps)} />
-    <Strip show={pop(frame, at(1.9), fps)} text="Listening locally. Say ‘Nekko…’ for commands." loud={0.5} />
+    <Composer draft="" on={on} press={tap(frame, at(1.45), fps)} island={{ show: pop(frame, at(1.9), fps), text: 'Listening locally. Say ‘Nekko…’ for commands.', loud: 0.5 }} />
     <Cursor {...cursor} press={tap(frame, at(1.45), fps)} show={tween(frame, [at(0.4), at(0.7)], [0, 1], theme.ease.out) * (1 - tween(frame, [at(2.6), at(3.0)], [0, 1], theme.ease.out))} />
     <Caption scene={scene} />
   </Scene>;
@@ -237,8 +241,7 @@ function TalkScene({ scene }: { scene: VoiceIntroScene }) {
   const draft = words.slice(0, shown).join(' ');
   const heard = shown > 8 ? SECOND : FIRST;
   return <Scene>
-    <Composer draft={draft} on={1} />
-    <Strip show={1} text={shown ? `Heard: ${heard}` : 'Listening locally.'} loud={shown < words.length ? 1 : 0.35} />
+    <Composer draft={draft} on={1} island={{ show: 1, text: shown ? `Heard: ${heard}` : 'Listening locally.', loud: shown < words.length ? 1 : 0.35 }} />
     <Caption scene={scene} />
   </Scene>;
 }

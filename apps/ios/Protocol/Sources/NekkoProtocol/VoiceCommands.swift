@@ -20,9 +20,9 @@ private func groups(_ re: NSRegularExpression, _ s: String) -> [String]? {
 
 private func matches(_ re: NSRegularExpression, _ s: String) -> Bool { groups(re, s) != nil }
 
-// Recognizers spell the wake word as they hear it: Nekko, Neko, Neco, Necko.
-private let wake = rx(#"^ne[ck]k?o\b[\s,:.!?-]*"#)
-private let wakeOnly = rx(#"^ne[ck]k?o\b[\s,:.!?-]*$"#)
+// Recognizers spell the wake word as they hear it: Nekko, Neko, Neco, Necko, Necco.
+private let wake = rx(#"^ne[ck][ck]?o\b[\s,:.!?-]*"#)
+private let wakeOnly = rx(#"^ne[ck][ck]?o\b[\s,:.!?-]*$"#)
 private let newSession = rx(#"^(?:(?:create|start|open)(?: a)? new (?:session|chat|agent)|new (?:agent )?(?:session|chat|agent)|let's (?:make|start|create) a new (?:change|session|chat|task))$"#)
 private let completeSession = rx(#"^(?:complete|finish|archive) (?:this|the current) (?:session|chat|agent)$"#)
 private let erase = rx(#"^(?:erase|scratch|cancel|undo) that$"#)
@@ -91,6 +91,13 @@ private func parseGo(_ command: String) -> String? {
     return "\(g[1] == "desktop" || g[1] == "space" ? "desktop" : "screen"):\(n)"
 }
 
+private let misheardName = rx(#"\bne[ck][ck]?o\b"#)
+
+/// The name is in no recognizer's vocabulary. The twin of the desktop's spellNekko.
+public func spellNekko(_ text: String) -> String {
+    misheardName.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "Nekko")
+}
+
 /// Splits a transcript at sentence ends and parses each piece; adjacent dictation pieces rejoin.
 public func splitVoiceSegments(_ text: String) -> [VoiceIntent] {
     var pieces: [String] = []
@@ -122,7 +129,7 @@ public struct WakeTail: Equatable, Sendable {
     public let wake: String
 }
 
-private let wakeTail = rx(#"(?:^|(?<=[.!?])\s+)(ne[ck]k?o\b[\s,:.!?-]*)$"#)
+private let wakeTail = rx(#"(?:^|(?<=[.!?])\s+)(ne[ck][ck]?o\b[\s,:.!?-]*)$"#)
 
 /// "Fix the bug. Nekko." → rest "Fix the bug.", wake "Nekko.". The twin of the desktop's splitWakeTail.
 public func splitWakeTail(_ text: String) -> WakeTail {
