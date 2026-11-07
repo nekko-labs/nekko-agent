@@ -373,7 +373,7 @@ fn extract_template(dir: &str, entries: &[String], model_file: &str, work_dir: &
 
 /* ------------------------------------------------------ stable-diffusion */
 
-const ROLES: [&str; 6] = ["clip_l", "clip_g", "t5xxl", "vae", "llm", "taesd"];
+const ROLES: [&str; 7] = ["clip_l", "clip_g", "t5xxl", "vae", "llm", "taesd", "llm_vision"];
 
 /// `sd-server`'s arguments for one image model (`diffusionArgs`).
 pub fn diffusion_args(
@@ -420,7 +420,8 @@ pub fn diffusion_args(
         "--listen-port".into(),
         port.to_string(),
     ];
-    if let Some(family) = image_companion_set_for(model) {
+    let family = image_companion_set_for(model);
+    if let Some(family) = &family {
         let has = |r: &str| paths.get(r).is_some_and(|v| nekko_js::truthy(Some(v)));
         let missing: Vec<String> = family["files"]
             .as_array()
@@ -446,6 +447,11 @@ pub fn diffusion_args(
         }
         args.push(format!("--{key}"));
         args.push(p);
+    }
+    // A family's own switches (sampler, flow shift, model args); sd-server takes
+    // them as its default generation settings.
+    for a in family.as_ref().and_then(|f| f["launchArgs"].as_array()).into_iter().flatten() {
+        args.push(text(Some(a)));
     }
     if truthy(&preset, "offloadToCpu") {
         args.push("--offload-to-cpu".into());
