@@ -15,6 +15,10 @@ on:
         required: false
         type: string
         default: ''
+      ios_runtime:
+        required: false
+        type: string
+        default: ''
       ios_test_file:
         required: false
         type: string
@@ -47,6 +51,11 @@ on:
         type: string
       harness_ref:
         description: 'Commit whose evidence test files run on both revisions (default: this workflow run''s commit)'
+        required: false
+        type: string
+        default: ''
+      ios_runtime:
+        description: 'Exact simulator runtime identifier for matched evidence; empty uses the existing auto-selection'
         required: false
         type: string
         default: ''
@@ -96,7 +105,9 @@ jobs:
           ref: ${{ inputs.harness_ref || github.sha }}
           path: .evidence-harness
           persist-credentials: false
-          sparse-checkout: ${{ inputs.ios_test_file }}
+          sparse-checkout: |
+            ${{ inputs.ios_test_file }}
+            apps/ios/App/Views/SecurityEvidenceFixture.swift
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -116,13 +127,33 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # Only the security comparison needs the debug-only in-memory fixture.
+          # Production views and behavior remain unchanged in both revisions.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/SecurityComparisonTests.swift" ]]; then
+          cp .evidence-harness/apps/ios/App/Views/SecurityEvidenceFixture.swift apps/ios/App/Views/
+          python3 - <<'PYFIX'
+          from pathlib import Path
+          p = Path("apps/ios/App/NekkoApp.swift")
+          s = p.read_text()
+          if '"-uiTestSecurityEvidence"' not in s:
+              s = s.replace('let flags = ["-uiTestChatRefresh"', 'let flags = ["-uiTestSecurityEvidence", "-uiTestChatRefresh"', 1)
+              needle = '        if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation")'
+              assert needle in s
+              s = s.replace(needle, '        if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") { SecurityEvidenceFixture() } else\n' + needle, 1)
+          p.write_text(s)
+          PYFIX
+          fi
       - run: brew install xcodegen
-      - name: Generate project and create simulator (same selection as Native iOS)
+      - name: Generate project and create simulator (optionally pinned for matched evidence)
         working-directory: apps/ios
+        env:
+          IOS_RUNTIME: ${{ inputs.ios_runtime }}
         run: |
           set -euo pipefail
           xcodegen generate
-          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          # Fail closed if a requested runtime is missing; never silently compare different OS versions.
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'requested = ENV.fetch("IOS_RUNTIME", ""); JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") && (requested.empty? || r["identifier"] == requested) }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          test -n "$RUNTIME" && test -n "$TYPE"
           DEVICE=$(xcrun simctl create Nekko-Mode-Evidence "$TYPE" "$RUNTIME")
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
@@ -223,6 +254,7 @@ jobs:
       - name: Capture the evidence test
         uses: reactivecircus/android-emulator-runner@v2
         env:
+          NEKKO_EVIDENCE_REVISION: ${{ matrix.revision }}
           NEKKO_EVIDENCE_CLASS: ${{ inputs.android_test_class }}
           NEKKO_EVIDENCE_EXPECT: ${{ inputs.android_expect }}
         with:

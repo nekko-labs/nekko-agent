@@ -40,8 +40,9 @@ One desktop runs and watches every agent its owner has, wherever each one runs. 
 
 `[implemented 2026-11-02; picker and engine tested, not yet on real machines]`
 
+- **Keep this computer awake while agents run.** `[implemented 2026-11-06; the hold tested on macOS, the Settings row captured, Linux and Windows not yet run]` A switch under *Let a computer connect to this one*, off by default and set only on the machine itself (`keepAwakeWhileAgentsRun`), since it spends that machine's battery. On, the engine holds off idle sleep while any turn runs here, re-deciding every 15 seconds, and lets go when the last one ends: `caffeinate -i` on macOS, `systemd-inhibit` on Linux, `SetThreadExecutionState` on Windows, each ending with the engine so a crash never leaves the machine held awake. Closing the lid or pressing the power button still sleeps it. It works with no window too (`computer serve`).
 - **Run on.** New chat gets a *Run on* row once a computer is connected, as on the iPhone. Choosing one swaps the model list to that computer's models and subscriptions, and the folder list to its folders, and picks its first model so starting there is still one click. A computer that is offline, or that allows watching only, can't be chosen. A chat started there has one working folder; supporting folders stay a local feature for now.
-- **Monitors.** A switch in the dock points the Hardware monitor at a connected computer. Local models and Utilization still read this one.
+- **Monitors.** A switch in the dock points the monitors at a connected computer: Hardware, Local models and Utilization all read the one chosen. `[implemented 2026-11-06; unit tests and a hidden capture with a stand-in computer, not yet against a real one]` Local models shows what that computer's Model Server holds, by model id (its phone view has no names). Utilization lists its enabled cloud providers with their quota, read by provider id, and its token use, re-read every minute; it never shows this computer's plans beside them. A model's Settings, Open Model Server and Manage providers belong to this computer and hide while another is watched. The Expert strip that follows the computer running a chat's model moves the same switch, so the two never disagree.
 
 ## Where the model runs
 
@@ -57,12 +58,13 @@ Where the agent runs and where the model runs are separate choices. Whichever co
 
 ## Every run setting, from any client
 
-`[gate implemented 2026-11-02 for phones and computers; the phone section built on iOS and Android; model-loading controls not built on any client]`
+`[gate implemented 2026-11-02 for phones and computers; the phone section built on iOS and Android, with memory, project rules, Privacy Shield and tools added 2026-11-06 (unit-tested, the iPhone rows captured in a fixture, not yet against a real computer); model-loading controls not built on any client]`
 
-- A phone or a desktop can set everything `setSessionOptions` takes on the computer running a chat. The phone's model sheet has *Run settings*: choosing the model automatically, offline, cloud only, incognito, a separate Git branch, work mode and tool style.
+- A phone or a desktop can set everything `setSessionOptions` takes on the computer running a chat. The phone's model sheet has *Run settings*: choosing the model automatically, offline, cloud only, incognito, a separate Git branch, work mode, tool style, memory (Everything, Project, Off), project rules (Rules, Root files, Off) and Privacy Shield (Default, which follows the computer, On or Off). Privacy Shield changes only the chat's mode and keeps its kinds and allowed values. *Tools* opens the computer's tools (`tools:list`, which reaches a phone or computer as names and descriptions only) with a switch each, written as the chat's `disabledTools`. Each of these needs the change proof (Face ID, the fingerprint or the screen lock), on or off, like the other guarded options.
 - **Options that change what an agent may touch or where its data goes need the same proof as raising a mode, in either direction:** execution mode, Git isolation, disabled tools, MCP servers and connectors, memory, guidance, privacy, offline, cloud only and incognito. A fork keeps its chat's offline, cloud-only, privacy and incognito settings, since it carries the transcript.
 - `chat:send` also takes videos, a history limit and no-tools. Attaching a path on the host stays refused.
 - How a Model Server loads and keeps models is open to devices while it allows it (`maxLoaded`, `idleTtlSeconds`, `jitLoad`, `autoload`, `autoStart`, presets, loading a model). `port`, `bind`, `apiKey`, `corsOrigins`, the model folders and the two settings above stay on the machine, because they open it to its network or decide this rule.
+- **Model loading from any client.** `[implemented 2026-11-06 on the desktop, iPhone and Android; unit-tested, the desktop captured with a stand-in computer and the iPhone section in a fixture, not yet against a real computer]` The desktop's Local models monitor, while it watches a connected computer, and the phones' agent details (Expert) have a Model Server section: *Load a model* from that server's models, *Unload all*, *Models kept loaded* (1 to 8), *Unload when idle* (5 minutes, 15 minutes, 1 hour or never) and *Load when a chat asks*. The desktop also offers Unload per model there. `engine:status` now carries the settings a device may change (`PHONE_MODEL_SERVER_VIEW`), so reading them needs no proof; every change needs it (Face ID or the screen lock on a phone, the link's key on a computer). With *Connected devices choose model settings* off, the section shows that computer's choices, can't change them, and says where to. Presets, `autoload` and `autoStart` have no control yet.
 
 ## A host with no window
 
@@ -80,4 +82,7 @@ Refused from a computer, always: provider keys and sign-ins, sync, remote-access
 
 ## Status
 
-Phases and what is left: `TASKS.md`, section *Connected computers*.
+Phases are in the design's Plan; the frozen task list is in `docs/history/tasks-archive.md`, section *Connected computers*, and what is left is tracked on #1492.
+
+- Done: messages during a run (CC0, #1516), link and host class, federation, see and drive, model sources, a host with no window, icons on phones, the host proving itself, and the monitors following the computer switch (2026-11-06).
+- Left: *Keep this computer awake while agents run* (CC4), model-loading controls on any client and the guarded options on phones (CC6), pairing without pasting (CC8).

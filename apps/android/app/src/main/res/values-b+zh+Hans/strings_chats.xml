@@ -241,4 +241,5 @@
     <string name="chats_group_week">过去 7 天</string>
     <string name="chats_group_month">过去 30 天</string>
     <string name="chats_group_older">更早</string>
+    <string name="chats_tool_step_up">在 %1$s 上的此聊天中始终允许 %2$s</string>
 </resources>

@@ -388,7 +388,7 @@ private fun ChatScreenContent(
     }
 
     if (showModelEffort) {
-        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onDismiss = { showModelEffort = false })
+        ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false })
     }
     val terminals by vm.terminalsOpen.collectAsStateWithLifecycle()
     terminals?.let { t ->
@@ -594,7 +594,17 @@ private fun ChatScreenContent(
                 }
             }
             val controls: @Composable () -> Unit = {
-                chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
+                chat.approval?.let { a ->
+                    ApprovalCard(a, onDecide = vm::approve, onAlwaysAllow = {
+                        try {
+                            vm.alwaysAllowTool()
+                        } catch (e: RelayException) {
+                            // A second factor first (SK-7): the sheet asks, then saves and allows; the card stays meanwhile.
+                            if (e.refusal?.asksForStepUp != true) throw e
+                            modeStepUp = PendingStepUp(res.getString(R.string.chats_tool_step_up, computerName, a.call.name)) { proof -> vm.alwaysAllowTool(proof) }
+                        }
+                    })
+                }
                 chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
                 // A completed chat reads like the desktop's: no message box until it is restored.
@@ -679,7 +689,7 @@ private fun ChatScreenContent(
         ModePill(
             pill, barBottom, floor,
             gauges = if (showHardware) { vertical, open -> MiniMonitor(hardware, onOpen = open, compact = pane != null, vertical = vertical, modelName = vm::modelName) } else null,
-            details = { AgentDetails(hardware, chat, computerName, vm::modelName, vm.hardware::unload) },
+            details = { AgentDetails(hardware, chat, computerName, vm::modelName, vm.hardware::unload, vm.hardware.actions) },
         )
     }
 }

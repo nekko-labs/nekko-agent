@@ -43,6 +43,18 @@ for theme in light dark; do
   rm -f "$env_file"
 done
 
+# Exercise the security controls and collect their full-screen evidence on the same
+# disposable emulator. These tests use in-memory preferences and no relay.
+adb shell pm clear "$pkg" >/dev/null
+result="$(adb shell "am instrument -w -e class com.nekko.android.SecurityEvidenceTest -e nekkoModeEvidence true $pkg.test/androidx.test.runner.AndroidJUnitRunner" || true)"
+echo "$result"
+mkdir -p "$out/security"
+adb pull "/sdcard/Android/data/$pkg/files/evidence/." "$out/security/" >/dev/null 2>&1 || echo "no security screenshots"
+if ! grep -q "OK (3 tests)" <<<"$result" || [ ! -s "$out/security/always-allow-tool.png" ] || [ ! -s "$out/security/yolo-warning.png" ]; then
+  echo "Security evidence tests or screenshots failed"
+  status=1
+fi
+
 # Small JPEG copies in the log, for reviewers who can't download artifacts.
 find "$out" -name '*.png' | sort | while read -r f; do
   if python3 -c "import PIL" 2>/dev/null; then

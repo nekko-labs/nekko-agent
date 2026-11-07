@@ -15,7 +15,7 @@ The reference for every colour in the Nekko and Indigo app themes, the app icon 
 |---|---|---|
 | **Plum** (main, Nekko) | `#190019` | Main buttons, the app icon tile, website download button, big fills. Too dark for text or thin lines on dark backgrounds. |
 | **Indigo** (main, Indigo theme) | `#2B124C` | Same role as plum, in the Indigo themes only. |
-| **Secondary** | `#854F6C` | Outlines, glows, the icon mark, the cat on the website, wash gradients, chart/dot-wave ends. Not for small text on dark (2.9:1). |
+| **Secondary** | `#854F6C` | Outlines, glows, installer marks, the cat on the website, wash gradients, chart/dot-wave ends. Not for small text on dark (2.9:1). |
 | **Secondary, light** | `#C99BB3` | The secondary as **small text on dark** (7.6:1): links, labels, merged-PR text in Dark. |
 | **Text, dark mode** | `#FFFFFF` | All body text in Dark. |
 | **Text, light mode** | `#000000` | All body text in Light. |
@@ -30,30 +30,33 @@ The main colours are near-black, so small accents (links, icons, headings, toggl
 
 | Theme | `accent` (small accents) | `accent2` (secondary accents) | Selected rows (`--accent-soft`) |
 |---|---|---|---|
-| Light Nekko | `#5A2352` | `#8A4A7F` | `#8A4A7F` at 16% |
+| Light Nekko | `#5A2352` | `#8A4A7F` | `#5A2352` at 16% over the surface |
 | Dark Nekko | `#C084B5` | `#C99BB3` | `#5A2352` at 55% over the surface |
-| Light Indigo | `#4A2A7A` | `#6E4FA0` | `#6E4FA0` at 16% |
+| Light Indigo | `#4A2A7A` | `#6E4FA0` | `#4A2A7A` at 16% over the surface |
 | Dark Indigo | `#A68FD0` | `#C99BB3` | `#4A2A7A` at 55% over the surface |
 
 ## Surfaces
 
-The Nekko and Indigo themes use the standard Light and Dark surfaces unchanged; only text and accents differ.
+Light Nekko and Indigo use pale family-tinted surfaces so the same colour roles as Dark remain visible without becoming dark themes. Dark surfaces are unchanged. The desktop/Local Web UI and generated iOS/Android palette catalogs share these light surface tokens. Native apps retain their own existing backdrop geometry.
 
-| Token | Light | Dark |
-|---|---|---|
-| Page (`--paper`) | `#FBFBFD` | `#0C0C11` |
-| Window (`--win`) | `#FCFCFE` | `#17171E` |
-| Panel (`--surface`) | `#FFFFFF` | `#16161C` |
-| Raised panel (`--surface-2`) | `#F2F2F7` | `#20202A` |
-| Lines (`--line`) | `#E8E8EF` | `#26262F` |
-| Muted text (website Dark) | n/a | `#A3A1B0` |
+| Token | Light Nekko | Light Indigo | Dark (both) |
+|---|---|---|---|
+| Page (`--paper`) | `#FBF6F9` | `#F7F5FC` | `#0C0C11` |
+| Window (`--win`) | `#FCF8FB` | `#FAF8FE` | `#17171E` |
+| Panel (`--surface`) | `#FFFBFD` | `#FDFBFF` | `#16161C` |
+| Raised panel (`--surface-2`) | `#F2E7EF` | `#EDE8F6` | `#20202A` |
+| Lines (`--line`) | `#E3D3DF` | `#DDD4EB` | `#26262F` |
+| Muted text (`--ink-soft`) | `#40313F` | `#3C314A` | `#A3A1B0` |
+| Faint text (`--ink-faint`) | `#493648` | `#43384F` | `#898894` |
+
+Selected rows mix the primary accent into the panel surface, as Dark does, rather than stacking a translucent secondary accent over whatever happens to sit behind them. Body text stays black, main buttons stay deep plum/indigo with white text, and saved custom accents are not migrated or overwritten.
 
 ## Components
 
 - **Main button:** fill is the main colour (`#190019` or `#2B124C`), text `#FFFFFF`. In Dark it also has a 1px `#854F6C` inside outline.
 - **Merged-PR banner text:** Light uses the main colour; Dark uses `#C99BB3`.
 - **Active-window gradient** (revised for #1791; other themes keep their existing treatment): a soft plum field from the top of the selected chat window, an ellipse 110% wide and 90% tall fading to nothing by 85%.
-  - Dark: `#854F6C` at 30%. Light: the main colour at 10%.
+  - Dark: `#854F6C` at 30%. Light: the same `#854F6C` hue at 22% (#2015), replacing the near-black main colour at 10%. Violet/rose overlay colours, geometry, timing and grain stay unchanged.
   - **When:** the selected agent keeps the same gradient from its new-chat greeting into its full transcript, working or idle. In Dynamic only the active pane has it; background agents stay neutral even while working. Selection fades the base field over 0.7 s.
   - **Colour transition:** a static violet/rose palette (`rgb(107 77 153 / .22)` top-left, `rgb(163 80 119 / .12)` bottom-right) crossfades by composited opacity from .1 to .9 over 24 s, alternating. It never intercepts input. Reduced motion disables the cycle and selection fade, retaining a static plum field.
   - **Existing-chat dithering (#1891):** the selected conversation adds the new-chat screen's faint (5.5% opacity), fixed-seed monochrome grain behind its content, reducing harsh gradient bands without blurring text. The tile is static even while the colours crossfade. New chat keeps its existing single grain layer; inactive panes, standalone composers and other themes are unchanged. No network assets, settings, host calls or permissions are added. Acceptance: smoother-looking transitions, readable text, pointer and typing pass-through, and unchanged new-chat appearance at desktop and narrow widths. Implemented and verified with 484 focused tests, desktop typecheck and nine isolated Electron checks on both base and head. Matching Windows desktop (1400×900) and narrow (460×900) captures were inspected; new-chat pixels are identical at both sizes. The narrow fixture scrolls to reach its composer on base and head. Reproduce with `NEKKO_CONTROLS_SANDBOX=chat-gradient-dither-sandbox.cjs node apps/desktop/scripts/agent-window-controls-integration.cjs` (add `NEKKO_TEST_REVISION=13f3f189` for the baseline). Native phone apps, macOS/Linux, other presets and packaged builds are not visually verified by this change.
@@ -67,12 +70,24 @@ The Nekko and Indigo themes use the standard Light and Dark surfaces unchanged; 
 | Light Indigo | `#2B124C` | `#854F6C` |
 | Dark Indigo | `#A68FD0` | `#854F6C` |
 
+## Light/dark colour alignment (#2015)
+
+Implemented in the shared desktop/Local Web UI renderer: pale family-tinted Light Nekko and Indigo surfaces, stronger shared plum glow, primary-accent selection fills, and darker family-tinted muted text. System resolving to Light Nekko inherits the treatment. Other named palettes, Dark, primary buttons, custom accent values and motion timing are unchanged.
+
+Acceptance: recognizable colour relationships between the light/dark pair; body, muted, faint and primary-accent text at WCAG AA 4.5:1 on surfaces, selection fills and a conservative fully overlapping gradient/grain bound; unchanged input pass-through, inactive panes and reduced-motion behavior. No new settings, external assets, network access, permissions or storage changes.
+
+Verification: 549 focused desktop theme/contrast tests plus 16 shared catalog/golden tests and desktop typecheck pass. The isolated Windows Electron fixture passes 21 checks on both base and head, with matching existing/new-chat screenshots at 1400×900 and 460×900 and a short real-time gradient recording. Captures were inspected using an off-screen, non-focusable native evidence viewer; browser capture failed, not the app renderer. At the narrow width, existing-chat composers require scrolling on both base and head. Android and iOS before/after evidence passed, was inspected and published in #2021. Android uses API 34 at 1080×1920; iOS uses matched iPhone 18 Pro / iOS 27.0 / Xcode 27.1 at 1206×2622 (run 42236644110). All light and dark native pairs were inspected: intended family tints, no visible layout regression, dark appearances retained. These are synthetic component fixtures, not live paired-chat or physical-device coverage. The first mismatched iOS 27.2/27.0 run was rejected; the evidence workflow now accepts an explicit runtime pin. macOS/Linux desktop and packaged builds have not been run locally.
+
+Reproduce with `NEKKO_CONTROLS_SANDBOX=light-theme-sandbox.cjs node apps/desktop/scripts/agent-window-controls-integration.cjs`; add `NEKKO_TEST_REVISION=bdd59fa38` for the baseline. Media stays outside git and is published in the PR description.
+
 ## App icon
 
 Plum in every theme (there is no indigo icon).
 
 - **Tile:** left-to-right gradient `#190019` to `#5A2352`, rounded square.
-- **Mark (the cat):** `#854F6C`.
+- **Mark (the cat):** white `#FFFFFF` (implemented in #1943); geometry and the plum tile gradient are unchanged.
+- **Installer banners:** keep the original plum `#854F6C` cat, text and edge stripe, not the white app-icon mark. The generator selects installer ink explicitly (#2003). Non-icon brand marks keep their existing plum treatments.
+- **Implemented and tested (#2003):** regression tests cover white app-icon output at nine sizes, explicit ink for fill and small-size strokes, and exact header/sidebar SVG equality with the pre-#1943 generator, including supersampled dimensions. No visual change to current UI or installers: committed icon and installer assets are not regenerated or changed. This restores future banner regeneration to the original plum art, not a new design. Cross-platform raster reproducibility and native launcher/installer appearance are not verified by this source-only follow-up.
 - Source of truth: `apps/desktop/scripts/icon-art.cjs`; regenerate with `npx electron apps/desktop/scripts/make-icons.cjs`.
 
 ## Base looks and other brand surfaces

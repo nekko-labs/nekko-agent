@@ -575,13 +575,15 @@ final class LiveCardViewTests: XCTestCase {
         XCTAssertEqual(LiveChatState.needsYou.phaseLine, "Needs you")
     }
 
-    /// The two that need you are the rows (sorted to the top from the end of
-    /// the list); the rest are counted, and the chats past the eight the card
-    /// carries are a bare "+N".
-    func testTheCrowdShowsWhatNeedsYouAsRows() {
+    /// The two that need you are the first chips (sorted to the top from the
+    /// end of the list); the rest, and the chats past the eight the card
+    /// carries, are one "+N".
+    func testTheCrowdShowsWhatNeedsYouFirst() {
         let card = Self.card(.standard, chats: Self.crowd)
-        XCTAssertEqual(cardRows(card).map(\.id), ["a", "q"])
-        XCTAssertEqual(cardTally(card).more, 4)
+        let all = cardChips(card)
+        XCTAssertEqual(all.chips.prefix(2).map(\.id), ["a", "q"])
+        XCTAssertEqual(all.chips.count, 5)
+        XCTAssertEqual(all.more, 7)
     }
 
     /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored). Runs only
@@ -652,11 +654,15 @@ final class RunActivitiesTests: XCTestCase {
     var loaded = true
 
     func make() -> RunActivities {
+        // The cards "iOS" has up: every one started here (or put up by a test) that has not ended.
+        let up = CardsUp(ids: { [unowned self] in started.filter { !$0.ended && $0.isLive }.map(\.id) },
+                         end: { [unowned self] id in started.first { $0.id == id }?.ended = true },
+                         take: { [unowned self] id in started.first { $0.id == id } })
         let r = RunActivities(request: { [unowned self] attributes, state in
             let card = FakeCard(attributes, state)
             started.append(card)
             return card
-        }, adoptLeftover: false)
+        }, adoptLeftover: false, cardsUp: up)
         r.level = { [unowned self] in level }
         r.source = { [unowned self] in loaded ? .init(summaries: summaries, activity: activity, computerId: "pc", computerName: "Mac") : nil }
         return r
@@ -730,6 +736,55 @@ final class RunActivitiesTests: XCTestCase {
         r.adopt(extra)
         XCTAssertTrue(extra.ended, "one card: a second is ended")
         XCTAssertTrue(r.card === pushed)
+    }
+
+    /// One card (#1912): a second card iOS has up that the app never heard of (a
+    /// push-to-start while it was suspended, an earlier launch's) ends on the next refresh.
+    func testARefreshEndsEveryOtherCardThatIsUp() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        r.refresh()
+        let mine = try XCTUnwrap(started.first)
+        let stray = FakeCard(mine.attributes, mine.state)
+        started.append(stray)
+        r.refresh()
+        XCTAssertTrue(stray.ended)
+        XCTAssertFalse(mine.ended)
+        XCTAssertTrue(r.card === mine)
+    }
+
+    /// With no card of its own the app carries on with the one that is up
+    /// (the last listed) instead of starting another, and ends the rest.
+    func testWithNoCardOfItsOwnTheAppCarriesOnWithTheOneUp() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        let attributes = NekkoCardAttributes(computerId: "pc", computerName: "Mac", level: .standard)
+        let state = LiveCardState(chats: [], focusId: nil, more: 0, listening: false, heard: "")
+        let old = FakeCard(attributes, state), pushed = FakeCard(attributes, state)
+        started = [old, pushed]
+        r.refresh()
+        XCTAssertTrue(old.ended)
+        XCTAssertTrue(r.card === pushed)
+        XCTAssertFalse(pushed.ended)
+        XCTAssertEqual(started.count, 2, "no new card")
+        XCTAssertEqual(pushed.state.chats.map(\.id), ["a"], "brought up to date")
+    }
+
+    /// A card another computer started (it was active before) is not this one's: it ends and one for the active computer starts.
+    func testACardForAnotherComputerIsReplaced() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        let theirs = FakeCard(NekkoCardAttributes(computerId: "other", computerName: "Laptop", level: .standard),
+                              LiveCardState(chats: [], focusId: nil, more: 0, listening: false, heard: ""))
+        started = [theirs]
+        r.refresh()
+        XCTAssertTrue(theirs.ended)
+        XCTAssertEqual(started.count, 2)
+        XCTAssertEqual(r.card?.attributes.computerId, "pc")
+        XCTAssertEqual(started.filter { !$0.ended }.count, 1)
     }
 
     func testDismissingTheOnlyFinishedChatEndsTheCard() throws {

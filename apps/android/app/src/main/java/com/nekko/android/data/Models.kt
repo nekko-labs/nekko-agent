@@ -125,6 +125,8 @@ data class Peer(
     val loaded: Boolean = false,
     /** The list shown is the phone's saved copy, from then. */
     val savedAt: Long? = null,
+    /** What waits there, as the reconnect read settles "Needs you" (the active computer's [AttentionState]). */
+    val attention: AttentionState = AttentionState(),
 )
 
 /** Hand-written JSON for what we persist; the app has no serialization plugin. */

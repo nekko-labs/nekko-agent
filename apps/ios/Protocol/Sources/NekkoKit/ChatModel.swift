@@ -473,6 +473,46 @@ public final class ChatModel {
         }
     }
 
+    /// Only MCP tools offer "Always allow this tool" (decision 0054): their server
+    /// alone says what they do, so the egress gate asks for each one in a chat
+    /// that read untrusted content. `offersToolScope` on the desktop.
+    public static func offersAlwaysAllow(_ call: ToolCall) -> Bool { call.name.hasPrefix("mcp__") }
+
+    /// Tools this phone saved for this chat since its copy of the session was
+    /// read: a second "Always allow" in the same turn keeps the first.
+    private var allowedHere: [String] = []
+
+    /// The chat's always-allowed MCP tools as far as this phone knows.
+    public var allowedMcpTools: [String] {
+        var seen = Set<String>()
+        return ((session?.allowedMcpTools ?? []) + allowedHere).filter { seen.insert($0).inserted }
+    }
+
+    /// "Always allow this tool": save the waiting MCP tool in this chat's
+    /// `allowedMcpTools`, then release the call, as the desktop does. The
+    /// option is guarded on the computer (`PHONE_GUARDED_OPTION_KEYS`), so it
+    /// goes signed, with Face ID or the passcode and a step-up when the
+    /// computer asks (`call(guarded:)`). Nothing is approved unless the save
+    /// went through, and the chat never switches to YOLO.
+    public func alwaysAllowTool() async throws {
+        guard let a = turn.approval else { return }
+        guard Self.offersAlwaysAllow(a.call) else { throw RelayError("Only an MCP tool can be always allowed.") }
+        guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
+        let allowed = allowedMcpTools.contains(a.call.name) ? allowedMcpTools : allowedMcpTools + [a.call.name]
+        turn.approval = nil
+        cardChanges += 1
+        do {
+            _ = try await store.call(guarded: Channels.sessionSetOptions,
+                                     [.string(sessionId), .object(["allowedMcpTools": .array(allowed.map(JSONValue.string))])])
+            allowedHere = allowed
+            _ = try await store.remote().call(Channels.toolApprove, [.string(sessionId), .string(a.call.id), .bool(true)])
+        } catch {
+            // The computer is still waiting: keep the card so the user can try again.
+            if turn.approval == nil { turn.approval = a }
+            throw store.readable(error)
+        }
+    }
+
     public func answer(_ answers: [AskAnswer]) async throws {
         guard let q = turn.question else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
@@ -532,6 +572,20 @@ public final class ChatModel {
     public func setRunOption(_ key: String, _ value: JSONValue) async throws {
         _ = try await store.call(raising: Channels.sessionSetOptions, [.string(sessionId), .object([key: value])])
         await reload()
+    }
+
+    /// The tools the computer's agents can call, for the chat's Tools list.
+    public func tools() async throws -> [ToolInfo] {
+        ToolInfo.list(try await store.remote().call(Channels.toolsList))
+    }
+
+    public var disabledTools: [String] { session?.disabledTools ?? [] }
+
+    /// Switch one tool on or off for this chat. The computer asks for Face ID either way.
+    public func setTool(_ name: String, on: Bool) async throws {
+        var off = disabledTools.filter { $0 != name }
+        if !on { off.append(name) }
+        try await setRunOption("disabledTools", .array(off.map { .string($0) }))
     }
 
     // MARK: The queue, forks and pull requests

@@ -74,6 +74,28 @@ app.whenReady().then(async () => {
     await check('every window keeps the model on its composer bar', `['a','b','c'].every(id => !!document.querySelector('[data-grid-cell="chat:' + id + '"] [data-composer-foot] [aria-haspopup="listbox"]'))`);
     const heightsBefore = await run(`(() => ['a','b','c'].map(id => Math.round(document.querySelector('[data-grid-cell="chat:' + id + '"] .composer')?.getBoundingClientRect().height ?? 0)))()`);
     report.composerHeightsBefore = heightsBefore;
+    // Listening in the narrowest composer the app has: the island stays on the bar, clear of the editor and the controls.
+    await run(`(() => {
+      const f = layoutFixture, s = f.store.getState();
+      f.store.setState({ settings: { ...s.settings, voice: { enabled: true, introSeen: true, commandsEnabled: true, silenceMs: 1200 } } });
+      f.bridge.voiceStatus = async () => ({ installed: true });
+      navigator.mediaDevices.getUserMedia = async () => { const ctx = new AudioContext(), osc = ctx.createOscillator(), dest = ctx.createMediaStreamDestination(); osc.connect(dest); osc.start(); return dest.stream; };
+    })()`);
+    await sleep(200);
+    await run(`document.querySelector('[data-grid-cell="chat:b"] [aria-label="Start listening"]').click()`);
+    await sleep(900);
+    await shot('wall-listening');
+    await check('the listening island covers nothing in a tiled window', `(() => {
+      const island = document.querySelector('[data-voice-island].is-open');
+      if (!island) return false;
+      const box = el => el.getBoundingClientRect(), a = box(island);
+      const hit = b => b.width && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      const others = [...island.parentElement.children].filter(el => el !== island);
+      const editor = island.closest('.composer').querySelector('[contenteditable]');
+      return !others.concat(editor).some(el => hit(box(el))) && a.right <= box(island.closest('.composer')).right;
+    })()`);
+    await run(`document.querySelector('[data-grid-cell="chat:b"] [aria-label="Stop listening"]').click()`);
+    await sleep(400);
     await check('header: window number, then Nekko (the agent icon) with its badge, no robot', `(() => { const icon = document.querySelector('[data-grid-cell="chat:a"] [data-pane-title-strip]'); const n = icon?.querySelector('.wall-number'), m = icon?.querySelector('[data-wall-mascot="working"] .wall-mascot-badge'); return !!n && n.textContent === '1' && !!m && !!(n.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) && !icon.querySelector('.numbered-agent-icon'); })()`);
     await check('plan folds to the working step with its kind and pass', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet][data-folded]'); return !!s && s.textContent.includes('Build') && s.textContent.includes('Pass 2') && s.textContent.includes('2 of 4'); })()`);
     await check('folded sub-agents read 1 running, 2 done', `document.querySelector('[data-grid-cell="chat:a"] [data-plan-chip="subagents"]')?.getAttribute('title') === 'Sub-agents: 1 running, 2 done'`);

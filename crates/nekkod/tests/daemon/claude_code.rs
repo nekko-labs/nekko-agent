@@ -47,6 +47,16 @@ pub fn fake_claude() {
             (server["env"]["NEKKO_BRIDGE_TOKEN"].as_str().unwrap_or_default().to_string(), at("--url"))
         })
         .unwrap_or_default();
+    // The Nekko tools the bridge would list (`--tools a,b` in its args).
+    let offered: Vec<String> = flag("--mcp-config")
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|c| {
+            let a = c["mcpServers"]["nekko_bridge"]["args"].as_array()?.clone();
+            let i = a.iter().position(|x| x == "--tools")?;
+            Some(a.get(i + 1)?.as_str()?.split(',').map(str::to_string).collect())
+        })
+        .unwrap_or_default();
     let down = token.is_empty() || std::env::var("NEKKOD_TEST_BRIDGE_DOWN").is_ok();
     let bridge = if down { "failed" } else { "connected" };
     // libtest has printed "test fake_claude ... " with no newline: end that line first.
@@ -139,6 +149,13 @@ pub fn fake_claude() {
             let reply = format!("woke: {}", decision["behavior"].as_str().unwrap_or("?"));
             out(assistant("m_w2", json!([{ "type": "text", "text": reply }])));
             out(result(&reply, "completed"));
+        } else if text == "/compact" {
+            // What Claude Code prints for a typed `/compact`: no model call of the chat's own.
+            out(json!({ "type": "system", "subtype": "compact_boundary", "session_id": session,
+                "compact_metadata": { "trigger": "manual", "pre_tokens": 21_002, "post_tokens": 4_600 } }));
+            out(json!({ "type": "user", "isSynthetic": true, "parent_tool_use_id": null, "session_id": session,
+                "message": { "role": "user", "content": "This session is being continued from a previous conversation.\n\nSummary:\nWe said hello." } }));
+            out(result("", "completed"));
         } else if text == "plan" {
             // Claude Code's own plan: two tasks, the first started.
             let tool = |id: &str, name: &str, input: Value, output: &str| {
@@ -161,6 +178,14 @@ pub fn fake_claude() {
             tool("toolu_t3", "TaskUpdate", json!({ "taskId": "1", "status": "in_progress" }), "Updated task #1 status");
             out(assistant("m_p", json!([{ "type": "text", "text": "planned" }])));
             out(result("planned", "completed"));
+        } else if text == "compact first" {
+            // Claude Code compacting before it answers, as it prints the status around it.
+            out(json!({ "type": "system", "subtype": "status", "status": "compacting", "session_id": session }));
+            out(
+                json!({ "type": "system", "subtype": "status", "status": null, "compact_result": "success", "session_id": session }),
+            );
+            out(assistant("m_cf", json!([{ "type": "text", "text": "compacted" }])));
+            out(result("compacted", "completed"));
         } else if text == "background later" || text == "watch later" {
             // A background task that finishes only once the test says so (a
             // `wake-now` file in the workspace), so the chat can change first.
@@ -187,6 +212,36 @@ pub fn fake_claude() {
             out(init());
             out(assistant("m_bl2", json!([{ "type": "text", "text": "woke later" }])));
             out(result("woke later", "completed"));
+        } else if text == "watch" || text == "watch anyway" {
+            // Claude Code arms Nekko's watch through the bridge when it was
+            // listed; "watch anyway" calls it even if not, as a misbehaving
+            // client could.
+            let listed = offered.iter().any(|t| t == "agent_watch");
+            let reply = if listed || text == "watch anyway" {
+                let input =
+                    json!({ "action": "create", "kind": "timer", "prompt": "Check the deploy.", "delay_seconds": 60 });
+                let answer: Value = rt.block_on(async {
+                    reqwest::Client::new()
+                        .post(format!("{url}/harness/tool"))
+                        .bearer_auth(&token)
+                        .json(&json!({ "name": "agent_watch", "input": input }))
+                        .send()
+                        .await
+                        .unwrap()
+                        .json()
+                        .await
+                        .unwrap()
+                });
+                if answer["ok"] == true {
+                    format!("armed: {}", answer["text"].as_str().unwrap_or_default())
+                } else {
+                    format!("refused: {}", answer["error"].as_str().unwrap_or_default())
+                }
+            } else {
+                "no watch tool".to_string()
+            };
+            out(assistant("m_w", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
         } else if text == "usage" {
             // Plan usage Claude Code reports on its own while it works.
             out(json!({ "type": "rate_limit_event", "rate_limit_info": {
@@ -487,6 +542,30 @@ async fn claude_codes_own_plan_is_the_chats_plan() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn claude_codes_compaction_lands_as_the_chats_divider() {
+    let rig = rig("compact", "guardrails", true);
+    for (turn, text) in [("cm1", "hello"), ("cm2", "/compact")] {
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, turn, text)]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (_, end) = turn_record(&rig, turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+    }
+    let session = saved(&rig);
+    let messages = session["messages"].as_array().unwrap();
+    let divider = messages.iter().find(|m| m["compaction"].is_object()).expect("the compaction is in the transcript");
+    assert_eq!(divider["content"], "We said hello.");
+    // The first turn's question and reply, and the `/compact` itself.
+    assert_eq!(divider["compaction"]["summarized"], 3, "{divider}");
+    assert_eq!(
+        (divider["compaction"]["by"].clone(), divider["compaction"]["tokensAfter"].clone()),
+        (json!("claude-code"), json!(4_600))
+    );
+    assert!(divider.get("turnStats").is_none(), "a summary is not the turn's reply");
+    // The gauge drops to the size after the compaction, with no model call to report it.
+    assert_eq!(session["claudeCodeContext"]["used"], 4_600);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn plan_usage_claude_code_printed_is_its_limits() {
     let rig = rig("usage", "guardrails", true);
     let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
@@ -517,6 +596,53 @@ async fn plan_usage_claude_code_printed_is_its_limits() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn nekkos_watch_is_offered_to_claude_code_only_where_the_policy_allows() {
+    let rig = rig("watch", "guardrails", true);
+    let provider = |id: &str, auth: Value| json!({ "id": id, "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true, "claudeCode": auth });
+    // `cc` has a sign-in nekkod has not read (`unknown`, treated as a plan); `cc_key` runs on an API key.
+    let plan = provider("cc", json!({}));
+    let key = provider("cc_key", json!({ "authSource": "nekko-anthropic-key" }));
+    write_settings(&rig, json!({ "providers": [plan.clone(), key.clone()] })).await;
+    let reply = |turn: &'static str| {
+        let rig = &rig;
+        async move {
+            let (_, end) = turn_record(rig, turn, "s_cc").await;
+            assert_eq!(end["aborted"], false, "{end}");
+            assistant_texts(&saved(rig)).last().cloned().unwrap_or_default()
+        }
+    };
+
+    // Not offered on a plan, and refused even when called anyway.
+    let (status, body) =
+        post(rig.d.port, "chat:turn", json!([spec_on(&rig, "cw1", "watch", plan.clone())]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(reply("cw1").await, "no watch tool");
+    post(rig.d.port, "chat:turn", json!([spec_on(&rig, "cw2", "watch anyway", plan)]), Some(TOKEN)).await;
+    let refused = reply("cw2").await;
+    assert!(refused.starts_with("refused: Nekko Agent does not offer agent_watch"), "{refused}");
+    assert_eq!(post(rig.d.port, "session:watches", json!(["s_cc"]), Some(TOKEN)).await.1, json!([]));
+
+    // On an API key it is offered, arms a durable watch, and the chat lists it.
+    post(rig.d.port, "chat:turn", json!([spec_on(&rig, "cw3", "watch", key)]), Some(TOKEN)).await;
+    let armed = reply("cw3").await;
+    assert!(armed.starts_with("armed: Watch armed: "), "{armed}");
+    let watches = post(rig.d.port, "session:watches", json!(["s_cc"]), Some(TOKEN)).await.1;
+    assert_eq!(
+        (watches[0]["kind"].clone(), watches[0]["status"].clone()),
+        (json!("timer"), json!("active")),
+        "{watches}"
+    );
+
+    // Only a live bridge token reaches it, never the daemon's own or a browser.
+    let client = reqwest::Client::new();
+    let url = format!("http://127.0.0.1:{}/harness/tool", rig.d.port);
+    let res = client.post(&url).bearer_auth(TOKEN).json(&json!({ "name": "agent_watch" })).send().await.unwrap();
+    assert_eq!(res.status().as_u16(), 401);
+    let res = client.post(&url).bearer_auth("x").header("Origin", "null").json(&json!({})).send().await.unwrap();
+    assert_eq!(res.status().as_u16(), 403);
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn permission_prompts_reach_nekko_approvals() {
     let rig = rig("approve", "guardrails", true);
     let (status, _) = post(rig.d.port, "chat:turn", json!([spec(&rig, "ccA", "run rm")]), Some(TOKEN)).await;
@@ -537,6 +663,16 @@ async fn permission_prompts_reach_nekko_approvals() {
     assert_eq!(assistant_texts(&s).last().unwrap(), "done: allow");
     let tool = s["messages"].as_array().unwrap().iter().find(|m| m["role"] == "tool").unwrap();
     assert_eq!(tool["toolResult"]["output"], "removed");
+
+    // The chat's audit trail keeps the permission, how it was decided and who answered.
+    let (_, trail) = post(rig.d.port, "audit:read", json!(["s_cc"]), Some(TOKEN)).await;
+    let asked: Vec<&Value> = trail.as_array().unwrap().iter().filter(|e| e["type"] == "permission").collect();
+    assert_eq!(asked.len(), 1, "{trail}");
+    assert_eq!(asked[0]["tool"], "Bash");
+    assert_eq!(asked[0]["executedBy"], "claude-code");
+    assert_eq!(asked[0]["decision"], "approved");
+    assert_eq!(asked[0]["by"], json!({ "via": "this computer" }));
+    assert_eq!(asked[0]["detail"], json!({}), "a Claude Code command line is never kept");
 
     // The daemon's own token is not a bridge token, and a browser may not call it.
     let client = reqwest::Client::new();
@@ -913,4 +1049,18 @@ async fn a_background_watcher_is_in_the_chat_summary_until_it_ends() {
         (summaries[0]["backgroundWatchCount"] == 0).then_some(())
     })
     .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_code_compacting_reaches_the_chat_as_it_runs() {
+    let rig = rig("compacting", "guardrails", true);
+    let (status, body) = post(rig.d.port, "chat:turn", json!([spec(&rig, "cf1", "compact first")]), Some(TOKEN)).await;
+    assert_eq!(status, 200, "{body}");
+    let (events, end) = turn_record(&rig, "cf1", "s_cc").await;
+    assert_eq!(end["aborted"], false, "{end}");
+    let states: Vec<_> =
+        events.iter().filter(|e| e["type"] == "claude_code_compacting").map(|e| e["state"].clone()).collect();
+    assert_eq!(states, [json!("running"), json!("done")]);
+    let k = kinds(&events);
+    assert!(k.ends_with(&["usage".into(), "done".into()]), "{k:?}");
 }

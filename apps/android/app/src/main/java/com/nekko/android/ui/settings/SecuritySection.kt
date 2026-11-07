@@ -37,7 +37,9 @@ import com.nekko.android.ui.components.NCard
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
+import com.nekko.android.ui.security.YoloWarning
 import com.nekko.android.ui.theme.Nekko
+import androidx.compose.ui.platform.testTag
 
 /**
  * Settings → Security. Turning the lock on is free; turning it off asks for
@@ -50,7 +52,36 @@ fun SecuritySection(deps: SettingsDeps) {
     SectionHeader(stringResource(R.string.settings_security))
     // The lock belongs to the app, not to Settings; MainActivity provides it.
     LocalAppLock.current?.let { AppLockCard(it) }
+    YoloWarningCard(deps)
     StepUpMethodsCard(deps)
+}
+
+/** Warn before YOLO: on unless **Don't warn me again** was ticked in the YOLO warning. This phone only. */
+@Composable
+private fun YoloWarningCard(deps: SettingsDeps) {
+    val p = Nekko.palette
+    val skip by deps.phonePrefs.flow(YoloWarning.SKIP).collectAsStateWithLifecycle()
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+        NCard {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .toggleable(value = !skip, role = Role.Switch) { warn -> deps.phonePrefs.set(YoloWarning.SKIP, !warn) }
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .testTag("settings.yoloWarning"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_warn_yolo), style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                    Text(stringResource(R.string.settings_warn_yolo_detail), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                }
+                // The row handles the toggle, so the switch itself is not a second target.
+                Switch(checked = !skip, onCheckedChange = null)
+            }
+        }
+    }
 }
 
 @Composable

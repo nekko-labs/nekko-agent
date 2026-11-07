@@ -68,7 +68,11 @@ class ChatViewModel(
     mic: MicHardware? = null,
     private val phonePrefs: PhonePrefs? = null,
 ) : ViewModel() {
-    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts)
+    private val controller = ChatController(
+        sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts,
+        // The same path as a mode raise: plain first, signed when the computer answers proof-required.
+        guarded = { channel, args, stepUp -> if (stepUp == null) repo.callRaising(channel, args) else repo.callChange(channel, args, stepUp) },
+    )
 
     /** Dictation into this chat's message box (Settings → Dictation). */
     val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
@@ -95,7 +99,7 @@ class ChatViewModel(
     val simpleChoices: StateFlow<String> = phonePrefs?.flow(SimpleMode.CHOICES) ?: MutableStateFlow("")
 
     /** Expert mode's hardware and loaded models; the screen polls it only while Expert is on and the chat is visible. */
-    val hardware = HardwareMonitorController(repo.caller) { repo.state.value.active?.name ?: "your computer" }
+    val hardware = HardwareMonitorController(repo.caller, repo::callRaising) { repo.state.value.active?.name ?: "your computer" }
 
     /** The model and effort sheet: change the chat's model or effort on the computer. Throws so the sheet can say why. */
     suspend fun setOptions(providerId: String? = null, modelId: String? = null, effort: Effort? = null) =
@@ -293,6 +297,15 @@ class ChatViewModel(
         controller.reload()
     }
 
+    /** The tools the computer's agents can call, for the chat's Tools list. */
+    suspend fun tools(): List<com.nekko.protocol.ToolInfo> = com.nekko.protocol.ToolInfo.list(repo.caller.call(com.nekko.protocol.Channels.TOOLS_LIST))
+
+    /** Switch one tool on or off for this chat; the computer asks for the screen lock either way. */
+    suspend fun setTool(name: String, on: Boolean, disabled: List<String>) {
+        val off = disabled.filter { it != name } + if (on) emptyList() else listOf(name)
+        setRunOption("disabledTools", kotlinx.serialization.json.JsonArray(off.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+    }
+
     suspend fun setMode(mode: PcSettings.ChatMode, stepUp: StepUpProof? = null) {
         repo.setChatMode(sessionId, mode, stepUp)
         controller.reload()
@@ -443,6 +456,7 @@ class ChatViewModel(
     }
     fun stop() = controller.stop()
     suspend fun approve(ok: Boolean) = controller.approve(ok)
+    suspend fun alwaysAllowTool(stepUp: StepUpProof? = null) = controller.alwaysAllowTool(stepUp)
     suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)
 
     private fun env(s: ComputersState) = ChatEnv(

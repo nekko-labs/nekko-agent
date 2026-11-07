@@ -71,4 +71,11 @@
     <string name="pill_dock_right">Ancrer à droite</string>
     <string name="pill_tuck">Replier</string>
     <string name="pill_show">Afficher le sélecteur de mode</string>
+    <string name="yolo_warning_title">Activer YOLO ?</string>
+    <string name="yolo_warning_text">L’agent exécutera des commandes, modifiera des fichiers, ouvrira des adresses et appellera des outils sans vous demander d’abord. Une page web, un résultat de recherche ou la sortie d’un outil qu’il lit peut contenir des instructions, et en YOLO rien ne les empêche d’envoyer vos fichiers ou vos données hors de cet ordinateur. Vos règles de refus bloquent toujours.</string>
+    <string name="yolo_warning_recommend">Garde-fous ne demande que lorsque c’est important, et c’est le mode recommandé.</string>
+    <string name="yolo_warning_skip">Ne plus m’avertir</string>
+    <string name="yolo_warning_skip_detail">Sur ce téléphone uniquement. Vous pouvez réactiver l’avertissement dans Réglages → Sécurité.</string>
+    <string name="yolo_warning_keep_asking">Continuer à demander</string>
+    <string name="yolo_warning_turn_on">Activer YOLO</string>
 </resources>

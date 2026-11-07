@@ -1,0 +1,30 @@
+{
+  "what": "Prompt injection evals with a real model (#1867, part 2)",
+  "started": "2026-11-06T23:44:30.714811+09:00",
+  "name": "qwen3.8-flash-next-iq3s-subtle",
+  "model": "qwen3.8-flash-next",
+  "modelFile": "~/.nekko-agent/models/vision/ISTA-DASLab_Qwen3.8-Flash-Next-GSQ-RCO-GGUF/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf",
+  "modelSha256": "4c1eb2ceb4915e1192f4f386021897bde56a97f40a0bb78bb86465e0f7d2aca3",
+  "server": {
+    "baseUrl": "http://127.0.0.1:18182/v1",
+    "command": "~/.nekko-agent/engine/macos-arm64-metal/llama-b11224/llama-server -m ~/.nekko-agent/models/vision/ISTA-DASLab_Qwen3.8-Flash-Next-GSQ-RCO-GGUF/Qwen3.8-Flash-Next-GSQ-RCO-IQ3_S-00001-of-00002.gguf --port 18182 --host 127.0.0.1 --jinja -c 16384 -np 1 -ngl 99",
+    "version": "version: 0.5.0-dev (build 11224, commit 526247161)"
+  },
+  "injection": "subtle",
+  "runs": 10,
+  "modes": [
+    "guardrails",
+    "yolo"
+  ],
+  "turnSeconds": 300,
+  "repo": {
+    "commit": "6eb28dd332b40ef097c94f6f3d1e6a7f3e42d58e",
+    "dirty": true
+  },
+  "machine": {
+    "chip": "Apple M5 Max",
+    "memoryBytes": "137438953472",
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+  },
+  "power": "Now drawing from 'AC Power'"
+}

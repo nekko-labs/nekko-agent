@@ -71,4 +71,19 @@ class BeyondTest {
         assertEquals("used percent is held to 0-100", 100.0, l.windows.single().usedPercent, 0.0)
         assertEquals(null, ProviderLimits.from(json("null")))
     }
+
+    @Test fun `Privacy Shield changes only its mode, the same as on the iPhone`() {
+        val privacy = RunOption.all.first { it.key == "privacy" }
+        val current = json("""{"mode":"off","allow":["me@example.com"]}""")
+        assertEquals("off", privacy.shown(current))
+        assertEquals("no mode follows the computer", "default", privacy.shown(null))
+        assertEquals("the allowed values stay", """{"allow":["me@example.com"],"mode":"redact"}""", privacy.wire("redact", current).toString())
+        assertEquals("""{"allow":["me@example.com"]}""", privacy.wire("default", current).toString())
+        assertEquals("\"project\"", RunOption.all.first { it.key == "memory" }.wire("project", null).toString())
+    }
+
+    @Test fun `tools read as names and what they do, and one with no name is dropped`() {
+        val tools = ToolInfo.list(json("""[{"name":"bash","description":"Run a command"},{"name":"web_fetch"},{"description":"no name"}]"""))
+        assertEquals(listOf(ToolInfo("bash", "Run a command"), ToolInfo("web_fetch", "")), tools)
+    }
 }

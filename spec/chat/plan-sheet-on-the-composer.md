@@ -123,3 +123,15 @@ Implemented: published and saved plan steps with the legacy `explore` kind rende
 PR, CI, Task, File, Preview and Sub-agent chips use text prefixes so their purpose is visible without a tooltip. Verification chips retain their explicit state and device wording. Opening chips follows existing navigation; this adds no routing, provider, permission or network behavior.
 
 Acceptance: inactive children and children of other parents do not enter the Running row; running children remain visible above collapsed steps; labels identify link types. Focused rendering regressions and isolated Electron evidence cover these behaviors. Live-provider delegation and packaged builds are not verified by fixtures.
+
+## Flat list with related step details (implemented; #2007)
+
+Issue: [#2007](https://github.com/nekko-labs/nekko-agent/issues/2007).
+
+- **Intent.** Remove plan groupings and use a flat list, while keeping related information together.
+- **One published step, one row.** Desktop and Local Web UI render the saved or rebuilt plan in its original order. Build/Verify/Ship labels are not drawn, including on the folded summary. Kinds remain saved metadata for the work loop; this is not a protocol or tool-schema change.
+- **No automatic verification grouping.** Supersedes “One Verify step” above: no synthetic “Check the work” row, no moved reports, no duplicated report-title sub-bullets, and no merged PR/file/task/subagent links between checks. Multiple verification steps stay flat and progress counts the original steps.
+- **Related details stay grouped under their own step.** Its disclosure contains its report detail (else note) and attached links, PRs, files, previews, subagents and CI. Existing disclosure defaults, per-step user choices, evidence safety, status marks, pass badges, live subagent cards and whole-plan folding are unchanged. CI remains on the last step carrying a report, else its PR’s step, else the current step. No custom group field, inferred title clustering or new nested plan model is introduced.
+- **Scope.** Shared desktop/web renderer only. Native iOS/Android presentation is unchanged; parity would be a separate change.
+
+Verification: focused `PlanSheet.test.tsx`, `PlanRail.test.tsx`, `planStepLinks.test.ts` and `claudeAgentPlan.test.ts` cover original order/progress, report marks, per-check link ownership, folded summary and preserved disclosures. `plan-sheet-sandbox.cjs` covers hidden Electron screenshots at 1440×900 and the standalone composer at 390×844, step click/Enter, chip placement, ripple/reduced motion and interruption. Packaged builds, a live provider and native mobile apps are not verified by these fixtures.
