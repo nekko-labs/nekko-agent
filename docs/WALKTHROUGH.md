@@ -395,6 +395,14 @@ The approval names the address or tool so you can tell whether you expected it. 
 mode already asks for all of these; YOLO never asks. Files in your project folders do
 not count as outside content.
 
+**Audit trail.** Right-click a chat and choose **Audit trail** to see what the agent did
+in it and who allowed it: each turn, each tool it ran and what that touched (a file, a
+host, a program, an MCP server), each approval and whether it was given on this computer,
+on a phone, in Telegram or skipped by YOLO, when the chat first read outside content, and
+what the Privacy Shield hid. **Approvals** shows only the decisions. The trail never holds
+what the agent read or sent, an incognito chat keeps none, and it is deleted with the
+chat.
+
 ---
 
 ## 6. Projects & the codebase index
