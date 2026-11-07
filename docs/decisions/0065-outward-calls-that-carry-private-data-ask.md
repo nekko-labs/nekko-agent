@@ -1,11 +1,11 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-07
 ---
 
 # 0065. Outward calls that carry private data ask
 
-Proposed by Davide on 2026-11-07; to be confirmed by Philip, with [0054](0054-gate-egress-in-chats-that-read-untrusted-content.md) and [0063](0063-mcp-tools-that-can-act-ask-and-new-recipients-ask.md). Issue: [#1867](https://github.com/nekko-labs/nekko-agent/issues/1867). Spec: [agent data security](../../spec/context/agent-data-security.md), "Outbound DLP".
+Proposed by Davide on 2026-11-07; accepted by Philip on 2026-11-07 without changes, with [0054](0054-gate-egress-in-chats-that-read-untrusted-content.md) and [0063](0063-mcp-tools-that-can-act-ask-and-new-recipients-ask.md). Issue: [#1867](https://github.com/nekko-labs/nekko-agent/issues/1867). Spec: [agent data security](../../spec/context/agent-data-security.md), "Outbound DLP".
 
 ## Context
 
