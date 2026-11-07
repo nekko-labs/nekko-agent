@@ -38,12 +38,14 @@ app.whenReady().then(async () => {
     if (await run("!!document.querySelector('[aria-label=\"Nekko Agent service\"]')")) {
       const click = text => run(`Array.from(document.querySelector('[aria-label="Nekko Agent service"]').querySelectorAll('button')).find(b => b.textContent.trim() === ${JSON.stringify(text)}).click()`);
       await run("document.querySelector('[aria-label=\"Nekko Agent service\"] input').click()"); await sleep(200);
-      await click('Restart service');
+      await click('Restart service'); await sleep(200);
+      fs.writeFileSync(path.join(out, 'settings-system-restart-confirm.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
       report.restartBeforeConfirm = await run("serviceEvidence.calls.filter(x => x === 'restart').length");
       await click('Confirm restart'); await sleep(200);
       await click('Check for updates'); await sleep(800);
       await click('Download update'); await sleep(200);
-      await click('Install update');
+      await click('Install update'); await sleep(200);
+      fs.writeFileSync(path.join(out, 'settings-system-install-confirm.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
       report.installBeforeConfirm = await run("serviceEvidence.calls.filter(x => x === 'install').length");
       await click('Confirm install'); await sleep(200);
       report.interactions = await run('JSON.stringify(serviceEvidence)');

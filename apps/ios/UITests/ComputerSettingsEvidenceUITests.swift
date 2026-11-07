@@ -4,6 +4,16 @@ import XCTest
 final class ComputerSettingsEvidenceUITests: XCTestCase {
     private var baseline: Bool { ProcessInfo.processInfo.environment["NEKKO_COMPUTER_BASELINE"] == "1" }
 
+    func testComputersListEvidence() {
+        let app = launch()
+        XCTAssertTrue(app.buttons["computers.row"].firstMatch.waitForExistence(timeout: 10))
+        if !baseline {
+            XCTAssertTrue(app.switches.matching(NSPredicate(format: "identifier BEGINSWITH %@", "computer.connection.")).firstMatch.exists)
+            XCTAssertFalse(app.descendants(matching: .any)["computers.cloudFleet"].exists)
+        }
+        attach(app, "computer-list")
+    }
+
     func testModelsEvidenceAndFilters() {
         let app = launch()
         openComputer(app)
