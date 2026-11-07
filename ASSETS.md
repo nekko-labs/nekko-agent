@@ -12,7 +12,7 @@ Thank you to everyone who built and maintains these.
 | React | The app's interface | see package-lock.json | MIT | - | [react.dev](https://react.dev) |
 | Mermaid | Diagrams in chat, and bundled in the iPhone app | 12.2.0 | MIT | vendor/mermaid/LICENSE | [mermaid-js/mermaid](https://github.com/mermaid-js/mermaid) |
 | agent-browser | The agent's native browser control, built with a small patch | 0.39.1 | Apache-2.0 | vendor/agent-browser/LICENSE | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) |
-| Remotion | The animated intros for Voice and Dynamic zones. Not open source: it has its own license, so check that before reusing this code. | see package-lock.json | Remotion License | - | [remotion.dev](https://www.remotion.dev) |
+| Remotion | The animated intros for Voice and Dynamic zones, and the website hero intro (video/hero-intro). Not open source: it has its own license, so check that before reusing this code. | see package-lock.json | Remotion License | - | [remotion.dev](https://www.remotion.dev) |
 | Inter Tight | Interface font | see package-lock.json | OFL-1.1 | - | [Fontsource](https://fontsource.org/fonts/inter-tight) |
 | JetBrains Mono | Code font | see package-lock.json | OFL-1.1 | - | [Fontsource](https://fontsource.org/fonts/jetbrains-mono) |
 | Inter Tight, website copy | nekkoagent.com's text font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-inter-tight.txt | [Fontsource](https://fontsource.org/fonts/inter-tight) |
