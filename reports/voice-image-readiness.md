@@ -11,10 +11,10 @@ Tracking: [#2162](https://github.com/nekko-labs/nekko-agent/issues/2162). Scope 
 | Settings microphone test | Late startup after unmount or a second click could retain a live capture | Generation-owned startup and teardown, including voice-off |
 | Android dictation | Repeated tap during host-status lookup could start overlapping jobs; cancelled jobs could update a newer run | Synchronous job reservation, coroutine cancellation and generation checks around suspended work and callbacks |
 | Android privacy lifecycle | LockGate keeps the chat composed, so disposal was not enough to stop dictation | Cancel on ON_STOP, app lock and disposal; discard stale permission callbacks |
-| iOS host transcription | 60-second deadline and blind retry conflicted with host single-flight inference | 180-second deadline; one request, propagate cancellation, retain offline-only fallback |
-| Android host transcription | 150-second deadline left no transport margin after cold start + inference | 180 seconds, matching iOS |
+| iOS host transcription | 60-second deadline and blind retry conflicted with host single-flight inference | 300-second deadline; one request, propagate cancellation, retain offline-only fallback |
+| Android host transcription | 150-second deadline left no transport margin after cold start + inference | 300 seconds, matching iOS |
 
-The host allows up to 30 seconds to start Whisper and 120 seconds for inference (`crates/nekkod/src/voice.rs`). A client deadline does not cancel host computation; no fix here claims otherwise. An action already invoked before an abort cannot be undone.
+The host allows up to 105 seconds to start Whisper (150 health checks, each allowing 500 ms plus 200 ms sleep) and 120 seconds for inference (`crates/nekkod/src/voice.rs`). A client deadline does not cancel host computation; no fix here claims otherwise. An action already invoked before an abort cannot be undone.
 
 ## Remaining feature gaps
 

@@ -180,8 +180,8 @@ class DictationController(
     }
 
     companion object {
-        // Host: up to 30 s cold start + 120 s inference, with room for relay transport.
-        const val TRANSCRIBE_TIMEOUT_MS = 180_000L
+        // Host: up to 105 s cold start + 120 s inference, with room for relay transport.
+        const val TRANSCRIBE_TIMEOUT_MS = 300_000L
 
         /** Ask the computer whether its Whisper can take a recording. */
         suspend fun computerVoice(caller: Caller, online: Boolean, enabled: Boolean): ComputerVoice {

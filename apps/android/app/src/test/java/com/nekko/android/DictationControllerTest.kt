@@ -97,8 +97,8 @@ class DictationControllerTest {
         assertEquals(" summarise the diff", box)
         assertEquals(MicState.Idle, c.state.value)
         val sent = caller.calls.single { it.channel == Channels.VOICE_TRANSCRIBE }
-        assertEquals(180_000L, sent.timeoutMs)
-        assertTrue(DictationController.TRANSCRIBE_TIMEOUT_MS > 30_000L + 120_000L)
+        assertEquals(300_000L, sent.timeoutMs)
+        assertTrue(DictationController.TRANSCRIBE_TIMEOUT_MS > 105_000L + 120_000L)
         val wav = (sent.args.single() as JsonArray)
         assertEquals(Wav.HEADER + Wav.SAMPLE_RATE * 2 * 2, wav.size)
         assertEquals(82, (wav[0] as JsonPrimitive).content.toInt()) // 'R'
