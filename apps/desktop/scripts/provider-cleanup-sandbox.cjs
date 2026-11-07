@@ -75,11 +75,12 @@ app.whenReady().then(async () => {
     })()`);
     for (const surface of ['window', 'chat']) for (const width of [1100, 390]) {
       win.setContentSize(width, 800);
-      await run(`layoutFixture.showComposer('${surface}')`); await sleep(600);
+      await run(`layoutFixture.showComposer('${surface === 'chat' ? 'full' : surface}')`); await sleep(600);
       await shot('composer-' + surface + '-' + width);
       if (process.env.NEKKO_TEST_LABEL !== 'before') {
         await check('Folders immediately follow plus ' + width, `(() => { const plus = document.querySelector('[aria-label="Add a photo, video, file, folder, or skill"]'); return plus.parentElement.nextElementSibling?.querySelector('[aria-label^="Selected folders"]') !== null; })()`);
         await check('Folder button never overlaps permissions ' + surface + width, `(() => {const folder = document.querySelector('[aria-label^="Selected folders"]').getBoundingClientRect(); const permission = document.querySelector('[data-asks-first]').getBoundingClientRect(); return folder.right <= permission.left;})()`);
+        if (surface === 'window') await check('Model title is not clipped by control group ' + width, `document.querySelector('[data-model-chip-name]').getBoundingClientRect().right <= document.querySelector('.composer-foot-controls').getBoundingClientRect().right`);
         await check('One permission control only ' + surface + width, `document.querySelectorAll('[data-asks-first]').length === 1`);
         await check('Both folder names visible ' + width, `document.querySelector('[aria-label^="Selected folders"]')?.textContent.includes('nekko-agent, docs')`);
         await check('Icon-only permission with divider ' + width, `(() => { const b = document.querySelector('[data-asks-first]'); return b && !b.textContent.trim() && b.getAttribute('aria-label')?.includes('Permissions') && b.previousElementSibling?.hasAttribute('data-permissions-divider'); })()`);
@@ -92,6 +93,7 @@ app.whenReady().then(async () => {
     for (const surface of ['add', 'onboarding', 'choices']) for (const width of [1100, 390]) {
       win.setContentSize(width,800);
       await run(`layoutFixture.showProviderSetupCleanup('${surface}')`); await sleep(300);
+      if (surface === 'onboarding') { await run(`Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Set up').click()`); await sleep(150); }
       await shot(surface + '-' + width);
       if (process.env.NEKKO_TEST_LABEL !== 'before') await check('No custom model entry in ' + surface + width, `!document.body.innerText.includes('Custom model id')`);
     }
