@@ -68,7 +68,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'tools', area: 'Chat · message box', label: 'Tools and MCP menus', hint: 'Turn single tools and MCP servers on or off', platforms: D, default: 'expert' },
   { id: 'internet', area: 'Chat · message box', label: 'Internet switch', hint: 'Turn the internet off for this chat. Stays on screen while it is off', platforms: D, default: 'expert' },
   { id: 'suggest', area: 'Chat · message box', label: 'Prompt suggestions', hint: 'Tips to make a request clearer', platforms: D, default: 'show' },
-  { id: 'thinking', area: 'Chat · conversation', label: 'Reasoning and tool steps', hint: 'What the model thought, and each step it took', platforms: DP, default: 'expert' },
+  { id: 'thinking', area: 'Chat · conversation', label: 'Reasoning and tool steps', hint: 'What the model thought. On phones, each step it took too; on the desktop the steps stay under the summary of each reply in both modes', platforms: DP, default: 'expert' },
   { id: 'stats', area: 'Chat · conversation', label: 'Reply stats', hint: 'Tokens, speed and time under each reply', platforms: D, default: 'expert' },
   { id: 'pr-status', area: 'Chat · conversation', label: 'Pull request status', hint: 'The live PR card and PR chips. Only while this chat has a pull request', platforms: DP, default: 'show', needs: 'pr' },
   { id: 'run-settings', area: 'Chat · message box', label: 'Run settings', hint: 'Offline, incognito, Git branch and tool style, in the model menu', platforms: P, default: 'expert' },
