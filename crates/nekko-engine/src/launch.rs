@@ -608,9 +608,21 @@ pub fn image_generation_body(request: &Value) -> Result<String, String> {
     if !ok {
         return Err(problem());
     }
-    let extra = nekko_js::stringify(
-        &json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed }),
-    );
+    // User prose must not smuggle native settings around these validated controls.
+    if prompt.unwrap_or_default().contains("<sd_cpp_extra_args>") {
+        return Err("Describe the photo in words; native image-engine arguments are not accepted in prompts.".into());
+    }
+    let mut extra = json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed });
+    if let Some(source) = request.get("sourceImage") {
+        validate_photo_source(source)?;
+        let strength = request.get("strength").cloned().unwrap_or(json!(0.65));
+        if !strength.as_f64().is_some_and(|n| n.is_finite() && (0.0..=1.0).contains(&n)) {
+            return Err("Photo change amount must be between 0 and 1.".into());
+        }
+        extra["init_image"] = source.clone();
+        extra["strength"] = strength;
+    }
+    let extra = nekko_js::stringify(&extra);
     let mut body = Map::new();
     if let Some(m) = request.get("modelId") {
         body.insert("model".into(), m.clone());
@@ -621,6 +633,22 @@ pub fn image_generation_body(request: &Value) -> Result<String, String> {
     body.insert("n".into(), json!(1));
     body.insert("output_format".into(), json!("png"));
     Ok(nekko_js::stringify(&Value::Object(body)))
+}
+
+/// Bounded inline raster input only. Never resolve a URL or read a host path.
+pub fn validate_photo_source(source: &Value) -> Result<(), String> {
+    use base64::Engine;
+    let error = || "Choose a PNG or JPEG photo up to 10 MB. Paths and remote image URLs are not accepted.".to_string();
+    let source = source.as_str().ok_or_else(error)?;
+    if source.len() > 14_000_000 { return Err(error()); }
+    let (png, data) = if let Some(data) = source.strip_prefix("data:image/png;base64,") { (true, data) }
+        else if let Some(data) = source.strip_prefix("data:image/jpeg;base64,") { (false, data) }
+        else { return Err(error()); };
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data).map_err(|_| error())?;
+    if bytes.len() > 10 * 1024 * 1024 || if png { !bytes.starts_with(b"\x89PNG\r\n\x1a\n") } else { !bytes.starts_with(&[0xff, 0xd8, 0xff]) } {
+        return Err(error());
+    }
+    Ok(())
 }
 
 /// The memory pool a model would be loaded into (`engineMemory`).

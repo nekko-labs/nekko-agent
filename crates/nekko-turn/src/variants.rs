@@ -394,7 +394,9 @@ pub struct ImageStart {
 /// the turn's settings as the chat's, and the request for the model server;
 /// or why it cannot start. `seed` is used when the params ask for a fresh one.
 pub fn start_image_turn(session: &mut Value, opts: &Value, now: u64, seed: u64) -> Result<ImageStart, String> {
-    let params = opts.get("params").cloned().unwrap_or(json!({}));
+    let mut params = opts.get("params").cloned().unwrap_or(json!({}));
+    // Source pixels are per-turn input, never a persisted preference.
+    if let Some(p) = params.as_object_mut() { p.remove("sourceImage"); }
     let text = js::trim(str_of(opts, "prompt").unwrap_or("")).to_string();
     if text.is_empty() {
         return Err("Describe the image you want first.".into());
@@ -406,7 +408,9 @@ pub fn start_image_turn(session: &mut Value, opts: &Value, now: u64, seed: u64) 
         s.insert("messages".into(), json!([]));
     }
     if let Some(Value::Array(list)) = s.get_mut("messages") {
-        list.push(json!({ "id": format!("msg_{}", base36(now)), "role": "user", "content": text, "createdAt": now }));
+        let mut message = json!({ "id": format!("msg_{}", base36(now)), "role": "user", "content": text, "createdAt": now });
+        if let Some(source) = opts.get("sourceImage") { message["images"] = json!([source]); }
+        list.push(message);
     }
     if s.get("title").and_then(Value::as_str) == Some("New chat") {
         s.insert("title".into(), json!(js::slice16(&text, 48)));
@@ -438,6 +442,10 @@ pub fn start_image_turn(session: &mut Value, opts: &Value, now: u64, seed: u64) 
         }
     }
     request.insert("seed".into(), used.clone());
+    if let Some(source) = opts.get("sourceImage") {
+        request.insert("sourceImage".into(), source.clone());
+        request.insert("strength".into(), params.get("strength").cloned().unwrap_or(json!(0.65)));
+    }
     Ok(ImageStart { request: Value::Object(request), text, seed: used })
 }
 
@@ -457,6 +465,10 @@ pub fn image_reply(result: &Value, params: &Value, seed: &Value, ms: u64, now: u
         }
     }
     generated.insert("seed".into(), seed.clone());
+    if params.get("sourceImage").is_some() {
+        generated.insert("fromPhoto".into(), json!(true));
+        generated.insert("strength".into(), params.get("strength").cloned().unwrap_or(json!(0.65)));
+    }
     generated.insert("ms".into(), json!(ms));
     json!({
         "id": format!("msg_{}", base36(now + 1)),

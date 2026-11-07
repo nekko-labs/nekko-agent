@@ -162,6 +162,8 @@ export type ChatType = 'multimodal' | 'image';
 
 /** An image-generation chat's settings, kept per chat. */
 export interface ImageChatParams {
+  /** Change amount when starting from a photo. Source images are per-turn, never settings. */
+  strength?: number;
   /** An engine library model with `modality: 'image'`. */
   modelId?: string;
   width: number;
@@ -175,6 +177,9 @@ export interface ImageChatParams {
 export const DEFAULT_IMAGE_CHAT_PARAMS: ImageChatParams = { width: 1024, height: 1024, steps: 28, cfgScale: 4.5, seed: -1 };
 
 export interface GeneratedImageMeta {
+  /** The source is retained on the preceding user message, never duplicated here. */
+  fromPhoto?: boolean;
+  strength?: number;
   modelId: string;
   width: number;
   height: number;
@@ -187,6 +192,8 @@ export interface GeneratedImageMeta {
 }
 
 export interface ImageTurnOptions {
+  /** PNG/JPEG data URL, retained on the user message; the original is never overwritten. */
+  sourceImage?: string;
   sessionId: string;
   prompt: string;
   params: ImageChatParams & { modelId: string };

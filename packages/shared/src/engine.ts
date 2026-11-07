@@ -98,6 +98,10 @@ export interface EngineInstallPreview {
 }
 
 export interface ImageGenerationRequest {
+  /** User-selected local PNG/JPEG data URL. Never a path or remote URL. */
+  sourceImage?: string;
+  /** Image-to-image change amount, from 0 to 1. */
+  strength?: number;
   modelId: string;
   prompt: string;
   width: number;

@@ -91,6 +91,14 @@ impl ImageTurns {
             c
         };
         let _running = Running(self, session_id.clone());
+        // Reject invalid photos/controls before saving a user message or loading a model.
+        let mut preflight = opts.get("params").cloned().filter(Value::is_object).unwrap_or(json!({}));
+        preflight["prompt"] = opts.get("prompt").cloned().unwrap_or(Value::Null);
+        if let Some(source) = opts.get("sourceImage") { preflight["sourceImage"] = source.clone(); }
+        if let Err(e) = nekko_engine::launch::image_generation_body(&preflight) {
+            fail(&e);
+            return Err(e);
+        }
         let started = match v::start_image_turn(&mut session, opts, nekko_js::now_ms(), random_seed()) {
             Ok(s) => s,
             Err(e) => {
@@ -129,7 +137,7 @@ impl ImageTurns {
             Some(Ok(result)) if !stopped => {
                 let reply = v::image_reply(
                     &result,
-                    &params,
+                    &started.request,
                     &started.seed,
                     clock.elapsed().as_millis() as u64,
                     nekko_js::now_ms(),

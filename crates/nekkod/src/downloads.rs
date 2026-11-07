@@ -57,6 +57,14 @@ fn landed(p: &str) -> bool {
     std::fs::metadata(p).is_ok_and(|m| m.len() > 0)
 }
 
+fn catalog_image_setup_model(model_id: &str, detail: &Value) -> Option<Value> {
+    if detail.is_null() || !model_id.contains('/') {
+        return None;
+    }
+    let model = json!({ "id": model_id, "name": model_id, "sourceRepo": model_id, "modality": "image" });
+    acquire::image_companion_set_for(&model).map(|_| model)
+}
+
 impl ModelDownloads {
     pub fn new(fetch: Arc<dyn Fetch>, library: Arc<Library>, catalog: Arc<Catalog>, hub: Hub) -> Arc<Self> {
         Arc::new_cyclic(|me: &std::sync::Weak<ModelDownloads>| {
@@ -171,17 +179,30 @@ impl ModelDownloads {
         Ok(json!({ "ok": plan["ok"], "message": plan["message"] }))
     }
 
-    /// An image model's text encoders and VAE (`imageCompanions`).
+    /// A local model or a catalog repository with a known image component set.
+    /// Catalog previews never inspect a relative path in the host working directory.
+    async fn image_setup_model(&self, model_id: &str) -> Result<Option<Value>, String> {
+        if let Some(model) = self.library.find(model_id).await? {
+            return Ok((model.get("modality").and_then(Value::as_str) == Some("image")).then_some(model));
+        }
+        // Only a real catalog repository can be used as a pre-download setup target.
+        if !model_id.contains('/') { return Ok(None); }
+        let detail = self.catalog.model(model_id).await;
+        Ok(catalog_image_setup_model(model_id, &detail))
+    }
+
+    /// An image model's text encoders and VAE, also previewable before downloading.
     async fn image_companions(&self, model_id: &str) -> Result<Value, String> {
-        let model = self.library.find(model_id).await?;
-        let Some(model) = model.filter(|m| m.get("modality").and_then(Value::as_str) == Some("image")) else {
+        let Some(model) = self.image_setup_model(model_id).await? else {
             return Ok(Value::Null);
         };
         let dir = self.library.models_dir();
         let id = model.get("id").map(nekko_js::display).unwrap_or_default();
         let token = self.hf_token();
         tokio::task::spawn_blocking(move || {
-            let beside = acquire::companions_beside(&model, &[companions_dir(&dir, &id)]);
+            let beside = if model.get("path").and_then(Value::as_str).is_some() {
+                acquire::companions_beside(&model, &[companions_dir(&dir, &id)])
+            } else { serde_json::Map::new() };
             acquire::image_companion_status(&model, &acquire::image_companions_dir(&dir), &beside, token.is_some())
         })
         .await
@@ -190,8 +211,8 @@ impl ModelDownloads {
 
     /// Fetch what an image model's set lacks (`downloadImageCompanions`).
     async fn download_image_companions(&self, model_id: &str) -> Result<Value, String> {
-        let Some(model) = self.library.find(model_id).await? else {
-            return Ok(acquire::refusal("That model is not in the library."));
+        let Some(model) = self.image_setup_model(model_id).await? else {
+            return Ok(acquire::refusal("No automatic photo setup is available for this model."));
         };
         let status = self.image_companions(model_id).await?;
         let token = self.hf_token();
@@ -275,6 +296,17 @@ pub fn sweep_stale_parts(dir: &std::path::Path, now: std::time::SystemTime) -> u
 #[cfg(test)]
 mod stale_parts_tests {
     use super::*;
+
+    #[test]
+    fn photo_package_can_be_planned_before_weights_exist() {
+        let id = "unsloth/FLUX.2-klein-4B-GGUF";
+        let model = catalog_image_setup_model(id, &json!({ "id": id })).unwrap();
+        assert!(model.get("path").is_none(), "catalog previews must never inspect the current directory");
+        assert_eq!(acquire::image_companion_set_for(&model).unwrap()["id"], "flux2-klein-4b");
+        assert!(catalog_image_setup_model(id, &Value::Null).is_none());
+        assert!(catalog_image_setup_model("unknown/model", &json!({})).is_none());
+        assert!(catalog_image_setup_model("local-file", &json!({})).is_none());
+    }
 
     #[test]
     fn only_old_part_files_go() {
