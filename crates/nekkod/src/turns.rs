@@ -2694,7 +2694,18 @@ impl TurnTools {
             // In a tainted chat, a public address the chat was never shown
             // (a new query string included) can carry data out.
             let unseen = self.gated() && !lock(&self.taint).allows(&url);
-            let ask = if asks {
+            // Outbound DLP (decision 0064): the address itself carries data.
+            let carried =
+                if self.mode == "yolo" { Vec::new() } else { crate::dlp::in_text(&url, &self.private_terms().await) };
+            let ask = if !carried.is_empty() {
+                Some((
+                    format!(
+                        "Fetch {url}? The address carries {}, which would leave this computer with the request. Approve only if you meant to share it.",
+                        crate::dlp::describe(&carried)
+                    ),
+                    "high",
+                ))
+            } else if asks {
                 Some((format!("Fetch {url}"), "low"))
             } else if unseen {
                 Some((
@@ -2965,6 +2976,24 @@ impl TurnTools {
             )),
             None => None,
         };
+        // Outbound DLP (decision 0064): a key, a card or a private term in the
+        // arguments of any MCP call, read-only ones too (a search query reaches
+        // the search engine), asks, or is named in the approval already asked.
+        let carried =
+            if self.mode == "yolo" { Vec::new() } else { crate::dlp::in_input(&input, &self.private_terms().await) };
+        let ask = match ask {
+            Some((reason, _)) if !carried.is_empty() => {
+                Some((format!("{reason} It carries {}.", crate::dlp::describe(&carried)), "high"))
+            }
+            None if !carried.is_empty() => Some((
+                format!(
+                    "{name} would send {} out of this computer in its arguments. Approve only if you meant to share it.",
+                    crate::dlp::describe(&carried)
+                ),
+                "high",
+            )),
+            other => other,
+        };
         if let Some((reason, severity)) = ask {
             if !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await {
                 return error(id, "Call not approved by user.");
@@ -2979,6 +3008,18 @@ impl TurnTools {
             }
         }
         mcp.call(call).await
+    }
+
+    /// The user's private terms (`settings.privacyTerms`), which the outbound
+    /// DLP looks for as the Privacy Shield does.
+    async fn private_terms(&self) -> Vec<String> {
+        let settings = self.turns.settings.clone();
+        tokio::task::spawn_blocking(move || settings.get())
+            .await
+            .ok()
+            .and_then(|s| s.get("privacyTerms").and_then(Value::as_array).cloned())
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default()
     }
 
     async fn disk(&self) -> Option<Value> {

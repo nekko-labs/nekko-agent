@@ -35,6 +35,7 @@ mod datalock;
 mod decide;
 mod decisions;
 mod desktop;
+mod dlp;
 mod downloads;
 mod engine;
 mod federation;
