@@ -42,7 +42,7 @@ export function DictationButton(props: VoiceTarget) {
         </span>
         <span className="min-w-0 truncate">{busy || (snap.heard ? `Heard: ${snap.heard}` : 'Listening locally… Say ‘Nekko…’ for commands.')}</span>
       </div>}
-      <button type="button" className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl hover:bg-surface-2 disabled:opacity-40 ${snap.listening ? 'text-(--danger)' : 'text-ink-soft'}`}
+      <button type="button" className={`action-target grid h-9 w-9 shrink-0 place-items-center rounded-xl hover:bg-surface-2 disabled:opacity-40 ${snap.listening ? 'text-(--danger)' : 'text-ink-soft'}`}
         onClick={() => void toggle()} disabled={snap.busy === 'starting'} aria-pressed={snap.listening}
         aria-label={snap.listening ? 'Stop listening' : 'Start listening'} title="Always-on local dictation · Say ‘Nekko…’ for app commands">
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">

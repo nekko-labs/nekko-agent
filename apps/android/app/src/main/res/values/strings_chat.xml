@@ -237,6 +237,9 @@
     <string name="chat_always_allow_tool">Always allow this tool</string>
     <string name="chat_always_allowing_tool">Allowing…</string>
     <string name="chat_always_allow_tool_detail">Allows this call and stops asking for this tool in this chat. Other tools still ask.</string>
+    <string name="chat_previous_question">Previous question</string>
+    <string name="chat_next_question">Next</string>
+    <string name="chat_question_page">%1$d of %2$d</string>
     <string name="chat_audit_trail">Audit trail</string>
     <string name="chat_audit_intro">What the agent did in this chat and who allowed it. It never holds what the agent read or sent, and it is deleted with the chat.</string>
     <string name="chat_audit_everything">Everything</string>

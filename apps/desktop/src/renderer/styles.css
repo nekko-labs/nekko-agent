@@ -247,8 +247,16 @@
   }
 }
 
+/* The target grows, not the glyph. Real layout space avoids overlapping
+   invisible hit areas; compact padding/height overrides cannot shrink it. */
+@utility action-target {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
+  @apply action-target inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
   transition:
     transform 160ms var(--ease-out),
     background 0.12s ease,
@@ -826,7 +834,8 @@
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
 #command-titlebar-slot .screens-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
-#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { padding-top: 2px; padding-bottom: 2px; }
+/* Desktop chrome is constrained by the native caption strip, not a CTA row. */
+#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { min-height: 28px; padding-top: 2px; padding-bottom: 2px; }
 
 .titlebar-updater {
   position: relative;
@@ -3559,7 +3568,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Listening grows out of the microphone to the left, inside the bar's own flow, so it can never
    cover the words being dictated. Black in every theme, like the island it is named for. It gives
    way to the bar's controls when the composer is narrow, and only suggestions give way before it. */
-.voice-island { position: relative; display: flex; align-items: center; flex: 0 0 2.25rem; min-width: 0; border-radius: 9999px; transition: flex-basis 240ms cubic-bezier(0.2, 0.9, 0.3, 1.05), background-color 160ms ease; }
+.voice-island { position: relative; display: flex; align-items: center; flex: 0 0 44px; min-width: 0; border-radius: 9999px; transition: flex-basis 240ms cubic-bezier(0.2, 0.9, 0.3, 1.05), background-color 160ms ease; }
 .voice-island.is-open { flex: 0 9999 22rem; min-width: 7.5rem; background: #000; }
 .voice-island.is-open > button { border-radius: 9999px; }
 .voice-island.is-open > button:hover { background: rgb(255 255 255 / 0.14); }
@@ -4307,5 +4316,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 
 @container (max-width: 520px) {
   .composer-bar:has(> .composer-folders) { gap: 4px; }
+  /* Let the folder summary truncate before pushing the 44px actions outside. */
+  .composer-bar > .composer-folders { min-width: 44px; }
   .composer-bar:has(> .composer-folders) .composer-foot-controls { min-width: 80px; }
 }
