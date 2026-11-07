@@ -100,6 +100,8 @@ struct SettingsView: View {
         Form {
             Section {
                 ThemePicker(selection: $prefs.theme)
+                NavigationLink(value: Route.customize) { Label("Customize", systemImage: "slider.horizontal.3") }
+                    .accessibilityIdentifier("settings.customize")
                 NavigationLink(value: Route.simpleMode) {
                     LabeledContent("Simple mode", value: prefs.expertMode ? String(localized: "Detailed") : String(localized: "Simple"))
                 }

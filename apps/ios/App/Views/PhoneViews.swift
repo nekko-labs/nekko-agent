@@ -109,6 +109,7 @@ struct PhoneChatView: View {
             }
         }
         .appBackground()
+        .floatingKeyboardDismiss()
         .navigationTitle(phone.chat(chatId)?.title ?? String(localized: "Chat"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { menu } }

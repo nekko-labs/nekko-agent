@@ -25,6 +25,7 @@ enum Route: Hashable {
     /// Settings → Live Activities: the card's level, with a preview.
     case liveActivities
     /// Settings → Simple mode: what Simple and Expert show, with a preview.
+    case customize
     case simpleMode
     /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
     case phoneModels
@@ -210,6 +211,7 @@ struct RouteView: View {
         case .monitors: MonitorsView(open: { id in path.append(.chat(id)) })
         case .security: SecuritySettingsView()
         case .liveActivities: LiveActivitySettingsView()
+        case .customize: CustomizeView()
         case .simpleMode: SimpleModeSettingsView()
         case .phoneModels: PhoneModelsView()
         case .connectors: ConnectorsView()

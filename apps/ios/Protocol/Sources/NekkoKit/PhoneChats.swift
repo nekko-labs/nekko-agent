@@ -79,6 +79,7 @@ public final class PhoneChats {
     public private(set) var running: Set<String> = []
     /// The tokens this iPhone's chats used, by provider, model and day. Kept on the phone only.
     public private(set) var usage = PhoneUsageLedger()
+    public private(set) var tone: PhoneTone = .standard
 
     private let secrets: SecureStore
     private let files: OfflineFiles?
@@ -90,6 +91,7 @@ public final class PhoneChats {
     static let file = "phone-chats"
     static let providersFile = "phone-providers"
     static let usageFile = "phone-usage"
+    static let toneFile = "phone-tone"
 
     public init(secrets: SecureStore, files: OfflineFiles?, http: PhoneHTTP,
                 now: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) },
@@ -102,6 +104,7 @@ public final class PhoneChats {
         providers = Self.decode([PhoneProvider].self, files?.load(PhoneProviders.computerId, Self.providersFile)) ?? []
         chats = Self.decode([PhoneChat].self, files?.load(PhoneProviders.computerId, Self.file)) ?? []
         usage = Self.decode(PhoneUsageLedger.self, files?.load(PhoneProviders.computerId, Self.usageFile)) ?? PhoneUsageLedger()
+        tone = Self.decode(PhoneTone.self, files?.load(PhoneProviders.computerId, Self.toneFile)) ?? .standard
         // A reply cut off when the app was closed is not still coming.
         for i in chats.indices {
             if let j = chats[i].messages.indices.last, chats[i].messages[j].role == .assistant, chats[i].messages[j].text.isEmpty,
@@ -126,6 +129,12 @@ public final class PhoneChats {
 
     public func chat(_ id: String) -> PhoneChat? { chats.first { $0.id == id } }
     public func provider(_ id: String) -> PhoneProvider? { providers.first { $0.id == id } }
+
+    /// Applies on the next turn; never rewrites saved messages or the provider identity.
+    public func setTone(_ value: PhoneTone) {
+        tone = value
+        if let files, let data = Self.encode(value) { files.save(PhoneProviders.computerId, Self.toneFile, data) }
+    }
 
     // MARK: Providers
 
@@ -306,6 +315,7 @@ public final class PhoneChats {
         models = [:]
         modelErrors = [:]
         usage = PhoneUsageLedger()
+        tone = .standard
         files?.remove(PhoneProviders.computerId)
     }
 
@@ -326,7 +336,7 @@ public final class PhoneChats {
             finish(chatId, answerId, error: String(localized: "This chat’s provider isn’t on this iPhone any more. Pick another model."))
             return
         }
-        let request = PhoneProviders.chatRequest(p, key: key(p.id), model: chat.modelId, messages: history)
+        let request = PhoneProviders.chatRequest(p, key: key(p.id), model: chat.modelId, messages: history, system: tone.systemPrompt)
         running.insert(chatId)
         let http = self.http
         let model = chat.modelId

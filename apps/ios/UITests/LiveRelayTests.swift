@@ -37,6 +37,9 @@ final class LiveRelayTests: XCTestCase {
         let intro = app.buttons["firstRun.continue"]
         XCTAssertTrue(intro.waitForExistence(timeout: 10))
         intro.tap()
+        let experience = app.buttons["experience.continue"]
+        XCTAssertTrue(experience.waitForExistence(timeout: 5))
+        experience.tap()
         // Pair through the paste field; testPairFromADeepLink covers the link path.
         // On a freshly made simulator the first tap after install can land while
         // the screen is still settling (the light pass, #831): tap Continue again
@@ -462,10 +465,9 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(viewMenu.waitForExistence(timeout: 5), "the view menu")
         XCTAssertTrue(waitForFrame(viewMenu, in: app, 10), "the view menu never got a frame")
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        XCTAssertTrue(app.buttons["Group by"].firstMatch.waitForExistence(timeout: 5) || app.staticTexts["Group by"].firstMatch.exists, "Group by")
+        XCTAssertTrue(app.buttons["chats.view.groupBy"].waitForExistence(timeout: 5), "Group by")
         attach(app, "beyond-6-view-menu")
-        // Close the menu.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)).tap()
+        app.buttons["chats.view.done"].tap()
         auditAccessibility(app, "beyond-chats")
 
         // IO-26: the computer's automation, run from the phone; its answer comes back.
@@ -869,12 +871,13 @@ final class LiveRelayTests: XCTestCase {
         let viewMenu = app.buttons["chats.view"].firstMatch
         XCTAssertTrue(waitForFrame(viewMenu, in: app, 10))
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        let groupBy = app.buttons["Group by"].firstMatch
+        let groupBy = app.buttons["chats.view.groupBy"]
         XCTAssertTrue(groupBy.waitForExistence(timeout: 5), "Group by")
-        groupBy.tap()
         let byComputer = app.buttons["Computer"].firstMatch
+        XCTAssertTrue(groupBy.tapUntil { byComputer.exists }, "Group by opens its choices")
         XCTAssertTrue(byComputer.waitForExistence(timeout: 5), "Group by → Computer")
         byComputer.tap()
+        app.buttons["chats.view.done"].tap()
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
             .waitForExistence(timeout: 5), "a heading for this iPhone")
         attach(app, "fleet-5-by-computer")
