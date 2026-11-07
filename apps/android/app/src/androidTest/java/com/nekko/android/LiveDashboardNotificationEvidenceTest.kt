@@ -147,32 +147,27 @@ class LiveDashboardNotificationEvidenceTest {
         }
     }
 
+    private fun descendants(root: AccessibilityNodeInfo): Sequence<AccessibilityNodeInfo> = sequence {
+        yield(root)
+        for (index in 0 until root.childCount) root.getChild(index)?.let { yieldAll(descendants(it)) }
+    }
+
     private fun hasText(root: AccessibilityNodeInfo, text: String): Boolean =
-        root.findAccessibilityNodeInfosByText(text).any { it.isVisibleToUser && it.text?.toString() == text }
+        descendants(root).any { it.isVisibleToUser && it.text?.toString() == text }
 
     private fun expandButton(row: AccessibilityNodeInfo): AccessibilityNodeInfo? =
-        listOf("android:id/expand_button", "com.android.systemui:id/expand_button").firstNotNullOfOrNull { id ->
-            row.findAccessibilityNodeInfosByViewId(id).firstOrNull { it.isVisibleToUser }
-        }
+        descendants(row).firstOrNull { it.isVisibleToUser && it.viewIdResourceName in
+            listOf("android:id/expand_button", "com.android.systemui:id/expand_button") }
 
     private fun fixtureRow(ui: UiAutomation, title: String): AccessibilityNodeInfo? {
-        // rootInActiveWindow can be the instrumentation shell while the shade is in
-        // another interactive window. Never accept the shell's copy of fixture text.
+        // Traverse the actual row: remote queries missed the exact title/body
+        // present in the recorded accessibility tree. Keep full-text assertions.
         val roots = listOfNotNull(ui.rootInActiveWindow) + ui.windows.mapNotNull { it.root }
-        for (root in roots.filter { it.packageName?.toString() == "com.android.systemui" }) {
-            for (node in root.findAccessibilityNodeInfosByText(title)) {
-                // The app-name header can equal EXTRA_TITLE on head. It is not the
-                // notification title, and its header subtree does not contain the body.
-                if (!node.isVisibleToUser || node.text?.toString() != title ||
-                    node.viewIdResourceName !in listOf("android:id/title", "com.android.systemui:id/title")) continue
-                var row: AccessibilityNodeInfo? = node
-                while (row != null) {
-                    if (expandButton(row) != null) return row
-                    row = row.parent
-                }
-            }
-        }
-        return null
+        return roots.asSequence().filter { it.packageName?.toString() == "com.android.systemui" }
+            .flatMap { descendants(it) }
+            .firstOrNull { row -> row.viewIdResourceName == "com.android.systemui:id/expandableNotificationRow" &&
+                descendants(row).any { it.isVisibleToUser && it.text?.toString() == title &&
+                    it.viewIdResourceName in listOf("android:id/title", "com.android.systemui:id/title") } }
     }
 
     private fun saveFailure(ui: UiAutomation, dir: File, expected: String, failure: AssertionError) {
