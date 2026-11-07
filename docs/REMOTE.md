@@ -87,7 +87,7 @@ to old duplicates that were saved with different identity keys.
 
 ## iPhone chat controls
 
-New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
+New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. On the iPhone, choosing **Works on its own** (YOLO) first shows **Turn on YOLO?**: in that mode the agent never asks, so a web page or tool output it reads can get your files or data sent out. **Keep asking** changes nothing. The same warning shows for the chat's tool policy in Expert's menu, in New chat and for the default in **Settings → On <computer>**. **Don't warn me again** applies to this iPhone only; **Settings → Security → Warn before YOLO** turns it back on. When an MCP tool waits for approval in a chat that read the web or a tool's output, the iPhone's approval card also offers **Always allow this tool**: it allows the call and stops asking for that tool in this chat (other tools still ask), after Face ID or your passcode. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
 
 The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
 
@@ -619,10 +619,10 @@ changes how the computer itself is set up:
   uses the model loads it again. Loading, downloading, deleting models and the Model Server's
   settings stay on the computer.
 - **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, complete it, and
-  switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
-  offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
-  default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
-  confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
+  switch it between Ask, Guardrails and YOLO, always allow an MCP tool in it (**Always allow this
+  tool** on an approval, iPhone), but not its tools, isolation or offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
+  default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, or
+  always allowing an MCP tool, is confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
   fingerprint, face or screen lock on Android (the default for new chats, in **Settings → On
   <computer>**).
 

@@ -89,6 +89,7 @@ extension StepUp {
             let title = args.first?.string.flatMap(chatTitle).flatMap { $0.isEmpty ? nil : $0 }
             let chat = title.map { "“\($0)”" } ?? "this chat"
             if let m = mode(args.dropFirst().first?.str("mode")) { return "Switch \(chat) to \(m) on \(computer)" }
+            if args.dropFirst().first?["allowedMcpTools"] != nil { return "Always allow a tool in \(chat) on \(computer)" }
             return "Change \(chat) on \(computer)"
         case Channels.settingsUpdate:
             if let m = mode(args.first?.str("defaultChatMode")) { return "Make \(m) the default for new chats on \(computer)" }
