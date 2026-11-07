@@ -7,7 +7,7 @@ import { StoreSidebar } from './store-sidebar';
 import { Toasts } from '../src/renderer/components/Toasts';
 import { Mascot } from '../src/renderer/components/Mascot';
 import { DEFAULT_WALL_STATE } from '../src/renderer/commandWall';
-import { summarizeSession } from '@nekko-agent/shared';
+import { summarizeSession, type TerminalInfo } from '@nekko-agent/shared';
 import '../src/renderer/styles.css';
 
 // Synthetic records only. This fixture never connects to a host or daemon.
@@ -15,7 +15,7 @@ const provider = { id: 'fixture', kind: 'openai', enabled: true, label: 'Fixture
 const models = [{ id: 'fixture-model', providerId: 'fixture', name: 'Fixture model', contextWindow: 128000 }, ...Array.from({ length: 40 }, (_, i) => ({ id: `catalog-${i}`, providerId: 'fixture', name: `Catalog model ${i}`, contextWindow: 128000 }))];
 const makeSession = (id: string) => ({ id, title: id === 'existing' ? 'Existing conversation' : `Synthetic ${id}`, createdAt: Date.now(), updatedAt: Date.now(), providerId: 'fixture', modelId: 'fixture-model', mode: 'agent', chatType: 'multimodal', messages: [], attachments: [], queuedPrompts: [] });
 let records: any[] = [];
-let terminals: any[] = [];
+let terminals: TerminalInfo[] = [];
 let serial = 0;
 const calls: any[] = [];
 const failures = { create: false, options: false, cleanup: false, terminal: false, delay: 0 };
@@ -25,7 +25,7 @@ const bridge: any = {
   abortChat: async (id: string) => { calls.push({ method: 'abort', id }); },
   setSessionWorkspace: async (id: string, workspaceId?: string) => { calls.push({ method: 'workspace', id, workspaceId }); Object.assign(records.find(s => s.id === id), { workspaceId }); },
   deleteSession: async (id: string) => { calls.push({ method: 'cleanup', id }); if (failures.cleanup) throw Error('Synthetic cleanup failure'); records = records.filter(s => s.id !== id); },
-  createTerminal: async (options: any) => { calls.push({ method: 'terminal', options }); if (failures.terminal) throw Error('Synthetic terminal failure'); const t = { workspaceId: options.workspaceId, id: `terminal-${++serial}`, title: 'Synthetic terminal', cwd: '/synthetic', running: false }; terminals.push(t); return t; },
+  createTerminal: async (options: any) => { calls.push({ method: 'terminal', options }); if (failures.terminal) throw Error('Synthetic terminal failure'); const t: TerminalInfo = { workspaceId: options.workspaceId, id: `terminal-${++serial}`, title: 'Synthetic terminal', cwd: '/synthetic', shell: '/synthetic/shell', createdAt: Date.now(), running: false }; terminals.push(t); return t; },
   listSessionSummaries: async () => records.map(summarizeSession), listTerminals: async () => terminals,
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => models,
   getUsageSummary: async () => null, pendingInput: async () => ({}), runningSessions: async () => [],
@@ -41,9 +41,11 @@ function Fixture() {
   const reset = () => {
     records = [makeSession('existing')]; terminals = []; serial = 0; calls.length = 0;
     Object.assign(failures, { create: false, options: false, cleanup: false, terminal: false, delay: 0 });
-    // The wall and New menu journeys cover Expert controls (Terminal); a fresh app starts in Simple.
+    // Returning-user wall and New menu journeys cover Expert controls (Terminal),
+    // not onboarding. Mark both intros seen so an empty synthetic chat cannot
+    // open the first-prompt modal over the sidebar (#833).
     localStorage.clear(); localStorage.setItem('nekko.chatMode', 'expert');
-    useStore.setState({ toasts: [], view: 'command', providers: [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: 'synthetic-project', settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'light', experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root: { id: 'synthetic-pane', kind: 'chat', refId: 'existing' }, autoAdd: false, watermark: Date.now(), dock: { ...DEFAULT_WALL_STATE.dock, show: false } } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false } as any);
+    useStore.setState({ toasts: [], view: 'command', providers: [provider], models, activeProviderId: 'fixture', sessions: records.map(summarizeSession), terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: 'synthetic-project', settings: { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'light', firstPromptIntroSeen: true, experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root: { id: 'synthetic-pane', kind: 'chat', refId: 'existing' }, autoAdd: false, watermark: Date.now(), dock: { ...DEFAULT_WALL_STATE.dock, show: false } } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false, planRailOpen: false } as any);
     records.forEach(putCachedSession); setRoute('command'); setEpoch(e => e + 1);
   };
   Object.assign(window, { integration: { reset, configureWall: async (wall: any) => { setRoute('blank'); await new Promise(resolve => setTimeout(resolve, 100)); localStorage.clear(); localStorage.setItem('nekko.chatMode', 'expert'); const state = useStore.getState(); useStore.setState({settings:{...state.settings, commandWall:{zonesIntro:true,...wall}}} as any); setEpoch(e=>e+1); setRoute('command'); }, dashboard: () => { const st=useStore.getState(); useStore.setState({settings:{...st.settings,commandWall:{...st.settings!.commandWall!,dock:{...DEFAULT_WALL_STATE.dock,show:true,monitors:{vitals:true,utilization:true,budget:true,hardware:true,automations:false,insights:true}}}}} as any); setEpoch(e=>e+1); }, calls, failures, route: setRoute, state: () => useStore.getState(), records: () => records } });

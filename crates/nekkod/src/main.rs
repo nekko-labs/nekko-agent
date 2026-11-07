@@ -57,6 +57,7 @@ mod model_server;
 mod model_tunnel;
 mod native;
 mod oauth;
+mod outward;
 mod pr_autowatch;
 mod pr_checkouts;
 mod privacy;
