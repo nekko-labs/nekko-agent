@@ -625,6 +625,16 @@ async fn permission_prompts_reach_nekko_approvals() {
     let tool = s["messages"].as_array().unwrap().iter().find(|m| m["role"] == "tool").unwrap();
     assert_eq!(tool["toolResult"]["output"], "removed");
 
+    // The chat's audit trail keeps the permission, how it was decided and who answered.
+    let (_, trail) = post(rig.d.port, "audit:read", json!(["s_cc"]), Some(TOKEN)).await;
+    let asked: Vec<&Value> = trail.as_array().unwrap().iter().filter(|e| e["type"] == "permission").collect();
+    assert_eq!(asked.len(), 1, "{trail}");
+    assert_eq!(asked[0]["tool"], "Bash");
+    assert_eq!(asked[0]["executedBy"], "claude-code");
+    assert_eq!(asked[0]["decision"], "approved");
+    assert_eq!(asked[0]["by"], json!({ "via": "this computer" }));
+    assert_eq!(asked[0]["detail"], json!({}), "a Claude Code command line is never kept");
+
     // The daemon's own token is not a bridge token, and a browser may not call it.
     let client = reqwest::Client::new();
     let url = format!("http://127.0.0.1:{}/harness/approve", rig.d.port);

@@ -113,6 +113,19 @@ pub struct Policy {
 
 /// `allowedMcpTools` from a phone: MCP tool names (`mcp__<server>__<tool>`) only,
 /// as `isMcpToolList` in packages/shared/src/phone-access.ts.
+/// A `tool:approve` that passed the gate, with who answered as its fourth
+/// argument for the chat's audit trail. Whatever the device sent there is
+/// replaced: a device never names itself.
+fn with_approver(channel: &str, args: Value, via: &str, device: &str) -> Value {
+    if channel != "tool:approve" {
+        return args;
+    }
+    let mut list = args.as_array().cloned().unwrap_or_default();
+    list.truncate(3);
+    list.push(json!({ "via": via, "device": device }));
+    Value::Array(list)
+}
+
 fn mcp_tool_list(v: &Value) -> bool {
     v.as_array().is_some_and(|a| {
         a.len() <= 200
@@ -1151,6 +1164,7 @@ impl Gate {
                     self.record(&who, &channel, Err(d.code.to_string()));
                     return Err(d.to_string());
                 }
+                let args = with_approver(&channel, args, "phone", &who.device_id);
                 let result = call(&self.run, channel.clone(), args).await;
                 self.record(&who, &channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
                 result
@@ -1224,6 +1238,7 @@ impl Gate {
             self.record(who, channel, Err(d.code.to_string()));
             return Some(Err(d.to_string()));
         }
+        let args = with_approver(channel, args, "paired computer", &who.device_id);
         let result = (self.run)(channel.to_string(), args).await;
         self.record(who, channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
         Some(result)
