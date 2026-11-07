@@ -113,6 +113,19 @@ final class Dictation {
     var park: ((String) -> Void)?
 
     private weak var store: ComputersStore?
+    private var computerId: String?
+    private var computer: NekkoVoiceComputer?
+    private var audioCancelled = false
+    private var captureGeneration = 0
+    /// Capture and capability probing share this pinned caller. Tests can inject it.
+    var makeComputer: (String, any Caller, @escaping () -> Bool) -> NekkoVoiceComputer = {
+        NekkoVoiceComputer(id: $0, caller: $1, allowed: $2)
+    }
+    private func scopeAllowed(_ store: ComputersStore) -> Bool {
+        guard !audioCancelled else { return false }
+        guard let computerId else { return true }
+        return NekkoVoiceScope.permits(computerId: computerId, activeId: store.activeId, state: store.state(of: computerId))
+    }
     private var engine: AVAudioEngine?
     /// Route change, a call or Siri, a media services reset: each ends listening.
     private var stops: [NSObjectProtocol] = []
@@ -192,7 +205,7 @@ final class Dictation {
         }
     }
 
-    func start(store: ComputersStore, holding: Bool) async {
+    func start(store: ComputersStore, holding: Bool, computerId: String? = nil) async {
         guard !recording, !starting else { return }
         starting = true
         startCancelled = false
@@ -200,6 +213,18 @@ final class Dictation {
         error = nil
         notice = nil
         self.store = store
+        audioCancelled = false
+        captureGeneration += 1
+        let generation = captureGeneration
+        self.computerId = computerId ?? store.activeId
+        guard scopeAllowed(store) else { error = "Voice computer unavailable."; return }
+        computer = nil
+        if allowComputer, let id = self.computerId, let caller = try? store.remote() {
+            computer = makeComputer(id, caller, { [weak self, weak store] in
+                guard let self, let store, !self.audioCancelled, self.captureGeneration == generation else { return false }
+                return NekkoVoiceScope.permits(computerId: id, activeId: store.activeId, state: store.state(of: id))
+            })
+        }
         // When the phone will transcribe, its permission prompt and the on-device check come
         // before listening: a prompt mid-listen leaves the screen and stops it.
         // Only first use, or a phone that can't recognize on the device, pays the relay round trip to ask
@@ -216,7 +241,7 @@ final class Dictation {
             return
         }
         // The waits above can outlast the screen (a lock) or the chat (closed): then nothing opens.
-        guard mayOpenMicrophone else { return }
+        guard mayOpenMicrophone, scopeAllowed(store) else { return }
         claimMicrophone()
         let session = AVAudioSession.sharedInstance()
         do {
@@ -320,8 +345,8 @@ final class Dictation {
     /// Whisper, else this phone on the device only). "" when nothing was said or `discard`
     /// ended it; throws when the phone refuses (`DictationError.noOnDevice`) or the words
     /// could not be turned into text.
-    func captureOnce(store: ComputersStore) async throws -> String {
-        try await captureOnce { await self.start(store: store, holding: false) }
+    func captureOnce(store: ComputersStore, computerId: String? = nil) async throws -> String {
+        try await captureOnce { await self.start(store: store, holding: false, computerId: computerId) }
     }
 
     /// `open` opens the microphone (tests feed samples instead).
@@ -398,6 +423,8 @@ final class Dictation {
 
     /// Stop without transcribing.
     func discard() {
+        captureGeneration += 1
+        audioCancelled = true
         if starting { startCancelled = true }
         guard recording else { return }
         _ = close()
@@ -482,10 +509,12 @@ final class Dictation {
     /// Transcribes after every earlier segment: the computer refuses a second transcription while one runs.
     func enqueue(_ samples: [Float]) {
         let previous = chain
+        let generation = captureGeneration
         queued += 1
         chain = Task {
             await previous?.value
-            await transcribeSegment(samples)
+            // Old audio must not pick up a later capture's computer/caller.
+            if generation == captureGeneration { await transcribeSegment(samples, generation: generation) }
             queued -= 1
         }
     }
@@ -501,11 +530,12 @@ final class Dictation {
     // Whisper writes non-speech as bracketed or parenthesized tags ("[BLANK_AUDIO]", "(keyboard clicking)").
     private static let annotation = try! NSRegularExpression(pattern: #"\[[^\]\n]{1,40}]|\([^)\n]{1,40}\)"#)
 
-    private func transcribeSegment(_ samples: [Float]) async {
+    private func transcribeSegment(_ samples: [Float], generation: Int) async {
         let wav = Self.wav(samples)
         do {
             let text: String?
             if let transcribe { text = try await transcribe(wav) } else { text = try await onEngines(wav) }
+            guard generation == captureGeneration else { return }
             failing = false
             let words = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let range = NSRange(words.startIndex..., in: words)
@@ -515,11 +545,13 @@ final class Dictation {
             heard.append(heardNow)
             if let sink { sink(heardNow) } else { park?(words) }
         } catch let e as DictationError {
+            guard generation == captureGeneration else { return }
             // Dictation is off: nothing more is recorded.
             error = e.localizedDescription
             refusal = e
             if recording { _ = close() }
         } catch {
+            guard generation == captureGeneration else { return }
             if !failing { self.error = "Couldn’t turn speech into text: \(error.localizedDescription)" }
             failing = true
         }
@@ -527,11 +559,17 @@ final class Dictation {
 
     private func onEngines(_ wav: Data) async throws -> String? {
         guard let store else { return nil }
+        guard scopeAllowed(store) else { throw CancellationError() }
+        let pinned = computer
         let computer: ((Data) async throws -> String)? = await computerHasWhisper(store) ? { [weak self] in
-            guard let self else { throw CancellationError() }
-            return try await transcribeOnComputer($0, store)
+            guard let self, let pinned else { throw CancellationError() }
+            return try await transcribeOnComputer($0, pinned, store)
         } : nil
-        return try await Self.transcribe(wav, computer: computer, online: { store.conn == .online }, phone: { [weak self] in try await self?.onPhone($0) })
+        // A scope change is not an offline fallback. Never upload or publish late words.
+        guard scopeAllowed(store) else { throw CancellationError() }
+        let words = try await Self.transcribe(wav, computer: computer, online: { store.conn == .online }, phone: { [weak self] in try await self?.onPhone($0) })
+        guard scopeAllowed(store) else { throw CancellationError() }
+        return words
     }
 
     /// Whisper on the computer when it has it, tried twice: while the computer is still online its
@@ -548,17 +586,18 @@ final class Dictation {
     }
 
     private func computerHasWhisper(_ store: ComputersStore) async -> Bool {
-        guard allowComputer, AppModel.shared.prefs.dictationOnComputer, store.conn == .online, store.pcSettings.voiceEnabled,
-              let r = try? store.remote(), let v = try? await r.call(Channels.voiceStatus) else { return false }
-        return VoiceInstall.from(v).installed
+        guard allowComputer, scopeAllowed(store), AppModel.shared.prefs.dictationOnComputer,
+              store.conn == .online, store.pcSettings.voiceEnabled, let computer,
+              let v = try? await computer.call(Channels.voiceStatus) else { return false }
+        return scopeAllowed(store) && VoiceInstall.from(v).installed
     }
 
     /// The words ("" when none).
-    private func transcribeOnComputer(_ wav: Data, _ store: ComputersStore) async throws -> String {
-        let r = try store.remote()
-        transcribingOn = store.active?.name ?? "your computer"
+    private func transcribeOnComputer(_ wav: Data, _ computer: NekkoVoiceComputer, _ store: ComputersStore) async throws -> String {
+        transcribingOn = store.computers.first { $0.id == computer.id }?.name ?? "your computer"
         defer { transcribingOn = nil }
-        let v = try await r.call(Channels.voiceTranscribe, [wavArg(wav)], timeout: 60)
+        // The pinned caller validates synchronously immediately before invoking the upload.
+        let v = try await computer.call(Channels.voiceTranscribe, [wavArg(wav)], timeout: 60)
         return v.string ?? v.str("text") ?? ""
     }
 

@@ -79,7 +79,7 @@ final class NekkoVoiceTests: XCTestCase {
         var routes: [String] = []
         var shown: [String] = []
         r.capture = { captures += 1; return await withCheckedContinuation { release = $0 } }
-        r.route = { routes.append($0); return "Sent" }
+        r.routeWithCommit = { text, _ in routes.append(text); return "Sent" }
         r.show = { _, text in shown.append(text) }
         let task = Task { await r.talk() }
         while release == nil { await Task.yield() }
@@ -100,7 +100,7 @@ final class NekkoVoiceTests: XCTestCase {
         var routed = 0
         var shown: [String] = []
         r.show = { _, text in shown.append(text) }
-        r.route = { _ in routed += 1; throw RelayError("Request denied") }
+        r.routeWithCommit = { _, _ in routed += 1; throw RelayError("Request denied") }
         r.capture = { "   " }
         await r.talk()
         XCTAssertEqual(routed, 0)
@@ -115,12 +115,15 @@ final class NekkoVoiceTests: XCTestCase {
         var release: CheckedContinuation<String, Never>?
         var shown: [String] = []
         r.capture = { "status" }
-        r.route = { _ in await withCheckedContinuation { release = $0 } }
+        r.routeWithCommit = { _, permit in
+            XCTAssertTrue(permit.commit())
+            return await withCheckedContinuation { release = $0 }
+        }
         r.show = { _, text in shown.append(text) }
         let task = Task { await r.talk() }
         while release == nil { await Task.yield() }
         r.cancel()
-        XCTAssertEqual(shown.last, "Processing…", "cannot claim nothing sent once delivery starts")
+        XCTAssertEqual(shown.last, "Sending…", "cannot claim nothing sent once delivery starts")
         release?.resume(returning: "Queued, not sent yet.")
         await task.value
         XCTAssertEqual(shown.last, "Queued, not sent yet.")
@@ -131,7 +134,7 @@ final class NekkoVoiceTests: XCTestCase {
         var shown: [String] = []
         r.capture = { await withCheckedContinuation { release = $0 } }
         r.finish = { release?.resume(returning: "private transcript") }
-        r.route = { _ in "Queued, not sent yet." }
+        r.routeWithCommit = { _, _ in "Queued, not sent yet." }
         r.show = { _, text in shown.append(text) }
         let task = Task { await r.talk() }
         while release == nil { await Task.yield() }

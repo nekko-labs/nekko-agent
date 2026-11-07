@@ -7,12 +7,16 @@ public final class NekkoVoiceDispatcher {
     public struct Target: Equatable, Sendable {
         public var id: String
         public var name: String
-        public init(id: String, name: String) { self.id = id; self.name = name }
+        public var archived: Bool
+        public init(id: String, name: String, archived: Bool = false) {
+            self.id = id; self.name = name; self.archived = archived
+        }
     }
     public struct Context: Sendable {
         public var computerId: String
         public var computerName: String
         public var online: Bool
+        public var denied = false
         public var loaded: Bool
         public var card: LiveCardState
         public var targets: [Target]
@@ -39,6 +43,10 @@ public final class NekkoVoiceDispatcher {
     /// confirm send to <same exact name> saying <same exact message>; cancel.
     /// A colon is also accepted in place of the spoken delimiter.
     public func dispatch(_ speech: String, context c: Context, now: Date = .now) -> Result {
+        guard !c.denied else {
+            cancel()
+            return .message("Not sent. This phone is no longer authorized. Open app.")
+        }
         let words = speech.trimmingCharacters(in: .whitespacesAndNewlines)
         let command = words.lowercased()
         if ["cancel", "no", "never mind"].contains(command) {
@@ -61,7 +69,7 @@ public final class NekkoVoiceDispatcher {
         }
         let name = String(words[words.index(words.startIndex, offsetBy: prefix.count)..<delimiter.lowerBound]).trimmingCharacters(in: .whitespaces)
         let text = String(words[delimiter.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let matches = c.targets.filter { !$0.name.isEmpty && $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
+        let matches = c.targets.filter { !$0.archived && !$0.name.isEmpty && $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }
         guard c.loaded, matches.count == 1, let target = matches.first, !text.isEmpty else {
             cancel()
             return .message("Not sent. Target missing, ambiguous, or unavailable. Open app to choose the exact chat and message.")
@@ -80,6 +88,51 @@ public final class NekkoVoiceDispatcher {
     }
 }
 
+/// Snapshot checks shared by main-actor capture and delivery. Offline is allowed; denied is not.
+public enum NekkoVoiceScope {
+    public static func permits(computerId: String, activeId: String?, state: RelayState) -> Bool {
+        activeId == computerId && state != .denied
+    }
+    public static func permitsDelivery(computerId: String, activeId: String?, cardComputerId: String?,
+                                       state: RelayState, targets: [NekkoVoiceDispatcher.Target],
+                                       sessionId: String, confirmedName: String?) -> Bool {
+        permits(computerId: computerId, activeId: activeId, state: state) && cardComputerId == computerId &&
+        targets.contains { $0.id == sessionId && $0.name == confirmedName && !$0.archived }
+    }
+}
+
+/// Own the caller, not a lookup into mutable selection after a capability await.
+@MainActor
+public final class NekkoVoiceComputer {
+    public let id: String
+    private let caller: any Caller
+    private let allowed: () -> Bool
+    public init(id: String, caller: any Caller, allowed: @escaping () -> Bool) {
+        self.id = id; self.caller = caller; self.allowed = allowed
+    }
+    public func call(_ channel: String, _ args: [JSONValue] = [], timeout: TimeInterval? = nil) async throws -> JSONValue {
+        guard allowed() else { throw CancellationError() }
+        return try await caller.call(channel, args, timeout: timeout)
+    }
+}
+
+/// A generation may cancel during preparation. Commit is synchronous and must be
+/// called immediately before persistence, with no suspension between it and the write.
+@MainActor
+public final class NekkoVoiceCommit {
+    private let current: () -> Bool
+    var onCommit: () -> Void = {}
+    public private(set) var committed = false
+    init(current: @escaping () -> Bool) { self.current = current }
+    public var isCurrent: Bool { current() }
+    public func commit(if allowed: () -> Bool = { true }) -> Bool {
+        guard !committed, current(), allowed() else { return false }
+        committed = true
+        onCommit()
+        return true
+    }
+}
+
 /// Capture has a single owner until it drains. A cancelled generation can neither
 /// dispatch late words nor overwrite a newer result, including during startup.
 @MainActor
@@ -87,12 +140,17 @@ public final class NekkoVoiceRunner {
     public var capture: () async throws -> String = { "" }
     public var finish: () -> Void = {}
     public var discard: () -> Void = {}
+    /// Read-only routes (e.g. status). Persistence must use routeWithCommit.
     public var route: (String) async throws -> String = { _ in "Not sent. Open app." }
+    public var routeWithCommit: ((String, NekkoVoiceCommit) async throws -> String)?
     public var show: (Bool, String) -> Void = { _, _ in }
     public var onCancel: () -> Void = {}
     public private(set) var busy = false
     private var listening = false
     private var generation = 0
+    private var delivery: NekkoVoiceCommit?
+    /// Processing remains visible, but is cancellable until synchronous persistence.
+    public var canCancel: Bool { busy && delivery?.isCurrent == true && delivery?.committed != true }
     public init() {}
     public func talk() async {
         guard !busy else { if listening { finish() }; return }
@@ -100,7 +158,10 @@ public final class NekkoVoiceRunner {
         listening = true
         generation += 1
         let token = generation
-        defer { busy = false; listening = false }
+        let permit = NekkoVoiceCommit { [weak self] in self?.busy == true && self?.generation == token }
+        permit.onCommit = { [weak self] in self?.show(true, "Sending…") }
+        delivery = permit
+        defer { busy = false; listening = false; delivery = nil }
         show(true, "")
         do {
             let text = try await capture().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -109,7 +170,9 @@ public final class NekkoVoiceRunner {
             guard !text.isEmpty else { show(false, "No words heard. Nothing sent."); return }
             // Keep the card alive and retain local voice state through push updates.
             show(true, "Processing…")
-            let reply = try await route(text)
+            let reply: String
+            if let routeWithCommit { reply = try await routeWithCommit(text, permit) }
+            else { reply = try await route(text) }
             guard token == generation else { return }
             show(false, reply)
         } catch {
@@ -121,8 +184,8 @@ public final class NekkoVoiceRunner {
     }
     public func finishListening() { if listening { finish() } }
     public func cancel() {
-        // Once dispatch starts, an outbox delivery cannot honestly be recalled.
-        guard !busy || listening else { return }
+        // Once persisted, an outbox delivery cannot honestly be recalled.
+        guard delivery?.committed != true else { return }
         generation += 1
         listening = false
         onCancel()

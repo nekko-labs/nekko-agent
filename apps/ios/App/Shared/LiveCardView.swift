@@ -53,6 +53,11 @@ struct LiveCardView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 if state.heard == "Processing…" {
+                    HStack(spacing: 8) {
+                        button(CancelTalkIntent()) { action(Text("Cancel"), primary: false) }
+                        appLink { action(Text("Open app"), primary: false) }
+                    }
+                } else if state.heard == "Sending…" {
                     appLink { action(Text("Open app"), primary: false) }
                 } else {
                     HStack(spacing: 8) {

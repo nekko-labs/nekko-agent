@@ -5,11 +5,14 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Notification
 import android.app.NotificationManager
+import android.app.UiAutomation
 import android.content.res.Configuration
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.os.Build
 import android.os.SystemClock
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nekko.android.connection.KeepAlive
@@ -73,8 +76,12 @@ class LiveDashboardNotificationEvidenceTest {
         // A stale PNG must never satisfy the capture script after a failed assertion.
         if (output.exists()) assertTrue(output.delete())
         val originalServiceInfo = ui.serviceInfo
+        var expected = "Notification not built yet"
         try {
-            ui.serviceInfo = ui.serviceInfo.apply { flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS }
+            ui.serviceInfo = ui.serviceInfo.apply {
+                flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+            }
             assertTrue("Fresh emulator must not have other app notifications", manager.activeNotifications.isEmpty())
             val notices = Notices(app)
             assertTrue("POST_NOTIFICATIONS and the connection channel must be enabled", notices.allowed())
@@ -93,33 +100,30 @@ class LiveDashboardNotificationEvidenceTest {
             assertTrue("Open the real notification shade", ui.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS))
             val title = stable.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
             val text = stable.extras.getCharSequence(Notification.EXTRA_TEXT).toString()
-            // Select the builder's words, not new-only labels, so this assertion runs on base too.
-            waitFor("System UI renders the notification's title and text") {
-                val root = ui.rootInActiveWindow
-                root?.packageName?.toString() == "com.android.systemui" &&
-                    root.findAccessibilityNodeInfosByText(title).isNotEmpty() &&
-                    root.findAccessibilityNodeInfosByText(text).isNotEmpty()
+            val bigText = stable.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+            expected = "EXTRA_TITLE=$title\nEXTRA_TEXT=$text\nEXTRA_BIG_TEXT=$bigText"
+            assertTrue("The builder supplies a title and collapsed body", title.isNotBlank() && text.isNotBlank())
+            // BigTextStyle replaces EXTRA_TEXT with EXTRA_BIG_TEXT in an expanded row.
+            // Android may auto-expand the first notification before we inspect it. Select
+            // complete builder words on both revisions, not a substring or new-only label.
+            waitFor("System UI renders the notification's title and collapsed or expanded body") {
+                fixtureRow(ui, title)?.let { row ->
+                    hasText(row, text) || (bigText != null && bigText.isNotBlank() && hasText(row, bigText))
+                } == true
             }
             // Expand only the fixture's row, never press an action or a different notification.
-            val titleNode = ui.rootInActiveWindow.findAccessibilityNodeInfosByText(title).first()
-            var row: android.view.accessibility.AccessibilityNodeInfo? = titleNode
-            while (row != null) {
-                val expand = row.findAccessibilityNodeInfosByViewId("com.android.systemui:id/expand_button").firstOrNull()
-                if (expand != null) {
-                    if (expand.contentDescription?.toString()?.contains("Expand", ignoreCase = true) == true) {
-                        assertTrue("Expand the fixture notification", expand.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK))
-                    }
-                    break
-                }
-                row = row.parent
+            val row = requireNotNull(fixtureRow(ui, title))
+            val expand = requireNotNull(expandButton(row))
+            if (expand.contentDescription?.toString()?.contains("Expand", ignoreCase = true) == true) {
+                assertTrue("Expand the fixture notification", expand.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             }
             ui.waitForIdle(500, 5_000)
-            // The base and implementation deliberately have different expanded words/actions.
-            // Wait for the actual builder's expanded body when it supplies one.
-            stable.extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.let { body ->
-                waitFor("System UI renders the expanded fixture body") {
-                    ui.rootInActiveWindow?.findAccessibilityNodeInfosByText(body)?.isNotEmpty() == true
-                }
+            // Initial collapsed/expanded acceptance does not relax the final assertion:
+            // require the full expanded body and title together in the fixture's row.
+            val finalBody = bigText ?: text
+            assertTrue("The builder supplies a final body", finalBody.isNotBlank())
+            waitFor("System UI renders the title and full expanded fixture body") {
+                fixtureRow(ui, title)?.let { hasText(it, finalBody) } == true
             }
             val bitmap = requireNotNull(ui.takeScreenshot()) { "System UI screenshot was unavailable" }
             try {
@@ -128,6 +132,12 @@ class LiveDashboardNotificationEvidenceTest {
                 bitmap.recycle()
             }
             assertTrue("Nonempty PNG for mode-evidence.sh", output.length() > 0)
+        } catch (failure: AssertionError) {
+            // Never let a failed assertion leave an accepted final PNG behind. These
+            // diagnostic names deliberately do not match *live-dashboard-notification*.png.
+            if (output.exists() && !output.delete()) failure.addSuppressed(IllegalStateException("Could not remove final PNG"))
+            saveFailure(ui, dir, expected, failure)
+            throw failure
         } finally {
             manager.cancel(tag, id)
             ui.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
@@ -135,6 +145,76 @@ class LiveDashboardNotificationEvidenceTest {
             // Keep POST_NOTIFICATIONS until CI deletes the disposable emulator.
             // Revoking it here can kill the instrumented UID before JUnit reports OK.
         }
+    }
+
+    private fun hasText(root: AccessibilityNodeInfo, text: String): Boolean =
+        root.findAccessibilityNodeInfosByText(text).any { it.isVisibleToUser && it.text?.toString() == text }
+
+    private fun expandButton(row: AccessibilityNodeInfo): AccessibilityNodeInfo? =
+        listOf("android:id/expand_button", "com.android.systemui:id/expand_button").firstNotNullOfOrNull { id ->
+            row.findAccessibilityNodeInfosByViewId(id).firstOrNull { it.isVisibleToUser }
+        }
+
+    private fun fixtureRow(ui: UiAutomation, title: String): AccessibilityNodeInfo? {
+        // rootInActiveWindow can be the instrumentation shell while the shade is in
+        // another interactive window. Never accept the shell's copy of fixture text.
+        val roots = listOfNotNull(ui.rootInActiveWindow) + ui.windows.mapNotNull { it.root }
+        for (root in roots.filter { it.packageName?.toString() == "com.android.systemui" }) {
+            for (node in root.findAccessibilityNodeInfosByText(title)) {
+                // The app-name header can equal EXTRA_TITLE on head. It is not the
+                // notification title, and its header subtree does not contain the body.
+                if (!node.isVisibleToUser || node.text?.toString() != title ||
+                    node.viewIdResourceName !in listOf("android:id/title", "com.android.systemui:id/title")) continue
+                var row: AccessibilityNodeInfo? = node
+                while (row != null) {
+                    if (expandButton(row) != null) return row
+                    row = row.parent
+                }
+            }
+        }
+        return null
+    }
+
+    private fun saveFailure(ui: UiAutomation, dir: File, expected: String, failure: AssertionError) {
+        // Capture before shade dismissal/cancellation. The script's EXIT trap pulls
+        // this directory even on failure. Neither file is accepted final evidence.
+        runCatching {
+            val bitmap = requireNotNull(ui.takeScreenshot()) { "Failure screenshot unavailable" }
+            try {
+                File(dir, "failure-only-shade.png").outputStream().use {
+                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it))
+                }
+            } finally {
+                bitmap.recycle()
+            }
+        }.onFailure { failure.addSuppressed(it) }
+        runCatching {
+            File(dir, "failure-only-accessibility.txt").printWriter().use { writer ->
+                writer.println("FAILURE DIAGNOSTIC ONLY, NOT ACCEPTED FINAL EVIDENCE")
+                writer.println(failure.stackTraceToString())
+                writer.println("Expected complete builder extras:\n$expected")
+                fun dump(node: AccessibilityNodeInfo?, depth: Int) {
+                    if (node == null) {
+                        writer.println("${"  ".repeat(depth)}<null root/child>")
+                        return
+                    }
+                    val bounds = Rect().also { node.getBoundsInScreen(it) }
+                    fun quoted(value: CharSequence?) = value?.toString()?.replace("\\", "\\\\")
+                        ?.replace("\n", "\\n")?.replace("\r", "\\r")?.replace("\"", "\\\"")
+                    writer.println("${"  ".repeat(depth)}package=${node.packageName} class=${node.className} " +
+                        "id=${node.viewIdResourceName} visible=${node.isVisibleToUser} bounds=$bounds " +
+                        "text=\"${quoted(node.text)}\" description=\"${quoted(node.contentDescription)}\"")
+                    for (index in 0 until node.childCount) dump(node.getChild(index), depth + 1)
+                }
+                writer.println("Active window (may belong to shell):")
+                dump(ui.rootInActiveWindow, 0)
+                for (window in ui.windows) {
+                    writer.println("Window id=${window.id} type=${window.type} layer=${window.layer} " +
+                        "active=${window.isActive} focused=${window.isFocused} title=${window.title}")
+                    dump(window.root, 0)
+                }
+            }
+        }.onFailure { failure.addSuppressed(it) }
     }
 
     private fun fixture(): LiveCardState {

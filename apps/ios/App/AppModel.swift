@@ -347,20 +347,27 @@ final class AppModel {
         await store.cardAction(focus: focus, dismiss: dismiss)
     }
 
+    private func voiceScopeAllowed(_ id: String) -> Bool {
+        activities.card?.attributes.computerId == id &&
+        NekkoVoiceScope.permits(computerId: id, activeId: store.activeId, state: store.state(of: id))
+    }
+
     /// Authenticated app-wide voice. Never routes plain speech to focusId and never
     /// publishes the captured transcript. Delivery is distinct from completion.
     private func wireTalk() {
         talker.capture = { [weak self] in
-            guard let self else { throw RelayError("App unavailable") }
+            guard let self, let id = self.voiceComputerId,
+                  self.voiceScopeAllowed(id) else { throw CancellationError() }
             self.start(force: true)
             self.store.resume()
-            return try await self.cardDictation.captureOnce(store: self.store)
+            return try await self.cardDictation.captureOnce(store: self.store, computerId: id)
         }
         talker.finish = { [weak self] in self?.cardDictation.stopListening() }
         talker.discard = { [weak self] in self?.cardDictation.discard() }
         talker.onCancel = { [weak self] in self?.voiceDispatcher.cancel() }
-        talker.route = { [weak self] text in
-            guard let self, let id = self.voiceComputerId,
+        talker.routeWithCommit = { [weak self] text, permit in
+            guard let self, let id = self.voiceComputerId, permit.isCurrent,
+                  self.voiceScopeAllowed(id),
                   let card = self.activities.card, card.attributes.computerId == id else {
                 return "Not sent. Card scope changed. Open app."
             }
@@ -369,7 +376,7 @@ final class AppModel {
                 computerId: id, computerName: card.attributes.computerName,
                 online: self.store.state(of: id) == .online, loaded: loaded,
                 card: card.state,
-                targets: self.store.chats(on: id).map { .init(id: $0.id, name: $0.title) })
+                targets: self.store.chats(on: id).filter { !$0.archived }.map { .init(id: $0.id, name: $0.title) })
             switch self.voiceDispatcher.dispatch(text, context: context) {
             case .message(let reply): return reply
             case .send(let computerId, let sid, let message):
@@ -379,13 +386,18 @@ final class AppModel {
                     return "Not sent. Open app on this computer to send."
                 }
                 let confirmedName = context.targets.first { $0.id == sid }?.name
-                let online = await self.waitOnline(seconds: 10)
-                guard self.store.activeId == computerId,
-                      self.activities.card?.attributes.computerId == computerId,
-                      self.store.chats(on: computerId).contains(where: { $0.id == sid && $0.title == confirmedName }) else {
-                    return "Not sent. Target or computer changed. Open app."
-                }
-                let delivered = try await self.store.outbox.sendWaiting(chatId: sid, text: message, wait: online ? 10 : 0)
+                let delivered = try await CardVoiceDelivery.send(
+                    outbox: self.store.outbox, sessionId: sid, text: message, permit: permit,
+                    waitOnline: { await self.waitOnline(seconds: 10) },
+                    allowed: {
+                        NekkoVoiceScope.permitsDelivery(
+                            computerId: computerId, activeId: self.store.activeId,
+                            cardComputerId: self.activities.card?.attributes.computerId,
+                            state: self.store.state(of: computerId),
+                            targets: self.store.chats(on: computerId).map {
+                                .init(id: $0.id, name: $0.title, archived: $0.archived)
+                            }, sessionId: sid, confirmedName: confirmedName)
+                    })
                 guard self.store.activeId == computerId else {
                     return "Delivery not confirmed. Computer changed. Open app to review the original computer's outbox."
                 }
@@ -793,5 +805,17 @@ final class AppModel {
             return "Tailscale is on, but \(c.relayHost) doesn’t answer. Check that \(c.name) is awake, signed in to the same tailnet, and running its relay."
         }
         return nil
+    }
+}
+
+/// Injectable preparation for the app's real outbox path, without app lifecycle IO.
+@MainActor
+enum CardVoiceDelivery {
+    static func send(outbox: Outbox, sessionId: String, text: String, permit: NekkoVoiceCommit,
+                     waitOnline: () async -> Bool, allowed: @escaping () -> Bool) async throws -> Bool {
+        guard permit.isCurrent, allowed() else { throw CancellationError() }
+        let online = await waitOnline()
+        return try await outbox.sendWaiting(chatId: sessionId, text: text, wait: online ? 10 : 0,
+                                            beforeEnqueue: { permit.commit(if: allowed) })
     }
 }
