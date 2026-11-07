@@ -36,9 +36,14 @@ if (source.includes('let flags = ["-uiTestChatRefresh"')) {
 fs.writeFileSync(root, source);
 const prefs = 'apps/ios/App/Platform/Prefs.swift';
 source = fs.readFileSync(prefs, 'utf8');
+// Start each isolated test clean, but leave the real stored value intact on relaunch.
+replace('d = defaults', `d = defaults
+        if ProcessInfo.processInfo.arguments.contains("-uiTestGroupList") && !ProcessInfo.processInfo.arguments.contains("-uiTestKeepGroups") {
+            defaults.removeObject(forKey: "openedChatGroups")
+        }`);
 replace('chatListView = ChatListView.parse(d.data(forKey: "chatListView"))', 'chatListView = ProcessInfo.processInfo.arguments.contains("-uiTestGroupList") && !ProcessInfo.processInfo.arguments.contains("-uiTestKeepCardDetails") ? .standard : ChatListView.parse(d.data(forKey: "chatListView"))');
 fs.writeFileSync(prefs, source);
 const test = 'apps/ios/UITests/GroupEvidenceTests.swift';
 if (process.argv.includes('--before')) {
-  fs.writeFileSync(test, fs.readFileSync(test, 'utf8').replace('let after = true', 'let after = false'));
+  fs.writeFileSync(test, fs.readFileSync(test, 'utf8').replace('let after = true', 'let after = false').replace('let remembersGroups = true', 'let remembersGroups = false'));
 }

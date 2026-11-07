@@ -43,6 +43,53 @@ final class GroupEvidenceTests: XCTestCase {
         }
     }
 
+    func testGroupChoicesSurviveRelaunchAndSearch() {
+        let remembersGroups = true // The harness sets false for the unchanged baseline.
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestGroupList", "-splash", "NO", "-AppleLanguages", "(en)"]
+        app.launch()
+        let building = app.buttons["chats.group.status:building"]
+        let watching = app.buttons["chats.group.status:watching"]
+        XCTAssertTrue(building.waitForExistence(timeout: 15))
+        XCTAssertEqual(building.value as? String, "Collapsed")
+        building.tap()
+        XCTAssertEqual(building.value as? String, "Expanded")
+        XCTAssertEqual(watching.value as? String, "Collapsed")
+        attach(app, "groups-before-relaunch")
+        app.terminate()
+        app.launchArguments += ["-uiTestKeepGroups"]
+        app.launch()
+        XCTAssertTrue(building.waitForExistence(timeout: 15))
+        XCTAssertEqual(building.value as? String, remembersGroups ? "Expanded" : "Collapsed")
+        XCTAssertEqual(watching.value as? String, "Collapsed")
+        attach(app, "groups-after-relaunch")
+
+        // Explicitly closing a group must also survive another launch.
+        if !remembersGroups { building.tap() }
+        building.tap()
+        watching.tap()
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(building.waitForExistence(timeout: 15))
+        XCTAssertEqual(building.value as? String, "Collapsed")
+        XCTAssertEqual(watching.value as? String, remembersGroups ? "Expanded" : "Collapsed")
+        attach(app, "groups-closed-after-relaunch")
+
+        app.buttons["chats.menu"].tap()
+        app.buttons["chats.menu.search"].tap()
+        let search = app.textFields["chats.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("Build")
+        XCTAssertEqual(building.value as? String, "Expanded")
+        XCTAssertTrue(app.staticTexts["Build the app"].waitForExistence(timeout: 5))
+        if remembersGroups { building.tap() } // Search disclosure must not write a preference.
+        app.buttons["chats.search.cancel"].tap()
+        XCTAssertEqual(building.value as? String, "Collapsed")
+        XCTAssertEqual(watching.value as? String, remembersGroups ? "Expanded" : "Collapsed")
+        attach(app, "groups-after-search")
+    }
+
     private func attach(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
