@@ -36,3 +36,15 @@ for (const revision of ['before', 'after']) {
     }
   });
 }
+
+test('native evidence always supplies UI tests in a nonempty Bash array', () => {
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/ios-group-evidence.yml'), 'utf8');
+  const initial = workflow.match(/FOCUSED=\(([^\n]*)\)/)?.[1].trim().split(/\s+/);
+  assert.deepEqual(initial, [
+    '-only-testing:NekkoNativeUITests/GroupEvidenceTests',
+    '-only-testing:NekkoNativeUITests/PurposeGroupsTests',
+  ]);
+  assert.match(workflow, /if \[.*matrix\.revision.*= after \]; then\s+FOCUSED\+=\(-only-testing:NekkoNativeTests\/ChatGroupPrefsTests\)/);
+  assert.equal((workflow.match(/-only-testing:NekkoNativeUITests\/GroupEvidenceTests/g) ?? []).length, 1);
+  assert.equal((workflow.match(/-only-testing:NekkoNativeUITests\/PurposeGroupsTests/g) ?? []).length, 1);
+});
