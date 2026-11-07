@@ -11,6 +11,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
+import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { BoltIcon, MagnetIcon } from '../icons.js';
 import { FocusIcon } from '../gentleface-icons.js';
@@ -197,7 +198,9 @@ export function CommandCenterView() {
 
   useEffect(() => {
     window.nekko.getUsageSummary().then(setUsage);
-    Promise.all([refreshSessions(), refreshTerminals()]).finally(() => setListsReady(true));
+    // Only lists that really loaded count: reconciling the wall against the empty
+    // ones a failed load leaves would close every window on it.
+    const stopLists = retryUntilAnswered(() => Promise.all([refreshSessions(), refreshTerminals()]).then(() => setListsReady(true)));
     window.nekko.listTasks().then(setTasks).catch(() => setTasks([]));
     window.nekko.pendingInput().then(setPending).catch(() => {});
     window.nekko.runningSessions().then((ids) => setRunning((r) => (ids.every((id) => r.has(id)) ? r : new Set([...r, ...ids])))).catch(() => {});
@@ -210,7 +213,7 @@ export function CommandCenterView() {
       if (!disposed) timer = setTimeout(poll, 3000);
     };
     timer = setTimeout(poll, 3000);
-    return () => { disposed = true; clearTimeout(timer); off(); };
+    return () => { disposed = true; clearTimeout(timer); stopLists(); off(); };
   }, [refreshSessions, refreshTerminals]);
 
   const refreshPending = () => { window.nekko.pendingInput().then(setPending).catch(() => {}); };
