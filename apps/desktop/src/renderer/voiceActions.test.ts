@@ -247,8 +247,173 @@ describe('runVoiceIntent', () => {
   });
 });
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
 describe('voiceListener', () => {
   const flush = () => new Promise(r => setTimeout(r, 0));
+  it.each(['abort', 'lock', 'voice-off'] as const)('drops in-flight and queued transcripts on %s, even after restarting', async reason => {
+    const transcript = deferred<string>();
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    nekko.voiceTranscribe.mockReturnValueOnce(transcript.promise).mockResolvedValue('New words.');
+    await voiceListener.start('s1');
+    const oldSegment = capture.onSegment!;
+    oldSegment([1]); oldSegment([2]);
+    await flush();
+    expect(nekko.voiceTranscribe).toHaveBeenCalledTimes(1);
+    if (reason === 'lock') nekko.fireVoiceStop();
+    else if (reason === 'voice-off') {
+      store.state.settings.voice.enabled = false;
+      store.listeners.forEach(fn => fn(store.state));
+      store.state.settings.voice.enabled = true;
+    } else voiceListener.abort();
+    await voiceListener.start('s1');
+    oldSegment([3]);
+    capture.onSegment!([4]);
+    await flush();
+    expect(nekko.voiceTranscribe).toHaveBeenCalledTimes(1);
+    transcript.resolve('Old words. Nekko, send it.');
+    await voiceListener.drain();
+    expect(a.text).toEqual(['New words.']);
+    expect(a.calls).toEqual(['text']);
+    expect(nekko.voiceTranscribe.mock.calls).toEqual([[[1]], [[4]]]);
+    expect(voiceListener.snapshot().heard).toBe('New words.');
+    off();
+  });
+  it('ignores a stale transcription failure after abort', async () => {
+    const transcript = deferred<string>();
+    nekko.voiceTranscribe.mockReturnValueOnce(transcript.promise);
+    await voiceListener.start('s1');
+    capture.onSegment!([1]);
+    await flush();
+    voiceListener.abort();
+    transcript.reject(new Error('old engine failure'));
+    await voiceListener.drain();
+    expect(store.state.pushToast).not.toHaveBeenCalled();
+    expect(voiceListener.snapshot().error).toBe('');
+  });
+  it('does not let an aborted async command failure clear a newer confirmation', async () => {
+    const command = deferred<void>();
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    nekko.voiceTranscribe.mockResolvedValueOnce('Nekko, complete this session.');
+    await voiceListener.start('s1');
+    capture.onSegment!([1]);
+    await voiceListener.drain();
+    store.state.archiveChat.mockReturnValueOnce(command.promise);
+    const answering = voiceListener.answer({ kind: 'yes' });
+    voiceListener.abort();
+    await voiceListener.start('s1');
+    nekko.voiceTranscribe.mockResolvedValueOnce('Nekko, complete this session.');
+    capture.onSegment!([2]);
+    // Drain only the current queue: the older action is a tap, not queued audio.
+    await voiceListener.drain();
+    const pending = voiceListener.snapshot().pending;
+    expect(pending?.kind).toBe('confirm');
+    command.reject(new Error('old archive failed'));
+    await answering;
+    expect(voiceListener.snapshot().pending).toBe(pending);
+    expect(store.state.pushToast).not.toHaveBeenCalledWith('error', 'old archive failed');
+    off();
+  });
+  it('ordinary stop still applies an in-flight transcript and its send command', async () => {
+    const transcript = deferred<string>();
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    nekko.voiceTranscribe.mockReturnValueOnce(transcript.promise);
+    await voiceListener.start('s1');
+    capture.onSegment!([1]);
+    const stopped = voiceListener.stop();
+    transcript.resolve('Last words. Nekko, send it.');
+    await stopped;
+    expect(a.calls).toEqual(['text', 'send']);
+    off();
+  });
+  it.each(['abort', 'lock'] as const)('invalidates a stopped capture tail on %s, with no active capture', async reason => {
+    const transcript = deferred<string>();
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    nekko.voiceTranscribe.mockReturnValueOnce(transcript.promise);
+    await voiceListener.start('s1');
+    capture.tail = [1];
+    const stopped = voiceListener.stop();
+    await flush();
+    if (reason === 'lock') nekko.fireVoiceStop(); else voiceListener.abort();
+    transcript.resolve('Nekko, send it.');
+    await stopped;
+    expect(a.calls).toEqual([]);
+    expect(voiceListener.snapshot().busy).toBeNull();
+    off();
+  });
+  it('stops remaining intents and already-transcribed segments after an async command is aborted', async () => {
+    const command = deferred<void>();
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    store.state.newChat.mockReturnValueOnce(command.promise);
+    nekko.voiceTranscribe.mockResolvedValueOnce('Nekko, new chat. Nekko, send it.').mockResolvedValueOnce('Queued words. Nekko, send it.');
+    await voiceListener.start('s1');
+    capture.onSegment!([1]); capture.onSegment!([2]);
+    await flush();
+    expect(store.state.newChat).toHaveBeenCalledOnce();
+    expect(nekko.voiceTranscribe).toHaveBeenCalledTimes(2);
+    voiceListener.abort();
+    command.resolve();
+    await voiceListener.drain();
+    expect(a.calls).toEqual([]);
+    expect(store.state.pushToast).not.toHaveBeenCalled();
+    off();
+  });
+  it.each([false, true])('does not send or restore pending ship actions after abort (open PR: %s)', async openPr => {
+    const pending = deferred<Record<string, PendingInput>>();
+    const a = target('s1');
+    const off = voiceListener.register('s1', () => a);
+    if (openPr) store.state.prsBySession = { s1: [pr()] };
+    nekko.pendingInput.mockReturnValueOnce(pending.promise);
+    nekko.voiceTranscribe.mockResolvedValue('Nekko, ship it. Nekko, send it.');
+    await voiceListener.start('s1');
+    capture.onSegment!([1]);
+    await flush();
+    expect(nekko.pendingInput).toHaveBeenCalledOnce();
+    voiceListener.abort();
+    pending.resolve({ s1: question });
+    await voiceListener.drain();
+    expect(a.calls).toEqual([]);
+    expect(nekko.answerQuestion).not.toHaveBeenCalled();
+    expect(runPrAction).not.toHaveBeenCalled();
+    expect(voiceListener.snapshot().pending).toBeNull();
+    off();
+  });
+  it('does not open the microphone when an aborted status lookup resolves', async () => {
+    const status = deferred<{ installed: boolean }>();
+    nekko.voiceStatus.mockReturnValueOnce(status.promise);
+    const starting = voiceListener.start('s1');
+    voiceListener.abort();
+    status.resolve({ installed: true });
+    expect(await starting).toBe('failed');
+    expect(startVoiceCapture).not.toHaveBeenCalled();
+    expect(store.listeners.size).toBe(0);
+  });
+  it('aborts deferred startup without overwriting a newer capture', async () => {
+    const local = deferred<Awaited<ReturnType<typeof startVoiceCapture>>>();
+    const staleAbort = vi.fn();
+    vi.mocked(startVoiceCapture).mockReturnValueOnce(local.promise);
+    const starting = voiceListener.start('s1');
+    await flush();
+    voiceListener.abort();
+    expect(await voiceListener.start('s2')).toBe('started');
+    local.resolve({ stop: vi.fn(() => []), abort: staleAbort });
+    expect(await starting).toBe('failed');
+    expect(staleAbort).toHaveBeenCalledOnce();
+    expect(voiceListener.snapshot()).toMatchObject({ listening: true, owner: 's2', busy: null });
+    nekko.fireVoiceStop();
+    expect(voiceListener.snapshot().listening).toBe(false);
+    expect(store.listeners.size).toBe(0);
+  });
   it('types dictation and runs a command from one segment, and keeps listening', async () => {
     const a = target('s1');
     const off = voiceListener.register('s1', () => a);
