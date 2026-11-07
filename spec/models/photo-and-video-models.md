@@ -18,7 +18,17 @@ area: models
 - **Companion files** (text encoder, VAE) download in one step for four families only: FLUX.2 klein 4B and 9B, SD 3.5 and FLUX.1 (`image_companion_sets` in `crates/nekko-engine/src/acquire.rs`). Choosing a model adopts its family's tuned steps and CFG.
 - **With no image model,** Photo shows one line, "No image models yet. Get one in Model Server", which opens the general Model Server page with a Hugging Face search.
 
-**The gap.** Name detection already marks Z-Image, Qwen Image, HiDream, Wan and others as image models, but none of them has a companion set. A user who finds one and downloads it gets a model that is listed and does not start. There is no curated image or video list and no hardware fit for image models.
+**The gap.** Name detection already marks Z-Image, Qwen Image, HiDream, Wan and others as image models, but none of them had a companion set. A user who found one and downloaded it got a model that is listed and does not start. There is no curated image or video list and no hardware fit for image models.
+
+## Capabilities and new companion sets `[implemented 2026-11-08 (#2177); unit-tested against real file names; not yet run against a real sd-server]`
+
+- **Each set says what it can do:** `capabilities` is `create`, `edit` or both, returned with the companion status (`engine:imageCompanions`). FLUX.2 klein 4B and 9B: create and edit. SD 3.5, FLUX.1, Z-Image, Qwen Image: create. Qwen Image Edit: edit.
+- **Z-Image** (Turbo and base): FLUX.1's VAE from Comfy-Org's ungated copy (Black Forest Labs' own repository is gated) and the Qwen3 4B Instruct 2507 encoder, 2.8 GB together. Turbo uses 8 steps at CFG 1; the base model 20 steps at CFG 5.
+- **Qwen Image Edit** (original, 2509, 2511): the Qwen Image VAE, the Qwen2.5-VL 7B encoder and its vision half, a new `llm_vision` role passed as `--llm_vision`. 2511 adds the `qwen_image_zero_cond_t` model switch it needs. 20 steps at CFG 2.5.
+- **Qwen Image**: the same VAE and encoder as Qwen Image Edit, so a user who has one needs only the vision file for the other.
+- **Launch arguments per family:** Qwen Image models start with flow shift 3 and the euler sampler, as sd.cpp documents; sd-server takes them as its default generation settings.
+- **No set on purpose:** Qwen Image 2.1 (a different encoder and VAE, research license) and FLUX.2 dev (a 24B encoder).
+- **Guarded by tests:** every set's files name a source and a size, a gated file always has an ungated stand-in, and a file name on disk is never reused for a different source.
 
 ## What the pinned engine can already do `[checked against the sd.cpp README and docs at 37bc88b, 2026-11-08; not run]`
 
@@ -77,7 +87,8 @@ Video keeps the planning and tool-based editing chat from #2149, and gains real 
 | --- | --- | --- | --- |
 | Create, small machines | **Z-Image-Turbo** (6B) | Fast; sd.cpp documents running it in 4 GB of VRAM quantized | Apache-2.0 |
 | Create + edit, one set of files | **FLUX.2 klein 4B** | Already has a companion set; edits with the same files | Apache-2.0 |
-| Edit, higher quality | **Qwen-Image-Edit-2511** | Strong instruction edits; larger | Apache-2.0 |
+| Edit, higher quality | **Qwen-Image-Edit-2511** | Strong instruction edits; larger (12.8 GB at Q4_K_M, plus 5.8 GB of encoders and VAE) | Apache-2.0 |
+| Create, text inside pictures | **Qwen-Image** | Shares its encoder and VAE with Qwen-Image-Edit | Apache-2.0 |
 | Video, local | **Wan 2.2 TI2V 5B** | Text and image to video; the smallest current Wan | Apache-2.0 |
 | Already supported, keep | SD 3.5, FLUX.1 | Existing companion sets | Model-specific community licenses |
 
@@ -106,7 +117,7 @@ Video keeps the planning and tool-based editing chat from #2149, and gains real 
 Each is one PR (a stack where noted). Tracked in the issue linked from this file's PR.
 
 1. **Engine: bump sd.cpp** to the current release, if its changes are needed; otherwise keep the pin.
-2. **Engine: model capabilities and companion sets:** `create` / `edit` / `video` per family; add Z-Image-Turbo and Qwen-Image-Edit-2511; tests that every curated pick resolves to a complete set.
+2. **Engine: model capabilities and companion sets** `[implemented, see above]`: `create` / `edit` per family; Z-Image, Qwen Image and Qwen Image Edit sets; `video` arrives with the Wan set in step 7. The test that every *curated* pick resolves to a complete set lands with the curated list (step 3).
 3. **Recommendations: image and video rows** in the feed: download sizes from Hugging Face, memory needed, fit per machine, measured seconds per image where available.
 4. **Photo: choose a model from the chat:** the cards, the hand-off to the shared download job, inline progress, the introduction's **Choose your first model** step.
 5. **Models: Image and Video filters** with the same curated picks and fit chips.
