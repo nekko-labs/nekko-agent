@@ -10,6 +10,7 @@
   "app:info",
   "app:quit",
   "artifact:read",
+  "audit:read",
   "changes:list",
   "chat:abort",
   "chat:answer",
@@ -101,7 +102,6 @@
  "alwaysDenied": {
   "channels": [
    "attachment:import",
-   "audit:read",
    "changes:accept",
    "changes:acceptAll",
    "connector:connect",
@@ -159,6 +159,7 @@
   ]
  },
  "readChannels": [
+  "audit:read",
   "service:status",
   "service:updateState",
   "changes:list",

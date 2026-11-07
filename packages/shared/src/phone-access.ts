@@ -143,6 +143,7 @@ export const PHONE_CHANNELS = [
   'app:info',
   'app:quit',
   'artifact:read',
+  'audit:read',
   'changes:list',
   'chat:abort',
   'chat:answer',
@@ -373,6 +374,8 @@ export const COMPUTER_ACCESS = {
  */
 /** Reading the chats and the computer's state the chat screens show (2026-10-22). */
 export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
+  // A chat's audit trail: value-free (who allowed what, never what was read or sent), 2026-11-07.
+  'audit:read',
   'changes:list',
   'chat:pending',
   'limits:get',

@@ -350,6 +350,11 @@ impl Table {
                 })
                 .await
                 .map_err(|e| e.to_string())?;
+                let mut trail = trail;
+                // Who answered by name: the registry's current name, never stored in the trail.
+                if let Ok(devices) = ctx.remote.route("remote:devices", &[]).await {
+                    crate::audit::name_devices(&mut trail, &devices);
+                }
                 Ok(Value::Array(trail))
             }),
         );
