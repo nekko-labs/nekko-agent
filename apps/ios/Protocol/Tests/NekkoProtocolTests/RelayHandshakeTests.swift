@@ -203,8 +203,11 @@ extension RelayClientTests {
         let deadline = Date().addingTimeInterval(1)
         while relay.sync({ relay.hellos.isEmpty }), Date() < deadline { await sleep(0.005) }
         XCTAssertEqual(relay.sync { relay.hellos.count }, 1)
+        // Let the HELLO send continuation arm its welcome deadline first.
+        await sleep(0.05)
         conn.handlers.onOpen()
         await sleep(0.15)
+        XCTAssertTrue(conn.isOpen, "the original socket must stay open while waiting for welcome")
         XCTAssertEqual(relay.sync { relay.urls.count }, 1, "HELLO already sent; wait for welcome, not another challenge")
         XCTAssertEqual(c.state, .connecting)
     }
