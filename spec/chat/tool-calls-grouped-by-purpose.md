@@ -135,7 +135,7 @@ Verification for #1107: focused timing/activity tests and desktop typecheck pass
 
 ## Whole-turn visibility (#2048)
 
-Implemented; focused regression tests pass. Isolated visual and interaction verification is in progress; not yet shipped.
+Implemented; 38 focused tests, desktop typecheck and hidden LiveTurn interaction checks at 820px/460px pass. Matched screenshots and timing recordings captured, but visual inspection is blocked by screenshot-tool timeout/UnknownVizError. Not yet shipped; PR #2050 remains draft pending inspection and required CI.
 
 - A live reply has a separate status line outside all collapsed tool/thinking groups, in both Simple and Expert modes. It distinguishes running tools, observed thinking/model response, model wait, approval, pause and retry states.
 - **Turn elapsed** measures the entire reply. Individual tool durations remain frozen when their results arrive, including failures; explanatory text explicitly distinguishes the two clocks. A 1.1-second completed tool must not imply that the ongoing reply has only run for 1.1 seconds.
