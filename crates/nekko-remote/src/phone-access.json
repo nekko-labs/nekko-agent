@@ -159,9 +159,9 @@
   ]
  },
  "readChannels": [
-  "audit:read",
   "service:status",
   "service:updateState",
+  "audit:read",
   "changes:list",
   "chat:pending",
   "limits:get",

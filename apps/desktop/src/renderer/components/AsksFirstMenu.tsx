@@ -18,7 +18,7 @@ export const ASKS_FIRST: ReadonlyArray<{ mode: ChatMode; label: string; hint: st
 export const ASKS_MENU_WIDTH = 400;
 
 /** Simple's view of the tool policy: one choice, in the row under the message box. */
-export function AsksFirstMenu({ session, onChange }: { session: Session; onChange: (s: Session | null) => void }) {
+export function AsksFirstMenu({ session, onChange, iconOnly = false }: { iconOnly?: boolean; session: Session; onChange: (s: Session | null) => void }) {
   const fallback = useStore((s) => s.settings?.defaultChatMode);
   const pop = usePopover(ASKS_MENU_WIDTH);
   // A sandbox always asks, so there is nothing to choose there.
@@ -37,10 +37,10 @@ export function AsksFirstMenu({ session, onChange }: { session: Session; onChang
   };
   return (
     <>
-      <button ref={pop.anchor} type="button" className="ctl-menu min-w-0 whitespace-nowrap" data-asks-first={mode} disabled={sandbox} aria-haspopup="menu" aria-expanded={pop.open} title={sandbox ? 'A sandbox always asks first' : current.hint} onClick={() => pop.setOpen((o) => !o)}>
+      <button ref={pop.anchor} type="button" className={`ctl-menu min-w-0 whitespace-nowrap ${iconOnly ? 'composer-permissions' : ''}`} aria-label={`Permissions: ${current.label}`} data-asks-first={mode} disabled={sandbox} aria-haspopup="menu" aria-expanded={pop.open} title={sandbox ? 'A sandbox always asks first' : `${current.label}: ${current.hint}`} onClick={() => pop.setOpen((o) => !o)}>
         <current.icon className="h-3 w-3 shrink-0 text-ink-faint" />
-        <span className="min-w-0 truncate text-ink">{current.label}</span>
-        <span className="ctl-caret">▾</span>
+        {!iconOnly && <><span className="min-w-0 truncate text-ink">{current.label}</span>
+        <span className="ctl-caret">▾</span></>}
       </button>
       {pop.open && createPortal(
         <div ref={pop.pop} style={pop.style} className="card fixed z-[100] p-1 shadow-(--shadow-float)" role="menu" aria-label="When the agent asks you" data-asks-menu>

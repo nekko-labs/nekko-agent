@@ -16,7 +16,7 @@ import { DiffusionInstallCard } from './DiffusionInstallCard.js';
 import { MlxInstallCard } from './MlxInstallCard.js';
 import { DecisionModels } from './DecisionModels.js';
 import { LocalServerSection } from '../server/LocalServerSection.js';
-import { ServerPowerPill } from '../server/ServerPowerPill.js';
+import { ServerPowerSwitch } from '../server/ServerPowerSwitch.js';
 import { ServiceLoadState } from '../ServiceLoadState.js';
 import { ErrorBoundary } from '../ErrorBoundary.js';
 import { Shown } from '../ModeViews.js';
@@ -163,19 +163,21 @@ export function EngineSection({
   return (
     <section className="min-w-0 space-y-8">
       {error && <ServiceLoadState label="model server" error={error} retry={refresh} />}
-      <div className="grid min-w-0 grid-cols-1 items-start gap-6 xl:grid-cols-2">
-      <div className="min-w-0">
+      {/* The two servers sit side by side, each as four rows of this grid
+          (header, description, status, the rest), so a two-line description
+          on one does not push its status row below the other's. */}
+      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-2">
+      <div className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent)' }} />
         <h2 className="text-base font-semibold">Model server</h2>
         <div className="ml-auto flex items-center gap-3">
-          <ServerPowerPill
+          <ServerPowerSwitch
             running={running}
             busy={busy !== null}
             unavailable={installed ? undefined : 'Not installed'}
             onToggle={() => void toggle()}
             labelWhat="model server"
-            color="var(--accent)"
           />
           <label
             className="flex items-center gap-2 text-xs text-ink-soft"
@@ -194,28 +196,33 @@ export function EngineSection({
         Serve text and image models on one address, using managed runtimes or models already on this machine.
       </p>
 
-      <div className="card mt-3 p-5">
+      <div className="mt-3 min-w-0">
         {/* The install card used to be the *whole* card until an engine existed,
             which hid the library behind it — so a machine with twenty models
             already on it showed "not installed" and nothing else. What we have is
             true whether or not the runtime is downloaded; only running it isn't. */}
         {!install.binPath && <EngineInstallCard install={install} onChanged={refresh} />}
         {installed && (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              <StatusDot running={running} busy={busy !== null} />
-              <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
-              {install.version && <span className="text-2xs text-ink-faint">{install.version}</span>}
-              {running && (
-                <span className="text-2xs text-ink-faint">
-                  {status.resident.length} loaded
-                  {residentBytes > 0 ? ` · ${formatBytes(residentBytes)} on GPU` : ''}
-                </span>
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                {running && <AddressPill address={address} />}
-              </div>
+          <div className="flex min-h-7 flex-wrap items-center gap-2">
+            <StatusDot running={running} busy={busy !== null} />
+            <span className="text-sm">{running ? 'Running' : 'Stopped'}</span>
+            {install.version && <span className="text-2xs text-ink-faint">{install.version}</span>}
+            {running && (
+              <span className="text-2xs text-ink-faint">
+                {status.resident.length} loaded
+                {residentBytes > 0 ? ` · ${formatBytes(residentBytes)} on GPU` : ''}
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              {running && <AddressPill address={address} />}
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        {installed && (
+          <>
 
             {install.problem && (
               <div
@@ -262,8 +269,16 @@ export function EngineSection({
           <summary className="cursor-pointer text-xs font-medium">Model server settings</summary>
           <div className="mt-3"><EngineServerSettings settings={status.settings} install={install} running={running} onChanged={() => { void refresh(); onProvidersChanged(); }} /></div>
         </details></Shown>
-        <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
-        <ErrorBoundary label="MLX runtime"><MlxInstallCard install={status.mlxInstall} onChanged={refresh} /></ErrorBoundary>
+        {/* Which image and MLX runtimes are installed matters to few people, so
+            it folds away like the server settings. The first card's divider
+            would sit right under the summary, so it goes. */}
+        <details className="mt-4 border-t border-line pt-4">
+          <summary className="cursor-pointer text-xs font-medium">Runtimes</summary>
+          <div className="[&>div:first-child]:mt-3 [&>div:first-child]:border-t-0 [&>div:first-child]:pt-0">
+            <ErrorBoundary label="Image runtime"><DiffusionInstallCard install={status.diffusionInstall} onChanged={refresh} /></ErrorBoundary>
+            <ErrorBoundary label="MLX runtime"><MlxInstallCard install={status.mlxInstall} onChanged={refresh} /></ErrorBoundary>
+          </div>
+        </details>
 
         {/* The engine's own output, under the server it came from rather than
             the model library: when a start fails this is where you look, and
