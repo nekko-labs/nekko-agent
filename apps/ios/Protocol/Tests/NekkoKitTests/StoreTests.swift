@@ -16,7 +16,7 @@ final class MemoryStore: SecureStore, @unchecked Sendable {
 
 /// A scripted computer: answers channels from `replies`, records calls, and
 /// lets the test push status changes and events like the relay client would.
-final class FakeConnection: RemoteConnection, @unchecked Sendable {
+class FakeConnection: RemoteConnection, @unchecked Sendable {
     let config: RelayConfig
     let lock = NSLock()
     var calls: [(String, [JSONValue])] = []

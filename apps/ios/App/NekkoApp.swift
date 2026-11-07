@@ -92,9 +92,10 @@ struct NekkoApp: App {
 enum NativeFixtureRoute {
     static var isolated: Bool {
         #if DEBUG
-        let flags = ["-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
+        let flags = ["-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
                      "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
-                     "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications", "-uiTestModelServer", "-uiTestRunSettings"]
+                     "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications",
+                     "-uiTestSecurityEvidence", "-uiTestRunSettings"]
         return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
         #else
         return false
@@ -119,6 +120,7 @@ private struct NativeAppContent: View {
     /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestComputerSettingsEvidence") { ComputerSettingsEvidenceFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneComposer") { PhoneComposerFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPhoneParity") { PhoneParityFixture() } else
@@ -142,6 +144,8 @@ private struct NativeAppContent: View {
             TurnDetailsFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") {
             ModelTabsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") {
+            SecurityEvidenceFixture()
         } else { RootView() }
         #else
         RootView()

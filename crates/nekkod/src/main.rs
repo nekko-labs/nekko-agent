@@ -78,6 +78,7 @@ mod runner;
 mod runtimes;
 mod sandbox;
 mod security;
+mod service_management;
 mod settings;
 mod side;
 mod sideband;

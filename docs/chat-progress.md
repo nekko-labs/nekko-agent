@@ -2,6 +2,12 @@
 
 Agent chats show verification progress above the footer pull-request panel in the desktop app and Local Web UI.
 
+## Tool duration versus the ongoing reply
+
+While a reply is active, a status line outside the collapsible steps identifies running tools, thinking, model response/wait, approval, pause or retry. It stays visible in both Simple and Expert modes. **Turn elapsed** measures the entire reply, not just the last tool.
+
+A tool's duration freezes when that call returns—even if it returned an error and the assistant continues working. For example, a fixed **1.1s** tool time can sit beside an increasing turn timer. That is not evidence that the tool is still running. The turn status disappears when the reply ends; it does not diagnose a quiet provider as stuck or infer background CI progress from a command's output.
+
 ## Thoughts in the conversation
 
 When a provider supplies thought text, the desktop app and Local Web UI show it directly in the conversation with a thought-bubble icon. Thoughts stay visible while streaming and after the reply is saved, even when the tool activity is collapsed. They appear between tool groups in the order they arrived.

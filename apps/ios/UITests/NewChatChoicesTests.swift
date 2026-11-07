@@ -22,6 +22,9 @@ final class NewChatChoicesTests: XCTestCase {
         XCTAssertFalse(app.buttons["Computer default"].exists)
         attach(app, "iphone-tools-after")
         app.buttons["tools.yolo"].tap()
+        // Turning YOLO on warns first (decision 0054).
+        XCTAssertTrue(app.buttons["yoloWarning.confirm"].waitForExistence(timeout: 5))
+        app.buttons["yoloWarning.confirm"].tap()
         XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "Works on its own")
         app.buttons["newChat.tools"].tap()
         XCTAssertTrue(app.buttons["tools.guardrails"].exists)
@@ -100,7 +103,8 @@ final class NewChatChoicesTests: XCTestCase {
     private func launch(_ extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES",
-                               "-theme", "computer", "-AppleLanguages", "(en)", "-uiTestNewChat", "-expertMode", "YES"] + extra
+                               "-theme", "computer", "-AppleLanguages", "(en)", "-uiTestNewChat", "-expertMode", "YES",
+                               "-skipYoloWarning", "NO"] + extra
         app.launch()
         return app
     }
