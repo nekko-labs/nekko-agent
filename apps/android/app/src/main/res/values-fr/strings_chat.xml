@@ -237,4 +237,7 @@
     <string name="chat_always_allow_tool">Toujours autoriser cet outil</string>
     <string name="chat_always_allowing_tool">Autorisation…</string>
     <string name="chat_always_allow_tool_detail">Autorise cet appel et ne demande plus pour cet outil dans cette discussion. Les autres outils demandent toujours.</string>
+    <string name="chat_previous_question">Question précédente</string>
+    <string name="chat_next_question">Suivant</string>
+    <string name="chat_question_page">%1$d sur %2$d</string>
 </resources>

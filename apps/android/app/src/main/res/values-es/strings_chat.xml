@@ -237,4 +237,7 @@
     <string name="chat_always_allow_tool">Permitir siempre esta herramienta</string>
     <string name="chat_always_allowing_tool">Permitiendo…</string>
     <string name="chat_always_allow_tool_detail">Permite esta llamada y deja de preguntar por esta herramienta en este chat. Las demás herramientas siguen preguntando.</string>
+    <string name="chat_previous_question">Pregunta anterior</string>
+    <string name="chat_next_question">Siguiente</string>
+    <string name="chat_question_page">%1$d de %2$d</string>
 </resources>

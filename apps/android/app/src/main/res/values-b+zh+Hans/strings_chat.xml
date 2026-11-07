@@ -237,4 +237,7 @@
     <string name="chat_always_allow_tool">始终允许此工具</string>
     <string name="chat_always_allowing_tool">正在允许…</string>
     <string name="chat_always_allow_tool_detail">允许此次调用，并在此聊天中不再询问此工具。其他工具仍会询问。</string>
+    <string name="chat_previous_question">上一题</string>
+    <string name="chat_next_question">下一题</string>
+    <string name="chat_question_page">第 %1$d 题，共 %2$d 题</string>
 </resources>
