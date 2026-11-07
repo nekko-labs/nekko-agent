@@ -95,7 +95,7 @@ enum NativeFixtureRoute {
         let flags = ["-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
                      "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
                      "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications",
-                     "-uiTestSecurityEvidence"]
+                     "-uiTestSecurityEvidence", "-uiTestRunSettings"]
         return flags.contains { ProcessInfo.processInfo.arguments.contains($0) }
         #else
         return false
