@@ -145,3 +145,15 @@ Issue: [#2007](https://github.com/nekko-labs/nekko-agent/issues/2007).
 - **Scope.** Shared desktop/web renderer only. Native iOS/Android presentation is unchanged; parity would be a separate change.
 
 Verification: focused `PlanSheet.test.tsx`, `PlanRail.test.tsx`, `planStepLinks.test.ts` and `claudeAgentPlan.test.ts` cover original order/progress, report marks, per-check link ownership, folded summary and preserved disclosures. `plan-sheet-sandbox.cjs` covers hidden Electron screenshots at 1440×900 and the standalone composer at 390×844, step click/Enter, chip placement, ripple/reduced motion and interruption. Packaged builds, a live provider and native mobile apps are not verified by these fixtures.
+
+## Live status on PR and task chips, and an Agents label (implemented; #2089)
+
+Issue: [#2089](https://github.com/nekko-labs/nekko-agent/issues/2089).
+
+- **Intent.** Philip: task and PR chips had no pull request glyph, and a grey task chip looked like a draft whatever its real state. The sub-agent cards needed a heading and icon on their left.
+- **PR chips.** Each wears the Gentleface pull request glyph for its state (open, draft, merged, closed), the same glyphs every PR chip in the app now uses. Its hue is the live status: an open PR takes its CI's colour (failing red, running amber, passing green), an open PR without CI green and a draft grey, merged purple, closed red. The words are unchanged ("PR #2031 · Open · CI failing").
+- **GitHub issue task chips.** The chip reads the issue's live state through the same cached, minute-long read as a PR (`pr:info`; gh first, the REST API as fallback) and wears GitHub's glyph and colour: open green, closed as completed purple ("Done"), closed as not planned grey. Until the state is read, and for every other tracker (Linear, Jira, Trello, Asana, ClickUp, Todoist), the chip keeps the grey tag.
+- **Agents label.** The sub-agent card row leads with "Agents" under the Gentleface bots icon. It stays at the left edge while the cards scroll sideways.
+- **Scope.** Desktop and Local Web UI. The phone apps' plan sheets are unchanged.
+
+Verification: `PlanSheet.test.tsx` (issue glyphs and colours, the Agents label leading the cards), the `nekko-workspace` unit test for the issue read (gh and REST shapes, not-planned), and hidden, off-screen Electron captures (`plan-chip-status-sandbox.cjs`: the three issue states, the PR glyph on an open PR with failing CI, the label left of the first card, folded and open). Not checked against a live GitHub read in the app or in a packaged build.
