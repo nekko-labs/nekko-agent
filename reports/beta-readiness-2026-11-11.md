@@ -1,6 +1,6 @@
 # Nekko Agent beta readiness: competitive investigation
 
-Date: 2026-11-11. Baseline: `cb46157` on main. Audience: local-first individual/prosumer beta; not an enterprise platform launch. This is an engineering/product investigation, not a certification that beta is ready.
+Final local verification: 2026-11-08 (JST). Baseline: `cb46157` on main. Audience: local-first individual/prosumer beta; not an enterprise platform launch. This is an engineering/product investigation, not a certification that beta is ready.
 
 ## Executive recommendation
 
@@ -97,7 +97,7 @@ Durable review originals contain local source content, potentially secrets. Stor
 
 For batch edits prefer an additive optional `edits` array on the existing `edit_file` tool, retaining the old `{path, old_string, new_string}` form. This keeps existing tool permissions, workflow allowlists and categories. Reject mixed forms, empty searches and malformed entries; validate all replacements before writing. Container execution must implement the same behavior rather than accepting a schema it cannot honor.
 
-## Sources (retrieved 2026-11-11)
+## Sources (retrieved during this investigation)
 
 - [Cline README](https://raw.githubusercontent.com/cline/cline/main/README.md)
 - [Cline checkpoints](https://docs.cline.bot/core-workflows/checkpoints): persistent shadow Git, restore options and cost caveat.
@@ -114,8 +114,10 @@ A guessed Cline raw documentation path returned 404; the current public docs URL
 
 ## Implementation and verification record
 
-Tracked by [issue #2172](https://github.com/nekko-labs/nekko-agent/issues/2172). This report is the first layer; the follow-on implementation adds local saved-chat originals and ordered batch replacements, with its feature specification, user guide and executable regressions. Neither layer certifies the wider beta launch.
+Tracked by [issue #2172](https://github.com/nekko-labs/nekko-agent/issues/2172), report [PR #2192](https://github.com/nekko-labs/nekko-agent/pull/2192), and implementation [PR #2193](https://github.com/nekko-labs/nekko-agent/pull/2193), linked in stack #2194. The implementation adds local saved-chat originals and ordered batch replacements, with its feature specification, public guide and executable regressions. Neither layer certifies the wider beta launch.
 
-Windows focused Rust suites and Clippy with warnings denied passed during development. Direct review subsequently identified a shared-turn save path needing incognito cleanup and corrected the helper's literal-string test; final checks are being rerun on the implementation layer. Added evidence covers restart, acceptance, deletion/privacy races, failed metadata/snapshot reads, failed writes, invalid batches and existing approval/jail boundaries. A real-daemon restart script is included in the follow-on layer, not a claim of packaged-desktop or live-model acceptance.
+After syncing main fc976b10d, Windows focused Rust suites passed **635 tests, zero failures**, with two existing real-model tests ignored. Clippy with warnings denied passed before that sync. Workspace formatting, spec-index and whitespace checks passed after sync. A freshly rebuilt isolated daemon passed all **five actual-restart journeys**: original recovery, acceptance, incognito transition/restart, deletion/recreation rejection and corrupt-snapshot discard. Test processes and their disposable profile were cleaned up; the user app was untouched.
 
-No visual change is intended. Required Linux CI will execute the actual shipped Python helper and Unix permission assertions. The inspected local Docker image contains no Python, so it cannot supply that evidence. Live-provider/strict-schema acceptance, packaged desktop builds and physical mobile journeys remain unverified. The independent initial review found defects that were addressed; its follow-up failed with an expired authentication token, so it is not recorded as a passed review. See the implementation PR's current **Unfinished work / release blockers** section for final check results and the remaining release conditions.
+Direct review fixed metadata-failure fallback, lifecycle races, missing single-replacement validation and a shared-turn incognito cleanup bypass. Regressions cover restart, acceptance, deletion/privacy races, failed metadata/snapshot reads, failed writes, invalid batches and existing approval/jail boundaries. Frozen fixtures intentionally replace the missing-replacement undefined write with an error.
+
+No visual change. Required Linux CI is running the actual shipped Python helper and Unix permission assertions; results are pending. The inspected local Docker image had no Python. Live-provider/strict-schema acceptance, packaged desktop builds, real Docker lifecycle and physical mobile journeys remain unverified. The independent initial review found defects that were addressed; its follow-up failed with an expired authentication token, so it is not a passed review. See the implementation PR's current **Unfinished work / release blockers** section for the latest check results and release conditions.

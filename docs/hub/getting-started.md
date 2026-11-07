@@ -44,6 +44,16 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 
 When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
 
+## Recovering file edits
+
+For saved chats, the native file tools keep the first original text used by **Review Changes** locally, so restarting Nekko no longer loses that review baseline. Accepting a change discards its saved original; deleting the chat removes its review snapshots too. Incognito keeps originals in memory only, and switching a chat to incognito removes its saved snapshots.
+
+If Nekko cannot save an original, it stops that edit with an error rather than silently losing recovery. Each chat can retain up to 512 paths and 64 MiB of serialized originals. Review and accept completed changes if you reach that limit. These local originals can contain private source text; this feature does not encrypt them or send them through chat sync.
+
+The agent can also submit up to 100 ordered replacements in one `edit_file` batch. Every replacement must validate before the tool writes the file, so a missing or ambiguous later match does not leave a half-applied batch. The same permissions and folder restrictions apply.
+
+These are **native text-tool originals, not whole-workspace backups**. Shell commands, external editors, Claude Code's own tools, binary files, multi-file rollback and changes made concurrently by another writer need their own recovery strategy. Keep version control and backups for important work.
+
 ## Reviewing visual changes
 
 For UI work, Nekko is instructed to show the actual before/after screenshots in the agent reply, rather than leaving evidence only in a PR. Matching images labeled **Before: screen name** and **After: screen name** appear as a comparison; the reply's **Next step** section also shows a **Verify the visual changes** panel with those same screenshots. Wide conversations show the pair side by side, while narrow conversations stack it. Evidence stays with the reply and chat where the work happened.
