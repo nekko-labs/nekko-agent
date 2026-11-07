@@ -450,7 +450,15 @@ export const IpcChannels = {
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
   mcpHypergateConnect: 'mcp:hypergate:connect',
-  // Transport-local update controls (desktop = electron-updater, web = refresh).
+  // Narrow capability-driven service controls for paired devices.
+  serviceStatus: 'service:status',
+  serviceRestart: 'service:restart',
+  serviceUpdateState: 'service:updateState',
+  serviceUpdateCheck: 'service:updateCheck',
+  serviceUpdateDownload: 'service:updateDownload',
+  serviceUpdateInstall: 'service:updateInstall',
+  // Transport-local native updater controls; raw update:* stays denied to phones.
+  updateState: 'update:state',
   updateCheck: 'update:check',
   updateDownload: 'update:download',
   updateInstall: 'update:install',

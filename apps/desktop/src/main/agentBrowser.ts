@@ -42,6 +42,12 @@ export interface ShellBridge {
   quitForUpdate(): void;
   /** The app's normal quit: `app:quit` from a phone the owner allowed to (SK-3, `quitFromPhone`). */
   quit?(): void;
+  /** Versioned supervisor discovery; absent on older shells. */
+  serviceStatus?(): { protocolVersion: 1; agentRunning: boolean; restart: boolean; updateInstall: boolean };
+  /** Accept a delayed restart owned by Electron, never by the daemon itself. */
+  serviceRestart?(): { restarting: true };
+  /** Reserve the same action lock before the daemon launches an installer. */
+  servicePrepareInstall?(): { prepared: true };
 }
 
 
@@ -281,6 +287,16 @@ export async function startAgentBrowser(options: {
       if (input.tool === 'pickFolder') {
         if (!options.pickFolder) throw new Error('No folder picker here.');
         reply(200, { path: await options.pickFolder() }); return;
+      }
+      if (input.tool === 'serviceStatus') {
+        if (!options.shell?.serviceStatus) throw new Error('service-unsupported: no service supervisor here');
+        reply(200, options.shell.serviceStatus()); return;
+      }
+      if (input.tool === 'serviceRestart' || input.tool === 'servicePrepareInstall') {
+        const action = input.tool === 'serviceRestart' ? options.shell?.serviceRestart : options.shell?.servicePrepareInstall;
+        if (!action) throw new Error('service-unsupported: no service supervisor here');
+        if (Object.keys(input).some((key) => key !== 'tool')) throw new Error('service-invalid: unexpected service arguments');
+        reply(200, action()); return;
       }
       if (input.tool === 'quit') {
         if (!options.shell?.quit) throw new Error('No window shell here.');

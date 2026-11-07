@@ -93,6 +93,16 @@ credentials. For safety the phone does not merge different keys just because the
 Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
 to old duplicates that were saved with different identity keys.
 
+## iPhone computer controls (in progress)
+
+In **Computers**, each paired computer has a connection switch. Turn it off to disconnect without forgetting the pairing; the phone will not reconnect automatically until you turn it back on. Re-pairing explicitly enables it again. On the computer's page, **Models** starts collapsed; expand it and use **All**, **Cloud**, or **Local** to narrow the list.
+
+A separate Nekko Cloud group is off by default and appears only when fleet access is enabled, you are signed in, and the fleet list is fetched successfully. The current iPhone app source does not yet offer a switch to enable fleet access. Viewing the group does not create or pair a cloud computer. This is separate from encrypted chat sync.
+
+The computer's **Nekko Agent service** section can show status and supported update actions. To allow changes from an eligible phone, the owner must first turn on **Manage service from phone** in desktop Settings under System. It is off by default and separate from the permission to quit. Phone permissions and security checks still apply. Restart and install ask for confirmation and may interrupt chats; an accepted request is not proof it finished. Reconnect and check the status and version. These controls do not restart your operating system. Unsupervised or headless restart and install are not supported.
+
+These iPhone and desktop controls are implemented in source for [#2053](https://github.com/nekko-labs/nekko-agent/issues/2053), with native build and visual checks still in progress. Real installations and live cloud have not been tested. Android equivalents are a follow-up tracked under that issue until a separate issue exists.
+
 ## iPhone chat controls
 
 New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. On the iPhone, choosing **Works on its own** (YOLO) first shows **Turn on YOLO?**: in that mode the agent never asks, so a web page or tool output it reads can get your files or data sent out. **Keep asking** changes nothing. The same warning shows for the chat's tool policy in Expert's menu, in New chat and for the default in **Settings → On <computer>**. **Don't warn me again** applies to this iPhone only; **Settings → Security → Warn before YOLO** turns it back on. When an MCP tool waits for approval in a chat that read the web or a tool's output, the iPhone's approval card also offers **Always allow this tool**: it allows the call and stops asking for that tool in this chat (other tools still ask), after Face ID or your passcode. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.

@@ -156,13 +156,32 @@ describe('private Electron browser bridge', () => {
   });
 
   it('answers what the daemon asks of the window shell, behind the token', async () => {
-    const shell = { nativeWindow: vi.fn(() => '1234'), dialog: vi.fn(async () => ['C:\\a.txt']), quitForUpdate: vi.fn(), quit: vi.fn() };
+    const shell = { nativeWindow: vi.fn(() => '1234'), dialog: vi.fn(async () => ['C:\\a.txt']), quitForUpdate: vi.fn(), quit: vi.fn(),
+      serviceStatus: vi.fn(() => ({ protocolVersion: 1 as const, agentRunning: true, restart: true, updateInstall: true })),
+      serviceRestart: vi.fn(() => ({ restarting: true as const })),
+      servicePrepareInstall: vi.fn(() => ({ prepared: true as const })),
+    };
     const bridge = await startAgentBrowser({ driver: async () => fakeDriver().driver, shell });
     const post = async (body: unknown, auth = true) => {
       const res = await fetch(bridge.url, { method: 'POST', headers: auth ? { Authorization: `Bearer ${bridge.token}` } : {}, body: JSON.stringify(body) });
       return { status: res.status, body: await res.json() };
     };
     try {
+      for (const tool of ['serviceStatus', 'serviceRestart', 'servicePrepareInstall']) {
+        expect((await post({ tool }, false)).status).toBe(403);
+        const origin = await fetch(bridge.url, { method: 'POST', headers: { Authorization: `Bearer ${bridge.token}`, Origin: 'https://example.com' }, body: JSON.stringify({ tool }) });
+        expect(origin.status).toBe(403);
+      }
+      expect(shell.serviceRestart).not.toHaveBeenCalled();
+      expect((await post({ tool: 'serviceStatus' })).body).toEqual({ protocolVersion: 1, agentRunning: true, restart: true, updateInstall: true });
+      expect((await post({ tool: 'serviceRestart', command: 'arbitrary shell' })).status).toBe(400);
+      expect(shell.serviceRestart).not.toHaveBeenCalled();
+      expect((await post({ tool: 'serviceRestart' })).body).toEqual({ restarting: true });
+      expect(shell.serviceRestart).toHaveBeenCalledOnce();
+      expect((await post({ tool: 'servicePrepareInstall', command: 'no' })).status).toBe(400);
+      expect(shell.servicePrepareInstall).not.toHaveBeenCalled();
+      expect((await post({ tool: 'servicePrepareInstall' })).body).toEqual({ prepared: true });
+      expect(shell.servicePrepareInstall).toHaveBeenCalledOnce();
       expect((await post({ tool: 'nativeWindow' }, false)).status).toBe(403);
       expect((await post({ tool: 'nativeWindow' })).body).toEqual({ handle: '1234' });
       expect((await post({ tool: 'dialog', kind: 'openFiles', options: { multiple: true } })).body).toEqual({ result: ['C:\\a.txt'] });

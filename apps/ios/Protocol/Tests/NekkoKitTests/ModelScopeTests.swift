@@ -47,6 +47,17 @@ final class ModelScopeTests: XCTestCase {
         XCTAssertEqual(ModelScope.local.favorites(["openai::gpt-5"], providers: [short]), [])
     }
 
+    func testComputerDetailsFilterModelsByTheirProviderNotTheirName() {
+        let models = ModelInfo.list([
+            ["id": "same", "providerId": "anthropic", "name": "Cloud model"],
+            ["id": "same", "providerId": "ollama", "name": "Local model"],
+            ["id": "unknown", "providerId": "removed"]
+        ])
+        XCTAssertEqual(ModelScope.all.models(models, providers: [cloud, local]).count, 3)
+        XCTAssertEqual(ModelScope.cloud.models(models, providers: [cloud, local]).map(\.providerId), ["anthropic"])
+        XCTAssertEqual(ModelScope.local.models(models, providers: [cloud, local]).map(\.providerId), ["ollama"])
+    }
+
     func testThisIPhonesProvidersAreCloud() {
         let p = PhoneProvider(id: "anthropic", kind: "anthropic", label: "Claude API", baseUrl: "https://api.anthropic.com")
         XCTAssertTrue(ModelScope.all.includes(p))

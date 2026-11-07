@@ -330,6 +330,8 @@ export interface AppSettings {
    * Settings → Remote access; never settable from a phone.
    */
   quitFromPhone?: boolean;
+  /** Explicit desktop opt-in for signed phone service actions. Absent means false. */
+  manageServiceFromPhone?: boolean;
   /**
    * Hold off idle sleep while any agent runs here, so a run another device
    * started does not stop when nobody touches this one. Off unless the owner

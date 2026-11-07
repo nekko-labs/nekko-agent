@@ -232,7 +232,7 @@ final class StepUpTests: XCTestCase {
     }
 
     func testTheGuardedAndUnguardedChannelsAreTheComputersLists() {
-        XCTAssertEqual(StepUp.guardedChannels, ["session:setOptions", "settings:update"])
+        XCTAssertEqual(StepUp.guardedChannels, ["session:setOptions", "settings:update", "service:restart", "service:updateInstall"])
         XCTAssertEqual(StepUp.neverGuarded, ["app:quit", "device:signOut", "remote:stop"])
         XCTAssertTrue(StepUp.neverGuarded.isSubset(of: Set(Channels.all)))
         XCTAssertTrue(Channels.all.contains(StepUp.challengeChannel))

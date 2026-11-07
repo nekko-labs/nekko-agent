@@ -45,6 +45,7 @@ pub struct Limits {
     pub totp_max_wrong: f64,
     pub totp_lock_ms: f64,
     pub guarded_channels: Vec<String>,
+    pub service_channels: Vec<String>,
     pub never_guarded: Vec<String>,
     /// `STEP_UP_DESKTOP_GUARDED`: each desktop action class and its channels (SK-4).
     pub desktop_guarded: Vec<(String, Vec<String>)>,
@@ -74,6 +75,7 @@ impl Limits {
             totp_max_wrong: n("/totp/maxWrong"),
             totp_lock_ms: n("/totp/lockMs"),
             guarded_channels: strings("/phoneGuarded/channels"),
+            service_channels: strings("/phoneGuarded/serviceChannels"),
             never_guarded: strings("/neverGuarded"),
             desktop_guarded: v
                 .pointer("/desktopGuarded")
