@@ -1690,7 +1690,12 @@ impl Turns {
         let mut seen: Option<String> = None;
         let mut model: Option<String> = None;
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
-            Mapped::Message(message) => history.push(message),
+            Mapped::Message(mut message) => {
+                if let Some(compaction) = message.get_mut("compaction") {
+                    compaction["summarized"] = json!(summarized_since_last_compaction(&history));
+                }
+                history.push(message)
+            }
             Mapped::Event(event) => send(event, &history),
             Mapped::Init(init) => {
                 seen = Some(init.session_id);
@@ -1838,6 +1843,13 @@ fn claude_code_plan(current: Option<&Value>, call: nekko_harness::PlanCall, now:
         turn::PlanOutcome::Applied { plan, .. } => Some(plan),
         _ => None,
     }
+}
+
+/// How many transcript messages a Claude Code compaction landing now stands
+/// in for: everything after the last summary, or the whole transcript.
+fn summarized_since_last_compaction(history: &[Value]) -> usize {
+    let start = history.iter().rposition(|m| js::truthy(m.get("compaction"))).map_or(0, |i| i + 1);
+    history.len() - start
 }
 
 /// `claudeCodeContext`: what a Claude Agent chat's context gauge shows, as
@@ -3550,6 +3562,15 @@ mod tests {
             claude_code_context(Some(&before), stopped, Some("claude-sonnet-5-5".into()), Some("sonnet".into())),
             json!({ "used": 52_000, "model": "claude-sonnet-5-5", "modelId": "sonnet" })
         );
+    }
+
+    #[test]
+    fn a_claude_code_compaction_summarizes_what_followed_the_last_one() {
+        let m = |id: &str| json!({ "id": id, "role": "user", "content": "x" });
+        let summary = json!({ "id": "c1", "role": "assistant", "content": "s", "compaction": { "summarized": 2 } });
+        assert_eq!(summarized_since_last_compaction(&[m("a"), m("b"), m("c")]), 3);
+        assert_eq!(summarized_since_last_compaction(&[m("a"), summary.clone(), m("b")]), 1);
+        assert_eq!(summarized_since_last_compaction(&[m("a"), summary]), 0);
     }
 
     #[test]

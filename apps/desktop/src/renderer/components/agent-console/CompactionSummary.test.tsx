@@ -24,4 +24,14 @@ describe('CompactionSummary', () => {
     expect(renderToStaticMarkup(<CompactionSummary message={{ ...message, compaction: { ...message.compaction!, summarized: 1 } }} latest />)).toContain('1 earlier message summarized');
     expect(renderToStaticMarkup(<CompactionSummary message={{ ...message, compaction: undefined }} latest />)).toContain('Earlier conversation summarized');
   });
+  it("says when Claude Code compacted a Claude Agent chat itself, and how far the context fell", () => {
+    const auto = { ...message, compaction: { summarized: 40, by: 'claude-code', trigger: 'auto', tokensBefore: 968_000, tokensAfter: 41_250 } } as ChatMessage;
+    const html = renderToStaticMarkup(<CompactionSummary message={auto} latest />);
+    expect(html).toContain('Claude Code compacted the conversation');
+    expect(html).toContain('Automatically, near the context limit · context 968k → 41k tokens · 40 earlier messages summarized');
+    const manual = { ...auto, compaction: { summarized: 3, by: 'claude-code', trigger: 'manual' } } as ChatMessage;
+    expect(renderToStaticMarkup(<CompactionSummary message={manual} latest />)).toContain('On /compact · 3 earlier messages summarized');
+    // Older Claude Code printed no summary: no toggle for an empty one.
+    expect(renderToStaticMarkup(<CompactionSummary message={{ ...auto, content: '' }} latest />)).not.toContain('Show summary');
+  });
 });

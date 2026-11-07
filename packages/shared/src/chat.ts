@@ -85,8 +85,19 @@ export interface ChatMessage {
    * before it. The earlier messages stay in the transcript so the chat can
    * still show them, but from here on a model is sent this summary and what
    * follows it, never what came before (`sinceCompaction`).
+   *
+   * `by: 'claude-code'` marks a compaction Claude Code made itself in a
+   * Claude Agent chat: `trigger` says whether it did so on its own near the
+   * window (`auto`) or for a typed `/compact` (`manual`), and `tokensBefore` /
+   * `tokensAfter` are its context size either side, as it reported them.
    */
-  compaction?: { summarized: number };
+  compaction?: {
+    summarized: number;
+    by?: 'claude-code';
+    trigger?: 'auto' | 'manual';
+    tokensBefore?: number;
+    tokensAfter?: number;
+  };
   /**
    * Measurements for the reply this message ends, recorded by the host when the
    * turn finishes. On the last assistant message of a turn only. Counts and

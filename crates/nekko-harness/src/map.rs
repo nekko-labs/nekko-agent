@@ -22,6 +22,7 @@
 //! | `result` | [`Mapped::End`]; then [`Mapper::finish`] gives `usage` + `done`, or `error` |
 //! | main-thread `assistant` `message.usage`, `result.modelUsage[model].contextWindow` | [`TurnEnd::context`] (what the context gauge shows) |
 //! | `result` `terminal_reason: aborted_*` | an interrupted turn, not a failure |
+//! | `system/compact_boundary`, then the `isSynthetic` user message with the summary | a `compaction` message (the "Conversation compacted" divider); `post_tokens` becomes the context's `used` |
 //!
 //! With `--include-partial-messages` text arrives twice: as deltas, then as
 //! the complete `assistant` block. A message whose deltas were seen is not
@@ -242,6 +243,9 @@ pub struct Mapper {
     /// Delegating calls waiting for their result: id to whether the sub-agent
     /// runs in the background, where that result only says it started.
     delegating: HashMap<String, bool>,
+    /// A `compact_boundary` whose summary message has not arrived yet: the
+    /// divider's `compaction` fields, waiting for its text.
+    compacted: Option<Value>,
 }
 
 /// A user message's content for stream-json: its text, and its images as
@@ -286,6 +290,24 @@ fn result_text(content: Option<&Value>) -> String {
     }
 }
 
+/// The summary a compaction continues from, when `v` is the synthetic user
+/// message that carries it: its text without the `<system-reminder>` blocks
+/// and the preamble addressed to the model ("This session is being continued
+/// ... Summary:").
+fn compact_summary(v: &Value) -> Option<String> {
+    if str_at(v, "type") != Some("user") || v.get("isSynthetic") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let mut text = result_text(v.pointer("/message/content"));
+    while let Some(start) = text.find("<system-reminder>") {
+        let end =
+            text[start..].find("</system-reminder>").map_or(text.len(), |e| start + e + "</system-reminder>".len());
+        text.replace_range(start..end, "");
+    }
+    let body = text.split_once("\nSummary:\n").map_or(text.as_str(), |(_, rest)| rest);
+    Some(body.trim().to_string())
+}
+
 fn num(v: Option<&Value>) -> u64 {
     v.and_then(Value::as_u64).unwrap_or(0)
 }
@@ -315,6 +337,7 @@ impl Mapper {
             context: ReportedContext::default(),
             planning: HashMap::new(),
             delegating: HashMap::new(),
+            compacted: None,
         }
     }
 
@@ -370,6 +393,17 @@ impl Mapper {
             let mut line = v.clone();
             line["parent_tool_use_id"] = Value::Null;
             return vec![Mapped::Subagent(Subagent::Line { call_id: call_id.into(), line })];
+        }
+        if self.compacted.is_some() {
+            if let Some(summary) = compact_summary(v) {
+                out.extend(self.compaction_message(&summary));
+                return out;
+            }
+            // The summary never came (an older Claude Code): the divider
+            // still goes above whatever the model says next.
+            if matches!(str_at(v, "type"), Some("stream_event" | "assistant" | "user" | "result")) {
+                out.extend(self.compaction_message(""));
+            }
         }
         match str_at(v, "type") {
             Some("system") => self.system(v, &mut out),
@@ -483,8 +517,45 @@ impl Mapper {
                     out.push(Mapped::Subagent(Subagent::Ended { call_id: call_id.into(), outcome }));
                 }
             }
+            // Claude Code compacted its context, on its own near the window
+            // or for a typed `/compact`. The divider waits for the summary,
+            // the next line; the gauge drops to the new size now, since a
+            // `/compact` makes no model call that would report it.
+            Some("compact_boundary") => {
+                self.flush_into(false, false, out);
+                // A second boundary before the first one's summary.
+                out.extend(self.compaction_message(""));
+                let meta = v.get("compact_metadata").unwrap_or(&Value::Null);
+                let mut fields = json!({ "summarized": 0, "by": "claude-code" });
+                if let Some(trigger) = str_at(meta, "trigger").filter(|t| matches!(*t, "auto" | "manual")) {
+                    fields["trigger"] = json!(trigger);
+                }
+                let (before, after) = (num(meta.get("pre_tokens")), num(meta.get("post_tokens")));
+                if before > 0 {
+                    fields["tokensBefore"] = json!(before);
+                }
+                if after > 0 {
+                    fields["tokensAfter"] = json!(after);
+                    self.context.used = Some(after);
+                }
+                self.compacted = Some(fields);
+            }
             _ => {}
         }
+    }
+
+    /// The divider for the pending compaction, holding `summary`; nothing
+    /// when none is pending. `summarized` is left at 0 for the daemon, which
+    /// knows how many transcript messages the summary stands in for.
+    fn compaction_message(&mut self, summary: &str) -> Option<Mapped> {
+        let fields = self.compacted.take()?;
+        Some(Mapped::Message(json!({
+            "id": new_id(),
+            "role": "assistant",
+            "content": summary,
+            "compaction": fields,
+            "createdAt": nekko_js::now_ms(),
+        })))
     }
 
     fn stream_event(&mut self, e: &Value, out: &mut Vec<Mapped>) {
