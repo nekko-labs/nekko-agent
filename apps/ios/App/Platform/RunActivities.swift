@@ -133,7 +133,7 @@ final class RunActivities {
         switch e {
         case .text, .reasoning: running(String(localized: "Writing…"))
         case .toolCall(_, let call): running(Transcript.toolLabel(call))
-        case .approvalRequired(_, let a): running(Transcript.toolLabel(a.call), callId: a.call.id, severity: a.severity.rawValue)
+        case .approvalRequired(_, let a): running(Transcript.toolVerb(a.call), callId: a.call.id, severity: a.severity.rawValue)
         case .question(_, let q): running(q.questions.first?.question ?? String(localized: "A question for you"))
         case .toolResult, .questionResolved: running(String(localized: "Working…"))
         case .done: finish(.done, String(localized: "Finished"))
