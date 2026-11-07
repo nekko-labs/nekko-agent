@@ -24,5 +24,6 @@ Promise.all([import('react'), import('react-dom/client'), import('../src/rendere
   useStore.setState({ settings, settingsLoaded: true } as any);
   useStore.getState().applyTheme();
   createRoot(document.getElementById('root')!).render(React.createElement(UpdateProvider, null, React.createElement(SettingsView)));
-  (window as any).settingsFixture = { settings, patches };
+  const { matchSettingsPages, openSettingsGroup } = await import('../src/renderer/settingsIndex');
+  (window as any).settingsFixture = { settings, patches, matchSettingsPages, openSettingsGroup };
 });
