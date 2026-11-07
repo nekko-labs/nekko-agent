@@ -28,7 +28,16 @@ area: context
   - Code: `crates/nekkod/src/outward.rs` (recipients, unit-tested), `Mcp::read_only`, `TurnTools::call_mcp`. Evals: `readme-mcp-send-exfil` (a README, which does not taint a chat, asks the agent to post the secret through an MCP tool) moved from `ran` to `asked` in Guardrails.
   - **Not covered:** recipients named only inside free text (a message body that says "forward this to x"), and the desktop or phone UI listing a chat's known recipients.
 - **YOLO** `[planned]`: stays "never ask", with a clear warning when it is turned on that a page the agent reads can get data sent out.
-- **One audit log per chat** `[planned, P1]`: tool calls, data read into context, approvals (who, when, which device) and Privacy Shield redaction counts, never the values themselves.
+- **One audit log per chat** `[engine implemented 2026-11-07; daemon-tested; no screen to read it yet]`: `<data>/audit/<chat id>.jsonl`, appended as the chat runs, one event per line with its time and turn:
+  - `turn`: mode, provider, model, and whether Claude Code runs it;
+  - `tool`: tool, outcome, duration, output size and a value-free detail (the host a fetch reached, the file a read or write touched, the program a shell command ran, the MCP server and how many recipients);
+  - `approval`: tool, severity, the answer (`approved`, `denied`, `unanswered`) and **who answered**: `this computer`, `phone` or `paired computer` with the device id (the phone gate adds it and overwrites whatever the device sent), `telegram`, or nobody (`yolo`, `workflow policy`);
+  - `permission` (Claude Agent chats): each permission Claude Code asked Nekko for, and how it was decided (`mode`, `rule`, or the user and who);
+  - `taint`: when the chat first read untrusted content, and which tool brought it;
+  - `redactions`: what the Privacy Shield hid, by kind and count.
+  - **Never written:** tool arguments, full URLs, approval reasons (they quote addresses and recipients), tool output, message text. Incognito chats write nothing. The trail is deleted with its chat (delete, clear history, purge), and keeps at most 2 MB plus one older file.
+  - Read with the daemon channel `audit:read [chatId]`; it is not a public IPC channel yet, so neither the app nor a phone can call it until the screen lands. Code: `crates/nekkod/src/audit.rs`.
+  - **Planned:** a screen to read it per chat, and an admin view for Team.
 - **Per-folder sensitivity labels** `[planned, P2]`: Confidential means local models only and no network in that chat. No automatic classifier for now.
 - **Claude Agent chats:** Claude Code sends their requests and runs their tools. The approval bridge gives them approvals, the egress gate and audit for the calls Claude Code asks about; the Privacy Shield cannot reach them. A local proxy could bring it to Claude Agent on an API key or cloud account `[not started; we will come back to it]`; on a Claude plan it is impossible (the terms require the unmodified Claude Code).
 - **Team plan** `[not started]`: SSO-only sign-in, provider and key rules, admin audit and the egress domain allowlist. We have not worked on them yet and will start when a Team customer asks.

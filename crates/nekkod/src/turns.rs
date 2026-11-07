@@ -138,6 +138,9 @@ struct PendingInner {
     /// per kind. Its payload restores the visible map when a newer one resolves.
     approvals: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
     questions: HashMap<String, (String, oneshot::Sender<Value>, Value)>,
+    /// Who answered each approval (`{ via, device? }`), for the chat's audit
+    /// trail; taken by the waiting turn.
+    answered_by: HashMap<String, Value>,
 }
 
 impl PendingInner {
@@ -190,11 +193,17 @@ impl Pending {
 
     /// `resolveApproval`: false when no turn here waits on that call.
     pub fn approve(&self, session_id: &str, call_id: &str, approved: bool) -> bool {
+        self.approve_by(session_id, call_id, approved, json!({ "via": "this computer" }))
+    }
+
+    /// [`Self::approve`], saying who answered (`{ via, device? }`).
+    pub fn approve_by(&self, session_id: &str, call_id: &str, approved: bool, by: Value) -> bool {
         let mut p = lock(&self.inner);
         if p.approvals.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
             return false;
         }
         let Some((_, tx, _)) = p.approvals.remove(call_id) else { return false };
+        p.answered_by.insert(call_id.to_string(), by);
         let _ = tx.send(approved);
         let current = p.by_session.get(session_id).and_then(|e| e.get("approval")).and_then(|a| a.get("call"));
         if current.and_then(|c| str_at(c, "id")) == Some(call_id) {
@@ -204,6 +213,11 @@ impl Pending {
             p.set(session_id, "approval", remaining);
         }
         true
+    }
+
+    /// Who answered approval `call_id`, once.
+    fn take_answered_by(&self, call_id: &str) -> Option<Value> {
+        lock(&self.inner).answered_by.remove(call_id)
     }
 
     /// `resolveQuestion`: false when no turn here waits on that question.
@@ -276,6 +290,10 @@ struct Shared {
     /// chat's Claude Code child (it may wait for a wake-up turn to end), so
     /// a permission prompt goes to the turn that is reading that child.
     active: std::sync::atomic::AtomicBool,
+    turn_id: String,
+    /// The data folder the chat's audit trail is written in; `None` until the
+    /// chat is loaded, and for an incognito chat.
+    audit_to: Mutex<Option<PathBuf>>,
 }
 
 /// What an unattended turn tracks: its tool access (`toolAccess`,
@@ -308,6 +326,15 @@ fn note_error(slot: &Mutex<Option<String>>, event: &Value) {
 impl Shared {
     fn emit(&self, event: Value) {
         let _ = self.events.send(Out::Event(event));
+    }
+
+    /// One event in the chat's audit trail (crate::audit), with this turn's id.
+    fn audit(&self, mut event: Value) {
+        let Some(dir) = lock(&self.audit_to).clone() else { return };
+        if let Some(o) = event.as_object_mut() {
+            o.insert("turnId".into(), json!(self.turn_id));
+        }
+        crate::audit::record(&dir, &self.session_id, event);
     }
 }
 
@@ -584,15 +611,26 @@ impl Turns {
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        // The audit trail keeps what was asked and who answered, never the
+        // reason (it quotes addresses and recipients).
+        let note = |answer: &str, by: Value| {
+            shared.audit(json!({
+                "type": "approval", "callId": call_id, "tool": call.get("name"), "severity": severity,
+                "answer": answer, "by": by,
+            }))
+        };
         if shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
+            note("approved", json!({ "via": "workflow policy" }));
             return true;
         }
         if self.live_mode(shared).await == "yolo" {
+            note("approved", json!({ "via": "yolo" }));
             return true;
         }
         // A workflow run never parks: the call is denied at once, with the
         // reason, and the tool result says so.
         if shared.unattended.is_on() {
+            note("denied", json!({ "via": "workflow policy" }));
             let name = str_at(call, "name").unwrap_or_default();
             lock(&shared.unattended.denied).insert(call_id, turn::workflow_access::unattended_denial(name, reason));
             return false;
@@ -605,7 +643,15 @@ impl Turns {
             "reason": reason,
             "severity": severity,
         }));
-        rx.await.unwrap_or(false)
+        let answer = rx.await;
+        let by = self.pending.take_answered_by(&call_id).unwrap_or(Value::Null);
+        match answer {
+            Ok(true) => note("approved", by),
+            Ok(false) if !by.is_null() => note("denied", by),
+            // Stopped, or the turn ended, before anyone answered.
+            _ => note("unanswered", Value::Null),
+        }
+        answer.unwrap_or(false)
     }
 
     /// `POST /harness/approve`: one of Claude Code's permission prompts, from
@@ -659,11 +705,24 @@ impl Turns {
             .and_then(|g| serde_json::from_value(g).ok())
             .unwrap_or_else(nekko_tools::default_guardrails);
         let allow = || json!({ "behavior": "allow", "updatedInput": input });
+        // Claude Code runs its own tools: the trail keeps each permission it
+        // asked Nekko for, and how it was decided (crate::audit).
+        let detail = crate::audit::detail(&tool, &input);
+        let note = |decision: &str, by: Value| {
+            shared.audit(json!({
+                "type": "permission", "executedBy": "claude-code", "tool": tool, "decision": decision, "by": by,
+                "detail": detail,
+            }))
+        };
         match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
             crate::harness::Decision::Allow => {
+                note("allowed", json!({ "via": "mode" }));
                 Some(json!({ "behavior": "allow", "updatedInput": crate::harness::auto_run_input(&tool, &input) }))
             }
-            crate::harness::Decision::Deny(message) => Some(deny(&message)),
+            crate::harness::Decision::Deny(message) => {
+                note("denied", json!({ "via": "rule" }));
+                Some(deny(&message))
+            }
             crate::harness::Decision::Ask { reason, severity } => {
                 let id = str_at(prompt, "tool_use_id")
                     .or_else(|| str_at(prompt, "toolUseID"))
@@ -679,7 +738,14 @@ impl Turns {
                     "reason": reason,
                     "severity": severity,
                 }));
-                Some(if rx.await.unwrap_or(false) { allow() } else { deny("The user denied this action.") })
+                let answer = rx.await;
+                let by = self.pending.take_answered_by(&id).unwrap_or(Value::Null);
+                match answer {
+                    Ok(true) => note("approved", by),
+                    Ok(false) if !by.is_null() => note("denied", by),
+                    _ => note("unanswered", Value::Null),
+                }
+                Some(if answer.unwrap_or(false) { allow() } else { deny("The user denied this action.") })
             }
         }
     }
@@ -795,6 +861,8 @@ impl Turns {
             last_error: Arc::default(),
             unattended: Unattended::default(),
             active: std::sync::atomic::AtomicBool::new(!claude_code),
+            turn_id: turn_id.clone(),
+            audit_to: Mutex::new(None),
         });
         {
             let mut running = lock(&self.running);
@@ -1016,6 +1084,16 @@ impl Turns {
             return early("chat:turn is unsupported for sandbox sessions; use the host container router");
         }
         let incognito = js::truthy(loaded.get("incognito"));
+        if !incognito {
+            *lock(&shared.audit_to) = Some(self.data_dir.clone());
+            shared.audit(json!({
+                "type": "turn",
+                "mode": str_at(&loaded, "mode").map(str::to_string).or_else(|| shared.default_mode.clone()).unwrap_or_else(|| "guardrails".into()),
+                "provider": opts.get("providerId").cloned().unwrap_or(Value::Null),
+                "model": opts.get("modelId").cloned().unwrap_or(Value::Null),
+                "claudeCode": facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code"),
+            }));
+        }
         // A Claude Agent chat: the user's Claude Code runs the turn and its
         // own tools, so none of Nekko's tools or MCP servers are set up.
         let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
@@ -1429,6 +1507,7 @@ impl Turns {
             let counts = shield.lock().unwrap_or_else(|e| e.into_inner()).counts_by_kind();
             if !counts.is_empty() {
                 crate::logs::note(&format!("privacy shield: replaced {counts:?}"));
+                shared.audit(json!({ "type": "redactions", "counts": counts }));
             }
         }
         self.end_turn(&store, shared, &session, forwarder, incognito).await
@@ -2456,11 +2535,25 @@ impl TurnTools {
     /// brought in outside text taints the chat, and every address in any
     /// output counts as shown to it.
     async fn attended(&self, call: &Value) -> Result<Value, String> {
+        let started = std::time::Instant::now();
         let out = self.dispatch(call).await;
+        let name = str_at(call, "name").unwrap_or_default();
+        let input = call.get("input").cloned().unwrap_or(Value::Null);
         if let Ok(v) = &out {
-            let name = str_at(call, "name").unwrap_or_default();
             let text = v.get("output").map(js::display).unwrap_or_default();
-            lock(&self.taint).observe(name, &text, js::truthy(v.get("isError")));
+            let failed = js::truthy(v.get("isError"));
+            let was = lock(&self.taint).tainted();
+            lock(&self.taint).observe(name, &text, failed);
+            if !was && lock(&self.taint).tainted() {
+                self.shared.audit(json!({ "type": "taint", "callId": call.get("id"), "by": name }));
+            }
+            self.shared.audit(json!({
+                "type": "tool", "callId": call.get("id"), "tool": name, "isError": failed,
+                "ms": started.elapsed().as_millis() as u64, "outputChars": text.chars().count(),
+                "detail": crate::audit::detail(name, &input),
+            }));
+        } else {
+            self.shared.audit(json!({ "type": "tool", "callId": call.get("id"), "tool": name, "isError": true, "detail": crate::audit::detail(name, &input) }));
         }
         out
     }

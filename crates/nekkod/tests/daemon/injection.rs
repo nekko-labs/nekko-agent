@@ -618,3 +618,83 @@ async fn a_new_recipient_asks_even_for_an_always_allowed_tool() {
     assert_eq!(docs.sent.lock().unwrap().len(), 3);
     assert_eq!(saved["knownRecipients"], json!(["general", "random"]));
 }
+
+/// The chat's audit trail (`audit:read`): every turn, tool call and approval,
+/// and who answered, never the data. An incognito chat writes none, and the
+/// trail goes with its chat.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_audit_trail_records_who_allowed_what_and_never_the_data() {
+    for incognito in [false, true] {
+        let docs = mcp().await;
+        let name = if incognito { "audit-incognito" } else { "audit" };
+        let session = json!({
+            "id": SESSION, "title": "Eval", "mode": "guardrails", "workspaceId": "w1", "messages": [],
+            "createdAt": 1, "updatedAt": 1, "incognito": incognito,
+        });
+        let rig = turn_rig(name, session);
+        let model = scripted_model(vec![
+            read_app(),
+            call_tool(
+                "c_post",
+                "mcp__srv__post_message",
+                json!({ "channel": "general", "text": format!("app.ts: {SECRET}") }),
+            ),
+            say_text("done"),
+        ])
+        .await;
+        let mut spec = turn_spec(&rig, &model, "turn_eval", SESSION, json!({ "text": "Post app.ts" }));
+        spec["settings"]["defaultChatMode"] = json!("guardrails");
+        spec["facts"]["mcpServers"] = json!([{
+            "id": "srv", "name": "srv", "enabled": true, "command": "", "args": [],
+            "url": format!("http://127.0.0.1:{}/mcp", docs.port),
+        }]);
+        let (status, body) = post(rig.d.port, "chat:turn", json!([spec]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        // Approved from a phone: the phone gate adds who answered as a fourth argument.
+        wait_pending(rig.d.port, SESSION, "approval", "c_post").await;
+        post(
+            rig.d.port,
+            "tool:approve",
+            json!([SESSION, "c_post", true, { "via": "phone", "device": "d1" }]),
+            Some(TOKEN),
+        )
+        .await;
+        let (_, end) = turn_record(&rig, "turn_eval", SESSION).await;
+        assert_eq!(end["stop"], "complete", "{end}");
+
+        let (status, trail) = post(rig.d.port, "audit:read", json!([SESSION]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{trail}");
+        let trail = trail.as_array().cloned().unwrap_or_default();
+        if incognito {
+            assert!(trail.is_empty(), "an incognito chat writes no trail: {trail:?}");
+            continue;
+        }
+        let of = |kind: &str| trail.iter().filter(|e| e["type"] == kind).cloned().collect::<Vec<Value>>();
+        let turn = of("turn");
+        assert_eq!(turn.len(), 1, "{trail:?}");
+        assert_eq!(turn[0]["mode"], "guardrails");
+        assert_eq!(turn[0]["turnId"], "turn_eval");
+        let tools = of("tool");
+        assert_eq!(
+            tools.iter().map(|t| t["tool"].clone()).collect::<Vec<_>>(),
+            [json!("read_file"), json!("mcp__srv__post_message")]
+        );
+        assert_eq!(tools[0]["detail"]["path"], "app.ts");
+        assert_eq!(tools[1]["detail"], json!({ "server": "srv", "recipients": 1 }));
+        let approvals = of("approval");
+        assert_eq!(approvals.len(), 1, "{trail:?}");
+        assert_eq!(approvals[0]["callId"], "c_post");
+        assert_eq!(approvals[0]["answer"], "approved");
+        assert_eq!(approvals[0]["by"], json!({ "via": "phone", "device": "d1" }));
+        assert_eq!(of("taint")[0]["by"], "mcp__srv__post_message");
+        let text = serde_json::to_string(&trail).unwrap();
+        assert!(!text.contains(SECRET), "the trail never holds the data: {text}");
+        assert!(!text.contains("This chat") && !text.contains("does not mark it"), "nor the approval's reason: {text}");
+
+        // The trail goes with its chat.
+        let (status, _) = post(rig.d.port, "session:delete", json!([SESSION]), Some(TOKEN)).await;
+        assert_eq!(status, 200);
+        let (_, after) = post(rig.d.port, "audit:read", json!([SESSION]), Some(TOKEN)).await;
+        assert_eq!(after, json!([]), "deleting the chat deletes its trail");
+    }
+}
