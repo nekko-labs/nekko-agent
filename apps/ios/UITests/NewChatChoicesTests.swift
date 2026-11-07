@@ -3,6 +3,24 @@ import XCTest
 /// No paired computer, network or user data: the real New chat with a seeded draft.
 @MainActor
 final class NewChatChoicesTests: XCTestCase {
+    /// Overlaid unchanged on base and head by native-mode-evidence.yml. Select by wire ID, never renamed text.
+    func testPermissionChoiceEvidence() {
+        let app = launch()
+        let picker = app.buttons["newChat.tools"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 10))
+        attach(app, "permission-new-chat")
+        for raw in ["ask", "guardrails", "yolo"] {
+            picker.tap()
+            for choice in ["ask", "guardrails", "yolo"] {
+                XCTAssertTrue(app.buttons["tools.\(choice)"].waitForExistence(timeout: 3))
+            }
+            attach(app, "permission-choices-\(raw)")
+            app.buttons["tools.\(raw)"].tap()
+            XCTAssertFalse((picker.value as? String ?? "").isEmpty)
+            attach(app, "permission-selected-\(raw)")
+        }
+    }
+
     func testConcreteChoicesAndIndependentRecommendations() {
         let app = launch()
         let effort = app.buttons["newChat.effort"]
@@ -22,7 +40,7 @@ final class NewChatChoicesTests: XCTestCase {
         XCTAssertFalse(app.buttons["Computer default"].exists)
         attach(app, "iphone-tools-after")
         app.buttons["tools.yolo"].tap()
-        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "Works on its own")
+        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "No restrictions")
         app.buttons["newChat.tools"].tap()
         XCTAssertTrue(app.buttons["tools.guardrails"].exists)
         app.buttons["tools.yolo"].tap()

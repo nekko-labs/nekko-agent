@@ -1,9 +1,19 @@
 import XCTest
+import UIKit
 import NekkoProtocol
 @testable import NekkoNative
 
 @MainActor
 final class SimpleModeTests: XCTestCase {
+    func testPermissionLabelsAndIconsKeepWireValues() {
+        let modes = PcSettings.ChatMode.allCases
+        XCTAssertEqual(modes.map(\.rawValue), ["ask", "guardrails", "yolo"])
+        XCTAssertEqual(modes.map(SimpleMode.asksName), ["Always ask", "Ask when it matters", "No restrictions"])
+        XCTAssertEqual(modes.map(modeName), modes.map(SimpleMode.asksName))
+        XCTAssertEqual(modes.map(ToolPolicyPicker.icon), ["permission-hand", "permission-shield-check", "permission-running"])
+        for mode in modes { XCTAssertNotNil(UIImage(named: ToolPolicyPicker.icon(mode))) }
+    }
+
     func testSimpleShowsOnlyTheEverydayControlsWhenNothingIsGoingOn() {
         let simple = SimpleMode.items.filter { SimpleMode.shown($0.id, expert: false, [:]) }.map(\.id)
         XCTAssertEqual(simple, ["model", "effort", "asks", "context"])

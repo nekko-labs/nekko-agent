@@ -1,6 +1,7 @@
 import React, { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { allowModeChange } from './YoloWarning.js';
 import { createPortal } from 'react-dom';
+import { CHAT_MODE_LABEL } from '@nekko-agent/shared';
 import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
   CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
@@ -11,10 +12,10 @@ import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionF
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon,
-  ExternalIcon, FileIcon, FolderIcon, GaugeIcon, InfoIcon, ListIcon, GlobeIcon, GlobeOffIcon, HandIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
-  RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon, BoltIcon as YoloIcon,
+  ExternalIcon, FileIcon, FolderIcon, GaugeIcon, InfoIcon, ListIcon, GlobeIcon, GlobeOffIcon, IncognitoIcon, LaptopIcon, LockIcon, PlugIcon, PlusIcon,
+  RouteIcon, ServerIcon, ShieldCheckIcon, ShieldIcon, SparkleIcon, StarIcon, WorktreeIcon, WrenchIcon,
 } from '../icons.js';
-import { BrainCircuitIcon, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
+import { BrainCircuitIcon, CHAT_MODE_ICON, GfLockIcon, ShieldQuestionIcon } from '../gentleface-icons.js';
 import { HoverTip } from './HoverTip.js';
 
 const WORKTREE_DOCS = 'https://git-scm.com/docs/git-worktree';
@@ -443,8 +444,8 @@ export function ModePanel({
             </div>
             <div className="mode-row is-stacked">
               <span className="mode-ic" data-icon-hover><ShieldQuestionIcon /></span>
-              <span className="min-w-0 flex-1">{title('Approvals', sandbox ? 'Sandbox always asks first.' : `${APPROVAL_DESC[approvals]} Guardrails is recommended for general use.`)}</span>
-              {tiles<ChatMode>('Approvals', approvals, [['ask', 'Ask', <HandIcon />, { 'data-chat-mode': 'ask' }], ['guardrails', 'Guardrails', <ShieldCheckIcon />, { 'data-chat-mode': 'guardrails' }], ['yolo', 'YOLO', <YoloIcon />, { 'data-chat-mode': 'yolo' }]],
+              <span className="min-w-0 flex-1">{title('Approvals', sandbox ? 'Sandbox always asks.' : `${APPROVAL_DESC[approvals]} ${CHAT_MODE_LABEL.guardrails} is recommended for general use.`)}</span>
+              {tiles<ChatMode>('Approvals', approvals, (['ask', 'guardrails', 'yolo'] as const).map((m) => { const Icon = CHAT_MODE_ICON[m]; return [m, CHAT_MODE_LABEL[m], <Icon />, { 'data-chat-mode': m }]; }),
                 (v) => void (!sandbox && actions.setApprovals(v)))}
             </div>
             {flyRow('tools', <WrenchIcon />, 'Tools', `${toolsOn} of ${toolsUsable} on${approach === 'code' ? ' · code mode' : ''}`)}

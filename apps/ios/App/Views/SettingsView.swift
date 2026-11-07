@@ -207,13 +207,13 @@ struct SettingsView: View {
             }
             if store.active != nil {
                 Section {
-                    // The choice on its own line: beside the label, "Guardrails (ask for risky tools)" was cut off.
+                    // Keep the choice on its own line so longer names have room.
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Tools in new chats").accessibilityHidden(true)
                         Picker("Tools in new chats", selection: Binding(get: { store.pcSettings.effectiveMode }, set: { m in
                             Task { do { try await store.updatePcSettings(PcSettings.patch(mode: m)) } catch { self.error = error.localizedDescription } }
                         })) {
-                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { Text(modeName($0)).tag($0) }
+                            ForEach(PcSettings.ChatMode.allCases, id: \.self) { Label(modeName($0), image: ToolPolicyPicker.icon($0)).tag($0) }
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)

@@ -28,7 +28,7 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.buttons["tools.guardrails"].waitForExistence(timeout: 3))
         attach(app, "policy-keyboard-after")
         app.buttons["tools.yolo"].tap()
-        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "Works on its own")
+        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "No restrictions")
         XCTAssertTrue((field.value as? String)?.contains("**Bold**") == true)
     }
 

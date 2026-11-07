@@ -301,7 +301,10 @@ struct ChatView: View {
                                     Button {
                                         act { try await chat.setOptions(mode: m) }
                                     } label: {
-                                        if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
+                                        Label {
+                                            Text(modeName(m))
+                                            if chat.session?.mode == m.rawValue { Image(systemName: "checkmark") }
+                                        } icon: { ToolPolicyPicker.image(m) }
                                     }
                                 }
                             } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
@@ -496,11 +499,7 @@ struct WaitingRow: View {
 }
 
 func modeName(_ m: PcSettings.ChatMode) -> String {
-    switch m {
-    case .ask: return String(localized: "Ask before every tool")
-    case .guardrails: return String(localized: "Guardrails (ask for risky tools)")
-    case .yolo: return String(localized: "YOLO (never ask)")
-    }
+    SimpleMode.asksName(m)
 }
 
 /// The transcript's rows: each block on its own, except adjacent calls with one

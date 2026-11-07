@@ -144,7 +144,7 @@ final class StepUpCallsTests: XCTestCase {
         XCTAssertEqual(computer.raises.map { $0.proof }, [false, true, true])
         XCTAssertEqual(sheet.asked.count, 1)
         let asked = try XCTUnwrap(sheet.asked.first)
-        XCTAssertEqual(asked.action, "Switch this chat to YOLO on My computer")
+        XCTAssertEqual(asked.action, "Switch this chat to No restrictions on My computer")
         XCTAssertEqual(asked.computer, "My computer")
         XCTAssertEqual(asked.challenge.rpId, StepUpComputer.rpId)
         XCTAssertEqual(asked.challenge.methods, [.securityKey, .totp])
@@ -174,7 +174,7 @@ final class StepUpCallsTests: XCTestCase {
 
         _ = try await store.call(raising: Channels.settingsUpdate, [["defaultChatMode": "yolo"]])
         XCTAssertEqual(sheet.asked.count, 2)
-        XCTAssertEqual(sheet.asked[0].action, "Make YOLO the default for new chats on My computer")
+        XCTAssertEqual(sheet.asked[0].action, "Make No restrictions the default for new chats on My computer")
         XCTAssertEqual(sheet.asked[1].attempt, 2)
         XCTAssertEqual(sheet.asked[1].problem, "My computer didn’t accept that key or code. Try again.")
         XCTAssertNotEqual(sheet.asked[0].challenge.challenge, sheet.asked[1].challenge.challenge, "a fresh challenge each time")
@@ -254,11 +254,17 @@ final class StepUpCallsTests: XCTestCase {
     }
 
     func testActionNames() {
+        for (wire, label) in [("ask", "Always ask"), ("guardrails", "Ask when it matters"), ("yolo", "No restrictions")] {
+            XCTAssertEqual(StepUp.actionName(channel: Channels.sessionSetOptions, args: ["s1", ["mode": .string(wire)]], computer: "Studio"),
+                           "Switch this chat to \(label) on Studio")
+            XCTAssertEqual(StepUp.actionName(channel: Channels.settingsUpdate, args: [["defaultChatMode": .string(wire)]], computer: "Studio"),
+                           "Make \(label) the default for new chats on Studio")
+        }
         XCTAssertEqual(StepUp.actionName(channel: Channels.sessionSetOptions, args: ["s1", ["mode": "guardrails"]], computer: "Studio") {
             $0 == "s1" ? "Refactor auth" : nil
-        }, "Switch “Refactor auth” to Guardrails on Studio")
+        }, "Switch “Refactor auth” to Ask when it matters on Studio")
         XCTAssertEqual(StepUp.actionName(channel: Channels.settingsUpdate, args: [["defaultChatMode": "yolo"]], computer: "Studio"),
-                       "Make YOLO the default for new chats on Studio")
+                       "Make No restrictions the default for new chats on Studio")
         XCTAssertEqual(StepUp.actionName(channel: "security:phoneRegister", args: [], computer: "Studio"),
                        "Add a security key or passkey on Studio")
     }

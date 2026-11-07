@@ -361,7 +361,7 @@ struct NewChatView: View {
                     .accessibilityIdentifier("newChat.folder")
                     if app.prefs.shows("asks") {
                         ToolPolicyPicker(selection: toolsChoice)
-                        .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
+                        .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Ask when it matters is recommended for general use.")
                         .accessibilityIdentifier("newChat.tools")
                     }
                 }

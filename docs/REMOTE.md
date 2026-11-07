@@ -14,7 +14,7 @@ Inside a conversation, related tool calls fold under a purpose heading with an i
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
 
-**Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in YOLO mode, and an agent in YOLO mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
+**Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in No restrictions mode, and an agent in No restrictions mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
 
 If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.
 
@@ -87,7 +87,7 @@ to old duplicates that were saved with different identity keys.
 
 ## iPhone chat controls
 
-New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
+New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Always ask**, **Ask when it matters**, and **No restrictions**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
 
 The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
 
@@ -301,30 +301,30 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
 >
 > **Your computer's settings from the phone** (Android): **Settings → On <computer>** changes three
-> of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; switching to
-> YOLO shows the YOLO warning first), what a long-press on a chat does (Complete, which moves it to Completed, or
+> of the computer's own settings: the chat mode for new chats (Always ask, Ask when it matters or No restrictions; switching to
+> No restrictions shows the No restrictions warning first), what a long-press on a chat does (Complete, which moves it to Completed, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
 > and **Rename**; a pinned chat shows a pin beside its time.
 >
-> **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Ask, Guardrails
-> or YOLO; a chat without its own follows the computer's default; switching to a mode that asks less
-> is confirmed with your fingerprint, face or screen lock, and YOLO shows the YOLO warning first), **Rename**,
+> **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Always ask, Ask when it matters
+> or No restrictions; a chat without its own follows the computer's default; switching to a mode that asks less
+> is confirmed with your fingerprint, face or screen lock, and No restrictions shows the No restrictions warning first), **Rename**,
 > **Pin** / **Unpin** and **Complete**, each saved on the computer.
 >
-> **Turn on YOLO?** (Android): before a chat, or the computer's default for new chats, switches to
-> YOLO, the phone explains that the agent will then run commands, edit files, fetch addresses and
+> **Turn on No restrictions?** (Android): before a chat, or the computer's default for new chats, switches to
+> No restrictions, the phone explains that the agent will then run commands, edit files, fetch addresses and
 > call tools without asking, and that a page, search result or tool output it reads can get your
 > files or data sent out; your deny rules still block. **Keep asking** changes nothing; **Turn on
-> YOLO** goes ahead. **Don't warn me again** is kept on this phone only; **Settings → Security →
-> Warn before YOLO** turns the warning back on.
+> No restrictions** goes ahead. **Don't warn me again** is kept on this phone only; **Settings → Security →
+> Warn before No restrictions** turns the warning back on.
 >
 > **Always allow this tool** (Android): once a chat has read web pages, search results or a tool's
 > output, the computer asks before every MCP tool call. On such an approval the chat's card offers
 > **Always allow this tool** beside Allow and Deny: it allows this call and stops asking for that one
 > tool in that chat, after your fingerprint, face or screen lock (and your security key or code
 > when the computer asks for one). Other tools keep asking, a new chat starts with none allowed, and
-> the chat never switches to YOLO. Monitors and notifications still offer Allow and Deny only.
+> the chat never switches to No restrictions. Monitors and notifications still offer Allow and Deny only.
 >
 > **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
@@ -560,7 +560,7 @@ changes how the computer itself is set up:
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
-- **Settings a phone may change:** the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane's top-right button does (Complete or Delete),
+- **Settings a phone may change:** the chat mode for new chats (Always ask, Ask when it matters or No restrictions), what the chat pane's top-right button does (Complete or Delete),
   whether deleting asks first, and voice on/off and its language. An update that touches any other
   setting is refused as a whole: nothing in it is applied.
 - **Settings a phone can read:** only the theme and accents, the default and starred models, your
@@ -619,9 +619,9 @@ changes how the computer itself is set up:
   uses the model loads it again. Loading, downloading, deleting models and the Model Server's
   settings stay on the computer.
 - **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, complete it, and
-  switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
+  switch it between Always ask, Ask when it matters and No restrictions, but not its tools, isolation or
   offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
-  default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
+  default for new chats) to a mode with fewer approvals, Ask to Ask when it matters or anything to No restrictions, is
   confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
   fingerprint, face or screen lock on Android (the default for new chats, in **Settings → On
   <computer>**).
@@ -644,7 +644,7 @@ your computer refuses those requests from that phone, whatever the phone app doe
 phone can watch but can't make the agent do anything, and with Read off it sees nothing. Every
 request a phone can make is in one of the two; anything else is refused.
 
-**File, git, terminal and SSH changes, and moving a chat to Guardrails or YOLO, are confirmed on
+**File, git, terminal and SSH changes, and moving a chat to Ask when it matters or No restrictions, are confirmed on
 the phone and checked by your computer.** (Sending a prompt or approving a tool needs only the Change
 switch, so it doesn't ask for Face ID each time.) The first time a phone
 makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or

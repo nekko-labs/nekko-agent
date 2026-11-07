@@ -60,7 +60,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   { id: 'ph-subtitle', area: 'Chat · header', label: 'Model and computer under the title', hint: 'Like "Opus 5.5 · Studio Mac"', platforms: P, default: 'expert' },
   { id: 'model', area: 'Chat · message box', label: 'Model name and picker', hint: 'Switch between Claude, ChatGPT or a local model', platforms: DP, default: 'show' },
   { id: 'effort', area: 'Chat · message box', label: 'Effort', hint: 'Provider-reported effort choices beside the model in both modes', platforms: DP, default: 'show' },
-  { id: 'asks', area: 'Chat · message box', label: 'Asks first', hint: 'When the agent stops to ask you, in plain words', platforms: DP, default: 'show' },
+  { id: 'asks', area: 'Chat · message box', label: 'Approvals', hint: 'When the agent stops to ask you, in plain words', platforms: DP, default: 'show' },
   { id: 'context', area: 'Chat · message box', label: 'Usage ring', hint: 'How full this chat is. Simple shows only the ring; the numbers are in its tooltip', platforms: DP, default: 'show' },
   { id: 'cost', area: 'Chat · message box', label: 'Cost and limits', hint: 'What this chat has cost, and plan limits', platforms: D, default: 'expert' },
   { id: 'mode', area: 'Chat · message box', label: 'Mode panel', hint: 'Environment, approvals, tools and rules in one panel', platforms: D, default: 'expert' },

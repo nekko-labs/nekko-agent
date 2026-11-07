@@ -4775,45 +4775,9 @@
         }
       }
     },
-    "Ask before every tool": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vor jedem Tool fragen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preguntar antes de cada herramienta"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demander avant chaque outil"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ツールごとに確認"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Perguntar antes de cada ferramenta"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每次使用工具前询问"
-          }
-        }
-      }
+    "Always ask": {
+      "comment": "Permission wording updated for #2095. English fallback until retranslated.",
+      "localizations": {}
     },
     "Ask my computer": {
       "localizations": {
@@ -14821,46 +14785,6 @@
         }
       }
     },
-    "Guardrails (ask for risky tools)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Leitplanken (bei riskanten Tools nachfragen)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Salvaguardas (preguntar en herramientas riesgosas)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Garde-fous (demander pour les outils risqués)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ガードレール（危険なツールは確認）"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Proteções (perguntar em ferramentas arriscadas)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "防护规则（有风险的工具需询问）"
-          }
-        }
-      }
-    },
     "Guidelines": {
       "localizations": {
         "de": {
@@ -15581,45 +15505,9 @@
         }
       }
     },
-    "How the agent asks before it runs tools on %@. Guardrails is recommended for general use.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wie der Agent fragt, bevor er Tools auf %@ ausführt. Für den allgemeinen Gebrauch wird Guardrails empfohlen."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cómo pregunta el agente antes de ejecutar herramientas en %@. Se recomienda Guardrails para uso general."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comment l’agent demande avant d’exécuter des outils sur %@. Guardrails est recommandé pour un usage général."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@でツールを実行する前の確認方法です。通常の利用にはGuardrailsを推奨します。"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Como o agente pergunta antes de executar ferramentas em %@. Guardrails é recomendado para uso geral."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "代理在 %@ 上运行工具前如何询问。一般使用推荐 Guardrails。"
-          }
-        }
-      }
+    "How the agent asks before it runs tools on %@. Ask when it matters is recommended for general use.": {
+      "comment": "Permission wording updated for #2095. English fallback until retranslated.",
+      "localizations": {}
     },
     "How the agent asks before it runs tools on %@. Its default is %@.": {
       "localizations": {
@@ -37331,46 +37219,6 @@
         }
       }
     },
-    "YOLO (never ask)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "YOLO (nie nachfragen)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "YOLO (nunca preguntar)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "YOLO (ne jamais demander)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "YOLO（確認なし）"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "YOLO (nunca perguntar)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "YOLO（从不询问）"
-          }
-        }
-      }
-    },
     "Yesterday": {
       "localizations": {
         "de": {
@@ -38377,125 +38225,13 @@
         }
       }
     },
-    "Asks first": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fragt zuerst"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pregunta primero"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demande d’abord"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "先に確認"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pergunta primeiro"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "先询问"
-          }
-        }
-      }
+    "Ask when it matters": {
+      "comment": "Permission wording updated for #2095. English fallback until retranslated.",
+      "localizations": {}
     },
-    "Asks when it matters": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fragt, wenn es wichtig ist"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pregunta cuando importa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demande quand c’est important"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "必要なときに確認"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pergunta quando importa"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重要时询问"
-          }
-        }
-      }
-    },
-    "Works on its own": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arbeitet selbstständig"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trabaja por su cuenta"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Travaille seul"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自動で作業"
-          }
-        },
-        "pt": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trabalha sozinho"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "自主工作"
-          }
-        }
-      }
+    "No restrictions": {
+      "comment": "Permission wording updated for #2095. English fallback until retranslated.",
+      "localizations": {}
     },
     "Says how many files the agent changed. Only while this chat has changed files": {
       "localizations": {
