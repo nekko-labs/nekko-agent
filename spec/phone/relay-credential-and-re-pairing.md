@@ -34,9 +34,9 @@ The relay that connects a phone to its computer only forwards sealed frames. It 
 
 ## iOS callback-order recovery (#2098)
 
-Implemented, verification pending: an open callback arriving after a verified challenge or welcome must not re-arm the challenge watchdog. iOS now checks the current socket, stopped state and handshake progress under the same lock before arming it, matching Android's existing `afterOpen` guard. The original welcome deadline remains active while waiting for welcome; missing or forged challenges still time out. No request is retried or replayed by this change.
+Implemented and protocol-regression verified: an open callback arriving after a verified challenge or welcome must not re-arm the challenge watchdog. iOS now checks the current socket, stopped state and handshake progress under the same lock before arming it, matching Android's existing `afterOpen` guard. The original welcome deadline remains active while waiting for welcome; missing or forged challenges still time out. No request is retried or replayed by this change.
 
-Two fake-transport regressions deliver the first open callback after HELLO and after welcome. `scripts/relay-handshake-regression.sh` overlays those tests on a supplied base revision, requires assertion failures (not build errors), then runs the complete relay-client test class on the fix. Real gomi incident attribution and physical-device verification remain unverified without contemporaneous diagnostics.
+Two fake-transport regressions deliver the first open callback after HELLO and after welcome. `scripts/relay-handshake-regression.sh` overlays those tests on a supplied base revision, requires assertion failures (not build errors), then runs the complete relay-client test class on the fix. [Hosted macOS verification](https://github.com/nekko-labs/nekko-agent/actions/runs/42375110421) reproduced both tests as assertion failures on base and passed all 51 relay-client tests on the fix. Real gomi incident attribution and physical-device verification remain unverified without contemporaneous diagnostics.
 
 ## Acceptance
 
