@@ -241,4 +241,5 @@
     <string name="chats_group_week">Últimos 7 dias</string>
     <string name="chats_group_month">Últimos 30 dias</string>
     <string name="chats_group_older">Mais antigos</string>
+    <string name="chats_tool_step_up">Sempre permitir %2$s neste chat em %1$s</string>
 </resources>

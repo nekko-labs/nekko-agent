@@ -72,9 +72,6 @@
     <string name="chat_title">Título</string>
     <string name="chat_rename">Renombrar</string>
     <string name="chat_cancel">Cancelar</string>
-    <string name="chat_use_yolo_title">¿Usar YOLO en este chat?</string>
-    <string name="chat_use_yolo_body">Este chat ejecutará comandos y editará archivos en %1$s sin preguntarte antes. Tus reglas de denegación siguen bloqueando.</string>
-    <string name="chat_use_yolo">Usar YOLO</string>
     <string name="chat_chat_mode">Modo del chat</string>
     <string name="chat_follows_default">Este chat sigue el valor predeterminado de %1$s: %2$s.</string>
     <string name="chat_waiting_to_send_one">En espera de enviarse</string>
@@ -237,4 +234,7 @@
     <string name="chat_card_allow">Permitir</string>
     <string name="chat_card_stop">Detener</string>
     <string name="chat_card_next">Siguiente</string>
+    <string name="chat_always_allow_tool">Permitir siempre esta herramienta</string>
+    <string name="chat_always_allowing_tool">Permitiendo…</string>
+    <string name="chat_always_allow_tool_detail">Permite esta llamada y deja de preguntar por esta herramienta en este chat. Las demás herramientas siguen preguntando.</string>
 </resources>

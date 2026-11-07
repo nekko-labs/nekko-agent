@@ -317,6 +317,8 @@ export interface AppSettings {
    */
   notices?: AppNotice[];
   skipDeleteConfirmation?: boolean;
+  /** Turning YOLO on skips its warning (Settings > General, "Warn before YOLO"). */
+  skipYoloWarning?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
    * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,

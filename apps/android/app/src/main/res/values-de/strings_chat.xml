@@ -72,9 +72,6 @@
     <string name="chat_title">Titel</string>
     <string name="chat_rename">Umbenennen</string>
     <string name="chat_cancel">Abbrechen</string>
-    <string name="chat_use_yolo_title">YOLO für diesen Chat verwenden?</string>
-    <string name="chat_use_yolo_body">Dieser Chat führt Befehle aus und bearbeitet Dateien auf %1$s, ohne dich vorher zu fragen. Deine Verbotsregeln blockieren weiterhin.</string>
-    <string name="chat_use_yolo">YOLO verwenden</string>
     <string name="chat_chat_mode">Chat-Modus</string>
     <string name="chat_follows_default">Dieser Chat folgt der Standardeinstellung von %1$s: %2$s.</string>
     <string name="chat_waiting_to_send_one">Wartet auf das Senden</string>
@@ -237,4 +234,7 @@
     <string name="chat_card_allow">Erlauben</string>
     <string name="chat_card_stop">Stopp</string>
     <string name="chat_card_next">Weiter</string>
+    <string name="chat_always_allow_tool">Dieses Tool immer erlauben</string>
+    <string name="chat_always_allowing_tool">Wird erlaubt…</string>
+    <string name="chat_always_allow_tool_detail">Erlaubt diesen Aufruf und fragt in diesem Chat nicht mehr nach diesem Tool. Andere Tools fragen weiterhin.</string>
 </resources>
