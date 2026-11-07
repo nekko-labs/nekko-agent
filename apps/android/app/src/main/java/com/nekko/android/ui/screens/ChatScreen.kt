@@ -53,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Difference
 import com.nekko.android.ui.chat.ChangesSheet
+import com.nekko.android.ui.chat.AuditSheet
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -159,6 +160,7 @@ import com.nekko.android.ui.settings.modeTitleRes
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Shield
 
@@ -214,6 +216,8 @@ private fun ChatScreenContent(
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    var showAudit by remember { mutableStateOf(false) }
+    val auditLoad by vm.audit.collectAsStateWithLifecycle()
     // Read with the chat and after each turn: Changes shows only with something in it.
     // A short turn can start and end between two frames, so `running` alone may never appear to change.
     LaunchedEffect(vm.sessionId, chat.running, chat.blocks.size, changesAllowed) { if (changesAllowed && !chat.running) vm.loadChanges() }
@@ -347,6 +351,10 @@ private fun ChatScreenContent(
         )
     }
 
+    if (showAudit) {
+        AuditSheet(auditLoad.trail, auditLoad.error, onRefresh = vm::loadAudit, onDismiss = { showAudit = false })
+    }
+
     // ⋮ → Rename, Pin, Complete, Chat mode: changes on the computer; a refusal is said in a toast.
     val chatAction: (String, suspend () -> Unit) -> Unit = { failed, action ->
         scope.launch {
@@ -460,6 +468,13 @@ private fun ChatScreenContent(
                                         onClick = { showMenu = false; showMode = true },
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.toolMode"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chat_audit_trail)) },
+                                        leadingIcon = { Icon(Icons.Filled.Policy, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.loadAudit(); showAudit = true },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.audit"),
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_rename)) },
