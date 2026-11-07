@@ -66,8 +66,8 @@ describe('offering a model that edits', () => {
   it('offers the Edit photos picks even to someone with picture models that cannot edit', () => {
     const options = [option({})];
     const own = [model('z_image_turbo-Q4_K')];
-    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null }).kind).toBe('hidden');
-    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null, force: true }).kind).toBe('choose');
+    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null, runtimeReady: true }).kind).toBe('hidden');
+    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null, force: true, runtimeReady: true }).kind).toBe('choose');
     const recs = { hardware: { device: 'NVIDIA GeForce RTX 5090' } } as unknown as Recommendations;
     const html = renderToStaticMarkup(
       <PhotoSetupSteps recs={recs} cards={options} choice={options[0]} phase={{ kind: 'choose' }} engineReady canInstallEngine capability="edit"
