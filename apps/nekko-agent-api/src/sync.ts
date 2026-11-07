@@ -70,7 +70,7 @@ const FRESH_SIGN_IN_MS = 10 * 60 * 1000;
  * can only sign in to the account; the clients' own checks are what stop a
  * malicious server.
  */
-async function keyed(db: Db, caller: Caller, keyId: number): Promise<boolean> {
+export async function keyed(db: Db, caller: Caller, keyId: number): Promise<boolean> {
   if (!caller.deviceId) return false;
   const { rows } = await db.query(
     `select 1 from sync_key_wraps w
@@ -78,7 +78,9 @@ async function keyed(db: Db, caller: Caller, keyId: number): Promise<boolean> {
        join sync_keyrings k on k.user_id = w.user_id and k.key_id = w.key_id
        join api_tokens t on t.id = $4 and t.user_id = w.user_id
       where w.user_id = $1 and w.key_id = $2 and w.device_id = $3 and d.revoked_at is null
-        and k.proof_hash is not null and t.sync_proven_key_id = w.key_id`,
+        and k.proof_hash is not null and t.sync_proven_key_id = w.key_id
+         and t.device_id = w.device_id and t.revoked_at is null
+         and (t.expires_at is null or t.expires_at > now())`,
     [caller.userId, keyId, caller.deviceId, caller.tokenId],
   );
   return rows.length === 1;
@@ -103,7 +105,7 @@ async function markProven(db: Db, caller: Caller, keyId: number): Promise<void> 
   await db.query("update api_tokens set sync_proven_key_id = $1 where id = $2", [keyId, caller.tokenId]);
 }
 
-async function currentKeyId(db: Db, userId: string): Promise<number | null> {
+export async function currentKeyId(db: Db, userId: string): Promise<number | null> {
   const { rows } = await db.query<{ k: number | null }>("select max(key_id) as k from sync_keyrings where user_id = $1", [userId]);
   return rows[0]?.k ?? null;
 }
@@ -209,6 +211,9 @@ export function registerSync(app: FastifyInstance, db: Db): void {
       if (!rows.length) return reply.code(404).send({ error: "not-found" });
       await tx.query("update api_tokens set revoked_at = coalesce(revoked_at, now()) where device_id = $1", [id]);
       await tx.query("delete from sync_key_wraps where device_id = $1", [id]);
+      // A revoked device key cannot enroll again; its advertisement no longer
+      // needs a revision guard, and must not consume fleet capacity forever.
+      await tx.query("delete from fleet_computers where device_id = $1 and user_id = $2", [id, caller.userId]);
       return reply.code(204).send();
     });
   });

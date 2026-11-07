@@ -107,12 +107,57 @@ export interface Recommendations {
   /** What a model may use: the roomiest GPU less the display's share, the GPU share of unified memory, or RAM less the OS's. */
   budget: { bytes: number; placement: RecommendationPlacement };
   tasks: TaskRecommendation[];
+  /** Picture tasks: creating from text and editing a given photo. */
+  imageTasks: ImageTaskRecommendation[];
   /**
    * A task whose pick moved past the model the user has for it: the machine
    * changed (`hardware`) or a newer list ranks a better one (`feed`). Only
    * upgrades, only once: dismissing one keeps its pick as seen.
    */
   nudges: UpgradeNudge[];
+}
+
+/**
+ * One picture model at one quant. Picked by memory alone: no seconds-per-image
+ * figure is claimed until one is measured, so there is no speed here.
+ */
+export interface ImageRecommendedOption {
+  modelId: string;
+  name: string;
+  owner: string;
+  /** Hugging Face repo, `owner/name`. */
+  repo: string;
+  /** The model's license, from its model card. */
+  license: string;
+  capabilities: import('./engine.js').ImageCapability[];
+  /** The engine's companion set; `engineDownloadImageCompanions` fetches it once the weights are on disk. */
+  companionSet: string;
+  quant: string;
+  /** The label `engineDownloadModel(repo, label)` takes. */
+  downloadLabel: string;
+  files: string[];
+  weightsBytes: number;
+  /** Text encoders and VAE, before counting any already on disk. */
+  companionBytes: number;
+  /** Weights and companions together. */
+  downloadBytes: number;
+  /** What the device needs: every file plus working buffers, or with offload the largest file plus working buffers. An estimate. */
+  memoryBytes: number;
+  headroomBytes: number;
+  placement: RecommendationPlacement;
+  /** Fits only with the model's `offloadToCpu` preset on: set it when installing. */
+  offloadToCpu: boolean;
+  fit: RecommendationFit;
+}
+
+export interface ImageTaskRecommendation {
+  task: 'imageCreate' | 'imageEdit';
+  label: string;
+  capability: import('./engine.js').ImageCapability;
+  /** The first candidate that fits, best first (from system RAM, the smallest that fits); `null` when none does. */
+  pick: ImageRecommendedOption | null;
+  /** Each candidate at the quant it would be offered at, best first. */
+  options: ImageRecommendedOption[];
 }
 
 export interface UpgradeNudge {
