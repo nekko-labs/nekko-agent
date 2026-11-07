@@ -55,6 +55,7 @@ import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
+import { PhotoModelSetup } from './agent-console/PhotoModelSetup.js';
 import { ImageLiveTurn } from './agent-console/ImageLiveTurn.js';
 import { SubagentInheritedModelContext, SubagentParentContext } from './agent-console/SubagentCue.js';
 import { WatchSessionContext } from '../agentWatches.js';
@@ -1950,6 +1951,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // can compose with no provider configured at all.
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
   const imageMode = (session ? session.chatType : summaryType) === 'image';
+  // Bumped when the Photo setup lands a model, so the image controls read the library again.
+  const [imageControlsKey, setImageControlsKey] = useState(0);
+  // While the Photo setup offers its choice, the empty "Choose a model" block would only say there is none.
+  const [photoSetupShown, setPhotoSetupShown] = useState(false);
+  const photoReady = (s: Session) => { setSession(s); setImageControlsKey((k) => k + 1); };
   const canCompose = imageMode || hasProvider;
   // The `/` and `@` menus read the word that ends at the caret, so they open
   // mid-draft too. null until the composer reports a caret (then the end of
@@ -2743,12 +2749,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {setupNeeded ? (
                   <button className="btn btn-primary" onClick={() => useStore.getState().setView('models')}>Set up my first agent →</button>
                 ) : null}
-                {surface !== 'transcript' && welcomeState.modelChoice && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
+                {imageMode && session && surface !== 'transcript' && <PhotoModelSetup session={session} onReady={photoReady} onShown={setPhotoSetupShown} />}
+                {surface !== 'transcript' && welcomeState.modelChoice && !(imageMode && photoSetupShown) && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
                   <div className="flex items-center justify-between gap-2 px-2">
                     <span className="text-xs font-medium text-ink-soft">Choose a model</span>
 
                   </div>
-                  {imageMode && session ? <ImageModeControls session={session} onChange={setSession} busy={streaming} /> :
+                  {imageMode && session ? <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} /> :
                     <ModelPicker providers={providers} filterProviders={cloudOnlyFilter} providerId={providerId} models={models} modelId={modelId}
                       resolvedModelId={resolvedClaudeCodeModel}
                       open={false} onOpenChange={openModelMenu} expanded
@@ -2992,7 +2999,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </>)}
             {showControls && imageMode && session && (
               <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-line px-2 py-1">
-                <ImageModeControls session={session} onChange={setSession} busy={streaming} />
+                <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} />
               </div>
             )}
 
