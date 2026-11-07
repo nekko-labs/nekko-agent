@@ -52,6 +52,12 @@ it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
   // That the page never hands the wall an add tile is rendered in newAgentSetup.test.ts.
 });
 
+it('treats the wall lists as ready only once they really loaded, so an engine still starting closes no windows', () => {
+  const source = readFileSync(new URL('./CommandCenterView.tsx', import.meta.url), 'utf8');
+  expect(source).toContain('retryUntilAnswered(() => Promise.all([refreshSessions(), refreshTerminals()]).then(() => setListsReady(true)))');
+  expect(source).not.toMatch(/finally\(\(\) => setListsReady/);
+});
+
 // Source pin, pending the wall e2e journey: the title-bar slot is found by a
 // MutationObserver in an effect, which needs a DOM to run.
 it('watches only the title-bar slot\'s ancestors, never the whole body subtree (source pin)', () => {

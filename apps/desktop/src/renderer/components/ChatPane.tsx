@@ -33,6 +33,7 @@ import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
 import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
+import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
 import { reportAgentWorking } from '../workingAgents.js';
 import { useAgentEventClaim } from '../agentSubscription.js';
@@ -946,19 +947,22 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   useEffect(() => {
     const cached = getCachedSession(sessionId);
     let live = true;
+    let stopLoad: (() => void) | undefined;
     const release = holdTranscript();
     // After the first paint: the frame (and a cached transcript) goes on
     // screen before any of this is even asked for.
     const cancel = afterPaint(() => {
-      loadSession(sessionId).then((s) => {
+      // A chat that no longer exists reads as null, so a failure means the engine.
+      stopLoad = retryUntilAnswered((retried) => loadSession(sessionId).then((s) => {
         if (!live) return;
         setSession(s);
         if (!cached) seedBrain(s);
-      }).catch(() => {}).finally(release);
+        if (retried) refreshCtx();
+      }).finally(release));
       refreshCtx();
       useStore.getState().refreshSessionPrs(sessionId);
     });
-    return () => { live = false; cancel(); release(); };
+    return () => { live = false; stopLoad?.(); cancel(); release(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
