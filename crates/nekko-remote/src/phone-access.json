@@ -464,7 +464,8 @@
   ],
   "chatType": [
    "image",
-   "multimodal"
+   "multimodal",
+   "video"
   ],
   "executionMode": [
    "sandbox",

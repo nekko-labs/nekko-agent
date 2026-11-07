@@ -8,7 +8,14 @@ import {
 } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
 
-const SIZES = ['512x512', '768x768', '1024x1024', '1024x768', '768x1024', '1344x768', '768x1344'];
+export const IMAGE_SIZES = ['512x512', '768x768', '1024x1024', '576x1024', '768x1024', '1024x768', '1024x576', '1344x768', '768x1344'];
+export function imageSizeLabel(size: string): string {
+  const [w, h] = size.split('x').map(Number);
+  if (!(w > 0 && h > 0)) return size;
+  const gcd = (a: number, b: number): number => b ? gcd(b, a % b) : a;
+  const d = gcd(w, h);
+  return `${w / d}:${h / d} · ${w}×${h}`;
+}
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
 
 /**
@@ -100,16 +107,16 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
           {(models ?? []).map((m) => <option key={m.id} value={m.id}>{m.name}{m.quantization && !m.name.includes(m.quantization) ? ` · ${m.quantization}` : ''}</option>)}
         </select>
       </label>
-      <label className="ctl-menu shrink-0" title="Image size">
-        <span className="ctl-menu-label">Size</span>
+      <label className="ctl-menu shrink-0" title="Aspect ratio and image size">
+        <span className="ctl-menu-label">Aspect ratio</span>
         <select
-          aria-label="Image size"
+          aria-label="Aspect ratio and image size"
           className="bg-transparent text-ink outline-hidden"
           value={size}
           disabled={busy}
           onChange={(e) => { const [width, height] = e.target.value.split('x').map(Number); void save({ width, height }); }}
         >
-          {(SIZES.includes(size) ? SIZES : [size, ...SIZES]).map((s) => <option key={s} value={s}>{s.replace('x', '×')}</option>)}
+          {(IMAGE_SIZES.includes(size) ? IMAGE_SIZES : [size, ...IMAGE_SIZES]).map((s) => <option key={s} value={s}>{imageSizeLabel(s)}</option>)}
         </select>
       </label>
       {num('Steps', params.steps, (steps) => ({ steps }), { min: 1, max: 100, width: 'w-9' })}

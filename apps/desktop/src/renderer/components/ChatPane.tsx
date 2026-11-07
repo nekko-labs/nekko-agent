@@ -53,6 +53,7 @@ import type { PendingApproval } from './agent-console/index.js';
 import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
+import { MediaAgentWelcome } from './MediaAgentIntro.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
 import { ImageLiveTurn } from './agent-console/ImageLiveTurn.js';
 import { SubagentInheritedModelContext, SubagentParentContext } from './agent-console/SubagentCue.js';
@@ -2713,6 +2714,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
 
         </ChatHeader>
         )}
+        {surface !== 'composer' && (session?.chatType === 'image' || session?.chatType === 'video') && <MediaAgentWelcome key={session.chatType} kind={session.chatType} />}
         {/* A sub-agent says so across the top, with a way back to the chat that spawned it. */}
         {surface !== 'composer' && !cleanStart && session?.parentSessionId && <SubagentBanner parentId={session.parentSessionId} onOpenParent={(id) => (commandCenter ? useStore.getState().focusChatOnWall(id, { keepLayout: true }) : useStore.getState().openChatPane(id))} />}
         {surface !== 'composer' && !cleanStart && showHardware && <ExpertMonitor />}
@@ -2737,7 +2739,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {setupNeeded ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
                   <h2 className="text-base font-semibold">
-                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
+                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : session?.chatType === 'video' ? 'What story should we make?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
                   </h2>
                   <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
                     {setupNeeded

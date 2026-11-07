@@ -154,8 +154,10 @@ export type ChatMode = 'ask' | 'guardrails' | 'yolo';
  * means) talks to a chat model with text and images in and text out.
  * `image` sends each prompt to a local image-generation model instead, and
  * every reply is a picture.
+ * `video` is a dedicated creative workspace using the normal model/tool loop;
+ * it does not imply an available video-generation backend.
  */
-export type ChatType = 'multimodal' | 'image';
+export type ChatType = 'multimodal' | 'image' | 'video';
 
 /** An image-generation chat's settings, kept per chat. */
 export interface ImageChatParams {

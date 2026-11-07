@@ -533,7 +533,7 @@ export function CommandCenterView() {
       <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
         onAdd={(kind) => {
           setCompletedId(null);
-          const add = kind === 'image' ? newChat({ kind: 'chat', chatType: 'image' }).then((id) => addFromToolbar('chat', id, true)) : addFromToolbar(kind);
+          const add = (kind === 'image' || kind === 'video') ? newChat({ kind: 'chat', chatType: kind }).then((id) => addFromToolbar('chat', id, true)) : addFromToolbar(kind);
           void add.catch(reportAddFailure);
         }}
         onPick={async (selection) => {
@@ -553,7 +553,7 @@ export function CommandCenterView() {
           onOrientation={(orientation) => setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), orientation } }))} />
       </div>}
       {agentsPresent && <div className="wall-agents-presence" data-orientation={panel.orientation} data-panel-open={panel.show} inert={!panel.show} aria-hidden={!panel.show}><AgentSidebar onCreate={async (kind, projectId, shell) => {
-        const id = kind === 'terminal' ? await newTerminal(projectId, shell) : await newChat({ kind: 'chat', chatType: kind === 'image' ? 'image' : 'multimodal' }, projectId);
+        const id = kind === 'terminal' ? await newTerminal(projectId, shell) : await newChat({ kind: 'chat', chatType: kind === 'image' || kind === 'video' ? kind : 'multimodal' }, projectId);
         await addFromToolbar(kind === 'terminal' ? 'terminal' : 'chat', id, true);
         setCompletedId(null);
       }} selectedId={completedId ?? selected} onOpenChat={(id) => {
@@ -612,7 +612,7 @@ export function WallToolbar({
   addOpen: boolean;
   setAddOpen: React.Dispatch<React.SetStateAction<boolean>>;
   /** A new agent, image session or terminal window on the wall. */
-  onAdd: (kind: 'chat' | 'image' | 'terminal') => void;
+  onAdd: (kind: 'chat' | 'image' | 'video' | 'terminal') => void;
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
