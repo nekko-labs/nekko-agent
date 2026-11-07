@@ -6,6 +6,19 @@ split-from: SPEC.md (2026-10-22)
 
 # Models & providers
 
+## Compact provider settings (#2094, 2026-11-07)
+
+Implemented in the desktop/shared web renderer:
+- The provider bar contains add-provider icons only; the duplicate connected-provider chip row is removed. Connected cards, setup choices, and shortcuts share a single colored provider mark. Gemini and Ollama Cloud compatible endpoints keep their vendor identity.
+- **More providers** reveals Vertex, Ollama Cloud, and OpenAI-compatible shortcuts inline, once, rather than opening a second provider chooser. Each appears with a 160 ms fade/width expansion and 35 ms stagger; reduced-motion skips animation. Focus moves to the first revealed shortcut; selecting a shortcut opens only that provider's setup.
+- The custom-model-ID input is removed from connected subscription cards, add-provider setup, and onboarding. Existing stored overrides remain readable for backward compatibility; no settings migration erases them.
+- Subscription cards omit redundant endpoint/account-ID text, keep account ID in a tooltip, and shorten reauthentication to **Sign in again**. Claude cards show email, organization when reported, plan, and named profile; CLI version/config-directory diagnostics remain in the source tooltip.
+- Usage rows say **Resets in …**, with an exact local reset timestamp on hover. Unknown reset times say **Reset unavailable**. Missing credit balances are not described as unlimited. The “Live reads … not a bill” footer is removed; stale reports are labeled. Claude cards use the canonical `claude-code:<id>` limits path, displaying only usage that Claude Code already reported, never accessing a credential or a plan endpoint.
+- Research: one email's personal and organization subscriptions can be separate named Claude Code profiles. Automatic enumeration/switching of memberships from a single saved login is **not implemented**; see [investigation](../../docs/claude-account-selection.md).
+
+Verification: focused renderer tests and hidden Electron interaction/geometry assertions at 1100×800 and 390×800; matched base-revision captures and real-frame motion recording. Live subscription sign-ins and native phone apps are not exercised by this change.
+
+
 ## Google and Ollama cloud setup (#1955)
 
 Implemented in the shared desktop/web renderer:
