@@ -5,7 +5,7 @@ area: phone
 
 # Live card: status dashboard and app-wide voice
 
-**Status: planned design, not implemented or device-verified.** This design supersedes the intended hierarchy of the existing chat-row card; the implementation described in [native iOS](native-ios-app.md) remains current until the work below lands. [Editable visual proposal](live-card-status-dashboard.html).
+**Status: implemented in the current worktree, native-unverified; not shipped.** The dashboard and deterministic voice paths supersede the chat-row card described historically in [native iOS](native-ios-app.md). Native builds/tests, matched native before/after evidence and physical-device checks for this redesign remain pending. The [editable visual proposal](live-card-status-dashboard.html) is design reference, not native evidence.
 
 ## The three goals
 
@@ -13,50 +13,68 @@ area: phone
 2. **Control Nekko by voice without opening the app.** **Talk to Nekko** is the main CTA. Voice is app-wide, as explicitly selected by Philip, not implicitly directed to whichever chat happens to be focused. Authentication and platform microphone restrictions still apply.
 3. **Open the app when needed to handle statuses.** **Open app** is a visibly secondary action leading to the agent list, where the user can review work, answer questions, and handle approvals. Chat-specific controls must not compete with voice on the resting card.
 
-## Resting-card hierarchy
+The goals are retained, not all proven met: no-app voice has an implemented but hardware-unverified iOS 18+ path; Android requires foreground UI, and iOS 17 offers an app handoff only.
 
-- Small header: Nekko Agent and the computer/scope the counts describe.
-- Three equally legible count columns: Building, Need input, Done. Show zero rather than making the layout jump. Building means actively running, including non-code work; it is not limited to compilation.
-- A compact secondary line exposes Watching and Failed when nonzero. Failed must not be folded into Done. Offline/stale state takes precedence over optional detail and never looks like fresh progress.
-- Wide accent-filled **Talk to Nekko** button with microphone icon. Its visual weight exceeds all other actions.
-- Quiet **Open app** link beside or below voice, with a sufficiently large hit area.
-- No default chat rows, per-chat elapsed timers, Allow/Deny/Stop button strip, or celebratory close button. Those actions remain in the app; voice may request them only through the safeguards below.
+## Implemented resting-card hierarchy
+
+- Small Nekko Agent header and named computer scope.
+- Building, Need input and Done count columns, including zero. Building includes non-code work, not just compilation.
+- Secondary Watching and Failed counts when nonzero; failures are not Done. Stale status takes precedence over optional detail. Legacy clipped payloads show a partial-count warning, not guessed totals.
+- Primary accent-filled **Talk to Nekko** on iOS 18+, secondary **Open app** to the chat list. On iOS 17 the primary label is **Open app for voice**, also opening the list without automatic capture.
+- No default chat rows, elapsed timers, Allow/Deny/Stop strip or close celebration. Those actions remain in the app, not in the voice dispatcher.
+- Android adapts counts to its ongoing notification/Live Update, with Talk to Nekko first and Open app second. Android owns action styling; notification actions are not an iOS-style custom card.
 
 ## Count correctness and scope
 
-- Compute totals from the full eligible set **before** the eight-chat detail limit or ActivityKit byte-budget reduction. Do not display clipped row totals as global counts.
-- Maintain existing eligibility initially: running, needs-input, watching, and finished within the last two hours. Done is not an all-time completed-chat counter. Completed/archived or deleted sessions leave according to the existing card rules.
-- Preserve mutually exclusive statuses. Waiting for input takes precedence over running. Count a chat once; do not double-count a parent and its reported sub-agent progress as the same work.
-- Scope is the card's connected computer initially, not silently every paired computer. Name that scope. App-wide voice means all eligible agents on that computer, not permission to control unrelated computers.
-- Carry optional authoritative per-state totals in pushed state, with matching Rust, Swift and Kotlin builders and byte-budget tests. On old payloads without totals, show known counts with an explicit partial-count indicator; never guess the status of `more` chats.
-- Reconcile foreground and pushed totals, preserve local voice state during pushes, and retain counts through detail trimming.
+- Rust, Swift and Kotlin builders carry optional authoritative per-state totals computed before the eight-chat detail limit and payload-budget trimming. Relay privacy filtering and trimming retain totals.
+- Eligibility remains running, needs-input, watching and finished within the last two hours. Done is not an all-time counter. Completed/archived or deleted chats leave under existing rules. Waiting for input takes precedence over running; a chat contributes once to its status.
+- The scope is the card's computer, not silently every paired computer. App-wide voice does not authorize unrelated computers.
+- Old payloads without totals use known detail counts, explicitly partial when `more` is nonzero. Hidden statuses are never guessed.
+- Foreground/pushed state reconciliation retains counts and local voice state through detail trimming. Cache expiry and count-change refresh paths are implemented; native lifecycle validation remains pending for this redesign.
 
-## App-wide voice behavior
+## Implemented voice grammar and boundaries
 
-- The destination is **Nekko**, not `focusId`. Asking for status summarizes the same scoped dashboard. Requests to act on an agent resolve an explicit target; ambiguous names require clarification rather than selecting the first or most urgent chat.
-- Tapping voice is explicit consent to start a bounded listening session, after Face ID/passcode where required. Expose Listening, Processing, clarification/confirmation, success, and failure. Include Cancel/Stop listening. Do not restart the microphone after cancellation or a late transcription callback.
-- Plain speech must never silently become a prompt to the last focused chat. Unrecognized commands produce an honest response and an app handoff, not an unrelated side effect.
-- Tool approvals, destructive actions and other sensitive operations keep existing authorization and confirmation requirements. A global voice command is not blanket approval. Bind confirmations to the exact target and action; reject stale confirmations.
-- Show accurate delivery state: queued is not sent, sent is not completed, disconnected is not successful. No secret, credential or full transcript belongs in the Lock Screen payload by default.
-- On supported iOS versions, investigate the existing authenticated `AudioRecordingIntent` path for background capture. On versions that require foregrounding, label the fallback honestly; do not promise no-app control there.
-- Android must offer the same goals using supported notification/voice entry points. If its background microphone rules require foreground UI, document that limitation and track the parity gap instead of claiming equivalence.
+The initial command grammar and dispatcher replies are **English**, separate from composer dictation commands:
 
-## Implementation and verification still required
+| Command | Behavior |
+| --- | --- |
+| `status` | Summarizes the same scoped dashboard; offline/stale and partial data are labeled. Aliases include `agent status` and `what is happening`. |
+| `send to NAME saying MESSAGE` | Resolves a unique full chat name and stages a confirmation; sends nothing yet. A colon can replace `saying`. |
+| `confirm send to NAME saying MESSAGE` | Requires the same computer, target id/name and exact message within 60 seconds. |
+| `cancel` | Clears pending confirmation/current input, not previously queued or dispatched work. |
 
-- [ ] Whole-set counts across Rust push producer, relay filtering, Swift and Kotlin models; compatibility and payload-budget tests.
-- [ ] Native dashboard layout, accessibility, localization, Settings preview, compact/expanded Dynamic Island and Android notification adaptation.
-- [ ] App-wide voice dispatcher independent of a selected chat, explicit target resolution and confirmation state machine.
-- [ ] Tests for mixed statuses, 20+ done, zero counts, stale/offline state, expired finished tail and old payloads.
-- [ ] Tests for status queries, ambiguous targets, authentication failure, cancel/late results, denial, offline queueing and forbidden operations.
-- [ ] Matched native before/after evidence at the same device/runtime, theme and data. The HTML proposal is not native evidence.
-- [ ] Physical-iPhone verification of Face ID, recording from the Lock Screen while the app is backgrounded, cancellation, reconnect and push reconciliation. Simulator rendering does not prove these capabilities.
-- [ ] Android device verification of notification entry, microphone lifecycle and platform restrictions.
+Missing, ambiguous, changed or expired targets/confirmations are refused with an app handoff, not guessed. Plain speech never becomes a prompt to `focusId`. No free-form assistant, tool approvals, stop-work command, destructive operation or other general action executor is implemented. Existing in-app authorization still applies.
 
-## Existing implementation references
+- **iOS 18+:** `TalkToNekkoIntent` is an authenticated `LiveActivityIntent` conforming to `AudioRecordingIntent`. Authentication precedes bounded capture. Protected-data and computer-scope checks guard dispatch. Listening, Processing, Finish speaking, Cancel and generic result/failure states are implemented. Background Lock Screen recording is a source implementation, not a physical-device claim.
+- **iOS 17:** Open app for voice opens the chat list, without automatic listening or an app-wide voice sheet. No no-app voice promise applies.
+- **Android:** the notification opens a foreground sheet behind the app lock, then requires an explicit Listen tap. No background microphone. Capture and dispatch require the resumed, unlocked, uncovered app on the original computer; pause, cover, disposal or computer change cancels capture and invalidates late results. The existing Dictation engine is used; phone recognition may use its provider's network service, unlike iOS's on-device-only phone fallback.
+- **Delivery:** iOS distinguishes queued from confirmed delivery and explicitly says delivery is not completion. Android reports queued, not yet confirmed sent or completed. Cancel cannot recall outbox work already dispatched. No secret, credential, raw error or full captured transcript belongs in the Lock Screen payload; dispatcher guidance/results do not echo the full target/message.
 
-- `apps/ios/App/Shared/LiveCardView.swift`: two chat rows, remainder tally and small Detailed-level chat mic.
-- `apps/ios/App/Shared/AgentRunActivity.swift`: authenticated `TalkToChatIntent`.
-- `apps/ios/App/AppModel.swift`, `wireTalk`: captured words sent to a specific session through the outbox.
-- `apps/ios/Protocol/Sources/NekkoProtocol/LiveCard.swift`: eight-chat details and two-hour finished tail.
-- `crates/nekko-remote/src/card.rs`: pushed card producer.
-- `apps/android/app/src/main/java/com/nekko/android/connection/LiveCards.kt`: Android card state adaptation.
+## Levels and localization
+
+None disables the card. All enabled iOS levels draw counts and voice, with an inert Settings preview of the same view. Minimal removes chat text from pushed state. Standard/Detailed still permit their existing chat detail payloads through the relay and Apple's push service even though the dashboard does not draw those details. Choose Minimal for counts without chat text; a counts-only view is not a new transport privacy guarantee.
+
+Dashboard and Settings catalog labels have the existing seven-language coverage. Command parsing and dispatcher replies remain initially English; adding catalog entries does not localize dynamically returned English replies. Android notification action labels are localized, not the entire foreground voice sheet.
+
+## Verification still pending
+
+Source changes include producer/relay/protocol/dispatcher tests and native UI evidence fixtures. Their presence is not a passing native run.
+
+- [ ] Run focused producer/relay/model/dispatcher tests and native iOS/Android build, unit and UI suites on supported hosts.
+- [ ] Capture and inspect matched native before/after evidence at the same runtime, theme and data: zero/mixed totals, 20+ Done, stale/partial payloads, finished-tail expiry, Settings, compact/expanded Island and Android notification adaptation.
+- [ ] Validate accessibility, large text, hit areas and long translations on native surfaces.
+- [ ] Physical iPhone: auth refusal, Face ID then Lock Screen/background recording, cancellation/late results, reconnect, outbox results, push reconciliation and real APNs delivery. Simulator rendering cannot prove these capabilities.
+- [ ] Verify iOS 17 Open app fallback does not auto-listen; verify iOS 18+ recording-intent behavior on hardware.
+- [ ] Android device: notification entry, lock/permission refusal, explicit Listen, microphone lifecycle, background cancellation and recognition privacy.
+
+No native evidence is supplied yet. Foreground-only Android voice and the iOS 17 app handoff remain explicit limitations; see [parity gaps](ios-and-android-stay-in-step.md).
+
+## Implementation references
+
+- `apps/ios/App/Shared/LiveCardView.swift`: dashboard and fallback links.
+- `apps/ios/App/Views/LiveActivitySettingsView.swift`: preview and level privacy footers.
+- `apps/ios/App/Shared/AgentRunActivity.swift`: authenticated Talk to Nekko, Finish/Cancel intents.
+- `apps/ios/App/AppModel.swift`, `wireTalk`, and `apps/ios/Protocol/Sources/NekkoKit/NekkoVoice.swift`: capture, dispatcher and outbox delivery.
+- `apps/ios/Protocol/Sources/NekkoProtocol/LiveCard.swift` and Kotlin counterpart: totals and eligibility.
+- `crates/nekko-remote/src/card.rs`, `apps/relay-server/src/push.ts`: pushed totals, privacy and byte budget.
+- `apps/android/app/src/main/java/com/nekko/android/connection/StatusDashboard.kt`, `Notices.kt`, `ui/screens/NekkoVoiceSheet.kt`, `voice/NekkoVoice.kt`: notification and foreground voice adaptation.

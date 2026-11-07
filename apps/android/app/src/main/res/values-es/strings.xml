@@ -4,4 +4,7 @@
     <string name="widget_description">Cuántos chats te necesitan y cuántos están trabajando. Solo cifras, nunca lo que dicen.</string>
     <string name="shortcut_new_chat">Chat nuevo</string>
     <string name="shortcut_new_chat_long">Chat nuevo en tu computadora</string>
+    <string name="dashboard_talk">Hablar con Nekko</string>
+    <string name="dashboard_open">Abrir app</string>
+    <string name="dashboard_voice_fallback">La voz abre la app. Desbloquea y toca Escuchar.</string>
 </resources>

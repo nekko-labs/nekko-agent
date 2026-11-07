@@ -10,6 +10,14 @@ split-from: SPEC.md (2026-10-22)
 
 **Availability** `[limited beta, 2026-10-24]`: in a limited beta. Not yet published on Google Play.
 
+## Live status dashboard and voice (implemented, native-unverified)
+
+The current worktree implements the [three-goal dashboard](live-card-status-dashboard.md): scoped Building / Need input / Done totals, secondary Watching/Failed and partial/stale indicators, Talk to Nekko first and Open app second on the ongoing notification/Live Update. Android owns notification action styling. All enabled levels show content-free totals rather than focused-chat controls.
+
+Talk to Nekko opens a foreground sheet behind the app lock; entry never starts the microphone. Tap Listen explicitly after permissions/unlock. Capture/dispatch require the resumed, unlocked, uncovered app on the original computer; backgrounding or scope change cancels capture. It uses the existing Dictation engine; phone recognition may use its provider’s network service. Initial English grammar: `status`, `send to NAME saying MESSAGE`, `confirm send to NAME saying MESSAGE`, `cancel`. A send needs a unique full chat name and exact computer/target/message confirmation within 60 seconds. It reports queued, not confirmed sent or completed. Cancel does not recall queued work. No free-form assistant, approvals or stop-work command is implemented.
+
+**Parity gap:** Android requires foreground UI and explicit Listen, unlike the authenticated iOS 18+ background recording-intent path. iOS 17 offers Open app without automatic listening, not an app-wide voice sheet. No-app voice is not met on Android or iOS 17; see [gaps](ios-and-android-stay-in-step.md). Native builds/tests, notification/UI evidence and physical-device microphone/authentication/lifecycle checks for this redesign remain pending. This is not a shipped or hardware-verified claim.
+
 **Scope of this version `[implemented; JVM, integration and build checks verified; not yet run on an emulator or device]`:**
 
 - **Pairing:** scan the computer's pairing QR with the Google code scanner (runs inside Play services, so the app never asks for the camera permission), paste the link, or open a `nekko-agent-pair:` link from the system camera. The phone enrolls with the one-time code, which it forgets as soon as the computer welcomes it. Several computers can be paired; one is active at a time and, since 2026-11-05, every other one stays connected beside it (below); rename, switch and forget are on the Computers screen.

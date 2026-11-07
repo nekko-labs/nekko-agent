@@ -4,4 +4,7 @@
     <string name="widget_description">Combien de discussions ont besoin de vous et combien travaillent. Seulement des nombres, jamais ce qu’elles disent.</string>
     <string name="shortcut_new_chat">Nouvelle discussion</string>
     <string name="shortcut_new_chat_long">Nouvelle discussion sur votre ordinateur</string>
+    <string name="dashboard_talk">Parler à Nekko</string>
+    <string name="dashboard_open">Ouvrir l’application</string>
+    <string name="dashboard_voice_fallback">La commande vocale ouvre l’application. Déverrouillez, puis appuyez sur Écouter.</string>
 </resources>

@@ -32,6 +32,14 @@ Both native apps reach the computer the same way: relay v2 over a WebSocket, end
 | **Finding a computer on this Wi-Fi** | *On this network* on the Pair screen: the system NSD service (`NsdManager`), no permission or multicast lock, one resolve at a time (`NearbyBrowser.kt`) | *On this network* on the Pair screen: `NWBrowser`, which shows iOS's local network prompt on the first tap (`NearbyBrowser.swift`, `NSBonjourServices`) |
 | **While in the background** | A foreground service (type remoteMessaging) keeps the connection while a chat is running, with the setting on, for up to 30 minutes after the last event (`KeepAlive.kt`) | A healthy socket is kept 30 s after an app switch, inside the short background task, then closed and reopened on return. After that, Live Activity pushes and notifications. iOS doesn't allow a long-lived socket. |
 
+## Status dashboard and voice
+
+Implemented in the current worktree, not yet shipped or native/device-verified: the live card/ongoing notification shows Building, Need input and recent Done counts for its named computer, with Watching/Failed and stale/partial detail. Talk to Nekko is primary; Open app leads to the list for review and approvals.
+
+Voice initially accepts English `status`, `send to NAME saying MESSAGE`, `confirm send to NAME saying MESSAGE` and `cancel`. A send needs a unique full chat name and exact same computer/target/message confirmation within 60 seconds. Arbitrary speech never becomes a prompt to the focused chat. No free-form assistant, approvals or other action executor is supported; queued/sent does not mean completed.
+
+On iOS 18+, voice uses an authenticated background recording-intent path, still awaiting physical-iPhone proof. iOS 17 shows Open app for voice and opens the list without auto-listening. Android opens a foreground sheet behind the app lock and requires explicit Listen; no background microphone. Android phone recognition may use its provider’s network service. Native tests/evidence for this redesign remain pending. See [Voice](voice.md#from-the-status-dashboard) for grammar and privacy limits.
+
 ## Next steps
 
 - **Android: FCM push** (PH6), once the FCM service account is on the relay. The relay already sends FCM.

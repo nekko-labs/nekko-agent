@@ -80,9 +80,16 @@
       "finishedAt": 799999940
      }
     ],
-    "focusId": "n"
+    "focusId": "n",
+    "counts": {
+     "failed": 1,
+     "done": 2,
+     "watching": 1,
+     "working": 1,
+     "needsYou": 1
+    }
    },
-   "bytes": 699
+   "bytes": 768
   },
   {
    "name": "a finished chat stays two hours",
@@ -122,9 +129,12 @@
       "finishedAt": 799992800
      }
     ],
-    "focusId": "ok"
+    "focusId": "ok",
+    "counts": {
+     "done": 2
+    }
    },
-   "bytes": 260
+   "bytes": 280
   },
   {
    "name": "nothing to show",
@@ -236,9 +246,12 @@
      }
     ],
     "focusId": "c0",
-    "more": 2
+    "more": 2,
+    "counts": {
+     "working": 10
+    }
    },
-   "bytes": 680
+   "bytes": 704
   },
   {
    "name": "a pin holds focus",
@@ -273,9 +286,13 @@
       "state": "watching"
      }
     ],
-    "focusId": "c"
+    "focusId": "c",
+    "counts": {
+     "working": 2,
+     "watching": 1
+    }
    },
-   "bytes": 292
+   "bytes": 328
   },
   {
    "name": "a pin on a chat that is gone falls back to the first",
@@ -302,9 +319,12 @@
       "state": "working"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 2
+    }
    },
-   "bytes": 215
+   "bytes": 238
   },
   {
    "name": "focus jumps to a chat that newly needs you, over the pin; listening and heard carry over",
@@ -349,9 +369,13 @@
     ],
     "focusId": "b",
     "listening": true,
-    "heard": "run the"
+    "heard": "run the",
+    "counts": {
+     "working": 1,
+     "needsYou": 1
+    }
    },
-   "bytes": 222
+   "bytes": 258
   },
   {
    "name": "a chat that already needed you is not new: the pin wins",
@@ -391,9 +415,13 @@
       "state": "working"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1,
+     "needsYou": 1
+    }
    },
-   "bytes": 216
+   "bytes": 252
   },
   {
    "name": "a brand-new chat that needs you is new",
@@ -429,9 +457,13 @@
       "state": "working"
      }
     ],
-    "focusId": "z"
+    "focusId": "z",
+    "counts": {
+     "working": 1,
+     "needsYou": 1
+    }
    },
-   "bytes": 216
+   "bytes": 252
   },
   {
    "name": "no previous card: needs-you is not new, the pin wins",
@@ -458,9 +490,13 @@
       "state": "working"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1,
+     "needsYou": 1
+    }
    },
-   "bytes": 216
+   "bytes": 252
   },
   {
    "name": "duplicate ids in the previous card keep the first",
@@ -491,9 +527,12 @@
       "state": "needsYou"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "needsYou": 1
+    }
    },
-   "bytes": 140
+   "bytes": 164
   },
   {
    "name": "minimal blanks the short title, row title, step and reply",
@@ -517,9 +556,12 @@
       "closeWord": "Cool"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1
+    }
    },
-   "bytes": 143
+   "bytes": 166
   },
   {
    "name": "standard blanks the reply",
@@ -546,9 +588,12 @@
       "closeWord": "Cool"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1
+    }
    },
-   "bytes": 190
+   "bytes": 213
   },
   {
    "name": "detailed keeps the reply; the step is one line",
@@ -576,9 +621,12 @@
       "closeWord": "Cool"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1
+    }
    },
-   "bytes": 197
+   "bytes": 220
   },
   {
    "name": "the step is clipped to 60 characters",
@@ -600,9 +648,12 @@
       "reply": "Done."
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1
+    }
    },
-   "bytes": 206
+   "bytes": 229
   },
   {
    "name": "the step at exactly 60 characters is kept",
@@ -622,9 +673,12 @@
       "step": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1
+    }
    },
-   "bytes": 199
+   "bytes": 222
   },
   {
    "name": "the row title is clipped to 40 characters",
@@ -644,9 +698,12 @@
       "title": "ttttttttttttttttttttttttttttttttttttttt…"
      }
     ],
-    "focusId": "a"
+    "focusId": "a",
+    "counts": {
+     "working": 1
+    }
    },
-   "bytes": 192
+   "bytes": 215
   },
   {
    "name": "a big card blanks every reply first",
@@ -760,9 +817,12 @@
       "step": "sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss…"
      }
     ],
-    "focusId": "c0"
+    "focusId": "c0",
+    "counts": {
+     "working": 8
+    }
    },
-   "bytes": 1224
+   "bytes": 1247
   },
   {
    "name": "a huge card then moves the last chats into more, never the focused one",
@@ -842,9 +902,12 @@
      }
     ],
     "focusId": "c7",
-    "more": 4
+    "more": 4,
+    "counts": {
+     "working": 8
+    }
    },
-   "bytes": 3172
+   "bytes": 3195
   },
   {
    "name": "a slash counts as two bytes, as Swift's JSONEncoder writes it",
@@ -943,9 +1006,196 @@
       "state": "working"
      }
     ],
-    "focusId": "c0"
+    "focusId": "c0",
+    "counts": {
+     "working": 8
+    }
    },
-   "bytes": 1101
+   "bytes": 1124
+  },
+  {
+   "name": "totals include twenty done and every eligible state before eight-detail clipping",
+   "level": "detailed",
+   "chats": [
+    {
+     "id": "done-0",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-1",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-2",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-3",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-4",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-5",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-6",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-7",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-8",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-9",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-10",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-11",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-12",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-13",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-14",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-15",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-16",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-17",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-18",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "done-19",
+     "state": "done",
+     "finishedAt": 799992800
+    },
+    {
+     "id": "need",
+     "state": "needsYou"
+    },
+    {
+     "id": "work",
+     "state": "working"
+    },
+    {
+     "id": "watch",
+     "state": "watching"
+    },
+    {
+     "id": "fail",
+     "state": "failed",
+     "finishedAt": 800000000
+    },
+    {
+     "id": "expired-done",
+     "state": "done",
+     "finishedAt": 799992799
+    },
+    {
+     "id": "expired-fail",
+     "state": "failed",
+     "finishedAt": 799992799
+    }
+   ],
+   "card": {
+    "chats": [
+     {
+      "id": "need",
+      "state": "needsYou"
+     },
+     {
+      "id": "work",
+      "state": "working"
+     },
+     {
+      "id": "watch",
+      "state": "watching"
+     },
+     {
+      "id": "done-0",
+      "state": "done",
+      "finishedAt": 799992800
+     },
+     {
+      "id": "done-1",
+      "state": "done",
+      "finishedAt": 799992800
+     },
+     {
+      "id": "done-2",
+      "state": "done",
+      "finishedAt": 799992800
+     },
+     {
+      "id": "done-3",
+      "state": "done",
+      "finishedAt": 799992800
+     },
+     {
+      "id": "done-4",
+      "state": "done",
+      "finishedAt": 799992800
+     }
+    ],
+    "focusId": "need",
+    "more": 16,
+    "counts": {
+     "done": 20,
+     "needsYou": 1,
+     "working": 1,
+     "watching": 1,
+     "failed": 1
+    }
+   },
+   "bytes": 882
   }
  ],
  "decode": [
@@ -966,12 +1216,14 @@
    "startedAt": 799999000.5,
    "states": [
     "done"
-   ]
+   ],
+   "counts": null
   },
   {
    "name": "missing fields read as empty",
    "json": {},
-   "states": []
+   "states": [],
+   "counts": null
   },
   {
    "name": "a state from a newer computer reads as working",
@@ -990,7 +1242,43 @@
    "states": [
     "working",
     "done"
-   ]
+   ],
+   "counts": null
+  },
+  {
+   "name": "authoritative raw-state counts survive decoding",
+   "json": {
+    "chats": [],
+    "counts": {
+     "working": 3,
+     "done": 20,
+     "watching": 0,
+     "future": 2
+    }
+   },
+   "states": [],
+   "counts": {
+    "working": 3,
+    "done": 20,
+    "watching": 0,
+    "future": 2
+   }
+  },
+  {
+   "name": "legacy clipped details do not imply authoritative totals",
+   "json": {
+    "chats": [
+     {
+      "id": "legacy",
+      "state": "done"
+     }
+    ],
+    "more": 19
+   },
+   "states": [
+    "done"
+   ],
+   "counts": null
   }
  ],
  "shortTitle": [

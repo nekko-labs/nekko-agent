@@ -36,11 +36,10 @@ struct LiveActivitySettingsView: View {
     private var footer: LocalizedStringKey? {
         switch prefs.liveActivityLevel {
         case .none: return nil
-        case .minimal: return "No chat text leaves your computer for the Lock Screen."
-        case .standard:
-            return "Chat titles and status are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service."
-        case .detailed:
-            return "Chat titles, status and each chat’s latest reply line are shown when your phone is unlocked. While the app is closed they reach your phone through the relay and Apple’s push service. The mic on the card asks for Face ID, then sends what you say to the chat it shows."
+        case .minimal:
+            return "See agent counts without chat text. Talk to Nekko asks you to unlock first. Say status, or send to a named chat and confirm the exact message. iOS 17 opens the app for voice."
+        case .standard, .detailed:
+            return "The dashboard shows counts, not chat messages. This level still allows chat details through the relay and Apple’s push service. Choose Minimal for counts only. Talk to Nekko asks you to unlock first; iOS 17 opens the app for voice."
         }
     }
 }
@@ -67,7 +66,7 @@ private struct LockScreenPreview: View {
                 .foregroundStyle(.white.opacity(0.9))
                 .accessibilityHidden(true)
             if level != .none {
-                LiveCardView(state: .sample, level: level, interactive: false)
+                LiveCardView(state: .sample, level: level, interactive: false, computerName: "Mac")
                     .padding(14)
                     .background(LiveCardView.background.opacity(0.92), in: RoundedRectangle(cornerRadius: 22))
                     .transition(.opacity)
@@ -98,5 +97,6 @@ extension LiveCardState {
                  closeWord: "Perfect", finishedAt: nil, callId: nil, severity: nil),
         LiveChat(id: "docs", short: "Docs", state: .done, step: "Finished", reply: "Docs page added.",
                  closeWord: "Looks good", finishedAt: Date(), callId: nil, severity: nil),
-    ], focusId: "billing", more: 0, listening: false, heard: "")
+    ], focusId: "billing", more: 0, listening: false, heard: "",
+       counts: ["needsYou": 1, "working": 1, "watching": 1, "done": 1])
 }

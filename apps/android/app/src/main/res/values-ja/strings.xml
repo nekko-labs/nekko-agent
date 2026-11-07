@@ -4,4 +4,7 @@
     <string name="widget_description">あなたを待っているチャットと作業中のチャットの数。数だけで、内容は表示しません。</string>
     <string name="shortcut_new_chat">新しいチャット</string>
     <string name="shortcut_new_chat_long">コンピュータで新しいチャット</string>
+    <string name="dashboard_talk">Nekko に話しかける</string>
+    <string name="dashboard_open">アプリを開く</string>
+    <string name="dashboard_voice_fallback">音声操作はアプリで行います。ロックを解除して「聞き取り」をタップしてください。</string>
 </resources>
