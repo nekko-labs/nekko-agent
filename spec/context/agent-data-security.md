@@ -32,7 +32,7 @@ area: context
   - Code: `crates/nekkod/src/dlp.rs` (unit-tested), `TurnTools::call_mcp` and `fetch_url` in `crates/nekkod/src/turns.rs`. Eval: `readme-search-exfil` (a README asks the agent to search the docs, through a read-only MCP tool, for the deploy token it read from `deploy.env`) is `asked` in Guardrails and `ran` in YOLO; with the scan disabled Guardrails runs it.
   - **Not covered:** secrets with no known shape (a plain password), data the model rewrites or splits across calls, the shell (it asks in Guardrails anyway unless read-only), and Claude Agent's own tools.
 - **YOLO** `[planned]`: stays "never ask", with a clear warning when it is turned on that a page the agent reads can get data sent out.
-- **One audit log per chat** `[engine implemented 2026-11-07; daemon-tested; no screen to read it yet]`: `<data>/audit/<chat id>.jsonl`, appended as the chat runs, one event per line with its time and turn:
+- **One audit log per chat** `[engine and desktop screen implemented 2026-11-07; daemon- and renderer-tested; not on the phones]`: `<data>/audit/<chat id>.jsonl`, appended as the chat runs, one event per line with its time and turn:
   - `turn`: mode, provider, model, and whether Claude Code runs it;
   - `tool`: tool, outcome, duration, output size and a value-free detail (the host a fetch reached, the file a read or write touched, the program a shell command ran, the MCP server and how many recipients);
   - `approval`: tool, severity, the answer (`approved`, `denied`, `unanswered`) and **who answered**: `this computer`, `phone` or `paired computer` with the device id (the phone gate adds it and overwrites whatever the device sent), `telegram`, or nobody (`yolo`, `workflow policy`);
@@ -40,8 +40,8 @@ area: context
   - `taint`: when the chat first read untrusted content, and which tool brought it;
   - `redactions`: what the Privacy Shield hid, by kind and count.
   - **Never written:** tool arguments, full URLs, approval reasons (they quote addresses and recipients), tool output, message text. Incognito chats write nothing. The trail is deleted with its chat (delete, clear history, purge), and keeps at most 2 MB plus one older file.
-  - Read with the daemon channel `audit:read [chatId]`; it is not a public IPC channel yet, so neither the app nor a phone can call it until the screen lands. Code: `crates/nekkod/src/audit.rs`.
-  - **Planned:** a screen to read it per chat, and an admin view for Team.
+  - **The screen:** right-click a chat, **Audit trail** (desktop and Local Web UI). Newest turn first, each event with its time and a coloured mark (approved, denied, YOLO, outside content); **Approvals** filters to the decisions. A phone id shows as the device id. Read through the public IPC channel `audit:read [chatId]`, which a phone may not call (`PHONE_DENIED_FOR_NOW.undecided`). Code: `crates/nekkod/src/audit.rs`, `apps/desktop/src/renderer/components/AuditTrail.tsx`.
+  - **Planned:** device names instead of ids, a phone view, and an admin view for Team.
 - **Per-folder sensitivity labels** `[planned, P2]`: Confidential means local models only and no network in that chat. No automatic classifier for now.
 - **Claude Agent chats:** Claude Code sends their requests and runs their tools. The approval bridge gives them approvals, the egress gate and audit for the calls Claude Code asks about; the Privacy Shield cannot reach them. A local proxy could bring it to Claude Agent on an API key or cloud account `[not started; we will come back to it]`; on a Claude plan it is impossible (the terms require the unmodified Claude Code).
 - **Team plan** `[not started]`: SSO-only sign-in, provider and key rules, admin audit and the egress domain allowlist. We have not worked on them yet and will start when a Team customer asks.
