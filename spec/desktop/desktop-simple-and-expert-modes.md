@@ -17,6 +17,10 @@ area: desktop
 
 Desktop and native UI labels now use **Simple** and **Detailed**, including tooltips, command palette actions, Settings choices (**Detailed only**) and previews. This is a display-label change only: stored `expert` mode and catalogue values, persistence keys, defaults and visibility rules remain unchanged. Existing preferences need no migration. Filenames and links retain their existing paths. Renderer/shared focused tests, desktop accessibility/settings assertions, native resource/catalog checks and Android app/test compilation pass. Matched native CI capture completed (iOS evidence tests pass; Android has matched baseline failures tracked in #1707); visual inspection is pending. Earlier verification above does not verify this label refresh.
 
+## Composer folders and permissions (#2094, 2026-11-07)
+
+Implemented: Simple's normal and wall-window composers show the selected primary and supporting folder names immediately after **+**. The folder button truncates to available space, keeps all selected paths in its tooltip, and retains the existing folder selection/access behavior. An icon-only permissions button follows a hairline divider, with **Permissions: <current choice>** as its accessible name and the current policy/hint in its tooltip. Its menu, sandbox restrictions, confirmation, and explicit Hide preference are unchanged. The duplicate permission/folder controls are not repeated in Simple's lower details row. Detailed keeps its existing placement and labels. Verified with renderer tests and hidden Electron geometry/interaction checks at desktop and narrow widths; no OS permission-dialog behavior is changed or claimed tested.
+
 ## Behaviour
 
 - **The switch.** Two icon segments in the title bar, beside the page name: a chat bubble (*Simple: everyday controls*) and angle brackets (*Detailed: every control*). Where there is no title bar (the browser builds) it sits at the top left of every chat. Kept on this computer (`localStorage`, `nekko.chatMode`), shared by every window, Simple for a new install. No keyboard shortcut: Ctrl+Shift+E already completes a chat.
