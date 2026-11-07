@@ -45,6 +45,8 @@ private final class TurnDetailsFixtureConnection: RemoteConnection, @unchecked S
     func registerPush(token: String) async throws {}
     func registerCard(token: String?, startToken: String?, level: LiveLevel, computerId: String, computerName: String) async throws {}
     func call(_ channel: String, _ args: [JSONValue], timeout: TimeInterval?) async throws -> JSONValue {
+        // The chat's audit trail (More → Audit trail): one approval from a named phone, one from a device no longer paired.
+        if channel == Channels.auditRead { return Self.auditTrail }
         guard channel == Channels.sessionGet else { return .null }
         let flags = ProcessInfo.processInfo.arguments
         var stats: [String: JSONValue] = [
@@ -68,5 +70,25 @@ private final class TurnDetailsFixtureConnection: RemoteConnection, @unchecked S
         return ["id": "turn-details-fixture", "title": "Reply details", "providerId": "selected-provider", "modelId": "selected-model",
                 "effort": "low", "updatedAt": 1793800000000, "messages": .array(messages)]
     }
+
+    private static let auditTrail: JSONValue = {
+        let t0: Int64 = 1_793_800_000_000
+        let e: [JSONValue] = [
+            ["at": .int(t0), "turnId": "t1", "type": "turn", "mode": "guardrails", "model": "used-model"],
+            ["at": .int(t0 + 2000), "turnId": "t1", "type": "tool", "tool": "read_file", "ms": 4, "detail": ["path": "~/code/shop/app.ts"]],
+            ["at": .int(t0 + 5000), "turnId": "t1", "type": "tool", "tool": "fetch_url", "ms": 412, "detail": ["host": "wiki.example.com"]],
+            ["at": .int(t0 + 5100), "turnId": "t1", "type": "taint", "by": "fetch_url"],
+            ["at": .int(t0 + 9000), "turnId": "t1", "type": "approval", "tool": "mcp__slack__post_message", "severity": "high", "answer": "approved",
+             "by": ["via": "phone", "device": "dev_7f3a91", "deviceName": "Test iPhone"]],
+            ["at": .int(t0 + 9800), "turnId": "t1", "type": "tool", "tool": "mcp__slack__post_message", "ms": 640, "detail": ["server": "slack", "recipients": 1]],
+            ["at": .int(t0 + 10500), "turnId": "t1", "type": "approval", "tool": "fetch_url", "severity": "high", "answer": "denied",
+             "by": ["via": "paired computer", "device": "dev_c04e12"]],
+            ["at": .int(t0 + 12000), "turnId": "t1", "type": "redactions", "counts": ["PII_EMAIL": 2]],
+            ["at": .int(t0 + 60000), "turnId": "t2", "type": "turn", "mode": "yolo", "model": "used-model"],
+            ["at": .int(t0 + 61000), "turnId": "t2", "type": "approval", "tool": "bash", "severity": "medium", "answer": "approved", "by": ["via": "yolo"]],
+            ["at": .int(t0 + 63000), "turnId": "t2", "type": "tool", "tool": "bash", "ms": 2310, "detail": ["program": "npm"]],
+        ]
+        return .array(e)
+    }()
 }
 #endif

@@ -116,26 +116,47 @@ final class LiveCardTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(LiveCardState.self, from: JSONEncoder().encode(card)).chats[0].title, "Fix login")
     }
 
-    func testRowsAreTheTopTwoWithTheFocusSwappedIn() throws {
-        let chats = [chat("n", .needsYou), chat("r1", .working), chat("r2", .working), chat("d", .done, finished: 60)]
-        let card = try XCTUnwrap(build(chats))
-        XCTAssertEqual(cardRows(card).map(\.id), ["n", "r1"], "what needs you is on top")
-        // A chat focused further down takes the second row, so the buttons answer a row you can see.
-        XCTAssertEqual(cardRows(try XCTUnwrap(build(chats, pinned: "d"))).map(\.id), ["n", "d"])
-        XCTAssertEqual(cardRows(try XCTUnwrap(build([chat("only", .working)]))).map(\.id), ["only"])
-    }
-
-    func testTallyCountsTheOtherChatsByState() throws {
+    func testChipsAreTheFirstFiveWithTheFocusSwappedIn() throws {
         let chats = [chat("n", .needsYou), chat("r1", .working), chat("r2", .working), chat("r3", .working),
                      chat("w", .watching), chat("d1", .done, finished: 60), chat("d2", .done, finished: 90)]
-        let tally = cardTally(try XCTUnwrap(build(chats)))
-        XCTAssertEqual(tally.states, [.init(state: .working, count: 2), .init(state: .watching, count: 1), .init(state: .done, count: 2)])
-        XCTAssertEqual(tally.more, 0)
-        // Past the eight, the card cannot say what state they are in: they are only counted.
-        let many = cardTally(try XCTUnwrap(build((0..<11).map { chat("c\($0)", .working) })))
-        XCTAssertEqual(many.states, [.init(state: .working, count: 6)])
-        XCTAssertEqual(many.more, 3)
-        XCTAssertTrue(cardTally(try XCTUnwrap(build([chat("a", .working), chat("b", .done, finished: 1)]))).isEmpty)
+        let card = try XCTUnwrap(build(chats))
+        let all = cardChips(card)
+        XCTAssertEqual(all.chips.map(\.id), ["n", "r1", "r2", "r3", "w"], "what needs you comes first")
+        XCTAssertEqual(all.more, 2)
+        // A chat focused further down takes the last chip, so the detail line and the mic belong to a chip you can see.
+        XCTAssertEqual(cardChips(try XCTUnwrap(build(chats, pinned: "d2"))).chips.map(\.id), ["n", "r1", "r2", "r3", "d2"])
+        let one = cardChips(try XCTUnwrap(build([chat("only", .working)])))
+        XCTAssertEqual(one.chips.map(\.id), ["only"])
+        XCTAssertEqual(one.more, 0)
+        // Past the eight the state carries, the rest are counted in the same "+N".
+        let many = cardChips(try XCTUnwrap(build((0..<11).map { chat("c\($0)", .working) })))
+        XCTAssertEqual(many.chips.count, 5)
+        XCTAssertEqual(many.more, 6)
+        // Fewer chips when five do not fit: the focus still has one, the rest join "+N".
+        let two = cardChips(try XCTUnwrap(build(chats, pinned: "d2")), limit: 2)
+        XCTAssertEqual(two.chips.map(\.id), ["n", "d2"])
+        XCTAssertEqual(two.more, 5)
+        XCTAssertEqual(cardChips(card, limit: 0).chips.map(\.id), ["n"], "never no chip")
+        XCTAssertEqual(cardChips(card, limit: 9).chips.count, 5, "never more than five")
+    }
+
+    /// One card: the app's own stays and every other ends; with none of its own,
+    /// the last listed is kept (and carried on with); duplicates in the list are one card.
+    func testConsolidateKeepsOneCard() {
+        XCTAssertEqual(consolidateCards(live: [], current: nil).keep, nil)
+        XCTAssertEqual(consolidateCards(live: [], current: "gone").end, [])
+        let mine = consolidateCards(live: ["old", "mine", "pushed"], current: "mine")
+        XCTAssertEqual(mine.keep, "mine")
+        XCTAssertEqual(mine.end, ["old", "pushed"])
+        let none = consolidateCards(live: ["old", "pushed"], current: nil)
+        XCTAssertEqual(none.keep, "pushed", "the last listed")
+        XCTAssertEqual(none.end, ["old"])
+        let unlisted = consolidateCards(live: ["old", "pushed"], current: "mine")
+        XCTAssertEqual(unlisted.keep, "mine", "the app's own card stays before iOS lists it")
+        XCTAssertEqual(unlisted.end, ["old", "pushed"])
+        let twice = consolidateCards(live: ["a", "a", "b"], current: "a")
+        XCTAssertEqual(twice.keep, "a")
+        XCTAssertEqual(twice.end, ["b"])
     }
 
     func testShortTitle() {

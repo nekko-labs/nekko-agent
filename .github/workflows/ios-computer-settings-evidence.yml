@@ -1,0 +1,137 @@
+name: iPhone computer settings evidence
+# Evidence only. The required Native iOS full suite retains its existing cadence.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/ios-computer-settings-evidence.yml'
+  workflow_call:
+    inputs:
+      baseline_ref:
+        required: true
+        type: string
+      head_ref:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      baseline_ref:
+        description: Full baseline commit SHA
+        required: true
+        type: string
+      head_ref:
+        description: Full commit SHA containing the implementation and harness
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  iphone:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    steps:
+      - name: Check out application revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.revision == 'before' && (inputs.baseline_ref || github.event.pull_request.base.sha) || (inputs.head_ref || github.event.pull_request.head.sha) }}
+          persist-credentials: false
+      - name: Check out the head harness explicitly
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ (inputs.head_ref || github.event.pull_request.head.sha) }}
+          path: .evidence-harness
+          persist-credentials: false
+          sparse-checkout: |
+            apps/ios/App/Views/ComputerSettingsEvidenceFixture.swift
+            apps/ios/UITests/ComputerSettingsEvidenceUITests.swift
+          sparse-checkout-cone-mode: false
+      - name: Overlay compatible harness and record revisions
+        env:
+          BASELINE: ${{ (inputs.baseline_ref || github.event.pull_request.base.sha) }}
+          HEAD_REF: ${{ (inputs.head_ref || github.event.pull_request.head.sha) }}
+          REVISION: ${{ matrix.revision }}
+        run: |
+          set -euo pipefail
+          [[ "$BASELINE" =~ ^[0-9a-f]{40}$ && "$HEAD_REF" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git -C .evidence-harness rev-parse HEAD)" = "$HEAD_REF"
+          if [ "$REVISION" = before ]; then expected="$BASELINE"; else expected="$HEAD_REF"; fi
+          test "$(git rev-parse HEAD)" = "$expected"
+          mkdir -p apps/ios/evidence
+          {
+            echo "app=$(git rev-parse HEAD)"
+            echo "harness=$(git -C .evidence-harness rev-parse HEAD)"
+            xcodebuild -version
+          } > apps/ios/evidence/revisions.txt
+          cp .evidence-harness/apps/ios/App/Views/ComputerSettingsEvidenceFixture.swift apps/ios/App/Views/
+          cp .evidence-harness/apps/ios/UITests/ComputerSettingsEvidenceUITests.swift apps/ios/UITests/
+          if [ "$REVISION" = before ]; then
+            # Insert just the launch route, not the head's app or protocol sources.
+            ruby -e '
+              p = "apps/ios/App/NekkoApp.swift"
+              s = File.read(p)
+              a = "let flags = [\"-uiTestChatRefresh\","
+              b = "if ProcessInfo.processInfo.arguments.contains(\"-uiTestVoiceConversation\") { VoiceConversationFixture() } else"
+              abort "Baseline routing changed" unless s.scan(a).length == 1 && s.scan(b).length == 1
+              s = s.sub(a, "let flags = [\"-uiTestComputerSettingsEvidence\", \"-uiTestChatRefresh\",")
+              s = s.sub(b, "if ProcessInfo.processInfo.arguments.contains(\"-uiTestComputerSettingsEvidence\") { ComputerSettingsEvidenceFixture() } else\n        " + b)
+              File.write(p, s)
+            '
+          fi
+      - run: brew install xcodegen
+      - name: Create isolated matched simulator and build
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          RUNTIME=com.apple.CoreSimulator.SimRuntime.iOS-27-0
+          TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro
+          xcrun simctl list runtimes -j | ruby -rjson -e 'abort "Required iOS 27.0 runtime unavailable" unless JSON.parse(STDIN.read)["runtimes"].any? { |r| r["isAvailable"] && r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-27-0" }'
+          DEVICE=$(xcrun simctl create Nekko-Computer-Settings-Evidence "$TYPE" "$RUNTIME")
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "device=$TYPE runtime=$RUNTIME theme=computer language=en" >> evidence/revisions.txt
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO build-for-testing
+      - name: Capture interaction and targeted tests
+        working-directory: apps/ios
+        env:
+          TEST_RUNNER_NEKKO_COMPUTER_BASELINE: ${{ matrix.revision == 'before' && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl ui "$DEVICE" appearance light
+          xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
+          xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/computer-interaction.mp4 &
+          VIDEO=$!
+          trap 'kill -INT "$VIDEO" 2>/dev/null || true; wait "$VIDEO" || true' EXIT
+          xcodebuild -project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug \
+            -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" \
+            -parallel-testing-enabled NO -resultBundlePath evidence/computer.xcresult test-without-building \
+            -only-testing:NekkoNativeUITests/ComputerSettingsEvidenceUITests
+      - name: Export attachments and remove owned simulator
+        if: always()
+        working-directory: apps/ios
+        run: |
+          set -euo pipefail
+          if [ -n "${DEVICE:-}" ]; then
+            xcrun simctl shutdown "$DEVICE" || true
+            xcrun simctl delete "$DEVICE" || true
+          fi
+          if [ -d evidence/computer.xcresult ]; then
+            xcrun xcresulttool export attachments --path evidence/computer.xcresult --output-path evidence/shots
+          fi
+          test -n "$(find evidence/shots -name '*.png' -print -quit)"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: iphone-computer-settings-${{ matrix.revision }}
+          path: apps/ios/evidence/**
+          if-no-files-found: error

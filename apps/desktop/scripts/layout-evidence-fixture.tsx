@@ -110,6 +110,20 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
       applyEvent({ type: 'done', sessionId: 'a', messageId: 'answer' });
       emitAgent({ type: 'done', sessionId: 'a', messageId: 'answer' });
     } };
+  }, showVisibility: async () => {
+    // #1666: a long answer under a plan, with a thought and a tool step before it.
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    const record = records[0] as any;
+    record.messages = [
+      { id: 'prompt', role: 'user', content: 'Review the changes and verify the interface.', createdAt: now - 5000 },
+      { id: 'work', role: 'assistant', content: '', reasoning: 'Check the project guidance before editing.', toolCalls: [{ id: 'read', name: 'read_file', input: { path: 'README.md' } }], createdAt: now - 4000 },
+      { id: 'result', role: 'tool', content: 'Project guidance', toolResult: { toolCallId: 'read', output: 'Project guidance' }, createdAt: now - 3000 },
+      { id: 'answer', role: 'assistant', content: Array.from({ length: 30 }, (_, i) => `### Review section ${i + 1}\n\nEach section of the review is long enough to fill the pane, so the transcript has to scroll behind the floating plan and the cat to reach its last row.`).join('\n\n'), createdAt: now - 2000 },
+    ];
+    record.agentPlan = ['Inspect the interface', 'Make the changes', 'Verify scrolling', 'Publish the result'].map((title, i) => ({ id: String(i), title, kind: ['build', 'build', 'verify', 'ship'][i], status: i < 2 ? 'done' : i === 2 ? 'active' : 'pending', createdAt: now, updatedAt: now }));
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], sessions: records.map(summarizeSession), settings, activeSessionId: 'a', running: new Set() } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { key: 'visibility', sessionId: 'a' })));
   }, showGreeting: async () => {
 
     const { ChatPane } = await import('../src/renderer/components/ChatPane');

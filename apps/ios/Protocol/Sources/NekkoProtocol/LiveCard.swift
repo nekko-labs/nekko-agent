@@ -29,11 +29,11 @@ public enum LiveChatState: String, Codable, Sendable {
 
 public struct LiveChat: Codable, Hashable, Sendable {
     public var id: String
-    /// About 8 characters, for the chip (see `shortTitle`).
+    /// About 8 characters, for "Send to" while listening (see `shortTitle`).
     public var short: String
-    /// The chat's title for its row on the card, at most 40 characters (see
+    /// The chat's title for its chip on the card, at most 40 characters (see
     /// `LiveCardRules.titleLength`). Empty at Minimal and from a computer that
-    /// predates the rows: the row falls back to `short`, then to the phase line.
+    /// predates titles: the chip falls back to `short`.
     public var title: String
     public var state: LiveChatState
     public var step: String
@@ -145,10 +145,13 @@ public enum LiveCardRules {
     public static let finishedTail: TimeInterval = 2 * 3600
     /// The encoded state's budget, under ActivityKit's 4 KB.
     public static let maxBytes = 3500
-    /// A row's title, in characters.
+    /// A chip's title, in characters (the chip cuts it shorter to fit).
     public static let titleLength = 40
-    /// Chats the card draws as rows; the rest are counted by state below them.
-    public static let rows = 2
+    /// Chats the card draws as chips at most (fewer when they take more than
+    /// `chipLines`); the rest are one "+N" chip.
+    public static let chips = 5
+    /// Lines of chips, so the card stays under the Lock Screen's 160 pt.
+    public static let chipLines = 2
 }
 
 /// Builds the card from every chat, or nil when there is nothing to show
@@ -193,47 +196,33 @@ public func buildCard(chats: [LiveChat], previous: LiveCardState?, pinnedFocus: 
     return card
 }
 
-/// The chats the card draws as rows: the first two (what needs you sorts
-/// first), with the focused chat swapped into the second row when it sits
-/// further down, so the buttons always answer a chat you can see.
-public func cardRows(_ card: LiveCardState) -> [LiveChat] {
-    var rows = Array(card.chats.prefix(LiveCardRules.rows))
-    if let focus = card.focusId, !rows.contains(where: { $0.id == focus }),
+/// The chats the card draws as chips, and how many more there are (one "+N"
+/// chip). The first `limit` (five, fewer when they do not fit the card) in the
+/// card's order (what needs you first), with the focused chat swapped into the
+/// last chip when it sits further down, so the detail line and the mic always
+/// belong to a chip you can see. `more` counts the chats left off plus the ones
+/// past the eight the state carries.
+public func cardChips(_ card: LiveCardState, limit: Int = LiveCardRules.chips) -> (chips: [LiveChat], more: Int) {
+    var chips = Array(card.chats.prefix(max(1, min(limit, LiveCardRules.chips))))
+    if let focus = card.focusId, !chips.isEmpty, !chips.contains(where: { $0.id == focus }),
        let chat = card.chats.first(where: { $0.id == focus }) {
-        rows[rows.count - 1] = chat
+        chips[chips.count - 1] = chat
     }
-    return rows
+    return (chips, card.chats.count - chips.count + card.more)
 }
 
-/// The count line under the rows: the chats that are not rows, by state in the
-/// card's order ("3 working, 5 done"), and the chats past the eight the state
-/// carries, whose state the card does not know (`more`).
-public func cardTally(_ card: LiveCardState) -> CardTally {
-    let shown = Set(cardRows(card).map(\.id))
-    var counts: [LiveChatState: Int] = [:]
-    for chat in card.chats where !shown.contains(chat.id) { counts[chat.state, default: 0] += 1 }
-    let states = counts.sorted { $0.key.rank < $1.key.rank }.map { CardTally.Count(state: $0.key, count: $0.value) }
-    return CardTally(states: states, more: card.more)
-}
-
-public struct CardTally: Equatable, Sendable {
-    public struct Count: Hashable, Sendable {
-        public var state: LiveChatState
-        public var count: Int
-        public init(state: LiveChatState, count: Int) {
-            self.state = state
-            self.count = count
-        }
-    }
-
-    public var states: [Count]
-    public var more: Int
-    public var isEmpty: Bool { states.isEmpty && more == 0 }
-
-    public init(states: [Count], more: Int) {
-        self.states = states
-        self.more = more
-    }
+/// One card, never two: which of the Live Activity cards iOS has up to keep and
+/// which to end. Several can be up at once: a card the relay started
+/// (push-to-start) while the app was suspended beside the app's own, one a
+/// computer that is no longer the active one started, or one an earlier launch
+/// left up. The app's own card (`current`, nil once it ended or was swiped away)
+/// stays, even before iOS lists it; with none, the last of `live` as iOS lists
+/// them, which the app then carries on with.
+public func consolidateCards(live: [String], current: String?) -> (keep: String?, end: [String]) {
+    var seen = Set<String>()
+    let ids = live.filter { seen.insert($0).inserted }
+    let keep = current ?? ids.last
+    return (keep, ids.filter { $0 != keep })
 }
 
 /// The first word, plus the second when both fit in 8 characters; a longer

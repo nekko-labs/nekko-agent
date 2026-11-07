@@ -19,6 +19,8 @@ area: phone
 - An empty tab stays selectable and says so: *No local model servers on this computer.* or *No cloud providers on this computer.* On this iPhone every provider is a cloud API (local servers need a computer), so its Local tab says *Local models run on a computer. Start the chat on a computer to use them.*
 - Accessibility: the control is labelled *Model source* (identifier `modelPicker.scope`); the empty-tab line is `modelPicker.emptyScope`. New strings are in `Localizable.xcstrings` in the app's seven languages.
 
+**Computer details (#2053, in progress):** The Models section starts collapsed and shows a count. Expanding it offers **All**, **Cloud** and **Local** filters, using the computer's provider kinds; an empty group says so. This is separate from choosing a model in the picker. The iOS source is implemented, but native build and visual verification for this change are in progress. Android parity is tracked under [parent #2053](https://github.com/nekko-labs/nekko-agent/issues/2053) until a separate issue exists.
+
 **Acceptance:** with a computer that has a cloud provider and a local one, Cloud shows only the cloud provider's section and its stars, Local only the local one's, All both; picking a model in any tab picks it as before.
 
 **Privacy and security:** none new. The filter reads the provider kinds the phone already receives (`providers:list`); nothing is sent or stored.

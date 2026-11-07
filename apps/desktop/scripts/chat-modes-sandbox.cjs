@@ -144,16 +144,18 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 30 && !(await has('[data-expert-monitor]')); i++) await sleep(200);
     check('Simple: the hardware strip shows while a local model is loaded', await has('[data-expert-monitor]'));
     check('Simple: a nearly full chat says what starting fresh saves', /Starting fresh saves about 162k tokens/.test(await text('[data-chat-long]')));
-    check('Simple: the turn\'s steps fold to one line', /Took 2 steps/.test(await text('[data-simple-steps]')));
+    // Simple keeps Detailed's purpose summary and caret for a turn's steps (#1666).
+    const stepCaret = `[...document.querySelectorAll('[data-session-id="alpha"] [data-transcript-scroll] button[aria-expanded]')].find(b => /^[▸▾]/.test(b.textContent.trim()))`;
+    check('Simple: a turn\'s steps keep the purpose summary and caret', !(await has('[data-simple-steps]')) && (await run(`!!(${stepCaret})`)));
     await capture('1-simple');
-    await run(`[...document.querySelectorAll('[data-simple-steps] button')].find(b => b.textContent === 'Show steps')?.click()`); await sleep(300);
-    check('Show steps opens that turn\'s steps', (await run(`document.querySelector('[data-simple-steps] button').getAttribute('aria-expanded')`)) === 'true');
+    await run(`${stepCaret}?.click()`); await sleep(300);
+    check('the caret opens that turn\'s steps', (await run(`${stepCaret}?.getAttribute('aria-expanded')`)) === 'true');
     await capture('1b-simple-steps-shown');
-    await run(`document.querySelector('[data-simple-steps] button').click()`); await sleep(200);
+    await run(`${stepCaret}?.click()`); await sleep(200);
     await click('[data-chat-mode] button[aria-label^="Expert"]');
     for (let i = 0; i < 20 && !(await has('[data-dial="GPU"]')); i++) await sleep(200);
     check('Expert: no getting-long note', !(await has('[data-chat-long]')));
-    check('Expert: steps are not folded to one line', !(await has('[data-simple-steps]')));
+    check('Expert: the same caret disclosure', !(await has('[data-simple-steps]')) && (await run(`!!(${stepCaret})`)));
     check('Expert: effort, context, Mode, tools and the strip are shown', (await has('[data-effort-index]')) && (await has('.context-bar')) && (await has('[data-chat-mode-button]')) && (await has('[data-expert-monitor]')));
     await sleep(800);
     await capture('3-expert');

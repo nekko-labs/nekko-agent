@@ -2838,8 +2838,18 @@
 .composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock { width: auto; margin-left: max(8%, 92px); margin-right: 8%; }
 /* The note sits right above the box, where the cat peeks: it starts clear of him. */
 .composer-column:has(> .composer > .chat-mascot) .chat-long-note { margin-left: 92px; }
+/* In a chat pane the plan floats over the transcript's foot instead of taking
+   a row of its own, so the conversation scrolls on behind it and the cat.
+   It still rises out from under the composer: the clip stops at the
+   composer's top edge (the dock's last 10px are tucked under it) rather than
+   painting over the box. ChatPane sets --chat-plan-clearance from the plan's
+   height so the last row can scroll clear of it. */
+[data-chat-surface="full"] .composer-column { position: relative; }
+[data-chat-surface="full"] .composer-column > .plan-sheet-dock { position: absolute; bottom: 100%; left: 0; right: 0; z-index: 1; clip-path: inset(-2px -14px 10px -14px); }
+[data-chat-surface="full"] [data-transcript-scroll] { padding-bottom: max(1.25rem, var(--chat-plan-clearance, 0px)); }
+[data-chat-surface="full"] [data-scroll-latest] { bottom: max(0.75rem, var(--chat-plan-clearance, 0px)); }
 /* The transcript's last row stops above his ears. */
-[data-session-id]:has(.composer > .chat-mascot) [data-transcript-scroll] { padding-bottom: 68px; }
+[data-session-id]:has(.composer > .chat-mascot) [data-transcript-scroll] { padding-bottom: max(68px, var(--chat-plan-clearance, 0px)); }
 .plan-sheet-dock::before, .plan-sheet-dock::after { content: ''; position: absolute; bottom: 10px; width: 12px; height: 12px; pointer-events: none; }
 .plan-sheet-dock::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
@@ -3546,6 +3556,16 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-send { margin-right: 4px; color: var(--accent); }
 .wall-send:disabled { color: var(--ink-faint); }
 .composer-action { background: transparent; border: 0; box-shadow: none; }
+/* Listening grows out of the microphone to the left, inside the bar's own flow, so it can never
+   cover the words being dictated. Black in every theme, like the island it is named for. It gives
+   way to the bar's controls when the composer is narrow, and only suggestions give way before it. */
+.voice-island { position: relative; display: flex; align-items: center; flex: 0 0 2.25rem; min-width: 0; border-radius: 9999px; transition: flex-basis 240ms cubic-bezier(0.2, 0.9, 0.3, 1.05), background-color 160ms ease; }
+.voice-island.is-open { flex: 0 9999 22rem; min-width: 7.5rem; background: #000; }
+.voice-island.is-open > button { border-radius: 9999px; }
+.voice-island.is-open > button:hover { background: rgb(255 255 255 / 0.14); }
+.voice-island-status { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; padding-left: 14px; overflow: hidden; color: rgb(255 255 255 / 0.82); font-size: var(--text-xs); white-space: nowrap; }
+.voice-island-meter { flex: 0 1 2.5rem; min-width: 1rem; height: 6px; overflow: hidden; border-radius: 9999px; background: rgb(255 255 255 / 0.18); }
+@media (prefers-reduced-motion: reduce) { .voice-island { transition: none; } }
 /* The wall composer's bar stays one line: the model and Mode buttons keep their labels and truncate, never wrap. */
 .composer-section[data-wall-composer] .composer-bar { min-width: 0; }
 .composer-section[data-wall-composer] [data-composer-foot] { flex: 0 1 auto; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
@@ -3686,7 +3706,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (hover: hover) {
   .composer-foot-controls .ctl-menu:hover { border-color: var(--line); }
 }
-.composer-foot-controls { flex-shrink: 1; overflow: hidden; }
+.composer-foot-controls { flex-shrink: 1; overflow: hidden; white-space: nowrap; }
 .composer-foot-controls .ctl-toggle .ctl-dot { display: none; }
 /* A narrow composer keeps the mode value and the incognito glyph; their
    words go to the tooltip so the bar never runs into the microphone. */
@@ -4268,3 +4288,11 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .save-spinner, .save-flash { animation: none; }
 }
+
+/* The Agents View popover is portaled out of the draggable title bar. */
+.wall-view-menu { position: fixed; z-index: 1000; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-float); -webkit-app-region: no-drag; }
+.wall-view-layout { border: 0; padding: 0; margin: 0; min-width: 0; }
+.wall-view-menu .screens-option[aria-disabled='true'] { opacity: .55; cursor: default; }
+.screens-embedded { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
+.screens-embedded .screens-row { overflow-x: auto; padding-bottom: 4px; }
+.screens-embedded .screens-tile { flex-shrink: 0; }

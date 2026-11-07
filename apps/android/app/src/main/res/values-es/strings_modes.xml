@@ -69,6 +69,8 @@
     <string name="pill_move_top">Mover arriba</string>
     <string name="pill_dock_left">Acoplar a la izquierda</string>
     <string name="pill_dock_right">Acoplar a la derecha</string>
+    <string name="pill_tuck">Recoger</string>
+    <string name="pill_show">Mostrar el selector de modo</string>
     <string name="yolo_warning_title">¿Activar YOLO?</string>
     <string name="yolo_warning_text">El agente ejecutará comandos, editará archivos, abrirá direcciones y usará herramientas sin preguntarte antes. Una página web, un resultado de búsqueda o la salida de una herramienta que lea puede traer instrucciones, y en YOLO nada les impide enviar tus archivos o datos fuera de esta computadora. Tus reglas de denegación siguen bloqueando.</string>
     <string name="yolo_warning_recommend">Salvaguardas solo pregunta cuando importa y es el modo recomendado.</string>

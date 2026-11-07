@@ -1,11 +1,11 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-06
 ---
 
 # 0054. Gate egress in chats that read untrusted content
 
-Proposed by Davide on 2026-11-06; to be confirmed by Philip before the egress gate lands. Issue: [#1867](https://github.com/nekko-labs/nekko-agent/issues/1867). Spec: [agent data security](../../spec/context/agent-data-security.md).
+Proposed by Davide on 2026-11-06; accepted by Philip on 2026-11-07 without changes. Issue: [#1867](https://github.com/nekko-labs/nekko-agent/issues/1867). Spec: [agent data security](../../spec/context/agent-data-security.md).
 
 ## Context
 
@@ -45,4 +45,4 @@ The full analysis, per model type (local, cloud via API key, Claude Agent), is i
 - A poisoned README in the workspace is not gated by this. If the evals with real models show it is a common path, workspace files join the taint sources.
 - YOLO remains a mode where an injection can leak data; the warning and the recorded eval outcomes keep that visible.
 - Claude Agent chats get the egress gate only through the approval bridge, for the calls Claude Code asks about; the Shield stays unavailable there until the proxy is built (API key or cloud account only).
-- **If Philip changes a choice**, this record is edited before the egress gate lands, and its status moves to accepted.
+- Philip accepted every choice unchanged on 2026-11-07, so nothing in this record was edited.

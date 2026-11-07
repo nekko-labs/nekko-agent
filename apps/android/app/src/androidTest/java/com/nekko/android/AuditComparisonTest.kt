@@ -1,0 +1,332 @@
+package com.nekko.android
+
+import android.graphics.Bitmap
+import android.os.Build
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.CompositionLocalProvider
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.rememberSimpleView
+import com.nekko.android.ui.screens.ChatsScreen
+import com.nekko.android.ui.settings.SimpleModeScreen
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.nekko.android.chat.ChatViewModel
+import com.nekko.android.data.ComputersRepository
+import com.nekko.android.data.PhonePrefs
+import com.nekko.android.data.PrefStore
+import com.nekko.android.data.Remote
+import com.nekko.android.data.SecureStore
+import com.nekko.android.monitors.EXPERT_MODE
+import com.nekko.android.ui.chat.ModeTags
+import com.nekko.android.ui.simple.PILL_TAG
+import com.nekko.android.data.PillDock
+import com.nekko.android.data.PillPlace
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
+import com.nekko.android.ui.panes.PaneLabels
+import com.nekko.android.ui.panes.PanesHost
+import com.nekko.android.ui.panes.rememberWindowPosture
+import com.nekko.android.ui.screens.ChatScreen
+import com.nekko.android.ui.theme.NekkoTheme
+import com.nekko.protocol.Channels
+import com.nekko.protocol.PaneContent
+import com.nekko.protocol.PaneLayout
+import com.nekko.protocol.PaneMode
+import com.nekko.protocol.PaneSide
+import com.nekko.protocol.RelayConfig
+import com.nekko.protocol.RelayState
+import com.nekko.protocol.RelayStatus
+import com.nekko.protocol.WelcomedDevice
+import com.nekko.protocol.WireJson
+import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+/**
+ * A chat's audit trail on Android, before and after: the real chat screen against a fake
+ * computer. The ⋮ menu gains **Audit trail**, which opens the trail with who answered
+ * each approval by device name. Screenshots go to the app's `evidence` folder.
+ */
+@RunWith(AndroidJUnit4::class)
+class AuditComparisonTest {
+    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    private val computer = FakeComputer()
+    private val device = "phone"
+    private val prefs = PhonePrefs(object : PrefStore {
+        val map = HashMap<String, String>()
+        override fun getString(name: String) = map[name]
+        override fun putString(name: String, value: String?) { if (value == null) map.remove(name) else map[name] = value }
+    })
+    @Volatile private var fresh: com.nekko.android.data.ModelPick? = null
+
+    /** The chat's ⋮ menu: Audit trail is there after, not before. */
+    @Test fun auditMenu() {
+        show()
+        compose.onNodeWithTag("chat.more").performClick()
+        settle()
+        val entry = compose.onAllNodesWithTag("chat.audit").fetchSemanticsNodes().isNotEmpty()
+        when (InstrumentationRegistry.getArguments().getString("nekkoRevision")) {
+            "before" -> assertEquals(false, entry)
+            "after" -> assertEquals(true, entry)
+        }
+        shot("audit-menu")
+    }
+
+    /** The sheet, then only the approvals; there is no sheet before. */
+    @Test fun auditSheet() {
+        show()
+        compose.onNodeWithTag("chat.more").performClick()
+        settle()
+        if (compose.onAllNodesWithTag("chat.audit").fetchSemanticsNodes().isEmpty()) {
+            assertEquals("before", InstrumentationRegistry.getArguments().getString("nekkoRevision"))
+            return
+        }
+        compose.onNodeWithTag("chat.audit").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat.audit.event").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(computer.calls.contains("audit:read"))
+        assertTrue(compose.onAllNodes(hasText("on Davide’s Pixel (phone)")).fetchSemanticsNodes().isNotEmpty())
+        settle()
+        shot("audit-sheet")
+        compose.onNodeWithTag("chat.audit.approvals").performClick()
+        settle()
+        shot("audit-approvals")
+    }
+
+    /** A repository paired with the fake computer, named Studio Mac. */
+    private fun repo(): ComputersRepository {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        val repo = ComputersRepository(
+            store = MemoryStore(),
+            remotes = { config, _ -> computer.remote(config) },
+            scope = scope,
+            deviceName = { "Pixel" },
+            deriveKey = { _, _ -> ByteArray(32) },
+        )
+        runBlocking {
+            val id = repo.pair(testPairing())
+            repo.rename(id, "Studio Mac")
+        }
+        return repo
+    }
+
+    /** One chat on a phone; two side by side (Chat + Chat) on an open folding phone. */
+    private fun show() {
+        val repo = repo()
+        val vms = mapOf("s1" to ChatViewModel("s1", repo, null, prefs), "s2" to ChatViewModel("s2", repo, null, prefs))
+        compose.setContent {
+            NekkoTheme(dark = false) {
+                val window = rememberWindowPosture()
+                if (window.mode == PaneMode.ONE) {
+                    ChatScreen(vms.getValue("s1"), onBack = {}, onStartFresh = { fresh = it })
+                    return@NekkoTheme
+                }
+                var layout by remember { mutableStateOf(PaneLayout(PaneContent.Chat("s1"), PaneContent.Chat("s2"), focused = PaneSide.FIRST)) }
+                LaunchedEffect(window.mode) { layout = layout.forMode(window.mode, null) }
+                PanesHost(
+                    window = window,
+                    layout = layout,
+                    onChange = { change -> layout = change(layout).normalized(window.mode) },
+                    labels = PaneLabels { c -> (c as? PaneContent.Chat)?.id ?: c.key },
+                    chats = emptyList(),
+                    waiting = emptySet(),
+                    tip = null,
+                    onTakeTip = {},
+                    onDismissTip = {},
+                    noteDismissed = true,
+                    onDismissNote = {},
+                ) { slot ->
+                    val id = (slot.content as PaneContent.Chat).id ?: "s1"
+                    ChatScreen(vms.getValue(id), onBack = slot.back, pane = slot)
+                }
+            }
+        }
+        compose.waitUntil(10_000) { computer.calls.contains(Channels.CONTEXT_PREVIEW) }
+        settle()
+    }
+
+    private fun settle() {
+        compose.waitForIdle()
+        Thread.sleep(700)
+        compose.waitForIdle()
+    }
+
+    /** The whole screen, so sheets, menus and the status bar show as on the phone. */
+    private fun shot(name: String) {
+        // takeScreenshot is null now and then while the display is busy; a moment later it isn't.
+        var shot: Bitmap? = null
+        for (i in 0 until 10) {
+            shot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            if (shot != null) break
+            Thread.sleep(300)
+        }
+        val bitmap = shot ?: error("No screenshot for $name")
+        val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
+        File(dir, "modes-$name-$device.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private class MemoryStore : SecureStore {
+        private val map = HashMap<String, String>()
+        override suspend fun get(key: String) = map[key]
+        override suspend fun set(key: String, value: String?) { if (value == null) map.remove(key) else map[key] = value }
+    }
+
+    /** The computer as the phone gate answers it (and a chat's audit trail): a Claude chat, the hardware, one loaded local model. */
+    class FakeComputer {
+        private companion object {
+            const val T0 = 1_760_000_000_000L
+        }
+
+        val calls = CopyOnWriteArrayList<String>()
+        /** When this computer was made: its chats were last touched just before. */
+        private val now = System.currentTimeMillis()
+        /** Each chat's effort, as `session:setOptions` left it. */
+        val efforts = java.util.concurrent.ConcurrentHashMap<String, String>()
+        val effort: String? get() = efforts["s1"]
+        @Volatile var resident = true
+        /** The chat has filled most of its window: Simple's "getting long" line. */
+        @Volatile var longChat = false
+        /** Forty more exchanges before the last turn, so the chat scrolls. */
+        @Volatile var manyMessages = false
+
+        private fun json(s: String): JsonElement = WireJson.parseToJsonElement(s)
+
+        private fun session(id: String) = buildJsonObject {
+            put("id", id)
+            put("title", if (id == "s1") "Tidy the release notes" else "Profile the image cache")
+            put("providerId", "anthropic")
+            put("modelId", "claude-opus-4-7")
+            efforts[id]?.let { put("effort", it) }
+            put("updatedAt", 1)
+            put("queue", JsonArray(emptyList()))
+            put(
+                "messages",
+                buildJsonArray {
+                    if (manyMessages) for (i in 0 until 40) {
+                        add(buildJsonObject { put("id", "$id-m$i"); put("role", if (i % 2 == 0) "user" else "assistant"); put("createdAt", T0 - 100_000 + i); put("content", "Earlier message $i about the release notes.") })
+                    }
+                    add(buildJsonObject { put("id", "$id-u"); put("role", "user"); put("createdAt", T0); put("content", "Group the release notes by area and drop the duplicates.") })
+                    // The turn's steps: a thought and two tool calls, which Simple folds into one line.
+                    add(
+                        buildJsonObject {
+                            put("id", "$id-a0"); put("role", "assistant"); put("createdAt", T0 + 2_000); put("content", "")
+                            put("reasoning", "The notes repeat a few fixes. Read them first, then count the bullets.")
+                            put(
+                                "toolCalls",
+                                buildJsonArray {
+                                    add(buildJsonObject { put("id", "$id-c1"); put("name", "read_file"); put("input", buildJsonObject { put("path", "RELEASE_NOTES.md") }) })
+                                    add(buildJsonObject { put("id", "$id-c2"); put("name", "bash"); put("input", buildJsonObject { put("command", "grep -c '^- ' RELEASE_NOTES.md") }) })
+                                },
+                            )
+                        },
+                    )
+                    add(buildJsonObject { put("id", "$id-r1"); put("role", "tool"); put("toolResult", buildJsonObject { put("toolCallId", "$id-c1"); put("output", "# Release notes\n- Faster chat list\n- Faster chat list"); put("isError", false) }) })
+                    add(buildJsonObject { put("id", "$id-r2"); put("role", "tool"); put("toolResult", buildJsonObject { put("toolCallId", "$id-c2"); put("output", "17"); put("isError", false) }) })
+                    add(buildJsonObject { put("id", "$id-a"); put("role", "assistant"); put("createdAt", T0 + 14_000); put("content", "Done: 14 notes in 4 areas (Chat, Phone, Models, Settings). I removed 3 duplicates and kept the clearer wording of each.") })
+                },
+            )
+        }
+
+        fun answer(channel: String, args: List<JsonElement>): JsonElement {
+            calls += channel
+            return when (channel) {
+                Channels.SETTINGS_GET -> json("""{"defaultProviderId":"anthropic","defaultModelId":"claude-opus-4-7"}""")
+                Channels.PROVIDERS_LIST -> json("""[{"id":"anthropic","kind":"anthropic","label":"Anthropic","enabled":true},{"id":"nekko-engine","kind":"nekko-engine","label":"Model Server","enabled":true}]""")
+                Channels.MODELS_LIST -> when (args.firstOrNull()?.jsonPrimitive?.content) {
+                    "anthropic" -> json("""[{"id":"claude-opus-4-7","providerId":"anthropic","name":"Claude Opus 4.7"},{"id":"claude-sonnet-4-5","providerId":"anthropic","name":"Claude Sonnet 4.5"}]""")
+                    else -> json("""[{"id":"google/gemma-4-e4b","providerId":"nekko-engine","name":"Gemma 4 E4B","loaded":true}]""")
+                }
+                // Touched a minute ago: a group lists only recent chats before Show more (ChatSections.split).
+                Channels.SESSIONS_SUMMARIES -> json("""[{"id":"s1","title":"Tidy the release notes","updatedAt":${now - 60_000}},{"id":"s2","title":"Profile the image cache","updatedAt":${now - 120_000}}]""")
+                Channels.SESSION_GET -> session(args.first().jsonPrimitive.content)
+                Channels.CHAT_PENDING -> json("""{"s1":{"approval":{"call":{"id":"call-1","name":"mcp__github__create_issue","input":{"title":"Release notes are out of date","repo":"nekko/agent"}},"reason":"This chat read web content: MCP calls ask first.","severity":"high"}}}""")
+                Channels.SESSION_SET_OPTIONS -> {
+                    args.getOrNull(1)?.jsonObject?.get("effort")?.let { efforts[args.first().jsonPrimitive.content] = it.jsonPrimitive.content }
+                    session(args.first().jsonPrimitive.content)
+                }
+                Channels.CONTEXT_PREVIEW -> if (longChat) {
+                    json("""{"usedTokens":176000,"contextWindow":200000,"sources":{"system":6200,"conversation":112000,"attached-file":48000,"guideline":5800,"memory":4000}}""")
+                } else json("""{"usedTokens":86400,"contextWindow":200000,"sources":{"system":6200,"conversation":61800,"attached-file":12400,"guideline":3800,"memory":2200}}""")
+                Channels.SYSTEM_STATS -> json("""{"cpuPct":38,"cpuCores":16,"memUsedMB":21800,"memTotalMB":32768,"temps":{"cpuC":64,"gpuC":71}}""")
+                Channels.GPU_STATS -> json("""{"totalMB":24576,"usedMB":9400,"unified":false,"devices":[{"utilizationPct":72}]}""")
+                Channels.ENGINE_STATUS -> json(
+                    """{"installed":true,"running":true,
+                    "resident":${if (resident) """[{"id":"google/gemma-4-e4b","contextLength":32768,"vramBytes":5100000000,"loadedOn":"gpu","gpuLayers":42,"totalLayers":42}]""" else "[]"},
+                    "loading":[],"memory":{"budgetBytes":22000000000,"kind":"vram"}}""",
+                )
+                Channels.MODEL_UNLOAD -> {
+                    resident = false
+                    json("""{"ok":true,"message":"Unloaded Gemma 4 E4B."}""")
+                }
+                Channels.WORKSPACE_LIST -> JsonArray(emptyList())
+                // The chat's audit trail (`audit:read`), named by its wire name so the test builds before it existed.
+                "audit:read" -> json(
+                    """[
+                    {"at":${T0},"turnId":"t1","type":"turn","mode":"guardrails","model":"claude-opus-4-7"},
+                    {"at":${T0 + 2_000},"turnId":"t1","type":"tool","tool":"read_file","ms":4,"detail":{"path":"~/code/shop/notes.md"}},
+                    {"at":${T0 + 5_000},"turnId":"t1","type":"tool","tool":"fetch_url","ms":412,"detail":{"host":"wiki.example.com"}},
+                    {"at":${T0 + 5_100},"turnId":"t1","type":"taint","by":"fetch_url"},
+                    {"at":${T0 + 9_000},"turnId":"t1","type":"approval","tool":"mcp__github__create_issue","severity":"high","answer":"approved","by":{"via":"phone","device":"dev_7f3a91","deviceName":"Davide’s Pixel"}},
+                    {"at":${T0 + 9_800},"turnId":"t1","type":"tool","tool":"mcp__github__create_issue","ms":640,"detail":{"server":"github","recipients":0}},
+                    {"at":${T0 + 12_000},"turnId":"t1","type":"approval","tool":"fetch_url","severity":"high","answer":"denied","by":{"via":"this computer"}},
+                    {"at":${T0 + 60_000},"turnId":"t2","type":"turn","mode":"yolo","model":"claude-opus-4-7"},
+                    {"at":${T0 + 61_000},"turnId":"t2","type":"approval","tool":"bash","severity":"medium","answer":"approved","by":{"via":"yolo"}},
+                    {"at":${T0 + 63_000},"turnId":"t2","type":"tool","tool":"bash","ms":2310,"detail":{"program":"npm"}}
+                    ]""",
+                )
+                else -> JsonNull
+            }
+        }
+
+        fun remote(config: RelayConfig): Remote = object : Remote {
+            override val status = MutableStateFlow(RelayStatus(RelayState.IDLE))
+            override val events = MutableSharedFlow<Pair<String, JsonElement>>(extraBufferCapacity = 64)
+            override val welcome = MutableSharedFlow<WelcomedDevice>(replay = 1, extraBufferCapacity = 1)
+            override fun connect() { status.value = RelayStatus(RelayState.ONLINE) }
+            override fun close() { status.value = RelayStatus(RelayState.IDLE) }
+            override fun nudge() {}
+            override fun reconnect() {}
+            override suspend fun call(channel: String, vararg args: JsonElement) = answer(channel, args.toList())
+            override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = answer(channel, args.toList())
+        }
+    }
+}

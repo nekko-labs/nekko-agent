@@ -36,6 +36,7 @@ import com.nekko.android.data.Remote
 import com.nekko.android.data.SecureStore
 import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.ui.chat.ModeTags
+import com.nekko.android.ui.simple.PILL_TAB_TAG
 import com.nekko.android.ui.simple.PILL_TAG
 import com.nekko.android.data.PillDock
 import com.nekko.android.data.PillPlace
@@ -329,6 +330,45 @@ class ChatModesTest {
         prefs.reset(PillPlace.KEY)
     }
 
+    /** A swipe into its edge tucks the pill into a slim tab; a tap on the tab brings it back. */
+    @Test fun pillTucksIntoItsEdge() {
+        prefs.set(PillPlace.KEY, PillPlace(PillDock.RIGHT, 0.3f))
+        show()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty() }
+        settle()
+        compose.onAllNodesWithTag(PILL_TAG).onFirst().performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(25f, 0f)) }
+            up()
+        }
+        settle()
+        assertTrue(prefs.get(PillPlace.KEY).tucked)
+        assertEquals(0, compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().size)
+        val tab = compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().fetchSemanticsNode().boundsInRoot
+        val width = compose.onRoot().fetchSemanticsNode().size.width
+        assertTrue("against the right edge: $tab", tab.right >= width - 1f)
+        shot("pill-tucked-right")
+        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick()
+        settle()
+        assertEquals(PillPlace(PillDock.RIGHT, 0.3f), prefs.get(PillPlace.KEY))
+
+        // Under the top bar, a swipe up tucks it into the bar.
+        prefs.set(PillPlace.KEY, PillPlace.DEFAULT)
+        settle()
+        compose.onAllNodesWithTag(PILL_TAG).onFirst().performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(0f, -25f)) }
+            up()
+        }
+        settle()
+        assertEquals(PillPlace(tucked = true), prefs.get(PillPlace.KEY))
+        shot("pill-tucked-top")
+        compose.onAllNodesWithTag(PILL_TAB_TAG).onFirst().performClick()
+        settle()
+        assertEquals(PillPlace.DEFAULT, prefs.get(PillPlace.KEY))
+        prefs.reset(PillPlace.KEY)
+    }
+
     /** In a long chat, reading on slides the pill away; scrolling back brings it back. */
     @Test fun pillHidesOnScroll() {
         computer.resident = false
@@ -376,6 +416,48 @@ class ChatModesTest {
         compose.onAllNodesWithContentDescription("Dismiss").onFirst().performClick()
         settle()
         assertEquals(0, compose.onAllNodesWithTag(ModeTags.LONG_CHAT).fetchSemanticsNodes().size)
+    }
+
+    /** Identical gestures on base/head; the baseline must keep its pill, not invent a tab. */
+    @Test fun pillTuckEvidence() {
+        val baseline = InstrumentationRegistry.getArguments().getString("nekkoPillBaseline") == "true"
+        prefs.set(PillPlace.KEY, PillPlace(PillDock.RIGHT, 0.3f))
+        show()
+        compose.waitUntil(10_000) { computer.calls.contains(Channels.SYSTEM_STATS) }
+        settle()
+        shot("evidence-right-initial")
+        compose.onAllNodesWithTag(PILL_TAG).onFirst().performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(25f, 0f)) }
+            up()
+        }
+        settle()
+        shot("evidence-right-after-swipe")
+        assertEquals(if (baseline) 0 else 1, compose.onAllNodesWithTag("simple.pill.tab").fetchSemanticsNodes().size)
+        if (!baseline) {
+            compose.onAllNodesWithTag("simple.pill.tab").onFirst().performClick()
+            settle()
+            assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
+            shot("evidence-right-restored")
+        }
+        prefs.set(PillPlace.KEY, PillPlace.DEFAULT)
+        settle()
+        shot("evidence-top-initial")
+        compose.onAllNodesWithTag(PILL_TAG).onFirst().performTouchInput {
+            down(center)
+            repeat(8) { moveBy(Offset(0f, -25f)) }
+            up()
+        }
+        settle()
+        shot("evidence-top-after-swipe")
+        assertEquals(if (baseline) 0 else 1, compose.onAllNodesWithTag("simple.pill.tab").fetchSemanticsNodes().size)
+        if (!baseline) {
+            compose.onAllNodesWithTag("simple.pill.tab").onFirst().performClick()
+            settle()
+            assertTrue(compose.onAllNodesWithTag(PILL_TAG).fetchSemanticsNodes().isNotEmpty())
+            shot("evidence-top-restored")
+        }
+        prefs.reset(PillPlace.KEY)
     }
 
     /** Settings > Simple mode, previewing Simple. */

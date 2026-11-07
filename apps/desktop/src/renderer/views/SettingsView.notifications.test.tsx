@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppSettings } from '@nekko-agent/shared';
 import { NotificationsSection, Toggle } from './SettingsView.js';
 
-vi.mock('../chrome.js', () => ({ hasAppChrome: false }));
+vi.mock('../chrome.js', () => ({ hasAppChrome: false, windowChrome: null }));
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({}) }) }));
 
 describe('Notifications settings', () => {

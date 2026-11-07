@@ -134,6 +134,7 @@ import com.nekko.protocol.ChatGroup
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
+import com.nekko.protocol.MonitorFormat
 import kotlinx.coroutines.launch
 import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.simple.PollHardware
@@ -475,7 +476,7 @@ fun ChatsScreen(
                                 itemsIndexed(needsYou, key = { _, it -> "needs:${it.id}" }) { i, summary ->
                                     if (i > 0) RowDivider(60.dp)
                                     ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
-                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews)
+                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view)
                                 }
                             }
                             // The desktop's agent sidebar as the view menu arranges it: by project (General, then each
@@ -505,7 +506,7 @@ fun ChatsScreen(
                                     if (i > 0) RowDivider(60.dp)
                                     if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
                                     else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
-                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews)
+                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view)
                                 }
                                 if (hidden > 0) {
                                     item(key = "more:${g.key}") {
@@ -730,7 +731,7 @@ private fun ChatActionDialog(
 }
 
 @Composable
-internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0, showPreview: Boolean = true) {
+internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0, showPreview: Boolean = true, details: ChatListView = ChatListView.STANDARD) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -756,7 +757,17 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
                     modifier = Modifier.weight(1f),
                 )
                 if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
-                Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                if (details.showUpdated) Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+            }
+            if (details.showModel) s.modelId?.let {
+                Text(AgentRows.shortModelName(it), style = MaterialTheme.typography.bodySmall, color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("chats.row.model"))
+            }
+            if (details.showContext) (s.contextUsed ?: s.transcriptTokens)?.let { used ->
+                val text = s.contextWindow?.let { "${MonitorFormat.tokens(used)}/${MonitorFormat.tokens(it)}" } ?: "${MonitorFormat.tokens(used)} tokens"
+                Text(text, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.testTag("chats.row.context"))
+            }
+            if (details.showPullRequests && s.prUrls.isNotEmpty()) {
+                Text(s.prUrls.take(3).joinToString(" · ") { "#" + it.substringAfterLast('/') } + if (s.prUrls.size > 3) " +${s.prUrls.size - 3}" else "", style = MaterialTheme.typography.bodySmall, color = p.accent, modifier = Modifier.testTag("chats.row.prs"))
             }
             if (showPreview && preview.isNotEmpty()) {
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -960,6 +971,12 @@ private fun ChatListViewMenu(view: ChatListView, onChange: (ChatListView) -> Uni
                 choice(stringResource(if (name) R.string.chats_a_to_z else R.string.chats_oldest_first), view.ascending) { onChange(view.copy(ascending = true)) }
                 choice(stringResource(if (name) R.string.chats_z_to_a else R.string.chats_newest_first), !view.ascending) { onChange(view.copy(ascending = false)) }
             }
+            HorizontalDivider()
+            heading(stringResource(R.string.chats_card_details))
+            choice(stringResource(R.string.chats_showmodel), view.showModel) { onChange(view.copy(showModel = !view.showModel)) }
+            choice(stringResource(R.string.chats_showcontext), view.showContext) { onChange(view.copy(showContext = !view.showContext)) }
+            choice(stringResource(R.string.chats_showpullrequests), view.showPullRequests) { onChange(view.copy(showPullRequests = !view.showPullRequests)) }
+            choice(stringResource(R.string.chats_showupdated), view.showUpdated) { onChange(view.copy(showUpdated = !view.showUpdated)) }
             HorizontalDivider()
             heading(stringResource(R.string.chats_show))
             choice(stringResource(R.string.chats_previews), view.showPreviews) { onChange(view.copy(showPreviews = !view.showPreviews)) }

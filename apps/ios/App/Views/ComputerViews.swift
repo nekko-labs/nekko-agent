@@ -23,6 +23,8 @@ struct ComputerDetailView: View {
     @State private var switching: Set<String> = []
     @State private var pickingIcon = false
     @State private var iconError: String?
+    @State private var modelsExpanded = false
+    @State private var modelScope = ModelScope.all
 
     var body: some View {
         Group {
@@ -75,6 +77,12 @@ struct ComputerDetailView: View {
                     .listRowSeparator(.hidden).listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
             }
+            Section {
+                ComputerConnectionToggle(computer: c, focusOnConnect: true)
+            } footer: {
+                Text("Disconnecting keeps this pairing. This iPhone won’t reconnect until you turn it on again.")
+                    .foregroundStyle(palette.inkSoft)
+            }
             if canReconnect {
                 Section {
                     Button { store.reconnect(computer: c.id) } label: { Label("Reconnect to \(c.name)", systemImage: "arrow.clockwise") }
@@ -103,8 +111,20 @@ struct ComputerDetailView: View {
             }
             if !m.models.isEmpty || !m.providers.isEmpty {
                 Section {
-                    ForEach(m.models) { info in modelRow(info, loaded: m.loadedIds.contains(info.id) || info.loaded, m) }
-                } header: { SectionTitle("Models") }
+                    DisclosureGroup(isExpanded: $modelsExpanded) {
+                        ModelScopeTabs(scope: $modelScope)
+                        let filtered = modelScope.models(m.models, providers: m.providers)
+                        if filtered.isEmpty {
+                            Text("No models in this group.").font(.footnote).foregroundStyle(palette.inkSoft)
+                        }
+                        ForEach(Array(filtered.enumerated()), id: \.offset) { _, info in
+                            modelRow(info, loaded: m.loadedIds.contains(info.id) || info.loaded, m)
+                        }
+                    } label: {
+                        LabeledContent("Models", value: "\(m.models.count)")
+                    }
+                    .accessibilityIdentifier("computer.models")
+                }
                 Section {
                     ForEach(m.providers) { p in providerRow(p, c, m) }
                     if m.isActive {
@@ -133,7 +153,7 @@ struct ComputerDetailView: View {
                     if let free = s.diskFreeBytes { LabeledContent("Free for models", value: bytes(free)) }
                 } header: { SectionTitle("Hardware") }
             }
-            if let machine = cloud.machine(forComputer: computerId) {
+            if cloud.fleetEnabled, cloud.fleetConnected, let machine = cloud.machine(forComputer: computerId) {
                 CloudMachineSections(machine: machine, computerId: computerId)
             }
             Section {
@@ -146,6 +166,7 @@ struct ComputerDetailView: View {
                     LabeledContent("Nekko Agent", value: [v, s?.edition].compactMap { $0 }.joined(separator: " · "))
                 }
             } header: { SectionTitle("Connection") }
+            ComputerServiceSection(computerId: c.id)
             // Settings → This computer (SK-8): Security, sign out, stop remote access, quit.
             ThisComputerSection(computerId: c.id)
         }
@@ -200,7 +221,7 @@ struct ComputerDetailView: View {
 
     /// Not reachable now (the links retry by themselves): offer to dial at once.
     private var canReconnect: Bool {
-        ([.offline, .denied, .idle] as [RelayState]).contains(store.state(of: computerId))
+        store.connectionEnabled(computerId) && ([.offline, .denied, .idle] as [RelayState]).contains(store.state(of: computerId))
     }
 
     private func subtitle(_ c: Computer, _ s: MachineSummary?) -> String {
