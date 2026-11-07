@@ -4,6 +4,8 @@ const fs = require('node:fs'), path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Use layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
+// Escape code delimiters and line separators before embedding JSON in evaluated code.
+const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 app.whenReady().then(async () => {
  const report = { checks: [], errors: [], captures: [] };
@@ -18,7 +20,7 @@ app.whenReady().then(async () => {
  const check = (name, passed) => { report.checks.push({ name, passed: !!passed }); };
  const shot = async name => { await sleep(300); fs.writeFileSync(path.join(out, name+'.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(name+'.png'); };
  const click = async text => {
-  const p = await run(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim() === ${JSON.stringify(text)});if(!b)return null;b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
+  const p = await run(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim() === ${js(text)});if(!b)return null;b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
   if (!p) throw Error('Missing button '+text);
   for (const type of ['mouseDown','mouseUp']) win.webContents.sendInputEvent({ type, ...p, button:'left', clickCount:1 });
   await sleep(400);
