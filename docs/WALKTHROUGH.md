@@ -391,6 +391,12 @@ tool in this chat; other tools still ask, and a new chat starts asking again. Ev
 it has not written to in this chat, the approval names it. Once you approve, that
 recipient is known for the rest of the chat.
 
+**Private data on its way out** asks too, in every Guardrails chat. Before an MCP call (a
+read-only search included) or a fetch, Nekko looks inside what the call would send with the
+Privacy Shield's detectors: an API key or token, a card or ID number, an email, a phone
+number, or one of your private terms. If it finds one, the approval says what kind of data
+it is, never the value, so a search for "the deploy token ghp_…" does not leave unasked.
+
 The approval names the address or tool so you can tell whether you expected it. Ask
 mode already asks for all of these; YOLO never asks. Files in your project folders do
 not count as outside content.
