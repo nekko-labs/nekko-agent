@@ -24,7 +24,7 @@ for (const revision of ['before', 'after']) {
       assert.ok(view.includes('private var opened: Set<String> { prefs.openedChatGroups }'));
       assert.ok(view.includes('withAnimation { flip(&prefs.openedChatGroups, g.key) }'));
       assert.ok(view.includes('guard query.isEmpty else { return }'));
-      assert.ok(read('App/NekkoApp.swift').includes('"-uiTestGroupList"'));
+      assert.ok(read('App/NekkoApp.swift').includes('let flags = ["-uiTestGroupList", '));
       const prefs = read('App/Platform/Prefs.swift');
       assert.ok(prefs.includes('!ProcessInfo.processInfo.arguments.contains("-uiTestKeepGroups")'));
       assert.ok(prefs.includes('openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])'));
