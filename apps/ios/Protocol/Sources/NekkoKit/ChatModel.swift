@@ -270,6 +270,11 @@ public final class ChatModel {
         PhoneChanges.from(try await store.remote().call(Channels.changesList, [.string(sessionId)]))
     }
 
+    /// This chat's audit trail: every turn, tool call and approval, and who answered.
+    public func auditTrail() async throws -> [AuditEvent] {
+        AuditEvent.trail(try await store.remote().call(Channels.auditRead, [.string(sessionId)]))
+    }
+
     /// One `context:preview` at a time; a re-read asked for meanwhile is dropped.
     public func loadContext() async {
         guard !readingContext else { return }
