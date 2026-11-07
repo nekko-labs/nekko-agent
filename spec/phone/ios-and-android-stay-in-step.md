@@ -48,6 +48,7 @@ Found by comparing the two codebases on 2026-11-02, not a full audit: a gap miss
 | Spooky seasonal icon | Missing; Android can swap launcher icons with an activity alias | needs an issue |
 | Languages and theme presets | In progress | T201a |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
+| Always allow an MCP tool from a notification or the Lock Screen card (2026-11-07) | Allow and Deny only there; the chat's own card has it | #2065 |
 
 A full feature-by-feature audit, including anything Android has that the iPhone lacks, also needs an issue.
 

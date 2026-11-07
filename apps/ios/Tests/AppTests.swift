@@ -165,6 +165,22 @@ final class DeepLinkTests: XCTestCase {
         app.listenIn = nil
         app.handle(url: URL(string: "nekko-agent-pair:?nothing=here")!)
         XCTAssertNil(app.pendingLink)
+        // "Always allow this tool" from a notification or the Live Activity: the chat
+        // opens and its card runs it once, for that call only.
+        app.handle(url: LiveCardView.alwaysAllowURL("s_123", callId: "call_7"))
+        XCTAssertEqual(app.openChat, "s_123")
+        XCTAssertEqual(app.alwaysAllowIn, AppModel.AlwaysAllowRequest(chatId: "s_123", callId: "call_7"))
+        XCTAssertNil(app.listenIn)
+        XCTAssertFalse(app.takeAlwaysAllow("s_other", callId: "call_7"), "another chat")
+        XCTAssertFalse(app.takeAlwaysAllow("s_123", callId: "call_8"), "another call in the same chat")
+        XCTAssertTrue(app.takeAlwaysAllow("s_123", callId: "call_7"))
+        XCTAssertFalse(app.takeAlwaysAllow("s_123", callId: "call_7"), "taken once")
+        app.handle(url: LiveCardView.alwaysAllowURL("s_123", callId: "call_7"))
+        app.handle(url: URL(string: "nekko-agent://chat/s_123")!)
+        XCTAssertNil(app.alwaysAllowIn, "a plain chat link allows nothing, and clears one still waiting")
+        app.handle(url: URL(string: "nekko-agent://chat/s_123?alwaysAllow=")!)
+        XCTAssertNil(app.alwaysAllowIn, "an empty call id is no request")
+        app.openChat = nil
         // The Control Center control's link asks for New chat, and is not a pairing.
         app.newChatRequested = false
         app.handle(url: URL(string: "nekko-agent://new")!)
