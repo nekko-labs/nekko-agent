@@ -16,6 +16,7 @@ import { wallLayoutShortcut, WallToolbar } from './CommandCenterView.js';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { AgentWindowDropdown } from '../components/AgentWindowPicker.js';
 import { readFileSync } from 'node:fs';
+import { allPanes } from '../layout.js';
 
 it.each(['focus', 'grid', 'fixed'] as const)('plus menu forwards all creation kinds without changing the %s layout', (mode) => {
   vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
@@ -33,6 +34,15 @@ it.each(['focus', 'grid', 'fixed'] as const)('plus menu forwards all creation ki
   for (const kind of ['chat', 'image', 'terminal']) menu.props.onCreate(kind);
   expect(setAddOpen).not.toHaveBeenCalled();
   expect(setWall).not.toHaveBeenCalled();
+  menu.props.onAddZone();
+  expect(setWall).toHaveBeenCalledTimes(1);
+  const before = { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } };
+  const after = setWall.mock.calls[0][0](before);
+  expect(allPanes(after.root)).toHaveLength(1);
+  expect(allPanes(after.root)[0].kind).toBe('zone');
+  expect(after.activeZone).toBe(allPanes(after.root)[0].id);
+  expect(after.layout).toBe(before.layout);
+  expect(setAddOpen).not.toHaveBeenCalled();
 });
 
 it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
