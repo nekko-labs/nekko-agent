@@ -17,7 +17,19 @@ describe('command palette settings search', () => {
 
   it('finds the Settings group that holds an unindexed section', () => {
     expect(matchSettingsPages('guardrail').map((p) => p.group)).toEqual(['safety']);
-    expect(matchSettingsPages('simple').map((p) => p.group)).toEqual(['simple']);
+    expect(matchSettingsPages('simple').map((p) => p.group)).toEqual(['customize']);
+  });
+
+  it.each(['customize', 'appearance', 'theme', 'style', 'font size', 'accessibility', 'simple mode', 'agents wall'])('routes %s to Customize', (query) => {
+    expect(matchSettingsPages(query).map((page) => page.group)).toEqual(['customize']);
+  });
+
+  it('routes moved controls to Customize without moving operational settings', () => {
+    const moved = ['sidebar-skills', 'sidebar-connectors', 'background-animation', 'language', 'chat-pane-action', 'auto-complete', 'tips', 'warn-before-yolo', 'confirm-deletions', 'close-behavior', 'low-memory', 'agent-activity-animation', 'mascot', 'tray-farewell', 'text-size'];
+    for (const id of moved) expect(SETTINGS_INDEX.find((entry) => entry.id === id)?.group).toBe('customize');
+    expect(SETTINGS_INDEX.filter((entry) => entry.group === 'general').map((entry) => entry.id)).toEqual(['telemetry', 'desktop-notifications']);
+    expect(matchSettingsPages('notifications').map((page) => page.group)).toEqual(['general']);
+    expect(matchSettingsPages('remote access').map((page) => page.group)).toEqual(['phone']);
   });
 
   it('keeps sibling keys when a nested switch flips, and inverts Confirm deletions', () => {
