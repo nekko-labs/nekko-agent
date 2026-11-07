@@ -72,6 +72,9 @@ final class Prefs {
     var lastFolder: [String: String] { didSet { d.set(lastFolder, forKey: "lastFolder") } }
     /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
     var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
+    /// Explicitly opened chat groups, by stable group key. New groups start folded.
+    /// Kept on this device across navigation and launches, never synced to a computer.
+    var openedChatGroups: Set<String> { didSet { d.set(openedChatGroups.sorted(), forKey: "openedChatGroups") } }
     /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
     var groupOrder: [String: [String]] { didSet { d.set(groupOrder, forKey: "groupOrder") } }
     /// Per computer, the two panes on a folding phone or iPad (`PaneLayout` JSON, FD-3). Never leaves this iPhone.
@@ -121,6 +124,7 @@ final class Prefs {
         lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
         lastFolder = d.dictionary(forKey: "lastFolder") as? [String: String] ?? [:]
         chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
+        openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])
         groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
         paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
         paneTipShown = flag("paneTipShown", false)
