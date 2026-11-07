@@ -236,6 +236,7 @@ jobs:
       - name: Capture the evidence test
         uses: reactivecircus/android-emulator-runner@v2
         env:
+          NEKKO_EVIDENCE_REVISION: ${{ matrix.revision }}
           NEKKO_EVIDENCE_CLASS: ${{ inputs.android_test_class }}
           NEKKO_EVIDENCE_EXPECT: ${{ inputs.android_expect }}
         with:

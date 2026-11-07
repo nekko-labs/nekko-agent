@@ -69,4 +69,11 @@
     <string name="pill_move_top">Mover para o topo</string>
     <string name="pill_dock_left">Fixar à esquerda</string>
     <string name="pill_dock_right">Fixar à direita</string>
+    <string name="yolo_warning_title">Ativar o YOLO?</string>
+    <string name="yolo_warning_text">O agente vai executar comandos, editar arquivos, acessar endereços e chamar ferramentas sem perguntar antes. Uma página da web, um resultado de busca ou a saída de uma ferramenta que ele lê pode trazer instruções, e no YOLO nada impede que elas enviem seus arquivos ou dados para fora deste computador. Suas regras de negação continuam bloqueando.</string>
+    <string name="yolo_warning_recommend">Proteções só pergunta quando importa e é o modo recomendado.</string>
+    <string name="yolo_warning_skip">Não me avisar de novo</string>
+    <string name="yolo_warning_skip_detail">Só neste telefone. Você pode reativar o aviso em Ajustes → Segurança.</string>
+    <string name="yolo_warning_keep_asking">Continuar perguntando</string>
+    <string name="yolo_warning_turn_on">Ativar o YOLO</string>
 </resources>

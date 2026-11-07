@@ -72,9 +72,6 @@
     <string name="chat_title">标题</string>
     <string name="chat_rename">重命名</string>
     <string name="chat_cancel">取消</string>
-    <string name="chat_use_yolo_title">在此聊天中使用 YOLO？</string>
-    <string name="chat_use_yolo_body">此聊天将在 %1$s 上运行命令并编辑文件，而不会先询问你。你的拒绝规则仍会拦截。</string>
-    <string name="chat_use_yolo">使用 YOLO</string>
     <string name="chat_chat_mode">聊天模式</string>
     <string name="chat_follows_default">此聊天遵循 %1$s 的默认设置：%2$s。</string>
     <string name="chat_waiting_to_send_one">等待发送</string>
@@ -237,4 +234,7 @@
     <string name="chat_card_allow">允许</string>
     <string name="chat_card_stop">停止</string>
     <string name="chat_card_next">下一个</string>
+    <string name="chat_always_allow_tool">始终允许此工具</string>
+    <string name="chat_always_allowing_tool">正在允许…</string>
+    <string name="chat_always_allow_tool_detail">允许此次调用，并在此聊天中不再询问此工具。其他工具仍会询问。</string>
 </resources>

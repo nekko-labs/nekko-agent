@@ -166,9 +166,6 @@
     <string name="settings_confirm_delete_detail">Preguntar antes, aquí y en %1$s</string>
     <string name="settings_pc_footer_online">Guardado en %1$s, los mismos ajustes que en Nekko Agent allí. Cada chat puede seguir cambiando su propio modo.</string>
     <string name="settings_pc_footer_offline">%1$s está sin conexión. Conéctate para cambiar sus ajustes.</string>
-    <string name="settings_yolo_title">¿Usar YOLO en los chats nuevos?</string>
-    <string name="settings_yolo_text">Los chats nuevos en %1$s ejecutarán comandos y editarán archivos sin preguntarte antes. Tus reglas de denegación siguen bloqueando. Puedes volver atrás aquí o en %1$s en cualquier momento.</string>
-    <string name="settings_use_yolo">Usar YOLO</string>
     <string name="settings_step_up_switch">Cambiar los chats nuevos de %1$s a %2$s</string>
     <string name="settings_step_up_change">Cambiar los ajustes de %1$s</string>
     <string name="settings_mode_ask">Preguntar</string>
@@ -388,4 +385,6 @@
     <string name="settings_card_detailed_detail">Añade la primera línea de la última respuesta</string>
     <string name="settings_card_footer_private">Ningún texto de los chats sale de tu computadora hacia la pantalla de bloqueo.</string>
     <string name="settings_card_footer_text">Los nombres y pasos de los chats se ven con el teléfono desbloqueado; un teléfono bloqueado que oculta el contenido sensible muestra los textos de Mínimo. Permitir te pide desbloquear primero.</string>
+    <string name="settings_warn_yolo">Avisar antes de YOLO</string>
+    <string name="settings_warn_yolo_detail">Explicar lo que YOLO deja pasar antes de que un chat o el modo predeterminado de una computadora cambie a él</string>
 </resources>

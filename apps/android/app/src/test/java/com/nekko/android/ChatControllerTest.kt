@@ -301,6 +301,113 @@ class ChatControllerTest {
         assertEquals(1, caller.calls.size)
     }
 
+    private val mcpApproval = Approval(
+        ToolCall("call-9", "mcp__github__create_issue", buildJsonObject { put("title", "Bug") }),
+        "this chat read web content",
+        Severity.HIGH,
+    )
+
+    /** Guarded calls as the view model sends them, recorded with the step-up they carried. */
+    private class Guarded(val fail: Exception? = null) {
+        val calls = mutableListOf<Triple<String, List<JsonElement>, com.nekko.protocol.StepUpProof?>>()
+        val call: suspend (String, List<JsonElement>, com.nekko.protocol.StepUpProof?) -> JsonElement = { channel, args, stepUp ->
+            calls += Triple(channel, args, stepUp)
+            fail?.let { throw it }
+            JsonNull
+        }
+    }
+
+    private fun TestScope.guardedController(caller: FakeCaller, guarded: Guarded) =
+        ChatController(sid, caller, backgroundScope, { online }, now = { 42L }, newId = { "m1" }, guarded = guarded.call)
+
+    @Test
+    fun `only MCP tools offer always allow`() {
+        assertTrue(ChatController.offersToolScope("mcp__github__create_issue"))
+        assertFalse(ChatController.offersToolScope("bash"))
+        assertFalse(ChatController.offersToolScope("web_fetch"))
+        assertFalse(ChatController.offersToolScope("xmcp__a__b"))
+    }
+
+    @Test
+    fun `always allow saves the merged list through the guarded call, then approves`() = runTest {
+        val caller = FakeCaller { c ->
+            when (c.channel) {
+                Channels.SESSION_GET -> buildJsonObject {
+                    put("id", sid); put("title", "t"); put("messages", JsonArray(emptyList())); put("updatedAt", 1)
+                    put("allowedMcpTools", buildJsonArray { add(JsonPrimitive("mcp__slack__post")); add(JsonPrimitive("mcp__github__create_issue")) })
+                }
+                else -> JsonNull
+            }
+        }
+        val guarded = Guarded()
+        val chat = guardedController(caller, guarded)
+        chat.reload()
+        caller.calls.clear()
+        chat.onEvent(AgentEvent.ApprovalRequired(sid, mcpApproval))
+        chat.alwaysAllowTool()
+
+        val (channel, args, stepUp) = guarded.calls.single()
+        assertEquals(Channels.SESSION_SET_OPTIONS, channel)
+        assertEquals(JsonPrimitive(sid), args[0])
+        // What the chat already allowed, plus this tool, once.
+        assertEquals(
+            listOf("mcp__slack__post", "mcp__github__create_issue"),
+            args[1].jsonObject["allowedMcpTools"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(setOf("allowedMcpTools"), args[1].jsonObject.keys)
+        assertNull(stepUp)
+        // Never the plain path, never YOLO; then the call is released.
+        val c = caller.calls.single()
+        assertEquals(Channels.TOOL_APPROVE, c.channel)
+        assertEquals(listOf(JsonPrimitive(sid), JsonPrimitive("call-9"), JsonPrimitive(true)), c.args)
+        assertNull(chat.state.value.turn.approval)
+    }
+
+    @Test
+    fun `always allow on a chat with none adds just this tool and carries the step-up`() = runTest {
+        val caller = FakeCaller()
+        val guarded = Guarded()
+        val chat = guardedController(caller, guarded)
+        chat.onEvent(AgentEvent.ApprovalRequired(sid, mcpApproval))
+        val proof = com.nekko.protocol.StepUpProof.Totp("123456")
+        chat.alwaysAllowTool(proof)
+        assertEquals(listOf("mcp__github__create_issue"), guarded.calls.single().second[1].jsonObject["allowedMcpTools"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(proof, guarded.calls.single().third)
+        assertEquals(listOf(Channels.TOOL_APPROVE), caller.channels())
+    }
+
+    @Test
+    fun `a refused save approves nothing and keeps the card`() = runTest {
+        val caller = FakeCaller()
+        val guarded = Guarded(fail = RelayException("Confirm with your security key or a code.", PhoneRefusal("step-up-required", "session:setOptions")))
+        val chat = guardedController(caller, guarded)
+        chat.onEvent(AgentEvent.ApprovalRequired(sid, mcpApproval))
+        try {
+            chat.alwaysAllowTool()
+            fail("expected the refusal")
+        } catch (e: RelayException) {
+            assertEquals("step-up-required", e.refusal?.code)
+        }
+        assertTrue(caller.calls.isEmpty())
+        assertEquals(mcpApproval, chat.state.value.turn.approval)
+    }
+
+    @Test
+    fun `always allow is refused for a tool that is not MCP`() = runTest {
+        val caller = FakeCaller()
+        val guarded = Guarded()
+        val chat = guardedController(caller, guarded)
+        chat.onEvent(AgentEvent.ApprovalRequired(sid, approval))
+        try {
+            chat.alwaysAllowTool()
+            fail("expected a refusal")
+        } catch (_: IllegalArgumentException) {
+        }
+        assertTrue(guarded.calls.isEmpty())
+        assertTrue(caller.calls.isEmpty())
+        assertEquals(approval, chat.state.value.turn.approval)
+    }
+
     @Test
     fun `answer sends the answers as a JSON array`() = runTest {
         val caller = FakeCaller()

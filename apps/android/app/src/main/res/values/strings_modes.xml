@@ -69,4 +69,11 @@
     <string name="pill_move_top">Move to top</string>
     <string name="pill_dock_left">Dock left</string>
     <string name="pill_dock_right">Dock right</string>
+    <string name="yolo_warning_title">Turn on YOLO?</string>
+    <string name="yolo_warning_text">The agent will run commands, edit files, fetch addresses and call tools without asking you first. A web page, search result or tool output it reads can carry instructions, and in YOLO nothing stops them from sending your files or data out of this computer. Your deny rules still block.</string>
+    <string name="yolo_warning_recommend">Guardrails asks only when it matters, and is the recommended mode.</string>
+    <string name="yolo_warning_skip">Don\'t warn me again</string>
+    <string name="yolo_warning_skip_detail">On this phone only. You can turn the warning back on in Settings → Security.</string>
+    <string name="yolo_warning_keep_asking">Keep asking</string>
+    <string name="yolo_warning_turn_on">Turn on YOLO</string>
 </resources>

@@ -166,9 +166,6 @@
     <string name="settings_confirm_delete_detail">先询问，在这里和 %1$s 上都是</string>
     <string name="settings_pc_footer_online">保存在 %1$s 上，与那里的 Nekko Agent 设置相同。每个聊天仍可更改自己的模式。</string>
     <string name="settings_pc_footer_offline">%1$s 已离线。连接后才能更改其设置。</string>
-    <string name="settings_yolo_title">新聊天使用 YOLO？</string>
-    <string name="settings_yolo_text">%1$s 上的新聊天将不经询问直接运行命令和编辑文件。你的拒绝规则仍会拦截。你可以随时在这里或 %1$s 上切换回来。</string>
-    <string name="settings_use_yolo">使用 YOLO</string>
     <string name="settings_step_up_switch">将 %1$s 上的新聊天切换为 %2$s</string>
     <string name="settings_step_up_change">更改 %1$s 的设置</string>
     <string name="settings_mode_ask">询问</string>
@@ -388,4 +385,6 @@
     <string name="settings_card_detailed_detail">另外显示最新回复的第一行</string>
     <string name="settings_card_footer_private">不会为锁定屏幕从电脑发送任何聊天文字。</string>
     <string name="settings_card_footer_text">手机解锁时显示聊天名称和步骤；锁定且隐藏敏感内容的手机只显示“简洁”文字。允许前需要先解锁。</string>
+    <string name="settings_warn_yolo">开启 YOLO 前提醒</string>
+    <string name="settings_warn_yolo_detail">在聊天或电脑的默认模式切换到 YOLO 之前，说明 YOLO 会放行什么</string>
 </resources>

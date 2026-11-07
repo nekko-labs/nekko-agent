@@ -72,9 +72,6 @@
     <string name="chat_title">タイトル</string>
     <string name="chat_rename">名前を変更</string>
     <string name="chat_cancel">キャンセル</string>
-    <string name="chat_use_yolo_title">このチャットで YOLO を使いますか？</string>
-    <string name="chat_use_yolo_body">このチャットは、事前に確認せずに %1$s でコマンドを実行し、ファイルを編集します。拒否ルールは引き続き適用されます。</string>
-    <string name="chat_use_yolo">YOLO を使う</string>
     <string name="chat_chat_mode">チャットモード</string>
     <string name="chat_follows_default">このチャットは %1$s の既定（%2$s）に従います。</string>
     <string name="chat_waiting_to_send_one">送信待ち</string>
@@ -237,4 +234,7 @@
     <string name="chat_card_allow">許可</string>
     <string name="chat_card_stop">停止</string>
     <string name="chat_card_next">次へ</string>
+    <string name="chat_always_allow_tool">このツールを常に許可</string>
+    <string name="chat_always_allowing_tool">許可中…</string>
+    <string name="chat_always_allow_tool_detail">この呼び出しを許可し、このチャットではこのツールについて確認しなくなります。他のツールは引き続き確認します。</string>
 </resources>

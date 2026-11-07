@@ -68,7 +68,11 @@ class ChatViewModel(
     mic: MicHardware? = null,
     private val phonePrefs: PhonePrefs? = null,
 ) : ViewModel() {
-    private val controller = ChatController(sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts)
+    private val controller = ChatController(
+        sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts,
+        // The same path as a mode raise: plain first, signed when the computer answers proof-required.
+        guarded = { channel, args, stepUp -> if (stepUp == null) repo.callRaising(channel, args) else repo.callChange(channel, args, stepUp) },
+    )
 
     /** Dictation into this chat's message box (Settings → Dictation). */
     val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
@@ -452,6 +456,7 @@ class ChatViewModel(
     }
     fun stop() = controller.stop()
     suspend fun approve(ok: Boolean) = controller.approve(ok)
+    suspend fun alwaysAllowTool(stepUp: StepUpProof? = null) = controller.alwaysAllowTool(stepUp)
     suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)
 
     private fun env(s: ComputersState) = ChatEnv(

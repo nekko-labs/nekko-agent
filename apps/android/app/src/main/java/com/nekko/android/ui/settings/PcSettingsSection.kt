@@ -46,6 +46,9 @@ import com.nekko.android.ui.components.SectionHeader
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.security.PendingStepUp
 import com.nekko.android.ui.security.StepUpSheet
+import com.nekko.android.ui.security.YoloWarning
+import com.nekko.android.ui.security.YoloWarningDialog
+import com.nekko.android.ui.security.skipsYoloWarning
 import com.nekko.android.ui.theme.Nekko
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.RelayException
@@ -75,6 +78,7 @@ fun PcSettingsSection(deps: SettingsDeps) {
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var askYolo by rememberSaveable { mutableStateOf(false) }
+    val skipWarning = skipsYoloWarning()
     // A mode raise the computer wants a second factor for (SK-7): the sheet asks, then sends it again.
     var stepUp by remember { mutableStateOf<PendingStepUp?>(null) }
 
@@ -134,8 +138,8 @@ fun PcSettingsSection(deps: SettingsDeps) {
                         enabled = enabled,
                         danger = m == ChatMode.YOLO,
                     ) {
-                        // YOLO runs everything without asking: say so once before switching.
-                        if (m == ChatMode.YOLO && pc.effectiveMode != ChatMode.YOLO) askYolo = true
+                        // YOLO runs everything without asking: the YOLO warning first.
+                        if (YoloWarning.needed(pc.effectiveMode, m, skipWarning)) askYolo = true
                         else if (m != pc.effectiveMode) save(PcSettings.patch(mode = m))
                     }
                 }
@@ -178,20 +182,10 @@ fun PcSettingsSection(deps: SettingsDeps) {
     }
 
     if (askYolo) {
-        AlertDialog(
-            onDismissRequest = { askYolo = false },
-            title = { Text(stringResource(R.string.settings_yolo_title)) },
-            text = {
-                Text(stringResource(R.string.settings_yolo_text, active.name))
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    askYolo = false
-                    save(PcSettings.patch(mode = ChatMode.YOLO))
-                }) { Text(stringResource(R.string.settings_use_yolo), color = p.danger) }
-            },
-            dismissButton = { TextButton(onClick = { askYolo = false }) { Text(stringResource(R.string.settings_cancel)) } },
-        )
+        YoloWarningDialog(onKeepAsking = { askYolo = false }, onTurnOn = {
+            askYolo = false
+            save(PcSettings.patch(mode = ChatMode.YOLO))
+        })
     }
 }
 
