@@ -37,6 +37,13 @@ describe('audit trail', () => {
     expect(describeBy(null)).toBe('nobody answered');
   });
 
+  it('names the device by its current name, and by id once it is no longer paired', () => {
+    expect(describeBy({ via: 'phone', device: 'd1', deviceName: "Davide's Pixel" })).toBe("on Davide's Pixel (phone)");
+    expect(describeBy({ via: 'paired computer', device: 'd2', deviceName: 'Studio Mac' })).toBe('on Studio Mac (paired computer)');
+    expect(describeBy({ via: 'paired computer', device: 'gone', deviceName: ' ' })).toBe('on a paired computer (gone)');
+    expect(describeBy({ via: 'phone' })).toBe('on a phone');
+  });
+
   it('keeps only approvals and permissions in the decisions view', () => {
     expect(trail.filter(isDecision).map((e) => e.at)).toEqual([3, 7]);
   });
