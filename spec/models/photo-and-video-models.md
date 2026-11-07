@@ -61,6 +61,13 @@ An empty Photo chat with no picture model on this computer shows **Choose a pict
 - **Someone with picture models of their own** does not see it; they pick in the chat's controls as before.
 - **Not here yet:** the cloud card (step 8), and the first-use introduction's **Choose your first model** step, which waits for the introduction itself (PR #2149).
 
+## Picture models in Models `[implemented 2026-11-08 (#2177); unit- and daemon-tested, captured in an isolated renderer fixture with a stub engine]`
+
+- **Kind filter:** above the model list, **All · Chat · Pictures · Video**. A family is video when its name or tags say Wan, LTX, HunyuanVideo, CogVideo or Mochi (checked first: a Wan file on disk is a picture model to the engine, but it makes video), pictures when a downloaded file is classified `image`, a catalog entry is tagged `image`, or a name matches the engine's picture-model names, and chat otherwise. **Video** says Nekko can't make videos with these yet. **Pictures** with nothing on disk and no search points to the picks above and to Hugging Face search. The curated starter list is unchanged: it holds chat models only.
+- **Best for this machine** lists **Create pictures** and **Edit photos** after the chat tasks: name, quant, a fit chip ("fits", "tight fit", "fits with offload", "tight, with offload"), "~memory of budget" marked as an estimate, the download including supporting files, the license, and **Download**. No speed.
+- **Supporting files follow every picture download:** when any image model with a companion set finishes downloading, whether from Models, a recommendation or the Photo setup, the daemon queues its text encoders and VAE itself. Files already on disk are skipped.
+- **Offload follows the recommendation, wherever the model came from:** when a Photo chat chooses a picture model (including the first one it picks on its own), Nekko turns on its **Offload weights to CPU** preset if this machine's recommendations say it only fits that way. The rest of the preset is kept.
+
 ## What the pinned engine can already do `[checked against the sd.cpp README and docs at 37bc88b, 2026-11-08; not run]`
 
 - **Images:** SD 1.x/2.x/XL, SD 3/3.5, FLUX.1, FLUX.2 dev/klein, Z-Image, Qwen Image and 2.1, HiDream-O1, Chroma and more.
@@ -151,7 +158,7 @@ Each is one PR (a stack where noted). Tracked in the issue linked from this file
 2. **Engine: model capabilities and companion sets** `[implemented, see above]`: `create` / `edit` per family; Z-Image, Qwen Image and Qwen Image Edit sets; `video` arrives with the Wan set in step 7.
 3. **Recommendations: image rows** `[implemented, see above]`: download sizes from Hugging Face, memory needed, fit per machine, offload when needed. Still open: a measured peak memory per family to replace the 2 GiB allowance, and measured seconds per image. Video rows come with step 7.
 4. **Photo: choose a model from the chat** `[implemented, see above]`: the cards, the hand-off to the shared download job, inline progress. The introduction's **Choose your first model** step follows when #2149 lands.
-5. **Models: Image and Video filters** with the same curated picks and fit chips.
+5. **Models: Image and Video filters** `[implemented, see above]`: kind filters, picture picks in Best for this machine, supporting files fetched after any picture download, offload set from the recommendation.
 6. **Photo: edit an existing photo:** attachments and **Edit** on a reply, the edit request to `sd-server`, the capability check and the edit-model offer.
 7. **Video: local generation (experimental, stack):** the Wan companion set, the video turn on `/sdcpp/v1/vid_gen`, job progress and recovery, the video reply in chat, the hardware gate.
 8. **Cloud image and video providers:** bring-your-own-key providers, privacy prompts under decision 0065.
