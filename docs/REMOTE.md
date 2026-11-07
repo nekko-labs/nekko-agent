@@ -721,7 +721,9 @@ Connection metadata (IPs, timing, frame sizes), the room code, and, if you enabl
 tokens plus the content-free fact "a run finished". If you turn on the iPhone's Live Activity, the
 short status it shows (chat titles, the current step and, at Detailed, reply lines, at the level you
 choose) is the exception: ActivityKit draws only what the push holds, so that text goes through the
-relay and Apple's push service (APNs) as plain text. Lock Screen notifications on both phones also
+relay and Apple's push service (APNs) as plain text. A step never shows what a call waiting on your approval
+would send (only what it does: "fetch url", "Run"), and a step whose detail holds a key, card, ID
+number, email address or phone number shows only what it does. Lock Screen notifications on both phones also
 pass through Apple's and Google's push services, with generic text. The relay keeps all of this in
 memory only. Everything else (chats, commands, files, model output) is end-to-end encrypted, which is
 why relayed local-model use is zero-data-retention for content.

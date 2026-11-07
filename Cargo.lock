@@ -2013,6 +2013,7 @@ dependencies = [
  "image",
  "nekko-js",
  "nekko-net",
+ "nekko-privacy",
  "nekko-sync",
  "p256",
  "pbkdf2",
