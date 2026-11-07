@@ -75,6 +75,42 @@ fn offers_the_builds_the_host_offers() {
     }
 }
 
+#[test]
+fn diffusion_release_1030_matches_published_asset_names() {
+    // Upstream's archive names omit the release counter and changed OS/ROCm versions.
+    let names: Vec<String> = [
+        "cudart-sd-bin-win-cu12-x64.zip",
+        "sd-master-0a06712-bin-Darwin-macOS-26.6.2-arm64.zip",
+        "sd-master-0a06712-bin-Linux-Ubuntu-24.04-x86_64-rocm-10.1.0.zip",
+        "sd-master-0a06712-bin-Linux-Ubuntu-24.04-x86_64-vulkan.zip",
+        "sd-master-0a06712-bin-Linux-Ubuntu-24.04-x86_64.zip",
+        "sd-master-0a06712-bin-win-cpu-x64.zip",
+        "sd-master-0a06712-bin-win-cuda12-x64.zip",
+        "sd-master-0a06712-bin-win-rocm-10.1.0-x64.zip",
+        "sd-master-0a06712-bin-win-vulkan-x64.zip",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    let g = golden();
+    for c in g["sdAssets"].as_array().unwrap() {
+        let builds = builds::diffusion_builds(
+            c["platform"].as_str().unwrap(),
+            c["arch"].as_str().unwrap(),
+            opt(&g["gpus"], &json!("nvidia")),
+        );
+        let build = builds.iter().find(|b| b["id"] == c["id"]).unwrap();
+        let expected = c["asset"]
+            .as_str()
+            .unwrap()
+            .replace("master-1030-0a06712", "master-0a06712")
+            .replace("rocm-6.4", "rocm-10.1.0")
+            .replace("macOS-15.6", "macOS-26.6.2");
+        assert_eq!(builds::match_diffusion_asset(build, &names), Some(expected), "{c}");
+        assert_eq!(json!(builds::match_diffusion_companion(build, &names)), c["companion"], "{c}");
+    }
+}
+
 /* -------------------------------------------------------- the scripted IO */
 
 fn norm(root: &str, v: &Value) -> Value {
