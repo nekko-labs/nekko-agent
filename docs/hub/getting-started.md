@@ -21,6 +21,8 @@ We care about three things:
 - **Take it with you.** Pair your phone to drive the agent on your computer from anywhere, end-to-end encrypted.
 - **Plug it into your tools.** Use it from the terminal, or as an MCP server inside Claude Code, Codex, Cursor and other agents.
 
+**Find a feature by what you want to do:** the [feature guide](/docs/features) maps local models, file recovery, memory, approvals, automation and MCP to setup instructions and honest limits.
+
 ## Install the app
 
 The quickest way to start is the installer.
@@ -46,13 +48,9 @@ When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears a
 
 ## Recovering file edits
 
-For saved chats, the native file tools keep the first original text used by **Review Changes** locally, so restarting Nekko no longer loses that review baseline. Accepting a change discards its saved original; deleting the chat removes its review snapshots too. Incognito keeps originals in memory only, and switching a chat to incognito removes its saved snapshots.
+Use the chat's **Changes** view to compare native text-tool edits, keep them or revert them. New source builds can retain the saved chat's original text across restart and validate up to 100 ordered replacements before writing. Incognito originals remain memory-only; accepting a change discards its baseline.
 
-If Nekko cannot save an original, it stops that edit with an error rather than silently losing recovery. Each chat can retain up to 512 paths and 64 MiB of serialized originals. Review and accept completed changes if you reach that limit. These local originals can contain private source text; this feature does not encrypt them or send them through chat sync.
-
-The agent can also submit up to 100 ordered replacements in one `edit_file` batch. Every replacement must validate before the tool writes the file, so a missing or ambiguous later match does not leave a half-applied batch. The same permissions and folder restrictions apply.
-
-These are **native text-tool originals, not whole-workspace backups**. Shell commands, external editors, Claude Code's own tools, binary files, multi-file rollback and changes made concurrently by another writer need their own recovery strategy. Keep version control and backups for important work.
+See [File recovery and batch edits](/docs/file-recovery) for availability, the exact tool-call example, privacy and storage limits. This is not whole-workspace backup, binary-perfect restoration or protection from concurrent external writers. Keep version control and backups for important work.
 
 ## Reviewing visual changes
 

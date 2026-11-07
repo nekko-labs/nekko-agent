@@ -42,7 +42,7 @@ Before beta, compare established coding/personal agents and implement the most v
 
 - Windows: `cargo test -p nekko-tools -p nekko-store -p nekko-turn -p nekko-sandbox -p nekkod --locked`: 635 passed, zero failed, two existing real-model tests ignored (live llama-server round trip and injection evaluation).
 - A freshly built worktree daemon passed all five journeys in `node scripts/itest-file-recovery.mjs`: actual restart recovery, acceptance, incognito transition/restart, deletion/recreation rejection, and corrupt snapshot error/explicit discard. Each run uses a disposable data directory and home, no configured provider, and cleans up its processes/profile.
-- The same daemon journey runs in the required loopback integration job. Unix-only helper execution and owner-only permission assertions require the Linux daemon job (`deploy:linux`); Windows results do not substitute for it.
+- Linux CI passed [the actual helper and owner-only permission assertions](https://github.com/nekko-labs/nekko-agent/actions/runs/42422037188/job/128552459962), and all five real-daemon journeys passed the loopback integration job. These checks remain required in the loopback integration and Linux daemon jobs (`deploy:linux`); Windows results do not substitute for Unix verification.
 - No visual change. The actual daemon checks prove backend integration, not packaged desktop acceptance, provider schema acceptance or a physical-device journey. Those broader checks remain unverified.
 
 ## Boundaries / not implemented
