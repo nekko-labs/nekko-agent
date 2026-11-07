@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AboutYouSection } from './AboutYouSettings.js';
 import { allowModeChange } from '../components/YoloWarning.js';
 import { AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
 import type { AppSettings, AutomationRunPolicy, ShellOption, ChatMode, ChatWorktreeInfo, GuardrailRule, GuardrailAction, HookEvent, HookRule, McpServerStatus, SandboxMode, TerminalRenderer, UpdateCheckSettings } from '@nekko-agent/shared';
@@ -209,6 +210,7 @@ export function SettingsView() {
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
             <SettingsGroup id="general">
+              <AboutYouSection settings={settings} update={update} />
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
               <section className="card mt-5 p-5">
                 <h2 className="font-semibold">View settings</h2>
@@ -307,7 +309,7 @@ export function SettingsView() {
                 <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-3">
                   <div className="min-w-0">
                     <span className="text-sm">Setup wizard</span>
-                    <p className="text-2xs text-ink-faint">Reopen the first-run walkthrough (theme, providers, integrations).</p>
+                    <p className="text-2xs text-ink-faint">Reopen the first-run walkthrough (you, detail, look, providers, integrations).</p>
                   </div>
                   <button className="btn btn-outline shrink-0 py-1 text-xs" onClick={() => void replaySetup()}>
                     Replay setup

@@ -29,6 +29,13 @@ export function ThemeStep() {
       <div className="mt-6">
         <ThemePresetPicker settings={settings} update={update} showLabel={false} large />
       </div>
+      <label className="mt-6 flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
+        <span className="flex-1">
+          <span className="block text-sm font-semibold">Nekko in your chats</span>
+          <span className="block text-xs text-ink-soft">Sits on each chat and watches you type.</span>
+        </span>
+        <input type="checkbox" role="switch" className="setup-switch" checked={settings.mascotEnabled} onChange={(e) => void update({ mascotEnabled: e.target.checked })} />
+      </label>
     </div>
   );
 }

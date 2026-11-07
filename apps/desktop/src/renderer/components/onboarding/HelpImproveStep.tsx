@@ -11,7 +11,7 @@ export function HelpImproveStep({
   commitRef,
 }: {
   /** Set to the step's commit action; the wizard runs it on Next. */
-  commitRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  commitRef?: React.MutableRefObject<(() => Promise<void | boolean>) | null>;
 } = {}) {
   const settings = useStore((s) => s.settings);
   const [on, setOn] = useState(settings?.telemetry?.enabled === true);

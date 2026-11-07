@@ -107,6 +107,7 @@ const api: NekkoApi = {
   telemetryStatus: () => inv(IpcChannels.telemetryStatus),
   feedbackInfo: () => inv(IpcChannels.feedbackInfo),
   feedbackSend: (message, includeAppInfo, screenshots) => inv(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
+  updatesJoin: (email, name) => inv(IpcChannels.updatesJoin, email, name),
   syncTurnOn: () => inv(IpcChannels.syncTurnOn),
   syncConfirmRecoveryKey: (text) => inv(IpcChannels.syncConfirmRecoveryKey, text),
   syncRestore: (text) => inv(IpcChannels.syncRestore, text),

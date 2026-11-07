@@ -11,12 +11,17 @@
 //! screenshots answers 404 there, so the note fails loudly rather than
 //! arriving without its images. The request carries no token, even when
 //! someone is signed in to Nekko Cloud.
+//!
+//! `updates:join` is the setup wizard's optional email: the address (and the
+//! name the person gave, if any) joins the `app` list through the same
+//! `POST /v1/signups` the website's beta form uses, which stores it in Nekko
+//! Cloud's Postgres and sends one confirmation email.
 
 use crate::routes::Ctx;
 use serde_json::{Map, Value, json};
 
 /// The channels served here, with or without a data directory.
-pub const CHANNELS: &[&str] = &["feedback:info", "feedback:send"];
+pub const CHANNELS: &[&str] = &["feedback:info", "feedback:send", "updates:join"];
 
 /// The server's limit, in characters.
 const MAX_CHARS: usize = 4000;
@@ -46,6 +51,11 @@ pub async fn route(ctx: &Ctx, channel: &str, args: &[Value]) -> Result<Value, St
                 body["screenshots"] = Value::Array(shots);
             }
             send(&cloud_url(), &body).await
+        }
+        "updates:join" => {
+            let email = args.first().and_then(Value::as_str).unwrap_or_default();
+            let name = args.get(1).and_then(Value::as_str);
+            join(&cloud_url(), &signup_body(email, name)?).await
         }
         _ => Err(format!("unknown channel {channel}")),
     }
@@ -102,6 +112,47 @@ fn body(message: &str, facts: Option<&Value>) -> Result<Value, String> {
         out["app"] = f.clone();
     }
     Ok(out)
+}
+
+/// The privacy policy text the setup wizard links to, as the website's form sends it.
+const POLICY_VERSION: &str = "2026-11-03";
+
+/// The wizard's signup: only the address and the name the person typed, on the `app` list.
+fn signup_body(email: &str, name: Option<&str>) -> Result<Value, String> {
+    let email = email.trim();
+    let (local, domain) = email.split_once('@').unwrap_or_default();
+    if email.len() > 320 || local.is_empty() || !domain.contains('.') || email.chars().any(char::is_whitespace) {
+        return Err("Enter a valid email address.".into());
+    }
+    let mut out = json!({
+        "email": email, "list": "app", "source": "/app/setup", "marketing": true, "policyVersion": POLICY_VERSION,
+    });
+    if let Some(name) = name.map(str::trim).filter(|n| !n.is_empty()) {
+        out["name"] = json!(name.chars().take(200).collect::<String>());
+    }
+    Ok(out)
+}
+
+async fn join(base: &str, body: &Value) -> Result<Value, String> {
+    let url = format!("{}/v1/signups", base.trim_end_matches('/'));
+    let res = nekko_net::send("updates-email", nekko_cloud::client().post(url).json(body)).await.map_err(|e| {
+        if e.is_blocked() {
+            e.to_string()
+        } else {
+            "Couldn't reach Nekko Cloud. Check your connection and try again.".to_string()
+        }
+    })?;
+    match res.status().as_u16() {
+        200..=299 => Ok(json!({ "ok": true })),
+        429 => Err("Too many tries. Try again later.".into()),
+        400 => Err(res
+            .json::<Value>()
+            .await
+            .ok()
+            .and_then(|v| v["error"].as_str().map(String::from))
+            .unwrap_or_else(|| "Enter a valid email address.".into())),
+        status => Err(format!("Nekko Cloud couldn't save the address ({status}). Try again later.")),
+    }
 }
 
 /// The sheet's screenshots as `{ type, data }`: the file name stays on this
@@ -241,6 +292,27 @@ mod tests {
             req
         });
         (base, server)
+    }
+
+    #[test]
+    fn signup_sends_only_the_address_the_name_and_the_list() {
+        assert_eq!(
+            signup_body(" a@b.co ", Some("  Philip ")).unwrap(),
+            json!({ "email": "a@b.co", "name": "Philip", "list": "app", "source": "/app/setup", "marketing": true, "policyVersion": POLICY_VERSION })
+        );
+        assert!(signup_body("a@b.co", Some(" ")).unwrap().get("name").is_none());
+        for bad in ["", "a@b", "@b.co", "a b@c.co", "nope"] {
+            assert!(signup_body(bad, None).is_err(), "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn join_posts_to_signups() {
+        let (base, server) = answer_once("202 Accepted", r#"{"ok":true}"#).await;
+        assert_eq!(join(&base, &signup_body("a@b.co", None).unwrap()).await.unwrap(), json!({ "ok": true }));
+        let req = server.await.unwrap();
+        assert!(req.starts_with("POST /v1/signups "), "{req}");
+        assert!(req.contains(r#""list":"app""#), "{req}");
     }
 
     #[tokio::test]

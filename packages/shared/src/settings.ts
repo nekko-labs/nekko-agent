@@ -66,6 +66,9 @@ export interface OnboardingState {
   steps?: Record<string, 'done' | 'skipped'>;
 }
 
+/** Setup's "What do you mostly do?" answer. */
+export type WorkProfile = 'developer' | 'designer' | 'writer' | 'business' | 'student' | 'exploring';
+
 /** Bump when the wizard's steps change enough that existing users should see it again. */
 export const ONBOARDING_VERSION = 1;
 
@@ -443,6 +446,12 @@ export interface AppSettings {
   };
   /** First-run setup wizard progress (undefined on installs that predate it). */
   onboarding?: OnboardingState;
+  /** What Nekko calls the person: greetings and the chat welcome. Set in setup or Settings > General. */
+  userName?: string;
+  /** The optional email given in setup for product updates; also joined to Nekko Cloud's `app` list then. */
+  userEmail?: string;
+  /** The closest of setup's "What do you mostly do?" cards; it only seeded the detail level. */
+  workProfile?: WorkProfile;
   /**
    * The Agent board wall: the split tree of windows and the toolbar
    * switches, as the renderer saves them, so the desktop, web and phone

@@ -32,6 +32,8 @@ The quickest way to start is the installer.
 2. Run it. On macOS, drag Nekko Agent into Applications.
 3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab (the violet brain-and-gear icon in the left navigation). Click a model's name there to make it the default for new chats.
 
+The first time it opens, Nekko says hi and asks a few quick questions, all of them skippable: what to call you, an optional email for update news, what you mostly do, and how much detail you like in replies (**Minimal**, **Regular** or **Detailed**, with a sample chat that shows each one and a switch for the **Monitors** panel). Then you pick a look and connect a model. Setup opens in Dark; switch to Light in the look step. Change any answer later in **Settings → General → About you**, or reopen the whole thing with **Replay setup**. An email you give joins the update list once and gets one confirmation email; nothing is sent if you leave it blank or choose **No thanks**.
+
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
 ## Typing in a new agent window

@@ -2384,6 +2384,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Nothing picked yet, but there is something to pick from: guide the choice
   // instead of failing on send.
   const needsModel = hasProvider && modelsLoaded && !modelId;
+  // What setup asked Nekko to call the person, for the welcome line.
+  const userName = useStore((s) => s.settings?.userName?.trim());
   // A tooltip on the model chip, not a banner in the strip: the nudge points at
   // the control that answers it and costs no layout while it waits.
   // Inline, and only where the user is driving the chat: the wall's composer
@@ -2732,7 +2734,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {setupNeeded ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
                   <h2 className="text-base font-semibold">
-                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : 'What should Nekko Agent work on?'}
+                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : userName ? `What should we work on, ${userName}?` : 'What should Nekko Agent work on?'}
                   </h2>
                   <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
                     {setupNeeded

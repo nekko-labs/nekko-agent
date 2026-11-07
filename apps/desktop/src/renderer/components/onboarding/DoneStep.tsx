@@ -1,13 +1,14 @@
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
+import { SetupNekko } from './AboutYouSteps.js';
 
 /**
  * The close: confirm setup is done and offer the three most useful first
  * moves. Each card finishes the wizard and jumps straight to the thing.
  */
 export function DoneStep({ onFinish }: { onFinish: (after?: () => void) => void }) {
-  const { newChat, setView } = useStore(useShallow((s) => ({ newChat: s.newChat, setView: s.setView })));
+  const { newChat, setView, name } = useStore(useShallow((s) => ({ newChat: s.newChat, setView: s.setView, name: s.settings?.userName?.trim() })));
 
   const items: Array<{ title: string; desc: string; action: () => void }> = [
     {
@@ -29,7 +30,8 @@ export function DoneStep({ onFinish }: { onFinish: (after?: () => void) => void 
 
   return (
     <div className="w-full">
-      <h1 className="text-center text-2xl font-semibold tracking-tight">You're set</h1>
+      <div className="flex justify-center"><SetupNekko size={72} happy /></div>
+      <h1 className="mt-4 text-center text-2xl font-semibold tracking-tight">{name ? `Nice to meet you, ${name}!` : "You're set"}</h1>
       <p className="mx-auto mt-2 max-w-md text-center text-sm leading-relaxed text-ink-soft">
         Here are three things to try first. Pick one to jump right in, or hit Finish.
       </p>
