@@ -8,7 +8,9 @@
 //!   fetch reached, the file a read or write touched, the program a shell
 //!   command ran, the MCP server, how many recipients);
 //! - `approval`: what was asked and the answer, and who gave it: this
-//!   computer, a phone (by device id), Telegram, or nobody (YOLO, a workflow);
+//!   computer, a phone (by device id), Telegram, or nobody (YOLO, a workflow).
+//!   [`name_devices`] adds the device's current name when the trail is read,
+//!   so a renamed phone shows its new name and the file keeps only the id;
 //! - `taint`: the chat read untrusted content, and which tool brought it;
 //! - `redactions`: what the Privacy Shield hid, by kind and count.
 //!
@@ -69,6 +71,24 @@ pub fn delete(data_dir: &Path, session_id: &str) {
     }
 }
 
+/// Add `by.deviceName` from the paired devices registry (`remote:devices`)
+/// to every answer given on a phone or a paired computer that is still known.
+pub fn name_devices(trail: &mut [Value], devices: &Value) {
+    let names: std::collections::HashMap<&str, &str> = devices
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|d| Some((d.get("id")?.as_str()?, d.get("name")?.as_str()?)))
+        .filter(|(_, name)| !name.trim().is_empty())
+        .collect();
+    for event in trail {
+        let Some(by) = event.get_mut("by").and_then(Value::as_object_mut) else { continue };
+        if let Some(name) = by.get("device").and_then(Value::as_str).and_then(|id| names.get(id)) {
+            by.insert("deviceName".into(), json!(name));
+        }
+    }
+}
+
 /// A tool call's value-free detail: what it touched, never what it carried.
 pub fn detail(name: &str, input: &Value) -> Value {
     let s = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or_default();
@@ -115,6 +135,26 @@ mod tests {
         record(tmp.path(), "../escape", json!({}));
         assert!(!tmp.path().join("escape.jsonl").exists());
         assert!(read(tmp.path(), "../escape").is_empty());
+    }
+
+    #[test]
+    fn names_the_devices_it_still_knows() {
+        let mut trail = vec![
+            json!({ "type": "approval", "by": { "via": "phone", "device": "d1" } }),
+            json!({ "type": "approval", "by": { "via": "paired computer", "device": "gone" } }),
+            json!({ "type": "approval", "by": { "via": "this computer" } }),
+            json!({ "type": "approval", "by": null }),
+        ];
+        let devices = json!([{ "id": "d1", "name": "Davide's Pixel" }, { "id": "d2", "name": "" }]);
+        name_devices(&mut trail, &devices);
+        assert_eq!(trail[0]["by"], json!({ "via": "phone", "device": "d1", "deviceName": "Davide's Pixel" }));
+        assert_eq!(
+            trail[1]["by"],
+            json!({ "via": "paired computer", "device": "gone" }),
+            "an unknown device keeps its id"
+        );
+        assert_eq!(trail[2]["by"], json!({ "via": "this computer" }));
+        assert_eq!(trail[3]["by"], Value::Null);
     }
 
     #[test]

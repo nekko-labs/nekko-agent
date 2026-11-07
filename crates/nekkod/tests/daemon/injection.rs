@@ -926,6 +926,12 @@ async fn the_audit_trail_records_who_allowed_what_and_never_the_data() {
         let (_, end) = turn_record(&rig, "turn_eval", SESSION).await;
         assert_eq!(end["stop"], "complete", "{end}");
 
+        // The phone is paired under a name: the trail is read with it.
+        std::fs::write(
+            rig.data.join("remote.json"),
+            json!({ "enabled": false, "devices": [{ "id": "d1", "name": "Davide's Pixel", "platform": "android", "createdAt": 1, "lastSeenAt": 1 }] }).to_string(),
+        )
+        .unwrap();
         let (status, trail) = post(rig.d.port, "audit:read", json!([SESSION]), Some(TOKEN)).await;
         assert_eq!(status, 200, "{trail}");
         let trail = trail.as_array().cloned().unwrap_or_default();
@@ -949,7 +955,9 @@ async fn the_audit_trail_records_who_allowed_what_and_never_the_data() {
         assert_eq!(approvals.len(), 1, "{trail:?}");
         assert_eq!(approvals[0]["callId"], "c_post");
         assert_eq!(approvals[0]["answer"], "approved");
-        assert_eq!(approvals[0]["by"], json!({ "via": "phone", "device": "d1" }));
+        assert_eq!(approvals[0]["by"], json!({ "via": "phone", "device": "d1", "deviceName": "Davide's Pixel" }));
+        let file = std::fs::read_to_string(rig.data.join("audit").join(format!("{SESSION}.jsonl"))).unwrap();
+        assert!(!file.contains("Pixel"), "the file keeps the id only: {file}");
         assert_eq!(of("taint")[0]["by"], "mcp__srv__post_message");
         let text = serde_json::to_string(&trail).unwrap();
         assert!(!text.contains(SECRET), "the trail never holds the data: {text}");

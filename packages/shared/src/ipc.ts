@@ -556,6 +556,8 @@ export interface AgentReplay {
 export interface AuditBy {
   via: string;
   device?: string;
+  /** The device's current name in Paired devices, added by `audit:read`; never stored in the trail. */
+  deviceName?: string;
 }
 
 /**
