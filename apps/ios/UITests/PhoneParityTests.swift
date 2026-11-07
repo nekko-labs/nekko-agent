@@ -109,7 +109,16 @@ final class PhoneParityTests: XCTestCase {
             guard revealViewOption(always, in: app) else { return }
         }
         attach(app, "groups-show-options")
-        always.tap()
+        if usesInlineControls {
+            // SwiftUI exposes a row-wide switch containing the actual control.
+            // As in LiveRelayTests, tap the inner switch rather than the inert row.
+            let knob = inlineAlways.switches.firstMatch
+            let control = knob.exists ? knob : inlineAlways
+            guard revealViewOption(control, in: app) else { return }
+            control.tap()
+        } else {
+            always.tap()
+        }
         if usesInlineControls {
             XCTAssertEqual(inlineAlways.value as? String, "1", "Always show groups is enabled")
             let done = app.buttons["chats.view.done"]
