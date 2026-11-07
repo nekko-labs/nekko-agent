@@ -405,8 +405,15 @@ pub fn start_image_turn(session: &mut Value, opts: &Value, now: u64, seed: u64) 
     if !s.get("messages").is_some_and(Value::is_array) {
         s.insert("messages".into(), json!([]));
     }
+    // Pictures to edit ride on the user message, so the transcript shows what was changed.
+    let refs: Vec<Value> = opts.get("images").and_then(Value::as_array).cloned().unwrap_or_default();
     if let Some(Value::Array(list)) = s.get_mut("messages") {
-        list.push(json!({ "id": format!("msg_{}", base36(now)), "role": "user", "content": text, "createdAt": now }));
+        let mut message =
+            json!({ "id": format!("msg_{}", base36(now)), "role": "user", "content": text, "createdAt": now });
+        if !refs.is_empty() {
+            message["images"] = Value::Array(refs.clone());
+        }
+        list.push(message);
     }
     if s.get("title").and_then(Value::as_str) == Some("New chat") {
         s.insert("title".into(), json!(js::slice16(&text, 48)));
@@ -438,6 +445,17 @@ pub fn start_image_turn(session: &mut Value, opts: &Value, now: u64, seed: u64) 
         }
     }
     request.insert("seed".into(), used.clone());
+    if !refs.is_empty() {
+        request.insert("refImages".into(), Value::Array(refs));
+        // An edit keeps the photo's shape (`size`) for this turn only; the chat's size stays.
+        if let Some(size) = opts.get("size") {
+            for k in ["width", "height"] {
+                if let Some(v) = size.get(k).filter(|v| v.is_number()) {
+                    request.insert(k.into(), v.clone());
+                }
+            }
+        }
+    }
     Ok(ImageStart { request: Value::Object(request), text, seed: used })
 }
 

@@ -64,8 +64,10 @@ export function photoSetupPhase(input: {
   options: ImageRecommendedOption[];
   companions: ImageCompanionStatus | null | undefined;
   chatModelId?: string;
+  /** Show the choice even to someone with picture models of their own (none of which can do the job). */
+  force?: boolean;
 }): PhotoSetupPhase {
-  const { jobs, models, options, companions, chatModelId } = input;
+  const { jobs, models, options, companions, chatModelId, force } = input;
   const files = new Set(options.map((o) => base(o.files[0] ?? '')));
   const groups = groupDownloads(jobs);
   const ours = (g: DownloadGroup) =>
@@ -91,7 +93,7 @@ export function photoSetupPhase(input: {
     return chatModelId === landed.id ? { kind: 'hidden' } : { kind: 'finish', model: landed, option };
   }
   // Someone with picture models of their own picks them in the chat's controls.
-  if (pictures.length) return { kind: 'hidden' };
+  if (pictures.length && !force) return { kind: 'hidden' };
   const failed = groups.find((g) => g.state === 'failed' && ours(g));
   if (failed) return { kind: 'failed', message: failed.message ?? 'The download stopped.' };
   return { kind: 'choose' };
@@ -116,7 +118,20 @@ export function photoCards(task: ImageTaskRecommendation): ImageRecommendedOptio
  * `onShown` says whether the setup is on screen, so the chat can hide its own
  * "no image models yet" line while this offers the choice.
  */
-export function PhotoModelSetup({ session, onReady, onShown }: { session: Session; onReady: (s: Session) => void; onShown?: (shown: boolean) => void }) {
+export function PhotoModelSetup({
+  session,
+  onReady,
+  onShown,
+  capability = 'create',
+  force = false,
+}: {
+  session: Session;
+  onReady: (s: Session) => void;
+  onShown?: (shown: boolean) => void;
+  /** `edit` offers models that change a photo (Edit photos); `create` those that make one. */
+  capability?: 'create' | 'edit';
+  force?: boolean;
+}) {
   const pushToast = useStore((s) => s.pushToast);
   const setView = useStore((s) => s.setView);
   const [status, setStatus] = useState<EngineStatus | null>(null);
@@ -151,7 +166,7 @@ export function PhotoModelSetup({ session, onReady, onShown }: { session: Sessio
     return () => { clearInterval(t); off(); };
   }, [refresh]);
 
-  const task = recs?.imageTasks?.find((t) => t.capability === 'create');
+  const task = recs?.imageTasks?.find((t) => t.capability === capability);
   const options = task?.options ?? [];
   const pictures = models?.filter((m) => m.modality === 'image') ?? [];
   const landed = pictures.find((m) => options.some((o) => base(o.files[0] ?? '') === base(m.path)));
@@ -164,7 +179,7 @@ export function PhotoModelSetup({ session, onReady, onShown }: { session: Sessio
 
   const phase: PhotoSetupPhase =
     models && task
-      ? photoSetupPhase({ jobs, models, options, companions: landed ? companions : null, chatModelId: session.imageParams?.modelId })
+      ? photoSetupPhase({ jobs, models, options, companions: landed ? companions : null, chatModelId: session.imageParams?.modelId, force })
       : { kind: 'hidden' };
 
   // The weights landed: fetch the rest without asking again.
@@ -237,6 +252,7 @@ export function PhotoModelSetup({ session, onReady, onShown }: { session: Sessio
       phase={phase}
       engineReady={engineReady}
       canInstallEngine={canInstallEngine}
+      capability={capability}
       busy={busy}
       onChoose={setChosen}
       onSetUp={() => void setUp()}
@@ -254,6 +270,7 @@ export function PhotoSetupSteps({
   phase,
   engineReady,
   canInstallEngine,
+  capability = 'create',
   busy = false,
   onChoose,
   onSetUp,
@@ -266,6 +283,7 @@ export function PhotoSetupSteps({
   phase: PhotoSetupPhase;
   engineReady: boolean;
   canInstallEngine: boolean;
+  capability?: 'create' | 'edit';
   busy?: boolean;
   onChoose: (modelId: string) => void;
   onSetUp: () => void;
@@ -300,8 +318,12 @@ export function PhotoSetupSteps({
   const none = !cards.some((c) => c.fit !== 'tooBig');
   return (
     <div className="w-full max-w-xl text-left" data-photo-setup={phase.kind}>
-      <p className="mb-1 text-center text-sm font-semibold">Choose a picture model</p>
-      <p className="mb-4 text-center text-xs text-ink-soft">It runs on this computer, so your prompts and pictures stay here.</p>
+      <p className="mb-1 text-center text-sm font-semibold">{capability === 'edit' ? 'Choose a model that edits photos' : 'Choose a picture model'}</p>
+      <p className="mb-4 text-center text-xs text-ink-soft">
+        {capability === 'edit'
+          ? 'It runs on this computer, so your photos stay here.'
+          : 'It runs on this computer, so your prompts and pictures stay here.'}
+      </p>
       {phase.kind === 'failed' && (
         <p role="alert" className="mb-3 flex items-start gap-2 rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--danger)' }}>
           <span className="mt-0.5 shrink-0" style={{ color: 'var(--danger)' }}><WarningIcon className="h-4 w-4" /></span>
