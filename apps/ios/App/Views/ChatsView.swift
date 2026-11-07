@@ -275,6 +275,7 @@ struct ChatsView: View {
                 }
             }
             .pickerStyle(.menu)
+            .accessibilityIdentifier("chats.view.groupBy")
             Picker("Sort by", selection: Binding(get: { view.sortBy }, set: { app.prefs.chatListView = view.withSort($0) })) {
                 ForEach(ChatListView.SortBy.allCases, id: \.self) { Text(Self.sortName($0)).tag($0) }
             }
@@ -301,6 +302,8 @@ struct ChatsView: View {
             }
             Divider()
             Button("Reset to defaults") { app.prefs.chatListView = .standard }.disabled(view.isStandard)
+            Button("Done") { viewOptionsOpen = false }
+                .accessibilityIdentifier("chats.view.done")
           }
           .frame(minWidth: 300, idealWidth: 340, minHeight: 420)
           .presentationCompactAdaptation(.popover)

@@ -97,10 +97,13 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Watching"].waitForExistence(timeout: 3))
         attach(app, "groups-watching")
         app.buttons["View options"].tap()
-        app.buttons["Show"].tap()
         let always = app.buttons["Always show groups"]
+        XCTAssertTrue(app.buttons["Show"].tapUntil { always.exists }, "Show opens its submenu after the popover settles")
         XCTAssertTrue(always.waitForExistence(timeout: 3))
         always.tap()
+        let done = app.buttons["chats.view.done"]
+        XCTAssertTrue(done.waitForExistence(timeout: 3))
+        done.tap()
         XCTAssertTrue(app.staticTexts["Building"].waitForExistence(timeout: 3))
         attach(app, "groups-always-visible")
         app.buttons["Folders"].tap()
