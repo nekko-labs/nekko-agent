@@ -55,6 +55,9 @@ import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
+import { PhotoModelSetup } from './agent-console/PhotoModelSetup.js';
+import { EditModelOffer } from './agent-console/EditModelOffer.js';
+import { MAX_EDIT_PHOTOS, editSize, photoFiles, photoSize, readPhoto } from './agent-console/photoEdit.js';
 import { ImageLiveTurn } from './agent-console/ImageLiveTurn.js';
 import { SubagentInheritedModelContext, SubagentParentContext } from './agent-console/SubagentCue.js';
 import { WatchSessionContext } from '../agentWatches.js';
@@ -413,7 +416,7 @@ function ChatHeader({
  * only when its own data does.
  */
 const TranscriptRowView = memo(function TranscriptRowView({
-  row, streaming, readOnly, prByUrl, sessionId, basePath, cuts, onEditResend, onCopyToComposer, onSplit, onDelete, onRestart, onImageClick, onImageContextMenu,
+  row, streaming, readOnly, prByUrl, sessionId, basePath, cuts, onEditResend, onCopyToComposer, onSplit, onDelete, onRestart, onImageClick, onImageContextMenu, onEditImage,
 }: {
   row: TranscriptRow;
   basePath?: string;
@@ -431,6 +434,8 @@ const TranscriptRowView = memo(function TranscriptRowView({
   onRestart: (id: string) => void;
   onImageClick: (src: string) => void;
   onImageContextMenu: (e: React.MouseEvent, src: string) => void;
+  /** Photo chats: attach a generated picture to the composer to change it. */
+  onEditImage?: (src: string) => void;
 }) {
   if (row.kind === 'activity') return <ActivityGroup items={row.items} />;
   if (row.kind === 'compaction') return <CompactionSummary message={row.message} latest={row.latest} />;
@@ -456,6 +461,7 @@ const TranscriptRowView = memo(function TranscriptRowView({
         onRestart={!readOnly && !streaming && persisted && cuts.restart.has(row.message.id) ? onRestart : undefined}
         onImageClick={onImageClick}
         onImageContextMenu={onImageContextMenu}
+        onEditImage={!readOnly && !streaming && row.message.role === 'assistant' ? onEditImage : undefined}
         chronological
       />
       </MarkdownSession.Provider>
@@ -862,6 +868,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const [composerH, setComposerH] = useState<number | null>(readComposerHeight);
   const composerSectionRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const attachButtonRef = useRef<HTMLButtonElement>(null);
   const turnStart = useRef(0);
@@ -1633,6 +1640,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       useStore.getState().pushToast('error', 'Pick an image model below the chat first.');
       return false;
     }
+    // Photos in the composer mean edit (decision 0067); a typed prompt alone means create.
+    const images = fromDraft ? pendingImages : [];
+    let size: { width: number; height: number } | undefined;
     try {
       const [runtime, setup] = await Promise.all([
         window.nekko.engineStatus(),
@@ -1644,15 +1654,27 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           : 'This model needs supporting files before it can create images. Click Finish image setup below. Your prompt is kept here.');
         return false;
       }
+      // A model with no known set cannot be asked: offer one that surely edits rather than ignore the photo.
+      const can = setup?.capabilities ?? [];
+      if (images.length && !can.includes('edit')) {
+        setEditOffer(true);
+        return false;
+      }
+      if (!images.length && setup && !can.includes('create')) {
+        useStore.getState().pushToast('info', 'This model only changes photos. Add a photo to edit, or pick a model that makes new pictures. Your prompt is kept here.');
+        return false;
+      }
+      if (images.length) size = editSize(await photoSize(images[0]), params);
     } catch {
       useStore.getState().pushToast('error', 'Could not check image setup. Try again or open Model Server.');
       return false;
     }
-    if (fromDraft) { setDraft(''); clearDraft(sessionId); }
+    if (fromDraft) { setDraft(''); clearDraft(sessionId); if (images.length) setPendingImages([]); }
+    setEditOffer(false);
     beginTurn();
-    setSession((prev) => prev ? { ...prev, messages: [...prev.messages, { id: 'tmp', role: 'user', content: prompt, createdAt: Date.now() }] } : prev);
+    setSession((prev) => prev ? { ...prev, messages: [...prev.messages, { id: 'tmp', role: 'user', content: prompt, createdAt: Date.now(), ...(images.length ? { images } : {}) }] } : prev);
     admitted?.();
-    await window.nekko.generateImageTurn({ sessionId, prompt, params: { ...params, modelId: params.modelId } });
+    await window.nekko.generateImageTurn({ sessionId, prompt, params: { ...params, modelId: params.modelId }, ...(images.length ? { images, size } : {}) });
     return true;
   };
 
@@ -1950,6 +1972,34 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // can compose with no provider configured at all.
   const summaryType = useStore((st) => st.sessions.find((x) => x.id === sessionId)?.chatType);
   const imageMode = (session ? session.chatType : summaryType) === 'image';
+  // Bumped when the Photo setup lands a model, so the image controls read the library again.
+  const [imageControlsKey, setImageControlsKey] = useState(0);
+  // While the Photo setup offers its choice, the empty "Choose a model" block would only say there is none.
+  const [photoSetupShown, setPhotoSetupShown] = useState(false);
+  const photoReady = (s: Session) => { setSession(s); setImageControlsKey((k) => k + 1); setEditOffer(false); };
+  // A photo is attached but the chat's model cannot edit: offer one that can (decision 0067).
+  const [editOffer, setEditOffer] = useState(false);
+  /** Photos to edit into the Photo composer: images only, scaled down, at most four in all. */
+  const addPhotos = useCallback(async (sources: Array<File | string>) => {
+    const toast = useStore.getState().pushToast;
+    const read: string[] = [];
+    for (const source of sources) {
+      try { read.push(await readPhoto(source)); }
+      catch (e) { toast('error', (e as Error).message); }
+    }
+    if (!read.length) return;
+    setPendingImages((current) => {
+      const next = [...current, ...read.filter((r) => !current.includes(r))];
+      if (next.length > MAX_EDIT_PHOTOS) toast('info', `A picture can be edited from up to ${MAX_EDIT_PHOTOS} photos; the first ${MAX_EDIT_PHOTOS} are kept.`);
+      return next.slice(0, MAX_EDIT_PHOTOS);
+    });
+  }, []);
+  const editPicture = useCallback((src: string) => { void addPhotos([src]); }, [addPhotos]);
+  const addPhotoFiles = (files: File[]) => {
+    const photos = photoFiles(files);
+    if (photos.length < files.length) useStore.getState().pushToast('info', 'Photo chats edit PNG, JPEG and WebP pictures; other files were left out.');
+    if (photos.length) void addPhotos(photos);
+  };
   const canCompose = imageMode || hasProvider;
   // The `/` and `@` menus read the word that ends at the caret, so they open
   // mid-draft too. null until the composer reports a caret (then the end of
@@ -2263,8 +2313,25 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
   };
 
+  /** Photo chats: a pasted picture is a photo to edit; text pastes as usual. */
+  const onPhotoPaste = (e: React.ClipboardEvent<MarkdownEditorElement>) => {
+    const files = Array.from(e.clipboardData.files).concat(
+      Array.from(e.clipboardData.items).filter((item) => item.kind === 'file').map((item) => item.getAsFile()).filter((f): f is File => !!f),
+    );
+    const unique = files.filter((f, i) => files.findIndex((g) => g.name === f.name && g.size === f.size && g.type === f.type) === i);
+    if (!unique.length) return;
+    e.preventDefault();
+    addPhotoFiles(unique);
+  };
+
   const onDropFiles = (e: React.DragEvent) => {
     const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length && imageMode && canCompose) {
+      e.preventDefault();
+      e.stopPropagation();
+      addPhotoFiles(files);
+      return;
+    }
     if (!files.length || imageMode || !canCompose) return;
     e.preventDefault();
     e.stopPropagation();
@@ -2484,9 +2551,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         onRestart={onRestart}
         onImageClick={setLightbox}
         onImageContextMenu={openImageMenu}
+        onEditImage={imageMode ? editPicture : undefined}
       />
     ),
-    [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu],
+    [artifactBasePath, streaming, readOnly, prByUrl, sessionId, onEditResend, onCopyToComposer, onSplit, cuts, onDelete, onRestart, openImageMenu, imageMode, editPicture],
   );
   // Width of the text column, for the height estimates of rows not yet measured.
   const columnWidth = Math.max(0, (paneWidth || 800) - 60);
@@ -2743,12 +2811,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {setupNeeded ? (
                   <button className="btn btn-primary" onClick={() => useStore.getState().setView('models')}>Set up my first agent →</button>
                 ) : null}
-                {surface !== 'transcript' && welcomeState.modelChoice && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
+                {imageMode && session && surface !== 'transcript' && <PhotoModelSetup session={session} onReady={photoReady} onShown={setPhotoSetupShown} />}
+                {surface !== 'transcript' && welcomeState.modelChoice && !(imageMode && photoSetupShown) && <div className="mt-4 flex h-[min(50vh,440px)] w-full max-w-xl flex-col gap-2 text-left">
                   <div className="flex items-center justify-between gap-2 px-2">
                     <span className="text-xs font-medium text-ink-soft">Choose a model</span>
 
                   </div>
-                  {imageMode && session ? <ImageModeControls session={session} onChange={setSession} busy={streaming} /> :
+                  {imageMode && session ? <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} /> :
                     <ModelPicker providers={providers} filterProviders={cloudOnlyFilter} providerId={providerId} models={models} modelId={modelId}
                       resolvedModelId={resolvedClaudeCodeModel}
                       open={false} onOpenChange={openModelMenu} expanded
@@ -2990,9 +3059,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               </>)}
             </div>
             </>)}
+            {imageMode && session && editOffer && <EditModelOffer session={session} onReady={photoReady} onDismiss={() => setEditOffer(false)} />}
             {showControls && imageMode && session && (
               <div className="flex min-w-0 items-center gap-1 overflow-hidden border-b border-line px-2 py-1">
-                <ImageModeControls session={session} onChange={setSession} busy={streaming} />
+                <ImageModeControls key={imageControlsKey} session={session} onChange={setSession} busy={streaming} />
               </div>
             )}
 
@@ -3227,13 +3297,37 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     aria-expanded={slashMenuOpen || atMenuOpen}
                     aria-controls={slashMenuOpen ? `slash-menu-${sessionId}` : atMenuOpen ? `at-menu-${sessionId}` : undefined}
                     onChange={(text) => { setDraft(text); setCaret(composerCaret()); setMenuClosed(false); }}
-                    onPaste={imageMode ? undefined : onPaste}
+                    onPaste={imageMode ? onPhotoPaste : onPaste}
                     onKeyDown={onComposerKeyDown}
                     disabled={!canCompose}
                   />
                   <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
                 <div className="composer-bar flex items-center gap-2 px-2 pb-2 pt-1">
+                  {imageMode && (<>
+                    <button
+                      type="button"
+                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+                      onClick={() => photoInputRef.current?.click()}
+                      title="Add a photo to edit"
+                      aria-label="Add a photo to edit"
+                      data-photo-attach
+                    >
+                      <PhotoIcon className="h-4 w-4" />
+                    </button>
+                    <input
+                      ref={photoInputRef}
+                      className="hidden"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      multiple
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files ?? []);
+                        if (files.length) addPhotoFiles(files);
+                        e.target.value = '';
+                      }}
+                    />
+                  </>)}
                   {!imageMode && (<>
                   <div
                     ref={attachMenuRef}
