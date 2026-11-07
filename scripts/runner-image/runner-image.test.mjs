@@ -248,6 +248,43 @@ test('no_seed_stays_up_and_runs_nothing', posixFixture, () => {
   assert.match(out, /no seed: no runner, staying up/);
 });
 
+// Force the first directory probe to cross the unchanged one-second fixture deadline.
+// This exercises the clock-boundary ordering deterministically, not by retrying a flake.
+function delayFirstSeedProbe() {
+  writeFileSync(join(root, 'bin', 'ls'), `#!/bin/bash
+if [ ! -e '${root}/probed' ]; then
+  touch '${root}/probed'
+  sleep 1.1
+fi
+exec /bin/ls "$@"
+`, { mode: 0o755 });
+}
+
+test('expired_first_probe_still_mounts_then_stays_up_without_a_seed', posixFixture, () => {
+  const { status, calls, out } = run({ prepare: delayFirstSeedProbe });
+  assert.equal(status, 0);
+  assert.equal(calls.filter((c) => c === 'diskutil mount readOnly NEKKOSEED').length, 1);
+  assert.ok(!calls.some((c) => c.startsWith('launchctl') || c.startsWith('shutdown')));
+  assert.match(out, /no seed: no runner, staying up/);
+});
+
+test('expired_first_probe_accepts_a_seed_from_its_initial_mount', posixFixture, () => {
+  const { status, calls } = run({ seed: {}, late: true, prepare: delayFirstSeedProbe });
+  assert.equal(status, 0);
+  startsRunSh(calls);
+  assert.equal(calls.filter((c) => c === 'diskutil mount readOnly NEKKOSEED').length, 1);
+});
+
+test('zero_seed_wait_attempts_one_mount_without_a_poll_sleep', posixFixture, () => {
+  const { status, calls, out } = run({
+    env: { NEKKO_SEED_WAIT: '0' },
+    prepare: () => writeFileSync(join(root, 'bin', 'sleep'), `#!/bin/bash\necho 'unexpected poll sleep' >> '${root}/calls.log'\n`, { mode: 0o755 }),
+  });
+  assert.equal(status, 0);
+  assert.deepEqual(calls, ['diskutil mount readOnly NEKKOSEED']);
+  assert.match(out, /no seed: no runner, staying up/);
+});
+
 test('an_empty_mount_point_is_not_a_seed_yet', posixFixture, () => {
   startsRunSh(run({ seed: {}, late: true }).calls);
 });
