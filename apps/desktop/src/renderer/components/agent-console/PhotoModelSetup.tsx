@@ -182,7 +182,7 @@ export function PhotoModelSetup({
 
   const phase: PhotoSetupPhase =
     models && task
-      ? photoSetupPhase({ jobs, models, options, companions: landed ? companions : null, chatModelId: session.imageParams?.modelId, force, runtimeReady: !!engine?.diffusionInstall?.binPath })
+      ? photoSetupPhase({ jobs, models, options, companions: landed ? companions : null, chatModelId: session.imageParams?.modelId, force, runtimeReady: !!status?.diffusionInstall?.binPath })
       : { kind: 'hidden' };
 
   // The weights landed: fetch the rest without asking again.
