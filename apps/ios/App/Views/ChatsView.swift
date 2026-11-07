@@ -288,10 +288,13 @@ struct ChatsView: View {
                 }
                 .pickerStyle(.menu)
             }
-            Menu("Show") {
+            // Keep these controls in the popover: a second popup menu did not
+            // expose its toggles reliably when hosted inside this Form.
+            DisclosureGroup("Show") {
                 Toggle("Previews", isOn: bind(\.showPreviews))
                 Toggle("Completed chats", isOn: bind(\.showCompleted))
                 Toggle("Always show groups", isOn: bind(\.showEmptyGroups))
+                    .accessibilityIdentifier("chats.view.showEmptyGroups")
                 if places.count > 1 {
                     Toggle("Computer", isOn: bind(\.showComputer))
                     Toggle("Computer icons", isOn: bind(\.showComputerIcons))

@@ -97,13 +97,21 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Watching"].waitForExistence(timeout: 3))
         attach(app, "groups-watching")
         app.buttons["View options"].tap()
-        let always = app.buttons["Always show groups"]
-        XCTAssertTrue(app.buttons["Show"].tapUntil { always.exists }, "Show opens its submenu after the popover settles")
+        // Shared before/after harness: the baseline has a menu item; View options
+        // now exposes the same preference as an inline switch in its Show disclosure.
+        let inlineAlways = app.switches["chats.view.showEmptyGroups"]
+        let menuAlways = app.buttons["Always show groups"]
+        XCTAssertTrue(app.buttons["Show"].tapUntil { inlineAlways.exists || menuAlways.exists }, "Show exposes its controls")
+        let always = inlineAlways.exists ? inlineAlways : menuAlways
         XCTAssertTrue(always.waitForExistence(timeout: 3))
+        attach(app, "groups-show-options")
         always.tap()
-        let done = app.buttons["chats.view.done"]
-        XCTAssertTrue(done.waitForExistence(timeout: 3))
-        done.tap()
+        if inlineAlways.exists {
+            XCTAssertEqual(inlineAlways.value as? String, "1", "Always show groups is enabled")
+            let done = app.buttons["chats.view.done"]
+            XCTAssertTrue(done.waitForExistence(timeout: 3))
+            done.tap()
+        }
         XCTAssertTrue(app.staticTexts["Building"].waitForExistence(timeout: 3))
         attach(app, "groups-always-visible")
         app.buttons["Folders"].tap()
