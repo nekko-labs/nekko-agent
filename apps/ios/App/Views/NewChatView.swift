@@ -41,6 +41,8 @@ struct NewChatView: View {
     @State private var onPhone = false
     @State private var phoneModel: (String, String)?
     @State private var pickingPhoneModel = false
+    /// "Send your first prompt", over someone's first ever new chat (FirstPromptIntroView.shouldShow).
+    @State private var firstPromptIntro = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     /// Auto (2026-11-05): a chat on a local model starts on a free computer.
@@ -113,6 +115,8 @@ struct NewChatView: View {
         .navigationTitle("New chat")
         .navigationBarTitleDisplayMode(.inline)
         .keyboardDoneButton()
+        .sheet(isPresented: $firstPromptIntro, onDismiss: { app.prefs.firstPromptIntroSeen = true }) { FirstPromptIntroView() }
+        .task(id: "\(onPhone) \(store.summariesLoaded)") { checkFirstPromptIntro() }
         .sheet(isPresented: $pickingPhoneModel) {
             PhoneModelPicker(selected: phoneModel) { p, m in
                 phoneModel = (p, m)
@@ -171,6 +175,13 @@ struct NewChatView: View {
         .onChange(of: store.pcSettings.defaultWorkspaceIds) { _, _ in pickDefaultFolder() }
         .onChange(of: store.workspaces) { _, _ in pickDefaultFolder() }
         .onChange(of: store.defaults) { _, _ in pickDefault() }
+    }
+
+    private func checkFirstPromptIntro() {
+        guard !firstPromptIntro, FirstPromptIntroView.shouldShow(seen: app.prefs.firstPromptIntroSeen, onPhone: onPhone, listLoaded: store.summariesLoaded,
+                                                                 chats: store.chats(on: nil) + phone.summaries) else { return }
+        typing = false
+        firstPromptIntro = true
     }
 
     /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
