@@ -532,10 +532,16 @@ inference or close the native apps' remaining feature and release gaps; see the
 
 **The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
-the Dynamic Island (only ever one, even with several computers paired), with a chip per chat
-that opens it, **Allow / Deny** on the chip of a chat waiting on a tool, and a
-level in **Settings → Live Activities** (None, Minimal, Standard, Detailed) that decides how much
-of the chat it shows (at Detailed, a mic sends one spoken message to the chat it shows, after Face ID; see [Voice](voice.md#from-the-lock-screen)); until the relay can push it, the card changes only while the app is running; notifications with Allow /
+the Dynamic Island (only ever one, scoped to the active computer). The current
+[status dashboard](voice.md#from-the-status-dashboard) replaces tappable chat chips with
+Building, Need input and Done counts, primary **Talk to Nekko**, and secondary **Open app**.
+On iOS 18+ voice requires authentication; on iOS 17 it opens the list without automatic
+listening. The dashboard replaces the old focused-chat microphone and chip actions;
+review chats and approvals in the app. **Settings → Live Activities** still offers None,
+Minimal, Standard and Detailed; Minimal removes chat text from push payloads, whereas
+Standard/Detailed still permit it even though the dashboard draws counts. Native/device
+verification for the redesign remains incomplete; background push delivery requires
+APNs configuration. Separate notifications retain Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
 and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
 speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on

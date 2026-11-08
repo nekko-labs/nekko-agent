@@ -182,6 +182,47 @@ class DictationControllerTest {
     }
 
     @Test
+    fun `cancel during startup cannot start microphone even when status swallows cancellation`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val mic = FakeMic()
+        val c = DictationController(backgroundScope, FakeCaller { JsonPrimitive("") }, mic,
+            { EngineChoice.COMPUTER_FIRST to "" },
+            { runCatching { gate.await() }; ready }, { "Mac" })
+        var heard: String? = null
+        c.toggle { heard = it }
+        runCurrent()
+        c.cancel()
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(0, mic.phoneCalls)
+        assertNull(heard)
+        assertEquals(MicState.Idle, c.state.value)
+    }
+
+    @Test
+    fun `cancel discards a late noncancellable phone result`() = runTest {
+        val gate = CompletableDeferred<String>()
+        val mic = object : MicHardware {
+            override suspend fun record(onProgress: (Int, Float) -> Unit) = ShortArray(0)
+            override fun stopRecording() = Unit
+            override fun phoneAvailable() = true
+            override suspend fun phoneListen(language: String, onLevel: (Float) -> Unit): String =
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { gate.await() }
+            override fun stopPhone() = Unit
+        }
+        val c = DictationController(backgroundScope, FakeCaller { JsonPrimitive("") }, mic,
+            { EngineChoice.PHONE to "" }, { ready }, { "Mac" })
+        var heard: String? = null
+        c.toggle { heard = it }
+        runCurrent()
+        c.cancel()
+        gate.complete("send to secret saying late words")
+        runCurrent()
+        assertNull(heard)
+        assertEquals(MicState.Idle, c.state.value)
+    }
+
+    @Test
     fun `a regular phone stop still keeps the recognized text`() = runTest {
         val spoken = CompletableDeferred<String>()
         val mic = object : MicHardware {

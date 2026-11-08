@@ -1,5 +1,5 @@
-// Synthetic Settings > Accessibility evidence: the text size stepper, its live
-// preview, and that only Apply changes the app.
+// Synthetic Settings > Style evidence: the text preview under the code font
+// follows the text size at once, with nothing to apply.
 // Launch: NEKKO_LAYOUT_SANDBOX=text-size-sandbox.cjs node layout-evidence-integration.cjs
 // Stub bridge only. Hidden, non-focusable window; clicks are DOM events, no OS input.
 const { app, BrowserWindow, session, screen } = require('electron');
@@ -26,68 +26,38 @@ app.whenReady().then(async () => {
   win.on('focus', () => report.errors.push('Fixture took focus'));
   const run = (source) => win.webContents.executeJavaScript(source, true);
   const capture = async (name) => {
-    await run(`[...document.querySelectorAll('.settings-nav-item')].find((n) => n.textContent.trim() === 'Accessibility').click()`);
+    await run(`document.getElementById('style')?.scrollIntoView({ block: 'start' })`);
     await sleep(800);
     fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true, stayAwake: false })).toPNG());
   };
-  const click = async (label) => {
-    await run(`[...document.querySelectorAll('#accessibility button')].find((b) => (b.getAttribute('aria-label') || b.textContent).startsWith(${js(label)})).click()`);
-    await sleep(300);
+  const pick = async (size) => {
+    await run(`(() => { const s = document.getElementById('style-text-size'); s.value = ${js(String(size))}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    await sleep(500);
   };
   const rootZoom = () => run(`document.documentElement.style.zoom`);
-  const saved = () => run(`window.nekko.getSettings ? window.nekko.getSettings().then((s) => s.textScale) : null`);
   // The on-screen height of the preview's title, which is what a person reads.
   const titleHeight = () => run(`document.querySelector('[data-text-size-preview] .font-semibold').getBoundingClientRect().height`);
-  const sectionText = () => run(`document.getElementById('accessibility').innerText`);
-  const disabled = (label) => run(`document.querySelector('#accessibility [aria-label="${label}"]').disabled`);
+  const sectionText = () => run(`document.getElementById('style').innerText`);
   try {
     await win.loadFile(path.join(out, 'index.html'));
     await sleep(1500);
     await run(`layoutFixture.store.getState().setView('settings')`);
     await sleep(1500);
     // A hidden window runs no animation frames until its first capture, so the nav's scroll starts here.
-    await capture('accessibility-100');
-    await capture('accessibility-100');
+    await capture('style-100');
+    await capture('style-100');
     const text = await sectionText();
-    check('text size comes before the animation toggle', text.indexOf('Text size') > -1 && text.indexOf('Text size') < text.indexOf('Agent activity animation'));
-    check('nothing to apply at rest', !/Apply \d/.test(text));
+    check('preview comes after the code font', text.indexOf('Code font') > -1 && text.indexOf('Code font') < text.indexOf('Preview at 100%'));
+    check('nothing to apply', !/Apply \d/.test(text));
+    check('Animations has no text size', !(await run(`document.getElementById('animations').innerText`)).includes('Text size'));
     const at100 = await titleHeight();
 
-    await click('Increase text size');
-    await click('Increase text size');
+    await pick(125);
     const at125 = await titleHeight();
     report.measures.previewTitle = { at100, at125 };
-    check('preview grows live', at125 > at100 * 1.2);
-    check('the app has not changed yet', (await rootZoom()) === '');
-    check('Apply names the size', (await sectionText()).includes('Apply 125%'));
-    await capture('accessibility-preview-125');
-
-    await click('Cancel');
-    check('Cancel returns the preview', Math.abs((await titleHeight()) - at100) < 0.5);
-    check('Cancel leaves the app alone', (await rootZoom()) === '');
-
-    await click('Increase text size');
-    await click('Increase text size');
-    await click('Apply');
-    await sleep(500);
-    check('Apply changes the whole app', (await rootZoom()) === '125%');
-    check('Apply hides the buttons', !/Apply \d/.test(await sectionText()));
-    report.measures.saved = await saved();
-    const applied125 = await titleHeight();
-    report.measures.previewTitle.applied125 = applied125;
-    check('preview does not double up on the applied size', Math.abs(applied125 - at125) < 1);
-    await capture('accessibility-applied-125');
-
-    await click('Increase text size');
-    check('stops at the upper limit', await disabled('Increase text size'));
-    report.measures.previewTitle.preview150 = await titleHeight();
-    await capture('accessibility-preview-150');
-    await click('Cancel');
-    for (let i = 0; i < 4; i += 1) await click('Decrease text size');
-    check('stops at the lower limit', await disabled('Decrease text size'));
-    check('still not applied', (await rootZoom()) === '125%');
-    report.measures.previewTitle.preview80 = await titleHeight();
-    await capture('accessibility-preview-80');
+    check('picking a size changes the app at once', (await rootZoom()) === '125%');
+    check('preview follows the size', at125 > at100 * 1.2 && (await sectionText()).includes('Preview at 125%'));
+    await capture('style-preview-125');
   } catch (e) {
     report.errors.push(String(e && e.stack || e));
   }

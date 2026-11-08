@@ -261,6 +261,8 @@ final class LiveCardTests: XCTestCase {
             let name = c["name"] as? String ?? ""
             let state = try decode(LiveCardState.self, c["json"] ?? [:])
             XCTAssertEqual(state.chats.map(\.state.rawValue), c["states"] as? [String], name)
+            XCTAssertEqual(state.counts, c["counts"] as? [String: Int], "counts: \(name)")
+            XCTAssertEqual(try decode(LiveCardState.self, JSONSerialization.jsonObject(with: JSONEncoder().encode(state))), state, "round trip: \(name)")
             if let at = c["finishedAt"] as? Double { XCTAssertEqual(state.chats[0].finishedAt, Date(timeIntervalSinceReferenceDate: at), name) }
             if let at = c["startedAt"] as? Double { XCTAssertEqual(state.chats[0].startedAt, Date(timeIntervalSinceReferenceDate: at), name) }
         }

@@ -183,62 +183,42 @@ class Notices(private val context: Context) {
      * lock screen, like the iPhone's Live Activity. The user can turn that off
      * per app; it then stays an ordinary ongoing notification.
      *
-     * With a [card] it is the Lock Screen card ([LiveCards]): the chat that most
-     * needs you, its live step, and its buttons. Minimal shows no chat text;
-     * Standard adds the chat's short title, its step and Allow; Detailed adds the
-     * reply line. At Standard and Detailed a locked phone that hides sensitive
-     * content shows the Minimal words. Without a card it says counts only.
+     * With a [card], all enabled privacy levels show content-free scoped totals.
+     * Voice leads the action row and opens a foreground sheet behind the app lock;
+     * Android, not this app, chooses notification action styling. No background mic.
      */
     fun keepAlive(status: KeepAlive.Status, card: LiveCardState? = null, level: LiveLevel = LiveLevel.NONE): Notification {
-        val focused = card?.focused
-        if (card == null || focused == null || level == LiveLevel.NONE) {
+        if (card == null || level == LiveLevel.NONE) {
             return base(chip(status))
                 .setContentTitle(context.getString(R.string.chat_notice_staying_connected))
                 .setContentText(line(status))
-                .setContentIntent(openApp())
+                .setContentIntent(openDashboard())
                 .build()
         }
-        val generic = generic(focused.state)
-        val others = card.chats.size - 1 + card.more
-        val count = if (others > 0) context.getString(R.string.chat_card_more, others) else null
-        val chip = if (focused.state == LiveChatState.NEEDS_YOU) generic(LiveChatState.NEEDS_YOU) else chip(status)
-        fun minimal() = base(chip)
-            .setContentTitle(generic)
-            .setContentText(count ?: line(status))
-        val b = if (level == LiveLevel.MINIMAL) {
-            minimal().setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        } else {
-            val text = step(focused.step).ifEmpty { generic }
-            base(chip)
-                .setContentTitle(focused.short.ifEmpty { generic })
-                .setContentText(text)
-                .setSubText(count)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(if (focused.reply.isNotEmpty()) "$text\n${focused.reply}" else text))
-                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-                .setPublicVersion(minimal().setContentIntent(openApp()).build())
-        }
-        if (focused.startedAt != null && (focused.state == LiveChatState.WORKING || focused.state == LiveChatState.NEEDS_YOU)) {
-            b.setWhen((focused.startedAt!! * 1000).toLong()).setUsesChronometer(true).setShowWhen(true)
-        }
-        b.setContentIntent(openChat(focused.id))
-        val callId = focused.callId
-        when {
-            focused.state == LiveChatState.NEEDS_YOU && callId != null -> {
-                // Allow needs an unlocked phone (Android 12+); below that it stays in the chat. Deny is safe unseen.
-                if (level != LiveLevel.MINIMAL && Build.VERSION.SDK_INT >= 31) {
-                    b.addAction(
-                        NotificationCompat.Action.Builder(0, context.getString(R.string.chat_card_allow), CardReceiver.intent(context, CardReceiver.ALLOW, focused.id, callId))
-                            .setAuthenticationRequired(true)
-                            .build(),
-                    )
-                }
-                b.addAction(0, context.getString(R.string.chat_notice_deny), deny(focused.id, callId))
-            }
-            focused.state == LiveChatState.WORKING -> b.addAction(0, context.getString(R.string.chat_card_stop), CardReceiver.intent(context, CardReceiver.STOP, focused.id))
-        }
-        if (others > 0) b.addAction(0, context.getString(R.string.chat_card_next), CardReceiver.intent(context, CardReceiver.NEXT, focused.id))
-        return b.build()
+        // Never include chat text, transcripts or focused-chat controls on the resting card.
+        val freshness = if (status.fresh) "" else "Offline or stale. Last known: "
+        return base(if (status.fresh) chip(status) else "Stale")
+            .setContentTitle(context.getString(R.string.app_name))
+            .setSubText(status.line)
+            .setContentText(freshness + StatusDashboard.summary(card))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(
+                listOf(freshness + StatusDashboard.summary(card), StatusDashboard.detail(card), context.getString(R.string.dashboard_voice_fallback))
+                    .filter { it.isNotBlank() }.joinToString("\n")))
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(openDashboard())
+            .addAction(NotificationCompat.Action.Builder(R.drawable.ic_launcher_foreground,
+                context.getString(R.string.dashboard_talk), openVoice()).setAuthenticationRequired(true).build())
+            .addAction(0, context.getString(R.string.dashboard_open), openDashboard())
+            .build()
     }
+
+    private fun openVoice(): PendingIntent = PendingIntent.getActivity(
+        context, 901, Intent(context, MainActivity::class.java).setAction(MainActivity.TALK_TO_NEKKO)
+            .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+    private fun openDashboard(): PendingIntent = PendingIntent.getActivity(
+        context, 902, Intent(context, MainActivity::class.java).setAction(MainActivity.OPEN_DASHBOARD)
+            .setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
     private fun base(chip: String) = NotificationCompat.Builder(context, CHANNEL_CONNECTION)
         .setSmallIcon(R.drawable.ic_launcher_foreground)

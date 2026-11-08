@@ -36,7 +36,8 @@ export const SHORTCUTS: Record<'palette' | 'newAgent' | 'newTerminal' | 'newMedi
     matches: (e) => mod(e) && !e.altKey && !e.shiftKey && e.key === '0',
   },
   // Handled by the chat window that has focus (or the one the user is
-  // driving), not by App: it opens that chat's own search bar.
+  // driving), not by App: it opens that chat's own search bar. On the
+  // Settings page it opens Settings search instead.
   findInChat: {
     label: `${MOD}F`,
     matches: (e) => mod(e) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f',

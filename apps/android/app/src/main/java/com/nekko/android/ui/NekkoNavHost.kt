@@ -91,6 +91,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 object Routes {
     const val CHATS = "chats"
+    const val VOICE = "voice"
     const val CHAT = "chat/{id}"
     const val NEW = "new"
     const val PAIR = "pair?link={link}"
@@ -153,6 +154,8 @@ fun NekkoNavHost(
             is DeepLink.Chat -> nav.navigate(Routes.chat(l.id)) { launchSingleTop = true }
             // Over whatever is open; Back from New chat returns there.
             DeepLink.Share, DeepLink.NewChat -> nav.navigate(Routes.NEW) { launchSingleTop = true }
+            DeepLink.Talk -> nav.navigate(Routes.VOICE) { launchSingleTop = true }
+            DeepLink.Dashboard -> nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
             null -> return@LaunchedEffect
         }
         onLinkHandled()
@@ -166,6 +169,13 @@ fun NekkoNavHost(
     LaunchedEffect(repo) { FirstRun.atLaunch(phonePrefs, repo.state.first { it.ready }.computers.isNotEmpty()) }
 
     NavHost(navController = nav, startDestination = Routes.CHATS) {
+        composable(Routes.VOICE) {
+            val context = LocalContext.current
+            val app = context.applicationContext as com.nekko.android.NekkoApp
+            com.nekko.android.ui.screens.NekkoVoiceSheet(repo, phonePrefs, app.connection.card) {
+                nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
+            }
+        }
         composable(Routes.CHATS) {
             // First run (IO-31): step 1 before pairing, step 3 right after the first pairing.
             if (firstRunStep(repo, phonePrefs)) return@composable

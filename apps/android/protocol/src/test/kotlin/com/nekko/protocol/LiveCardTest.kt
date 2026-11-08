@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.double
+import kotlinx.serialization.json.int
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -128,7 +129,12 @@ class LiveCardTest {
         for (c in root["build"] as JsonArray) {
             val o = c as JsonObject
             val name = (o["name"] as JsonPrimitive).content
-            if (name in sizeGuard) continue
+            if (name in sizeGuard) {
+                val chats = (o["chats"] as JsonArray).mapNotNull { LiveChat.from(it) }
+                val want = LiveCardState.from(o["card"])
+                assertEquals("counts: $name", want.counts, LiveCard.build(chats, null, null, LiveLevel.DETAILED, fixtureNow)?.counts)
+                continue
+            }
             val chats = (o["chats"] as? JsonArray).orEmpty().mapNotNull { LiveChat.from(it) }
             val previous = o["previous"]?.takeIf { it !is JsonNull }?.let { LiveCardState.from(it) }
             val level = LiveLevel.parse((o["level"] as JsonPrimitive).content)!!
@@ -142,6 +148,8 @@ class LiveCardTest {
             val o = c as JsonObject
             val s = LiveCardState.from(o["json"])
             assertEquals((o["name"] as JsonPrimitive).content, (o["states"] as JsonArray).map { (it as JsonPrimitive).content }, s.chats.map { it.state.wire })
+            val counts = (o["counts"] as? JsonObject)?.mapValues { (_, v) -> (v as JsonPrimitive).int }
+            assertEquals("counts: ${o["name"]}", counts, s.counts)
         }
         for (c in root["shortTitle"] as JsonArray) {
             val (input, want) = (c as JsonArray).map { (it as JsonPrimitive).content }

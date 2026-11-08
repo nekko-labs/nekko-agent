@@ -15,6 +15,10 @@ on:
         required: false
         type: string
         default: ''
+      capture_platform:
+        required: false
+        type: string
+        default: both
       ios_runtime:
         required: false
         type: string
@@ -54,6 +58,12 @@ on:
         required: false
         type: string
         default: ''
+      capture_platform:
+        description: 'Capture one platform when the other harness is not baseline-compatible'
+        required: false
+        type: choice
+        options: [both, ios, android]
+        default: both
       ios_runtime:
         description: 'Exact simulator runtime identifier for matched evidence; empty uses the existing auto-selection'
         required: false
@@ -88,6 +98,7 @@ permissions:
   contents: read
 jobs:
   ios:
+    if: inputs.capture_platform != 'android'
     # The existing ios-native.yml hosted image, never the owner-runner picker.
     runs-on: xcode-27
     timeout-minutes: 45
@@ -194,6 +205,7 @@ jobs:
           path: apps/ios/evidence/**
           if-no-files-found: error
   android:
+    if: inputs.capture_platform != 'ios'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:

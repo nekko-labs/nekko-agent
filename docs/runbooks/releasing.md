@@ -53,3 +53,7 @@ It reads the local tags, so fetch them first. `--reserve` is what the nightly wo
 | `release.yml` (tag) | the same three from the tag name; the CLI and Local Web UI npm packages as before |
 | `ios-testflight.yml` | `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` (the store code) on the archive. See [ios-release.md](ios-release.md) |
 | `android-native.yml` (nightly) | `-PnekkoVersionName` and `-PnekkoVersionCode` |
+
+## Local desktop development versions
+
+`npm run dev` and `npm run local` identify unpackaged source as `<latest-reachable-release>-dev.<distance>+g<commit>` (`.dirty` for tracked edits). They do not stamp or rewrite package manifests. About, Settings and the launcher share this identity. Fetch release tags when a clone is stale: `git fetch origin 'refs/tags/v*:refs/tags/v*'`. A source archive or missing Git is labeled `-dev.unknown`; a clone without release tags uses the manifest base with a development suffix. Installed builds still show their exact stamped release/nightly version. Restart a running development app after pulling this change or creating a release tag; an existing main process keeps its launch-time identity.

@@ -34,6 +34,17 @@ Philip asked (2026-11-02) that the two phone apps do the same things, for what e
 | Dictation fallback on the phone | Apple's speech recognizer | Android's speech recognizer |
 | Stay connected in the background | Background time and grace | Keep-alive foreground service |
 
+## Live dashboard voice gaps (current worktree, native-unverified)
+
+Both implementations use scoped counts and initial English `status`, `send to NAME saying MESSAGE`, `confirm send to NAME saying MESSAGE`, `cancel` grammar. No focused-chat fallback, free-form assistant or approvals dispatcher is implemented. Exact confirmation expires after 60 seconds. See [dashboard behavior and pending checks](live-card-status-dashboard.md).
+
+| Capability | iPhone | Android | Gap / follow-up |
+| --- | --- | --- | --- |
+| Voice without foregrounding | iOS 18+: authenticated LiveActivityIntent + AudioRecordingIntent path implemented, hardware unverified | Notification opens foreground sheet behind app lock; explicit Listen required; no background microphone | No-app goal remains unmet on Android. Track under dashboard #2046; validate supported native paths before claiming parity. |
+| Older OS fallback | iOS 17: Open app for voice opens list without auto-listening | Foreground sheet as above | iOS 17 is an app handoff, not equivalent background voice or an app-wide voice sheet. |
+| Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
+| Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
+
 ## Android is behind the iPhone today
 
 Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by reading the code, not on a device ([report](../../reports/android-ios-parity-2026-11-07.md)).

@@ -132,7 +132,7 @@ public enum Channels {
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces, "chat:generateImage"])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
@@ -151,6 +151,8 @@ public enum Channels {
         artifactRead, previewFetch,
         // Allowed for clients that aren't this app: a connected computer's plan changes and model settings.
         "chat:steer", chatInterruptQueued, "engine:settings", "engine:saveModelPreset", "engine:unloadAll", "model:load",
+        // Phone-scoped local image generation (#2211); not a dashboard voice command.
+        "chat:generateImage", "engine:models",
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
