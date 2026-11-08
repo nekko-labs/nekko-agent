@@ -46,6 +46,16 @@ Feature source `35fb0a6e659641fef67c00dcd650d417184cf167`:
 
 Required evidence is not passed until captured, inspected and linked in the PR. Android voice motion/posture evidence remains to be run. Baseline iOS screenshots exist but have not yet been inspected by the parent.
 
+## Latest checkpoint
+
+Feature head `47b213eb6db2536571fded23e945db261d236423`, host head `9c41189cb`.
+
+- Windows production desktop/web build passed; all nine isolated Local Web UI/daemon turn-variant assertions passed, including explicit refusal to generate in a text chat, image-kind selection through options, fake-runtime image output and persisted metadata/status stages.
+- Android native voice interaction fixture passed on `a275c0cb9` ([run42435913917](https://github.com/nekko-labs/nekko-agent/actions/runs/42435913917)): composer entry, draft preservation, lock dismissal and voice-off controls, without send/queue side effects. This is not a physical audio test.
+- [Conversation screenshot](https://github.com/nekko-labs/nekko-agent/releases/download/pr-media-6/pr-2212-after-phone-voice-conversation-ready.png) and [composer screenshot](https://github.com/nekko-labs/nekko-agent/releases/download/pr-media-6/pr-2212-after-phone-voice-composer.png) captured and published; uploader verified public bytes/URLs. **Not visually inspected**: browser screenshot timed out, native capture returned `UnknownVizError`. New conversation sheet has no before state; existing composer baseline and motion/foldable evidence remain required.
+- Initial native fixture compilation failures were fixed, not skipped. Latest matched image/new-chat evidence [run42436236581](https://github.com/nekko-labs/nekko-agent/actions/runs/42436236581); final iOS native [run42435898482](https://github.com/nekko-labs/nekko-agent/actions/runs/42435898482). Mac runner queue is not a passing build.
+- The permission approval and checkpoint are recorded in project memory, obsurdian commit `436b40f`.
+
 ## Existing native baseline failures
 
 - Android translations: same 30 missing entries on exact base and safety head; #2125, fix #2130.
