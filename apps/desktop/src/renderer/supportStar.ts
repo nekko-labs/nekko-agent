@@ -24,12 +24,17 @@ export function firstStarCelebration(status: SupportStarStatus): boolean {
 /** Shared single-flight state: a status read cannot overwrite an in-flight star. */
 export function refreshSupportStar(write = false): Promise<void> {
   if (pending) return pending;
+  const previous = useSupportStar.getState().status;
   useSupportStar.setState({ busy: true, celebrating: false });
   pending = Promise.resolve().then(async () => {
     try {
       const status = await (write ? window.nekko.supportStar() : window.nekko.supportStarStatus());
       if (!status || !['starred', 'not-starred', 'unavailable'].includes(status.state)) throw Error('Unsupported response');
-      const celebrating = firstStarCelebration(status);
+      // A verified transition also covers starring in the browser, without
+      // mistaking a first read of an existing star for a new contribution.
+      const newlyObserved = previous?.state === 'not-starred' && status.state === 'starred'
+        && !!status.login && previous.login?.toLowerCase() === status.login.toLowerCase();
+      const celebrating = firstStarCelebration({ ...status, newlyStarred: status.newlyStarred === true || newlyObserved });
       useSupportStar.setState({ status, celebrating });
       clearTimeout(celebrationTimer);
       if (celebrating) celebrationTimer = setTimeout(() => useSupportStar.setState({ celebrating: false }), 1400);

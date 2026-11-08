@@ -42,6 +42,24 @@ describe('GitHub support state', () => {
     expect(JSON.stringify(useSupportStar.getState())).not.toContain('secret-bearing');
     expect(useSupportStar.getState().celebrating).toBe(false);
   });
+  it('celebrates a verified browser-star transition, but never a mere browser visit', async () => {
+    useSupportStar.setState({ status: { state: 'not-starred', login: 'browser-supporter' } });
+    const supportStar = vi.fn();
+    vi.stubGlobal('window', { nekko: { supportStar, supportStarStatus: async () => ({ state: 'starred', login: 'browser-supporter', newlyStarred: false }) } });
+    await refreshSupportStar();
+    expect(useSupportStar.getState().celebrating).toBe(true);
+    expect(supportStar).not.toHaveBeenCalled();
+    await refreshSupportStar();
+    expect(useSupportStar.getState().celebrating).toBe(false);
+  });
+  it('recovers after an older bridge throws synchronously', async () => {
+    vi.stubGlobal('window', { nekko: { supportStarStatus: () => { throw Error('Old bridge'); } } });
+    await refreshSupportStar();
+    expect(useSupportStar.getState().status?.state).toBe('unavailable');
+    vi.stubGlobal('window', { nekko: { supportStarStatus: async () => ({ state: 'not-starred', login: 'reconnected' }) } });
+    await refreshSupportStar();
+    expect(useSupportStar.getState().status?.state).toBe('not-starred');
+  });
   it('clears stale confirmed status when refresh cannot verify it', async () => {
     useSupportStar.setState({ status: { state: 'starred', login: 'old-account' } });
     vi.stubGlobal('window', { nekko: { supportStarStatus: async () => ({ state: 'unavailable', reason: 'Reconnect GitHub.' }) } });

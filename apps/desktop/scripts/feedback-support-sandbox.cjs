@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
     win.setContentSize(390, 844); await sleep(300); await shot('feedback-narrow');
     await run("document.querySelector('[aria-label=Close]').click()"); await sleep(200);
     await shot('settings-narrow');
-    if (await run("!!document.querySelector('[data-testid=github-star-support]')")) {
+    if (process.env.NEKKO_FEEDBACK_BASELINE !== '1') {
       const check = async (name, code) => { if (!(await run(code))) throw Error(name); report.checks.push(name); };
       await check('status reads never star', '!window.starWrites');
       await check('support group first', "document.querySelector('[data-settings-group]').dataset.settingsGroup === 'support'");
