@@ -2,7 +2,7 @@
 
 > **Not yet tested on real hardware.** The Devs don’t have a hardware security key to test this one, so we tried our best without one! If you see any issues, please [let us know](https://github.com/nekko-labs/nekko-agent/issues/new) 🙏
 
-Nekko Agent can ask for a **second factor you hold** before the few actions that would let someone take your computer over or hide what they did: raising a chat to YOLO, turning remote access on, pairing a phone, changing what a phone may do, or touching a provider key. The second factor is a hardware security key (a YubiKey, a Titan or any other FIDO2 key, over USB, NFC or Lightning), a passkey on your phone or computer, or a six-digit code from an authenticator app.
+Nekko Agent can ask for a **second factor you hold** before the few actions that would let someone take your computer over or hide what they did: raising a chat to No restrictions, turning remote access on, pairing a phone, changing what a phone may do, or touching a provider key. The second factor is a hardware security key (a YubiKey, a Titan or any other FIDO2 key, over USB, NFC or Lightning), a passkey on your phone or computer, or a six-digit code from an authenticator app.
 
 This is called **step-up**: an extra confirmation on top of what already happens. On a phone that is Face ID (or the passcode) plus the key; on the desktop, where until now nothing stood between someone at your keyboard and these actions, it is the key.
 
@@ -27,7 +27,7 @@ A key registered on one computer is useless on another: each computer is its own
 
 | Action | Asks for |
 | --- | --- |
-| Raise a chat's mode (Ask → Guardrails → YOLO), or the mode for new chats | Face ID on the phone, then the key. On the desktop, the key. |
+| Raise a chat's mode (Always ask → Ask when it matters → No restrictions), or the mode for new chats | Face ID on the phone, then the key. On the desktop, the key. |
 | Turn remote access on, change the relay or the connection | the key |
 | Pair a device, **Sign out all phones** | the key |
 | Change what a phone may do (its Read and Change switches, **Lock phones**) | the key |
@@ -37,11 +37,11 @@ A key registered on one computer is useless on another: each computer is its own
 
 Everything else (sending a message, approving a tool, answering a question, saving a file, pushing a branch) works as before.
 
-**One confirmation covers five minutes** on that phone or that desktop, so raising three chats to Guardrails is one touch. A step-up never replaces the other checks: a phone with Change switched off cannot raise a mode, key or no key.
+**One confirmation covers five minutes** on that phone or that desktop, so raising three chats to Ask when it matters is one touch. A step-up never replaces the other checks: a phone with Change switched off cannot raise a mode, key or no key.
 
 ## What it looks like
 
-A guarded action opens a sheet that says what is about to happen in plain words (*Switch "Refactor auth" to YOLO on Philip's Mac Studio*) and asks you to **confirm with your security key**: touch it, or hold it to the top of the phone. **Use a code** switches to the six digits from your authenticator app. **Cancel** leaves everything as it was. On the desktop the sheet says which key answered, by the name you gave it.
+A guarded action opens a sheet that says what is about to happen in plain words (*Switch "Refactor auth" to No restrictions on Philip's Mac Studio*) and asks you to **confirm with your security key**: touch it, or hold it to the top of the phone. **Use a code** switches to the six digits from your authenticator app. **Cancel** leaves everything as it was. On the desktop the sheet says which key answered, by the name you gave it.
 
 On a phone the request carries the key's answer inside the end-to-end encrypted message, next to the phone's own signature. The relay sees ciphertext only, and each answer is tied to a one-time challenge from your computer that expires in two minutes, so it cannot be replayed, even by the relay. If something is off, the phone says why in a plain sentence. Behind it is one of four answers from the computer:
 

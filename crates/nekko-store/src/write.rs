@@ -405,6 +405,9 @@ impl SessionStore {
     fn save(&self, s: &mut Map<String, Value>) -> Result<(), String> {
         s.insert("updatedAt".into(), json!(nekko_js::now_ms()));
         let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
+        if nekko_js::truthy(s.get("incognito")) {
+            self.remove_review(id)?;
+        }
         self.write_text(id, &serde_json::to_string_pretty(s).map_err(|e| e.to_string())?)
     }
 
@@ -475,6 +478,9 @@ impl SessionStore {
                     None => target.clone(),
                 }
             };
+            if nekko_js::truthy(head.get("incognito")) {
+                self.remove_review(&id)?;
+            }
             let doc = Chat { fields: &head, messages: messages.as_deref() };
             self.write_text(&id, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)
         });
@@ -697,9 +703,12 @@ impl SessionStore {
         if !valid_id(id) {
             return Ok(());
         }
-        self.with_chat(id, || match std::fs::remove_file(self.path(id)) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
-            _ => Ok(()),
+        self.with_chat(id, || {
+            self.remove_review(id)?;
+            match std::fs::remove_file(self.path(id)) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+                _ => Ok(()),
+            }
         })
     }
 
@@ -744,6 +753,7 @@ impl SessionStore {
                 .filter(|id| valid_id(id))
                 .ok_or("a session without a valid id")?;
             before_delete(id)?;
+            self.remove_review(id)?;
             let file = self.path(id);
             match std::fs::remove_file(&file) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
@@ -829,6 +839,7 @@ impl SessionStore {
                 continue;
             }
             before_delete(id)?;
+            self.remove_review(id)?;
             let file = self.path(id);
             match std::fs::remove_file(&file) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),

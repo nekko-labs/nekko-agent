@@ -1,11 +1,9 @@
 name: iPhone computer settings evidence
 # Evidence only. The required Native iOS full suite retains its existing cadence.
+# Run by hand (or from another workflow) with the two commits to compare. It does
+# not run on pull requests: its "before" checks expect the computer settings from
+# before #2057, so on any PR based on a later main the baseline job always fails.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ios-computer-settings-evidence.yml'
   workflow_call:
     inputs:
       baseline_ref:
@@ -48,8 +46,14 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             apps/ios/App/Views/ComputerSettingsEvidenceFixture.swift
+            apps/ios/App/NekkoApp.swift
             apps/ios/UITests/ComputerSettingsEvidenceUITests.swift
+            apps/ios/scripts/computer-settings-evidence.mjs
+            apps/ios/scripts/computer-settings-evidence.test.mjs
           sparse-checkout-cone-mode: false
+      - name: Test baseline overlay
+        run: node --test apps/ios/scripts/computer-settings-evidence.test.mjs
+        working-directory: .evidence-harness
       - name: Overlay compatible harness and record revisions
         env:
           BASELINE: ${{ (inputs.baseline_ref || github.event.pull_request.base.sha) }}
@@ -71,16 +75,7 @@ jobs:
           cp .evidence-harness/apps/ios/UITests/ComputerSettingsEvidenceUITests.swift apps/ios/UITests/
           if [ "$REVISION" = before ]; then
             # Insert just the launch route, not the head's app or protocol sources.
-            ruby -e '
-              p = "apps/ios/App/NekkoApp.swift"
-              s = File.read(p)
-              a = "let flags = [\"-uiTestChatRefresh\","
-              b = "if ProcessInfo.processInfo.arguments.contains(\"-uiTestVoiceConversation\") { VoiceConversationFixture() } else"
-              abort "Baseline routing changed" unless s.scan(a).length == 1 && s.scan(b).length == 1
-              s = s.sub(a, "let flags = [\"-uiTestComputerSettingsEvidence\", \"-uiTestChatRefresh\",")
-              s = s.sub(b, "if ProcessInfo.processInfo.arguments.contains(\"-uiTestComputerSettingsEvidence\") { ComputerSettingsEvidenceFixture() } else\n        " + b)
-              File.write(p, s)
-            '
+            node .evidence-harness/apps/ios/scripts/computer-settings-evidence.mjs
           fi
       - run: brew install xcodegen
       - name: Create isolated matched simulator and build

@@ -149,7 +149,7 @@ The same change as the desktop ([Desktop Simple and Expert modes](../desktop/des
 
 Philip's rule, recorded in the [desktop spec](../desktop/desktop-simple-and-expert-modes.md): a control that means nothing right now is not on screen. On both phones, through `SimpleMode.swift` and `SimpleMode.kt`, with the same ids and rules as `simple-mode.ts`:
 
-- **Asks first** (`asks`, replacing `ph-policy`, Show by default): in Simple the tool policy is a plain control beside the model under the message box, *Asks first*, *Asks when it matters* or *Works on its own*, with the same values and the same step-up as before. Expert keeps it in More. New chat shows it in the same words.
+- **Approvals** (`asks`, replacing `ph-policy`, Show by default): in Simple the tool policy is a plain control beside the model under the message box, *Always ask*, *Ask when it matters* or *No restrictions*, with the same values and the same step-up as before. Expert keeps it in More. New chat shows it in the same words.
 - **Effort** stays inside the model dropdown in Simple: the dial leaves the control under the message box unless the model's half is hidden.
 - **Changes** (Show by default) needs changed files, in both modes, and says how many. The phone reads `changes:list` when a chat opens and after each turn. iPhone: *3 files changed* in More. Android: the header icon with a count badge, spoken as *3 files changed*, because the bar has no room for the words.
 - **PR status** (`pr-status`, Show by default) needs a PR: the PR chip, its sheet, and the iPhone plan sheet's PR chips. `ph-git` keeps the rest: More > Git and Commit or open a PR on the iPhone, and More > Git on Android, which is new there.
@@ -163,3 +163,7 @@ Philip's rule, recorded in the [desktop spec](../desktop/desktop-simple-and-expe
 - The desktop has the same design since 2026-10-25: [Desktop Simple and Expert modes](../desktop/desktop-simple-and-expert-modes.md).
 - Clearing a chat's effort back to the computer's default from the phone (needs the gate to accept a clear).
 - Changing which monitors show, as the desktop's Settings → Monitors does; the phone shows them all.
+
+### Consistent approval names and icons (#2095)
+
+Implemented: iOS and Android use Always ask / Ask when it matters / No restrictions in permission choices and related security text. The three icons use the same Gentleface hand / shield-check / running line paths as desktop. Protocol values, policy enforcement and step-up behavior are unchanged. Changed strings fall back to English pending retranslation. Focused tests and native app/UI-test builds pass; native paired screenshot capture and inspection are pending, so no device visual verification is claimed yet.

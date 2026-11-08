@@ -7,6 +7,19 @@
 
 export type PrState = 'open' | 'merged' | 'closed';
 
+/** A GitHub issue's live state, read through the same cached channel as a PR (a plan's task chips). */
+export interface IssueInfo {
+  kind: 'issue';
+  url: string;
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  state: 'open' | 'closed';
+  /** Why it closed, as GitHub records it: `completed` or `not_planned`. */
+  stateReason: string | null;
+}
+
 /** Rolled-up CI status across a PR's head-commit checks. */
 export type PrChecks = 'passing' | 'failing' | 'pending' | 'none';
 

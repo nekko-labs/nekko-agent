@@ -7,19 +7,13 @@ import fastifyStatic from '@fastify/static';
 import { defaultUserDataDir, prepareUserDataRoot } from '@nekko-agent/profile/user-data';
 import { brandEnv, unsupportedPlatformReason } from '@nekko-agent/shared';
 import { IDLE_STOP_MS, parseCloudScope, runRelayAgent } from './relay-agent.js';
-import { runCli } from 'nekko-agent/run';
+import { runCli, CliError, EXIT_CODES } from 'nekko-agent/run';
 import { isLoopbackHost, tokenMatches, validateBindSecurity } from './security.js';
 import { createApiSecurityHook, isOriginForm, type RequestSecurityOptions } from './request-security.js';
 import { registerWebhookRoutes, type WebhookTarget } from './webhooks.js';
 import { githubReviewConfig, registerGitHubReviewRoutes, ReviewReplayLedger, type RepositoryReviewInput, type RepositoryReviewVerdict } from './github-review.js';
 import { startNekkod } from 'nekko-agent/engine';
 import { forwardCall, isSocketRoute, proxyUpgrade, refuse, upgradeAllowed, upstreamPath } from './proxy.js';
-
-/** Subcommands handled by the embedded CLI (so `npx nekko-agent mcp|chat|…` works). */
-const CLI_SUBCOMMANDS = new Set([
-  'mcp', 'chat', 'status', 'sessions', 'watch', 'workspace', 'prompts', 'tasks',
-  'skills', 'tools', 'models', 'train', 'help', 'version',
-]);
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const __dirname = dirname(SCRIPT);
@@ -50,10 +44,14 @@ function findRendererDir(): string {
 const RENDERER_DIR = findRendererDir();
 
 async function main() {
-  // Subcommand → embedded CLI (e.g. `npx nekko-agent mcp`, `nekko-agent status`).
-  const sub = process.argv[2];
-  if (sub && CLI_SUBCOMMANDS.has(sub)) {
-    await runCli(process.argv.slice(2));
+  // Only a bare invocation starts the server. Let the CLI own command names,
+  // aliases, leading flags and validation instead of maintaining a second list.
+  const args = process.argv.slice(2);
+  if (args.length) {
+    await runCli(args).catch((e) => {
+      console.error(`Error: ${(e as Error).message}`);
+      process.exitCode = e instanceof CliError ? e.exitCode : EXIT_CODES.providerFailure;
+    });
     return;
   }
   // Intel Macs were dropped (no engine daemon for them): refuse before

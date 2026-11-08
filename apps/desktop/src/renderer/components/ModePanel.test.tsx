@@ -91,7 +91,7 @@ describe('Mode panel markup', () => {
   it('locks internet on for a cloud model and approvals in a sandbox', () => {
     expect(renderToStaticMarkup(<ModePanel {...deps({ isCloudModel: true })} />)).toMatch(/aria-checked="true" aria-label="Internet access" class="mode-switch" disabled/);
     session = { ...base, executionMode: 'sandbox' };
-    expect(renderToStaticMarkup(<ModePanel {...deps()} />)).toContain('Sandbox always asks first.');
+    expect(renderToStaticMarkup(<ModePanel {...deps()} />)).toContain('Sandbox always asks.');
   });
 });
 

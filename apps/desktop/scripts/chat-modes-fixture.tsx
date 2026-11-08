@@ -19,7 +19,7 @@ const at = Date.now() - 3_600_000;
 
 // One capture's situation, set by the sandbox before it reloads. Nothing set
 // keeps the original evidence: a nearly full chat with two models resident.
-const scene: { local?: boolean; changes?: number; long?: boolean; agents?: number; many?: boolean; pr?: boolean; remote?: boolean; wall?: boolean } = (() => {
+const scene: { local?: boolean; changes?: number; long?: boolean; agents?: number; many?: boolean; pr?: boolean; remote?: boolean; wall?: boolean; clean?: boolean; sandbox?: boolean } = (() => {
   try { return JSON.parse(localStorage.getItem('fixture.scene') ?? '{}'); } catch { return {}; }
 })();
 const prUrl = 'https://github.com/fixture/app/pull/42';
@@ -41,7 +41,7 @@ function makeSession() {
     { id: `mu${i}`, role: 'user', content: `Check workflow number ${i + 1} too, and tell me if its cache key has the same problem.`, createdAt: at + 5000 + i * 2000 },
     { id: `ma${i}`, role: 'assistant', content: 'Same problem there. '.repeat(30), createdAt: at + 6000 + i * 2000 },
   );
-  return { id: 'alpha', title: 'CI cache misses', createdAt: at, updatedAt: at, providerId: 'fixture', modelId: 'claude-opus-5-5', effort: 'high', mode: 'agent', chatType: 'multimodal', messages, attachments: [], queuedPrompts: [] };
+  return { id: 'alpha', title: 'CI cache misses', createdAt: at, updatedAt: at, providerId: 'fixture', modelId: 'claude-opus-5-5', effort: 'high', mode: scene.sandbox ? 'ask' : 'guardrails', executionMode: scene.sandbox ? 'sandbox' : 'unified', chatType: 'multimodal', messages: scene.clean ? [] : messages, attachments: [], queuedPrompts: [] };
 }
 
 let record: any = makeSession();
@@ -90,7 +90,7 @@ function Fixture() {
     <div className="titlebar"><h1 className="titlebar-heading text-gradient">Agents</h1><ModeSwitch /></div>
     {location.hash === '#settings'
       ? <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 24px 24px' }}><SimpleModeSettings /></main>
-      : <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" commandCenter={!!scene.wall} /></main>}
+      : <main style={{ flex: 1, minHeight: 0 }}><ChatPane sessionId="alpha" commandCenter={!!scene.wall} cleanStart={!!scene.clean} /></main>}
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<Fixture />);

@@ -1,5 +1,75 @@
-import { describe, expect, it } from 'vitest';
-import { keepSegment, pcmWav, PRE_ROLL_SECONDS, shouldCut, trimPreRoll } from './voiceCapture.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { keepSegment, pcmWav, PRE_ROLL_SECONDS, shouldCut, startVoiceCapture, trimPreRoll } from './voiceCapture.js';
+
+afterEach(() => { vi.unstubAllGlobals(); });
+
+function audioSetup(failure?: string, cleanupFails = false) {
+  const error = new Error(`Failed ${failure}`);
+  const failAt = (step: string) => { if (failure === step) throw error; };
+  const tracks = [{ stop: vi.fn() }, { stop: vi.fn() }];
+  const stream = { getTracks: () => tracks };
+  const source = { connect: vi.fn(() => failAt('source.connect')), disconnect: vi.fn() };
+  const processor = { connect: vi.fn(() => failAt('processor.connect')), disconnect: vi.fn(), onaudioprocess: null as null | ((event: any) => void) };
+  const context = {
+    sampleRate: 16000, destination: {},
+    createMediaStreamSource: vi.fn(() => { failAt('source'); return source; }),
+    createScriptProcessor: vi.fn(() => { failAt('processor'); return processor; }),
+    resume: vi.fn(async () => { failAt('resume'); }), close: vi.fn(async () => {}),
+  };
+  if (cleanupFails) {
+    source.disconnect.mockImplementation(() => { throw new Error('disconnect failed'); });
+    tracks[0].stop.mockImplementation(() => { throw new Error('stop failed'); });
+    context.close.mockRejectedValue(new Error('close failed'));
+  }
+  vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn(async () => stream) } });
+  vi.stubGlobal('AudioContext', class { constructor() { failAt('constructor'); return context; } });
+  return { error, tracks, source, processor, context };
+}
+
+describe('capture setup and teardown', () => {
+  it.each(['constructor', 'source', 'processor', 'source.connect', 'processor.connect', 'resume'])('releases all acquired resources when %s fails', async failure => {
+    const audio = audioSetup(failure);
+    await expect(startVoiceCapture({ onLevel: vi.fn(), onSilence: vi.fn() })).rejects.toBe(audio.error);
+    for (const track of audio.tracks) expect(track.stop).toHaveBeenCalledOnce();
+    expect(audio.context.close).toHaveBeenCalledTimes(failure === 'constructor' ? 0 : 1);
+    expect(audio.source.disconnect).toHaveBeenCalledTimes(['constructor', 'source'].includes(failure) ? 0 : 1);
+    expect(audio.processor.disconnect).toHaveBeenCalledTimes(['constructor', 'source', 'processor'].includes(failure) ? 0 : 1);
+    expect(audio.processor.onaudioprocess).toBeNull();
+  });
+  it('preserves the setup error and continues cleanup when disconnect, track stop and close fail', async () => {
+    const audio = audioSetup('resume', true);
+    await expect(startVoiceCapture({ onLevel: vi.fn(), onSilence: vi.fn() })).rejects.toBe(audio.error);
+    expect(audio.processor.disconnect).toHaveBeenCalledOnce();
+    for (const track of audio.tracks) expect(track.stop).toHaveBeenCalledOnce();
+    expect(audio.context.close).toHaveBeenCalledOnce();
+    expect(audio.processor.onaudioprocess).toBeNull();
+  });
+  it.each(['stop', 'abort'] as const)('%s releases resources only once and prevents late audio callbacks', async method => {
+    const audio = audioSetup();
+    const onLevel = vi.fn();
+    const local = await startVoiceCapture({ onLevel, onSilence: vi.fn() });
+    const process = audio.processor.onaudioprocess!;
+    process({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.5) } });
+    const result = local[method]();
+    if (method === 'stop') expect(result).toHaveLength(44 + 4096 * 2);
+    local.abort(); expect(local.stop()).toEqual([]);
+    process({ inputBuffer: { getChannelData: () => { throw new Error('must not read late audio'); } } });
+    expect(onLevel).toHaveBeenCalledOnce();
+    expect(audio.source.disconnect).toHaveBeenCalledOnce();
+    expect(audio.processor.disconnect).toHaveBeenCalledOnce();
+    for (const track of audio.tracks) expect(track.stop).toHaveBeenCalledOnce();
+    expect(audio.context.close).toHaveBeenCalledOnce();
+  });
+  it('still flushes speech tails and drops silent tails in segment mode', async () => {
+    const audio = audioSetup();
+    const local = await startVoiceCapture({ onLevel: vi.fn(), onSilence: vi.fn(), onSegment: vi.fn() });
+    audio.processor.onaudioprocess!({ inputBuffer: { getChannelData: () => new Float32Array(4096).fill(0.5) } });
+    expect(local.stop()).toHaveLength(44 + 4096 * 2);
+    const quiet = await startVoiceCapture({ onLevel: vi.fn(), onSilence: vi.fn(), onSegment: vi.fn() });
+    audio.processor.onaudioprocess!({ inputBuffer: { getChannelData: () => new Float32Array(4096) } });
+    expect(quiet.stop()).toEqual([]);
+  });
+});
 
 describe('local PCM recording', () => {
   it('encodes mono 16kHz PCM without an external converter', () => {
