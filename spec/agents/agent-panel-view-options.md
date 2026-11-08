@@ -147,3 +147,11 @@ Implemented in source; native visual acceptance is pending the linked evidence r
 - Phone rows project existing summary model IDs, transcript token estimates and model-matched Claude-reported used/window counts. A missing window stays unknown (used tokens only); no model capacity is invented. Android PR numbers come from summary URLs; iOS retains state-aware PR badges. Neither toggle changes model requests, context budgeting or PR fetching.
 
 Acceptance: preference migration and roundtrip tests on all three clients; desktop server-render matrix for independent visibility and PR relocation; native real-view UI toggle tests plus matching baseline/head screenshots. Native simulator evidence and published media remain required before landing. Full live context-gauge parity on phones (catalog capacity and open-chat bundle estimates) is not implemented by this change.
+
+## Show with an interactive sample card (#2338)
+
+Implemented for desktop and Local Web UI. **Show** combines panel visibility settings on the left with **Card details** on the right: a labeled synthetic sample card, not a real chat, exposes Model, Context window, Pull requests, Git branch, Sub-agent count, Window count, and Last reply time as dotted-border toggle regions. Hidden details remain visible as labels with a plus so they can be restored. Selecting a metadata detail while Metadata is off also enables Metadata; pull requests and last reply time remain independent. Existing per-device view storage and Reset to defaults are retained.
+
+At 520px and below, Show stacks its sections; the viewport-bounded submenu scrolls on short windows. Its toggles retain menuitemcheckbox semantics and keyboard navigation. Escape backs out of Show, then closes the parent without updating the sidebar during a React state updater. Simple/Detailed and Customize were removed from this panel menu and moved to the app-wide View menu.
+
+Verification: focused static-render tests and isolated real-renderer interaction checks cover the seven toggles, metadata restoration, reopening, and viewport bounds. Wide and 320px captures inspected on Windows. Native iOS/Android card menus are unchanged.
