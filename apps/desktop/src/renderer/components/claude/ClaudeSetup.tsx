@@ -5,6 +5,7 @@ import { useStore } from '../../store.js';
 import { windowChrome } from '../../chrome.js';
 import { CheckIcon, CloudIcon, LaptopIcon, TerminalIcon, WarningIcon } from '../../icons.js';
 import { TerminalPane } from '../TerminalPane.js';
+import { claudeProfileConflict } from './claudeConnections.js';
 import { ClaudeWhyLink, useClaudeCodeStatus, useClaudePolicy } from './ClaudeAgent.js';
 
 /**
@@ -173,6 +174,7 @@ export function ClaudeSetup({
   // "Another subscription account": a named Claude Code folder, signed in on its own.
   const [another, setAnother] = useState<string | null>(null);
   const name = claudeAccountName(another ?? '');
+  const profileConflict = claudeProfileConflict(providers, name);
   const [checkedName, setCheckedName] = useState(name);
   useEffect(() => {
     const t = setTimeout(() => setCheckedName(name), 400);
@@ -180,6 +182,7 @@ export function ClaudeSetup({
   }, [name]);
   const other = useClaudeCodeStatus(undefined, another !== null && checkedName ? checkedName : undefined);
   const [attested, setAttested] = useState(false);
+  useEffect(() => { setAttested(false); }, [name]);
 
   const terminal = useInlineTerminal(() => {
     refresh();
@@ -200,6 +203,10 @@ export function ClaudeSetup({
 
   const [saving, setSaving] = useState(false);
   const save = async (account?: string, label?: string) => {
+    if (account && claudeProfileConflict(useStore.getState().providers, account)) {
+      pushToast('error', 'That Claude Code profile is already connected. Choose a different name.');
+      return;
+    }
     setSaving(true);
     try {
       const s = account ? other.status : status;
@@ -319,7 +326,7 @@ export function ClaudeSetup({
 
       {terminal.term?.account && terminalPanel}
 
-      {choice === 'subscription' && usual && another === null && (
+      {choice === 'subscription' && another === null && (
         <button type="button" className="claude-link" onClick={() => setAnother('')}>+ Another subscription account</button>
       )}
       {choice === 'subscription' && another !== null && (
@@ -327,12 +334,13 @@ export function ClaudeSetup({
           typed={another}
           onType={setAnother}
           name={name}
+          conflict={profileConflict?.label}
           status={checkedName === name ? other.status : null}
           check={other.status?.installed && other.status.loggedIn && checkedName === name ? claudeAccountCheck(other.status, identities) : null}
           attested={attested}
           onAttest={setAttested}
           saving={saving}
-          onSignIn={() => void terminal.open('signin', name)}
+          onSignIn={() => { if (name && !claudeProfileConflict(useStore.getState().providers, name)) void terminal.open('signin', name); }}
           onSave={() => void save(name, another.trim())}
           onCancel={() => { setAnother(null); setAttested(false); }}
         />
@@ -677,6 +685,7 @@ function AnotherAccount({
   typed,
   onType,
   name,
+  conflict,
   status,
   check,
   attested,
@@ -689,6 +698,7 @@ function AnotherAccount({
   typed: string;
   onType: (v: string) => void;
   name: string;
+  conflict?: string;
   status: ClaudeCodeStatus | null;
   check: ReturnType<typeof claudeAccountCheck> | null;
   attested: boolean;
@@ -708,14 +718,16 @@ function AnotherAccount({
           {name ? <>Claude Code keeps this login in its own folder, <code>{claudeAccountFolder(name)}</code>.</> : 'A short name, like Work or Client A. One email with a personal plan and an organization? Add each as its own account and pick the other one when Anthropic asks which to use.'}
         </span>
       </label>
-      {name && !status && <p className="claude-detect mt-2"><span className="claude-spin" />Checking that folder's sign-in…</p>}
-      {name && status?.installed && !status.loggedIn && (
+      <p className="mt-2 text-xs text-ink-faint">Using the same email for a personal plan and an organization? Sign in separately and choose the intended organization on Anthropic's page.</p>
+      {conflict && <p className="claude-verdict" data-verdict="blocked" role="alert">{conflict} already uses this profile. Choose a different name to keep its sign-in unchanged.</p>}
+      {name && !conflict && !status && <p className="claude-detect mt-2"><span className="claude-spin" />Checking that folder's sign-in…</p>}
+      {name && !conflict && status?.installed && !status.loggedIn && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-ink-soft">Not signed in yet.</span>
           <button type="button" className="btn btn-primary" onClick={onSignIn}>Sign in to {label || name}</button>
         </div>
       )}
-      {check && (
+      {!conflict && check && (
         <div className="claude-verdict" data-verdict={check.verdict} role={check.verdict === 'blocked' ? 'alert' : undefined}>
           <p className="claude-verdict-head">
             {check.verdict === 'ok' ? <CheckIcon className="h-4 w-4" /> : check.verdict === 'confirm' ? <WarningIcon className="h-4 w-4" /> : <BanIcon />}

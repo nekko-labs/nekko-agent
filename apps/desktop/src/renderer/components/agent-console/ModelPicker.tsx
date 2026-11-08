@@ -12,6 +12,8 @@ import { useStore } from '../../store.js';
 import { useProviderLimitsPortfolio } from '../../useLimits.js';
 import { accountEmailOf, accountShortName, accountSiblings, providerDisplayName, useAccountEmails } from '../../accountEmails.js';
 import { ProviderUsageMeters } from './ProviderUsageMeters.js';
+import { ClaudeConnectionPicker } from '../claude/ClaudeConnectionPicker.js';
+import { filterClaudeConnections, isClaudeConnection } from '../claude/claudeConnections.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
 import { CloudIcon, GridIcon, LaptopIcon, RouteIcon, StarIcon } from '../../icons.js';
 
@@ -98,7 +100,14 @@ export function ModelPicker({
   // (personal and work, say) are told apart in the chip and the list.
   const accountEmails = useAccountEmails(providers);
   const nameOf = (p: ProviderConfig) => providerDisplayName(p, accountEmails);
-  const twoColumns = scope === 'all' && providers.some((p) => isLocalProvider(p.kind)) && providers.some((p) => !isLocalProvider(p.kind));
+  const currentProvider = allProviders.find((p) => p.id === providerId);
+  const claudeConnections = providers.filter(isClaudeConnection);
+  const showClaudeConnections = !!currentProvider && isClaudeConnection(currentProvider) && claudeConnections.length > 1 && (scope === 'all' || scope === 'cloud');
+  const [connection, setConnection] = useState(providerId ?? 'all');
+  useEffect(() => { setConnection(providerId ?? 'all'); }, [providerId, open]);
+  const selectedConnection = claudeConnections.some(p => p.id === connection) ? connection : 'all';
+  const connectionProviders = showClaudeConnections ? filterClaudeConnections(providers, selectedConnection) : providers;
+  const twoColumns = scope === 'all' && connectionProviders.some((p) => isLocalProvider(p.kind)) && connectionProviders.some((p) => !isLocalProvider(p.kind));
   const ref = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<React.CSSProperties>({});
@@ -155,7 +164,7 @@ export function ModelPicker({
   const modelsOf = (pid: string): ModelInfo[] =>
     byProvider[pid] ?? (pid === providerId ? models : []);
   const q = query.trim().toLowerCase();
-  const visibleProviders = providers.filter((p) => scope === 'all' || (scope !== 'fusion' && isLocalProvider(p.kind) === (scope === 'local')));
+  const visibleProviders = connectionProviders.filter((p) => scope === 'all' || (scope !== 'fusion' && isLocalProvider(p.kind) === (scope === 'local')));
   const groups = filteredModelGroups(visibleProviders, modelsOf, query);
   const starred = groups.flatMap((g) =>
     g.models
@@ -181,7 +190,6 @@ export function ModelPicker({
   // The default belongs in its real provider group, even when recent or starred.
   if (defaultKey) pinnedKeys.delete(defaultKey);
   // Named from every provider: a filtered-out selection still says what it is.
-  const currentProvider = allProviders.find((p) => p.id === providerId);
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
   // `models` is the previous provider's until the new list lands; the picker may already hold it.
   const currentModel = models.find((m) => m.id === modelId) ?? (providerId ? byProvider[providerId]?.find((m) => m.id === modelId) : undefined);
@@ -218,7 +226,7 @@ export function ModelPicker({
     if (!modelId || modelId === AUTO_MODEL_ID || !list) return null;
     return list.some((m) => m.id === modelId) ? null : `${accountShortName(p, accountEmails)} does not offer ${currentName}`;
   };
-  const accountSwitcher = accounts.length > 1 && (
+  const accountSwitcher = !showClaudeConnections && accounts.length > 1 && (
     <div className="model-accounts mb-1 px-1" data-account-switcher>
       <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Account">
         <span className="px-2 text-xs font-medium text-ink-soft">Account</span>
@@ -382,13 +390,14 @@ export function ModelPicker({
               onChange={(e) => setQuery(e.target.value)}
             />
           )}
+          {showClaudeConnections && <ClaudeConnectionPicker providers={claudeConnections} selected={selectedConnection} currentId={providerId} onSelect={id => { setConnection(id); setQuery(''); }} />}
           {accountSwitcher}
           <div className="flex min-h-0 flex-1 flex-col" role="listbox" aria-label="Model">
             {providers.length === 0 && <p className="px-3 py-1 text-2xs text-ink-faint">No provider configured.</p>}
             {providers.length > 0 && groups.length === 0 && scope !== 'fusion' && (
               <p className="px-3 py-1 text-2xs text-ink-faint">{q ? 'No models match.' : pending ? 'Loading models…' : 'No models available.'}</p>
             )}
-            {allowAuto && total > 1 && !q && (scope === 'all' || scope === 'fusion') && (
+            {allowAuto && (!showClaudeConnections || selectedConnection === 'all') && total > 1 && !q && (scope === 'all' || scope === 'fusion') && (
               <button
                 role="option"
                 aria-selected={modelId === AUTO_MODEL_ID}
