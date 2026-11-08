@@ -887,6 +887,8 @@ fn tool_call(b: &Value) -> Value {
     // `agent_watch`, so every client draws its watch row and live chip.
     if name == NEKKO_WATCH_TOOL {
         name = "agent_watch";
+    } else if name == "mcp__nekko_bridge__set_chat_title" {
+        name = "set_chat_title";
     }
     json!({ "id": str_at(b, "id").unwrap_or_default(), "name": name, "input": input, "executedBy": "claude-code" })
 }
@@ -897,6 +899,15 @@ const NEKKO_WATCH_TOOL: &str = "mcp__nekko_bridge__agent_watch";
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bridge_title_call_uses_nekkos_title_tool_name() {
+        let input = json!({ "title": "Fix chat naming" });
+        let call = tool_call(&json!({ "id": "t1", "name": "mcp__nekko_bridge__set_chat_title", "input": input }));
+        assert_eq!(call["name"], "set_chat_title");
+        assert_eq!(call["input"], input);
+        assert_eq!(call["executedBy"], "claude-code");
+    }
 
     #[test]
     fn user_content_is_text_or_blocks() {

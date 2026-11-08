@@ -277,3 +277,74 @@ async fn think_off_reaches_ollama_when_the_show_would_have_stalled() {
     assert_eq!(chats.len(), 1);
     assert_eq!(chats[0].body.as_ref().unwrap().get("think"), Some(&json!(false)));
 }
+
+/// Ollama refuses the chat, then its `/api/show` never answers.
+struct RefusedThenStalledShow {
+    show_arrived: Notify,
+}
+
+impl Transport for RefusedThenStalledShow {
+    fn send<'a>(&'a self, req: &'a HttpRequest) -> BoxFuture<'a, Result<HttpResponse, TransportError>> {
+        if req.url.ends_with("/api/show") {
+            self.show_arrived.notify_one();
+            return Box::pin(std::future::pending());
+        }
+
+        let body = br#"{"error":"\"m\" does not support tools"}"#.to_vec();
+        let body = OneChunk(Some(body));
+        Box::pin(async move { Ok(HttpResponse { status: 400, headers: Vec::new(), body: Box::new(body) }) })
+    }
+}
+
+struct OneChunk(Option<Vec<u8>>);
+
+impl ResponseBody for OneChunk {
+    fn chunk(&mut self) -> BoxFuture<'_, Result<Option<Vec<u8>>, TransportError>> {
+        let chunk = self.0.take();
+        Box::pin(async move { Ok(chunk) })
+    }
+}
+
+fn ollama_refusing_tools() -> (AnyProvider, Arc<RefusedThenStalledShow>) {
+    let transport = Arc::new(RefusedThenStalledShow { show_arrived: Notify::new() });
+    let config: ProviderConfig = serde_json::from_value(json!({
+        "id": "p", "kind": "ollama", "baseUrl": "http://127.0.0.1:1", "enabled": true,
+    }))
+    .unwrap();
+    let io = Io { transport: transport.clone(), clock: nekko_agent::stream::system_clock() };
+    (create_provider_with(config, io), transport)
+}
+
+fn with_a_tool(req: ChatRequest) -> ChatRequest {
+    let tool = ToolSpec { name: "read".into(), description: "Read".into(), parameters: json!({}) };
+    ChatRequest { tools: Some(vec![tool]), ..req }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stalled_ollama_show_leaves_a_refused_chat_with_ollamas_own_error() {
+    let (p, _) = ollama_refusing_tools();
+    let asked = tokio::time::Instant::now();
+    let (_, err) = p.chat(with_a_tool(request(None))).collect().await;
+    assert_eq!(asked.elapsed(), Duration::from_secs(2));
+    assert_eq!(err.unwrap().message, r#"Ollama: "m" does not support tools (400)"#);
+}
+
+#[tokio::test]
+async fn an_abort_during_the_ollama_show_ends_a_refused_chat_without_the_wait() {
+    let (p, t) = ollama_refusing_tools();
+    let ctl = AbortController::new();
+    let mut s = p.chat(with_a_tool(request(Some(ctl.signal()))));
+
+    let wait = tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::select! {
+            _ = t.show_arrived.notified() => {}
+            _ = s.next() => panic!("the chat ended without asking /api/show"),
+        }
+    });
+    wait.await.expect("/api/show was never asked");
+    ctl.abort();
+
+    // Under the show's 2 s timeout. The chat had already failed, so its error stands.
+    let end = tokio::time::timeout(Duration::from_secs(1), s.next()).await.expect("abort was not noticed");
+    assert_eq!(end.unwrap().unwrap_err().message, r#"Ollama: "m" does not support tools (400)"#);
+}

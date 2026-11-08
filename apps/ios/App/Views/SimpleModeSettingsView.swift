@@ -159,7 +159,13 @@ private struct SimpleAreaPreview: View {
             }
             HStack(spacing: 6) {
                 Text("More menu").font(.caption2).foregroundStyle(palette.inkFaint)
-                part("asks") { tag("Asks first", "hand.raised") }
+                part("asks") {
+                    HStack(spacing: 4) {
+                        ToolPolicyPicker.image(.ask)
+                        Text("Always ask").lineLimit(1)
+                    }
+                    .font(.caption2)
+                }
             }
         }
     }

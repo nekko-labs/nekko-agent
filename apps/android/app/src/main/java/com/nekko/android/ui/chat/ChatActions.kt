@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import com.nekko.android.ui.components.PermissionIcon
 import com.nekko.android.ui.settings.modeDetailRes
 import com.nekko.android.ui.settings.modeTitleRes
 import com.nekko.android.ui.security.YoloWarning
@@ -84,7 +85,7 @@ fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDi
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (expert) R.string.chat_chat_mode else R.string.simple_asks_first)) },
+        title = { Text(stringResource(if (expert) R.string.chat_chat_mode else R.string.permission_simple_always_ask)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Column(Modifier.selectableGroup()) {
@@ -106,6 +107,7 @@ fun ChatModeDialog(current: ChatMode?, default: ChatMode, computer: String, onDi
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             RadioButton(selected = shown == m, onClick = null)
+                            PermissionIcon(m)
                             Column(Modifier.weight(1f)) {
                                 Text(stringResource(title(m)), style = MaterialTheme.typography.bodyLarge, color = if (m == ChatMode.YOLO) p.danger else p.ink)
                                 Text(stringResource(detail(m)), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)

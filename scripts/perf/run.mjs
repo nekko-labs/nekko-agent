@@ -62,6 +62,7 @@ import { summarize } from './lib/stats.mjs';
 import { frameWorkFromTrace } from './lib/trace.mjs';
 import { BUDGETS, MEMORY_BUDGETS } from './budgets.mjs';
 import { startProfile, startTimeline, stopProfile } from './lib/profile.mjs';
+import { selectWallView } from '../../apps/desktop/scripts/wall-view-navigation.cjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const argv = process.argv.slice(2);
@@ -227,8 +228,10 @@ async function openApp({ appUrl, cdpPort, vsync, pump = false, gpu = flag('no-gp
     await waitFor("!!document.querySelector('button[data-sidebar-group]')", 'the Agents sidebar');
     // The groups draw before the session list reaches them, and a click on no card does nothing.
     await waitFor(`[...document.querySelectorAll('div[role="button"]')].some((card) => card.getAttribute('title')?.includes(${JSON.stringify(title)}))`, `the card for ${title}`);
-    // Cards only select a window in Dynamic/Grid; measure the full-size chat in Focus.
-    await cdp.evaluate(`(() => { const b = [...document.querySelectorAll('.wall-layout-segments button')].find(b => b.textContent.trim() === 'Focused'); if (b && b.getAttribute('aria-pressed') !== 'true') b.click(); return true; })()`);
+    // Setup, not a measured switch: use the shipped View menu and fail closed
+    // unless both its radio and the wall confirm the full-size Single agent view.
+    await selectWallView(source => cdp.evaluate(source), 'focus', () => sleep(100));
+    log('setup wall view: focus (View radio, layout and menu dismissal verified)');
     await showAllCards();
     await cdp.call((title) => [...document.querySelectorAll('div[role="button"]')].find(card => card.getAttribute('title')?.includes(title))?.click(), title);
     // Setup is not a measured sidebar switch. Let the virtual transcript settle

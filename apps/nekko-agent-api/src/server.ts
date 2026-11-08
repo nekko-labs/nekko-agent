@@ -9,6 +9,7 @@ import { registerMachines, type MachinesOptions } from "./machines.js";
 import { confirmSignup, page, sendConfirmation, unsubscribe, type Mailer } from "./confirmations.js";
 import { parseSignup, recordSignup } from "./signups.js";
 import type { DeleteAuthUser } from "./supabase.js";
+import { registerFleet } from "./fleet.js";
 import { registerSync } from "./sync.js";
 
 export interface ServerOptions {
@@ -31,6 +32,8 @@ export interface ServerOptions {
   feedbackScreenshotLimit?: ScreenshotLimit;
   /** Nekko Cloud machines (decision 0017); without it the /v1/machines routes are absent. */
   machines?: MachinesOptions;
+  /** Experimental user-owned computer discovery. No execution or automatic pairing. */
+  fleetEnabled?: boolean;
   /** Sends signup confirmation emails; without it signups still save and the email is skipped. */
   mailer?: Mailer;
   /** This service's public origin, for the links in emails. */
@@ -161,6 +164,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   app.register(async (scope) => {
     await scope.register(rateLimit, { max: sync.max, timeWindow: sync.windowMs });
     registerSync(scope, opts.db);
+    if (opts.fleetEnabled) registerFleet(scope, opts.db);
     registerAccount(scope, opts.db, opts.signIn, { max: auth.max, timeWindow: auth.windowMs }, { driver: opts.machines?.driver, deleteAuthUser: opts.deleteAuthUser });
   });
   registerDonations(app, opts.db, opts.donationRateLimit ?? { max: 20, windowMs: 60 * 60 * 1000 });

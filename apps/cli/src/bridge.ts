@@ -64,11 +64,24 @@ export const WATCH_TOOL = {
   },
 };
 
+/** In-turn naming only; nekkod checks both capabilities and title ownership. */
+export const TITLE_TOOL = {
+  name: 'set_chat_title',
+  description: 'Give this new chat a concise, specific 3-6 word title. Never overwrite a user-chosen title. This changes only the Nekko chat title, not the Claude Code session name.',
+  inputSchema: {
+    type: 'object',
+    properties: { title: { type: 'string', description: 'A concise title describing the user’s task.' } },
+    required: ['title'],
+  },
+};
+
+type NekkoTool = typeof WATCH_TOOL | typeof TITLE_TOOL;
+
 /** The Nekko tools a bridge may be told to offer, by name. */
-const NEKKO_TOOLS = { [WATCH_TOOL.name]: WATCH_TOOL } as const;
+const NEKKO_TOOLS = { [WATCH_TOOL.name]: WATCH_TOOL, [TITLE_TOOL.name]: TITLE_TOOL } as const;
 
 /** `--tools a,b`: the known Nekko tools nekkod asked this bridge to offer. */
-export function offeredTools(flag: string | undefined): (typeof WATCH_TOOL)[] {
+export function offeredTools(flag: string | undefined): NekkoTool[] {
   const names = (flag ?? '').split(',').map((s) => s.trim()).filter(Boolean);
   return [...new Set(names)].flatMap((n) => (n in NEKKO_TOOLS ? [NEKKO_TOOLS[n as keyof typeof NEKKO_TOOLS]] : []));
 }
@@ -132,7 +145,7 @@ export async function askNekkod(
 export async function handleBridgeMessage(
   msg: { id?: unknown; method?: string; params?: any },
   ask: (prompt: Record<string, unknown>) => Promise<BridgeDecision>,
-  tools: (typeof WATCH_TOOL)[] = [],
+  tools: NekkoTool[] = [],
   run: (call: { name: string; input: Record<string, unknown> }) => Promise<ToolAnswer> = async () => ({ ok: false, error: 'Not offered.' }),
 ): Promise<unknown | undefined> {
   const { id, method, params } = msg;
