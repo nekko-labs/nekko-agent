@@ -39,6 +39,15 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Perf setup selects the shipped Single agent View (#2200, 2026-11-08)
+
+Area: perf harness. Result: measurement fix, not a production renderer optimization.
+Conditions: Windows, Node 24.1.0, headless Chrome 153.0.8010.12, 1440x1000, fresh synthetic profiles and the unchanged renderer at `6e54fe6ed`. Full workload: 1,000 + 12x400-message chats, 150 composer samples, 100 terminal samples when available, 40 warm switches, three cold cycles, six seconds of streaming, five memory laps; one attempt with `--no-gpu` (memory still uses SwiftShader). The same existing dev daemon is used in both runs (SHA256 `27b38fcabc57a07277cd93dafb79de9699f9861d32c9a047b9a9499be35ce1a1`); its source revision was not independently established and this is not a fresh Rust-build verification.
+
+The old setup's read-only diagnostic reports `layout: grid` and zero legacy `Focused` controls on every `openChat`: the missing button silently did nothing. The repair uses the shared View-menu helper, verifies the checked Single agent radio and `data-wall-layout="focus"`, and requires menu dismissal before selecting the chat. Only unmeasured setup changes; measured switching, transcript settling, timeouts, seed data, sample counts and budgets are unchanged. An initial diagnostic command malformed its own logging expression and failed before measurement; it was corrected, not counted as a baseline product failure.
+
+The full baseline completed (exit 1): composer p95 12.6 ms (n=150), streaming work 6.8 ms (n=361), warm switch 10.6 ms (n=40), cold frame 100.4 ms (n=33; over the unchanged 48 ms gate), cold history 100.4 ms (n=33). All six memory rows passed: six working windows, 134.92 MB tiles, 0.13 MB heap growth per lap, zero node/listener growth. Terminal was skipped because no terminal pane opened. Fixed-run and protected CI results are pending. This corrects the measured layout rather than making the renderer faster; grid-versus-focus numbers must not be presented as an application speedup. No cause is claimed for the older newest-message failure, and #1998 (cold-switch remount optimization) and #1865 (browser startup) remain separate.
+
 ## Flat agent plan (#2013, 2026-11-06)
 
 Area: renderer. Result: an older cold-frame differential did not reproduce in two additional matched pairs; no speedup or zero-effect claim.
