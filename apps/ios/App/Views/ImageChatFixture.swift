@@ -15,7 +15,7 @@ struct ImageChatFixture: View {
     init() {
         let image = PhotoPreviewFixture.photos[0] // Original synthetic artwork, not a generated/provider image.
         _store = State(initialValue: ComputersStore(store: ImageFixtureSecrets(),
-            makeConnection: { ImageFixtureConnection(image: image) },
+            makeConnection: { _ in ImageFixtureConnection(image: image) },
             deviceName: { "Image evidence iPhone" }, deriveKey: { _, _ in Data(repeating: 1, count: 32) }))
     }
 
@@ -85,7 +85,7 @@ private final class ImageFixtureConnection: RemoteConnection, ProofCaller, @unch
         case Channels.appInfo:
             return ["capabilities": ["imageGeneration": .bool(!ProcessInfo.processInfo.arguments.contains("-imageOldHost"))]]
         case Channels.engineModels:
-            return ProcessInfo.processInfo.arguments.contains("-imageNoModels") ? [] : [["id": "flux-local", "name": "FLUX local", "kind": "image", "format": "safetensors", "state": "idle"]]
+            return ProcessInfo.processInfo.arguments.contains("-imageNoModels") ? [] : [["id": "flux-local", "name": "FLUX local", "kind": "image", "format": "gguf", "state": "idle"]]
         case Channels.sessionCreate, Channels.sessionGet: return session
         case Channels.sessionSetOptions:
             if let p = ImageChatParams.from(args.last?["imageParams"]) { lock.withLock { params = p } }
@@ -94,7 +94,7 @@ private final class ImageFixtureConnection: RemoteConnection, ProofCaller, @unch
         case Channels.sessionsSummaries: return [session]
         case Channels.settingsGet: return [:]
         case Channels.chatPending: return [:]
-        case Channels.phoneChangeKeyRegister: return ["ok": true]
+        case ChangeProof.keyChannel: return ["ok": true]
         case Channels.chatGenerateImage: throw RelayError("Use the existing Change proof.")
         case Channels.chatSend, Channels.chatQueue: throw RelayError("Image prompts must never use text routing.")
         default: return .null
