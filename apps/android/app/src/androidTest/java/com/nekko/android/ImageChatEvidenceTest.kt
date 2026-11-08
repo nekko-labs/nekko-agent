@@ -104,9 +104,25 @@ class ImageChatEvidenceTest {
                 }
             }
         }
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("Paper boat").fetchSemanticsNodes().isNotEmpty() }
-        if (!before) compose.onAllNodesWithTag("chats.row.image").onFirst().assertExists()
-        shot("image-summary")
+        try {
+            compose.waitUntil(10_000) { compose.onAllNodesWithText("Paper boat").fetchSemanticsNodes().isNotEmpty() }
+            // Both revisions must render the actual chat row, not just its repository summary.
+            compose.onNode(hasText("Paper boat") and hasClickAction()).assertIsDisplayed()
+            if (!before) compose.onNodeWithTag("chats.row.image", useUnmergedTree = true)
+                .assertExists().assertTextEquals("Image").assertIsDisplayed()
+            else compose.onAllNodesWithTag("chats.row.image", useUnmergedTree = true).assertCountEquals(0)
+            shot("image-summary")
+        } catch (failure: Throwable) {
+            runCatching {
+                val state = repo.state.value
+                evidenceFile("image-summary-failure", "txt").writeText(
+                    "conn=${state.conn} loading=${state.summariesLoading} error=${state.lastError}\n" +
+                        "summaries=${state.summaries}\nactivity=${state.activity}\nchannels=${host.calls.map { it.first }}\n" +
+                        compose.onRoot(useUnmergedTree = true).printToString(),
+                )
+            }.exceptionOrNull()?.let { failure.addSuppressed(it) }
+            throw failure
+        }
     }
 
     @Test fun offlineImageIntentDoesNotBecomeTextOutbox() {
@@ -141,12 +157,17 @@ class ImageChatEvidenceTest {
         if (InstrumentationRegistry.getArguments().getString("nekkoModeEvidence") != "true") return
         settle()
         val inst = InstrumentationRegistry.getInstrumentation()
+        val bitmap = inst.uiAutomation.takeScreenshot() ?: error("No native window screenshot")
+        evidenceFile(name, "png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+    }
+
+    private fun evidenceFile(name: String, extension: String): File {
+        val inst = InstrumentationRegistry.getInstrumentation()
         val device = InstrumentationRegistry.getArguments().getString("nekkoDevice", "phone")
         val revision = InstrumentationRegistry.getArguments().getString("nekkoRevision", "unspecified")
         val dir = File(inst.targetContext.getExternalFilesDir(null), "evidence").apply { mkdirs() }
-        val bitmap = inst.uiAutomation.takeScreenshot() ?: error("No native window screenshot")
-        File(dir, "$revision-$device-$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        bitmap.recycle()
+        return File(dir, "$revision-$device-$name.$extension")
     }
 }
 
@@ -168,6 +189,8 @@ private class ImageEvidenceRemote : Remote {
     val calls = CopyOnWriteArrayList<Pair<String, List<JsonElement>>>()
     val signed = CopyOnWriteArrayList<Pair<String, List<JsonElement>>>()
     private fun json(s: String) = WireJson.parseToJsonElement(s)
+    // Default grouped lists hide idle, unpinned chats older than 14 days. Missing dates parse as 0.
+    private val updatedAt = System.currentTimeMillis()
     private val image = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAmElEQVR4nO3PMQ2AUBTFUPQhC1V4wQEGWDHw38BUmjS5Y4d7tv04l7vuZ7m/9dvfDgWgDwWgDwWgD30GWI5OfQC6D0D3AejeD7AcnfoAdB+A7gPQvR9gOTr1Aeg+AN0HoHs/wHJ06gPQfQC6D0D3foDl6NQHoPsAdB+A7v0Ay9GpD0D3Aeg+AN37AZajUx+A7gPQfQC61wNe8oUB/4lexNYAAAAASUVORK5CYII="
     fun online() { welcome.tryEmit(WelcomedDevice("test", "Test phone", "android", PhoneProtocol.VERSION)); status.value = RelayStatus(RelayState.ONLINE) }
     override fun connect() { status.value = RelayStatus(RelayState.CONNECTING) }
@@ -188,7 +211,7 @@ private class ImageEvidenceRemote : Remote {
             "providers:list" -> json("""[{"id":"engine","kind":"engine","name":"Local","enabled":true}]""")
             "models:list" -> json("""[{"id":"text","name":"Text model"}]""")
             "engine:models" -> json("""[{"id":"flux","kind":"image","name":"Flux","format":"gguf","state":"ready"}]""")
-            "sessions:summaries" -> json("""[{"id":"image-session","title":"Paper boat","chatType":"image"}]""")
+            "sessions:summaries" -> json("""[{"id":"image-session","title":"Paper boat","updatedAt":$updatedAt,"chatType":"image"}]""")
             "session:create" -> json("""{"id":"image-session"}""")
             "session:get" -> json("""{"id":"image-session","title":"Paper boat","chatType":"image","imageParams":{"modelId":"flux","cfgScale":4},"messages":[{"id":"reply","role":"assistant","content":"","reasoning":"Rendering","images":["$image"]}]}""")
             "session:photo" -> JsonPrimitive(image)
