@@ -3613,6 +3613,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Suggestions never compete with folders, the model or send for action-row space. */
 .composer-suggestions-row { display: flex; min-width: 0; }
 .composer-suggestions { display: flex; min-width: 0; max-width: 100%; }
+.composer-suggestions:empty { display: none; }
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Rows stay flat at rest; pointer/focus feedback is a wash and soft light,
    not a raised card. The inset glow survives the group's overflow clipping. */

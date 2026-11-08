@@ -94,13 +94,13 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     const noop = () => {};
     const content = surface === 'onboarding' ? React.createElement(ProvidersStep, {key: performance.now()}) : surface === 'choices' ? React.createElement(ProviderChoices, {onPick:noop, current:'gemini', cloudOnly:true}) : React.createElement(AddProvider, {onDone:noop, fixedKind:'chatgpt'});
     root.render(React.createElement('main', {style: {padding:24, height:'100vh', overflow:'auto', background:'var(--paper)'}}, content));
-  }, showFolderComposer: async (cleanStart = false, expert = true, surface: 'full' | 'window' | 'composer' = 'window') => {
+  }, showFolderComposer: async (cleanStart = false, expert = true, surface: 'full' | 'window' | 'composer' = 'window', draftText = 'Please help improve the project layout and check the changes.') => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     localStorage.setItem('nekko.chatMode', expert ? 'expert' : 'simple');
     const { saveDraft } = await import('../src/renderer/composerDrafts');
     const record = { ...records[0], id: `folders-${cleanStart}-${expert}-${surface}` } as any;
     records[0] = record;
-    saveDraft(record.id, { text: 'Please help improve the project layout and check the changes.', images: [] });
+    saveDraft(record.id, { text: draftText, images: [] });
     record.mode = 'ask';
     record.workspaceId = 'code';
     record.supportingWorkspaceIds = [];

@@ -70,6 +70,12 @@ app.whenReady().then(async () => {
       await run(`layoutFixture.showFolderComposer(false, true, ${js(surface)})`); await sleep(350);
       check(surface + ': folders first', await run(`document.querySelector('.composer-bar').firstElementChild.classList.contains('composer-folders')`));
     }
+    if (!baseline) {
+      win.setContentSize(1000, 800);
+      await run(`layoutFixture.showFolderComposer(true, true, 'window', '')`); await sleep(350);
+      check('empty draft has no blank suggestions row', await run(`getComputedStyle(document.querySelector('[data-composer-suggestions]')).display === 'none'`));
+      await shot('empty-detailed-1000');
+    }
     report.background = { visible: win.isVisible(), focusable: win.isFocusable(), bounds: win.getBounds() };
   } catch (e) { report.failure = String(e.stack || e); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));

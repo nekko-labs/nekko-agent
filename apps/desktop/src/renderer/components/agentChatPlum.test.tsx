@@ -38,6 +38,9 @@ describe('agent chat visual continuity', () => {
     expect(cssRule(css, '.agent-chip-chat[data-agent-active]').background).toBe('var(--accent-soft)');
     expect(cssRule(css, '.agent-chip-chat:focus-visible').outline).toContain('var(--accent)');
   });
+  it('does not leave a blank suggestions row for an empty draft', () => {
+    expect(cssRule(css, '.composer-suggestions:empty').display).toBe('none');
+  });
   it.each([false, true])('puts suggestions on the next line below the action row, clean start: %s', (cleanStart) => {
     const html = renderChatPane(chatSession({ messages: cleanStart ? [] : chatSession().messages }), { commandCenter: true, cleanStart });
     const box = composerBox(html);
