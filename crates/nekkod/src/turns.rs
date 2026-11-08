@@ -279,6 +279,14 @@ struct Shared {
     cancel: Cancel,
     steering: Steering,
     events: mpsc::UnboundedSender<Out>,
+    /// The transcript at the newest checkpoint the forwarder has not saved yet.
+    /// One slot, not one copy per event: each checkpoint used to queue a deep
+    /// copy of the whole transcript (tens of MB in a long chat) on the
+    /// unbounded channel, and quick tools queued them faster than the
+    /// forwarder saved, which is how nekkod ran out of memory (2026-11-09).
+    /// A later transcript holds everything an earlier one did, so saving only
+    /// the newest loses nothing.
+    latest: Arc<Mutex<Option<Vec<Value>>>>,
     /// `settings.defaultChatMode`, for the live policy check on each approval.
     default_mode: Option<String>,
     /// The message of the last `error` event the turn sent, for a parent that
@@ -908,6 +916,7 @@ impl Turns {
             cancel: Cancel::default(),
             steering: Arc::default(),
             events: tx,
+            latest: Arc::default(),
             default_mode: spec.pointer("/settings/defaultChatMode").and_then(Value::as_str).map(str::to_string),
             last_error: Arc::default(),
             unattended: Unattended::default(),
@@ -1318,6 +1327,7 @@ impl Turns {
                 turn_from,
                 started_at,
                 last_error: shared.last_error.clone(),
+                latest: shared.latest.clone(),
             },
         ));
 
@@ -1528,6 +1538,7 @@ impl Turns {
         let mut history: Vec<Value> =
             lock(&session).get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
         let events = shared.events.clone();
+        let latest = shared.latest.clone();
         let str_of = |v: &Value, k: &str| str_at(v, k).map(str::to_string);
         let run = RunOptions {
             session_id: session_id.clone(),
@@ -1548,8 +1559,10 @@ impl Turns {
             steering: shared.steering.clone(),
         };
         run_agent(run, &client, &runner, &mut |event: Value, transcript: &[Value]| {
-            let snapshot = is_checkpoint(&event).then(|| transcript.to_vec());
-            let _ = events.send(Out::Loop(event, snapshot));
+            if is_checkpoint(&event) {
+                *lock(&latest) = Some(transcript.to_vec());
+            }
+            let _ = events.send(Out::Loop(event, None));
         })
         .await;
         drop(runner);
@@ -1593,9 +1606,12 @@ impl Turns {
         let mut history: Vec<Value> =
             lock(session).get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
         let events = shared.events.clone();
+        let latest = shared.latest.clone();
         let send = |event: Value, history: &[Value]| {
-            let snapshot = is_checkpoint(&event).then(|| history.to_vec());
-            let _ = events.send(Out::Loop(event, snapshot));
+            if is_checkpoint(&event) {
+                *lock(&latest) = Some(history.to_vec());
+            }
+            let _ = events.send(Out::Loop(event, None));
         };
         let fail = |message: &str, history: &[Value]| {
             send(json!({ "type": "error", "sessionId": session_id, "message": message }), history);
@@ -2236,6 +2252,10 @@ struct Forward {
     turn_from: usize,
     started_at: u64,
     last_error: Arc<Mutex<Option<String>>>,
+    /// [`Shared::latest`]: the transcript a checkpoint saves, taken by the
+    /// first checkpoint that finds it; one that finds it taken saves the chat
+    /// as it stands, which already has that newer transcript.
+    latest: Arc<Mutex<Option<Vec<Value>>>>,
 }
 
 /// The turn's events, in order. A checkpoint is saved before the UI is told
@@ -2267,7 +2287,10 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 f.hub.publish("agent:event", e, false);
                 continue;
             }
-            Some(Out::Loop(e, s)) => (e, s),
+            Some(Out::Loop(e, s)) => {
+                let s = s.or_else(|| if is_checkpoint(&e) { lock(&f.latest).take() } else { None });
+                (e, s)
+            }
         };
         if snapshot.is_none() && Deltas::joinable(&event) {
             deltas.push(&f.hub, event);
