@@ -3,8 +3,8 @@ import NekkoProtocol
 import SwiftUI
 
 /// First run (IO-31), three steps shown once: what the app does (this view),
-/// pairing (`WelcomeView`, step 2), and notifications with a preview of what
-/// they look like (`NotificationStepView`, after the first pairing, because
+/// pairing (`WelcomeView`, step 2), and a permission checklist explaining what
+/// each feature uses (`NotificationStepView`, after the first pairing, because
 /// permission is asked only once a computer is paired). Skip ends it.
 struct FirstRunIntroView: View {
     var next: () -> Void
@@ -69,55 +69,15 @@ struct StepLabel: View {
     }
 }
 
-/// Step 3: what notifications look like, then iOS's own question (asked only
-/// now, after pairing). *Not now* leaves them off; Settings can turn them on.
+/// Step 3: review each system permission after pairing. Optional tools can wait.
 struct NotificationStepView: View {
     @Environment(AppModel.self) private var app
-    @Environment(ComputersStore.self) private var store
-    @Environment(\.palette) private var palette
-    @State private var asking = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    StepLabel(step: 3)
-                    Text("Know when your computer needs you").font(.title.weight(.bold)).foregroundStyle(palette.ink)
-                        .accessibilityAddTraits(.isHeader)
-                    Text("A notification when a tool waits for your approval, when the agent asks a question, and when a reply finishes or fails. Choose which in Settings.")
-                        .foregroundStyle(palette.inkSoft)
-                    VStack(spacing: 10) {
-                        NotificationPreview(title: "Nekko needs you", text: "Approve? Run npm test", actions: true)
-                        NotificationPreview(title: store.active?.name ?? "Your computer", text: "Finished on \(store.active?.name ?? "your computer").",
-                                            actions: false)
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Preview: an approval with Allow and Deny, and a finished reply.")
-                    Text("Pushed notifications say only what happened, never what your chats say. With the app lock on, the ones the app shows say less too.")
-                        .font(.footnote).foregroundStyle(palette.inkSoft)
-                }
-                .padding(20)
+            PermissionChecklistView {
+                Task { await app.finishOnboarding(allowNotifications: false) }
             }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 8) {
-                    Button {
-                        asking = true
-                        Task { await app.finishOnboarding(allowNotifications: true) }
-                    } label: {
-                        Text("Allow notifications").frame(maxWidth: .infinity).padding(.vertical, 6).foregroundStyle(palette.onAccent)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(asking)
-                    .accessibilityIdentifier("firstRun.allowNotifications")
-                    Button("Not now") { Task { await app.finishOnboarding(allowNotifications: false) } }
-                        .frame(minHeight: 44)
-                        .accessibilityIdentifier("firstRun.notNow")
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(.bar)
-            }
-            .background(palette.paper)
         }
     }
 }

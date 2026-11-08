@@ -26,6 +26,6 @@ Connection and alerts come first: notifications (approvals, questions, replies a
 
 ## Implementation and verification status
 
-Implemented in this foundation layer: permission reader/request coordinator and focused native unit tests for capture status, checks, inventory and request cancellation. The reusable checklist, onboarding replacement, Settings entry point and native UI tests are planned in the next stack layer. Build, test and inspected simulator evidence results are recorded in the linked PR; physical hardware, real local-network authorization, authentication hardware and APNs delivery must not be claimed from simulator-only checks. English source strings use the native localization APIs; new translations have not been supplied.
+Implemented in the task branch: permission reader/request coordinator, reusable checklist, onboarding replacement and Settings entry point. Native unit and onboarding UI tests cover the inventory and status rules. Build, test and inspected simulator evidence results are recorded in the linked PR; physical hardware, real local-network authorization, authentication hardware and APNs delivery must not be claimed from simulator-only checks. English source strings use the native localization APIs; new translations have not been supplied.
 
 Android parity is planned in [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251), with the gap recorded in [phone parity](ios-and-android-stay-in-step.md).

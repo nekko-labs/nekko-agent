@@ -102,14 +102,15 @@ final class FirstRunTests: XCTestCase {
 
             app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-theme", theme, "-uiTestReset", "YES", "-uiTestNotificationStep"]
             app.launch()
-            let allow = app.buttons["firstRun.allowNotifications"]
+            let allow = app.buttons["permissions.continue"]
             XCTAssertTrue(allow.waitForExistence(timeout: 10), "step 3")
             XCTAssertTrue(app.staticTexts["Step 3 of 3"].exists)
-            XCTAssertTrue(app.descendants(matching: .any)["Preview: an approval with Allow and Deny, and a finished reply."].exists)
+            XCTAssertTrue(app.buttons["permissions.action.notifications"].exists)
+            XCTAssertTrue(app.buttons["permissions.action.network"].exists)
             attach(app, "(theme)-firstrun-3")
             auditAccessibility(app, "(theme)-firstrun-3", covered: bar(app, above: allow))
-            // Not now: iOS is not asked, and the step goes away.
-            app.buttons["firstRun.notNow"].tap()
+            // Continuing without a row tap never prompts for optional access.
+            allow.tap()
             XCTAssertFalse(app.alerts.firstMatch.waitForExistence(timeout: 2))
             XCTAssertTrue(waitGone(allow, 5))
             app.terminate()
