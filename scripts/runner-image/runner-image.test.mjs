@@ -29,7 +29,7 @@ function stubs() {
   stub('id', 'echo 501');
   stub('stat', 'echo "${FAKE_CONSOLE:-runner}"');
   stub('launchctl', 'shift 2; exec "$@"');
-  stub('top', 'sleep 0.1; echo "CPU usage: 10.0% user, 15.0% sys, 75.00% idle"');
+  stub('top', 'sleep "${FAKE_TOP_SLEEP:-0.1}"; [ -n "${FAKE_NO_SAMPLE:-}" ] || echo "CPU usage: 10.0% user, 15.0% sys, 75.00% idle"');
   stub(
     'vm_stat',
     `cat <<'EOF'
@@ -54,10 +54,15 @@ EOF`,
 echo "run.sh $*" >> '${log}'
 sleep "\${FAKE_SLEEP:-0}"
 # FAKE_STATS_DISK (a name under dev/): the job lasts until a usage sample lands past that disk's
-# header block (at most 20 s), so a slow CI machine cannot end it before the sampler's first write.
+# header block. Bound this by elapsed time, not 200 subprocess-heavy polling iterations:
+# the five-second deadline leaves teardown time inside run()'s unchanged ten-second timeout.
 if [ -n "\${FAKE_STATS_DISK:-}" ]; then
-  for _ in $(seq 200); do
-    [ -n "$(tail -c +513 '${root}/dev/'"$FAKE_STATS_DISK" | tr -d '\\0')" ] && break
+  deadline=$((SECONDS + 5))
+  until [ -n "$(tail -c +513 '${root}/dev/'"$FAKE_STATS_DISK" | tr -d '\\0')" ]; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo 'fake runner: no usage sample before deadline' >&2
+      exit 86
+    fi
     sleep 0.1
   done
 fi
@@ -106,6 +111,8 @@ function run({ seed: files, env = {}, prepare, late } = {}) {
       ...env,
     },
   });
+  assert.ifError(r.error); // Report a harness timeout directly, never as a missing shutdown.
+  assert.equal(r.signal, null, 'boot script must exit normally');
   const log = join(root, 'calls.log');
   const calls = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
   return { status: r.status, calls, out: `${r.stdout}${r.stderr}` };
@@ -147,27 +154,64 @@ test('step_pages_are_followed_as_the_runner_user_never_through_a_symlink', posix
   assert.deepEqual(tails, [`sudo -u runner -H -- tail -n +1 -f ${home}/actions-runner/_diag/pages/step_1.log`]);
 });
 
-test('usage_is_sampled_onto_the_stats_disk_only', posixFixture, () => {
+function runWithStats(env = {}, partitionLikeParent = false) {
+  const fixtureEnv = { FAKE_STATS_DISK: 'disk9', ...env };
   const header = Buffer.alloc(512);
   header.write('NEKKOSTATS1\n');
   const disk = (name, head) => writeFileSync(join(root, 'dev', name), Buffer.concat([head, Buffer.alloc(4096)]));
-  const { calls } = run({
+  return run({
     seed: { 'jit-config': 'QUJD' },
-    env: { FAKE_STATS_DISK: 'disk9' },
+    env: fixtureEnv,
     prepare: () => {
+      if (partitionLikeParent) {
+        const parent = join(root, 'parent-s1');
+        mkdirSync(parent);
+        symlinkSync(join(root, 'dev'), join(parent, 'dev'));
+        fixtureEnv.NEKKO_DEV_DIR = join(parent, 'dev');
+      }
       disk('disk1', Buffer.alloc(512)); // the guest's own disk: no header
       disk('disk1s1', header); // a partition is never the stats disk
       disk('disk9', header);
     },
   });
-  startsRunSh(calls);
-  const body = (name) => readFileSync(join(root, 'dev', name)).subarray(512).toString().replace(/\0+$/, '');
-  const lines = body('disk9').trim().split('\n');
-  assert.ok(lines.length >= 1, 'at least one sample');
+}
+
+const statsBody = (name) => readFileSync(join(root, 'dev', name)).subarray(512).toString().replace(/\0+$/, '');
+function assertStatsSample() {
+  const lines = statsBody('disk9').trim().split('\n');
+  assert.ok(lines.some((line) => line.length > 0), 'at least one sample');
   // 16 KiB pages: (65536 wired + 131072 app + 6400 compressed) pages is 3172 MB, 64 swapouts 1 MB.
   for (const l of lines) assert.match(l, /^\d{10} 75\.00 3172 100 1$/);
-  assert.equal(body('disk1'), '');
-  assert.equal(body('disk1s1'), '');
+  assert.equal(statsBody('disk1'), '');
+  assert.equal(statsBody('disk1s1'), '');
+}
+
+for (const [name, env, partitionLikeParent] of [
+  ['usage_is_sampled_onto_the_stats_disk_only', {}],
+  ['delayed_usage_sample_still_finishes_before_the_harness_timeout', { FAKE_TOP_SLEEP: '0.7' }],
+  ['stats_disk_parent_name_is_not_mistaken_for_a_partition', {}, true],
+]) {
+  test(name, posixFixture, () => {
+    const { status, calls, out } = runWithStats(env, partitionLikeParent);
+    assert.equal(status, 0);
+    startsRunSh(calls);
+    assert.match(out, /runner exited with 0/);
+    assert.doesNotMatch(out, /no usage sample before deadline/);
+    assertStatsSample();
+  });
+}
+
+test('missing_usage_sample_fails_explicitly_after_orderly_shutdown', posixFixture, () => {
+  const { status, calls, out } = runWithStats({ FAKE_NO_SAMPLE: '1' });
+  assert.equal(status, 0); // The boot script logs job failure but still exits after shutdown.
+  startsRunSh(calls);
+  assert.match(out, /fake runner: no usage sample before deadline/);
+  assert.match(out, /runner exited with 86/);
+  assert.ok(calls.some((c) => c.startsWith('top ')), 'sampler ran but produced no sample');
+  assert.equal(statsBody('disk9'), '');
+  assert.equal(statsBody('disk1'), '');
+  assert.equal(statsBody('disk1s1'), '');
+  assert.throws(assertStatsSample, /at least one sample/, 'missing telemetry must still fail validation');
 });
 
 test('no_stats_disk_samples_nothing', posixFixture, () => {
