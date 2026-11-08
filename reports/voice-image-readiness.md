@@ -105,3 +105,10 @@ Feature head `47b213eb6db2536571fded23e945db261d236423`, host head `9c41189cb`.
 - Native Android42439884618: live-relay emulator and live-update jobs passed. All 48 previously diagnosed lint errors cleared; lint now reports one error in upstream ComposerPhotosTest (StateFlow.value inside composition). The fixture now collects its state; no production surface changes. Native rerun is still required.
 - Published 18 new native stills/recordings to PR2212 via pr-media-6; uploader checked downloaded SHA256 and public URL bytes, then PR readback. Browser screenshot again timed out and native capture returned UnknownVizError; media is captured/published but NOT pixel/motion-inspected. Isolated read-only viewer/browser stopped.
 - PR2212 CI42439865845 fails exactly the Settings Customize baseline assertion tracked by #2218 (462 other files passed; integration job passed). No assertion disabled, no blind rerun or gate bypass. iOS build42439944654/new image surfaces42439964686 remain queued; repository runner inventory returned zero self-hosted runners, which does not establish availability of organization/hosted capacity.
+
+## Landed host dependency and main refresh (2026-11-08)
+
+- #2211 merged normally at b3f17e57eb5bba35eec69261353faeb2f0ac322b after new-head build, integration, performance, gate and CodeQL analysis passed. #2218 is fixed upstream.
+- Merged main into the UI branch without conflicts as ff97e5f801a3dda5bfeae9f3c9dbb11af02bd296. Settings Customize unchanged suite passes 2/2; 16 resource/harness checks, shared build, spec-index and whitespace checks pass.
+- Android tree is unchanged from c12df243e: inspected native run42440610346 passed 502 app +436 protocol tests, zero failures/skips, lint0 errors/105 warnings/4 hints, relay/security/Live Update checks.
+- iOS now includes upstream first-prompt intro, pairing rotation and pane interaction changes, including an automatic merge in NewChatView. Earlier8a3 iOS run42439944654 is no longer final-head proof; fresh native verification is required. No visual inspection or hardware certification is claimed. #2212 remains draft and #2162 open.
