@@ -133,7 +133,7 @@ final class LiveRelayTests: XCTestCase {
         // A busy app can drop the option's tap, and Answer stays disabled until one is picked.
         let ios = app.buttons["iOS"].firstMatch
         XCTAssertTrue(ios.tapUntil { ios.isSelected }, "the option is picked")
-        XCTAssertTrue(app.buttons["Answer"].tapUntil { !question.exists }, "the question closes after Answer")
+        XCTAssertTrue(app.buttons["Send answers"].tapUntil { !question.exists }, "the question closes after sending answers")
         XCTAssertTrue(app.staticTexts["Hello from your computer."].firstMatch.waitForExistence(timeout: computerWait))
 
         // The agent writes a file; the phone reads the change, read only (the

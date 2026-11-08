@@ -78,7 +78,7 @@ object Transcript {
                     val r = m.toolResult ?: continue
                     val i = toolIndex[r.toolCallId] ?: continue
                     val b = out[i] as Block.Tool
-                    out[i] = b.copy(status = if (r.isError) ToolStatus.ERROR else ToolStatus.OK, output = clip(r.output, full = r.outputChars, images = r.omittedImages))
+                    out[i] = b.copy(status = if (r.isError) ToolStatus.ERROR else ToolStatus.OK, output = if (QuestionReplies.body(b.name, r.output) != null) r.output else clip(r.output, full = r.outputChars, images = r.omittedImages))
                 }
             }
         }
@@ -102,7 +102,7 @@ object Transcript {
             approval = if (turn.approval?.call?.id == e.result.toolCallId) null else turn.approval,
             blocks = turn.blocks.map { b ->
                 if (b is Block.Tool && b.id == e.result.toolCallId) {
-                    b.copy(status = if (e.result.isError) ToolStatus.ERROR else ToolStatus.OK, output = clip(e.result.output))
+                    b.copy(status = if (e.result.isError) ToolStatus.ERROR else ToolStatus.OK, output = if (QuestionReplies.body(b.name, e.result.output) != null) e.result.output else clip(e.result.output))
                 } else b
             },
         )

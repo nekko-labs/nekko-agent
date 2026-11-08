@@ -42,6 +42,17 @@ class AskFormTest {
     }
 
     @Test
+    fun `skip clears only the current question including its note`() {
+        val f = AskForm().toggle(single, "A").toggle(multi, "X").note(multi, "custom")
+        assertTrue(f.hasAnswer(multi))
+        val skipped = f.skip(multi)
+        assertTrue(skipped.hasAnswer(single))
+        assertFalse(skipped.hasAnswer(multi))
+        assertEquals(listOf(AskAnswer("q1", listOf("A"), null)), skipped.answers(request))
+        assertTrue(f.hasAnswer(multi)) // navigating never mutates older snapshots
+    }
+
+    @Test
     fun `answers trim notes and skip blank questions`() {
         val f = AskForm().toggle(single, "A").note(single, "  why not  ")
         assertEquals(listOf(AskAnswer("q1", listOf("A"), "why not")), f.answers(request))
