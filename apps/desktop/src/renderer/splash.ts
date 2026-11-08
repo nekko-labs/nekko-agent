@@ -17,27 +17,31 @@ import { BRAND_HEAD } from './components/BrandMark.js';
 import { CHUNKY_CELLS, CHUNKY_SIZE, FINE_PATH, MID_PATH } from './splashCells.js';
 
 const KEY = 'nekko.splash';
+// Old caches contain the retired lilac or a small-text accent, not a main fill.
+const PALETTE_VERSION = 1;
 const B = 500;
 const OUT = 'cubic-bezier(.2,.8,.2,1)';
 const NS = 'http://www.w3.org/2000/svg';
-/** The brand green (the app icon's tile), for a first launch with nothing stored yet. */
-const DEFAULT = { bg: '#101714', fg: '#f2f1e9', paper: '#0c0c11' };
+/** The Nekko theme's main plum, including the first launch before settings load. */
+const DEFAULT = { bg: '#190019', fg: '#ffffff', paper: '#0c0c11' };
 const RELOAD_FADE_OUT = 180;
 
 type Colours = { bg: string; fg: string; paper: string };
 
 /**
  * Store the current theme's splash colours. The ground is always a solid colour
- * from the theme, never a pale one, so the splash can't flash white: the first
- * of `candidates` that is dark enough, else the brand green.
+ * from the theme, never a pale one. Branded looks use their main fill, not the
+ * lighter accent intended for small text. Other palettes retain their colours.
  */
-export function rememberSplashColours(candidates: (string | undefined)[]): void {
+export function rememberSplashColours(candidates: (string | undefined)[], presetId?: string): void {
   try {
     // With no preset colours, the theme's accent as the stylesheet resolves it.
     if (!candidates.some(Boolean)) candidates = [getComputedStyle(document.documentElement).getPropertyValue('--accent')];
-    const bg = candidates.map((c) => (c ? toHex(c) : null)).find((c): c is string => !!c && luminance(c) < 0.6) ?? DEFAULT.bg;
+    const main = !presetId || ['system', 'light', 'dark'].includes(presetId) || /^x-plum-(white|dark)$/.test(presetId)
+      ? DEFAULT.bg : /^x-indigo-(white|dark)$/.test(presetId) ? '#2b124c' : undefined;
+    const bg = main ?? candidates.map((c) => (c ? toHex(c) : null)).find((c): c is string => !!c && luminance(c) < 0.6) ?? DEFAULT.bg;
     const paper = toHex(getComputedStyle(document.documentElement).getPropertyValue('--paper')) ?? DEFAULT.paper;
-    localStorage.setItem(KEY, JSON.stringify({ bg, fg: readableOn(bg), paper }));
+    localStorage.setItem(KEY, JSON.stringify({ version: PALETTE_VERSION, bg, fg: readableOn(bg), paper }));
   } catch {
     /* storage blocked: the default colours are used */
   }
@@ -62,8 +66,12 @@ function luminance(hex: string): number {
 
 function storedColours(): Colours {
   try {
-    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<Colours> | null;
-    if (v && typeof v.bg === 'string' && typeof v.fg === 'string') return { bg: v.bg, fg: v.fg, paper: typeof v.paper === 'string' ? v.paper : DEFAULT.paper };
+    const v = JSON.parse(localStorage.getItem(KEY) ?? 'null') as (Partial<Colours> & { version?: number }) | null;
+    const hex = (c: unknown): c is string => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+    // Keep the old paper for quiet reloads, but never paint an old splash fill.
+    const paper = hex(v?.paper) ? v.paper : DEFAULT.paper;
+    if (v?.version === PALETTE_VERSION && hex(v.bg) && hex(v.fg)) return { bg: v.bg, fg: v.fg, paper };
+    return { ...DEFAULT, paper };
   } catch {
     /* fall through */
   }

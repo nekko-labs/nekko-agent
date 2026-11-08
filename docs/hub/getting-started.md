@@ -66,6 +66,8 @@ In **Settings → Customize → Appearance**, choose a palette from the colored 
 
 On desktop and the Local Web UI, light **Nekko** and **Indigo** use pale rose and indigo surfaces, tinted selections, and the same plum/violet/rose gradient colors as their dark counterparts. The selected chat keeps its color field from the greeting into the conversation; other panes stay quiet. Dark themes are unchanged, and reduced motion keeps a static field.
 
+The desktop opening splash uses deep plum for Nekko (including the default System look), rather than the lighter accent used for text. Indigo uses its own deep main color; other chosen palettes keep their colors. Older cached splash colors are refreshed automatically.
+
 Open **Custom colors** to adjust the accent and secondary color with the wheel or an exact color value. **Reset to this theme's colors** restores the defaults for the current palette and mode. The same controls appear during first-run setup. Theme circles respond gently to hover and press; the system's reduced-motion preference turns that motion off.
 
 ## Following tool activity
@@ -351,3 +353,5 @@ Selecting text in the desktop or Local Web UI message editor opens a compact, si
 On iOS, tap the keyboard-down button at the right of the message box’s formatting row to hide the keyboard without sending or clearing your draft. It stays available when **Aa** collapses the formatting controls. Tap the message box to continue typing.
 
 Development builds show the latest reachable release tag plus a `dev` suffix, commit distance and source hash, rather than the checked-in package version. Installed apps show their stamped release version. Restart development mode after pulling a version-identity fix or fetching new release tags.
+
+Nekko Agent’s app icon uses a white cat on deep plum across desktop, browser and phone launchers. The desktop tray and notification icon use the same artwork. An already running or installed app keeps its bundled icon until you update and restart it; a development launch rebuilds its branded runtime when the icon changes.

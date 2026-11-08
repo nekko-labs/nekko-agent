@@ -1,3 +1,4 @@
+import * as splash from './splash.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => { (globalThis as any).window = { innerWidth: 1280, addEventListener() {}, matchMedia: () => ({ matches: false }) }; });
@@ -82,5 +83,31 @@ describe('independent palette and mode application', () => {
     expect(attrs.get('data-preset')).toBe(id);
     expect(props.get('--accent')).toBe(settings.accent);
     expect(props.get('--accent-2')).toBe(settings.accent2);
+  });
+});
+
+describe('remembered splash palette', () => {
+  it.each(['x-plum-dark', 'x-indigo-dark', 'nebula'])('passes the resolved %s palette after settings load', (id) => {
+    const remember = vi.spyOn(splash, 'rememberSplashColours').mockImplementation(() => {});
+    try {
+      useStore.setState({ settings: { theme: 'dark', themePreset: id } as any, settingsLoaded: true });
+      useStore.getState().applyTheme();
+      expect(remember).toHaveBeenCalledWith(expect.any(Array), id);
+    } finally { remember.mockRestore(); }
+  });
+  it.each(['dark', 'x-plum-dark', 'x-indigo-dark'])('preserves a custom accent on %s', (id) => {
+    const remember = vi.spyOn(splash, 'rememberSplashColours').mockImplementation(() => {});
+    try {
+      useStore.setState({ settings: { theme: 'dark', themePreset: id, accent: '#336699' } as any, settingsLoaded: true });
+      useStore.getState().applyTheme();
+      expect(remember).toHaveBeenCalledWith(expect.arrayContaining(['#336699']), 'custom');
+    } finally { remember.mockRestore(); }
+  });
+  it('does not overwrite cached colours before settings load', () => {
+    const remember = vi.spyOn(splash, 'rememberSplashColours').mockImplementation(() => {});
+    try {
+      useStore.getState().applyTheme();
+      expect(remember).not.toHaveBeenCalled();
+    } finally { remember.mockRestore(); }
   });
 });

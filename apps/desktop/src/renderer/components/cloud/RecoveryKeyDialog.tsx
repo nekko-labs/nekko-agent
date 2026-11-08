@@ -88,7 +88,7 @@ async function saveKit(key: string, email: string) {
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>Nekko Agent recovery kit</title>
 <style>body{font:14px/1.5 system-ui,sans-serif;color:#17171d;max-width:640px;margin:40px auto;padding:0 24px}
-h1{font-size:22px;margin:0 0 4px}.muted{color:#52525e}.key{display:grid;grid-template-columns:repeat(4,auto);gap:8px 16px;justify-content:start;font:600 18px/1.3 ui-monospace,monospace;letter-spacing:.06em;padding:18px;border:1.5px solid #6d5efc;border-radius:12px;margin:20px 0}
+h1{font-size:22px;margin:0 0 4px}.muted{color:#52525e}.key{display:grid;grid-template-columns:repeat(4,auto);gap:8px 16px;justify-content:start;font:600 18px/1.3 ui-monospace,monospace;letter-spacing:.06em;padding:18px;border:1.5px solid #5a2352;border-radius:12px;margin:20px 0}
 .row{display:flex;gap:28px;align-items:flex-start}ol{padding-left:18px}.box{border:1px dashed #b9b9c6;border-radius:8px;height:46px;margin-top:4px}</style></head>
 <body><h1>Nekko Agent recovery kit</h1><p class="muted">For ${esc(email)} · made ${esc(date)}</p>
 <div class="key">${key.split('-').map((g) => `<span>${g}</span>`).join('')}</div>

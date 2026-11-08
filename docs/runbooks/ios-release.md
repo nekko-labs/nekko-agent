@@ -21,11 +21,11 @@ A manual dispatch forces an upload attempt, even without source changes. Main pu
 3. Confirm export/upload succeeded. Apple processing and TestFlight group availability are separate checks in App Store Connect; a green workflow alone does not prove testers can install.
 4. Read the **internal-testers** job: it waits up to 45 minutes for Apple's processing, then adds the build to every internal TestFlight group that does not already receive every build, and logs the external groups it left alone. If it warns that processing was still running, add the build to the internal group by hand once it finishes. Do not imply this publishes an App Store production release.
 
-## Internal testers only
+## Who can test a build
 
-Nightly and hand-started uploads go to **internal TestFlight testers only** (Philip, 2026-11-06): every iOS nightly is a new marketing version, and external testers would need Beta App Review for each. The export sets `testFlightInternalTestingOnly`, so App Store Connect refuses to put the build in an external group, send it to Beta App Review or submit it to the App Store, and `scripts/testflight-internal.mjs` makes no such request (its only write adds the build to internal groups). Never add a nightly to an external group by hand.
+**The scheduled nightly can go to external testers; hand-started uploads are internal only** (Philip, 2026-11-08; until then every upload was internal only). The nightly's export leaves `testFlightInternalTestingOnly` off, so the build can be added to an external group such as "friends and family testers". That is still a step done by hand in App Store Connect, and because every iOS nightly is a new marketing version, Apple's Beta App Review runs for each one before external testers can install it.
 
-Only a dispatch with `-f internal_only=false` uploads a build that can go further, and only Philip decides that. An internal group with automatic distribution ("access to all builds") gets every build without the job; the job covers the others.
+A run started by hand sets `testFlightInternalTestingOnly` unless dispatched with `-f internal_only=false`, so App Store Connect refuses to put that build in an external group, send it to Beta App Review or submit it to the App Store. Use it for builds only the team should see. `scripts/testflight-internal.mjs` never touches external groups or Beta App Review in either case (its only write adds the build to internal groups). An internal group with automatic distribution ("access to all builds") gets every build without the job; the job covers the others.
 
 ```sh
 gh run view <run-id> --repo nekko-labs/nekko-agent
