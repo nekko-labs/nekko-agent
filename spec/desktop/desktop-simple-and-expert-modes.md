@@ -34,12 +34,13 @@ Implemented: Simple's normal and wall-window composers show the selected primary
   - *This chat has a pull request:* the chat's PRs, or a PR its tool calls opened.
   - *Agents are at work in the background* (`agentMonitorRelevant`): a sub-agent of this chat has a live run, or its Claude Code reports background tasks. Queued messages stay out, because they are already above the message box, and so do artifacts, which are not news.
   - *A computer is connected:* `store.computers` is not empty.
+  - *This Mac is a CI runner:* `runner:list` returns at least one runner (`runners`).
 - **Desktop controls in the catalogue.**
   - **Chat header:** git checkout chip (`worktree`), Changes (`changes`, contextual, reading *3 files changed*, with the lines added and removed in Detailed), Logs (`logs`), the Agent Monitor (`agent-monitor`), the hardware strip (`hardware`).
   - **Message box:** model picker (`model`; shown regardless while the chat has no usable model), effort (`effort`), Approvals (`asks`), usage ring (`context`), cost and limits (`cost`), the Mode button and panel (`mode`), Privacy Shield (`privacy`), Tools and MCP menus (`tools`), the internet switch (`internet`), prompt suggestions (`suggest`).
   - **Conversation:** reasoning and tool steps (`thinking`). Out of sight on the desktop (since 2026-11-06, #1666), only the reasoning rows go: a turn's tool steps keep the purpose summary and caret disclosure Detailed has (*Read guidance*, *Edited 3 files*, a sub-agent's headline), closed once the turn is done, and a turn that only thought draws nothing. The phones keep the one-line fold (*Took 4 steps*, **Show steps**); see the iPhone spec; reply stats (`stats`); PR status (`pr-status`, contextual): the live PR card in the chat and the plan sheet's PR and CI chips. Hidden, an open PR stays a plain card.
   - **Agents wall:** Connected computers (`computers`, contextual): Run on, the computer chip on a card, grouping by computer, computer icons and the hardware switch; Terminal in New, the window picker, the split compass and an empty zone's options (`terminal`); the model and token line on deck cards (`cardmeta`). The Monitors panel is not in the catalogue: see [The Monitors panel](#the-monitors-panel-2026-11-06).
-  - **Workflows:** the CI runners section and its switch (`ci`).
+  - **Workflows:** the CI runners page and its sub-navigation entry (`ci`, contextual: Detailed only, and in Simple once this Mac has a CI runner, from 2026-11-08).
   - **Models:** the Model server settings fold and a model's Expert load flags (`engine`).
   - **Settings:** the Tools group (git, pull requests, terminal, MCP), folded behind one *Show advanced settings* row (`set-tools`).
   - Keyboard shortcuts (a new terminal, for one) still work in Simple.
