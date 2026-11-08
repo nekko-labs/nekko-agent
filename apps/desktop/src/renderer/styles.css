@@ -807,9 +807,9 @@
 .titlebar-mac .developer-server-controls { margin-right: 12px; }
 /* The Agents controls share the title bar row. Keep them clear of the
    Windows/Linux caption buttons unless the developer controls already do:
-   their 138px, then the 16px the add bar's divider leaves before the layout
-   switcher, so the row has the same space at both ends. */
-.titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 154px; }
+   their width, read from the Window Controls Overlay (138px when it reports
+   none), then an 8px gap between the View button and Minimise. */
+.titlebar:not(.titlebar-mac):not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px)) + 8px); }
 .titlebar-mac:not(:has(.developer-server-controls)) #command-titlebar-slot { margin-right: 12px; }
 /* The strip is 46px with 12px top padding (mark and heading centred at 29px),
    but the native caption buttons keep their 38px band (`TITLEBAR_HEIGHT`).
@@ -3672,8 +3672,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-composer-row > .wall-composer { align-self: auto; min-width: 0; flex-shrink: 1; }
 /* Adding to the wall: a row of quiet icon buttons at the toolbar's right end
    (agent, terminal, then the selected agent's Changes, Browser and Files, then
-   More), in place of the Add window button that used to sit by the composer. */
-.wall-add-bar { display: inline-flex; align-items: center; gap: 12px; margin-right: 8px; padding-right: 20px; border-right: 1px solid var(--line); }
+   More), in place of the Add window button that used to sit by the composer.
+   The divider sits midway: + to it and it to View's icon (with the row's 8px
+   gap and View's 8px padding) both come to about 28px. */
+.wall-add-bar { display: inline-flex; align-items: center; gap: 12px; margin-right: 12px; padding-right: 16px; border-right: 1px solid var(--line); }
 /* In the accent, so the three ways to open a window stand out in the toolbar. */
 .wall-add-icon {
   display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px;
