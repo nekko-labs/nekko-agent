@@ -482,9 +482,18 @@ struct PaneColumn: View {
         // Touching a pane gives it the focus (its composer takes the keyboard).
         .simultaneousGesture(TapGesture().onEnded { host.focus(id) })
         .overlay {
+            // The focused pane wears a faint accent glow at its top and bottom edges
+            // (into the status bar and home indicator), not a border.
             if display.isSplit && focused {
-                Rectangle().strokeBorder(palette.accent.opacity(0.55), lineWidth: 2)
-                    .allowsHitTesting(false).accessibilityHidden(true)
+                VStack(spacing: 0) {
+                    LinearGradient(colors: [palette.accent.opacity(0.22), .clear], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 28)
+                    Spacer(minLength: 0)
+                    LinearGradient(colors: [.clear, palette.accent.opacity(0.22)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 28)
+                }
+                .ignoresSafeArea(edges: .vertical)
+                .allowsHitTesting(false).accessibilityHidden(true)
             }
         }
         // A container the UI tests can find each pane by (`pane.a`, `pane.b`).
