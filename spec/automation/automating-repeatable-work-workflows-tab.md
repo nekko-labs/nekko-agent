@@ -32,9 +32,15 @@ needs. A back action preserves the selected category; templates and blank setup
 remain available without completing the guide. Desktop and narrow widths use the
 same wizard and stack cards into one column on phones.
 
-The introduction, category panels, and selected-example setup contain clearly
-labeled video placeholders for Travis. Producing and hosting the videos is
-planned work, not implemented playback. There are no external embeds or requests.
+The introduction plays a 42-second, mascot-led Remotion walkthrough in the reserved
+"See what you can automate" slot. It follows one web-page summary from choosing
+an idea through a manual first run, reviewing output and explicitly adding a
+schedule. It uses the app's theme, synthetic illustrative data, visible captions,
+standard play/pause/seek/fullscreen controls and an expandable text transcript.
+Playback is opt-in (no autoplay or loop), makes no external requests, changes no
+settings and never creates or executes a task. The Remotion source is also
+renderable to MP4. Category and selected-example videos remain clearly labeled
+placeholders tracked in #1171; this overview does not imply they are complete.
 
 Selecting an example or continuing only prepares an editable draft. Targets stay
 local until the user explicitly creates the workflow. Every starter initially has
@@ -52,5 +58,10 @@ choosing an example shows requirements and an editable target; blank/invalid web
 URLs cannot continue; Back returns to ideas; Continue opens an editor seeded
 with the target and manual trigger without calling create/run APIs. Before/after
 renderer evidence covers desktop and 390px phone width. Real scheduled runs,
-connector authorization, native-app onboarding, and completed videos are outside
-this change's verification scope.
+connector authorization, native-app onboarding, and the category/example videos
+are outside this overview change's verification scope.
+
+Overview acceptance: verify text fit and scene timing across the six scenes,
+responsive player layout, light/dark themes, manual playback and transcript.
+The overview is an illustrated explanation, not evidence of live scheduled
+execution, connector authorization, or native phone playback.
