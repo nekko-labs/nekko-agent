@@ -549,7 +549,7 @@ final class AppModel {
         return nil
     }
 
-    /// First run, step 3: *Allow notifications* (true) or *Not now*. Either way it's done.
+    /// Finish the permission checklist without requiring optional grants.
     func finishOnboarding(allowNotifications: Bool) async {
         showNotificationStep = false
         prefs.onboarded = true

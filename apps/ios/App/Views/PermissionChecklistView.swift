@@ -18,7 +18,7 @@ struct PermissionChecklistView: View {
                 group("Connection & alerts", subtitle: "Recommended for following your computer", items: [.notifications, .network])
                 group("Make yourself at home", subtitle: "Optional tools. Turn on only what you use.", items: [.liveActivities, .camera, .microphone, .speech, .authentication, .photos])
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Your choice, every step", systemImage: "hand.raised")
+                    Text("Your choice, every step")
                         .font(.headline).foregroundStyle(palette.ink)
                     Text("You can continue without granting access. Change your mind here or in system Settings at any time. Choosing photos or files uses the system picker and needs no blanket library or storage permission.")
                         .font(.subheadline).foregroundStyle(palette.inkSoft)

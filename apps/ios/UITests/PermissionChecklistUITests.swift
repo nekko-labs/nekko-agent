@@ -111,7 +111,11 @@ final class PermissionChecklistUITests: XCTestCase {
             return
         }
         XCTAssertEqual(toggle.value as? String, "0")
-        toggle.tap()
+        // Settings exposes the entire label row as a Switch on iOS 26.
+        // Tap its trailing control, not the row's inert label center.
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        let enabled = expectation(for: NSPredicate(format: "value == %@", "1"), evaluatedWith: toggle)
+        wait(for: [enabled], timeout: 5)
         app.activate()
         let microphoneStatus = app.descendants(matching: .any)["permissions.status.microphone"].firstMatch
         let restored = expectation(for: NSPredicate(format: "label == %@", "Allowed"), evaluatedWith: microphoneStatus)
