@@ -2694,8 +2694,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     </div>
   );
 
-  // Prompt suggestions sit beside the microphone, in the action bar.
-  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className="composer-suggestions empty:hidden" data-composer-suggestions>
+  // Suggestions share the Mode row, anchored at its far right.
+  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className="composer-suggestions ml-auto shrink-0 empty:hidden" data-composer-suggestions>
     <PromptAnalyzer
       variant="chip"
       text={deferredDraft}
@@ -3499,21 +3499,19 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       }}
                     />
                   </div>
-                  {!expertMode && <div className="composer-folders min-w-0">
+                  <div className="composer-folders min-w-0">
                     <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
-                  </div>}
+                  </div>
                   {!expertMode && asksFirst}
                   </>)}
                   {(header || wallWindow) && (
                     <div className="composer-foot-controls flex min-w-0 items-center gap-1" data-composer-foot>
                       {wallWindow && !imageMode && modelControls}
                       {wallWindow && !imageMode && expertMode && asksFirst}
-                      <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" hideMode={wallWindow || !showMode} />
                       {!wallWindow && <ChatControls session={session} isCloudModel={isCloudModel} onChange={setSession} draft={draft} toolsInWindow only="privacy" hidePrivacy={!showPrivacy} />}
                     </div>
                   )}
                   <div className="flex-1" />
-                  {promptSuggestions}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3529,8 +3527,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
-                {wallWindow && !imageMode && showMode && <div className="composer-foot-row flex min-w-0 border-t border-line px-2 py-1" data-composer-mode-row>
-                  <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
+                {!imageMode && (showMode || (expertMode && showSuggest)) && <div className="composer-foot-row flex min-w-0 items-center gap-2 border-t border-line px-2 py-1 empty:hidden" data-composer-mode-row>
+                  {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />}
+                  {promptSuggestions}
                 </div>}
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
@@ -3540,7 +3539,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
                     {!wallWindow && <>
                       <div className="flex min-w-0 flex-wrap items-center gap-2" data-composer-primary-row>
-                        {detailsShown && expertMode && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
                         <div className="min-w-0 max-w-full shrink-0">{modelControls}</div>
                         {detailsShown && expertMode && asksFirst}
                         <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -3558,8 +3556,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                           </button>}
                         </div>
                       </div>
-                      {detailsShown && (showMode || expertMode || showCost || showTools || showInternet || session?.offline) && <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2" data-composer-mode-row>
-                        {showMode && <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />}
+                      {detailsShown && (expertMode || showCost || showTools || showInternet || session?.offline) && <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
                         {expertMode && usageGauge}
                         {showCost && (
                           <LiveUsageChip
@@ -3596,9 +3593,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     {expertMode && asksFirst}
                   </div>
                 )}
-                {cleanStart && !wallWindow && showMode && session?.chatType !== 'image' && <div className="composer-foot-row flex px-2 pb-1" data-composer-mode-row>
-                  <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
-                </div>}
             </div>
           </div>
         </div>

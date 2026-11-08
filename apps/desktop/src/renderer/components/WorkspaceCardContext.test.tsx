@@ -16,7 +16,8 @@ const state: Record<string, unknown> = {
 vi.mock('../store.js', () => ({ useStore: (pick: (s: typeof state) => unknown) => pick(state) }));
 const gitStatus: { current: unknown } = { current: null };
 vi.mock('../useGitStatus.js', () => ({ useGitStatus: () => gitStatus.current }));
-vi.mock('../compactionStatus.js', () => ({ useCompactionStore: () => false }));
+const compaction = vi.hoisted(() => ({ active: false }));
+vi.mock('../compactionStatus.js', () => ({ useCompactionStore: () => compaction.active }));
 import { WorkspaceCard, chatRenameTitle } from './WorkspaceCard.js';
 
 const session = {
@@ -24,7 +25,7 @@ const session = {
   messageCount: 2, exchangeCount: 1, stalled: false, recentTurns: [], prUrls: [], imageCount: 0, createdAt: 0,
 } as unknown as SessionSummary;
 
-const card = (status?: 'working' | 'done' | 'idle', chat: SessionSummary = session) => renderToStaticMarkup(
+const card = (status: 'working' | 'done' | 'idle' | 'input' | 'error' = 'working', chat: SessionSummary = session) => renderToStaticMarkup(
   <WorkspaceCard workspace={null} session={chat} terminal={null} status={status} isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} />,
 );
 
@@ -58,10 +59,25 @@ describe('workspace card completion control', () => {
 });
 
 describe('workspace card context readout', () => {
-  it('shows the same total the open chat\'s composer gauge shows, idle or working', () => {
+  it('shows the same total the open chat\'s composer gauge shows while unfinished', () => {
     (state.sessionCtxEstimate as Record<string, number>).s1 = 81_000;
-    expect(card()).toContain('81k/1M');
+    expect(card('idle', { ...session, activeWatchCount: 1 })).toContain('81k/1M');
     expect(card('working')).toContain('81k/1M');
+  });
+
+  it('hides context for implicit or explicit Done and archived chats, keeping model and PR metadata', () => {
+    compaction.active = true;
+    expect(card('done')).not.toContain('Compacting context');
+    expect(card('working')).toContain('Compacting context');
+    compaction.active = false;
+    expect(card('done')).not.toContain('Context window:');
+    expect(card('idle')).not.toContain('Context window:');
+    expect(card('working', { ...session, archivedAt: 1 })).not.toContain('Context window:');
+    expect(card('done')).toContain('title="m"');
+    for (const status of ['working', 'input', 'error'] as const) expect(card(status)).toContain('Context window:');
+    expect(card('idle', { ...session, activeWatchCount: 1 })).toContain('Context window:');
+    expect(card('idle', { ...session, backgroundWatchCount: 1 })).toContain('Context window:');
+    expect(card('idle', { ...session, exchangeCount: 0 })).toContain('Context window:');
   });
 
   it('falls back to the transcript estimate when the chat is not open', () => {
@@ -235,7 +251,7 @@ describe('workspace card PR chip', () => {
 
 describe('independent card details', () => {
   const render = (props: Partial<React.ComponentProps<typeof WorkspaceCard>> = {}) => renderToStaticMarkup(
-    <WorkspaceCard workspace={null} session={{ ...session, lastReplyAt: -60_000 }} terminal={null} status="done" isActive={false} now={0} projects={[]} subAgentCount={2} onOpen={() => {}} onClose={() => {}} {...props} />,
+    <WorkspaceCard workspace={null} session={{ ...session, lastReplyAt: -60_000, activeWatchCount: 1 }} terminal={null} status="idle" isActive={false} now={0} projects={[]} subAgentCount={2} onOpen={() => {}} onClose={() => {}} {...props} />,
   );
   it('can hide each detail without hiding other facts or the title/status', () => {
     state.prsBySession = { s1: [{ url: 'https://github.com/o/r/pull/7', owner: 'o', repo: 'r', number: 7, title: 'PR', state: 'open', isDraft: false }] };
