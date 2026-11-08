@@ -40,3 +40,19 @@ After a `v0.9` tag: desktop 0.9.0 is the release, and the nightlies are 0.9.1, 0
 **Implemented, pending release verification.** Unpackaged desktop builds (`npm run dev`, `npm run local`) report the highest numeric stable release tag reachable from their checkout, followed by `-dev.<commits-since-tag>+g<commit>`. Tracked local edits add `.dirty`. The same identity reaches About, Settings and the development-launch banner through the engine app-info bridge. Tags are read locally, with no network requests, uploads or counter reservations. Fetch release tags to refresh a stale clone. An archive, missing Git or missing tags falls back to the manifest version with an explicit development suffix, never an apparently released version. Packaged installers continue to use only their workflow-stamped version; development identity does not change update feeds or package manifests.
 
 **Acceptance:** numeric tag ordering, short tags, unrelated branches, dirty sources, missing Git/tags and unchanged packaged versions are regression-tested. Hidden desktop evidence verifies the About label independently of the user profile. macOS release signing/notarization is verified by the release workflow, not by this development fixture.
+
+## Existing-tag desktop release recovery
+
+**Implemented; cross-platform recovery publication unverified.** Release tooling
+may be dispatched from current main with an explicit existing full `release_tag`.
+Application code is checked out from that immutable tag, while only the official
+Electron downloader comes from the workflow revision. This reserves no version,
+rewrites no tag and skips all npm publication in recovery mode. Electron archives
+come only from the official GitHub release-assets API and must match exact
+version/platform, size and official SHASUMS256; available GitHub asset digests must
+also match. Checksum or API errors fail closed, without retry loops. The verified
+ZIP goes to electron-builder without changing macOS signing/notarization, Windows
+publisher checks, feed checks or the complete-matrix publication dependency.
+Acceptance: tagged application SHA is logged and checked independently from the
+workflow SHA; published installer metadata, hashes, signing and notarization still
+require real release artifact verification. No user app/profile is touched.
