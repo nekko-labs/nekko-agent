@@ -373,7 +373,7 @@ fn extract_template(dir: &str, entries: &[String], model_file: &str, work_dir: &
 
 /* ------------------------------------------------------ stable-diffusion */
 
-const ROLES: [&str; 6] = ["clip_l", "clip_g", "t5xxl", "vae", "llm", "taesd"];
+const ROLES: [&str; 7] = ["clip_l", "clip_g", "t5xxl", "vae", "llm", "taesd", "llm_vision"];
 
 /// `sd-server`'s arguments for one image model (`diffusionArgs`).
 pub fn diffusion_args(
@@ -420,7 +420,8 @@ pub fn diffusion_args(
         "--listen-port".into(),
         port.to_string(),
     ];
-    if let Some(family) = image_companion_set_for(model) {
+    let family = image_companion_set_for(model);
+    if let Some(family) = &family {
         let has = |r: &str| paths.get(r).is_some_and(|v| nekko_js::truthy(Some(v)));
         let missing: Vec<String> = family["files"]
             .as_array()
@@ -446,6 +447,11 @@ pub fn diffusion_args(
         }
         args.push(format!("--{key}"));
         args.push(p);
+    }
+    // A family's own switches (sampler, flow shift, model args); sd-server takes
+    // them as its default generation settings.
+    for a in family.as_ref().and_then(|f| f["launchArgs"].as_array()).into_iter().flatten() {
+        args.push(text(Some(a)));
     }
     if truthy(&preset, "offloadToCpu") {
         args.push("--offload-to-cpu".into());
@@ -584,6 +590,12 @@ pub fn explain_load_error(log: &[String]) -> String {
 
 /// One image request as stable-diffusion.cpp's server takes it, or why it is
 /// refused (`imageGenerationBody`).
+/// At most this many pictures to edit from, as the Photo composer allows.
+pub const MAX_REF_IMAGES: usize = 4;
+/// Their data URLs together, under the engine router's 25 MB request limit.
+const MAX_REF_BYTES: usize = 20 * 1024 * 1024;
+const REF_PROBLEM: &str = "Attach up to 4 pictures to edit, each a PNG, JPEG or WebP image, 20 MB in all.";
+
 pub fn image_generation_body(request: &Value) -> Result<String, String> {
     let problem = || {
         "Use a prompt, dimensions from 256 to 2048 in multiples of 64, 1 to 100 steps and CFG from 0 to 30.".to_string()
@@ -608,9 +620,24 @@ pub fn image_generation_body(request: &Value) -> Result<String, String> {
     if !ok {
         return Err(problem());
     }
-    let extra = nekko_js::stringify(
-        &json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed }),
-    );
+    // Pictures to edit: sd.cpp's reference images, as data URLs (`ref_images`).
+    let refs: Vec<Value> = match request.get("refImages") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(list)) => list.clone(),
+        Some(_) => return Err(REF_PROBLEM.into()),
+    };
+    let ref_ok = refs.len() <= MAX_REF_IMAGES
+        && refs.iter().all(|r| r.as_str().is_some_and(|s| s.starts_with("data:image/") && s.contains(";base64,")))
+        && refs.iter().filter_map(Value::as_str).map(str::len).sum::<usize>() <= MAX_REF_BYTES;
+    if !ref_ok {
+        return Err(REF_PROBLEM.into());
+    }
+    let mut native =
+        json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed });
+    if !refs.is_empty() {
+        native["ref_images"] = Value::Array(refs);
+    }
+    let extra = nekko_js::stringify(&native);
     let mut body = Map::new();
     if let Some(m) = request.get("modelId") {
         body.insert("model".into(), m.clone());

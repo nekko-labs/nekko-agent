@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { posixFixture } from './posix-fixture.mjs';
 
 const script = join(dirname(fileURLToPath(import.meta.url)), 'check-mac-entitlements.sh');
 const VIRT = '<plist><dict><key>com.apple.security.virtualization</key><true/></dict></plist>';
@@ -40,7 +41,7 @@ echo '<plist><dict/></plist>'
   return { app, bin, set, run };
 }
 
-test('only_nekko_vm_with_the_entitlement_passes', () => {
+test('only_nekko_vm_with_the_entitlement_passes', posixFixture, () => {
   const f = fixture();
   f.set('nekko-vm', 'ents');
   const r = f.run();
@@ -48,7 +49,7 @@ test('only_nekko_vm_with_the_entitlement_passes', () => {
   assert.equal(r.stdout.trim(), 'virtualization entitlement: nekko-vm only (5 binaries checked)');
 });
 
-test('app_or_nekkod_with_the_entitlement_fails', () => {
+test('app_or_nekkod_with_the_entitlement_fails', posixFixture, () => {
   const f = fixture();
   f.set('nekko-vm', 'ents');
   f.set('Nekko Agent.app', 'ents');
@@ -62,13 +63,13 @@ test('app_or_nekkod_with_the_entitlement_fails', () => {
   assert.equal(r.stderr.trim(), `${join(f.bin, 'nekkod')} carries the virtualization entitlement.`);
 });
 
-test('nekko_vm_without_it_fails', () => {
+test('nekko_vm_without_it_fails', posixFixture, () => {
   const r = fixture().run();
   assert.equal(r.status, 1);
   assert.equal(r.stderr.trim(), 'nekko-vm lacks the virtualization entitlement.');
 });
 
-test('missing_nekko_vm_fails', () => {
+test('missing_nekko_vm_fails', posixFixture, () => {
   const f = fixture();
   rmSync(join(f.bin, 'nekko-vm'));
   const r = f.run();
@@ -76,7 +77,7 @@ test('missing_nekko_vm_fails', () => {
   assert.equal(r.stderr.trim(), `${f.app} has no nekko-vm.`);
 });
 
-test('codesign_error_fails_the_check', () => {
+test('codesign_error_fails_the_check', posixFixture, () => {
   const f = fixture();
   f.set('nekko-vm', 'ents');
   f.set('nekkod', 'fail', '');
@@ -85,7 +86,7 @@ test('codesign_error_fails_the_check', () => {
   assert.equal(r.stderr.trim(), `codesign could not read ${join(f.bin, 'nekkod')}.`);
 });
 
-test('the_unsigned_guest_scripts_beside_nekko_vm_are_skipped', () => {
+test('the_unsigned_guest_scripts_beside_nekko_vm_are_skipped', posixFixture, () => {
   const f = fixture();
   f.set('nekko-vm', 'ents');
   mkdirSync(join(f.bin, 'runner-image'));
@@ -96,7 +97,7 @@ test('the_unsigned_guest_scripts_beside_nekko_vm_are_skipped', () => {
   assert.equal(r.stdout.trim(), 'virtualization entitlement: nekko-vm only (5 binaries checked)');
 });
 
-test('symlinked_nekko_vm_fails', () => {
+test('symlinked_nekko_vm_fails', posixFixture, () => {
   const f = fixture();
   f.set('nekko-vm', 'ents');
   renameSync(join(f.bin, 'nekko-vm'), join(f.bin, 'nekko-vm-real'));
@@ -106,7 +107,7 @@ test('symlinked_nekko_vm_fails', () => {
   assert.equal(r.stderr.trim(), `${join(f.bin, 'nekko-vm')} is not a regular file, so it was never checked.`);
 });
 
-test('empty_app_path_says_no_app_found', () => {
+test('empty_app_path_says_no_app_found', posixFixture, () => {
   const r = fixture().run('');
   assert.equal(r.status, 1);
   assert.equal(r.stderr.trim(), 'no .app found.');

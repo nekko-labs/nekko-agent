@@ -70,10 +70,14 @@ fn session(ctx: &ToolContext) -> Option<&str> {
     ctx.session_id.as_deref().filter(|s| !s.is_empty())
 }
 
-fn record_original(ctx: &ToolContext, path: &str) {
+async fn record_original(ctx: &ToolContext, path: &str) -> Result<(), String> {
     if let (Some(sid), Some(changes)) = (session(ctx), ctx.changes.as_ref()) {
-        changes.record_original(sid, path);
+        let (changes, sid, path) = (changes.clone(), sid.to_string(), path.to_string());
+        tokio::task::spawn_blocking(move || changes.record_original(&sid, &path))
+            .await
+            .map_err(|e| e.to_string())??;
     }
+    Ok(())
 }
 
 fn read_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
@@ -140,7 +144,7 @@ async fn write_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     if !write_approved(call, ctx, &p, "Write").await {
         return Ok(ToolResult::err(call, "Write not approved by user."));
     }
-    record_original(ctx, &p);
+    record_original(ctx, &p).await?;
     nodefs::mkdir_p(&dirname(&p))?;
     // String(a.content ?? '')
     let content = if js::nullish(arg(call, "content")) { String::new() } else { js::to_string(arg(call, "content")) };
@@ -158,6 +162,15 @@ async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
         return Ok(ToolResult::err(call, "Edit not approved by user."));
     }
     let cur = nodefs::read_utf8(&p)?;
+    if call.input.get("edits").is_some() {
+        let updated = crate::edit_batch::apply_batch(&cur, &call.input)?;
+        record_original(ctx, &p).await?;
+        nodefs::write_utf8(&p, &updated)?;
+        return Ok(ToolResult::ok(
+            call,
+            format!("Edited {p} ({} replacements)", call.input["edits"].as_array().map_or(0, Vec::len)),
+        ));
+    }
     // `cur.split(old_string)`: undefined splits nothing off; anything else is
     // String(x), null included.
     let old = arg(call, "old_string").map(|v| js::to_string(Some(v)));
@@ -171,9 +184,12 @@ async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     if count > 1 {
         return Ok(ToolResult::err(call, format!("old_string matched {count} times; make it unique.")));
     }
-    record_original(ctx, &p);
+    if arg(call, "new_string").is_none() {
+        return Ok(ToolResult::err(call, "new_string is required for a single replacement."));
+    }
+    record_original(ctx, &p).await?;
     let old = old.unwrap_or_default();
-    // `replace` coerces a missing replacement to "undefined", as String() does.
+    // Preserve legacy coercion for explicitly supplied replacement values.
     let new = js::to_string(arg(call, "new_string"));
     nodefs::write_utf8(&p, &js::replace_first(&cur, &old, &new))?;
     Ok(ToolResult::ok(call, format!("Edited {p}")))
