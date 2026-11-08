@@ -16,9 +16,10 @@
  *      known rule (RULES below) are resolved mechanically and the merge is pushed
  *      with the repo's App token, so CI runs and auto-merge lands it once green;
  *   2. when every job that failed also fails in other PRs' CI runs (a
- *      baseline failure on main, such as a flaky budget), asks nobody: Codex
+ *      suspected shared baseline failure), asks nobody: Codex
  *      cannot fix main from a PR branch. It says so once, waits, and retries the
- *      PR once main's failure is gone (at most RETRY_BUDGET times per head);
+ *      PR against newer main, or re-runs it once the signal clears when main is
+ *      already included (at most RETRY_BUDGET re-runs per head);
  *   3. otherwise asks Codex: a `@codex` comment posted with CODEX_TOKEN (a token
  *      of a maintainer whose ChatGPT account has Codex connected to GitHub) starts
  *      a Codex cloud task on the PR, which pushes its fix to the branch. Once per
@@ -47,20 +48,26 @@ export const CODEX_BUDGET = 3;
 export const NEEDS_HUMAN = 'needs-human';
 /** Retries of one head after a baseline failure on main has cleared. */
 export const RETRY_BUDGET = 2;
-/** How far back other PRs' CI runs count as main's own state. */
+/** How far back other PRs' CI runs count as shared-failure evidence. */
 export const BASELINE_WINDOW_MS = 6 * 60 * 60 * 1000;
-/** A job failing in this many other PRs' CI runs is failing on main, not in one PR. */
+/** A job failing in this many other PRs' CI runs may be a shared baseline failure. */
 export const BASELINE_MIN_PRS = 2;
 
 /**
- * The job names failing on main: those that failed in the CI runs of at
+ * Suspected shared job failures: those that failed in the latest CI runs of at
  * least BASELINE_MIN_PRS other PRs within BASELINE_WINDOW_MS.
  *   runs: [{ pr, at, failed: [jobName] }]
  */
-export function baselineJobs(runs, number, now = Date.now()) {
-  const prsByJob = new Map();
+export function baselineJobs(runs, number, now = Date.now(), branch) {
+  // Newer green runs supersede old failures from the same PR. Pending and
+  // cancelled runs are filtered by the caller: neither proves recovery.
+  const latest = new Map();
   for (const r of runs) {
-    if (r.pr === number || now - r.at > BASELINE_WINDOW_MS) continue;
+    if (!latest.has(r.pr) || r.at > latest.get(r.pr).at) latest.set(r.pr, r);
+  }
+  const prsByJob = new Map();
+  for (const r of latest.values()) {
+    if (r.pr === number || (branch && r.branch === branch) || now - r.at > BASELINE_WINDOW_MS) continue;
     for (const job of r.failed) {
       if (job === 'gate') continue;
       if (!prsByJob.has(job)) prsByJob.set(job, new Set());
@@ -70,7 +77,7 @@ export function baselineJobs(runs, number, now = Date.now()) {
   return new Set([...prsByJob].filter(([, prs]) => prs.size >= BASELINE_MIN_PRS).map(([job]) => job));
 }
 
-/** True when the PR failed and every job it failed is also failing on main. */
+/** True when every failed job has the shared-failure signal (not causal proof). */
 export const onlyBaseline = (jobs, baseline) => jobs.length > 0 && jobs.every((j) => baseline.has(j.name));
 const RED = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED']);
 
@@ -129,7 +136,7 @@ export function decide(pr, now = Date.now()) {
   }
 
   const waiting = here.find((m) => m.kind === 'baseline-ci');
-  if (waiting && !(pr.mergeable === 'CONFLICTING')) {
+  if (waiting && RED.has(pr.gate) && pr.gateAttempt > 0 && pr.mergeable !== 'CONFLICTING') {
     return { action: 'baseline', kind: waiting.kind.slice(9), retries: here.filter((m) => m.kind === 'retried').length };
   }
 
@@ -361,27 +368,81 @@ function failedJobs(runId, attempt) {
   return jobs.filter((j) => ['failure', 'timed_out', 'cancelled'].includes(j.conclusion) && j.name !== 'gate').map((j) => ({ name: j.name, url: j.html_url }));
 }
 
-/** Other PRs' recent failed CI runs, with the jobs that failed: main's own state. */
+/** Latest conclusive CI run per PR; an in-flight/cancelled run cannot clear red. */
+export function latestCiRuns(runs, now = Date.now()) {
+  const latest = new Map();
+  for (const r of runs) {
+    const number = r.pull_requests?.[0]?.number;
+    // GitHub often empties pull_requests after a PR merges. Keep its green
+    // evidence under the repository + branch identity instead of losing it.
+    const key = r.head_branch ? `${r.head_repository?.full_name ?? REPO}:${r.head_branch}` : number;
+    if (!key || r.name !== 'CI' || r.status !== 'completed' ||
+        !['success', 'failure'].includes(r.conclusion) || now - Date.parse(r.created_at) > BASELINE_WINDOW_MS) continue;
+    const previous = latest.get(key);
+    if (!previous || Date.parse(r.created_at) > Date.parse(previous.created_at)) latest.set(key, r);
+  }
+  return [...latest.values()];
+}
+
+/** Other PRs' recent CI evidence. Shared job names are a hint, not proof of main. */
 let recentCiFailures = null;
 function ciFailures(now) {
   if (recentCiFailures) return recentCiFailures;
-  const runs = JSON.parse(gh(['api', `repos/${REPO}/actions/runs?event=pull_request&status=failure&per_page=50`])).workflow_runs ?? [];
-  recentCiFailures = runs
-    .filter((r) => r.name === 'CI' && now - Date.parse(r.created_at) <= BASELINE_WINDOW_MS)
-    .map((r) => ({ pr: r.pull_requests?.[0]?.number, at: Date.parse(r.created_at), failed: failedJobs(r.id).map((j) => j.name) }))
-    .filter((r) => r.pr);
+  const runs = JSON.parse(gh(['api', `repos/${REPO}/actions/workflows/ci.yml/runs?event=pull_request&per_page=100`])).workflow_runs ?? [];
+  recentCiFailures = latestCiRuns(runs, now).map((r) => ({
+    pr: r.pull_requests?.[0]?.number ?? `${r.head_repository?.full_name ?? REPO}:${r.head_branch}`,
+    branch: r.head_branch, at: Date.parse(r.created_at),
+    failed: r.conclusion === 'failure' ? failedJobs(r.id).map((j) => j.name) : [],
+  }));
   return recentCiFailures;
 }
 
 /** The jobs behind a red `gate`. */
 const jobsFor = (pr) => (pr.gateRun ? failedJobs(pr.gateRun, pr.gateAttempt) : []);
 
-/** Put the PR through its checks again: `gate`'s failed jobs re-run. */
-function retry(pr, kind, why, { dryRun }) {
-  console.log(`#${pr.number}: ${why}; retrying (${kind}).`);
-  if (dryRun) return;
-  gh(['run', 'rerun', String(pr.gateRun), '--failed']);
-  comment(pr, `Queue repair: main's own failure has cleared, so this PR is being checked again. ${marker('retried', pr.head)}`, { dryRun });
+/**
+ * An Actions re-run keeps the original PR merge snapshot. Incorporate newer main
+ * with GitHub's ordinary merge (no force push, no code conflict resolution), then
+ * let synchronize start fresh CI. The expected head rejects concurrent pushes.
+ * Reads use GH_TOKEN; updates use the App token so they actually trigger CI.
+ */
+export function retryBaseline(pr, { stillFailing, dryRun, request = gh, pushToken = env.PUSH_TOKEN } = {}) {
+  const status = request(['api', `repos/${REPO}/compare/${pr.head}...main`, '--jq', '.status']);
+  if (status === 'ahead' || status === 'diverged') {
+    if (!dryRun && !pushToken) throw new Error('PUSH_TOKEN is required to refresh a branch and trigger CI');
+    if (!dryRun) request(['api', '--method', 'PUT', `repos/${REPO}/pulls/${pr.number}/update-branch`,
+      '-f', `expected_head_sha=${pr.head}`], { token: pushToken });
+    return 'refresh';
+  }
+  if (status !== 'identical' && status !== 'behind') throw new Error(`Unexpected main comparison: ${status}`);
+  if (stillFailing) return 'wait';
+  if (pr.retries >= RETRY_BUDGET) return 'exhausted';
+  if (!dryRun) request(['run', 'rerun', String(pr.gateRun), '--failed']);
+  return 'rerun';
+}
+
+function recoverBaseline(pr, kind, stillFailing, { dryRun, retries = 0 }) {
+  let action;
+  try {
+    action = retryBaseline({ ...pr, retries }, { stillFailing, dryRun });
+  } catch (e) {
+    // No fallback to the obsolete run on conflict, a racing head or denied
+    // workflow update. A person can resolve the branch; no permissions widened.
+    return needsHuman(pr, `could not refresh baseline checks: ${e.message}`, { dryRun });
+  }
+  if (action === 'refresh') {
+    console.log(`#${pr.number}: refreshed with main; waiting for new-head CI.`);
+    comment(pr, `Queue repair requested a merge of current main into this branch with an expected-head check. New-head CI must pass; the old failed run was not re-run. ${marker('refreshed', pr.head)}`, { dryRun });
+  } else if (action === 'rerun') {
+    console.log(`#${pr.number}: already contains main; retrying unchanged snapshot.`);
+    comment(pr, `Queue repair: the recent shared failure signal cleared and this branch already contains main; retrying its failed jobs. ${marker('retried', pr.head)}`, { dryRun });
+  } else if (action === 'exhausted') {
+    const next = codexOrHuman(pr, kind, `checks failed after ${retries} retries on a branch containing main`);
+    if (next.action === 'codex') askCodex(pr, kind, { jobs: jobsFor(pr), why: next.why }, { dryRun });
+    else needsHuman(pr, next.why, { dryRun });
+  } else {
+    console.log(`#${pr.number}: shared failures persist and main is already included; waiting.`);
+  }
 }
 
 function comment(pr, body, { token, dryRun }) {
@@ -490,21 +551,15 @@ export function main(argv = process.argv.slice(2)) {
       } else {
         const kind = d.kind;
         const jobs = jobsFor(pr);
-        const baseline = baselineJobs(ciFailures(now), pr.number, now);
+        const baseline = baselineJobs(ciFailures(now), pr.number, now, pr.branch);
         const onMain = onlyBaseline(jobs, baseline);
         const names = jobs.map((j) => `\`${j.name}\``).join(', ');
         if (d.action === 'baseline') {
-          if (onMain) console.log(`#${pr.number}: ${names} still failing on main; waiting.`);
-          else if (d.retries < RETRY_BUDGET) retry(pr, kind, `${names || 'its failure'} no longer failing in other PRs' CI runs`, { dryRun });
-          else {
-            const next = codexOrHuman(pr, kind, `${names} failed again after ${d.retries} retries once main's failure had cleared`);
-            if (next.action === 'codex') askCodex(pr, kind, { jobs, why: next.why }, { dryRun });
-            else needsHuman(pr, next.why, { dryRun });
-          }
+          recoverBaseline(pr, kind, onMain, { dryRun, retries: d.retries });
         } else if (onMain) {
           // Not this PR's to fix, and not Codex's: no budget spent.
           console.log(`#${pr.number}: ${names} also failing in other PRs' CI runs; waiting for main.`);
-          comment(pr, `Queue repair: ${d.why}, but ${names} also failed in the CI runs of at least ${BASELINE_MIN_PRS} other PRs in the last ${BASELINE_WINDOW_MS / 3600000} hours, so this looks like main's own failure, not this PR's. Nobody is asked to fix it here; this PR is checked again once that failure stops. ${marker(`baseline-${kind}`, pr.head)}`, { dryRun });
+          comment(pr, `Queue repair: ${d.why}, but ${names} also failed in the CI runs of at least ${BASELINE_MIN_PRS} other PRs in the last ${BASELINE_WINDOW_MS / 3600000} hours, so this may be a shared baseline failure (job names alone are not proof). On the next pass, newer main is merged in for fresh checks; if main is already included, repair waits for the shared signal to clear. ${marker(`baseline-${kind}`, pr.head)}`, { dryRun });
         } else {
           askCodex(pr, kind, { jobs, why: d.why }, { dryRun });
         }
