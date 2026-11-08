@@ -2700,8 +2700,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     </div>
   );
 
-  // New chats give prompt suggestions their own row below the primary controls.
-  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className={`composer-suggestions empty:hidden ${cleanStart ? 'composer-suggestions-row' : ''}`} data-composer-suggestions>
+  // Prompt suggestions sit beside the microphone, in the action bar.
+  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className="composer-suggestions empty:hidden" data-composer-suggestions>
     <PromptAnalyzer
       variant="chip"
       text={deferredDraft}
@@ -3526,7 +3526,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {!cleanStart && promptSuggestions}
+                  {promptSuggestions}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3541,7 +3541,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       {composerStops ? <GfStopIcon className="h-[17px] w-[17px]" /> : wallWindow ? <GfSendIcon className="h-[17px] w-[17px]" /> : <NekkoAvatar size={24} />}
                     </button>
                 </div>
-                {cleanStart && promptSuggestions}
               </div>
                 {wallWindow && !imageMode && showMode && <div className="composer-foot-row flex min-w-0 border-t border-line px-2 py-1" data-composer-mode-row>
                   <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
