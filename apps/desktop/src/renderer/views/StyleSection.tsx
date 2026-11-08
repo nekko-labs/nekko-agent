@@ -9,7 +9,8 @@ type Props = { settings: AppSettings; update: (patch: Partial<AppSettings>) => v
 const FONTS_DOCS = 'https://nekkoagent.com/docs/fonts-and-text';
 
 /**
- * Settings > Style: text size and the two font families. The defaults are the
+ * Settings > Style: text size, the two font families and a preview of both at
+ * the current size. The defaults are the
  * website's fonts (Inter Tight, JetBrains Mono); a font file dropped in the
  * fonts folder shows up in both lists after Reload. An empty string saves
  * "default", since a patch cannot carry `undefined`.
@@ -48,6 +49,14 @@ export function StyleSection({ settings, update }: Props) {
       <div className="min-w-0"><label htmlFor="style-font-mono" className="text-sm">Code font</label>
         <p className="text-2xs text-ink-faint" style={{ fontFamily: 'var(--font-mono)' }}>{'const nekko = () => "meow"; // 0O 1lI'}</p></div>
       {fontSelect('style-font-mono', settings.fontMono, (v) => update({ fontMono: v }), 'JetBrains Mono', 'ui-monospace')}
+    </div>
+    {/* The page is already at the chosen size, so the preview needs no zoom of its own. */}
+    <div className="mt-2 overflow-hidden rounded-md border border-line p-3" role="group" aria-label="Text preview" data-text-size-preview>
+      <p className="text-2xs text-ink-faint">Preview at {textScaleOf(settings.textScale)}%</p>
+      <p className="mt-1 font-semibold">Fix the failing test</p>
+      <p className="text-sm">Nekko found the problem and is writing the fix now.</p>
+      <p className="mt-1 text-xs text-ink-soft">Two files changed, a few seconds ago</p>
+      <code className="mt-1 block text-xs">{'const nekko = () => "meow";'}</code>
     </div>
     <div className="mt-3 border-t border-line pt-3">
       <span className="text-sm">Add your own fonts</span>

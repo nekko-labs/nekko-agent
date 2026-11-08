@@ -30,7 +30,7 @@ describe('Settings Customize section', () => {
       expect(customize).toContain(label);
       expect(general).not.toContain(label);
     }
-    for (const id of ['customization', 'settings-style', 'settings-accessibility', 'settings-simple']) {
+    for (const id of ['customization', 'settings-style', 'settings-animations', 'settings-simple']) {
       expect(customize).toContain(`id="${id}"`);
       expect(html.split(`id="${id}"`)).toHaveLength(2);
     }
