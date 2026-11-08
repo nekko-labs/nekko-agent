@@ -4,7 +4,12 @@ import type { CommandWallState } from '../commandWall.js';
 import { ScreensControl } from './ScreensControl.js';
 
 export const LAYOUT_LABEL = { focus: 'Single agent', grid: 'Multi-agent' } as const;
-type Props = { wall: CommandWallState; setWall: (update: (s: CommandWallState) => CommandWallState) => void };
+type Props = {
+  wall: CommandWallState;
+  setWall: (update: (s: CommandWallState) => CommandWallState) => void;
+  /** Multi-agent was clicked (even when already on): the board's cue for the zones tour. */
+  onPickMultiAgent?: () => void;
+};
 
 /** Original layout glyph, shared by the trigger and the illustrated choices. */
 export function AgentLayoutIcon({ mode, preview = false }: { mode: 'focus' | 'grid'; preview?: boolean }) {
@@ -18,7 +23,7 @@ export function AgentLayoutIcon({ mode, preview = false }: { mode: 'focus' | 'gr
   </svg>;
 }
 
-export function WallViewOptions({ wall, setWall }: Props) {
+export function WallViewOptions({ wall, setWall, onPickMultiAgent }: Props) {
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const snapAvailable = wall.layout.mode === 'grid' && !wall.layout.fixedGrid;
   return <>
@@ -28,7 +33,8 @@ export function WallViewOptions({ wall, setWall }: Props) {
       <div className="wall-view-choices">
         {(['focus', 'grid'] as const).map((mode, i) => <label key={mode} className="wall-view-choice">
           <input type="radio" name="wall-view-mode" data-view-mode={mode} checked={wall.layout.mode === mode}
-            onChange={() => setWall(w => ({ ...w, layout: { ...w.layout, mode } }))} />
+            onChange={() => setWall(w => ({ ...w, layout: { ...w.layout, mode } }))}
+            onClick={mode === 'grid' ? onPickMultiAgent : undefined} />
           <AgentLayoutIcon mode={mode} preview />
           <strong>{LAYOUT_LABEL[mode]}</strong>
           <span className="wall-view-choice__hint">{mode === 'focus' ? 'One chat at a time' : 'Chats side by side'}</span>
@@ -80,7 +86,11 @@ export function WallViewMenu(props: Props) {
     </button>
     {open && createPortal(<div ref={pop} role="dialog" aria-label="View" data-wall-view-menu className="wall-view-menu" style={pos}
       onBlur={e => { if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget) && !anchor.current?.contains(e.relatedTarget)) setOpen(false); }}>
-      <WallViewOptions {...props} />
+      <WallViewOptions {...props} onPickMultiAgent={props.onPickMultiAgent && (() => {
+        // The zones tour is about to open in the board: get the menu out of its way.
+        if (props.wall.zones && !props.wall.zonesIntro) setOpen(false);
+        props.onPickMultiAgent?.();
+      })} />
     </div>, document.body)}
   </>;
 }

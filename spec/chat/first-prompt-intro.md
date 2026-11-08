@@ -20,7 +20,7 @@ Someone opening their very first chat gets a short, skippable explanation of how
   - the chat list has loaded and no chat has an exchange yet, so it is the person's first ever chat;
   - `firstPromptIntroSeen` is not set;
   - contextual tips are on (`showTips` is not `false`);
-  - the zones intro, which opens on the first visit to the Agents board, has been closed (or the board is not in zones), so a new user gets the two intros one after the other, never stacked.
+  - first-run setup is closed, so the intro never stacks on the wizard. (Until 2026-11-08 it waited for the zones intro instead; that one now opens only when someone picks Multi-agent.)
 - **What it shows.** A modal titled **Send your first prompt** in the ZonesIntro layout: three short looping demos, each with a heading and one or two sentences underneath (the words are in the modal, not the video), step dots, **Back**, **Next**, and **Get started** on the last step.
   1. **Start with a question**: Nekko peeks over the composer; the "Summarize this PDF" starter is tapped and typed in. Body: type anything, or pick a starter.
   2. **Add your files**: "Q3 report.pdf" is dragged in and lands as an attachment pill; Nekko's eyes follow it. Body: drag files in, or use **+** or **@**.

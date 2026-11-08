@@ -470,6 +470,7 @@ export function CommandCenterView() {
     selectAgent(id);
     if (id) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-grid-cell="chat:${CSS.escape(id)}"] .composer [contenteditable]`)?.focus({ preventScroll: true }));
   }, [selectAgent]);
+  const [multiAgentPicked, setMultiAgentPicked] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (useStore.getState().view !== 'command' || document.visibilityState === 'hidden' || !viewRef.current?.getClientRects().length || e.defaultPrevented || e.repeat || e.isComposing) return;
@@ -477,6 +478,7 @@ export function CommandCenterView() {
       if (mode) {
         e.preventDefault();
         setWall((w) => ({ ...w, layout: { ...w.layout, mode } }));
+        if (mode === 'grid') setMultiAgentPicked(true);
         return;
       }
       if (e.key === 'Tab' && e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -499,7 +501,9 @@ export function CommandCenterView() {
   const onAgentsView = useStore((s) => s.view) === 'command';
   // Waits for first-run setup to close: it would otherwise open on top of the wizard.
   const setupOpen = useStore((s) => s.onboardingOpen);
-  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro && !setupOpen;
+  // The zones tour opens once, the first time someone picks Multi-agent (View
+  // menu or Ctrl/Cmd+Shift+2), never on its own at launch.
+  const showZonesIntro = multiAgentPicked && listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro && !setupOpen;
   useEffect(() => {
     if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
   }, [chatFinderOpen, setWall]);
@@ -532,7 +536,7 @@ export function CommandCenterView() {
   return (
     <div ref={viewRef} className="flex h-full min-h-0 flex-col -mt-px gap-2 pb-0 pl-1 pr-px pt-0">
       {showZonesIntro && <Suspense fallback={null}><ZonesIntro onClose={() => setWall((w) => ({ ...w, zonesIntro: true }))} /></Suspense>}
-      <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen}
+      <WallToolbar wall={wall} setWall={setWall} addOpen={addOpen} setAddOpen={setAddOpen} onPickMultiAgent={() => setMultiAgentPicked(true)}
         onAdd={(kind) => {
           setCompletedId(null);
           const add = kind === 'image' ? newChat({ kind: 'chat', chatType: 'image' }).then((id) => addFromToolbar('chat', id, true)) : addFromToolbar(kind);
@@ -608,6 +612,7 @@ export function WallToolbar({
   setAddOpen,
   onAdd,
   onPick,
+  onPickMultiAgent,
 }: {
   wall: CommandWallState;
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
@@ -616,6 +621,8 @@ export function WallToolbar({
   /** A new agent, image session or terminal window on the wall. */
   onAdd: (kind: 'chat' | 'image' | 'terminal') => void;
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
+  /** Multi-agent picked in the View menu: opens the zones tour the first time. */
+  onPickMultiAgent?: () => void;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
   // In the desktop shell the controls share the title bar's row with the
@@ -659,7 +666,7 @@ export function WallToolbar({
           })} />
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
-        <WallViewMenu wall={wall} setWall={setWall} />
+        <WallViewMenu wall={wall} setWall={setWall} onPickMultiAgent={onPickMultiAgent} />
       </div>
     </div>
   );

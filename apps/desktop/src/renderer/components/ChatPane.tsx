@@ -2576,7 +2576,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Someone's first ever new chat opens the "Send your first prompt" intro over it, once.
   const [firstPromptIntroClosed, setFirstPromptIntroClosed] = useState(false);
-  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions }));
+  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions, setupOpen: s.onboardingOpen }));
   const closeFirstPromptIntro = useCallback(() => {
     setFirstPromptIntroClosed(true);
     // If saving fails it simply shows again next time.
