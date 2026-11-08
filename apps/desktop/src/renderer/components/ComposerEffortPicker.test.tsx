@@ -25,12 +25,12 @@ describe('composer effort and suggestions', () => {
     expect(out).not.toContain('data-composer-suggestions');
     expect(out).not.toContain('Prompt suggestions test control');
   });
-  it('puts new-chat suggestions below Send without repeating the control', () => {
+  it('keeps new-chat suggestions beside the microphone without repeating the control', () => {
     mode.expert = true;
     const out = composerBox(renderChatPane(chatSession({ messages: [] }), { commandCenter: true, cleanStart: true }));
     expect(out.match(/data-composer-suggestions/g)).toHaveLength(1);
-    expect(out).toContain('composer-suggestions-row');
-    expect(out.indexOf('data-composer-suggestions')).toBeGreaterThan(out.indexOf('data-composer-action'));
+    expect(out).not.toContain('composer-suggestions-row');
+    expect(out.indexOf('data-composer-suggestions')).toBeLessThan(out.indexOf('data-composer-action'));
   });
   it('puts suggestions beside the microphone, in the action bar, only in Expert', () => {
     mode.expert = true;
