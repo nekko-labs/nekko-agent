@@ -184,7 +184,7 @@ Video keeps the planning and tool-based editing chat from #2149, and gains real 
 
 - Local models: prompts and attached photos stay on the computer.
 - Cloud models: a prompt, and especially an attached personal photo, is sent to the provider. That follows [decision 0065](../../docs/decisions/0065-outward-calls-that-carry-private-data-ask.md) (outward calls carrying private data ask). The cloud card names the provider before anything is sent.
-- Phones: image generation stays closed on the phone channel (`chat:generateImage` is denied today). Opening it is its own decision, not part of this plan.
+- Phones: image generation from a phone is a signed Change call (`spec/phone/image-chats.md` in #2211). Editing photos from a phone extends that payload with up to four photos and an edit size, inside the same proof ([decision 0069](../../docs/decisions/0069-phones-edit-photos-on-the-signed-change-channel.md), proposed).
 - Downloads come only from the pinned repositories in the companion sets and the curated list.
 
 ## Plan
