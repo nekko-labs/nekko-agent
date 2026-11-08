@@ -31,9 +31,10 @@ public struct Draft: Equatable, Sendable {
     public var effort: String?
     /// Why the computer turned this prompt down, when it came back from the outbox.
     public var refusal: String?
+    public var imageParams: ImageChatParams? = nil
 
     public init(text: String = "", skill: SkillSummary? = nil, images: [String] = [], providerId: String? = nil,
-                modelId: String? = nil, workspaceId: String? = nil, mode: String? = nil, effort: String? = nil, refusal: String? = nil, useDefaultFolders: Bool? = nil, supportingWorkspaceIds: [String] = []) {
+                modelId: String? = nil, workspaceId: String? = nil, mode: String? = nil, effort: String? = nil, refusal: String? = nil, useDefaultFolders: Bool? = nil, supportingWorkspaceIds: [String] = [], imageParams: ImageChatParams? = nil) {
         self.text = text
         self.skill = skill
         self.images = images
@@ -45,13 +46,14 @@ public struct Draft: Equatable, Sendable {
         self.mode = mode
         self.effort = effort
         self.refusal = refusal
+        self.imageParams = imageParams
     }
 
     /// Nothing worth keeping: no words, skill or photos, and no New chat choices.
     public var isEmpty: Bool {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && skill == nil && images.isEmpty
             && providerId == nil && modelId == nil && workspaceId == nil && mode == nil && effort == nil && refusal == nil
-            && useDefaultFolders != false && supportingWorkspaceIds.isEmpty
+            && useDefaultFolders != false && supportingWorkspaceIds.isEmpty && imageParams == nil
     }
 
     /// Something to send: words, a skill or a photo.
@@ -74,6 +76,7 @@ public struct Draft: Equatable, Sendable {
         out.mode = mode ?? back.mode
         out.effort = effort ?? back.effort
         out.refusal = back.refusal ?? refusal
+        out.imageParams = imageParams ?? back.imageParams
         return out
     }
 
@@ -92,6 +95,7 @@ public struct Draft: Equatable, Sendable {
         if let mode { o["mode"] = .string(mode) }
         if let effort { o["effort"] = .string(effort) }
         if let refusal { o["refusal"] = .string(refusal) }
+        if let imageParams { o["imageParams"] = imageParams.json }
         return .object(o)
     }
 
@@ -101,7 +105,8 @@ public struct Draft: Equatable, Sendable {
                      images: v["images"]?.array?.compactMap(\.string) ?? [], providerId: v.str("providerId"),
                      modelId: v.str("modelId"), workspaceId: v.str("workspaceId"), mode: v.str("mode"),
                      effort: v.str("effort"), refusal: v.str("refusal"), useDefaultFolders: v["useDefaultFolders"]?.bool,
-                     supportingWorkspaceIds: (v["supportingWorkspaceIds"]?.array ?? []).compactMap(\.string))
+                     supportingWorkspaceIds: (v["supportingWorkspaceIds"]?.array ?? []).compactMap(\.string),
+                      imageParams: ImageChatParams.from(v["imageParams"]))
     }
 }
 

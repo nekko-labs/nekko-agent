@@ -355,6 +355,10 @@ public final class ChatModel {
     @discardableResult
     public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
         try Task.checkCancellation()
+        // Load the authoritative chat kind before routing. Never guess text for an unread chat.
+        if session == nil { await reload() }
+        guard let currentSession = session else { throw RelayError("Read this chat before sending. Your prompt has not been sent.") }
+        if currentSession.chatType == "image" { return try await sendImage(text, skill: skill, images: images) }
         let outbox = store.outbox
         let id = outbox.newId()
         guard store.conn == .online, let r = try? store.remote() else {
@@ -434,6 +438,55 @@ public final class ChatModel {
             }
         }
         return id
+    }
+
+    public var isImageChat: Bool { session?.chatType == "image" }
+
+    public func setImageParams(_ params: ImageChatParams) async throws {
+        guard isImageChat, !running, !sending, store.conn == .online else {
+            throw RelayError("Reconnect and wait for this image turn to finish before changing its settings.")
+        }
+        let r = try store.remote()
+        let models = try await store.loadImageModels()
+        guard params.valid, models.contains(where: { $0.id == params.modelId }) else {
+            throw RelayError("Choose an available local image model and valid image settings.")
+        }
+        guard try store.remote() === r else { throw RelayError("The selected computer changed.") }
+        let saved = try await r.call(Channels.sessionSetOptions, [.string(sessionId), params.sessionOptions])
+        guard let confirmed = Session.from(saved), confirmed.chatType == "image", confirmed.imageParams == params else {
+            throw RelayError("The host did not save image settings. Re-read this chat before generating.")
+        }
+        await reload()
+    }
+
+    /// No image outbox: the host has no exactly-once image-turn contract. A lost
+    /// answer is ambiguous, so re-read rather than automatically replaying as text.
+    private func sendImage(_ text: String, skill: SkillSummary?, images: [String]) async throws -> String {
+        guard skill == nil, images.isEmpty else { throw RelayError("Image generation accepts a text prompt only. Remove attachments and skills first.") }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw RelayError("Describe the image to generate.") }
+        guard store.conn == .online, store.imageGeneration else {
+            throw RelayError("Reconnect to an image-capable computer to generate. Your draft stays here; it will not be sent as text.")
+        }
+        guard !running, !sending, session?.running != true else { throw RelayError("Wait for this image to finish, or stop it before sending another prompt.") }
+        guard let params = session?.imageParams, params.valid else {
+            throw RelayError("Choose valid Image settings first. Existing Change proofs require a whole-number CFG; fractional settings are never rounded silently.")
+        }
+        let r = try store.remote()
+        let models = try await store.loadImageModels()
+        guard models.contains(where: { $0.id == params.modelId }) else { throw RelayError("This image model is unavailable. Choose a local image model.") }
+        guard try store.remote() === r else { throw RelayError("The selected computer changed. Your prompt has not been sent.") }
+        sending = true
+        turn = LiveTurn(running: true, blocks: [], startedAt: now())
+        defer { sending = false; turn.running = false }
+        do {
+            _ = try await store.call(change: Channels.chatGenerateImage, [params.generation(sessionId: sessionId, prompt: text)], timeout: turnTimeout)
+            await reload()
+            store.reloadList()
+            return "image-\(now())"
+        } catch {
+            await reload()
+            throw store.readable(error)
+        }
     }
 
     /// `channel` with the prompt's `clientMessageId`. A computer from before
@@ -559,6 +612,7 @@ public final class ChatModel {
 
     /// Change this chat's model, effort or tool policy on the computer.
     public func setOptions(providerId: String? = nil, modelId: String? = nil, mode: PcSettings.ChatMode? = nil, effort: Effort? = nil) async throws {
+        guard !isImageChat else { throw RelayError("Use Image settings to choose a local image model.") }
         var o: [String: JSONValue] = [:]
         if let providerId { o["providerId"] = .string(providerId) }
         if let modelId { o["modelId"] = .string(modelId) }
@@ -604,6 +658,7 @@ public final class ChatModel {
     /// Change the queued prompt at `index` before it runs, or remove it (`text` nil). The computer
     /// refuses when that prompt no longer reads `expect` (it started, or the queue moved).
     public func editQueued(_ index: Int, expect: String, text: String?) async throws {
+        guard !isImageChat else { throw RelayError("Image chats do not support queued text prompts.") }
         guard store.conn == .online else { throw RelayError(Self.reconnectToEditQueue) }
         let edit = QueuedPrompt.edit(expect: expect, text: text)
         do {
@@ -618,6 +673,7 @@ public final class ChatModel {
 
     /// Stop the reply and start the queued prompt at `index` on this chat's model.
     public func interruptQueued(_ index: Int) async throws {
+        guard !isImageChat else { throw RelayError("Image chats do not support queued text prompts.") }
         guard store.conn == .online else { throw RelayError(Self.reconnectToEditQueue) }
         var args: [JSONValue] = [.string(sessionId), .int(Int64(index))]
         let (providerId, modelId) = Self.resolveModel(session, store.defaults)
@@ -704,12 +760,13 @@ public final class ChatModel {
         return t.isEmpty ? "Chat" : t
     }
 
-    public var modelId: String? { Self.resolveModel(session, store.defaults).1 }
+    public var modelId: String? { isImageChat ? session?.imageParams?.modelId : Self.resolveModel(session, store.defaults).1 }
     public var providerId: String? { Self.resolveModel(session, store.defaults).0 }
 
     /// The chat's model as its provider names it, else its id.
     public var modelName: String? {
         guard let id = modelId else { return nil }
+        if isImageChat { return store.imageModels.first { $0.id == id }?.name ?? id }
         return providerId.flatMap { store.models[$0]?.first { $0.id == id }?.name } ?? id
     }
 
@@ -720,6 +777,12 @@ public final class ChatModel {
     /// Why the composer can't send right now, or nil. Being offline is not a
     /// reason: the prompt waits in the outbox (`sendsLater`).
     public var blocked: String? {
+        if isImageChat {
+            if store.conn != .online { return "Reconnect to generate an image. Your draft stays here; nothing is queued as text." }
+            if !store.imageGeneration { return "This host does not support image chats from phones. Update Nekko Agent on the computer." }
+            if session?.imageParams?.modelId == nil { return "Choose a local image model in Image settings." }
+            return nil
+        }
         let (p, m) = Self.resolveModel(session, store.defaults)
         if store.conn == .denied || store.denied != nil { return "This phone is no longer paired." }
         if store.conn == .online && session != nil && (p == nil || m == nil) {
@@ -729,7 +792,7 @@ public final class ChatModel {
     }
 
     /// The computer is out of reach: Send puts the prompt in the outbox ("Send when online").
-    public var sendsLater: Bool { store.conn != .online }
+    public var sendsLater: Bool { !isImageChat && store.conn != .online }
 
     /// `typed` is more work for this chat to place: here, or in a sub-agent. Never a slash command,
     /// and only while the computer can say delegation will run.
@@ -744,6 +807,7 @@ public final class ChatModel {
         guard store.conn != .online, store.conn != .denied, store.denied == nil else { return nil }
         let name = store.active?.name ?? "your computer"
         let state = store.conn == .offline ? "offline" : "reconnecting"
+        if isImageChat { return "\(name) is \(state). Reconnect to generate; your draft is kept here and is never sent as text." }
         return "\(name) is \(state). What you send waits on this iPhone and goes when it’s back."
     }
 

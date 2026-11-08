@@ -13,6 +13,9 @@ struct NewChatView: View {
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
+    @State private var imageChat = false
+    @State private var imageParams = ImageChatParams()
+    @State private var showImageSettings = false
     @State private var model: (String, String)?
     @State private var folder: String?
     @State private var choseFolder = false
@@ -90,7 +93,7 @@ struct NewChatView: View {
         ScrollView {
             VStack(spacing: 14) {
                 if offline {
-                    note(Label(supportingFolders.isEmpty ? "\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then." : "Reconnect to start with your starred supporting folders. They require confirmation on this iPhone; your draft stays here.",
+                    note(Label(imageChat ? "Reconnect to generate images. Your image-chat draft stays here and will not be queued as text." : supportingFolders.isEmpty ? "\(store.active?.name ?? "Your computer") is \(store.conn == .offline ? "offline" : "reconnecting"). Start now and the chat begins when it’s back; it waits on this iPhone until then." : "Reconnect to start with your starred supporting folders. They require confirmation on this iPhone; your draft stays here.",
                                systemImage: "tray.and.arrow.up"), color: palette.inkSoft)
                         .accessibilityIdentifier("newChat.offlineNote")
                 }
@@ -119,6 +122,7 @@ struct NewChatView: View {
                 app.prefs.lastModel[PhoneProviders.computerId] = "\(p)::\(m)"
             }
         }
+        .sheet(isPresented: $showImageSettings) { ImageChatSettings(params: $imageParams) }
         .sheet(isPresented: $showModels) {
             ModelPicker(selected: (model?.0, model?.1)) { p, m in
                 model = (p, m)
@@ -155,6 +159,8 @@ struct NewChatView: View {
         // The computer's providers may arrive after this screen opened.
         .onChange(of: isLocal) { _, local in if local && autoPick == nil && !autoFinding { autoRun += 1 } }
         // Kept on the phone like a chat's composer: text, photos, model, folder and tool policy.
+        .onChange(of: imageChat) { _, _ in saveDraft() }
+        .onChange(of: imageParams) { _, _ in saveDraft() }
         .onChange(of: text) { _, _ in saveDraft() }
         .onChange(of: images) { _, _ in saveDraft() }
         .onChange(of: model?.0) { _, _ in saveDraft() }
@@ -177,7 +183,7 @@ struct NewChatView: View {
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
             MarkdownComposerField(text: $text, focused: $typing,
-                                  placeholder: onPhone ? "Ask anything" : "What should your computer do?",
+                                  placeholder: imageChat ? "Describe an image to generate" : onPhone ? "Ask anything" : "What should your computer do?",
                                   identifier: "newChat.prompt", onPasteImages: pasteImages, boxed: false)
                 .padding(.top, 20)
             if loadingPhotos {
@@ -207,7 +213,7 @@ struct NewChatView: View {
                 .accessibilityLabel("Add")
                 .accessibilityIdentifier("newChat.add")
                 // Chats on this iPhone send text only.
-                .disabled(onPhone)
+                .disabled(onPhone || imageChat)
                 Spacer(minLength: 0)
                 VoiceConversationButton(makeTarget: makeVoiceTarget, finished: { target in
                     switch target {
@@ -215,6 +221,7 @@ struct NewChatView: View {
                     case .phone(let id): opened(id)
                     }
                 })
+                .disabled(imageChat)
                 startButton
             }
             // The model, effort and where the chat runs: the box's bottom rows, never below it (#1599).
@@ -234,7 +241,7 @@ struct NewChatView: View {
     @ViewBuilder private var startButton: some View {
         if offline {
             Button(action: start) {
-                Text(supportingFolders.isEmpty ? "Start when online" : "Connect to start").font(.footnote.weight(.semibold)).lineLimit(1)
+                Text(imageChat ? "Connect to generate" : supportingFolders.isEmpty ? "Start when online" : "Connect to start").font(.footnote.weight(.semibold)).lineLimit(1)
                     .padding(.horizontal, 12).frame(minHeight: 36)
                     .background(canStart ? palette.accent : palette.surface2, in: Capsule())
                     .foregroundStyle(canStart ? palette.onAccent : palette.inkFaint)
@@ -260,6 +267,31 @@ struct NewChatView: View {
 
     /// The model and effort, where the chat runs and what it may do: computer, Nekko Cloud, folder and tool policy.
     private var options: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Chat kind", selection: $imageChat) {
+                Text("Chat").tag(false)
+                Text("Image").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("newChat.kind")
+            if imageChat {
+                Menu {
+                    ForEach(store.computers) { computer in
+                        Button(computer.name) { onPhone = false; place(computer.id) }
+                    }
+                } label: { chip(onPhone ? "Choose a computer" : store.active?.name ?? "Choose a computer", icon: "desktopcomputer") }
+                Button { showImageSettings = true } label: {
+                    chip(imageParams.modelId ?? "Choose an image model", icon: "photo.badge.plus", faint: imageParams.modelId == nil)
+                }.accessibilityIdentifier("newChat.imageSettings")
+                Text("\(imageParams.width)×\(imageParams.height) · \(imageParams.steps) steps · CFG \(imageParams.cfgScale, specifier: "%.1f")")
+                    .font(.caption).foregroundStyle(palette.inkSoft)
+                Text(onPhone ? "Image chats run on a paired computer, not this iPhone. Switch to Chat to choose a computer first." : !store.imageGeneration ? "Connect to an image-capable host. Older hosts need an update." : "Text prompts only · local image model · Change confirmation required")
+                    .font(.caption).foregroundStyle(palette.inkSoft)
+            } else { textOptions }
+        }
+    }
+
+    private var textOptions: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 if onPhone {
@@ -419,6 +451,11 @@ struct NewChatView: View {
     }
 
     private var canStart: Bool {
+        if imageChat {
+            return !busy && !offline && !onPhone && store.imageGeneration && imageParams.valid
+                && imageParams.modelId != nil && images.isEmpty && !loadingPhotos
+                && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
         if onPhone { return !busy && phoneModel != nil && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let empty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && images.isEmpty
         return !busy && !autoFinding && !loadingPhotos && model != nil && !(offline && (empty || !supportingFolders.isEmpty))
@@ -426,6 +463,7 @@ struct NewChatView: View {
 
     /// Images on the clipboard, scaled like picked photos (at most four in the message).
     private func pasteImages() {
+        guard !imageChat else { error = "Image generation accepts text only. Attachments are not supported."; return }
         let added = (UIPasteboard.general.images ?? []).prefix(max(0, 4 - images.count)).compactMap(ImageAttachments.encode)
         if added.isEmpty { error = String(localized: "There’s no image on the clipboard."); return }
         images += added
@@ -460,7 +498,7 @@ struct NewChatView: View {
     static let autoTag = "nekko.auto"
 
     /// Auto can choose here: a local model, more than one computer, and no folder (a folder decides the computer).
-    private var autoOffered: Bool { !onPhone && isLocal && folder == nil && store.computers.count > 1 }
+    private var autoOffered: Bool { !imageChat && !onPhone && isLocal && folder == nil && store.computers.count > 1 }
     private var autoShown: Bool { autoOn && autoOffered }
 
     private var autoLine: String? {
@@ -622,7 +660,7 @@ struct NewChatView: View {
     }
 
     private var current: Draft {
-        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal, useDefaultFolders: !choseFolder, supportingWorkspaceIds: supportingFolders)
+        Draft(text: text, images: images, providerId: model?.0, modelId: model?.1, workspaceId: folder, mode: selectedTools.rawValue, effort: selectedEffort.rawValue, refusal: refusal, useDefaultFolders: !choseFolder, supportingWorkspaceIds: supportingFolders, imageParams: imageChat ? imageParams : nil)
     }
 
     private func restoreDraft() {
@@ -646,6 +684,8 @@ struct NewChatView: View {
     }
 
     private func apply(_ d: Draft) {
+        imageChat = d.imageParams != nil
+        if let params = d.imageParams { imageParams = params }
         if let defaults = d.useDefaultFolders {
             choseFolder = !defaults
             cachedSupportingFolders = d.supportingWorkspaceIds
@@ -670,6 +710,7 @@ struct NewChatView: View {
     }
 
     private func makeVoiceTarget() async throws -> ConversationTarget {
+        guard !imageChat else { throw RelayError("Image chats accept typed text prompts only.") }
         if onPhone {
             guard let picked = phoneModel else { throw RelayError("Choose a phone model before starting voice.") }
             return .phone(phone.create(providerId: picked.0, modelId: picked.1, first: ""))
@@ -686,6 +727,7 @@ struct NewChatView: View {
     }
 
     private func start() {
+        if imageChat { startImage(); return }
         guard !autoFinding else { return }
         if onPhone {
             guard let picked = phoneModel else { return }
@@ -731,6 +773,24 @@ struct NewChatView: View {
             } catch {
                 self.error = error.localizedDescription
             }
+            busy = false
+        }
+    }
+
+    private func startImage() {
+        guard canStart else { error = "Reconnect and choose a local image model. Remove attachments before generating."; return }
+        let params = imageParams
+        let first = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        busy = true
+        error = nil
+        Task {
+            do {
+                let id = try await store.createImageChat(params: params, workspaceId: folder)
+                store.drafts.clear(DraftStore.newChat)
+                store.drafts.set(id, Draft(text: first))
+                app.firstMessages[id] = UnsentPrompt(text: first, skill: nil, images: [])
+                opened(id)
+            } catch { self.error = error.localizedDescription }
             busy = false
         }
     }

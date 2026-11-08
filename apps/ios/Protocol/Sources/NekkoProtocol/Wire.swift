@@ -29,6 +29,8 @@ public enum Channels {
     public static let voiceStatus = "voice:status"
     /// A mono 16 kHz 16-bit PCM WAV as a JSON array of byte values → the text.
     public static let voiceTranscribe = "voice:transcribe"
+    public static let chatGenerateImage = "chat:generateImage"
+    public static let engineModels = "engine:models"
     public static let chatSend = "chat:send"
     public static let chatAbort = "chat:abort"
     public static let chatQueue = "chat:queue"
@@ -132,9 +134,10 @@ public enum Channels {
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces, chatGenerateImage])
 
     public static let all = [
+        chatGenerateImage, engineModels,
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
         sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList, auditRead,
@@ -398,6 +401,7 @@ public struct Session: Equatable, Sendable {
     public var parentSessionId: String?
     /// `image` for an image chat; nil for an ordinary one.
     public var chatType: String?
+    public var imageParams: ImageChatParams? = nil
     public var executionMode: String?
     public var disabledTools: [String] = []
     /// MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in
@@ -434,7 +438,7 @@ public struct Session: Equatable, Sendable {
             effort: v.str("effort"),
             agentPlan: PlanStep.list(v["agentPlan"]),
             runOptions: RunOption.values(of: v),
-            parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), executionMode: v.str("executionMode"),
+            parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), imageParams: ImageChatParams.from(v["imageParams"]), executionMode: v.str("executionMode"),
             disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [],
             allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [])
     }
@@ -471,6 +475,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
     public var transcriptTokens: Int64? = nil
     public var contextUsed: Int64? = nil
     public var contextWindow: Int64? = nil
+    public var chatType: String? = nil
+    public var imageParams: ImageChatParams? = nil
 
     /// Real, top-level chats, active or completed: what the phone lists.
     public var isVisible: Bool { parentSessionId == nil && taskId == nil && trainingRunId == nil }
@@ -489,7 +495,8 @@ public struct SessionSummary: Equatable, Sendable, Identifiable {
             prUrls: v["prUrls"]?.array?.compactMap(\.string) ?? [],
             transcriptTokens: v.long("transcriptTokens").flatMap { $0 > 0 ? $0 : nil },
             contextUsed: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("used").flatMap { $0 >= 0 ? $0 : nil } : nil,
-            contextWindow: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("window").flatMap { $0 > 0 ? $0 : nil } : nil)
+            contextWindow: v.str("modelId") != nil && v["claudeCodeContext"]?.str("modelId") == v.str("modelId") ? v["claudeCodeContext"]?.long("window").flatMap { $0 > 0 ? $0 : nil } : nil,
+            chatType: v.str("chatType"), imageParams: ImageChatParams.from(v["imageParams"]))
     }
 
     /// Every chat the computer listed, children and task chats included, as sent.
@@ -824,6 +831,8 @@ public struct AppInfo: Equatable, Sendable {
     public let platform: String?
     /// The owner lets a phone quit Nekko Agent there (SK-3, `app:quit`); false from older computers.
     public var quitFromPhone = false
+    /// Explicit discovery only; an older host cannot generate from this phone.
+    public var imageGeneration = false
     /// The computer's icon, one of `computerIcons`; nil when it has none, or one this app doesn't draw.
     public var hostname: String?
     public var computerName: String?
@@ -831,6 +840,7 @@ public struct AppInfo: Equatable, Sendable {
 
     public static func from(_ v: JSONValue?) -> AppInfo {
         AppInfo(version: v?.str("version"), platform: v?.str("platform"), quitFromPhone: v?.flag("quitFromPhone") ?? false,
+                imageGeneration: v?["capabilities"]?.flag("imageGeneration") ?? false,
                 hostname: v?.str("hostname"), computerName: v?.str("computerName"),
                 machineIcon: v?.str("machineIcon").flatMap { computerIcons.contains($0) ? $0 : nil })
     }

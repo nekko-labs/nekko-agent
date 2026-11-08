@@ -73,6 +73,7 @@ class ChatViewModel(
         sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts,
         // The same path as a mode raise: plain first, signed when the computer answers proof-required.
         guarded = { channel, args, stepUp -> if (stepUp == null) repo.callRaising(channel, args) else repo.callChange(channel, args, stepUp) },
+        generateImage = { request -> repo.callChange(Channels.CHAT_GENERATE_IMAGE, listOf(request), timeoutMs = TURN_TIMEOUT_MS) },
     )
 
     /** Dictation into this chat's message box (Settings → Dictation). */
@@ -105,6 +106,15 @@ class ChatViewModel(
     /** The model and effort sheet: change the chat's model or effort on the computer. Throws so the sheet can say why. */
     suspend fun setOptions(providerId: String? = null, modelId: String? = null, effort: Effort? = null) =
         controller.setOptions(providerId, modelId, effort)
+
+    suspend fun imageModels() = repo.imageModels()
+    suspend fun setImageParams(params: com.nekko.protocol.ImageChatParams) = controller.setImageParams(params)
+
+    /** Authorized photo read by message identity only; no file or artifact path. */
+    suspend fun photo(messageId: String, index: Int): String? {
+        check(repo.state.value.conn == RelayState.ONLINE) { "Reconnect to open this image." }
+        return (repo.caller.call(Channels.SESSION_PHOTO, JsonPrimitive(sessionId), JsonPrimitive(messageId), JsonPrimitive(index)) as? JsonPrimitive)?.takeIf { it.isString }?.content
+    }
 
     /** The computer's state, for the model picker and the Monitor's model names. */
     val computers: StateFlow<ComputersState> = repo.state
@@ -365,7 +375,30 @@ class ChatViewModel(
         }
     }
 
-    suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) = controller.send(text, skill, images)
+    suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) {
+        // Until the session is read its kind is unknown; never put possible image intent in the text outbox.
+        val session = controller.state.value.session ?: throw com.nekko.protocol.RelayException("Wait for this chat to load before sending.")
+        if (session.chatType == "image" && photos.state.value.photos.isNotEmpty()) {
+            throw com.nekko.protocol.RelayException("Image generation accepts text only. Remove the attached photos first.")
+        }
+        controller.send(text, skill, images)
+    }
+
+    val voiceLanguage: String get() = phonePrefs?.get(Dictation.LANGUAGE).orEmpty()
+    val voiceEnabled: Boolean get() = phonePrefs?.get(Dictation.ENABLED) == true
+    val voiceEnabledFlow get() = phonePrefs?.flow(Dictation.ENABLED)
+
+    fun voicePreflight(authorized: Boolean, draft: com.nekko.android.voice.VoiceTurn.Draft, conversation: Boolean = true) {
+        val state = controller.state.value
+        com.nekko.android.voice.VoiceTurn.preflight(state.session, repo.state.value.conn == RelayState.ONLINE,
+            authorized, state.turn.running, repo.outbox.state.value.waitingFor(sessionId).isNotEmpty(), draft, conversation)
+        check(state.savedAt == null && state.loadError == null && state.turn.approval == null && state.turn.question == null) { "This chat needs your attention before voice can send." }
+        check(photos.state.value.photos.isEmpty() && !photos.state.value.busy) { "Remove attached photos before sending by voice." }
+    }
+
+    suspend fun sendVoice(text: String, authorized: () -> Boolean): String = controller.sendVoice(text) {
+        authorized() && voiceEnabled && photos.state.value.let { it.photos.isEmpty() && !it.busy }
+    }
 
     /** Photos waiting in the message box; kept here so a rotation doesn't drop them. */
     val photos = PhotoTray<ImageBitmap>()
@@ -479,6 +512,7 @@ class ChatViewModel(
     suspend fun approve(ok: Boolean) = controller.approve(ok)
     suspend fun alwaysAllowTool(stepUp: StepUpProof? = null) = controller.alwaysAllowTool(stepUp)
     suspend fun answer(answers: List<AskAnswer>) = controller.answer(answers)
+    suspend fun answerVoice(callId: String, text: String, authorized: () -> Boolean) = controller.answerVoice(callId, text, authorized)
 
     private fun env(s: ComputersState) = ChatEnv(
         conn = s.conn,
@@ -488,5 +522,6 @@ class ChatViewModel(
         models = s.models,
         canQueue = true,
         strategy = s.pcSettings.orchestrationStrategy,
+        imageGeneration = s.imageGeneration,
     )
 }

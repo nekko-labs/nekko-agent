@@ -563,7 +563,10 @@ struct ChatRow: View {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
-                if showModel, let model = summary.modelId {
+                if summary.chatType == "image" {
+                    Label("Image", systemImage: "photo").font(.caption2).foregroundStyle(palette.accent)
+                }
+                if showModel, let model = summary.chatType == "image" ? summary.imageParams?.modelId : summary.modelId {
                     Text(AgentRows.shortModelName(model)).font(.caption2).foregroundStyle(palette.accent)
                         .lineLimit(1).accessibilityLabel("Model \(model)").accessibilityIdentifier("chats.row.model")
                 }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_conversation">Voice conversation</string>
+    <string name="voice_explanation">Tap Start, then speak. Each spoken turn is sent to this text chat. The phone reads the new completed reply, then listens again. Stop, leaving, locking or disconnecting ends voice, not the agent’s work. Voice never queues or retries a prompt. Keep the message box empty.</string>
+    <string name="voice_start">Start</string>
+    <string name="voice_stop">Stop voice</string>
+    <string name="voice_close">Close</string>
+    <string name="voice_cancel">Cancel</string>
+    <string name="voice_settings">Open microphone settings</string>
+    <string name="voice_permission_granted">Microphone allowed. Tap Start or hold again to begin.</string>
+    <string name="voice_permission_denied">Allow microphone access in Settings → Apps → Nekko Agent → Permissions, then start again.</string>
+    <string name="voice_unavailable">This phone needs installed on-device speech recognition (Android 12 or later). No cloud speech fallback is used.</string>
+    <string name="voice_ready">Ready</string>
+    <string name="voice_listening">Listening</string>
+    <string name="voice_waiting">Thinking</string>
+    <string name="voice_speaking">Speaking</string>
+    <string name="voice_stopped">Stopped</string>
+    <string name="voice_heard">You said</string>
+    <string name="voice_reply">Reply</string>
+    <string name="voice_hold">Hold to talk</string>
+    <string name="voice_hold_accessibility">Start or finish held dictation</string>
+    <string name="voice_commands">Listen for “Nekko” commands</string>
+    <string name="voice_finish">Finish listening</string>
+</resources>

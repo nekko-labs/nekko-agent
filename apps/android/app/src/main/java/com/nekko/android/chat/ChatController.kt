@@ -26,6 +26,7 @@ import com.nekko.protocol.Transcript
 import com.nekko.protocol.queuePrompt
 import com.nekko.protocol.sendOptions
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -75,6 +76,7 @@ data class ChatEnv(
     val canQueue: Boolean = false,
     /** How the computer's agents delegate ([PcSettings.orchestrationStrategy]). */
     val strategy: String? = null,
+    val imageGeneration: Boolean = false,
 )
 
 /** Everything the chat screen renders. Pure projection of [ChatState] + [ChatEnv]. */
@@ -116,6 +118,8 @@ data class ChatUi(
     val context: ContextUsage? = null,
     /** [context]'s count plus about one token per four characters streamed this turn; null until the computer answers. */
     val contextTokens: Long? = null,
+    val chatType: String? = null,
+    val imageParams: com.nekko.protocol.ImageChatParams? = null,
 )
 
 /**
@@ -143,6 +147,8 @@ class ChatController(
      * computer asked for one. Null sends it plain (tests, previews).
      */
     private val guarded: (suspend (channel: String, args: List<JsonElement>, stepUp: StepUpProof?) -> JsonElement)? = null,
+    /** Generation always uses the existing authorized Change path, never an unsigned fallback. */
+    private val generateImage: (suspend (JsonElement) -> JsonElement)? = null,
 ) {
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -258,9 +264,85 @@ class ChatController(
         reload()
     }
 
+    private var voiceFailure: kotlinx.coroutines.CompletableDeferred<Nothing>? = null
+
+    /** Voice owns this request's completion, never the normal fire-and-forget/outbox send path. */
+    suspend fun sendVoice(text: String, authorized: () -> Boolean): String = kotlinx.coroutines.withTimeout(300_000) {
+        check(voiceFailure == null) { "A voice turn is already waiting." }
+        val failure = kotlinx.coroutines.CompletableDeferred<Nothing>()
+        voiceFailure = failure
+        try {
+            fun allowed() {
+                check(authorized() && env().conn == RelayState.ONLINE) { "Voice stopped. Unlock and reconnect, then start again." }
+            }
+            fun preflight(session: Session?) {
+                check(session?.id == sessionId) { "The selected chat changed. Voice stopped." }
+                com.nekko.android.voice.VoiceTurn.preflight(session, env().conn == RelayState.ONLINE, authorized(),
+                    _state.value.turn.running, outbox?.state?.value?.waitingFor(sessionId)?.isNotEmpty() == true)
+                check(_state.value.savedAt == null && _state.value.turn.approval == null && _state.value.turn.question == null) { "This chat needs your attention before voice can start." }
+            }
+            allowed()
+            preflight(_state.value.session)
+            val before = Session.from(caller.call(Channels.SESSION_GET, JsonPrimitive(sessionId)))
+            preflight(before)
+            val pendingBefore = caller.call(Channels.CHAT_PENDING)
+            check(pendingBefore is kotlinx.serialization.json.JsonObject && PendingInput.map(pendingBefore)[sessionId].let { it?.approval == null && it?.question == null }) { "This chat needs your attention before voice can send." }
+            preflight(before)
+            check(before != null && text.isNotBlank()) { "Nothing to send." }
+            val (provider, model) = resolveModel(before, env().defaults)
+            check(provider != null && model != null) { "Choose a default model on your computer first." }
+            val id = newId()
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            allowed()
+            _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("voice-$id", text, now())))) }
+            coroutineScope {
+                val request = async {
+                    // No callWithId compatibility retry, no disk outbox, and never CHAT_QUEUE.
+                    caller.callWithTimeout(300_000, Channels.CHAT_SEND, sendOptions(sessionId, provider, model, text, clientMessageId = id))
+                }
+                kotlinx.coroutines.selects.select<Unit> {
+                    request.onAwait { }
+                    failure.onAwait { }
+                }
+            }
+            allowed()
+            failure.takeIf { it.isCompleted }?.await()
+            val after = Session.from(caller.call(Channels.SESSION_GET, JsonPrimitive(sessionId)))
+            val pendingRaw = caller.call(Channels.CHAT_PENDING)
+            val pending = PendingInput.map(pendingRaw)[sessionId]
+            allowed()
+            failure.takeIf { it.isCompleted }?.await()
+            check(pendingRaw is kotlinx.serialization.json.JsonObject && pending?.approval == null && pending?.question == null) { "This chat needs your answer or approval. Voice stopped." }
+            val reply = com.nekko.android.voice.VoiceTurn.reply(before, after, text, id)
+            _state.update { it.copy(session = after, turn = LiveTurn(), savedAt = null, loadError = null) }
+            reply
+        } catch (e: CancellationException) {
+            // Cancels the local wait only; it never aborts or resends the agent's turn.
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(turn = it.turn.copy(error = e.message)) }
+            throw e
+        } finally {
+            if (voiceFailure === failure) voiceFailure = null
+        }
+    }
+
+    /** Uses raw controller state, not a potentially one-frame-old projected question. Never answers tool approvals. */
+    suspend fun answerVoice(callId: String, text: String, authorized: () -> Boolean) {
+        val question = _state.value.turn.question ?: error("That question is no longer waiting.")
+        check(question.callId == callId && authorized()) { "That question is no longer waiting in this chat." }
+        answer(question.questions.map { AskAnswer(it.id, listOf(com.nekko.protocol.ASK_OTHER_LABEL), text) })
+    }
+
     /** Fold one event; returns true when the caller should [reload]. */
     fun onEvent(e: AgentEvent): Boolean {
         if (e.sessionId != sessionId) return false
+        val voiceProblem = when (e) {
+            is AgentEvent.Error -> e.message
+            is AgentEvent.Question, is AgentEvent.ApprovalRequired -> "This chat needs your answer or approval. Voice stopped."
+            else -> null
+        }
+        if (voiceProblem != null) voiceFailure?.completeExceptionally(IllegalStateException(voiceProblem))
         _state.update { it.copy(turn = Transcript.apply(it.turn, e)) }
         // Re-read the saved transcript when the turn ends, then drop the overlay it replaces.
         return e is AgentEvent.Done || e is AgentEvent.Error || e is AgentEvent.SessionMeta
@@ -274,6 +356,10 @@ class ChatController(
      * sent again with the same id, which the computer runs once.
      */
     suspend fun send(text: String, skill: SkillSummary? = null, images: List<String> = emptyList()) {
+        if (_state.value.session?.chatType == "image") {
+            sendImage(text, skill, images)
+            return
+        }
         val ob = outbox
         val id = ob?.newId() ?: newId()
         if (ob != null) {
@@ -345,6 +431,40 @@ class ChatController(
                 _state.update { it.copy(turn = it.turn.copy(running = false, error = e.message ?: "Couldn’t send that.")) }
             }
         }
+    }
+
+    private suspend fun sendImage(text: String, skill: SkillSummary?, images: List<String>) {
+        val session = _state.value.session ?: throw RelayException("Wait for this chat to load.")
+        require(skill == null && images.isEmpty()) { "Image generation accepts a text prompt only. Remove attachments and skills first." }
+        require(text.isNotBlank()) { "Describe the image to generate." }
+        check(env().conn == RelayState.ONLINE) { "Reconnect to generate an image. Image prompts are never queued as text." }
+        check(env().imageGeneration) { "This computer does not advertise image generation. Update Nekko Agent on the computer." }
+        check(!_state.value.turn.running && !session.running) { "Wait for this image to finish or stop it first." }
+        val params = session.imageParams ?: com.nekko.protocol.ImageChatParams(cfgScale = 4.5)
+        val request = params.generation(sessionId, text)
+        val generate = generateImage ?: throw RelayException("This phone cannot authorize image generation.")
+        // Await authorization and the turn so a refusal/cancel keeps the composer's words.
+        // There is no image idempotency token: never retry an ambiguous lost response automatically.
+        _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now())))) }
+        try {
+            generate(request)
+            reload()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(turn = it.turn.copy(running = false, error = e.message ?: "Image generation failed. Reconnect and check the chat before trying again.")) }
+            throw e
+        } finally {
+            _state.update { it.copy(turn = it.turn.copy(running = false)) }
+        }
+    }
+
+    suspend fun setImageParams(params: com.nekko.protocol.ImageChatParams) {
+        check(_state.value.session?.chatType == "image") { "Not an image chat." }
+        check(env().conn == RelayState.ONLINE) { "Reconnect to change image settings." }
+        check(!_state.value.turn.running) { "Wait for the image to finish." }
+        caller.call(Channels.SESSION_SET_OPTIONS, JsonPrimitive(sessionId), params.sessionOptions())
+        reload()
     }
 
     /**
@@ -526,15 +646,20 @@ class ChatController(
             val (providerId, modelId) = resolveModel(state.session, env.defaults)
             val unpaired = env.conn == RelayState.DENIED || env.denied != null
             val away = !unpaired && env.conn != RelayState.ONLINE
+            val image = state.session?.chatType == "image"
             val blocked = when {
                 unpaired -> "This phone is no longer paired."
+                image && away -> "Reconnect to generate an image. Image prompts are never queued as text."
+                image && !env.imageGeneration -> "This computer does not advertise image generation. Update Nekko Agent on the computer."
+                image && (state.session?.imageParams?.valid != true) -> com.nekko.protocol.ImageChatParams.INVALID
+                image -> null
                 // Offline mode: the prompt waits in the outbox; the model is settled when it is delivered.
                 away && env.canQueue -> null
                 away -> "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}."
                 providerId == null || modelId == null -> "No model chosen for this chat. Set a default model on your computer."
                 else -> null
             }
-            val sendsLater = if (away && env.canQueue) {
+            val sendsLater = if (!image && away && env.canQueue) {
                 "${env.computerName} is ${if (env.conn == RelayState.OFFLINE) "offline" else "reconnecting"}. What you send waits on this phone and goes when it’s back."
             } else {
                 null
@@ -552,7 +677,7 @@ class ChatController(
                 title = plainText(state.session?.title ?: "").ifEmpty { "Chat" },
                 subtitle = listOfNotNull(modelId, env.computerName).joinToString(" · "),
                 blocks = Transcript.mergeLive(saved, turn.blocks),
-                running = turn.running,
+                running = turn.running || (image && state.session.running),
                 approval = turn.approval,
                 question = turn.question,
                 error = state.loadError ?: turn.error ?: notSaved,
@@ -563,11 +688,13 @@ class ChatController(
                 queued = state.session?.queue ?: emptyList(),
                 queuedPrompts = state.session?.queued ?: emptyList(),
                 rate = turn.rate,
-                skills = state.skills,
+                skills = if (image) emptyList() else state.skills,
                 omittedMessages = state.session?.omittedMessages ?: 0,
                 providerId = providerId,
                 modelId = modelId,
-                modelName = modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
+                chatType = state.session?.chatType,
+                imageParams = state.session?.imageParams,
+                modelName = if (image) state.session?.imageParams?.modelId ?: "Image model" else modelId?.let { id -> env.models[providerId]?.firstOrNull { it.id == id }?.name ?: id },
                 effort = Effort.parse(state.session?.effort),
                 runOptions = state.session?.runOptions ?: emptyMap(),
                 disabledTools = state.session?.disabledTools ?: emptyList(),

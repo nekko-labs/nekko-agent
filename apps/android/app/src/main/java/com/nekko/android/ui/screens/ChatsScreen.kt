@@ -759,7 +759,8 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
                 if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
                 if (details.showUpdated) Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             }
-            if (details.showModel) s.modelId?.let {
+            if (s.chatType == "image") Text(stringResource(R.string.image_kind_image), style = MaterialTheme.typography.bodySmall, color = p.accent, modifier = Modifier.testTag("chats.row.image"))
+            if (details.showModel && s.chatType != "image") s.modelId?.let {
                 Text(AgentRows.shortModelName(it), style = MaterialTheme.typography.bodySmall, color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("chats.row.model"))
             }
             if (details.showContext) (s.contextUsed ?: s.transcriptTokens)?.let { used ->

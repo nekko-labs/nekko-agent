@@ -397,6 +397,9 @@ public final class Outbox {
             guard let session = Session.from(try await c.call(Channels.sessionGet, [.string(chatId)])) else {
                 return .refused("This chat was deleted on your computer.")
             }
+            guard session.chatType != "image" else {
+                return .refused("Image chats require an online, confirmed image turn. Your prompt was not sent as text.")
+            }
             // Sent before (the answer was lost): delivered.
             if session.clientMessageIds.contains(item.id) { return .delivered(chatId) }
             if session.running {

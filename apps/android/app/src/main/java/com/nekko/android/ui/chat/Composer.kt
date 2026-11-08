@@ -147,6 +147,8 @@ fun Composer(
     offerSubagent: Boolean = false,
     /** The box's bottom row (the chat's model and context), inside the box. */
     footer: (@Composable () -> Unit)? = null,
+    onVoiceConversation: (() -> Unit)? = null,
+    voiceControls: (@Composable (com.nekko.android.voice.VoiceComposer) -> Unit)? = null,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -346,6 +348,7 @@ fun Composer(
                                 onDismiss = { plusOpen = false },
                                 onNewAgent = onNewAgent?.let { go -> { plusOpen = false; go() } },
                                 onTerminal = onTerminal?.let { go -> { plusOpen = false; go() } },
+                                onVoiceConversation = onVoiceConversation?.let { go -> { plusOpen = false; go() } },
                                 onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
                                 attach = attach,
                                 onPicked = { plusOpen = false; attach?.clearError?.invoke() },
@@ -398,6 +401,12 @@ fun Composer(
                         }
                     }
                 }
+                voiceControls?.invoke(com.nekko.android.voice.VoiceComposer(
+                    read = { com.nekko.android.voice.VoiceTurn.Draft(text, skillName != null || promptId != null, photos.isNotEmpty(), sending || addingPhotos) },
+                    replace = { expected, replacement ->
+                        if (text != expected || sending) false else { setText(replacement); true }
+                    },
+                ))
                 footer?.invoke()
             }
         }
@@ -595,6 +604,7 @@ private fun PlusMenu(
     onNewAgent: (() -> Unit)?,
     onTerminal: (() -> Unit)?,
     onDictate: (() -> Unit)?,
+    onVoiceConversation: (() -> Unit)? = null,
     attach: AttachUi?,
     onPicked: () -> Unit,
     prompts: List<SavedPrompt> = emptyList(),
@@ -608,6 +618,12 @@ private fun PlusMenu(
         containerColor = p.surface,
         shape = RoundedCornerShape(14.dp),
     ) {
+        if (onVoiceConversation != null) DropdownMenuItem(
+            text = { Text(stringResource(R.string.voice_conversation), color = p.ink) },
+            leadingIcon = { Icon(Icons.Filled.Mic, contentDescription = null, tint = p.inkSoft) },
+            onClick = onVoiceConversation,
+            modifier = Modifier.testTag("composer.voiceConversation"),
+        )
         if (onNewAgent != null) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.chat_new_agent), color = p.ink) },

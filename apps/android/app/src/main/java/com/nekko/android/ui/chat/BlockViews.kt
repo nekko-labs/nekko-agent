@@ -183,6 +183,7 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?, showReas
                 }
             }
         }
+        if (b.thumbs.isNotEmpty()) ReplyPhotos(b.id, b.thumbs)
         if (b.text.isNotEmpty()) {
             Voiced(voice) {
                 LongPressMenu(b.text, fork) { press ->
@@ -197,7 +198,7 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?, showReas
             }
             // Cards come once the reply is finished; a tapped link works meanwhile.
             if (!b.streaming) PreviewCards(b.text)
-        } else if (b.streaming && reasoning.isNullOrEmpty()) {
+        } else if (b.streaming && reasoning.isNullOrEmpty() && b.thumbs.isEmpty()) {
             CircularProgressIndicator(
                 color = p.accent,
                 strokeWidth = 2.dp,
