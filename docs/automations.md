@@ -8,7 +8,7 @@ CI on your machine, see [Local CI runner](git-runner.md).
 
 ## Turn on a ready-made automation
 
-**Scheduled Tasks → New scheduled task** opens on a gallery. An empty Scheduled Tasks tab shows the same cards.
+**Scheduled Tasks → New scheduled task** opens on a gallery. If this is your first task, the guide includes a 42-second overview video and a readable transcript: choose an idea, review access, try a manual run, inspect the result, then add a schedule when ready. Watching the video never creates or runs a task. An empty Scheduled Tasks tab shows the same cards.
 
 | Automation | When it runs | What it needs |
 |---|---|---|
