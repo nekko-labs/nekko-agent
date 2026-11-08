@@ -36,6 +36,9 @@ export function startDesktopNotifications(): () => void {
       const sessionId = notificationSessionId(url);
       if (sessionId) openNotifiedChat(sessionId);
     });
+    // Main holds a link that launched the app until now. DeepLinkListener, a
+    // child of App, subscribed in the same commit before this parent effect.
+    window.nekkoChrome.deepLinksReady?.();
     return () => { offStore(); offLink(); };
   }
   if (typeof Notification === 'undefined') return () => {};

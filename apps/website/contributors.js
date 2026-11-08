@@ -45,7 +45,7 @@
     const count = fragment.childNodes.length;
     wall.append(fragment);
     wall.hidden = false;
-    status.textContent = `${count} ${count === 1 ? 'contributor' : 'contributors'} · From GitHub, refreshed with each site build`;
+    status.textContent = `${count} ${count === 1 ? 'contributor' : 'contributors'}`;
   } catch {
     // The thank-you, contribution guide and GitHub list work without this script.
   }

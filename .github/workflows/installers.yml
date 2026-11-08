@@ -1,7 +1,8 @@
 name: Installers
 
 # Builds the real Windows and macOS installers, unsigned, and installs them:
-# nightly, and on a PR that touches how they are packaged and carries
+# nightly (with Linux, which also keeps its Electron download cached for
+# release.yml), and on a PR that touches how they are packaged and carries
 # `deploy:windows` or `deploy:macos` (that OS only). release.yml only runs on a
 # tag, so without this a broken installer config would first show up as a
 # broken release.
@@ -60,7 +61,7 @@ jobs:
       fail-fast: false
       # On a PR, only the labelled OS. (Each `cond && x || y` branch is non-empty.)
       matrix:
-        os: ${{ fromJSON(github.event_name != 'pull_request' && '["windows-latest","xcode-27"]' || (contains(github.event.pull_request.labels.*.name, 'deploy:windows') && contains(github.event.pull_request.labels.*.name, 'deploy:macos')) && '["windows-latest","xcode-27"]' || contains(github.event.pull_request.labels.*.name, 'deploy:windows') && '["windows-latest"]' || '["xcode-27"]') }}
+        os: ${{ fromJSON(github.event_name != 'pull_request' && '["windows-latest","xcode-27","ubuntu-latest"]' || (contains(github.event.pull_request.labels.*.name, 'deploy:windows') && contains(github.event.pull_request.labels.*.name, 'deploy:macos')) && '["windows-latest","xcode-27"]' || contains(github.event.pull_request.labels.*.name, 'deploy:windows') && '["windows-latest"]' || '["xcode-27"]') }}
     runs-on: ${{ matrix.os }}
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -72,6 +73,21 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Electron and the tools electron-builder fetches from GitHub (NSIS,
+      # signing helpers), kept in the Actions cache. The nightly on main saves
+      # it and a tag build restores it, so a GitHub download outage cannot
+      # fail a release (v0.9.5's first run died on a 504 for Electron).
+      - name: Point Electron's downloads at a cached folder
+        id: electron-cache
+        shell: bash
+        run: |
+          echo "electron_config_cache=${{ runner.temp }}/electron-cache/electron" >> "$GITHUB_ENV"
+          echo "ELECTRON_BUILDER_CACHE=${{ runner.temp }}/electron-cache/electron-builder" >> "$GITHUB_ENV"
+          echo "versions=$(node -p "const p=require('./package-lock.json').packages; p['node_modules/electron'].version+'-'+p['node_modules/electron-builder'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/electron-cache
+          key: electron-${{ runner.os }}-${{ steps.electron-cache.outputs.versions }}
       - run: npm ci
       # After `npm ci` so the lockfile installs untouched (release.yml does the same).
       - name: Stamp the nightly version
@@ -166,5 +182,7 @@ jobs:
           path: |
             apps/desktop/release/NekkoAgent-*.exe
             apps/desktop/release/NekkoAgent-*.dmg
+            apps/desktop/release/NekkoAgent-*.AppImage
+            apps/desktop/release/NekkoAgent-*.deb
           retention-days: 14
           if-no-files-found: error

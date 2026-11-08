@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { FIRST_WORKFLOW_CATEGORIES, FirstWorkflowWizard, firstWorkflowDetailValid, firstWorkflowSeed } from './FirstWorkflowWizard.js';
 
 describe('first workflow wizard', () => {
-  it('offers categorized ideas and honest video placeholders without creating anything', () => {
+  it('offers an overview video and categorized ideas without creating anything', () => {
     let calls = 0;
     const html = renderToStaticMarkup(<FirstWorkflowWizard onCreate={() => calls++} onBrowse={() => calls++} />);
     for (const category of FIRST_WORKFLOW_CATEGORIES) {
@@ -12,7 +12,9 @@ describe('first workflow wizard', () => {
       for (const example of category.examples) expect(html).toContain(example.name);
     }
     expect(html).toContain('Video coming soon. Travis');
-    expect(html).not.toContain('<video');
+    expect(html).toContain('data-scheduled-tasks-demo');
+    expect(html).toContain('Read the walkthrough transcript');
+    expect(html).toContain('42 seconds');
     expect(html).not.toContain('<iframe');
     expect(html).toContain('Browse all templates or start from scratch');
     expect(calls).toBe(0);

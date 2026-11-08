@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { useStore } from '../store.js';
 import { saveSettings, openSettingsGroup } from '../settingsIndex.js';
 import { Modal } from './primitives/Modal.js';
-import { ModeSwitch } from './ModeViews.js';
+import { AgentOutputDetail } from './AgentOutputDetail.js';
 import { ThemePresetPicker } from './ThemePresetPicker.js';
 import { SimpleModeSettings } from './SimpleModeSettings.js';
 import { CloseIcon } from '../icons.js';
@@ -58,9 +58,9 @@ export function ExperienceControls({ onSettings }: { onSettings: (group: string)
     <h2 className="text-2xl font-medium">Make Nekko work your way</h2>
     <p className="mt-2 text-sm text-ink-soft">Choose what you see and how your agents work. The same capabilities, with the details you want.</p>
     <section className="customize-section">
-      <h3>Agent output</h3>
-      <p>Simple folds working steps away. Detailed shows tools, reasoning when available, and reply statistics. This changes the view, not what the agent is allowed to do.</p>
-      <ModeSwitch labels />
+      <h3>Agent output detail</h3>
+      <p>Choose how much working detail your agents show. Same answer, three ways, just like in the introduction. This changes the view, not permissions or answer length.</p>
+      <AgentOutputDetail />
     </section>
     <section className="customize-section">
       <h3>Tone</h3>

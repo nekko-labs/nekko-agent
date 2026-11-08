@@ -11,7 +11,9 @@
 use super::Runners;
 use super::signals::MacState;
 use super::updates::{os_major, write_atomic};
-use super::vm::{BuildSpec, GITHUB_SEED, HelperVm, RunHandle, RunSpec, Stopped, Vm, output_within, xcode_source};
+use super::vm::{
+    BuildSpec, CONSOLE_LOG, GITHUB_SEED, HelperVm, RunHandle, RunSpec, Stopped, Vm, output_within, xcode_source,
+};
 use nekko_cloud::vault::Vault;
 use nekko_engine::download::{Downloads, HttpFetch, Request};
 use nekko_runner::{MAX_MACOS_VMS, Pressure, Priority, RunnerSettings, SECURITY_GRACE_DAYS, Thermal};
@@ -1549,6 +1551,8 @@ impl BuildHost for RealBuildHost {
         vm.clone_bundle(bundle, &clone).await?;
         // The documented check: the runner rejects this and the guest powers off.
         vm.write_seed(&seed, GITHUB_SEED, "not-a-config").await?;
+        // The helper creates the console file anew, and the add-tools boot left one at this same path.
+        let _ = std::fs::remove_file(clone.with_file_name(CONSOLE_LOG));
         let spec =
             RunSpec { bundle: clone.clone(), cpus: self.cpus(), memory_mb: MEMORY_MB, seed: seed.clone(), stats: None };
         let mut handle = vm.start(spec).await?;
@@ -1617,6 +1621,8 @@ impl BuildHost for RealBuildHost {
             seed: seed.clone(),
             stats: None,
         };
+        // A retried Tools stage finds the last attempt's console file, which the helper will not reopen.
+        let _ = std::fs::remove_file(bundle.with_file_name(CONSOLE_LOG));
         let mut handle = vm.start(spec).await?;
         let stopped = timeout(ADD_TOOLS_LIMIT, &mut handle.done).await;
         if stopped.is_err() {

@@ -1,4 +1,4 @@
-import { WorkflowIcon } from '../gentleface-icons.js';
+import { GfServerIcon, WorkflowIcon } from '../gentleface-icons.js';
 import React, { useEffect, useMemo, useState } from 'react';
 import type {
   SkillDef,
@@ -101,7 +101,9 @@ export function WorkflowsView() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const paused = useStore((s) => s.settings?.automationsPaused === true);
   const ciRunnersFocus = useStore((s) => s.ciRunnersFocus);
-  const [showCi, setShowCi] = useState(ciRunnersFocus);
+  // The sub-navigation's page: the task list, or this Mac's CI runners.
+  const [section, setSection] = useState<'tasks' | 'ci'>(ciRunnersFocus ? 'ci' : 'tasks');
+  const [runners, setRunners] = useState<'none' | 'some' | 'unsupported'>('none');
   const workflowFocus = useStore((s) => s.workflowFocus);
   /** A run a notification asked to show; its row opens on that run. */
   const [focusRun, setFocusRun] = useState<{ workflowId: string; runId: string } | null>(null);
@@ -112,8 +114,17 @@ export function WorkflowsView() {
   }, []);
 
   useEffect(() => {
-    if (ciRunnersFocus) setShowCi(true);
+    if (ciRunnersFocus) setSection('ci');
   }, [ciRunnersFocus]);
+
+  // A connected runner is what makes the section relevant in Simple; a daemon with no runner channel (not a Mac) has none to show.
+  useEffect(() => {
+    const seen = (views: readonly unknown[]) => setRunners(views.length > 0 ? 'some' : 'none');
+    void window.nekko.listRunners?.().then(seen, (e: unknown) => {
+      if ((e instanceof Error ? e.message : String(e)).startsWith('unknown channel')) setRunners('unsupported');
+    });
+    return window.nekko.onRunnersChanged?.(seen);
+  }, []);
 
   // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
   const sheetOpen = !!(creating || editing || setup);
@@ -201,11 +212,33 @@ export function WorkflowsView() {
     await window.nekko.updateWorkflow(wf.id, { enabled: !wf.enabled });
   };
 
-  const ciShown = useShown('ci') || showCi || ciRunnersFocus;
+  // Arriving from View CI runners shows them whatever the mode, as before.
+  const ciRelevant = useShown('ci', { runners: runners === 'some' });
+  const ciShown = runners !== 'unsupported' && (ciRelevant || section === 'ci');
+  const page = ciShown ? section : 'tasks';
   return (
     <div className="flex h-full min-h-0">
-      {/* Filters */}
-      {workflows.length > 0 && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
+      {/* Sub-navigation, then the list's filters */}
+      {(workflows.length > 0 || ciShown) && <aside className="flex w-60 shrink-0 flex-col overflow-y-auto border-r border-(--line) px-3 py-3">
+        {ciShown && (
+          <nav aria-label="Scheduled Tasks sections" className="mb-2 flex flex-col gap-0.5" data-workflows-subnav>
+            {([
+              { id: 'tasks', label: 'Scheduled tasks', Icon: WorkflowIcon },
+              { id: 'ci', label: 'CI runners', Icon: GfServerIcon },
+            ] as const).map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                type="button"
+                className="settings-nav-item"
+                aria-current={page === id ? 'page' : undefined}
+                onClick={() => setSection(id)}
+              >
+                <Icon className="h-4 w-4 shrink-0" />{label}
+              </button>
+            ))}
+          </nav>
+        )}
+        {page === 'tasks' && workflows.length > 0 && <>
         <input
           className="input w-full text-xs"
           placeholder="Search scheduled tasks…"
@@ -287,14 +320,13 @@ export function WorkflowsView() {
             ))}
           </div>
         </FilterGroup>
+        </>}
       </aside>}
 
       {/* List */}
       <div className="min-w-0 flex-1 overflow-y-auto p-4">
-        {!loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
+        {page === 'ci' ? <div className="mx-auto max-w-5xl"><CiRunnersView /></div> : !loaded ? <p className="p-4 text-sm text-ink-soft" role="status">{loadFailed ? 'Could not load scheduled tasks. Reopen this tab to try again.' : 'Loading scheduled tasks…'}</p> : workflows.length === 0 ? (<>
           <FirstWorkflowWizard onCreate={(seed) => setCreating({ seed })} onBrowse={() => setPicking(true)} />
-          {/* The wizard replaces the list, so the runners follow it: they must stay reachable with no tasks. */}
-          {ciShown && <div className="mx-auto mt-6 max-w-4xl px-4 sm:px-8"><CiRunnersView /></div>}
         </>) : <div className="mx-auto max-w-5xl">
           <div className="flex flex-wrap items-baseline gap-2">
             {!hasAppChrome && <h1 className="view-title">Scheduled Tasks</h1>}
@@ -402,7 +434,6 @@ export function WorkflowsView() {
                 focusRun={focusRun}
               />
             ))}
-            {ciShown && <CiRunnersView />}
           </div>
         </div>}
       </div>

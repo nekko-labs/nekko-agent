@@ -438,6 +438,8 @@ footer {
 }
 .footer-brand { font-weight: 800; letter-spacing: 0.14em; }
 footer a { color: var(--muted); text-decoration: none; font-family: var(--mono); font-size: 12px; }
+/* a link inside the footer sentence reads as part of it */
+footer .micro a { font: inherit; text-decoration: underline; text-underline-offset: 2px; }
 @media (hover: hover) {
   footer a:hover { color: var(--ink); }
 }
@@ -931,6 +933,7 @@ h3 { font-size: 21px; }
 .beta-done { display: grid; gap: 6px; }
 .beta-done[hidden], .beta-ask[hidden] { display: none; }
 .beta-ask { display: grid; gap: 14px; }
+.beta-skip { justify-self: start; background: none; border: 0; padding: 0; font: inherit; font-size: 14px; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .beta-badge {
   justify-self: start; font-family: var(--retro-mono); font-size: 11px; letter-spacing: 0.14em;
   background: #854f6c; color: #16161c; border: 2px solid var(--sticker); border-radius: 8px; padding: 3px 9px;

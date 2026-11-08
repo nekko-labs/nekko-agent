@@ -6,11 +6,23 @@ Nekko Agent has two modes. **Simple** is a cleaner, more focused view: details s
 
 The switch has two icons: a chat bubble for Simple and angle brackets for Detailed.
 
-- **Desktop:** in the title bar, beside the page name.
+- **Desktop:** open View options above the agents wall. The labeled switch keeps each icon beside its name.
 - **iPhone:** at the top of the chats list's view menu (the filter icon) and of a chat's **More** menu.
 - **Android:** in the floating pill just under the top bar, in a chat and in the chats list.
 
 Each computer and phone remembers its own mode. A new install starts in Simple.
+
+## Agent output detail
+
+On desktop and the Local Web UI, open **Customize > Experience > Agent output detail**. The same three choices appear in the first-run introduction:
+
+- **Minimal:** Simple mode with the Changes chip, prompt suggestions and context ring hidden, for fewer extras. Reply statistics stay out of sight.
+- **Regular:** Simple mode with those extras at their defaults and a tidy summary of the agent's work.
+- **Detailed:** Detailed mode, with tool steps, reasoning when the provider supplies it, and reply statistics.
+
+Try each choice beside the animated sample reply. It is an illustrative example, not a live agent run. Pause or play the preview; Reduce Motion shows the finished example instead. The choice saves immediately on this device and is restored when you reopen Customize. It does not change answer length, model instructions, permissions or the monitors you selected. Other per-control overrides still apply. Choosing Regular or Detailed resets the three Minimal-specific overrides to their defaults.
+
+The iPhone and Android still use their existing native Simple/Detailed controls; the three-choice Customize section described here is the shared desktop/web surface.
 
 ## What shows when
 

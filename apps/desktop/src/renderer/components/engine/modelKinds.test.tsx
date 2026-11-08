@@ -58,7 +58,7 @@ describe('picture models in the recommendations', () => {
     const html = renderToStaticMarkup(<RecommendationList recs={withPictures} models={[{ path: '/m/flux-2-klein-4b-Q4_0.gguf' }]} open onDownload={vi.fn()} onRecheck={vi.fn()} />);
     expect(html).toContain('Create pictures');
     expect(html).toContain('Z-Image Turbo');
-    expect(html).toContain('tight, with offload');
+    expect(html).toContain('Tight, with offload');
     expect(html).toContain('with its supporting files');
     expect(html.match(/data-image-recommendation/g)).toHaveLength(2);
     // The edit pick is already on disk.
@@ -68,9 +68,9 @@ describe('picture models in the recommendations', () => {
   });
 
   it('names the fit honestly', () => {
-    expect(imageFitText(option({ offloadToCpu: false, fit: 'fits' })).text).toBe('fits');
+    expect(imageFitText(option({ offloadToCpu: false, fit: 'fits' })).text).toBe('Fits');
     expect(imageFitText(option({ offloadToCpu: false, fit: 'fits' })).title).toContain('estimate');
-    expect(imageFitText(option({ fit: 'fits' })).text).toBe('fits with offload');
+    expect(imageFitText(option({ fit: 'fits' })).text).toBe('Fits with offload');
   });
 
   it('turns on offload only for a model the recommendations say needs it, and only once', () => {

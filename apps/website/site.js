@@ -190,6 +190,7 @@
 
     function renderMenu() {
       menu.textContent = '';
+      const src = root.dataset.dlSource || 'section'; // hero or section
       const current = chosen();
       let wrote = false;
       for (const key of OS_ORDER) {
@@ -205,6 +206,8 @@
           a.href = urlFor(b) || RELEASES;
           a.setAttribute('role', 'menuitem');
           if (b === current) a.setAttribute('aria-current', 'true');
+          // cta slug: <src>-download-item-<os>-<fmt>-<arch>, e.g. hero-download-item-win-exe-x64
+          a.setAttribute('data-cta', `${src}-download-item-${b.os}-${b.fmt.replace(/^\./, '')}-${b.arch}`);
           a.innerHTML =
             `<span class="dl-fmt">${b.fmt}</span><span class="dl-hint">${b.hint}</span>`;
           menu.appendChild(a);
@@ -220,6 +223,7 @@
       all.className = 'dl-item';
       all.href = RELEASES;
       all.setAttribute('role', 'menuitem');
+      all.setAttribute('data-cta', `${src}-download-all-releases`);
       all.innerHTML = `<span class="dl-fmt">All downloads</span><span class="dl-hint">GitHub Releases</span>`;
       menu.appendChild(all);
     }
@@ -566,12 +570,18 @@
   const look = stage.querySelector('.np-look');
   const bubble = stage.querySelector('[data-bubble]');
   const note = form.querySelector('#beta-note');
+  const askEmail = form.querySelector('.beta-ask');
+  const askName = form.querySelector('[data-beta-name]');
+  const nameInput = askName.querySelector('input');
+  const done = form.querySelector('.beta-done');
+  let body = null; // the saved signup, re-sent with the name in step two
   const lines = {
     idle: "Psst… want to see what's next?",
     watching: 'Ooh, keep going…',
     eager: 'Do it, do it!',
     confused: 'Hmm, that email looks a bit off.',
     celebrate: "Yay! You're in!",
+    name: 'Saved! What should I call you?',
   };
   let mood = 'idle';
   const setMood = (m) => {
@@ -602,8 +612,23 @@
     setTimeout(() => peek.classList.remove('blink'), 160);
   }, 3800);
 
+  const finish = () => {
+    askName.hidden = true;
+    done.hidden = false;
+    bubble.textContent = lines.celebrate;
+  };
+  form.querySelector('[data-beta-skip]').addEventListener('click', finish);
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (body) {
+      // Step two. The API fills in a name on the existing signup; a failure here
+      // loses nothing, since the email was saved in step one.
+      const name = nameInput.value.trim();
+      if (name) fetch(form.dataset.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ ...body, name }) }).catch(() => {});
+      finish();
+      return;
+    }
     if (!input.checkValidity()) { setMood('confused'); input.focus(); return; }
     const endpoint = form.dataset.endpoint;
     if (!endpoint) {
@@ -620,7 +645,7 @@
       const v = params.get(key);
       if (v) utm[key] = v;
     }
-    const body = {
+    const signup = {
       email: input.value.trim(),
       list: 'beta',
       source: location.pathname,
@@ -628,14 +653,12 @@
       website: form.elements.website?.value || '',
       // Product updates are their own unticked choice; the API records which policy text was agreed to.
       marketing: Boolean(form.elements.marketing?.checked),
-      policyVersion: '2026-11-03',
+      policyVersion: '2026-11-08',
     };
-    const name = form.elements.name?.value.trim();
-    if (name) body.name = name;
     button.disabled = true;
     let res;
     try {
-      res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body) });
+      res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(signup) });
     } catch (err) {
       res = null;
     }
@@ -654,10 +677,13 @@
       peek.dataset.mood = mood = 'confused';
       return;
     }
+    body = signup;
     look.removeAttribute('transform');
     setMood('celebrate');
-    form.querySelector('.beta-ask').hidden = true;
-    form.querySelector('.beta-done').hidden = false;
+    bubble.textContent = lines.name;
+    askEmail.hidden = true;
+    askName.hidden = false;
+    nameInput.focus();
   });
 
   // ---- the tour video beside the form. Its file follows the look (dark files

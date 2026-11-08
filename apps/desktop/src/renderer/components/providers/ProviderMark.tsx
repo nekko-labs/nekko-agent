@@ -31,8 +31,10 @@ export function providerColor(kind: ProviderSetupKind): string {
   return MARKS[kind]?.color ?? '#485064';
 }
 
-export function ProviderMark({ kind, tile = false }: { kind: ProviderSetupKind; tile?: boolean }) {
+export function ProviderMark({ kind, tile = false, inline = false }: { kind: ProviderSetupKind; tile?: boolean; inline?: boolean }) {
   const mark = MARKS[kind];
+  // Inline, the logo takes the text's colour; a custom endpoint has no logo and shows nothing.
+  if (inline) return mark ? <span className="provider-mark-inline" style={{ ['--mark' as string]: `url(./providers/${mark.icon}.svg)` }} data-provider-mark={mark.icon} aria-hidden="true" /> : null;
   return <span className={`provider-mark${tile ? ' provider-mark-tile' : ''}`} style={tile ? { background: providerColor(kind) } : undefined} aria-hidden="true">
     {mark ? <img src={`./providers/${mark.icon}.svg`} alt="" width="22" height="22" /> : <span>↗</span>}
   </span>;
