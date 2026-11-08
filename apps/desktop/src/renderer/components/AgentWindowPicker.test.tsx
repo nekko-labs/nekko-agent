@@ -268,12 +268,13 @@ describe('AgentWindowPicker', () => {
     expect(view.onAdd).toHaveBeenLastCalledWith({ kind: 'chat', refId: 'chat-1', chatType: 'multimodal' });
   });
 
-  it('creates images but honestly disables planned video', async () => {
+  it('creates distinct Photo and Video sessions without promising a video generator', async () => {
     const view = picker('media');
-    expect(view.button('Video · Planned').props.disabled).toBe(true);
-    expect(view.button('Video · Planned').props.onClick).toBeUndefined();
-    await view.button('Create image session').props.onClick();
+    await view.button('Photo').props.onClick();
     expect(view.onAdd).toHaveBeenCalledWith({ kind: 'chat', chatType: 'image' });
+    await view.button('Video').props.onClick();
+    expect(view.onAdd).toHaveBeenLastCalledWith({ kind: 'chat', chatType: 'video' });
+    expect(view.button('Direct video generation is not connected')).toBe(view.button('Video'));
   });
 
   it('supports new and existing terminals, including exited shells', async () => {

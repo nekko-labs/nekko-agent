@@ -30,3 +30,18 @@ A reply can stop because it reached the model's output cap (`max_tokens`) rather
 - `turnStats.stop` stays `complete`; the transcript text is what says the reply was cut off.
 
 Planned: the OpenAI-compatible, ChatGPT and Ollama providers do not yet report their own length stops (`finish_reason: length` and equivalents).
+
+## Late provider accounting cannot restart a reply
+
+Implemented with regression coverage (#2253): `usage` events enrich an existing
+live run but do not create one, resume a wait, or resurrect a turn after `error`
+or `done`. Claude Code can emit an API error before its final usage totals and
+intentionally not repeat that error. The daemon must not retain an accounting-only
+replay, and the desktop must not adopt it as a new empty “Working” reply. Active
+usage accumulation, the finished transcript handoff, and genuine subsequent
+progress still work. This changes no provider billing or persisted usage logging.
+
+Verification: focused daemon/desktop regressions and a hidden synthetic desktop
+journey compare the unchanged base with the fix. The exact reported conversation
+and real multi-device sync are unverified; this finding does not establish that
+sync caused the report. Rejected-send and event-lag recovery are separate scope.

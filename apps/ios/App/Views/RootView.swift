@@ -121,6 +121,7 @@ struct RootView: View {
                 guard let id else { return }
                 // A `?listen=1` for another chat is stale once this one opens.
                 if app.listenIn != id { app.listenIn = nil }
+                if app.alwaysAllowIn?.chatId != id { app.alwaysAllowIn = nil }
                 open(.chat(id))
                 app.openChat = nil
             }

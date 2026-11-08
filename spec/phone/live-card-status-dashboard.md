@@ -39,7 +39,7 @@ The goals are retained, not all proven met: no-app voice has an implemented but 
 - Building, Need input and Done count columns, including zero. Building includes non-code work, not just compilation.
 - Secondary Watching and Failed counts when nonzero; failures are not Done. Stale status takes precedence over optional detail. Legacy clipped payloads show a partial-count warning, not guessed totals.
 - Primary accent-filled **Talk to Nekko** on iOS 18+, secondary **Open app** to the chat list. On iOS 17 the primary label is **Open app for voice**, also opening the list without automatic capture.
-- No default chat rows, elapsed timers, Allow/Deny/Stop strip or close celebration. Those actions remain in the app, not in the voice dispatcher.
+- No default chat rows, elapsed timers, Allow/Deny/Stop strip or close celebration. Those actions remain in the app, not in the voice dispatcher. Main's notification “Always allow this tool” deep link and authenticated in-app approval handler remain available; this does not add an approval strip to the dashboard.
 - Android adapts counts to its ongoing notification/Live Update, with Talk to Nekko first and Open app second. Android owns action styling; notification actions are not an iOS-style custom card.
 
 ## Count correctness and scope

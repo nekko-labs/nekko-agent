@@ -30,6 +30,19 @@ struct LiveCardView: View {
         return c.url!
     }
 
+    /// "Always allow this tool" (an MCP tool only): open the chat, which saves the
+    /// tool for that chat and then allows the call, as its own card does. It
+    /// opens the app because the save is signed with Face ID or the passcode,
+    /// which a Lock Screen button can't do in the background.
+    static func alwaysAllowURL(_ sessionId: String, callId: String) -> URL {
+        var c = URLComponents()
+        c.scheme = "nekko-agent"
+        c.host = "chat"
+        c.path = "/" + sessionId
+        c.queryItems = [URLQueryItem(name: "alwaysAllow", value: callId)]
+        return c.url!
+    }
+
     static func count(_ status: LiveChatState, in state: LiveCardState) -> Int {
         if let counts = state.counts { return max(0, counts[status.rawValue] ?? 0) }
         return state.chats.filter { $0.state == status }.count

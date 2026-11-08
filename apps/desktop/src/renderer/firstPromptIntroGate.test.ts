@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { shouldShowFirstPromptIntro } from './firstPromptIntroGate.js';
 
 const fresh = [{ exchangeCount: 0 }];
-// The zones intro has been seen, so nothing else is waiting to open.
-const ready = { commandWall: { zones: true, zonesIntro: true } };
+const ready = {};
 
 describe('shouldShowFirstPromptIntro', () => {
   it('opens on the first ever new chat', () => {
@@ -17,11 +16,10 @@ describe('shouldShowFirstPromptIntro', () => {
     expect(shouldShowFirstPromptIntro({ cleanStart: true, settings: ready, sessions: [] })).toBe(false);
   });
 
-  it('waits for the zones intro, so two intros never stack', () => {
-    expect(shouldShowFirstPromptIntro({ cleanStart: true, settings: {}, sessions: fresh })).toBe(false);
-    expect(shouldShowFirstPromptIntro({ cleanStart: true, settings: { commandWall: { zones: true } }, sessions: fresh })).toBe(false);
-    // A board that is not in zones has no zones intro to wait for.
-    expect(shouldShowFirstPromptIntro({ cleanStart: true, settings: { commandWall: { zones: false } }, sessions: fresh })).toBe(true);
+  it('waits for first-run setup, so it never stacks on the wizard', () => {
+    expect(shouldShowFirstPromptIntro({ cleanStart: true, settings: ready, sessions: fresh, setupOpen: true })).toBe(false);
+    // The zones tour opens only on picking Multi-agent, so a board in zones does not hold it back.
+    expect(shouldShowFirstPromptIntro({ cleanStart: true, settings: { commandWall: { zones: true } } as never, sessions: fresh })).toBe(true);
   });
 
   it('never opens once seen or skipped', () => {
