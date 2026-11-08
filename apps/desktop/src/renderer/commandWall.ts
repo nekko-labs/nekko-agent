@@ -50,24 +50,7 @@ export const MONITORS: Array<{ key: MonitorKey; label: string; blurb: string }> 
   { key: 'utilization', label: 'Utilization', blurb: 'Tokens and model usage' },
   { key: 'budget', label: 'Budget', blurb: 'Monthly spend against your advisory budget' },
   { key: 'automations', label: 'Automations', blurb: 'Scheduled and running automations' },
-  { key: 'insights', label: 'Insights', blurb: 'Usage trends and optimization tips' },
 ];
-
-export type InsightPanel = 'vitals' | 'optimize' | 'cost' | 'tokens' | 'models' | 'replies' | 'services';
-
-export const INSIGHT_PANELS: Array<{ key: InsightPanel; label: string; blurb: string }> = [
-  { key: 'vitals', label: 'Vitals', blurb: 'Agents working, waiting on you, automations, terminals, tokens and spend' },
-  { key: 'optimize', label: 'Optimize tips', blurb: 'Ways to cut token spend, from your own usage' },
-  { key: 'cost', label: 'Cost', blurb: 'This month, the projection, daily spend and the top agents' },
-  { key: 'tokens', label: 'Tokens over time', blurb: 'Input and output tokens, day by day' },
-  { key: 'models', label: 'By model', blurb: 'Tokens and cost per model' },
-  { key: 'replies', label: 'Replies', blurb: 'How replies end and how many tool steps they take' },
-  { key: 'services', label: 'Services', blurb: 'Providers, MCP servers and the remote relay, with live status' },
-];
-
-export interface InsightsPrefs {
-  panels: Record<InsightPanel, boolean>;
-}
 
 export type ComposerSide = 'top' | 'bottom';
 export type ComposerAlign = 'left' | 'center' | 'right';
@@ -115,7 +98,6 @@ export interface CommandWallState {
   /** New chats (including spawned sub-agents) join the wall as they appear. */
   autoAdd: boolean;
   filter: WallFilter;
-  insights: InsightsPrefs;
   /** Chats created after this moment are auto-added; 0 until the wall has been seeded once. */
   watermark: number;
   composer: ComposerDock;
@@ -150,10 +132,6 @@ export const NARROW_ROW_H = 440;
 /** The stage's shape when nothing has measured it yet: a typical landscape window. */
 export const DEFAULT_ASPECT = 1.7;
 
-export const DEFAULT_INSIGHTS: InsightsPrefs = {
-  panels: { vitals: true, optimize: true, cost: true, tokens: false, models: false, replies: false, services: false },
-};
-
 export const DEFAULT_WALL_STATE: CommandWallState = {
   layout: DEFAULT_WALL_LAYOUT,
   dock: DEFAULT_MONITORS_DOCK,
@@ -162,7 +140,6 @@ export const DEFAULT_WALL_STATE: CommandWallState = {
   root: null,
   autoAdd: true,
   filter: 'all',
-  insights: DEFAULT_INSIGHTS,
   watermark: 0,
   composer: DEFAULT_COMPOSER_DOCK,
   tabs: 'top',
@@ -601,10 +578,13 @@ function sanitize(node: unknown, reserve: (id: string) => void, dock: MonitorsDo
     reserve(n.id);
     return { id: n.id, dir: n.dir, children, sizes: sizes.map((s) => s / sum) };
   }
-  if (n.kind === 'automations' || n.kind === 'insights') {
-    dock.monitors[n.kind] = true;
+  // An old wall's Automations window becomes the Automations monitor; its
+  // Insights window is dropped with the retired Insights monitor.
+  if (n.kind === 'automations') {
+    dock.monitors.automations = true;
     return null;
   }
+  if (n.kind === 'insights') return null;
   const zone = {
     ...(typeof n.zone === 'string' && n.zone ? { zone: n.zone } : {}),
     ...(Number.isInteger(n.tint) && (n.tint as number) >= 0 && (n.tint as number) < ZONE_TINTS ? { tint: n.tint as number } : {}),
@@ -696,13 +676,6 @@ function readWatermark(raw: unknown): number {
   return typeof raw === 'number' && Number.isFinite(raw) && raw >= 0 ? raw : 0;
 }
 
-function readPanels(raw: unknown): InsightsPrefs {
-  const panels = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  const out = { ...DEFAULT_INSIGHTS.panels };
-  for (const key of Object.keys(out) as InsightPanel[]) if (typeof panels[key] === 'boolean') out[key] = panels[key] as boolean;
-  return { panels: out };
-}
-
 /**
  * The grid this wall replaced kept a flat list of cells; the first run after
  * the change tiles them so nobody's wall starts over; its panels move to the Monitors dock.
@@ -716,7 +689,6 @@ export function migrateGridState(saved: unknown): CommandWallState | null {
   const root = tileTree(cells.map((c) => wallPane(c.kind, c.refId)));
   const dock = sanitizeMonitorsDock(undefined);
   dock.monitors.automations = g.insights?.show !== false;
-  dock.monitors.insights = g.insights?.show !== false;
   return {
     ...DEFAULT_WALL_STATE,
     layout: sanitizeWallLayout(undefined),
@@ -725,7 +697,6 @@ export function migrateGridState(saved: unknown): CommandWallState | null {
     root,
     autoAdd: typeof g.autoAdd === 'boolean' ? g.autoAdd : true,
     filter: 'all',
-    insights: readPanels(g.insights?.panels),
     watermark: readWatermark(g.watermark),
     composer: DEFAULT_COMPOSER_DOCK,
   };
@@ -761,7 +732,6 @@ export function loadWallState(storage: Pick<Storage, 'getItem'> | undefined, set
       // The Agents/Terminals filter left the toolbar (2026-10-17), so a wall
       // saved while filtered would hide windows with no way to show them.
       filter: 'all',
-      insights: readPanels(record(saved.insights).panels),
       watermark: readWatermark(saved.watermark),
       composer: readDock(saved.composer),
       tabs: saved.tabs === 'left' || saved.tabs === 'hidden' ? saved.tabs : 'top',
@@ -786,7 +756,7 @@ export function saveWallState(storage: Pick<Storage, 'setItem'> | undefined, sta
 
 /** The wall as the setting stores it: the same fields, typed loosely for the shared schema. */
 export function toWallSetting(state: CommandWallState): CommandWallSetting {
-  return { layout: state.layout, dock: state.dock, hero: state.hero, folded: state.folded, root: state.root, autoAdd: state.autoAdd, filter: state.filter, insights: state.insights, watermark: state.watermark, composer: state.composer, tabs: state.tabs, agentPanel: state.agentPanel, snap: !!state.snap, zones: !!state.zones, activeZone: state.activeZone ?? null, zonesIntro: !!state.zonesIntro };
+  return { layout: state.layout, dock: state.dock, hero: state.hero, folded: state.folded, root: state.root, autoAdd: state.autoAdd, filter: state.filter, watermark: state.watermark, composer: state.composer, tabs: state.tabs, agentPanel: state.agentPanel, snap: !!state.snap, zones: !!state.zones, activeZone: state.activeZone ?? null, zonesIntro: !!state.zonesIntro };
 }
 
 /* ---------- the ribbon ---------- */

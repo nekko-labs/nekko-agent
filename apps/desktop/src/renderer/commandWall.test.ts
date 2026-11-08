@@ -322,18 +322,18 @@ describe('persistence', () => {
     const loaded = loadWallState(storage);
     expect(allPanes(loaded.root).map((p) => `${p.kind}:${p.refId}`)).toEqual(['chat:a', 'terminal:t']);
     expect(loaded.dock.monitors.automations).toBe(true);
-    expect(loaded.dock.monitors.insights).toBe(true);
+    // Its insights box had no monitor to become once Insights retired (2026-11-09).
+    expect(loaded.dock.monitors).not.toHaveProperty('insights');
     expect(loaded.autoAdd).toBe(false);
     // The filter control is gone, so a saved filter would hide windows for good.
     expect(loaded.filter).toBe('all');
-    expect(loaded.insights.panels.models).toBe(true);
+    expect(loaded).not.toHaveProperty('insights');
     expect(loaded.watermark).toBe(77);
   });
   it('leaves the panels out when the grid had hidden its insights box', () => {
     const migrated = migrateGridState({ cells: [{ kind: 'chat', refId: 'a' }], insights: { show: false } });
     expect(allPanes(migrated!.root).map((p) => p.kind)).toEqual(['chat']);
     expect(migrated!.dock.monitors.automations).toBe(false);
-    expect(migrated!.dock.monitors.insights).toBe(false);
   });
   it('tolerates a damaged entry and an unknown kind', () => {
     const storage = memory();
@@ -393,8 +393,8 @@ describe('wall preferences and panel migration', () => {
     expect(MONITORS.map(p => p.key)).toEqual(Object.keys(DEFAULT_MONITORS_DOCK.monitors));
     expect(DEFAULT_MONITORS_DOCK).toEqual({ side: 'right', show: true, simpleShow: false,
       monitorOrder: MONITORS.map(p => p.key),
-      minimized: { automations: false, utilization: false, budget: false, insights: false, hardware: false, localModels: false },
-      monitors: { automations: true, utilization: true, budget: true, insights: false, hardware: true, localModels: true } });
+      minimized: { automations: false, utilization: false, budget: false, hardware: false, localModels: false },
+      monitors: { automations: true, utilization: true, budget: true, hardware: true, localModels: true } });
     expect(DEFAULT_WALL_STATE.hero).toBeNull();
     expect(DEFAULT_WALL_STATE.folded).toEqual({});
   });
@@ -404,7 +404,7 @@ describe('wall preferences and panel migration', () => {
     expect(sanitizeWallLayout({ mode: 'focus', cols: 2.6, rows: 1.2, fixedGrid: 'yes' })).toEqual({ mode: 'focus', cols: 3, rows: 1, fixedGrid: false });
     expect(sanitizeWallLayout({ mode: 'other', cols: Infinity, rows: '4' })).toEqual(DEFAULT_WALL_LAYOUT);
     expect(sanitizeMonitorsDock({ side: 'other', show: 0, minimized: 'yes', panels: { insights: true, budget: false, vitals: true, hardware: 0, alien: true } }))
-      .toEqual({ ...DEFAULT_MONITORS_DOCK, monitors: { ...DEFAULT_MONITORS_DOCK.monitors, insights: true, budget: false } });
+      .toEqual({ ...DEFAULT_MONITORS_DOCK, monitors: { ...DEFAULT_MONITORS_DOCK.monitors, budget: false } });
     for (const side of ['right', 'left', 'top', 'bottom']) expect(sanitizeMonitorsDock({ side }).side).toBe(side);
     for (const watermark of [-1, '10', null]) expect(restore({ watermark }).watermark).toBe(0);
     const state = restore({ autoAdd: 'false', hero: 42, folded: { a: true, b: false, c: 1, '': true } });
@@ -415,8 +415,8 @@ describe('wall preferences and panel migration', () => {
     expect(sanitizeMonitorsDock([])).toEqual(DEFAULT_MONITORS_DOCK);
   });
   it('reads docks saved before monitors were renamed from panels', () => {
-    const legacy = sanitizeMonitorsDock({ panels: { insights: true, budget: false }, panelOrder: ['budget', 'hardware'] });
-    expect(legacy.monitors).toEqual({ ...DEFAULT_MONITORS_DOCK.monitors, insights: true, budget: false });
+    const legacy = sanitizeMonitorsDock({ panels: { automations: false, budget: false }, panelOrder: ['budget', 'hardware'] });
+    expect(legacy.monitors).toEqual({ ...DEFAULT_MONITORS_DOCK.monitors, automations: false, budget: false });
     expect(legacy.monitorOrder?.slice(0, 2)).toEqual(['budget', 'hardware']);
     expect(legacy).not.toHaveProperty('panels');
     expect(legacy).not.toHaveProperty('panelOrder');
@@ -426,7 +426,8 @@ describe('wall preferences and panel migration', () => {
   it('sanitizes minimization independently for known monitors without mutating defaults', () => {
     const minimized = { utilization: true, budget: false, insights: true, hardware: 1, alien: true };
     const dock = sanitizeMonitorsDock({ panels: { utilization: false }, minimized });
-    expect(dock.minimized).toEqual({ ...DEFAULT_MONITORS_DOCK.minimized, utilization: true, insights: true });
+    // The retired Insights monitor drops out with the unknown keys.
+    expect(dock.minimized).toEqual({ ...DEFAULT_MONITORS_DOCK.minimized, utilization: true });
     expect(dock.monitors.utilization).toBe(false);
     expect(dock.minimized).not.toBe(DEFAULT_MONITORS_DOCK.minimized);
     dock.minimized.automations = true;
@@ -444,22 +445,21 @@ describe('wall preferences and panel migration', () => {
     expect(refs(state.root)).toEqual(['a', 'b']);
     expect(loadWallState(undefined, toWallSetting(state))).toEqual(state);
   });
-  it('removes old panel leaves, enables their dock flags and preserves relative sizes', () => {
+  it('removes old panel leaves, enables the Automations monitor and preserves relative sizes', () => {
     const saved = { root: { id: 'split_c', dir: 'row', children: [a,
       { id: 'pane_d', kind: 'automations', refId: 'automations' }, b,
       { id: 'pane_e', kind: 'insights', refId: 'insights' }], sizes: [0.2, 0.3, 0.4, 0.1] },
-      dock: { show: false, monitors: { automations: false, insights: false } } };
+      dock: { show: false, monitors: { automations: false } } };
     const state = restore(saved);
     expect(state.root).toMatchObject({ id: 'split_c', dir: 'row', children: [a, b] });
     if (!state.root || !isSplit(state.root)) throw new Error('Expected split');
     expect(state.root.sizes[0]).toBeCloseTo(1 / 3);
     expect(state.root.sizes[1]).toBeCloseTo(2 / 3);
     expect(state.dock.monitors.automations).toBe(true);
-    expect(state.dock.monitors.insights).toBe(true);
+    expect(state.dock.monitors).not.toHaveProperty('insights');
     expect(state.dock.show).toBe(false);
-    expect(saved.dock.monitors.insights).toBe(false);
+    expect(saved.dock.monitors.automations).toBe(false);
     expect(loadWallState(undefined, toWallSetting(state))).toEqual(state);
-    expect(DEFAULT_MONITORS_DOCK.monitors.insights).toBe(false);
   });
   it('collapses panel-only branches without changing intact nested trees', () => {
     const nested = { id: 'split_f', dir: 'col', children: [a, b], sizes: [0.25, 0.75] };
