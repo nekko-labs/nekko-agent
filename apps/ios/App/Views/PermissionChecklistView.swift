@@ -50,8 +50,6 @@ struct PermissionChecklistView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .accessibilityIdentifier("permissions.continue")
-                    Text("Optional permissions can wait.")
-                        .font(.caption).foregroundStyle(palette.inkSoft)
                 }
                 .frame(maxWidth: 680)
                 .padding(.horizontal, 20).padding(.vertical, 12)
@@ -96,7 +94,7 @@ struct PermissionChecklistView: View {
         let state = permissions.status(item)
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                Image(systemName: item.icon).font(.title3).foregroundStyle(palette.accent)
+                Image(systemName: item.icon).font(.system(size: 20)).foregroundStyle(palette.accent)
                     .frame(width: 28, height: 28).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.title).font(.headline).foregroundStyle(palette.ink)
