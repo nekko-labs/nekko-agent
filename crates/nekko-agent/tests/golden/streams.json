@@ -3789,6 +3789,719 @@
     ],
     "onHeaders": []
   },
+  "ol-tools-model-cant": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b",
+          "stream": true,
+          "options": {
+            "temperature": 0.2,
+            "num_predict": 2048
+          },
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a coding agent.\nBe terse."
+            },
+            {
+              "role": "user",
+              "content": "List the files."
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b"
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "qwen3-coder-30b can't use tools, and chats in Nekko Agent need them. Pick a model whose Ollama capabilities include tools. (Ollama: \"qwen3-coder-30b\" does not support tools (400))"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-model-can": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b",
+          "stream": true,
+          "options": {
+            "temperature": 0.2,
+            "num_predict": 2048
+          },
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a coding agent.\nBe terse."
+            },
+            {
+              "role": "user",
+              "content": "List the files."
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b"
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "Ollama: \"qwen3-coder-30b\" does not support tools (400)"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-capabilities-missing": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b",
+          "stream": true,
+          "options": {
+            "temperature": 0.2,
+            "num_predict": 2048
+          },
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a coding agent.\nBe terse."
+            },
+            {
+              "role": "user",
+              "content": "List the files."
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b"
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "Ollama: \"qwen3-coder-30b\" does not support tools (400)"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-show-404": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b",
+          "stream": true,
+          "options": {
+            "temperature": 0.2,
+            "num_predict": 2048
+          },
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a coding agent.\nBe terse."
+            },
+            {
+              "role": "user",
+              "content": "List the files."
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b"
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "Ollama: \"qwen3-coder-30b\" does not support tools (400)"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-show-network-error": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b",
+          "stream": true,
+          "options": {
+            "temperature": 0.2,
+            "num_predict": 2048
+          },
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a coding agent.\nBe terse."
+            },
+            {
+              "role": "user",
+              "content": "List the files."
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b"
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "Ollama: \"qwen3-coder-30b\" does not support tools (400)"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-chat-ok-no-show": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-coder-30b",
+          "stream": true,
+          "options": {
+            "temperature": 0.2,
+            "num_predict": 2048
+          },
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a coding agent.\nBe terse."
+            },
+            {
+              "role": "user",
+              "content": "List the files."
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "text",
+          "delta": "Rayleigh."
+        },
+        {
+          "type": "usage",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "outputMs": 1
+        },
+        {
+          "type": "done"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-empty-no-show": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "m",
+          "stream": true,
+          "options": {
+            "temperature": 0.7
+          },
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a coding agent."
+            },
+            {
+              "role": "user",
+              "content": "Do the thing"
+            },
+            {
+              "role": "user",
+              "content": "You kept repeating tool calls. Answer now."
+            }
+          ],
+          "tools": []
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "Ollama: \"m\" does not support tools (400)"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-and-think-model-can": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-8b"
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-8b",
+          "stream": true,
+          "options": {
+            "temperature": 0.7
+          },
+          "think": true,
+          "messages": [
+            {
+              "role": "user",
+              "content": "Why is the sky blue?"
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "text",
+          "delta": "Rayleigh."
+        },
+        {
+          "type": "usage",
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "outputMs": 1
+        },
+        {
+          "type": "done"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
+  "ol-tools-and-think-model-cant": {
+    "requests": [
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-8b"
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/chat",
+        "headers": {},
+        "body": {
+          "model": "qwen3-8b",
+          "stream": true,
+          "options": {
+            "temperature": 0.7
+          },
+          "messages": [
+            {
+              "role": "user",
+              "content": "Why is the sky blue?"
+            }
+          ],
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "read_file",
+                "description": "Read a file from the workspace.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "description": "Run a shell command.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string"
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "default": 120
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      {
+        "method": "POST",
+        "url": "http://localhost:11434/api/show",
+        "headers": {},
+        "body": {
+          "model": "qwen3-8b"
+        }
+      }
+    ],
+    "chunks": [
+      [
+        {
+          "type": "error",
+          "message": "qwen3-8b can't use tools, and chats in Nekko Agent need them. Pick a model whose Ollama capabilities include tools. (Ollama: \"qwen3-8b\" does not support tools (400))"
+        }
+      ]
+    ],
+    "onHeaders": []
+  },
   "openai-cache-on": {
     "requests": [
       {

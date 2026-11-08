@@ -21,6 +21,8 @@ We care about three things:
 - **Take it with you.** Pair your phone to drive the agent on your computer from anywhere, end-to-end encrypted.
 - **Plug it into your tools.** Use it from the terminal, or as an MCP server inside Claude Code, Codex, Cursor and other agents.
 
+**Find a feature by what you want to do:** the [feature guide](/docs/features) maps local models, file recovery, memory, approvals, automation and MCP to setup instructions and honest limits.
+
 ## Install the app
 
 The quickest way to start is the installer.
@@ -43,6 +45,12 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 ## Returning to the latest message
 
 When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
+
+## Recovering file edits
+
+Use the chat's **Changes** view to compare native text-tool edits, keep them or revert them. New source builds can retain the saved chat's original text across restart and validate up to 100 ordered replacements before writing. Incognito originals remain memory-only; accepting a change discards its baseline.
+
+See [File recovery and batch edits](/docs/file-recovery) for availability, the exact tool-call example, privacy and storage limits. This is not whole-workspace backup, binary-perfect restoration or protection from concurrent external writers. Keep version control and backups for important work.
 
 ## Reviewing visual changes
 
