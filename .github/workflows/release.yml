@@ -11,9 +11,19 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
   # Dispatched at a tag by version-release.yml (a tag pushed with GITHUB_TOKEN
   # can't trigger the push event above), and usable by hand to re-run a release
-  # for an existing tag. Run it with `--ref v1.2.3` so `github.ref_name` is the
-  # tag, which is what every step below reads.
+  # for an existing tag. Use --ref v1.2.3 for tag-local tooling, or
+  # --ref main -f release_tag=v1.2.3 for current tooling and immutable tag source.
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing immutable tag to rebuild with current tooling (desktop only)'
+        required: false
+        type: string
+
+# Recovery runs use current workflow/tooling but check out application code from
+# the existing tag. They do not re-publish npm packages or reserve a new version.
+env:
+  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -37,7 +47,27 @@ jobs:
       # macOS certificate above.
       AZURE_SIGNING_CLIENT_ID: ${{ secrets.AZURE_SIGNING_CLIENT_ID }}
     steps:
+      - name: Validate release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo 'Expected a full existing release tag.' >&2; exit 1; }
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+      - name: Record immutable application source
+        shell: bash
+        run: |
+          echo "Application tag: $RELEASE_TAG"
+          git rev-parse HEAD
+      - name: Check out release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+          sparse-checkout: scripts/release-electron.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       # A tagged release that is *partially* configured is the dangerous case:
       # it would publish a signed-but-unnotarized app that Gatekeeper still
@@ -163,13 +193,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "$GITHUB_REF_NAME is not a release tag; run this workflow with --ref vMAJOR.MINOR.PATCH." >&2
+            echo "$RELEASE_TAG is not a release tag; run this workflow with --ref vMAJOR.MINOR.PATCH." >&2
             exit 1
           fi
           npm pkg set "version=$version"
           npm pkg set "version=$version" -w @nekko-agent/desktop -w @nekko-agent/local-web-ui
+      - name: Download and verify official Electron
+        id: electron
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .release-tools/scripts/release-electron.mjs
       - run: npm run build
 
       # Build installers (Windows: NSIS, macOS: dmg/zip, Linux:
@@ -186,6 +221,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_DIST: ${{ steps.electron.outputs.electron_dist }}
           CSC_LINK: ${{ secrets.MACOS_SIGNING_CERTS_P12 }}
           CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
           AZURE_SIGNING_TENANT_ID: ${{ secrets.AZURE_SIGNING_TENANT_ID }}
@@ -235,7 +271,7 @@ jobs:
               echo 'macOS: building UNSIGNED (no Developer ID cert configured).'
             fi
           fi
-          npm run release -w @nekko-agent/desktop -- ${EXTRA[@]+"${EXTRA[@]}"}
+          npm run release -w @nekko-agent/desktop -- "-c.electronDist=$ELECTRON_DIST" ${EXTRA[@]+"${EXTRA[@]}"}
 
       # Sign the update feed electron-builder just published (latest*.yml) with
       # the release signing key and upload `<file>.sig` beside each one; the
@@ -257,7 +293,7 @@ jobs:
           sigs=()
           if [ -n "$out" ]; then mapfile -t sigs <<<"$out"; fi
           if [ "${#sigs[@]}" -gt 0 ]; then
-            gh release upload "$GITHUB_REF_NAME" "${sigs[@]}" --clobber
+            gh release upload "$RELEASE_TAG" "${sigs[@]}" --clobber
           fi
 
       # Only nekko-vm may create VMs (apps/desktop/scripts/sign-mac.cjs): it must
@@ -322,7 +358,7 @@ jobs:
         run: |
           set -euo pipefail
           prerelease=false
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+          if [[ "$RELEASE_TAG" == *-* ]]; then
             prerelease=true
           fi
           # Look the release up by listing rather than via /releases/tags/{tag}.
@@ -330,16 +366,16 @@ jobs:
           # draft, which is exactly what electron-builder just created, so the
           # job could never publish the thing it was written to publish.
           release=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq "map(select(.tag_name == \"$GITHUB_REF_NAME\")) | first")
+            --jq "map(select(.tag_name == \"$RELEASE_TAG\")) | first")
           if [ -z "$release" ] || [ "$release" = "null" ]; then
-            echo "No release found for tag $GITHUB_REF_NAME." >&2
+            echo "No release found for tag $RELEASE_TAG." >&2
             exit 1
           fi
           release_id=$(jq -r '.id' <<<"$release")
           existing_body=$(jq -r '.body // ""' <<<"$release")
           generated_body=$(gh api --method POST \
             "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
-            -f "tag_name=$GITHUB_REF_NAME" \
+            -f "tag_name=$RELEASE_TAG" \
             --jq '.body')
           if [ -n "$existing_body" ]; then
             body=$(printf '%s\n\n%s' "$existing_body" "$generated_body")
@@ -353,6 +389,7 @@ jobs:
 
   publish-cli:
     name: Publish CLI package
+    if: ${{ !inputs.release_tag }}
     # After publish-web: it publishes the @nekko-agent/nekkod-* packages this one pins.
     needs: [release, publish-web]
     runs-on: ubuntu-latest
@@ -377,9 +414,9 @@ jobs:
       - name: Publish the nekko-agent CLI
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag $GITHUB_REF_NAME does not contain a valid npm version." >&2
+            echo "Tag $RELEASE_TAG does not contain a valid npm version." >&2
             exit 1
           fi
           published_version=$(npm view "nekko-agent@$version" version 2>/dev/null || true)
@@ -420,6 +457,7 @@ jobs:
 
   nekkod-npm:
     name: Build nekkod for npm
+    if: ${{ !inputs.release_tag }}
     uses: ./.github/workflows/nekkod-npm.yml
 
   # The self-hosted Local Web UI (`npx nekko-agent-local-web-ui`) and the per-platform
@@ -429,6 +467,7 @@ jobs:
   # a trusted publisher for nekko-agent-local-web-ui and each @nekko-agent/nekkod-* package.
   publish-web:
     name: Publish Local Web UI package
+    if: ${{ !inputs.release_tag }}
     needs: [release, nekkod-npm]
     runs-on: ubuntu-latest
     permissions:
@@ -453,9 +492,9 @@ jobs:
       - name: Publish the nekkod packages, then nekko-agent-local-web-ui
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag $GITHUB_REF_NAME does not contain a valid npm version." >&2
+            echo "Tag $RELEASE_TAG does not contain a valid npm version." >&2
             exit 1
           fi
           provenance=()
