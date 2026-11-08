@@ -13,6 +13,9 @@ export const openFeedback = () => window.dispatchEvent(new Event('nekko:feedback
 
 const FEEDBACK_EMAIL = 'feedback@nekkoagent.com';
 
+/** Screenshot upload is hidden for now; flip this to bring the picker, paste and drop back. */
+const SCREENSHOTS_ENABLED = false;
+
 const PROMPTS: Record<FeedbackKind, { summary: string; description: string; sent: string }> = {
   good: {
     summary: "What's working well?",
@@ -192,7 +195,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     try {
       // Only Needs improvement offers app info and screenshots; anything set before changing to Good stays behind.
       const improving = kind === 'improve';
-      await window.nekko.feedbackSend(feedbackNote(kind, summary, description), improving && includeInfo, improving ? await screenshots.forUpload() : []);
+      await window.nekko.feedbackSend(feedbackNote(kind, summary, description), improving && includeInfo, improving && SCREENSHOTS_ENABLED ? await screenshots.forUpload() : []);
       setDiscarding(false);
       setSent(kind);
     } catch (e) {
@@ -231,13 +234,13 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
 
   const onPaste = (e: React.ClipboardEvent) => {
     const files = [...e.clipboardData.files];
-    if (kind !== 'improve' || !files.length) return;
+    if (!SCREENSHOTS_ENABLED || kind !== 'improve' || !files.length) return;
     e.preventDefault();
     void screenshots.add(files);
   };
 
   const onDrop = (e: React.DragEvent) => {
-    if (kind !== 'improve') return;
+    if (!SCREENSHOTS_ENABLED || kind !== 'improve') return;
     e.preventDefault();
     void screenshots.add([...e.dataTransfer.files]);
   };
@@ -279,7 +282,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
             <div className="mt-3"><ContributeNote /></div>
           </div>
         ) : (
-          <form className="flex min-h-0 flex-col" noValidate onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={e => { if (kind === 'improve') e.preventDefault(); }} onDrop={onDrop} onSubmit={e => { e.preventDefault(); void send(); }}>
+          <form className="flex min-h-0 flex-col" noValidate onKeyDown={onKeyDown} onPaste={onPaste} onDragOver={e => { if (SCREENSHOTS_ENABLED && kind === 'improve') e.preventDefault(); }} onDrop={onDrop} onSubmit={e => { e.preventDefault(); void send(); }}>
             <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-5 pb-5 pt-1">
               <fieldset>
                 <legend className="mb-1 block text-xs font-medium text-ink-soft">What kind of feedback is this?</legend>
@@ -336,7 +339,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                     {showDescriptionProblem && <p id="feedback-description-error" className="mt-1 text-xs text-danger">{descriptionProblem}</p>}
                   </div>
 
-                  {kind === 'improve' && <FeedbackScreenshots {...screenshots} />}
+                  {SCREENSHOTS_ENABLED && kind === 'improve' && <FeedbackScreenshots {...screenshots} />}
 
                   {kind === 'improve' && (
                     <label className="flex items-start justify-between gap-3">

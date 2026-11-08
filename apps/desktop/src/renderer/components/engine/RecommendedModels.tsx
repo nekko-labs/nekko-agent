@@ -230,11 +230,11 @@ export function RecommendationList({
 /** "4.6 GB of 7 GB (estimated)": a picture model's memory is not measured yet, so it says so. */
 export function imageFitText(p: ImageRecommendedOption): { text: string; title: string } {
   if (p.offloadToCpu) {
-    return { text: p.fit === 'fits' ? 'fits with offload' : 'tight, with offload', title: 'Fits only by keeping part of it in system memory (CPU offload), so pictures take longer. Nekko turns that on when a Photo chat first uses it.' };
+    return { text: p.fit === 'fits' ? 'Fits with offload' : 'Tight, with offload', title: 'Fits only by keeping part of it in system memory (CPU offload), so pictures take longer. Nekko turns that on when a Photo chat first uses it.' };
   }
   return p.fit === 'fits'
-    ? { text: 'fits', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: picture models are not measured yet.` }
-    : { text: 'tight fit', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: it should run, with little to spare.` };
+    ? { text: 'Fits', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: picture models are not measured yet.` }
+    : { text: 'Tight fit', title: `Leaves about ${formatBytes(p.headroomBytes)}, by an estimate: it should run, with little to spare.` };
 }
 
 /** One picture task's pick: no speed (none is measured), and its supporting files counted in the download. */

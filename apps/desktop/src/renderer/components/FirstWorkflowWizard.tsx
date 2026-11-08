@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { WorkflowSeed } from './WorkflowEditor.js';
+import { ScheduledTasksDemo } from './ScheduledTasksDemo.js';
 
 export const FIRST_WORKFLOW_CATEGORIES = [
   { id: 'shopping', name: 'Shopping & web browsing', description: 'Let Nekko keep an eye on the pages you care about.', examples: [
@@ -69,7 +70,7 @@ export function FirstWorkflowWizard({ onCreate, onBrowse }: { onCreate: (seed: W
       </ol>
       {!selected ? (
         <>
-          <VideoPlaceholder title="See what you can automate" />
+          <ScheduledTasksDemo />
           <h2 className="mt-6 text-base font-semibold">What would you like help with?</h2>
           <p className="mt-1 text-xs text-ink-faint">Expand a category to explore ideas and upcoming video examples.</p>
           <div className="mt-3 space-y-2">

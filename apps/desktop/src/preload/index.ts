@@ -30,6 +30,7 @@ import { MAIN_EVENTS } from './routing.js';
 import { withStepUpRetry, type StepUpHandler } from '../stepUpRetry.js';
 import { WEBAUTHN_CEREMONY_CHANNEL } from '../webauthnCeremony.js';
 import {
+  DEEP_LINKS_READY_CHANNEL,
   PAGE_RELOADING_EVENT,
   TITLEBAR_HEIGHT,
   TITLEBAR_OVERLAY_CHANNEL,
@@ -617,6 +618,7 @@ if (process.env.NEKKO_PRESENTER === '1') {
 const chrome: WindowChromeBridge = {
   serviceControl: (action) => ipcRenderer.invoke(SERVICE_CONTROL_CHANNEL, action),
   reportNotificationVisibility: report => { if (process.isMainFrame) ipcRenderer.send(NOTIFICATION_VISIBILITY_CHANNEL, report); },
+  deepLinksReady: () => { if (process.isMainFrame) ipcRenderer.send(DEEP_LINKS_READY_CHANNEL); },
   platform: process.platform,
   titleBarHeight: TITLEBAR_HEIGHT,
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => ipcRenderer.send(TITLEBAR_OVERLAY_CHANNEL, theme),

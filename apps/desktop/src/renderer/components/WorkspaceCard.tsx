@@ -15,6 +15,7 @@ import { COMPLETION_ROW_ATTR, completeWithExit } from '../completionExit.js';
 import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
 import { SessionPrChip } from './SessionPrChip.js';
+import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { wakeSourcesOf } from '../views/agentPanelView.js';
 
 /**
@@ -229,7 +230,9 @@ function WorkspaceCardImpl({
   const liveCtxEstimate = useStore((s) => (session ? s.sessionCtxEstimate[session.id] : undefined));
   const compacting = useCompactionStore((s) => (session ? s.bySession[session.id]?.state === 'running' : false));
   const computer = useComputerOf(session?.id);
-  const computersShown = useShown('computers', { computers: !!computer });
+  // Once a second computer is connected, every chat card names where it runs, this one included.
+  const anyComputer = useStore((s) => s.computers.length > 0);
+  const computersShown = useShown('computers', { computers: anyComputer });
   const remoteProviders = useStore((s) => (computer ? s.computerCatalogs[computer.id]?.providers : undefined));
   const provider = (remoteProviders ?? providers).find((p) => p.id === session?.providerId);
 
@@ -283,13 +286,14 @@ function WorkspaceCardImpl({
       ? terminal.shell.split(/[\\/]/).pop() || terminal.shell
       : 'Shell';
 
-  const computerLine = showComputer && computersShown && !!computer;
-  const modelLine = showModel || (showContext && isChat && (ctxUsed > 0 || compacting)) || (showPullRequests && !!terminal && !!terminalPrUrl(terminal));
+  const computerShown = showComputer && computersShown && isChat;
+  const providerKind = showModel && provider && session?.chatType !== 'image' ? providerMarkKind(provider) : undefined;
+  const modelLine = computerShown || showModel ||(showContext && isChat && (ctxUsed > 0 || compacting)) || (showPullRequests && !!terminal && !!terminalPrUrl(terminal));
   const spawnLine = (showSubagents && subAgentCount > 0) || (showWindows && windows > 1);
   // The PR chip rides the end of the card's last line: its bottom right.
-  const prLine: 'title' | 'model' | 'computer' | 'git' | 'spawn' = !showMetadata
+  const prLine: 'title' | 'model' | 'git' | 'spawn' = !showMetadata
     ? 'title'
-    : spawnLine ? 'spawn' : showGit && git ? 'git' : computerLine ? 'computer' : modelLine ? 'model' : 'title';
+    : spawnLine ? 'spawn' : showGit && git ? 'git' : modelLine ? 'model' : 'title';
   const prChip = (line: typeof prLine) =>
     showPullRequests && prs.length > 0 && prLine === line ? <span className="ml-auto inline-flex shrink-0 pl-1 text-2xs leading-[15px]"><SessionPrChip prs={prs} /></span> : null;
 
@@ -361,14 +365,17 @@ function WorkspaceCardImpl({
 
       {terminalView && <div className="mt-0.5 truncate pl-3 text-2xs leading-[15px]" style={{ color: terminalView.tone }} title={terminalView.detail || terminalView.status}>{terminalView.status}{showMetadata && terminalView.detail ? ` · ${terminalView.detail}` : ''}</div>}
 
-      {/* Line 2: what is running it: the model, then how full the context
-          window is. Where it comes from is in the tooltip, not a line of its own. */}
+      {/* Line 2: where and what is running it: the computer (once there is
+          more than one), the provider's logo and the model, then how full the
+          context window is. The provider's name is in the tooltip. */}
       {showMetadata && <>
       {modelLine && <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
+        {computerShown && <ComputerChip computer={computer} dim={!!computer && computer.state !== 'online'} showIcon={showComputerIcons} />}
+        {computerShown && showModel && <span aria-hidden>·</span>}
         {showModel && <Fact
           grow
           tone={isChat ? 'var(--accent-2)' : 'var(--success)'}
-          icon={isChat ? undefined : <TerminalIcon className="h-2.5 w-2.5 shrink-0" />}
+          icon={isChat ? providerKind && <ProviderMark kind={providerKind} inline /> : <TerminalIcon className="h-2.5 w-2.5 shrink-0" />}
           title={`${provider ? `${provider.label} / ` : ''}${session?.modelId ?? model}`}
         >
           {model}
@@ -395,13 +402,6 @@ function WorkspaceCardImpl({
         )}
         {prChip('model')}
       </div>}
-
-      {showComputer && computersShown && computer && (
-        <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
-          <ComputerChip computer={computer} dim={computer.state !== 'online'} showIcon={showComputerIcons} />
-          {prChip('computer')}
-        </div>
-      )}
 
       {/* Line 3: its git position. The project is the group heading the card
           sits under, so the card does not repeat it. */}

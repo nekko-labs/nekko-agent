@@ -90,6 +90,7 @@ let webviewGuarded = false;
 /** True once the engine has been stopped for quit, so the second quit goes through. */
 let engineStopped = false;
 import {
+  DEEP_LINKS_READY_CHANNEL,
   PAGE_RELOADING_EVENT,
   RELOAD_FADE_MS,
   TITLEBAR_HEIGHT,
@@ -145,6 +146,14 @@ const PROTOCOLS = ['nekko-agent'] as const;
  */
 let pendingLink: string | null = null;
 
+/**
+ * The main window's page has said it is listening for links
+ * (`DEEP_LINKS_READY_CHANNEL`). A finished load is not enough: React attaches
+ * the listeners in effects that can run after it, and a link sent before
+ * then is dropped.
+ */
+let linksReady = false;
+
 /** Pick an `nekko-agent://` URL out of a command line (Windows and Linux pass it as an argument). */
 function linkFromArgv(argv: string[]): string | null {
   return argv.find((a) => PROTOCOLS.some((scheme) => a.startsWith(`${scheme}://`))) ?? null;
@@ -160,12 +169,20 @@ function linkFromArgv(argv: string[]): string | null {
 function deliverLink(url: string): void {
   trayCompanion?.dismiss();
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
-  if (!win || win.webContents.isLoading()) {
+  if (!win || win.webContents.isLoading() || !linksReady) {
     pendingLink = url;
     if (!win) createWindow();
     return;
   }
   raise(win);
+  win.webContents.send(IpcEvents.deepLink, url);
+}
+
+/** Send the held link, once the main window's page is listening. */
+function flushPendingLink(win: BrowserWindow): void {
+  if (!pendingLink || !linksReady || win !== mainWindow || win.isDestroyed()) return;
+  const url = pendingLink;
+  pendingLink = null;
   win.webContents.send(IpcEvents.deepLink, url);
 }
 
@@ -390,14 +407,14 @@ function createWindow(): void {
     void trayCompanion?.closeWindow(() => { saveWindowBounds(win.isMaximized() ? { ...win.getNormalBounds(), maximized: true } : win.getBounds()); win.hide(); });
   });
 
-  // A link that arrived before the page could listen (a cold launch from
-  // Hypergate's Connect button) is replayed the moment it can.
-  win.webContents.on('did-finish-load', () => {
-    if (!pendingLink) return;
-    const url = pendingLink;
-    pendingLink = null;
-    win.webContents.send(IpcEvents.deepLink, url);
-  });
+  // A link that arrived before the page could listen (a cold launch from a
+  // notification or Hypergate's Connect button) is replayed the moment it can:
+  // when the page says it is listening, or when a load that held a link while
+  // the page was already listening finishes. A new document listens afresh.
+  linksReady = false;
+  win.webContents.on('did-navigate', () => { if (mainWindow === win) linksReady = false; });
+  win.webContents.on('render-process-gone', () => { if (mainWindow === win) linksReady = false; });
+  win.webContents.on('did-finish-load', () => flushPendingLink(win));
 
   // Persist size/position (debounced) so the window reopens where it was.
   let saveTimer: NodeJS.Timeout | undefined;
@@ -695,6 +712,12 @@ app.whenReady().then(async () => {
     if (!trustedNotificationReporter(applicationWindows.has(event.sender.id), event.senderFrame, event.sender.mainFrame)) return;
     notificationSessions.set(event.sender.id, visibleNotificationSession(report));
     notificationViews.set(event.sender.id, visibleNotificationView(report));
+  });
+  ipcMain.on(DEEP_LINKS_READY_CHANNEL, (event) => {
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    if (!win || event.sender !== win.webContents || event.senderFrame !== event.sender.mainFrame) return;
+    linksReady = true;
+    flushPendingLink(win);
   });
   registerIpc(engine, (sender) => applicationWindows.has(sender.id));
   registerWebAuthnCeremony();
