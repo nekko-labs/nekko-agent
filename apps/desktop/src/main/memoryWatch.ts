@@ -10,9 +10,13 @@ export type MemoryState = {
   availableBytes: number;
   commitLimitBytes?: number | null;
   commitAvailableBytes?: number | null;
-  topApp?: { name: string; bytes: number; processes: number } | null;
+  topApp?: TopApp | null;
   nekkoBytes?: number | null;
 };
+/** `pids` tells one run of the app from the next; an older daemon leaves it out. */
+export type TopApp = { name: string; bytes: number; processes: number; pids?: number[] };
+/** An app run the person waved off (× or Ignore): not asked about again until it is relaunched. */
+export type WaivedApp = { name: string; pids?: number[] };
 
 /** What `engine:memory` answers: the loaded local models, how many are replying, and what their processes hold. */
 export type LocalModels = { models: number; busy: number; bytes: number };
@@ -29,16 +33,31 @@ export const MEMORY_QUIET_MS = 30 * 60_000;
 /** An unanswered question goes away after this long (it counts as Ignore). */
 export const MEMORY_PROMPT_MS = 2 * 60_000;
 const RESULT_MS = 6_000;
+const DISMISS_URL = 'https://nekko.invalid/dismiss';
 
 const rank = { ok: 0, low: 1, critical: 2 } as const;
 
 /**
- * What to do about memory now. An app the person always closes goes first;
- * then the remembered choice; otherwise ask. Nothing while memory is fine,
- * and nothing twice within the quiet time unless low turned critical.
+ * Whether `app` is the run that was waved off: the same name with a process
+ * still in common. Closed and relaunched, it has all new pids. Without pids
+ * (an older daemon) the name alone has to do.
  */
-export function decideMemory(state: MemoryState, settings: Pick<AppSettings, 'lowMemoryAction' | 'lowMemoryCloseApps'>, memo: MemoryMemo, now: number): MemoryStep {
+export function sameRun(app: TopApp, waived: WaivedApp): boolean {
+  if (app.name.toLowerCase() !== waived.name.toLowerCase()) return false;
+  if (!app.pids || !waived.pids) return true;
+  return app.pids.some(pid => waived.pids!.includes(pid));
+}
+
+/**
+ * What to do about memory now. Nothing while memory is fine, nothing about an
+ * app run the person waved off, and nothing twice within the quiet time unless
+ * low turned critical. Then an app the person always closes goes first; then
+ * the remembered choice; otherwise ask.
+ */
+export function decideMemory(state: MemoryState, settings: Pick<AppSettings, 'lowMemoryAction' | 'lowMemoryCloseApps'>, memo: MemoryMemo, now: number, waived: WaivedApp[] = []): MemoryStep {
   if (state.level === 'ok') return { kind: 'none' };
+  const top = state.topApp;
+  if (top && waived.some(w => sameRun(top, w))) return { kind: 'none' };
   if (memo && now - memo.at < MEMORY_QUIET_MS && rank[state.level] <= rank[memo.level]) return { kind: 'none' };
   const app = state.topApp?.name;
   if (app && (settings.lowMemoryCloseApps ?? []).some(a => a.toLowerCase() === app.toLowerCase())) return { kind: 'close', app };
@@ -147,6 +166,8 @@ export function createMemoryWatch(options: { tray: Tray; engine: EngineProcess; 
   let popup: BrowserWindow | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let memo: MemoryMemo = null;
+  // For as long as the desktop app runs; a relaunch of the app asks again.
+  let waived: WaivedApp[] = [];
   let busy = false;
   let disposed = false;
   const dismiss = () => { clearTimeout(timer); popup?.destroy(); popup = null; };
@@ -160,7 +181,7 @@ export function createMemoryWatch(options: { tray: Tray; engine: EngineProcess; 
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', (event, url) => {
       event.preventDefault();
-      if (url === 'https://nekko.invalid/dismiss') { dismiss(); return; }
+      if (url === DISMISS_URL) dismiss();
       onNavigate?.(url);
     });
     await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
@@ -200,8 +221,11 @@ export function createMemoryWatch(options: { tray: Tray; engine: EngineProcess; 
     try {
       const state = await engine.call<MemoryState>(IpcChannels.memoryState);
       if (state.level === 'ok') { memo = null; return; }
+      const top = state.topApp;
+      // A waved-off run follows the processes it starts and ends; one closed and relaunched is forgotten.
+      if (top) waived = waived.flatMap(w => w.name.toLowerCase() !== top.name.toLowerCase() ? [w] : sameRun(top, w) ? [{ name: top.name, pids: top.pids }] : []);
       const settings = await engine.call<AppSettings>(IpcChannels.settingsGet);
-      const step = decideMemory(state, settings, memo, Date.now());
+      const step = decideMemory(state, settings, memo, Date.now(), waived);
       if (step.kind === 'none') return;
       hushed = (await options.quiet?.()) === true;
       // The question waits for the game to leave; it is asked on a later look.
@@ -215,6 +239,8 @@ export function createMemoryWatch(options: { tray: Tray; engine: EngineProcess; 
       else {
         await show(memoryPromptHtml(state, models), MEMORY_PROMPT_MS, url => {
           const picked = parseChoice(url);
+          // × and Ignore wave off this run of the app: no asking about it again until it is relaunched.
+          if (top && (url === DISMISS_URL || picked?.choice === 'ignore')) waived = [...waived.filter(w => !sameRun(top, w)), { name: top.name, pids: top.pids }];
           if (!picked) return;
           dismiss();
           void (async () => {
