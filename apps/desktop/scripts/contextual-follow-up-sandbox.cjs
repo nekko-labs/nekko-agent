@@ -50,6 +50,8 @@ app.whenReady().then(async () => {
       await run("layoutFixture.emitAgent({type:'done',sessionId:'a',messageId:'a1'})"); await sleep(700);
       await run("document.querySelector('[data-follow-up-location] [value=\"subagent\"]').click()");
       await sleep(100);
+      check('selecting the slider does not send', await run("layoutFixture.lastSend?.text === 'Inspect the saved PNGs directly'"));
+      check('legacy routing row is absent beside suggestions', await run("!document.querySelector('[data-work-place]')"));
       await run("document.querySelector('[data-follow-up-choices] button').click()"); await sleep(400);
       check('optional delegation wraps selected response only', await run("layoutFixture.lastSend?.text === 'Do this in a subagent, then report back:\\n\\nInspect the saved PNGs directly'"));
       await run(`layoutFixture.bridge.suggestReplies = () => new Promise(resolve => { window.resolveSuggestion = resolve; }); layoutFixture.emitAgent({type:'done',sessionId:'a',messageId:'a1'});`);
