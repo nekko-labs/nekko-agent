@@ -312,7 +312,7 @@ test('a cleared signal retries only an up-to-date branch, within the budget', ()
 test('conflicts, racing heads and denied updates never fall back to the stale run', () => {
   for (const error of ['merge conflict (422)', 'expected head changed (422)', 'workflow permission denied (403)']) {
     const { calls, result } = retryFixture('diverged', { error });
-    assert.throws(result, new RegExp(error.replace(/[()]/g, '\\$&')));
+    assert.throws(result, { message: error });
     assert.equal(calls.length, 2);
     assert.ok(!calls.some(c => c.args.includes('rerun')));
   }

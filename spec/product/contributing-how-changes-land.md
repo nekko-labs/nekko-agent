@@ -19,7 +19,8 @@ split-from: SPEC.md (2026-10-22)
 ## Shared build-failure recovery (#2232)
 
 Implemented in the repair script; local decision/request tests and a real-Git
-merge fixture verified, hosted repair verification pending. The current no-queue,
+merge fixture verified. Hosted build outcomes and live App-backed recovery
+verification are recorded in PR #2233. The current no-queue,
 non-strict merge policy is retained: independently green PRs are not guaranteed
 to have been tested together against the latest main. Semantic merge races remain
 possible; this is recovery, not a new merge-prevention guarantee.

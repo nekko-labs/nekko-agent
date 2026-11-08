@@ -431,7 +431,7 @@ function recoverBaseline(pr, kind, stillFailing, { dryRun, retries = 0 }) {
     return needsHuman(pr, `could not refresh baseline checks: ${e.message}`, { dryRun });
   }
   if (action === 'refresh') {
-    console.log(`#${pr.number}: refreshed with main; waiting for new-head CI.`);
+    console.log(`#${pr.number}: ${dryRun ? "would request" : "requested"} main refresh; waiting for new-head CI.`);
     comment(pr, `Queue repair requested a merge of current main into this branch with an expected-head check. New-head CI must pass; the old failed run was not re-run. ${marker('refreshed', pr.head)}`, { dryRun });
   } else if (action === 'rerun') {
     console.log(`#${pr.number}: already contains main; retrying unchanged snapshot.`);
