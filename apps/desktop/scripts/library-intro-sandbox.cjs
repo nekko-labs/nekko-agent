@@ -6,6 +6,8 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 const baseline = process.env.NEKKO_LIBRARY_BASELINE === '1';
+// Escape characters JSON.stringify leaves raw before splicing into evaluated code.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const report = { checks: {}, errors: [], captures: [] };
 app.whenReady().then(async () => {
@@ -17,7 +19,7 @@ app.whenReady().then(async () => {
   const run = source => win.webContents.executeJavaScript(source);
   const check = async (source, label) => { const ok = await run(source); report.checks[label] = ok; if (!ok) throw Error(label); };
   const shot = async name => { const file = path.join(out, `${name}.png`); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
-  const click = text => run(`(() => { const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)}); if (!b) throw Error('Missing control'); b.click(); })()`);
+  const click = text => run(`(() => { const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${js(text)}); if (!b) throw Error('Missing control'); b.click(); })()`);
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture'); i++) await sleep(100);
