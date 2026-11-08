@@ -231,7 +231,7 @@ export function CommandCenterView() {
           setPending(inputs);
         }).catch(() => {}); // An unavailable input state must not hide a window.
       }
-      if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
+      if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'approval_resolved' || e.type === 'tool_result') refreshPending();
       if (e.type === 'done' || e.type === 'error') {
         setRunning((r) => { const n = new Set(r); n.delete(e.sessionId); return n; });
         window.nekko.getUsageSummary().then(setUsage);

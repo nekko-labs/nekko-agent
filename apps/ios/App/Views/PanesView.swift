@@ -480,7 +480,7 @@ struct PaneColumn: View {
             }
         }
         // Touching a pane gives it the focus (its composer takes the keyboard).
-        .simultaneousGesture(TapGesture().onEnded { host.focus(id) })
+        .modifier(FocusOnTouch { host.focus(id) })
         .overlay {
             // The focused pane wears a faint accent glow at its top and bottom edges
             // (into the status bar and home indicator), not a border.
@@ -538,6 +538,45 @@ struct PaneColumn: View {
     private var menuItem: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             PaneMenu(host: host, id: id, content: content, display: display)
+        }
+    }
+}
+
+/// Calls `focus` on any tap in the view without taking the tap from it. From iOS 18
+/// a SwiftUI `TapGesture` on a pane cancels the touches of the List inside, so its
+/// rows' NavigationLinks never fired (iPad and iPhone Duo); this UIKit tap recognizer
+/// neither cancels touches nor blocks other recognizers.
+struct FocusOnTouch: ViewModifier {
+    let focus: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.gesture(Recognizer(focus: focus))
+        } else {
+            content.simultaneousGesture(TapGesture().onEnded(focus))
+        }
+    }
+
+    @available(iOS 18.0, *)
+    struct Recognizer: UIGestureRecognizerRepresentable {
+        let focus: () -> Void
+
+        func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+        func makeUIGestureRecognizer(context: Context) -> UITapGestureRecognizer {
+            let tap = UITapGestureRecognizer()
+            tap.cancelsTouchesInView = false
+            tap.delaysTouchesEnded = false
+            tap.delegate = context.coordinator
+            return tap
+        }
+
+        func handleUIGestureRecognizerAction(_ recognizer: UITapGestureRecognizer, context: Context) {
+            if recognizer.state == .ended { focus() }
+        }
+
+        final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+            func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
         }
     }
 }
