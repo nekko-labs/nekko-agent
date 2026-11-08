@@ -5,6 +5,7 @@ import { useStore } from '../store.js';
 import { getCachedSession, loadSession } from '../sessionCache.js';
 import { hasAppChrome } from '../chrome.js';
 import { FilePane } from '../components/FilePane.js';
+import { LibraryArtwork, LibraryIntro, libraryIntroSeen, dismissLibraryIntro } from '../components/LibraryIntro.js';
 import { ExternalIcon, FocusLayoutIcon } from '../icons.js';
 import { artifactCandidates, groupArtifacts, mergeArtifacts, sessionArtifacts, type ArtifactEntry } from '../artifactsIndex.js';
 
@@ -31,6 +32,8 @@ export function ArtifactsView() {
     refreshSessions: s.refreshSessions,
     focusChatOnWall: s.focusChatOnWall,
   })));
+  const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
+  const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
   const [entries, setEntries] = useState<ArtifactEntry[] | null>(null);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
@@ -70,21 +73,23 @@ export function ArtifactsView() {
 
   return (
     <div className="flex h-full min-h-0" data-artifacts-view>
-      <aside className="flex w-[340px] shrink-0 flex-col border-r border-line">
+      {showIntro && <LibraryIntro onClose={closeIntro} />}
+      <aside className={`${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col border-r border-line md:w-[340px]`}>
         <div className="flex items-center gap-2 p-4 pb-2">
-          {!hasAppChrome && <h1 className="view-title">Artifacts</h1>}
+          {!hasAppChrome && <h1 className="view-title">Library</h1>}
           <span className="ml-auto text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
         </div>
         <div className="space-y-2 px-3 pb-2">
-          <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter artifacts" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <button type="button" className="btn btn-outline w-full py-1 text-xs" onClick={() => setShowIntro(true)}>Library guide</button>
+          <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
           <label className="flex items-center gap-2 text-2xs text-ink-faint">
             <input type="checkbox" checked={includeCompleted} onChange={(e) => setIncludeCompleted(e.target.checked)} /> Include completed chats
           </label>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" role="list" aria-label="Artifacts">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3" role="list" aria-label="Library files">
           {entries && groups.length === 0 && (
             <p className="px-3 py-2 text-xs text-ink-faint">
-              {query ? 'Nothing matches.' : 'No artifacts yet. Documents, pages, designs and diagrams your agents write or link to show up here.'}
+              {query ? 'Nothing matches.' : 'Your Library is ready for its first file. Documents, pages, designs and diagrams your agents write or link to show up here.'}
             </p>
           )}
           {groups.map(({ kind, items }) => (
@@ -114,11 +119,12 @@ export function ArtifactsView() {
         </div>
       </aside>
 
-      <section className="flex min-w-0 flex-1 flex-col">
+      <section className={`${selected ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
         {selected ? (
           <>
             <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
-              <div className="min-w-0 flex-1">
+              <button type="button" className="btn btn-outline py-1 text-xs md:hidden" onClick={() => setSelected(null)}>Back to Library</button>
+              <div className="order-first min-w-0 flex-1 basis-full md:order-none md:basis-auto">
                 <p className="truncate text-sm font-semibold">{selected.title}</p>
                 <p className="truncate font-mono text-2xs text-ink-faint" title={selected.path}>{selected.path}</p>
               </div>
@@ -135,6 +141,7 @@ export function ArtifactsView() {
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+            <div className="w-full max-w-xs"><LibraryArtwork /></div>
             <h2 className="text-xl font-semibold">What your agents made</h2>
             <p className="max-w-sm text-sm text-ink-faint">
               Reports, pages, designs and diagrams from every chat, grouped by kind. Pick one to preview it, or open the chat it came from in Single agent view.
