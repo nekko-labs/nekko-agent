@@ -7,12 +7,12 @@
 //! helper is reaped).
 
 use super::audit::{self, AuditLine, AuditResult, SlotEvent, Today};
-use super::awake::Awake;
 use super::provider::{JobRef, Provider, ProviderError, QueuedJob, RunnerStatus};
 use super::signals::{MacState, Sense, signals_for};
 use super::store::{RunnerRecord, overlaps};
 use super::updates::write_atomic;
 use super::vm::{CONSOLE_LOG, RunHandle, RunSpec, Stopped, Vm, reap};
+use crate::awake::Awake;
 use nekko_runner::{
     Decision, Guest, HostFacts, MAX_MACOS_VMS, Priority, Reason, RunnerConfig, RunnerSettings, SizeSuggestion,
     SlotLimit, Usage, blank_stats_disk, cpus_per_vm, evaluate, hold_awake, keep_idle, linux_slots_available,

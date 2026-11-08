@@ -120,7 +120,38 @@ pub fn fake_claude() {
             out(lifecycle("started"));
         }
         out(init());
-        if text == "background" || text == "background-slow" {
+        if text.starts_with("title probe") {
+            let probe = json!({
+                "offered": offered.iter().any(|t| t == "set_chat_title"),
+                "note": text.contains("Nekko chat naming note:"),
+                "systemFlag": args.iter().any(|a| a == "--system-prompt" || a == "--append-system-prompt"),
+            });
+            if text.starts_with("title probe hold") {
+                std::fs::write("title-ready", probe.to_string()).unwrap();
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+                while !Path::new("title-continue").exists() {
+                    assert!(std::time::Instant::now() < deadline, "title fixture was not released");
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            }
+            // Call even if unoffered: the daemon must enforce the same gates.
+            let title = if text.starts_with("title probe blank") { "  " } else { "  Fix   chat naming  " };
+            let answer: Value = rt.block_on(async {
+                reqwest::Client::new()
+                    .post(format!("{url}/harness/tool"))
+                    .bearer_auth(&token)
+                    .json(&json!({ "name": "set_chat_title", "input": { "title": title } }))
+                    .send()
+                    .await
+                    .unwrap()
+                    .json()
+                    .await
+                    .unwrap()
+            });
+            let reply = json!({ "probe": probe, "answer": answer }).to_string();
+            out(assistant("m_title", json!([{ "type": "text", "text": reply }])));
+            out(result(&reply, "completed"));
+        } else if text == "background" || text == "background-slow" {
             // Start a background command, end the turn, then wake when it
             // finishes, with nothing written: a turn of Claude Code's own
             // whose command needs a person to approve it. The slow one gives
@@ -593,6 +624,99 @@ async fn plan_usage_claude_code_printed_is_its_limits() {
     assert_eq!((window["id"].clone(), window["status"].clone()), (json!("session"), json!("warning")), "{limits}");
     assert_eq!(window["usedPercent"].as_f64(), Some(62.0));
     assert_eq!(read("cc").await, Value::Null, "an unread sign-in shows no plan usage");
+}
+
+fn title_provider(key: bool) -> Value {
+    json!({ "id": "cc_title", "kind": "claude-code", "label": "Claude Agent", "baseUrl": "", "enabled": true,
+        "claudeCode": if key { json!({ "authSource": "nekko-anthropic-key" }) } else { json!({}) } })
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_title_bridge_gates_offering_note_and_execution() {
+    let rig = rig("title-gates", "guardrails", true);
+    let key = title_provider(true);
+    let unknown = title_provider(false);
+    for (i, (provider, fields, text, offered, updated)) in [
+        (unknown, json!({ "titleAuto": true }), "title probe", false, false),
+        (key.clone(), json!({ "titleAuto": false }), "title probe", false, false),
+        (key.clone(), json!({}), "title probe", false, false),
+        (key.clone(), json!({ "titleAuto": true, "parentSessionId": "parent" }), "title probe", false, false),
+        (key.clone(), json!({ "titleAuto": true, "trainingRunId": "training" }), "title probe", false, false),
+        (key.clone(), json!({ "titleAuto": true }), "title probe blank", true, false),
+        (key, json!({ "titleAuto": true }), "title probe", true, true),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        write_settings(&rig, json!({ "providers": [provider.clone()] })).await;
+        let mut session =
+            json!({ "id": "s_cc", "title": "Placeholder", "messages": [], "createdAt": 1, "updatedAt": 1 });
+        session.as_object_mut().unwrap().extend(fields.as_object().unwrap().clone());
+        std::fs::write(rig.data.join("sessions/s_cc.json"), session.to_string()).unwrap();
+        let turn = format!("title-{i}");
+        let (status, body) =
+            post(rig.d.port, "chat:turn", json!([spec_on(&rig, &turn, text, provider)]), Some(TOKEN)).await;
+        assert_eq!(status, 200, "{body}");
+        let (events, end) = turn_record(&rig, &turn, "s_cc").await;
+        assert_eq!(end["aborted"], false, "{end}");
+        let saved = saved(&rig);
+        let texts = assistant_texts(&saved);
+        let reply = texts.last().unwrap_or_else(|| panic!("case {i}: no reply; events={events:?}; saved={saved}"));
+        let answer: Value = serde_json::from_str(reply).unwrap();
+        assert_eq!(
+            answer["probe"],
+            json!({ "offered": offered, "note": offered, "systemFlag": false }),
+            "case {i}: {answer}"
+        );
+        assert_eq!(answer["answer"]["ok"], updated, "case {i}: {answer}");
+        assert_eq!(saved["title"], if updated { "Fix chat naming" } else { "Placeholder" });
+        if updated {
+            assert_eq!(saved["titleAuto"], false);
+            assert!(events.iter().any(|e| e["type"] == "session_meta"), "{events:?}");
+        }
+        let users: Vec<_> = saved["messages"].as_array().unwrap().iter().filter(|m| m["role"] == "user").collect();
+        assert_eq!(users.len(), 1, "no extra naming turn");
+        assert_eq!(users[0]["content"], text, "note must not rewrite the saved user prompt");
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn claude_title_bridge_rechecks_rename_privacy_and_policy_at_dispatch() {
+    for change in ["rename", "incognito", "offline", "policy"] {
+        let rig = rig(&format!("title-recheck-{change}"), "guardrails", true);
+        let key = title_provider(true);
+        write_settings(&rig, json!({ "providers": [key.clone()] })).await;
+        let mut session = saved(&rig);
+        session["titleAuto"] = json!(true);
+        std::fs::write(rig.data.join("sessions/s_cc.json"), session.to_string()).unwrap();
+        post(rig.d.port, "chat:turn", json!([spec_on(&rig, "title-held", "title probe hold", key)]), Some(TOKEN)).await;
+        let probe: Value = until("the title call to wait", Duration::from_secs(30), || async {
+            std::fs::read_to_string(rig.workspace.join("title-ready"))
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok())
+        })
+        .await;
+        assert_eq!(probe["offered"], true);
+        assert_eq!(probe["note"], true);
+        if change == "policy" {
+            write_settings(&rig, json!({ "providers": [title_provider(false)] })).await;
+        } else {
+            let mut session = saved(&rig);
+            if change == "rename" {
+                session["title"] = json!("My chosen title");
+                session["titleAuto"] = json!(false);
+            } else {
+                session[change] = json!(true);
+            }
+            std::fs::write(rig.data.join("sessions/s_cc.json"), session.to_string()).unwrap();
+        }
+        std::fs::write(rig.workspace.join("title-continue"), "go").unwrap();
+        turn_record(&rig, "title-held", "s_cc").await;
+        let saved = saved(&rig);
+        let answer: Value = serde_json::from_str(assistant_texts(&saved).last().unwrap()).unwrap();
+        assert_eq!(answer["answer"]["ok"], false, "{change}: {answer}");
+        assert_eq!(saved["title"], if change == "rename" { "My chosen title" } else { "cc" });
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]

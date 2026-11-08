@@ -100,7 +100,7 @@ open. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
   </tr>
 </table>
 
-> A full picture-by-picture tour is in the **[walkthrough guide](docs/WALKTHROUGH.md)**.
+> A full picture-by-picture tour is in the **[walkthrough guide](docs/WALKTHROUGH.md)**. Find a capability and its limits in **[Features by task](https://nekkoagent.com/docs/features)**, including [file recovery and batch edits](https://nekkoagent.com/docs/file-recovery), [context, memory and safety](https://nekkoagent.com/docs/context-memory-safety), and [docs for AI agents](https://nekkoagent.com/docs/for-agents).
 
 ## Benchmarks
 

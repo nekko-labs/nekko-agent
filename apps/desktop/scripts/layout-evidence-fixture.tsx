@@ -23,6 +23,8 @@ const bridge: any = {
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
   getSettings: async () => settings, updateSettings: async (p: any) => ({ ...Object.assign(settings, p) }), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
+  // CiRunnersView mounts with the App: its list contract is an array, not null.
+  listRunners: async (): Promise<import('@nekko-agent/shared').RunnerView[]> => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
   createSession: async () => { const s = session('n' + records.length, 'New chat'); records.push(s); return s; },
   listTerminals: async () => [],

@@ -4,7 +4,7 @@ import { useStore } from '../../store.js';
 import { formatBytes } from '../runtimes/verdict.js';
 
 const ROLE_LABEL: Record<ImageCompanionStatus['files'][number]['role'], string> = {
-  clip_l: 'CLIP-L text encoder', clip_g: 'CLIP-G text encoder', t5xxl: 'T5-XXL text encoder', llm: 'LLM text encoder', vae: 'VAE', taesd: 'TAESD decoder',
+  clip_l: 'CLIP-L text encoder', clip_g: 'CLIP-G text encoder', t5xxl: 'T5-XXL text encoder', llm: 'LLM text encoder', llm_vision: 'LLM vision encoder', vae: 'VAE', taesd: 'TAESD decoder',
 };
 
 /**

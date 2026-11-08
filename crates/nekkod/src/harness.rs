@@ -132,6 +132,8 @@ pub struct BridgeEntry {
 /// Nekko's own tools the bridge can offer a Claude Code chat, by bridge tool
 /// name. Only offered where the Claude policy's `nekko_tools` row allows it.
 pub const BRIDGE_WATCH: &str = "agent_watch";
+/// Automatic naming also requires the context-note capability and an eligible chat.
+pub const BRIDGE_TITLE: &str = "set_chat_title";
 /// The name Claude Code calls it by (and asks permission for).
 pub const BRIDGE_WATCH_TOOL: &str = "mcp__nekko_bridge__agent_watch";
 
@@ -940,7 +942,19 @@ mod tests {
         assert_eq!(h.bridge_tools("s1"), Some(vec![]));
         h.prepare_bridge_with("s1", &roots(), &[BRIDGE_WATCH.into()]).unwrap();
         assert_eq!(h.bridge_tools("s1"), Some(vec![BRIDGE_WATCH.to_string()]));
+        h.prepare_bridge_with("s1", &roots(), &[BRIDGE_TITLE.into()]).unwrap();
+        assert_eq!(h.bridge_tools("s1"), Some(vec![BRIDGE_TITLE.to_string()]));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn title_naming_keeps_existing_mcp_approval_behavior() {
+        let tool = "mcp__nekko_bridge__set_chat_title";
+        let input = serde_json::json!({ "title": "Fix chat naming" });
+        for mode in ["ask", "plan", "guardrails"] {
+            assert!(matches!(decide(mode, tool, &input, &[], &roots()), Decision::Ask { .. }));
+        }
+        assert_eq!(decide("yolo", tool, &input, &[], &roots()), Decision::Allow);
     }
 
     #[test]

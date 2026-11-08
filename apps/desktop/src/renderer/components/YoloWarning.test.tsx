@@ -10,7 +10,7 @@ vi.mock('react', async (original) => ({ ...await original<typeof import('react')
 
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); state.settings.skipYoloWarning = false; });
 
-/** Open the warning and return its rendered tree and buttons (Keep asking, Turn on YOLO). */
+/** Open the warning and return its rendered tree and buttons (Keep asking, Turn on No restrictions). */
 function dialog(skip = false, open: () => Promise<boolean> = confirmYolo) {
   vi.stubGlobal('HTMLElement', class {});
   const remove = vi.fn();
@@ -45,7 +45,7 @@ describe('YOLO warning', () => {
   });
   it('warns when switching to YOLO, and Keep asking cancels without saving anything', async () => {
     const d = dialog(true, () => allowModeChange('guardrails', 'yolo'));
-    expect(d.texts).toContain('Turn on YOLO?');
+    expect(d.texts).toContain('Turn on No restrictions?');
     d.buttons[0].props.onClick();
     expect(await d.result).toBe(false);
     expect(d.updateSettings).not.toHaveBeenCalled();
