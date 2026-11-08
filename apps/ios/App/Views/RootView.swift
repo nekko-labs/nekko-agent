@@ -403,14 +403,14 @@ struct CatMark: View {
     }
 }
 
-/// The brand mark on its own: the head in the brand sage secondary, with no tile
+/// The brand mark on its own: the head in the theme's plum accent, with no tile
 /// behind it, as the desktop, Android and the opening animation show it. The
 /// tiled square is only the Home Screen icon.
 struct BrandMark: View {
-    static let ink = Color(red: 0xA7 / 255, green: 0xC8 / 255, blue: 0xAC / 255)
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        CatMark().foregroundStyle(Self.ink).accessibilityHidden(true)
+        CatMark().foregroundStyle(palette.accent).accessibilityHidden(true)
     }
 }
 

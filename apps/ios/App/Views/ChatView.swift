@@ -32,6 +32,10 @@ struct ChatView: View {
     @State private var viewing: PhotoSet?
     /// Whether the end of the transcript is on screen: only then does it follow new output.
     @State private var atBottom = true
+    /// The `blocksLayout` the transcript last followed: a new one means rows were added or replaced.
+    @State private var followedLayout = -1
+    /// The pending scroll to the end once new rows are laid out (see `settleAtEnd`).
+    @State private var settling: Task<Void, Never>?
     @State private var pull = PawPull()
     /// The transcript's rows between renders (a streamed token patches only the last one).
     @State private var rowCache = TranscriptRowCache()
@@ -220,7 +224,23 @@ struct ChatView: View {
             .clipShape(Rectangle().scale(x: 1, y: 2, anchor: .bottom))
             // Follow streamed output only while the reader is at the end, and
             // without animating every token (overlapping animations shudder).
-            .onChange(of: chat.blocksRevision) { _, _ in if atBottom { proxy.scrollTo("bottom", anchor: .bottom) } }
+            // Rows added or replaced (the transcript arriving, a re-read, a new step)
+            // also scroll again once laid out: the lazy stack leaves the screen blank
+            // when it jumps to rows it has not built yet, until the reader scrolls.
+            .onChange(of: chat.blocksRevision) { _, _ in
+                let layoutChanged = chat.blocksLayout != followedLayout
+                followedLayout = chat.blocksLayout
+                guard atBottom else { return }
+                proxy.scrollTo("bottom", anchor: .bottom)
+                if layoutChanged { settleAtEnd(proxy) }
+            }
+            // A chat that opens with its transcript already there (the saved copy) settles too.
+            .onAppear {
+                guard atBottom, followedLayout != chat.blocksLayout, !chat.blocks.isEmpty else { return }
+                followedLayout = chat.blocksLayout
+                settleAtEnd(proxy)
+            }
+            .onDisappear { settling?.cancel() }
             // An approval or question card grows the bottom bar: keep the latest step above it.
             // After the card has been laid out: scrolling in the same update used the old inset.
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
@@ -440,6 +460,22 @@ struct ChatView: View {
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { proxy.scrollTo("bottom", anchor: .bottom) }
+    }
+
+    /// Scroll to the end again after the new rows are laid out, then once more when the
+    /// lazy stack has measured the rows it estimated: scrolling to an id makes it build
+    /// the rows there, which a jump inside the same update did not. Coalesced and never
+    /// animated. Not gated on `atBottom` again: the unbuilt end can read as scrolled away.
+    /// It is over in under 0.2 s, before a reader's own scroll gets going.
+    private func settleAtEnd(_ proxy: ScrollViewProxy) {
+        settling?.cancel()
+        settling = Task { @MainActor in
+            for wait in [30, 150] {
+                try? await Task.sleep(for: .milliseconds(wait))
+                guard !Task.isCancelled else { return }
+                proxy.scrollTo("bottom", anchor: .bottom)
+            }
+        }
     }
 
     private func scrollAfterLayout(_ proxy: ScrollViewProxy) {

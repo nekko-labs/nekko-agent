@@ -47,6 +47,8 @@ private final class RefreshFixtureConnection: RemoteConnection, @unchecked Senda
         guard channel == Channels.sessionGet else { return .null }
         let read = lock.withLock { reads += 1; return reads }
         if read > 1 { try await Task.sleep(for: .seconds(3)) }
+        // The transcript arrives after the empty chat is on screen, as from a computer far away.
+        else if ProcessInfo.processInfo.arguments.contains("-refreshSlowFirstRead") { try await Task.sleep(for: .seconds(1)) }
         let count = ProcessInfo.processInfo.arguments.contains("-refreshLongChat") ? 30 : 2
         let messages: [JSONValue] = (1...count).map { i in
             ["id": .string("m-\(i)"), "role": .string(i % 2 == 0 ? "assistant" : "user"),

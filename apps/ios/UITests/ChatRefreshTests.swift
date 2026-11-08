@@ -13,6 +13,26 @@ final class ChatRefreshTests: XCTestCase {
         add(shot)
     }
 
+    /// Opening a chat whose transcript comes in after the empty chat is laid out: its end
+    /// shows at once, without the reader having to scroll for the rows to appear.
+    func testALateTranscriptShowsItsEndWithoutScrolling() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-uiTestChatRefresh", "-refreshLongChat", "-refreshSlowFirstRead",
+                               "-splash", "NO", "-appLock", "NO", "-onboarded", "YES"]
+        app.launch()
+        let latest = app.staticTexts["You are at the latest message."]
+        XCTAssertTrue(latest.waitForExistence(timeout: 15), "the last row is built")
+        // Past the settle after layout (under 0.2 s), with no touch from the test.
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertTrue(latest.isHittable, "the end of the transcript is on screen")
+        let before = app.staticTexts["Message 29: let’s check the refresh at the end of this chat."]
+        XCTAssertTrue(before.exists && before.isHittable, "the rows above the end are drawn too")
+        let shot = XCTAttachment(screenshot: app.screenshot())
+        shot.name = "late-transcript"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
     func testPullUpFromShortChatAndGreeting() {
         checkPull(long: false)
     }

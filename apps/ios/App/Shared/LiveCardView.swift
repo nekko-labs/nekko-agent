@@ -13,7 +13,8 @@ struct LiveCardView: View {
     var stale = false
 
     static let background = Color(red: 28/255, green: 28/255, blue: 30/255)
-    fileprivate static let accent = Color(red: 0x8B/255, green: 0x7D/255, blue: 0xFF/255)
+    /// Plum, not the retired lavender `#8B7DFF` (spec/brand/colour-palette.md).
+    fileprivate static let accent = BrandColor.accentOnDark
     private static let onAccent = Color(red: 0x0C/255, green: 0x0C/255, blue: 0x11/255)
     private static let grey = Color(red: 0xA3/255, green: 0xA1/255, blue: 0xB0/255)
     private static let attention = Color(red: 0xED/255, green: 0xBE/255, blue: 0x79/255)

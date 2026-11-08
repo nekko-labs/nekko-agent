@@ -93,6 +93,24 @@ Reproduce with `NEKKO_CONTROLS_SANDBOX=light-theme-sandbox.cjs node apps/desktop
 - **Verification boundary:** source/container checks and matched asset previews cover the generated icons, not installed macOS Settings/Dock, Windows/Linux shells, native device launchers, iOS selected dark mode or Watch launchers. These OS journeys require disposable platform sessions/builds.
 - **Preserved deliberately:** existing cat-mark geometry, seasonal Spooky artwork, user-selected plum/indigo themes, third-party provider logos, historical screenshots/evidence and immutable release files. This asset cleanup is not a whole-site/theme recolor or a mascot redesign.
 
+## Fixed brand surfaces: launch, splash and the pixel mascot (2026-11-08)
+
+What the app draws in the brand's own colours, whatever theme is chosen. Before this the iPhone had gone back to the retired green on its launch screen, opening animation, app lock cover and pixel mascot, and the desktop's pixel mascot had never moved off it.
+
+| Surface | Ground / fill | Line and mark | Small accent |
+|---|---|---|---|
+| iPhone launch screen (`LaunchBrandPlum.storyboard`), opening animation, return dissolve and app lock cover | plum `#190019` | white cat | none |
+| Android 12+ opening splash | plum `#190019` (`ic_launcher_background`) | white mark (`ic_launcher_mark`) | none |
+| Desktop / Local Web UI startup splash | plum `#190019` (already, #2272) | white | none |
+| Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat; desktop `PixelHead`) | plum `#190019` | white line and eyes | mouth `#C99BB3` |
+| Outline brand mark on a themed screen (iPhone first run and pairing) | none | the theme's `accent` | none |
+| iPhone Live Activity card (fixed dark `#1C1C1E`) | none | none | Dark Nekko accent `#C084B5` (dot, mic, filled buttons; 5.8:1 on the card, 6.7:1 under its dark text), was the retired lavender `#8B7DFF` |
+
+- The iPhone reads all of these from `BrandColor` (`apps/ios/App/Shared/BrandColor.swift`); a themed surface uses the theme's `Palette` instead.
+- The launch storyboard is renamed whenever its colour changes (`LaunchScreen`, `Launch`, `LaunchPlum`, now `LaunchBrandPlum`) because iOS keeps showing a cached launch screen under the old name.
+- `scripts/brand-colours.test.mjs` (in `npm test`) checks the storyboard ground, the Android splash, the desktop mascot and the Live Activity accent, and that no iOS, Android or desktop component source uses the retired green (`#101714`, `#263D2D`, `#F2F1E9`, `#A7C8AC`) or the Live Activity's old lavender.
+- Status: implemented. The source checks pass on Linux; the iPhone build and UI tests run in the Native iOS workflow on the PR. Not yet seen on a physical iPhone, where iOS may keep the cached launch screen until the app is updated, or on an Android device.
+
 ## Base looks and other brand surfaces
 
 `[updated 2026-11-05]` The last places that still drew the old lilac and violet now use the palette above.
