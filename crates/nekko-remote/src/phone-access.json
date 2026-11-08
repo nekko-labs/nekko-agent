@@ -3,7 +3,9 @@
   "requestKeys": [
    "sessionId",
    "prompt",
-   "params"
+   "params",
+   "images",
+   "size"
   ],
   "paramKeys": [
    "modelId",
@@ -36,6 +38,17 @@
   "seed": [
    -1,
    2147483647
+  ],
+  "editImages": 4,
+  "editImageTypes": [
+   "png",
+   "jpeg",
+   "webp"
+  ],
+  "editImageChars": 6291456,
+  "sizeKeys": [
+   "width",
+   "height"
   ]
  },
  "channels": [

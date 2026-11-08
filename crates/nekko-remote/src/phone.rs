@@ -2362,6 +2362,51 @@ mod tests {
             assert_eq!(ran(&unknown, C), 0);
         }
 
+        /// Decision 0069 (#2222): photos to edit and the edit's size ride inside
+        /// the same Change v1 proof, which covers the whole arguments.
+        #[test]
+        fn image_edit_photos_and_size_are_bound_by_the_change_proof() {
+            const C: &str = "chat:generateImage";
+            let k = signer(22);
+            let png = "data:image/png;base64,iVBORw0KGgo=";
+            let args = json!([{ "sessionId": "s1", "prompt": "make it blue", "params": {
+                "modelId": "image/sd", "width": 1024, "height": 1024, "steps": 4, "cfgScale": 1, "seed": -1
+            }, "images": [png], "size": { "width": 768, "height": 1024 } }]);
+            let r = policy_rig(ON, Some(&k), None, "ask");
+            assert_eq!(r.ask(C, args.clone(), None), refused("proof-required", C));
+            let signed = proof(&k, "phone-1", C, &args, NOW as i64);
+            let mut tampered = Vec::new();
+            for photos in [
+                json!(["data:image/png;base64,iVBORw0KGgp="]),
+                json!([png, png]),
+                json!(["data:image/jpeg;base64,iVBORw0KGgo="]),
+            ] {
+                let mut t = args.clone();
+                t[0]["images"] = photos;
+                tampered.push(t);
+            }
+            for size in [json!({ "width": 1024, "height": 768 }), json!({ "width": 768, "height": 1088 })] {
+                let mut t = args.clone();
+                t[0]["size"] = size;
+                tampered.push(t);
+            }
+            let mut dropped = args.clone();
+            dropped[0].as_object_mut().unwrap().remove("size");
+            tampered.push(dropped);
+            for t in tampered {
+                assert!(r.ask(C, t.clone(), Some(signed.clone())).unwrap_err().contains("proof-invalid"), "{t}");
+            }
+            assert_eq!(ran(&r, C), 0, "a changed photo or size never runs on the original signature");
+            // Signed but unsafe photos are still refused by shape.
+            let mut svg = args.clone();
+            svg[0]["images"] = json!(["data:image/svg+xml;base64,PHN2Zz4="]);
+            let signed_svg = proof(&k, "phone-1", C, &svg, NOW as i64);
+            assert!(r.ask(C, svg, Some(signed_svg)).unwrap_err().contains("value-invalid"));
+            assert_eq!(ran(&r, C), 0);
+            assert_eq!(r.ask(C, args, Some(signed)), Ok(Value::Null));
+            assert_eq!(ran(&r, C), 1);
+        }
+
         #[test]
         fn every_phone_channel_is_classed() {
             let classes = Classes::from_policy();

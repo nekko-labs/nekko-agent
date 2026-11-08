@@ -30,6 +30,10 @@ fn random_seed() -> u64 {
     (u32::from_le_bytes(b) % 0x7fff_ffff) as u64
 }
 
+/// The reply when photos reach a model that can neither edit nor animate them.
+const CANNOT_EDIT: &str =
+    "This model can't change photos. Choose a model that edits photos, or send the prompt without a photo.";
+
 #[derive(Default)]
 pub struct ImageTurns {
     running: Mutex<HashMap<String, Cancel>>,
@@ -127,7 +131,24 @@ impl ImageTurns {
         }
         // A video model makes a clip at its own size (the chat's shape at about 832x480).
         let model_id = started.request.get("modelId").map(nekko_js::display).unwrap_or_default();
-        let video = server.makes_video(&model_id).await;
+        let can = server.capabilities(&model_id).await;
+        let video = can.iter().any(|c| c == "video");
+        // Photos go only to a model that edits them or animates the first (decisions 0067
+        // and 0069): the desktop asks first, but a phone reaches this turn directly.
+        if started.request.get("refImages").is_some() && !can.iter().any(|c| c == "edit" || c == "video") {
+            let message = CANNOT_EDIT;
+            if let Some(Value::Array(list)) = session.get_mut("messages") {
+                list.push(v::image_failure(false, message, nekko_js::now_ms()));
+            }
+            if !incognito {
+                let (st, mut s) = (store.clone(), session);
+                if let Ok(Err(e)) = tokio::task::spawn_blocking(move || st.save_turn(&mut s, None)).await {
+                    eprintln!("nekkod: could not save an image turn: {e}");
+                }
+            }
+            fail(message);
+            return Ok(Value::Null);
+        }
         if video {
             let num = |k: &str| params.get(k).and_then(Value::as_f64).unwrap_or(0.0);
             let (w, h) = nekko_engine::launch::clip_size(num("width"), num("height"));

@@ -728,6 +728,26 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     )
     .await;
     assert_eq!(refused["error"], "Invalid image request: prompt");
+
+    // Photos to a model that cannot edit them (this one has no known set) are refused by
+    // the turn itself, whichever client sent them (decision 0069): the chat is told, nothing is drawn.
+    let photo = "data:image/png;base64,iVBORw0KGgo=";
+    let edit = json!({ "sessionId": "s_img", "prompt": "make it blue", "params": params, "images": [photo], "size": { "width": 768, "height": 1024 } });
+    let (status, body) = post(d.port, "chat:generateImage", json!([edit]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
+    let messages = saved["messages"].as_array().unwrap();
+    let (asked, last) = (&messages[messages.len() - 2], messages.last().unwrap());
+    assert_eq!((asked["content"].clone(), asked["images"].clone()), (json!("make it blue"), json!([photo])));
+    assert_eq!(
+        last["content"],
+        "The image could not be generated: This model can't change photos. Choose a model that edits photos, or send the prompt without a photo.",
+        "{last}"
+    );
+    assert_eq!(last.get("images"), None, "nothing was generated");
+    let (_, running) = post(d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert_eq!(running, json!([]));
     post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
     drop(d);
     std::fs::remove_dir_all(root).ok();
@@ -963,7 +983,7 @@ async fn the_daemon_makes_a_clip_with_a_video_model() {
         json!({ "engineBinPath": fake_llama(), "engine": { "port": port, "modelFolders": [] } }).to_string(),
     )
     .unwrap();
-    let session = json!({ "id": "s_clip", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let session = json!({ "id": "s_clip", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_clip.json"), session.to_string()).unwrap();
     let d = start_with_env(&data, json!({}), &[]);
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;

@@ -42,8 +42,33 @@ async fn image_boundary_host_api_refuses_invalid_requests_without_saving_or_load
         let (_, body) = post(d.port, "chat:generateImage", json!([opts]), Some(TOKEN)).await;
         assert!(body["error"].as_str().is_some_and(|s| s.starts_with("Invalid image request:")), "{key}: {body}");
     }
+    // Photo shapes the host refuses too (decision 0069): SVG, paths, too many, a size without photos.
+    let png = "data:image/png;base64,iVBORw0KGgo=";
+    for (key, value) in [
+        ("images", json!(["data:image/svg+xml;base64,PHN2Zz4="])),
+        ("images", json!(["/private/photo.png"])),
+        ("images", json!([png, png, png, png, png])),
+        ("size", json!({ "width": 768, "height": 1024, "path": "/private" })),
+    ] {
+        let mut opts = valid.clone();
+        opts[key] = value;
+        let (_, body) = post(d.port, "chat:generateImage", json!([opts]), Some(TOKEN)).await;
+        assert_eq!(body["error"], format!("Invalid image request: {key}"), "{key}: {body}");
+    }
+    let mut size_only = valid.clone();
+    size_only["size"] = json!({ "width": 768, "height": 1024 });
+    let (_, body) = post(d.port, "chat:generateImage", json!([size_only]), Some(TOKEN)).await;
+    assert_eq!(body["error"], "Invalid image request: size");
     let (_, missing_model) = post(d.port, "chat:generateImage", json!([valid]), Some(TOKEN)).await;
     assert_eq!(missing_model["error"], "Choose an installed local image-generation model.");
+    // The desktop's photo edit (ChatPane sendImage) passes the shape check: the chat's saved
+    // params with its fractional CFG default, the photos and the edit's size. It stops only
+    // at the model lookup here because this sandbox has none.
+    let desktop = json!({ "sessionId": "s_img", "prompt": "make it blue", "params": {
+        "modelId": "image/missing", "width": 1024, "height": 1024, "steps": 28, "cfgScale": 4.5, "seed": -1
+    }, "images": [png, "data:image/jpeg;base64,/9j/4AAQ"], "size": { "width": 832, "height": 1216 } });
+    let (_, desktop) = post(d.port, "chat:generateImage", json!([desktop]), Some(TOKEN)).await;
+    assert_eq!(desktop["error"], "Choose an installed local image-generation model.", "{desktop}");
     let mut wrong_chat = valid.clone();
     wrong_chat["sessionId"] = json!("s_text");
     let (_, wrong_chat) = post(d.port, "chat:generateImage", json!([wrong_chat]), Some(TOKEN)).await;
