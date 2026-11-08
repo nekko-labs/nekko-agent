@@ -355,6 +355,10 @@ public final class ChatModel {
     @discardableResult
     public func send(_ text: String, skill: SkillSummary? = nil, images: [String] = []) async throws -> String {
         try Task.checkCancellation()
+        if isPhotoChat {
+            try makePicture(text, images: images)
+            return ""
+        }
         let outbox = store.outbox
         let id = outbox.newId()
         guard store.conn == .online, let r = try? store.remote() else {
@@ -434,6 +438,92 @@ public final class ChatModel {
             }
         }
         return id
+    }
+
+    // MARK: Photo chats
+
+    /// A Photo chat (`chatType == "image"`): the composer makes pictures on the computer.
+    public var isPhotoChat: Bool { session?.isPhotoChat == true }
+
+    /// What a Photo chat says when the computer hasn't given it a picture model.
+    public static let choosePictureModel = "Choose a picture model for this chat on your computer."
+    /// Photo turns run only while the computer is there: the outbox carries chat turns, not pictures.
+    public static let reconnectForPicture = "Reconnect to make a picture. Photo chats need your computer online."
+    public static let waitForPicture = "Wait for this picture to finish, or stop it."
+
+    /// A Photo chat's turn (`chat:generateImage`, decision 0069): `prompt`, and
+    /// with photos an edit of them at the first one's shape. Not through the
+    /// outbox, and never queued: it runs now or is refused. Returns once the
+    /// turn has started; `image_status` events carry its progress, Stop is
+    /// `abort()`. Throws, keeping the prompt in the composer, when it can't go.
+    public func makePicture(_ prompt: String, images: [String] = []) throws {
+        guard let params = session?.imageParams, params.modelId != nil else { throw RelayError(Self.choosePictureModel) }
+        guard store.conn == .online, let r = try? store.remote() else { throw RelayError(Self.reconnectForPicture) }
+        guard !turn.running else { throw RelayError(Self.waitForPicture) }
+        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw RelayError("Describe the picture you want first.") }
+        let photos = Array(images.filter(PhotoEdit.accepts).prefix(PhotoEdit.maxPhotos))
+        guard let opts = imageTurnOptions(sessionId: sessionId, prompt: text, params: params, images: photos) else {
+            throw RelayError(Self.choosePictureModel)
+        }
+        let at = now()
+        outgoingPhotos = photos.isEmpty ? nil : ("pending-\(at)", photos)
+        turn = LiveTurn(running: true, blocks: [.user(id: "pending-\(at)", text: text, at: at, images: photos.count)], startedAt: at)
+        sending = true
+        sendTask = Task { @MainActor in
+            defer { self.sending = false }
+            do {
+                // Resolves when the picture is made, failed or stopped; the events say so first.
+                _ = try await r.call(Channels.chatGenerateImage, [opts], timeout: turnTimeout)
+                await self.reload()
+            } catch {
+                var t = self.turn
+                let started = t.blocks.contains { $0.id != "pending-\(at)" } || t.status != nil
+                if !started {
+                    t.blocks.removeAll { $0.id == "pending-\(at)" }
+                    self.outgoingPhotos = nil
+                }
+                if let e = error as? RelayError, e.fromComputer {
+                    // Turned down: the prompt and photos go back to the composer.
+                    t.running = false
+                    t.status = nil
+                    if !started { self.unsent = UnsentPrompt(text: text, skill: nil, images: photos) }
+                    t.error = self.store.readable(e).localizedDescription
+                    self.turn = t
+                } else {
+                    // No answer: the picture may still be on its way. The re-read after a reconnect shows it.
+                    t.running = false
+                    t.status = nil
+                    self.turn = t
+                    self.scheduleReload()
+                }
+            }
+        }
+    }
+
+    /// How a reply's picture was made; nil for anything that isn't a Photo reply.
+    public func generated(_ messageId: String) -> GeneratedPicture? {
+        let savedId = shownIds.first { $0.value == messageId }?.key ?? messageId
+        return session?.messages.first { $0.id == savedId }?.generated
+    }
+
+    /// Edit is offered under a made picture, never under a clip.
+    public func canEdit(_ messageId: String) -> Bool {
+        guard savedAt == nil, let g = generated(messageId) else { return false }
+        return !g.isClip
+    }
+
+    /// A made picture to edit, as large as the computer will send it
+    /// (`session:photo`), else the small copy already here. The caller scales
+    /// it (`PhotoEdit.maxEdge`) and puts it in the composer (`attach`).
+    public func pictureToEdit(_ messageId: String, _ index: Int) async throws -> String {
+        let full = try? await fullPhoto(messageId, index)
+        if let full, !full.isEmpty { return full }
+        let small = photos(messageId)
+        guard small.indices.contains(index), !small[index].isEmpty else {
+            throw RelayError("Your computer didn’t send that picture. Try again when it’s online.")
+        }
+        return small[index]
     }
 
     /// `channel` with the prompt's `clientMessageId`. A computer from before
@@ -722,6 +812,11 @@ public final class ChatModel {
     public var blocked: String? {
         let (p, m) = Self.resolveModel(session, store.defaults)
         if store.conn == .denied || store.denied != nil { return "This phone is no longer paired." }
+        if let session, session.isPhotoChat {
+            // The model is chosen and set up on the computer (decision 0069); offline nothing waits.
+            if session.imageParams?.modelId == nil { return Self.choosePictureModel }
+            return store.conn == .online ? nil : Self.reconnectForPicture
+        }
         if store.conn == .online && session != nil && (p == nil || m == nil) {
             return "No model chosen for this chat. Set a default model on your computer."
         }
@@ -729,7 +824,8 @@ public final class ChatModel {
     }
 
     /// The computer is out of reach: Send puts the prompt in the outbox ("Send when online").
-    public var sendsLater: Bool { store.conn != .online }
+    /// Never for a Photo chat: its turns don't wait in the outbox.
+    public var sendsLater: Bool { store.conn != .online && !isPhotoChat }
 
     /// `typed` is more work for this chat to place: here, or in a sub-agent. Never a slash command,
     /// and only while the computer can say delegation will run.
@@ -741,7 +837,7 @@ public final class ChatModel {
 
     /// What the composer says about the connection while it is down, or nil.
     public var offlineNote: String? {
-        guard store.conn != .online, store.conn != .denied, store.denied == nil else { return nil }
+        guard store.conn != .online, store.conn != .denied, store.denied == nil, !isPhotoChat else { return nil }
         let name = store.active?.name ?? "your computer"
         let state = store.conn == .offline ? "offline" : "reconnecting"
         return "\(name) is \(state). What you send waits on this iPhone and goes when it’s back."

@@ -17,6 +17,8 @@ To edit, attach, paste or drop a photo and describe the change, or press **Edit*
 
 Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
 
+On the iPhone app, a Photo chat works the same way, on your computer: type a prompt, or add up to four photos to edit, and send; the progress line says what the computer is doing and **Stop** cancels. **Edit** under a picture puts it in the message box. Choose the chat's picture model on the computer first; the phone uses it and cannot download one. Photo chats need the computer online: nothing waits on the phone to send later. Android follows.
+
 ### Short video clips (experimental)
 
 Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Models**, **Best for this machine** lists it under **Create video clips** when your computer can run it: it needs a graphics card or Apple Silicon with enough memory, and is never suggested for running on the processor alone, where a clip would take hours. Download it like any other model; its supporting files come with it.

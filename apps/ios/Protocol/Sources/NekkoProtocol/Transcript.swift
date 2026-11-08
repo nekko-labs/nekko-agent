@@ -41,6 +41,8 @@ public struct LiveTurn: Equatable, Sendable {
     public var rate: Double?
     /// When the overlay started (for Live Activities' elapsed time).
     public var startedAt: Int64?
+    /// A Photo turn's progress in words (`image_status`), until it ends.
+    public var status: String?
 
     public init(running: Bool = false, blocks: [Block] = [], approval: Approval? = nil, question: AskRequest? = nil,
                 error: String? = nil, rate: Double? = nil, startedAt: Int64? = nil) {
@@ -66,7 +68,8 @@ public enum Transcript {
                 out.append(.user(id: m.id, text: text, at: m.createdAt, images: m.imageCount))
             case "assistant":
                 let reasoning = m.reasoning.flatMap { $0.isEmpty ? nil : $0 }
-                if !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) || (m.turnStats != nil && m.toolCalls.isEmpty) {
+                // A Photo chat's reply is its picture, with no text.
+                if !m.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !(reasoning?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) || (m.turnStats != nil && m.toolCalls.isEmpty) || m.imageCount > 0 {
                     out.append(.assistant(id: m.id, text: m.content, reasoning: reasoning, streaming: false, interrupted: m.interrupted))
                 }
                 for call in m.toolCalls {
@@ -119,13 +122,18 @@ public enum Transcript {
             // The failed call's streamed text is regenerated: drop what came after the last non-reply block.
             let keep = (t.blocks.lastIndex { !$0.isAssistant } ?? -1) + 1
             t.blocks = Array(t.blocks.prefix(keep))
+        case .imageStatus(_, _, let label):
+            t.running = true
+            t.status = label.isEmpty ? nil : label
         case .done:
             t.running = false
+            t.status = nil
             t.approval = nil
             t.question = nil
             t.blocks = settle(t.blocks)
         case .error(_, let message):
             t.running = false
+            t.status = nil
             t.approval = nil
             t.question = nil
             t.blocks = settle(t.blocks)

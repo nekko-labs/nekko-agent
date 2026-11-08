@@ -30,6 +30,8 @@ public enum Channels {
     /// A mono 16 kHz 16-bit PCM WAV as a JSON array of byte values → the text.
     public static let voiceTranscribe = "voice:transcribe"
     public static let chatSend = "chat:send"
+    /// A Photo chat's turn (decision 0069): `imageTurnOptions` → resolves when the picture is made, failed or stopped.
+    public static let chatGenerateImage = "chat:generateImage"
     public static let chatAbort = "chat:abort"
     public static let chatQueue = "chat:queue"
     /// Stop the reply and start the queued prompt at an index.
@@ -136,7 +138,7 @@ public enum Channels {
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
-        sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatAbort, chatQueue,
+        sessionSetOptions, sessionSetSupportingWorkspaces, sessionDelete, voiceStatus, voiceTranscribe, chatSend, chatGenerateImage, chatAbort, chatQueue,
         chatInterruptQueued, chatPending, chatAnswer, toolApprove, workspaceList, workspaceAddByPath, workspaceRemove, appInfo, activityState, skillsRunnable, toolsList, changesList, auditRead,
         chatEditQueued, sessionFork, tasksList, taskRunNow, workflowsList, workflowRun, prSessionList,
         usageSummary, limitsGet, sessionWatches, machineSummary, monitorSummary, securityChallenge, appQuit, deviceSignOut, remoteStop,
@@ -345,12 +347,15 @@ public struct ChatMessage: Equatable, Sendable {
     public let toolResult: ToolResult?
     public let interrupted: Bool
     public var turnStats: TurnStats? = nil
+    /// A Photo chat's reply: how its picture (or clip) was made.
+    public var generated: GeneratedPicture? = nil
 
     public static func == (a: ChatMessage, b: ChatMessage) -> Bool {
         a.id == b.id && a.role == b.role && a.content == b.content && a.reasoning == b.reasoning
             && a.createdAt == b.createdAt && a.imageCount == b.imageCount && a.skill?.name == b.skill?.name
             && a.skill?.input == b.skill?.input && a.toolCalls == b.toolCalls && a.toolResult == b.toolResult
             && a.interrupted == b.interrupted && a.images == b.images && a.turnStats == b.turnStats
+            && a.generated == b.generated
     }
 
     public static func from(_ v: JSONValue?) -> ChatMessage? {
@@ -364,7 +369,8 @@ public struct ChatMessage: Equatable, Sendable {
             images: v["images"]?.array?.map { $0.string ?? "" } ?? [], skill: skill,
             toolCalls: v["toolCalls"]?.array?.compactMap(ToolCall.from) ?? [],
             toolResult: ToolResult.from(v["toolResult"]), interrupted: v.flag("interrupted"),
-            turnStats: role == "assistant" ? TurnStats.from(v["turnStats"]) : nil)
+            turnStats: role == "assistant" ? TurnStats.from(v["turnStats"]) : nil,
+            generated: role == "assistant" ? GeneratedPicture.from(v["generated"]) : nil)
     }
 }
 
@@ -398,11 +404,16 @@ public struct Session: Equatable, Sendable {
     public var parentSessionId: String?
     /// `image` for an image chat; nil for an ordinary one.
     public var chatType: String?
+    /// A Photo chat's picture settings, as its composer on the computer saved them.
+    public var imageParams: ImageParams?
     public var executionMode: String?
     public var disabledTools: [String] = []
     /// MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in
     /// this chat (decision 0054): the egress gate stops asking for them.
     public var allowedMcpTools: [String] = []
+
+    /// A Photo chat: its turns make pictures (`chat:generateImage`), not replies.
+    public var isPhotoChat: Bool { chatType == "image" }
 
     /// A follow-up the person chose to run in a sub-agent (`inSubagent` in shared/orchestration.ts).
     public static func inSubagent(_ text: String) -> String { "Do this in a subagent, then report back:\n\n\(text)" }
@@ -434,7 +445,8 @@ public struct Session: Equatable, Sendable {
             effort: v.str("effort"),
             agentPlan: PlanStep.list(v["agentPlan"]),
             runOptions: RunOption.values(of: v),
-            parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"), executionMode: v.str("executionMode"),
+            parentSessionId: v.str("parentSessionId"), chatType: v.str("chatType"),
+            imageParams: ImageParams.from(v["imageParams"]), executionMode: v.str("executionMode"),
             disabledTools: v["disabledTools"]?.array?.compactMap(\.string) ?? [],
             allowedMcpTools: v["allowedMcpTools"]?.array?.compactMap(\.string) ?? [])
     }
@@ -963,13 +975,15 @@ public enum AgentEvent: Equatable, Sendable {
     case done(sessionId: String, messageId: String?)
     case error(sessionId: String, message: String)
     case sessionMeta(sessionId: String)
+    /// A Photo turn's progress: `loading` the model or `generating`, in words (`label`).
+    case imageStatus(sessionId: String, stage: String, label: String)
     case other(sessionId: String, type: String)
 
     public var sessionId: String {
         switch self {
         case .text(let s, _), .reasoning(let s, _), .toolCall(let s, _), .approvalRequired(let s, _), .toolResult(let s, _),
              .question(let s, _), .questionResolved(let s, _), .usage(let s, _, _), .retry(let s), .done(let s, _),
-             .error(let s, _), .sessionMeta(let s), .other(let s, _):
+             .error(let s, _), .sessionMeta(let s), .imageStatus(let s, _, _), .other(let s, _):
             return s
         }
     }
@@ -1000,6 +1014,7 @@ public enum AgentEvent: Equatable, Sendable {
         case "error": return .error(sessionId: sid, message: v.str("message") ?? "Something went wrong.")
         // A message taken at the next step joined the transcript.
         case "session_meta", "steered": return .sessionMeta(sessionId: sid)
+        case "image_status": return .imageStatus(sessionId: sid, stage: v.str("stage") ?? "generating", label: v.str("label") ?? "")
         default: return .other(sessionId: sid, type: type)
         }
     }

@@ -161,6 +161,62 @@ struct QueueEditor: View {
     }
 }
 
+/// A Photo chat's reply: the pictures the computer made, large, with Edit under
+/// each (not under a clip, which is a short animation). Tap one to see it full screen.
+struct MadePictures: View {
+    let photos: [String]
+    /// A clip from a video model: the phone shows its first frame.
+    var clip = false
+    var open: (Int) -> Void
+    /// Puts picture `i` in the message box to edit; nil offers no Edit.
+    var edit: ((Int) -> Void)?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(photos.enumerated()), id: \.offset) { i, p in
+                VStack(alignment: .leading, spacing: 6) {
+                    if let image = DataURLImage.decode(p) {
+                        Button { open(i) } label: {
+                            Image(uiImage: image).resizable().scaledToFit()
+                                .frame(maxWidth: 300, maxHeight: 300, alignment: .leading)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(alignment: .bottomLeading) {
+                                    if clip {
+                                        Label("Clip", systemImage: "play.rectangle.fill").font(.caption2.weight(.semibold))
+                                            .padding(.horizontal, 8).padding(.vertical, 4)
+                                            .background(.ultraThinMaterial, in: Capsule()).padding(8)
+                                    }
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(clip ? Text("Clip") : photos.count == 1 ? Text("Picture") : Text("Picture \(i + 1) of \(photos.count)"))
+                        .accessibilityHint("Opens it full screen")
+                        .accessibilityIdentifier("chat.madePicture")
+                    } else {
+                        // Kept back by the computer (only the newest come to the phone).
+                        Label(LocalizedStringKey(clip ? "Clip on your computer" : "Picture on your computer"), systemImage: clip ? "film" : "photo")
+                            .font(.footnote).foregroundStyle(palette.inkFaint)
+                    }
+                    if let edit {
+                        Button { edit(i) } label: {
+                            Label("Edit", systemImage: "wand.and.stars").font(.footnote.weight(.semibold))
+                                .padding(.horizontal, 12).frame(minHeight: 32)
+                                .background(palette.surface, in: Capsule())
+                                .overlay(Capsule().stroke(palette.line))
+                                .frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(palette.accent)
+                        .accessibilityHint("Adds this picture to your message to change it")
+                        .accessibilityIdentifier("chat.editPicture")
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// A user's photos in the transcript, as the small copies the computer sends; tap to see them full screen.
 struct PhotoStrip: View {
     let photos: [String]
