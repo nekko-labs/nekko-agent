@@ -2,6 +2,7 @@
 const { app, BrowserWindow, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { selectWallView } = require('./wall-view-navigation.cjs');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
@@ -11,7 +12,7 @@ const expectNew = process.env.NEKKO_EXPECT_WAVE_NEW === '1';
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
-  const win = new BrowserWindow({ width: 1440, height: 900, useContentSize: true, show: false, focusable: false, skipTaskbar: true, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width: 1440, height: 900, useContentSize: true, show: false, focusable: false, skipTaskbar: true, webPreferences: { offscreen: true, sandbox: true, contextIsolation: true, backgroundThrottling: false } });
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 350)); });
   win.on('focus', () => report.errors.push('took focus'));
   const run = s => win.webContents.executeJavaScript(s);
@@ -23,6 +24,10 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture && !!document.querySelector("[data-chat-surface]")'); i++) await sleep(100);
     await sleep(1500);
+    // This journey tests the board, not first-visit onboarding. Dismiss its real control.
+    await run(`document.querySelector('.zones-intro button[aria-label="Close"]')?.click()`);
+    await sleep(150);
+    assert(await run(`!document.querySelector('[role="dialog"]')`), 'board-uncovered');
     await shot('default-empty');
     await run(`(() => { const f = layoutFixture, s = f.store.getState(); f.store.setState({ settings: {...s.settings, themePreset: 'lilac', theme: 'light', backgroundAnimation: true, mascotEnabled: true} }); f.store.getState().applyTheme(); })()`);
     if (!await run(`!!document.querySelector('[data-chat-surface]')`)) throw Error('App fixture did not render agent panels');
@@ -67,22 +72,23 @@ app.whenReady().then(async () => {
     await run(`layoutFixture.bridge.sendChat = () => new Promise(() => {}); layoutFixture.store.setState({composerInbox:{sessionId:'a',text:'Check the synthetic workspace',run:true}})`);
     await sleep(300);
     assert(await run(`!document.querySelector('[data-session-id="a"] .pixel-wave-background')`), 'send-removes-wave-before-token');
-    assert(await run(`document.querySelector('.pixel-mascot')?.dataset.mascotPose === 'working'`), 'send-colors-cat-before-token');
+    assert(await run(`document.querySelector('[data-session-id="a"] [data-chat-mascot]')?.dataset.chatMascot === 'working'`), 'send-marks-chat-cat-working-before-token');
     // Persist the synthetic user message then emit a running token, without a host.
     await run(`(() => {const f=layoutFixture, s=f.records[0]; s.messages=[{id:'user-1',role:'user',content:'Check the synthetic workspace',createdAt:Date.now()}]; f.putCachedSession(s); f.emitAgent({type:'session_meta',sessionId:'a'}); f.emitAgent({type:'text',sessionId:'a',delta:'Inspecting the workspace.'});})()`);
     await sleep(500);
     assert(await run(`!document.querySelector('[data-session-id="a"] .pixel-wave-background')`), 'first-message-removes-wave');
-    assert(await run(`document.querySelector('.pixel-mascot')?.dataset.mascotPose === 'working'`), 'working-cat');
+    assert(await run(`document.querySelector('[data-session-id="a"] [data-chat-mascot]')?.dataset.chatMascot === 'working'`), 'working-cat');
     assert(await run(`document.querySelectorAll('.composer-beam-ring').length === 0`), 'no-working-beams');
-    assert(await run(`document.querySelector('.pixel-mascot svg')?.getAnimations({subtree:true}).length === 0`), 'working-cat-no-motion');
+    assert(await run(`document.querySelector('[data-session-id="a"] [data-chat-mascot] svg')?.getAnimations({subtree:true}).length === 0`), 'working-cat-no-motion');
     await shot('working-agent');
-    await run(`layoutFixture.emitAgent({type:'text',sessionId:'background-agent',delta:'Working elsewhere'});layoutFixture.emitAgent({type:'done',sessionId:'a',messageId:'reply-1'})`);
+    await run(`layoutFixture.emitAgent({type:'text',sessionId:'b',delta:'Working elsewhere'});layoutFixture.emitAgent({type:'done',sessionId:'a',messageId:'reply-1'})`);
     await sleep(150);
-    assert(await run(`document.querySelector('.pixel-mascot')?.dataset.mascotPose === 'working'`), 'background-agent-keeps-cat-working');
-    await run(`layoutFixture.emitAgent({type:'question',sessionId:'background-agent',request:{id:'q',callId:'q',questions:[]}})`);
+    assert(await run(`document.querySelector('[data-grid-cell="chat:b"] [data-wall-mascot]')?.dataset.wallMascot === 'working'`), 'background-agent-keeps-own-indicator-working');
+    assert(await run(`document.querySelector('[data-session-id="a"] [data-chat-mascot]')?.dataset.chatMascot === 'idle'`), 'finished-chat-cat-idle-while-background-agent-works');
+    await run(`(() => {const request={callId:'q',askedAt:Date.now(),questions:[{id:'scope',header:'Scope',question:'Which synthetic task?',options:[{label:'Unit tests'},{label:'Documentation'}]}]}; localStorage.setItem('fixture.pending',JSON.stringify({b:{sessionId:'b',question:request}})); layoutFixture.emitAgent({type:'question',sessionId:'b',request});})()`);
     await sleep(150);
-    assert(await run(`document.querySelector('.pixel-mascot')?.dataset.mascotPose !== 'working'`), 'waiting-cat-idle');
-    await run(`layoutFixture.emitAgent({type:'done',sessionId:'background-agent',messageId:'reply-2'})`);
+    assert(await run(`document.querySelector('[data-grid-cell="chat:b"] [data-wall-mascot]')?.dataset.wallMascot === 'input'`), 'waiting-agent-indicator');
+    await run(`localStorage.removeItem('fixture.pending');layoutFixture.emitAgent({type:'question_resolved',sessionId:'b',callId:'q',answers:[]});layoutFixture.emitAgent({type:'done',sessionId:'b',messageId:'reply-2'})`);
     await sleep(150);
     await shot('finished-agent');
     // Match default-theme working state too; primary evidence uses the default palette.
@@ -90,13 +96,18 @@ app.whenReady().then(async () => {
     await sleep(250); await shot('default-working');
     fs.mkdirSync(path.join(out, 'motion-working'), { recursive: true });
     for (let i = 0; i < 16; i++) { fs.writeFileSync(path.join(out, 'motion-working', String(i).padStart(3, '0') + '.png'), (await win.capturePage(undefined, { stayHidden: true })).resize({width:1440}).toPNG()); await sleep(150); }
-    await run(`document.querySelector('button[title^="Dynamic ("]')?.click()`); await sleep(500);
-    await shot('default-dynamic-working');
-    assert(await run(`document.querySelectorAll('.composer-beam-ring').length === 0`), 'dynamic-no-working-beams');
+    await selectWallView(run, 'focus', () => sleep(150));
+    assert(await run(`!!document.querySelector('[data-wall-layout="focus"]')`), 'single-agent-view-selected');
+    await selectWallView(run, 'grid', () => sleep(150));
+    assert(await run(`!!document.querySelector('[data-wall-layout="grid"]')`), 'multi-agent-view-selected');
+    await shot('default-multi-agent-working');
+    assert(await run(`document.querySelectorAll('.composer-beam-ring').length === 0`), 'multi-agent-no-working-beams');
     report.checks.bounds = win.getBounds();
     report.checks.visible = win.isVisible();
+    report.checks.focused = win.isFocused();
+    report.checks.offscreen = win.webContents.isOffscreen();
     await shot('active-agent');
-  } catch (e) { report.errors.push(String(e.stack || e)); }
+  } catch (e) { report.errors.push(String(e.stack || e)); report.failureState = await run(`({layout:document.querySelector('[data-wall-layout]')?.dataset.wallLayout,dialogs:[...document.querySelectorAll('[role="dialog"]')].map(e=>({label:e.getAttribute('aria-label'),text:e.innerText.slice(0,300)})),menus:document.querySelectorAll('[data-wall-view-menu]').length,animations:[...document.querySelectorAll('[data-chat-mascot] svg')].flatMap(e=>e.getAnimations({subtree:true}).map(a=>({state:a.playState,time:a.currentTime,name:a.animationName,property:a.transitionProperty})))})`).catch(() => null); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   app.exit(report.errors.length ? 1 : 0);

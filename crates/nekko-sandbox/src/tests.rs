@@ -8,6 +8,46 @@ use std::sync::Arc;
 const IMAGE: &str = "example/sandbox@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const IMAGE_ID: &str = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
+/// Execute the shipped helper itself, rather than the scripted Docker runner.
+/// Unix CI supplies python3; Windows native tests do not claim container parity.
+#[cfg(unix)]
+#[test]
+fn real_helper_validates_batches_before_writing() {
+    let root = std::env::temp_dir().join(format!("nekko-helper-batch-{}", nekko_js::uuid()));
+    std::fs::create_dir_all(&root).unwrap();
+    let helper = include_str!("helper.py").replace("root='/workspace'", &format!("root={}", json!(root)));
+    let call = |mut args: Value| {
+        args["op"] = json!("edit");
+        args["path"] = json!("source.txt");
+        args["limits"] = json!({"bytes": 16 * 1024 * 1024, "files": 100});
+        std::process::Command::new("python3")
+            .args(["-I", "-c", &helper, &args.to_string()])
+            .output()
+            .expect("python3 required for helper parity")
+    };
+    let file = root.join("source.txt");
+    for invalid in [
+        json!({"edits":[]}),
+        json!({"edits":null}),
+        json!({"edits":[{"old_string":"one","new_string":"changed"},{"old_string":"missing","new_string":"x"}]}),
+        json!({"old_string":"one","edits":[{"old_string":"one","new_string":"x"}]}),
+        json!({"edits":[{"old_string":"", "new_string":"x"}]}),
+        json!({"edits":[{"old_string":"one", "new_string":null}]}),
+        json!({"edits":vec![json!({"old_string":"one","new_string":"one"}); 101]}),
+    ] {
+        std::fs::write(&file, "one\r\ntwo").unwrap();
+        assert!(!call(invalid).status.success());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "one\r\ntwo");
+    }
+    let result = call(json!({"edits":[
+        {"old_string":"one","new_string":"α"},
+        {"old_string":"α","new_string":"$& $$ $` $'"}
+    ]}));
+    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), "$& $$ $` $'\r\ntwo");
+    std::fs::remove_dir_all(root).unwrap();
+}
+
 #[derive(Default)]
 struct State {
     calls: Vec<Vec<String>>,

@@ -342,6 +342,7 @@ async fn wipe(ctx: &Ctx, opts: &Value) -> Result<Value, String> {
         .map_err(|e| e.to_string())?;
     let files = data_dir.clone();
     tokio::task::spawn_blocking(move || wipe_files(&files, models)).await.map_err(|e| e.to_string())??;
+    ctx.changes.clear_memory();
     nekko_net::clear();
     ctx.accounts.clear(None);
     let next = crate::settings::route(&ctx.settings, "settings:reset", &[]).await?;
@@ -377,6 +378,7 @@ pub fn wipe_files(data_dir: &std::path::Path, models: bool) -> Result<(), String
     }
     crate::logs::clear_dir(&data_dir.join("logs")).map_err(|e| e.to_string())?;
     remove(&data_dir.join("desktop").join("agent-browser"))?;
+    remove(&data_dir.join("changes"))?;
     let downloads: &[&str] = if models { DOWNLOADS } else { &[] };
     for name in WIPE_OWNED.iter().chain(downloads) {
         remove(&data_dir.join(name))?;
@@ -649,6 +651,15 @@ mod tests {
         walk(dir, dir, &mut out);
         // `readdirSync(...).sort()` in the TS is code-unit order per folder.
         Value::Object(out.into_iter().map(|(k, v)| (k, json!(v))).collect())
+    }
+
+    #[test]
+    fn wipe_removes_orphaned_review_originals() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("changes")).unwrap();
+        std::fs::write(tmp.path().join("changes/orphan.json"), "private original").unwrap();
+        wipe_files(tmp.path(), false).unwrap();
+        assert!(!tmp.path().join("changes").exists());
     }
 
     #[test]

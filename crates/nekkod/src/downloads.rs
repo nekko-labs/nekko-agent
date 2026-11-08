@@ -110,6 +110,15 @@ impl ModelDownloads {
         }
         let list = self.library.list().await?;
         let Some(model) = acquire::downloaded_model(&list, job) else { return Ok(()) };
+        // A picture model starts only with its text encoders and VAE: fetch
+        // them now, wherever the download was started from, rather than at
+        // the first prompt. Files already on disk are skipped.
+        if model.get("modality").and_then(Value::as_str) == Some("image")
+            && acquire::image_companion_set_for(&model).is_some()
+        {
+            let id = model.get("id").map(nekko_js::display).unwrap_or_default();
+            self.download_image_companions(&id).await?;
+        }
         if model.get("format").and_then(Value::as_str) == Some("mlx") || nekko_js::truthy(model.get("preset")) {
             return Ok(());
         }

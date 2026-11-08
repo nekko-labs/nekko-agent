@@ -190,6 +190,10 @@ export interface ImageTurnOptions {
   sessionId: string;
   prompt: string;
   params: ImageChatParams & { modelId: string };
+  /** Pictures to edit, as data URLs (at most 4). Without them the prompt makes a new picture. */
+  images?: string[];
+  /** The size to make an edit at (the photo's shape), for this turn only; the chat keeps `params`' size. */
+  size?: { width: number; height: number };
 }
 
 /** `Session.claudeCodeContext`. */
