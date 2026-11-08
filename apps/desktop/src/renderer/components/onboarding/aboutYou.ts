@@ -21,9 +21,9 @@ export const PROFILES: readonly ProfileCard[] = [
 ];
 
 export const LEVELS: ReadonlyArray<{ id: DetailLevel; title: string; desc: string }> = [
-  { id: 'minimal', title: 'Minimal', desc: 'Just the answer. Steps and stats stay out of sight.' },
+  { id: 'minimal', title: 'Minimal', desc: 'The answer, with fewer extras and no reply stats.' },
   { id: 'regular', title: 'Regular', desc: 'The answer, plus a tidy summary of what I did.' },
-  { id: 'detailed', title: 'Detailed', desc: 'Every thought, tool call and token as it happens.' },
+  { id: 'detailed', title: 'Detailed', desc: 'Tool steps, available reasoning and reply stats.' },
 ];
 
 export const levelForProfile = (profile?: WorkProfile | null): DetailLevel =>

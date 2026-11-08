@@ -1808,3 +1808,7 @@ User intent: the conversation should use the space at the sides of the chat pane
 - **Preview (dev only).** `NEKKO_CLAUDE_POLICY_PREVIEW=subscription` renders the plan's approval-gated rows as enabled and answers `claude:planUsage` with example data (`claudePlanUsageExample()`, labelled "Example data"), for recording what Nekko would turn on. It is compiled only into nekkod builds with the `dev-tools` feature (`npm run dev`'s daemon), never the release build the app packages, and is ignored in a packaged app. The real Claude Code session in a preview still runs on an API key.
 
 Status: implemented and tested (unit, parity and an end-to-end daemon test); inert until the Claude Agent harness and UI use it.
+
+### Agent output detail presets (#2297)
+
+Implemented in shared desktop/Local Web UI Customize: a dedicated **Agent output detail** section reuses the introduction's Minimal, Regular and Detailed cards and animated sample reply. Choices save immediately to existing device-local presentation settings, without changing permissions, answer length or monitor preferences. The preview supports pause/play and a finished static Reduce Motion state; narrow layouts stack the cards and allow preview scrolling. Labeled Simple/Detailed shortcuts retain inline icons. Focused renderer tests, desktop typecheck and hidden Electron interaction/visual evidence pass; packaged builds, real agent runs and native mobile three-choice parity are not verified by this change. See [Customize experience](spec/desktop/customize-experience.md#agent-output-detail-2297).
