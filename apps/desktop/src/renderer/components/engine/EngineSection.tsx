@@ -295,7 +295,7 @@ export function EngineSection({
       </div>
       <ErrorBoundary label="Local API"><LocalServerSection /></ErrorBoundary>
       </div>
-      <div className="min-w-0">
+      <div data-models-section="library" className="min-w-0">
         <h2 className="text-base font-semibold">Models</h2>
         <p className="mt-0.5 text-xs text-ink-faint">Find, download and run models from one library.</p>
         <div className="card mt-3 min-w-0 p-4 sm:p-5">

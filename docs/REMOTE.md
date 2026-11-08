@@ -4,6 +4,16 @@ Drive the Nekko Agent running on your computer from your phone: start and manage
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
+## Permissions on iPhone and iPad
+
+After pairing your first computer, the permissions checklist explains what Nekko uses and why. Tap an item to allow it, or **Continue** and decide later. Existing users can open **Settings → Device access → Permissions** without repeating onboarding.
+
+- **Notifications** let you know about approvals, questions, and finished or failed replies. Choose the kinds in Settings. Permission alone does not guarantee delivery: your computer and relay must also be reachable, and iOS notification settings still apply.
+- **Local Network** finds nearby computers and reaches local connections. Looking does not pair. iOS does not expose a simple authorization status, so no discovery result means access is not verified, not necessarily denied. Check system Settings and your computer's network visibility.
+- **Optional tools:** Live Activities, camera for QR pairing, microphone and on-device speech recognition for dictation, device authentication, and add-only access to save images to Photos. Checking authentication does not change App lock. Live Activities has a separate system setting and app content controls.
+
+Denied access can be restored in system Settings. If Settings opens its home page, find Nekko Agent there (under **Apps** on newer iOS versions). Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
+
 ## Draft photos and appearance on iPhone
 
 Photos added with **+ → Photos** or **Paste image** appear inside the message composer. Tap a thumbnail to preview it, or its remove button to leave it out. Adding or removing a photo saves the draft immediately on the phone; reopening the app restores its text and attachments. Photos stay local until you send the message.
