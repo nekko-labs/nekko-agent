@@ -7,15 +7,15 @@ import { dirname, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const build = resolve(__dirname, '../build');
-const BG = rgbaToInt(16, 23, 20, 255); // Nekko Agent dark green #101714
-const ACCENT = rgbaToInt(167, 200, 172, 255); // sage #a7c8ac
+const BG = rgbaToInt(25, 0, 25, 255); // Nekko Agent plum #190019
+const ACCENT = rgbaToInt(201, 155, 179, 255); // light plum #c99bb3
 
 const tintFont = (font) => {
   for (const page of font.pages) {
     for (let i = 0; i < page.bitmap.data.length; i += 4) {
-      page.bitmap.data[i] = 167;
-      page.bitmap.data[i + 1] = 200;
-      page.bitmap.data[i + 2] = 172;
+      page.bitmap.data[i] = 201;
+      page.bitmap.data[i + 1] = 155;
+      page.bitmap.data[i + 2] = 179;
     }
   }
   return font;
