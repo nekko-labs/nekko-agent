@@ -37,6 +37,35 @@ fn phone_image_fractional_cfg_cannot_cross_the_phone_boundary_but_local_desktop_
 }
 
 #[test]
+fn phone_image_edit_photos_fit_one_relay_frame_but_the_desktop_has_no_frame_cap() {
+    // Exactly what the desktop's photo edit sends (ChatPane sendImage): the chat's saved
+    // params, fractional CFG included, four photos and the edit's size.
+    let photo = format!("data:image/png;base64,{}", "A".repeat(2 * 1024 * 1024));
+    let desktop = json!({ "sessionId": "s_img", "prompt": "make it blue", "params": {
+        "modelId": "image/flux2-klein", "width": 1024, "height": 1024, "steps": 4, "cfgScale": 4.5, "seed": -1
+    }, "images": [photo, photo, photo, photo], "size": { "width": 832, "height": 1216 } });
+    assert_eq!(phone_image::host_request_problem(&desktop), None);
+    let mut phone = desktop.clone();
+    phone["params"]["cfgScale"] = json!(4);
+    assert_eq!(phone_image::request_problem(&phone), Some("images".into()), "over the phone's frame budget");
+    phone["images"] = json!([photo, photo]);
+    assert_eq!(phone_image::request_problem(&phone), None);
+    assert!(phone::screen("chat:generateImage", &[phone]).is_ok());
+    // The host keeps every other photo and size rule.
+    for (key, value) in [
+        ("images", json!(["data:image/svg+xml;base64,PHN2Zz4="])),
+        ("images", json!(["/Users/me/photo.png"])),
+        ("images", json!(vec![json!("data:image/png;base64,AAAA"); 5])),
+        ("size", json!({ "width": 832, "height": 1216, "depth": 1 })),
+        ("size", json!({ "width": 830, "height": 1216 })),
+    ] {
+        let mut bad = desktop.clone();
+        bad[key] = value;
+        assert_eq!(phone_image::host_request_problem(&bad), Some(key.into()), "{key}: {}", bad[key]);
+    }
+}
+
+#[test]
 fn phone_image_has_no_install_fetch_or_upload_authority() {
     for c in [
         "engine:install",

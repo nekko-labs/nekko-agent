@@ -404,7 +404,10 @@ fn want(model: &str, quant: &str, offload: bool, placement: Placement) -> (Strin
 #[test]
 fn every_picture_task_is_answered_with_a_model_that_can_do_it() {
     let feed = bundled_feed();
-    assert_eq!(feed.image_tasks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), ["imageCreate", "imageEdit"]);
+    assert_eq!(
+        feed.image_tasks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        ["imageCreate", "imageEdit", "videoCreate"]
+    );
     for t in &feed.image_tasks {
         for c in &t.candidates {
             let m = feed.image_models.iter().find(|m| &m.id == c).unwrap_or_else(|| panic!("{c}"));
@@ -457,4 +460,20 @@ fn without_a_gpu_the_smallest_picture_model_that_fits_is_picked() {
 fn a_card_too_small_even_to_offload_falls_back_to_system_ram() {
     let p = machine("win32", 16.0, vec![gpu("NVIDIA GeForce GTX 1650", 4.0)], false, &["cuda", "cpu"], Some("cuda"));
     assert_eq!(image_pick(&p, "imageCreate"), want("z-image-turbo", "Q4_K", false, Placement::Cpu));
+}
+
+#[test]
+fn video_clips_need_a_graphics_card_or_unified_memory() {
+    assert_eq!(image_pick(&rtx_5090(), "videoCreate"), want("wan2.2-ti2v-5b", "Q8_0", false, Placement::Gpu));
+    assert_eq!(
+        image_pick(&apple("Apple M5 Max", 64.0, 40), "videoCreate"),
+        want("wan2.2-ti2v-5b", "Q8_0", false, Placement::Unified)
+    );
+    // An 8 GB card cannot hold the text encoder even offloading, and a clip on the processor would take hours: no pick.
+    for p in [rtx_4060_vulkan(), cpu_only()] {
+        let r = rec(&p, bundled_feed());
+        let t = image(&r, "videoCreate");
+        assert!(t.pick.is_none(), "{:?}", t.pick);
+        assert!(!t.options.is_empty(), "the model is still listed, said not to fit");
+    }
 }

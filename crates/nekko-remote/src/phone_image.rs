@@ -82,12 +82,14 @@ pub fn request_problem(value: &Value) -> Option<String> {
 
 /// The trusted local host API retains its existing bounded fractional CFG
 /// contract (desktop defaults to 4.5). Phones must pass the strict validator
-/// above before dispatch: Change v1 cannot sign fractional numbers.
+/// above before dispatch: Change v1 cannot sign fractional numbers. Photos to
+/// edit follow the same shape rules, without the phone's relay-frame cap (the
+/// desktop may send four 1536 px PNGs).
 pub fn host_request_problem(value: &Value) -> Option<String> {
     request_problem_with(value, false)
 }
 
-fn request_problem_with(value: &Value, integer_cfg: bool) -> Option<String> {
+fn request_problem_with(value: &Value, phone: bool) -> Option<String> {
     let Some(o) = value.as_object() else { return Some("image request".into()) };
     for key in o.keys() {
         if !limits()["requestKeys"].as_array().is_some_and(|keys| keys.iter().any(|v| v.as_str() == Some(key))) {
@@ -107,7 +109,60 @@ fn request_problem_with(value: &Value, integer_cfg: bool) -> Option<String> {
     }) {
         return Some("prompt".into());
     }
-    params_problem_with(&value["params"], true, integer_cfg)
+    params_problem_with(&value["params"], true, phone).or_else(|| edit_problem(o, phone))
+}
+
+/// A PNG, JPEG or WebP base64 data URL (`phoneImagePhoto`): the only photo a
+/// request may carry. No SVG, GIF, paths, file or web URLs.
+pub fn edit_photo(v: &Value) -> bool {
+    let Some(s) = v.as_str() else { return false };
+    let mut types = limits()["editImageTypes"].as_array().into_iter().flatten().filter_map(Value::as_str);
+    let Some(body) = types.find_map(|t| s.strip_prefix(&format!("data:image/{t};base64,"))) else {
+        return false;
+    };
+    let data = body.trim_end_matches('=');
+    !data.is_empty()
+        && body.len() - data.len() <= 2
+        && data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/')
+}
+
+/// Photos to edit (1 to `editImages`) and the edit's `size`, which is refused
+/// without photos since it only ever shapes an edit (`phoneImageEditProblem`).
+fn edit_problem(o: &serde_json::Map<String, Value>, phone: bool) -> Option<String> {
+    let p = limits();
+    if let Some(images) = o.get("images") {
+        let ok = images.as_array().is_some_and(|a| {
+            !a.is_empty()
+                && a.len() <= p["editImages"].as_u64().unwrap_or(0) as usize
+                && a.iter().all(edit_photo)
+                && (!phone
+                    || a.iter().map(|i| i.as_str().map_or(0, str::len)).sum::<usize>()
+                        <= p["editImageChars"].as_u64().unwrap_or(0) as usize)
+        });
+        if !ok {
+            return Some("images".into());
+        }
+    }
+    if let Some(size) = o.get("size") {
+        let keys: Vec<&str> = p["sizeKeys"].as_array().into_iter().flatten().filter_map(Value::as_str).collect();
+        let ok = o.contains_key("images")
+            && size.as_object().is_some_and(|s| {
+                !keys.is_empty()
+                    && s.len() == keys.len()
+                    && keys.iter().all(|&k| {
+                        s.get(k).and_then(Value::as_f64).is_some_and(|n| {
+                            n.fract() == 0.0
+                                && n >= p[k][0].as_f64().unwrap_or(f64::INFINITY)
+                                && n <= p[k][1].as_f64().unwrap_or(f64::NEG_INFINITY)
+                                && n % p["sizeMultiple"].as_f64().unwrap_or(0.0) == 0.0
+                        })
+                    })
+            });
+        if !ok {
+            return Some("size".into());
+        }
+    }
+    None
 }
 
 /// Retrieve only raster data attached to this exact transcript message. No I/O,

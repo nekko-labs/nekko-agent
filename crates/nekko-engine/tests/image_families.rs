@@ -48,6 +48,12 @@ fn real_file_names_resolve_to_their_family() {
         assert_eq!(set["id"], id, "{path}");
         assert_eq!(set["defaults"], defaults, "{path}");
     }
+    // Wan 2.2 TI2V 5B makes clips; the other Wan models need another VAE and get no set.
+    let wan = set_of("image/QuantStack_Wan2.2-TI2V-5B-GGUF/Wan2.2-TI2V-5B-Q4_K_M.gguf");
+    assert_eq!((wan["id"].clone(), wan["capabilities"].clone()), (json!("wan2.2-ti2v-5b"), json!(["video"])));
+    assert_eq!(set_of("image/Comfy-Org_Wan/wan2.2_ti2v_5B_fp16.gguf")["id"], "wan2.2-ti2v-5b");
+    assert_eq!(set_of("image/QuantStack_Wan2.2-T2V-A14B-GGUF/Wan2.2-T2V-A14B-HighNoise-Q4_K_M.gguf"), Value::Null);
+    assert_eq!(set_of("image/city96_Wan2.1-T2V-14B-gguf/wan2.1-t2v-14b-Q4_K_M.gguf"), Value::Null);
     // Qwen Image 2.1 needs a different encoder and VAE, and is research-licensed: no set.
     assert_eq!(set_of("image/leejet_Qwen-Image-2.1-GGUF/qwen_image_2.1-Q4_K.gguf"), Value::Null);
 }
@@ -61,7 +67,7 @@ fn families_say_what_they_can_do() {
     assert_eq!(caps("qwen-image-Q4_K_M.gguf"), json!(["create"]));
     for set in acquire::image_companion_sets() {
         let list: Vec<&str> = set["capabilities"].as_array().unwrap().iter().map(|c| c.as_str().unwrap()).collect();
-        assert!(!list.is_empty() && list.iter().all(|c| ["create", "edit"].contains(c)), "{}", set["id"]);
+        assert!(!list.is_empty() && list.iter().all(|c| ["create", "edit", "video"].contains(c)), "{}", set["id"]);
     }
 }
 
@@ -204,4 +210,50 @@ fn pictures_to_edit_are_checked() {
     let huge = format!("data:image/png;base64,{}", "A".repeat(21 * 1024 * 1024));
     assert_eq!(body(json!({ "refImages": [huge] })).unwrap_err(), problem);
     assert!(body(json!({ "refImages": [one, one, one, one] })).is_ok());
+}
+
+fn clip(extra: Value) -> Result<Value, String> {
+    let mut request = json!({ "modelId": "m", "prompt": "waves on a beach", "width": 1024, "height": 1024, "steps": 20, "cfgScale": 6, "seed": 7 });
+    for (k, v) in extra.as_object().unwrap() {
+        request[k] = v.clone();
+    }
+    launch::video_generation_body(&request).map(|b| serde_json::from_str(&b).unwrap())
+}
+
+#[test]
+fn a_clip_request_uses_the_native_video_schema() {
+    let b = clip(json!({ "width": 1344, "height": 768 })).unwrap();
+    assert_eq!(b["prompt"], "waves on a beach");
+    assert_eq!(
+        (b["width"].clone(), b["height"].clone()),
+        (json!(832), json!(480)),
+        "the chat's shape at about 832x480"
+    );
+    assert_eq!((b["video_frames"].clone(), b["fps"].clone()), (json!(33), json!(16)));
+    assert_eq!(b["sample_params"], json!({ "sample_steps": 20, "guidance": { "txt_cfg": 6 } }));
+    assert_eq!((b["seed"].clone(), b["output_format"].clone()), (json!(7), json!("webp")));
+    assert_eq!(b.get("init_image"), None);
+    // Square and portrait keep their shape, in multiples of 32.
+    assert_eq!(launch::clip_size(1024.0, 1024.0), (640, 640));
+    assert_eq!(launch::clip_size(768.0, 1344.0), (480, 832));
+    // A first picture becomes the clip's first frame.
+    let photo = "data:image/png;base64,AAAA";
+    assert_eq!(clip(json!({ "refImages": [photo] })).unwrap()["init_image"], photo);
+    assert_eq!(clip(json!({ "videoFrames": 49, "fps": 24 })).unwrap()["video_frames"], 49);
+}
+
+#[test]
+fn a_clip_request_is_checked() {
+    let problem = "A clip is 1 to 121 frames in steps of 4 (1, 5, 9 ... 121) at 1 to 60 frames a second.";
+    assert_eq!(clip(json!({ "videoFrames": 50 })).unwrap_err(), problem);
+    assert!(clip(json!({ "videoFrames": 1 })).is_ok() && clip(json!({ "videoFrames": 121 })).is_ok());
+    // A prompt that names the tag itself keeps its steps, guidance and seed.
+    let tricky = clip(json!({ "prompt": "say <sd_cpp_extra_args> on a sign" })).unwrap();
+    assert_eq!((tricky["seed"].clone(), tricky["sample_params"]["sample_steps"].clone()), (json!(7), json!(20)));
+    assert_eq!(tricky["prompt"], "say <sd_cpp_extra_args> on a sign");
+    assert_eq!(clip(json!({ "videoFrames": 0 })).unwrap_err(), problem);
+    assert_eq!(clip(json!({ "videoFrames": 500 })).unwrap_err(), problem);
+    assert_eq!(clip(json!({ "fps": 2.5 })).unwrap_err(), problem);
+    assert!(clip(json!({ "prompt": "" })).is_err());
+    assert!(clip(json!({ "refImages": ["https://x"] })).is_err());
 }

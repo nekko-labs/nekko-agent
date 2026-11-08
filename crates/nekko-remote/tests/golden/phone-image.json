@@ -175,6 +175,642 @@
     "prompt": "cat",
     "params": {
      "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo=",
+     "data:image/jpeg;base64,/9j/4AAQ",
+     "data:image/webp;base64,UklGRg==",
+     "data:image/png;base64,iVBORw0KGgo="
+    ]
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo=",
+     "data:image/jpeg;base64,/9j/4AAQ",
+     "data:image/webp;base64,UklGRg==",
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo=",
+     "data:image/png;base64,iVBORw0KGgo=",
+     "data:image/png;base64,iVBORw0KGgo=",
+     "data:image/png;base64,iVBORw0KGgo=",
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": "data:image/png;base64,iVBORw0KGgo=",
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/svg+xml;base64,PHN2Zz4="
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/gif;base64,R0lGOD=="
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "/Users/me/photo.png"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "file:///Users/me/photo.png"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "https://example.com/photo.png"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png,rawbytes"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,AA AA"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,AA==AA"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "DATA:image/png;base64,AAAA"
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     {
+      "path": "/private"
+     }
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     null
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "images"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024,
+     "depth": 1
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 770,
+     "height": 1024
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768,
+     "height": 192
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768,
+     "height": 2112
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768.5,
+     "height": 1024
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": "768",
+     "height": 1024
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": [
+     768,
+     1024
+    ]
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": null
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "size"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4.5,
+     "seed": -1
+    },
+    "images": [
+     "data:image/png;base64,iVBORw0KGgo="
+    ],
+    "size": {
+     "width": 768,
+     "height": 1024
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
      "width": 256,
      "height": 768,
      "steps": 28,

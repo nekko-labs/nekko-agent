@@ -5,6 +5,7 @@ import { formatBytes } from '../runtimes/verdict.js';
 export function photoReadyLabel(runtime: boolean, companions: ImageCompanionStatus | null): string {
   if (!runtime || !companions?.ready) return 'Finish photo setup';
   const capabilities = companions.capabilities ?? [];
+  if (capabilities.includes('video')) return 'Ready to make short clips (experimental)';
   return capabilities.includes('create') && capabilities.includes('edit') ? 'Ready to create and edit photos'
     : capabilities.includes('edit') ? 'Ready to edit photos' : 'Ready to create pictures';
 }

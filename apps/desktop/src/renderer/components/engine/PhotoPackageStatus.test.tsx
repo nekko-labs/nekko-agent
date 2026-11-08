@@ -15,6 +15,7 @@ describe('photo package readiness', () => {
     expect(photoReadyLabel(true, files(['edit']))).toBe('Ready to edit photos');
     expect(photoReadyLabel(true, files(['create']))).toBe('Ready to create pictures');
     expect(photoReadyLabel(true, files(['create', 'edit']))).toBe('Ready to create and edit photos');
+    expect(photoReadyLabel(true, files(['video']))).toBe('Ready to make short clips (experimental)');
   });
   it('does not imply readiness before a host check', () => {
     const html = renderToStaticMarkup(<PhotoPackageStatus modelId="m" onChanged={() => {}} onDefaults={() => {}} />);
