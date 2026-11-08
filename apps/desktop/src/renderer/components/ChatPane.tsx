@@ -2160,13 +2160,12 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // More work for a chat that has replied: run it here, or hand it to a subagent.
   // A slash command isn't work to place, and Enter still means here.
   const followUp = draft.trim() && !draft.trimStart().startsWith('/') ? draft : null;
-  // When the agent has asked a question, the choice of where to run the answer
-  // is also part of the answer, so the chips stay visible even when the
-  // composer is empty. Outside of a question, placement chips wait for a draft;
-  // generated suggestions have their own contextual buttons and location selector.
+  // Placement chips need typed work to place, even under an agent question:
+  // with an empty box they would advertise an action with nothing to do.
+  // Generated suggestions have their own contextual buttons and location selector.
   const canDelegateFollowUp = !imageMode && !remoteBlock && hasProvider && !!session
     && canOfferSubagent(session, delegationStrategy);
-  const offerSubagent = (!!followUp || !!question) && canDelegateFollowUp;
+  const offerSubagent = !!followUp && canDelegateFollowUp;
   const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !approval
     && !imageMode && !remoteBlock && hasProvider && !!liveSuggestions?.options.length;
   const runFollowUp = (wrap?: (text: string) => string) => void send(draft.trim() ? undefined : followUp ?? undefined, undefined, wrap);
@@ -2702,8 +2701,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     </div>
   );
 
-  // New chats give prompt suggestions their own row below the primary controls.
-  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className={`composer-suggestions empty:hidden ${cleanStart ? 'composer-suggestions-row' : ''}`} data-composer-suggestions>
+  // Prompt suggestions sit beside the microphone, in the action bar.
+  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className="composer-suggestions empty:hidden" data-composer-suggestions>
     <PromptAnalyzer
       variant="chip"
       text={deferredDraft}
@@ -2863,12 +2862,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" />
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
-                {/* Where the next piece of work runs, offered in the conversation like the other next steps.
-                    When the agent has asked a question, the chips sit directly under the question card:
-                    the choice of where to run the answer reads as part of the answer. */}
+                {/* Where the typed follow-up runs, offered in the conversation like the other next steps. */}
                 {offerSubagent && (
                   <div className="flex flex-wrap items-center gap-2 py-2 text-xs" role="group" aria-label="Where this work runs" data-work-place>
-                    {!draft.trim() && followUp && <span className="min-w-0 text-ink-faint [overflow-wrap:anywhere]">Next: {followUp}</span>}
                     <button type="button" className="btn btn-outline py-1 text-xs" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
                     <button type="button" className="btn btn-outline py-1 text-xs" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
                     <span className="text-2xs text-ink-faint">Here uses more context</span>
@@ -3532,7 +3528,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {!cleanStart && promptSuggestions}
+                  {promptSuggestions}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3547,7 +3543,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       {composerStops ? <GfStopIcon className="h-[17px] w-[17px]" /> : wallWindow ? <GfSendIcon className="h-[17px] w-[17px]" /> : <NekkoAvatar size={24} />}
                     </button>
                 </div>
-                {cleanStart && promptSuggestions}
               </div>
                 {wallWindow && !imageMode && showMode && <div className="composer-foot-row flex min-w-0 border-t border-line px-2 py-1" data-composer-mode-row>
                   <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />

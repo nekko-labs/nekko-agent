@@ -52,7 +52,7 @@ app.whenReady().then(async () => {
     // A trackpad swipe left: horizontal wheel input over the transcript.
     const mid = await run(`(()=>{const r=document.querySelector('[data-transcript-scroll]').getBoundingClientRect();return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)}})()`);
     const swipe = async () => { for (let i = 0; i < 12; i++) { win.webContents.sendInputEvent({ type: 'mouseWheel', x: mid.x, y: mid.y, deltaX: -12, deltaY: 0, canScroll: true }); await sleep(16); } };
-    const reveal = () => run(`(()=>{const s=document.querySelector('[data-transcript-scroll]');const l=s.querySelector('.vt-list');const row=s.querySelector('.vt-row[data-vt-stamp]');return {reveal:s.style.getPropertyValue('--vt-reveal'),opacity:row?getComputedStyle(row,'::after').opacity:null,stamp:row?row.dataset.vtStamp:null,transform:l?getComputedStyle(l).transform:null,scrollLeft:s.scrollLeft}})()`);
+    const reveal = () => run(`(()=>{const s=document.querySelector('[data-transcript-scroll]');const l=s.querySelector('.vt-list');const row=s.querySelector('.vt-row[data-vt-stamp]');return {reveal:Math.abs(parseFloat(l?.style.transform.replace('translateX(',''))||0)+'px',opacity:row?getComputedStyle(row,'::after').opacity:null,stamp:row?row.dataset.vtStamp:null,transform:l?getComputedStyle(l).transform:null,scrollLeft:s.scrollLeft}})()`);
     await swipe();
     let during = await reveal();
     // Electron's wheel sign is inverted relative to a DOM WheelEvent on some builds; try the other way once.
@@ -77,7 +77,7 @@ app.whenReady().then(async () => {
     }
     for (const width of [1100, 460]) {
       win.setContentSize(width, 760); await sleep(400);
-      for (const direction of [-1, 1]) {
+      for (const direction of (base ? [-1, 1] : [1])) {
         const frames = [];
         const frame = async () => frames.push((await win.capturePage(undefined, { stayHidden: true })).resize({ width }).toPNG());
         const measure = () => run(`(() => { const s=document.querySelector('[data-transcript-scroll]'), l=s.querySelector('.vt-list'), r=l.querySelector('.vt-row[data-vt-stamp]'), child=r.firstElementChild; const a=r.getBoundingClientRect(), b=child.getBoundingClientRect(), p=getComputedStyle(r,'::after'), c=document.createElement('canvas').getContext('2d'); c.font=p.font; return {rowLeft:a.left,childLeft:b.left,width:a.width,stampRight:a.right+parseFloat(p.paddingLeft)+c.measureText(r.dataset.vtStamp).width,clipRight:s.getBoundingClientRect().right,scrollLeft:s.scrollLeft}; })()`);
@@ -86,7 +86,11 @@ app.whenReady().then(async () => {
           await run(`document.querySelector('[data-transcript-scroll]').dispatchEvent(new WheelEvent('wheel',{deltaX:${direction*18},deltaY:0,bubbles:true,cancelable:true}))`);
           await sleep(30); await frame();
         }
+        // Capturing frames can take longer than the wheel idle deadline.
+        // Measure displacement during input, not after the capture overhead.
+        await run(`document.querySelector('[data-transcript-scroll]').dispatchEvent(new WheelEvent('wheel',{deltaX:${direction*112},deltaY:0,bubbles:true,cancelable:true}))`);
         const held = await measure();
+        report.measures['row-' + width + '-' + direction] = { resting, held };
         await capture(`swipe-${width}-${direction}-held`);
         for (let i=0;i<8;i++) { await sleep(60); await frame(); }
         if (!base) {

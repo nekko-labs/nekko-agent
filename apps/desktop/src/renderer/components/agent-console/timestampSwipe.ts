@@ -1,7 +1,7 @@
 /** Wide enough for localized times and the gap beside tool rows. */
 export const TIMESTAMP_REVEAL_PX = 112;
-/** Wheel events have no finger-up signal. Allow brief pauses before settling. */
-export const WHEEL_RELEASE_MS = 450;
+/** Wheel events have no finger-up signal. Return promptly when input stops. */
+export const WHEEL_RELEASE_MS = 80;
 /** A selection often starts just past a line's end or in the gap between its lines. */
 const TEXT_MARGIN_PX = 12;
 
@@ -52,8 +52,11 @@ export function attachTimestampSwipe(el: HTMLElement) {
   };
   const onWheel = (e: WheelEvent) => {
     if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) || e.ctrlKey) return;
+    // Positive wheel X scrolls the content left. A rightward swipe can close
+    // an existing reveal, but must never open one from rest.
+    if (e.deltaX < 0 && reveal === 0) return;
     e.preventDefault();
-    move(reveal + Math.abs(e.deltaX));
+    move(reveal + e.deltaX);
     if (!pointer?.active) release = setTimeout(finish, WHEEL_RELEASE_MS);
   };
   const onDown = (e: PointerEvent) => {
@@ -76,7 +79,10 @@ export function attachTimestampSwipe(el: HTMLElement) {
       window.getSelection()?.removeAllRanges();
     }
     e.preventDefault();
-    move(dx);
+    // Consume movement at the stop instead of storing overshoot: reversing
+    // direction should pull back immediately, even after a long drag.
+    pointer.x = e.clientX;
+    move(reveal + dx);
   };
   const onUp = (e: PointerEvent) => {
     if (!pointer || pointer.id !== e.pointerId) return;

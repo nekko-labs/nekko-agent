@@ -41,7 +41,7 @@ fn an_app_is_its_processes_summed_without_nekko_or_the_system() {
     let own = own_pids(&procs, 10);
     assert_eq!(own, [10, 11, 12, 20].into_iter().collect());
     let top = top_app(&procs, &own).unwrap();
-    assert_eq!((top.name.as_str(), top.bytes, top.processes), ("chrome", 6 * GB, 2));
+    assert_eq!((top.name.as_str(), top.bytes, top.processes, top.pids.as_slice()), ("chrome", 6 * GB, 2, &[30, 31][..]));
 }
 
 #[test]
