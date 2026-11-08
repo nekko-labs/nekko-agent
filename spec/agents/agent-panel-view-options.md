@@ -150,7 +150,7 @@ Acceptance: preference migration and roundtrip tests on all three clients; deskt
 
 ## Show with an interactive sample card (#2338)
 
-Implemented for desktop and Local Web UI. **Show** combines panel visibility settings on the left with **Card details** on the right: a labeled synthetic sample card, not a real chat, exposes Model, Context window, Pull requests, Git branch, Sub-agent count, Window count, and Last reply time as dotted-border toggle regions. Hidden details remain visible as labels with a plus so they can be restored. Selecting a metadata detail while Metadata is off also enables Metadata; last reply time remains independent. Existing per-device view storage and Reset to defaults are retained.
+Implemented for desktop and Local Web UI. **Show** combines panel visibility settings on the left with **Card details** on the right: a labeled synthetic sample card, not a real chat, exposes Model, Context window, Pull requests, Git branch, Sub-agent count, Window count, and Last reply time as dotted-border toggle regions. Hidden details remain visible as labels with a plus so they can be restored. Selecting a metadata detail while Metadata is off also enables Metadata; pull requests and last reply time remain independent. Existing per-device view storage and Reset to defaults are retained.
 
 At 520px and below, Show stacks its sections; the viewport-bounded submenu scrolls on short windows. Its toggles retain menuitemcheckbox semantics and keyboard navigation. Escape backs out of Show, then closes the parent without updating the sidebar during a React state updater. Simple/Detailed and Customize were removed from this panel menu and moved to the app-wide View menu.
 
