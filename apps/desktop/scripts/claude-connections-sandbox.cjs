@@ -74,6 +74,15 @@ app.whenReady().then(async () => {
       check('setup has not launched a terminal', await run('!window.integration.calls.some(c => c.terminal)'));
     }
     await shot('subscription-profile');
+    if (!before) {
+      const typeProfile = value => run(`(() => { const i = document.querySelector('.claude-another input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${js(value)}); i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await typeProfile('Client A'); await sleep(600);
+      check('first named profile identity loaded', await run('document.querySelector(".claude-another").innerText.includes("Previous organization")'));
+      await typeProfile('Client B'); await sleep(550);
+      check('pending profile never reuses previous identity', await run('!document.querySelector(".claude-another").innerText.includes("Previous organization") && ![...document.querySelectorAll(".claude-another button")].some(b => b.textContent.includes("Use this account"))'));
+      await typeProfile(''); await sleep(600);
+      check('empty named profile cannot save the usual account', await run('!document.querySelector(".claude-another .claude-verdict")'));
+    }
     await run('window.integration.show("api")'); await sleep(400);
     await run(`document.querySelector('[role="radio"][aria-label^="API"]')?.click()`);
     // The radio's name comes from its text, not aria-label.

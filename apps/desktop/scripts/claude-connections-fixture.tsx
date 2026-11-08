@@ -24,7 +24,11 @@ Object.assign(window, { nekko: {
   getLimits: async () => null,
   getLimitsProblem: async () => null,
   onLimitsUpdated: () => () => {},
-  getClaudeCodeStatus: async (id?: string, account?: string) => account ? { installed: true, version: '2.1.319', loggedIn: false } : status(id),
+  getClaudeCodeStatus: async (id?: string, account?: string) => {
+    if (account === 'client-a') return { ...status('work'), orgId: 'client-a', orgName: 'Previous organization' };
+    if (account === 'client-b') await new Promise(resolve => setTimeout(resolve, 900));
+    return account ? { installed: true, version: '2.1.319', loggedIn: false } : status(id);
+  },
   getClaudePolicy: async () => ({ policy: CLAUDE_POLICY }),
   createTerminal: async (opts: unknown) => { calls.push({ terminal: opts }); return { id: 'fixture-terminal' }; },
   runInTerminal: async () => {},

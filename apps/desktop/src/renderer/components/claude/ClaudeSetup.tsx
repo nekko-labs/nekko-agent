@@ -336,12 +336,12 @@ export function ClaudeSetup({
           name={name}
           conflict={profileConflict?.label}
           status={checkedName === name ? other.status : null}
-          check={other.status?.installed && other.status.loggedIn && checkedName === name ? claudeAccountCheck(other.status, identities) : null}
+          check={name && other.status?.installed && other.status.loggedIn && checkedName === name ? claudeAccountCheck(other.status, identities) : null}
           attested={attested}
           onAttest={setAttested}
           saving={saving}
           onSignIn={() => { if (name && !claudeProfileConflict(useStore.getState().providers, name)) void terminal.open('signin', name); }}
-          onSave={() => void save(name, another.trim())}
+          onSave={() => { if (name && checkedName === name && other.status?.installed && other.status.loggedIn) void save(name, another.trim()); }}
           onCancel={() => { setAnother(null); setAttested(false); }}
         />
       )}
