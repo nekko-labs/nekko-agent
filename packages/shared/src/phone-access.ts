@@ -13,6 +13,7 @@
  */
 
 import { clientMessageIdOf } from './chat.js';
+import { SERVICE_CHANNELS, SERVICE_READ_CHANNELS, SERVICE_CHANGE_CHANNELS } from './service-management.js';
 import { COMPUTER_ICONS } from './computers.js';
 import { skillTurnText } from './skills.js';
 import { stepUpPolicy, STEP_UP_CHALLENGE } from './step-up.js';
@@ -137,10 +138,12 @@ import { CHAT_ASSET_EXT, CHAT_LINK_EXT, LOOPBACK_HOSTS } from './chat-links.js';
  * phone-artifacts.ts and chat-links.ts.
  */
 export const PHONE_CHANNELS = [
+  ...SERVICE_CHANNELS,
   'activity:state',
   'app:info',
   'app:quit',
   'artifact:read',
+  'audit:read',
   'changes:list',
   'chat:abort',
   'chat:answer',
@@ -369,6 +372,8 @@ export const COMPUTER_ACCESS = {
  */
 /** Reading the chats and the computer's state the chat screens show (2026-10-22). */
 export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
+  // A chat's audit trail: value-free (who allowed what, never what was read or sent), 2026-11-07.
+  'audit:read',
   'changes:list',
   'chat:pending',
   'limits:get',
@@ -404,6 +409,7 @@ export const PHONE_MONITOR_READ_CHANNELS: readonly string[] = ['context:preview'
 export const PHONE_ACTIVITY_READ_CHANNELS: readonly string[] = ['activity:state'];
 export const PHONE_ACTIVITY_VIEW = ['chatActive', 'headless', 'strain', 'userActive'] as const;
 export const PHONE_READ_CHANNELS: readonly string[] = [
+  ...SERVICE_READ_CHANNELS,
   ...PHONE_CHAT_READ_CHANNELS,
   ...PHONE_MONITOR_READ_CHANNELS,
   ...PHONE_ACTIVITY_READ_CHANNELS,
@@ -470,6 +476,7 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
  */
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
+  ...SERVICE_CHANGE_CHANNELS,
   // Saved-folder access changes need a signed proof, including revocation.
   'session:setSupportingWorkspaces',
   'workspace:addByPath',

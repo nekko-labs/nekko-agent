@@ -49,6 +49,32 @@ pub fn parse_pr_url(url: &str) -> Option<(String, String, u64)> {
     Some((g(1)?, g(2)?, if number.is_finite() { number as u64 } else { return None }))
 }
 
+/// A GitHub issue URL's owner, repo and number, for a plan's task chips.
+pub fn parse_issue_url(url: &str) -> Option<(String, String, u64)> {
+    static R: OnceLock<Regex> = OnceLock::new();
+    let r = re(&R, r"github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/issues\/(\d+)", "");
+    let m = r.find(url)?;
+    let g = |i: usize| m.group(i).map(|r| url[r].to_string());
+    let number = js::string_to_number(&g(3)?);
+    Some((g(1)?, g(2)?, if number.is_finite() { number as u64 } else { return None }))
+}
+
+/// An issue's live state from `gh issue view` (`stateReason`) or the REST API
+/// (`state_reason`): open, or closed as `completed` / `not_planned`.
+pub fn issue_info(url: &str, owner: &str, repo: &str, number: u64, j: &Value) -> Value {
+    let reason = upper(j.get("stateReason").or_else(|| j.get("state_reason"))).to_lowercase();
+    json!({
+        "kind": "issue",
+        "url": url,
+        "owner": owner,
+        "repo": repo,
+        "number": number,
+        "title": j.get("title").filter(|t| !t.is_null()).map(js::display).unwrap_or_else(|| format!("{owner}/{repo}#{number}")),
+        "state": if upper(j.get("state")) == "CLOSED" { "closed" } else { "open" },
+        "stateReason": if reason.is_empty() { Value::Null } else { json!(reason) },
+    })
+}
+
 /// `collectSessionPrUrls(messages)`: only a successful `gh pr create` (or a
 /// `gh api .../pulls -X POST`) whose whole output is one PR URL counts.
 pub fn collect_session_pr_urls(messages: &[Value]) -> Vec<String> {
@@ -613,7 +639,7 @@ impl Prs {
     /// `fetchPrInfo(url)`: gh first, the REST API when gh is missing, not
     /// signed in, or cannot see the repository.
     pub async fn fetch_info(&self, url: &str, token: Option<&str>) -> Value {
-        let Some((owner, repo, number)) = parse_pr_url(url) else { return Value::Null };
+        let Some((owner, repo, number)) = parse_pr_url(url) else { return self.fetch_issue(url, token).await };
         let slug = format!("{owner}/{repo}");
         if !self.gh_missing.load(Ordering::SeqCst) && !self.cooling() {
             let n = number.to_string();
@@ -646,6 +672,35 @@ impl Prs {
         add_stack(&mut info, &j);
         self.enrich_progress(&mut info, &owner, &repo, number, token).await;
         info
+    }
+
+    /// A GitHub issue's state, gh first and the REST API as the fallback, the
+    /// same way a PR is read. Null for any other URL.
+    async fn fetch_issue(&self, url: &str, token: Option<&str>) -> Value {
+        let Some((owner, repo, number)) = parse_issue_url(url) else { return Value::Null };
+        let slug = format!("{owner}/{repo}");
+        if !self.gh_missing.load(Ordering::SeqCst) && !self.cooling() {
+            let n = number.to_string();
+            let res = self
+                .gh_read(
+                    &["issue", "view", &n, "--repo", &slug, "--json", "title,state,stateReason"],
+                    Duration::from_secs(15),
+                    None,
+                )
+                .await;
+            self.note_cooldown(&res.stderr);
+            if res.missing {
+                self.gh_missing.store(true, Ordering::SeqCst);
+            } else if res.ok
+                && let Ok(j) = serde_json::from_str::<Value>(&res.stdout)
+            {
+                return issue_info(url, &owner, &repo, number, &j);
+            }
+        }
+        match self.api_json(&format!("{}/repos/{slug}/issues/{number}", self.api), token).await {
+            Some(j) => issue_info(url, &owner, &repo, number, &j),
+            None => Value::Null,
+        }
     }
 
     /// The by-URL read, cached for a minute and shared by concurrent callers.
@@ -1220,6 +1275,23 @@ fn check_progress(contexts: &[Value]) -> Value {
 #[cfg(test)]
 mod progress_tests {
     use super::*;
+
+    #[test]
+    fn issue_state_reads_gh_and_rest_shapes() {
+        let url = "https://github.com/o/r/issues/12";
+        assert_eq!(parse_issue_url(url), Some(("o".into(), "r".into(), 12)));
+        assert_eq!(parse_issue_url("https://github.com/o/r/pull/12"), None);
+        let gh = issue_info(url, "o", "r", 12, &json!({"title":"T","state":"CLOSED","stateReason":"NOT_PLANNED"}));
+        assert_eq!(
+            (gh["kind"].as_str(), gh["state"].as_str(), gh["stateReason"].as_str()),
+            (Some("issue"), Some("closed"), Some("not_planned"))
+        );
+        let rest = issue_info(url, "o", "r", 12, &json!({"title":"T","state":"closed","state_reason":"completed"}));
+        assert_eq!((rest["state"].as_str(), rest["stateReason"].as_str()), (Some("closed"), Some("completed")));
+        let open = issue_info(url, "o", "r", 12, &json!({"state":"OPEN","stateReason":""}));
+        assert_eq!((open["state"].as_str(), open["title"].as_str()), (Some("open"), Some("o/r#12")));
+        assert!(open["stateReason"].is_null());
+    }
 
     #[test]
     fn progress_states_and_links_are_conservative() {

@@ -18,7 +18,10 @@ async function main() {
     if (process.platform === 'win32') cp.execFileSync('tar', ['-xf', zip, '-C', source]);
     else cp.execFileSync('python3', ['-c', 'import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])', zip, source]);
     entry = path.join(out, 'base-fixture.tsx');
-    fs.writeFileSync(entry, fs.readFileSync(path.join(__dirname, 'wall-controls-fixture.tsx'), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/')));
+    // Both fixture modules must use the archived renderer, not current store/UI code.
+    const archived = file => fs.readFileSync(path.join(__dirname, file), 'utf8').replaceAll('../src/renderer', path.join(source, 'apps/desktop/src/renderer').replaceAll('\\', '/'));
+    fs.writeFileSync(entry, archived('wall-controls-fixture.tsx'));
+    fs.writeFileSync(path.join(out, 'store-sidebar.tsx'), archived('store-sidebar.tsx'));
     shared = path.join(source, 'packages/shared/src/index.ts');
   }
   await require(path.join(modules, 'esbuild')).build({ entryPoints: [entry], bundle: true, jsx: 'automatic', conditions: ['style', 'browser', 'import', 'default'], format: 'iife', outfile: path.join(out, 'fixture.js'), nodePaths: [modules], alias: { '@nekko-agent/shared': shared, '@fixture/context': path.join(repo, 'apps/desktop/scripts/fixture-context.ts') }, loader: { '.woff2': 'dataurl', '.svg': 'dataurl', '.png': 'dataurl', '.wasm': 'file' } });
@@ -30,7 +33,7 @@ async function main() {
     const html=path.join(out,'index.html'); fs.writeFileSync(html,fs.readFileSync(html,'utf8').replace('<script src="fixture.js">','<script src="chrome-bootstrap.js"></script><script src="fixture.js">'));
   }
   const env = { ...process.env, NEKKO_INTEGRATION_OUT: out }; delete env.ELECTRON_RUN_AS_NODE;
-  const result = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, 'wall-controls-sandbox.cjs')], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
+  const result = cp.spawnSync(require(path.join(modules, 'electron')), [path.join(__dirname, path.basename(process.env.NEKKO_WALL_SANDBOX || 'wall-controls-sandbox.cjs'))], { cwd: repo, env, windowsHide: true, stdio: 'inherit', timeout: 120000 });
   if (result.error) throw result.error;
   process.exitCode = result.status || 0;
 }

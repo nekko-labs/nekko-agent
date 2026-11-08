@@ -200,3 +200,28 @@ describe('workspace card PR chip', () => {
     expect(render({ showMetadata: false, session: replied })).toContain('1 min ago');
   });
 });
+
+
+describe('independent card details', () => {
+  const render = (props: Partial<React.ComponentProps<typeof WorkspaceCard>> = {}) => renderToStaticMarkup(
+    <WorkspaceCard workspace={null} session={{ ...session, lastReplyAt: -60_000 }} terminal={null} status="done" isActive={false} now={0} projects={[]} subAgentCount={2} onOpen={() => {}} onClose={() => {}} {...props} />,
+  );
+  it('can hide each detail without hiding other facts or the title/status', () => {
+    state.prsBySession = { s1: [{ url: 'https://github.com/o/r/pull/7', owner: 'o', repo: 'r', number: 7, title: 'PR', state: 'open', isDraft: false }] };
+    gitStatus.current = { workspaceId: 'session:s1', repo: true, branch: 'feat/example', ahead: 0, behind: 0 };
+    try {
+      const facts = { showModel: 'title="m"', showContext: 'Context window:', showPullRequests: 'data-session-pr-chip', showGit: 'feat/example', showSubagents: '2 sub-agents', showUpdated: '1 min ago' };
+      for (const [key, marker] of Object.entries(facts)) {
+        expect(render()).toContain(marker);
+        const html = render({ [key]: false });
+        expect(html).not.toContain(marker);
+        expect(html).toContain('Complete Chat');
+        for (const [other, present] of Object.entries(facts)) if (key !== other) expect(html).toContain(present);
+      }
+      const titleOnly = render({ showModel: false, showContext: false, showGit: false, showSubagents: false });
+      expect(titleOnly.match(/data-session-pr-chip/g)).toHaveLength(1);
+      expect(titleOnly).not.toContain('1 min ago');
+      expect(render({ showModel: false, showContext: false, showGit: false, showSubagents: false, showPullRequests: false })).toContain('1 min ago');
+    } finally { gitStatus.current = null; state.prsBySession = {}; }
+  });
+});

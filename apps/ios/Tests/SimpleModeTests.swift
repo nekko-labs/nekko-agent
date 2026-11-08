@@ -1,9 +1,19 @@
 import XCTest
+import UIKit
 import NekkoProtocol
 @testable import NekkoNative
 
 @MainActor
 final class SimpleModeTests: XCTestCase {
+    func testPermissionLabelsAndIconsKeepWireValues() {
+        let modes = PcSettings.ChatMode.allCases
+        XCTAssertEqual(modes.map(\.rawValue), ["ask", "guardrails", "yolo"])
+        XCTAssertEqual(modes.map(SimpleMode.asksName), ["Always ask", "Ask when it matters", "No restrictions"])
+        XCTAssertEqual(modes.map(modeName), modes.map(SimpleMode.asksName))
+        XCTAssertEqual(modes.map(ToolPolicyPicker.icon), ["permission-hand", "permission-shield-check", "permission-running"])
+        for mode in modes { XCTAssertNotNil(UIImage(named: ToolPolicyPicker.icon(mode))) }
+    }
+
     func testSimpleShowsOnlyTheEverydayControlsWhenNothingIsGoingOn() {
         let simple = SimpleMode.items.filter { SimpleMode.shown($0.id, expert: false, [:]) }.map(\.id)
         XCTAssertEqual(simple, ["model", "effort", "asks", "context"])
@@ -182,6 +192,29 @@ final class SimpleModeTests: XCTestCase {
         XCTAssertEqual(PillPlacement.parse("leading:7"), PillPlacement(dock: .leading, y: 1))
         XCTAssertTrue(PillPlacement.standard.isStandard)
         XCTAssertFalse(PillPlacement(dock: .across, y: 0.4).isStandard)
+    }
+
+    func testThePillTucksOnlyWhenSwipedIntoItsEdge() {
+        let none = CGSize.zero
+        let right = PillPlacement(dock: .trailing, y: 0.4)
+        XCTAssertTrue(right.swipesIn(CGSize(width: 40, height: 6), predicted: none))
+        XCTAssertTrue(right.swipesIn(CGSize(width: 10, height: 0), predicted: CGSize(width: 140, height: 0)), "a flick is enough")
+        XCTAssertFalse(right.swipesIn(CGSize(width: -40, height: 0), predicted: none), "away from the edge")
+        XCTAssertFalse(right.swipesIn(CGSize(width: 30, height: 60), predicted: none), "mostly down is not into the side")
+        XCTAssertTrue(PillPlacement(dock: .leading, y: 1).swipesIn(CGSize(width: -40, height: 0), predicted: none))
+        XCTAssertTrue(PillPlacement.standard.swipesIn(CGSize(width: 0, height: -40), predicted: none))
+        XCTAssertFalse(PillPlacement.standard.swipesIn(CGSize(width: 40, height: 0), predicted: none))
+        XCTAssertFalse(PillPlacement(dock: .across, y: 0.5).swipesIn(CGSize(width: 0, height: -40), predicted: none),
+                       "across the middle there is no edge to tuck into")
+
+        var tucked = right
+        tucked.tucked = true
+        XCTAssertEqual(PillPlacement.parse(tucked.encoded), tucked)
+        XCTAssertEqual(PillPlacement.parse("across:0.5:tucked"), PillPlacement(dock: .across, y: 0.5), "only at an edge")
+        XCTAssertEqual(PillPlacement.parse("trailing:0.5:folded"), .standard)
+        var top = PillPlacement.standard
+        top.tucked = true
+        XCTAssertFalse(top.isStandard, "tucked under the bar, content takes the room back")
     }
 
     func testThePillScrollsAwayOnTheWayOnAndBackOnTheWayBack() {

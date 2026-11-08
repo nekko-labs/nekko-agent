@@ -41,6 +41,11 @@ const RECIPIENT_KEYS: &[&str] = &[
     "webhook_url",
 ];
 
+/// Whether an argument name holds who a message goes to.
+pub fn is_recipient_key(key: &str) -> bool {
+    RECIPIENT_KEYS.contains(&key.to_ascii_lowercase().replace('-', "_").as_str())
+}
+
 /// The recipients a call's input names, each once, as compared.
 pub fn recipients(input: &Value) -> Vec<String> {
     let mut out = Vec::new();

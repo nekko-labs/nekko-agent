@@ -15,6 +15,16 @@ split-from: SPEC.md (2026-10-22)
 - Dragging cards into order works only when grouped by project in manual order, the one arrangement where that order is what the panel shows; projects can be dragged only when grouped by project. Group header **+** and terminal buttons appear only in project grouping.
 - The choice is a per-window preference in `localStorage` (`nekko.agentPanelView`), like the panel width; invalid saved values fall back field by field. No host calls, storage schema, permissions or network use change.
 
+## Bounded agent groups
+
+Implemented for the shared desktop and Local Web UI renderer: every active group initially mounts up to **20 top-level rows**, after filtering and sorting. This includes Project, Activity, Date, Computer, None, Terminals and Photos and videos. **Show more (N)** mounts all remaining rows in that group in one click, not another page. Completed lists separately start at 20 when opened and expand fully in the same way. Expansion is local to the mounted panel, independent per list, and resets when the grouping changes.
+
+Hidden rows are not mounted and do not initiate PR-detail prefetches. Lightweight session summaries remain available for correct ordering, group counts, activity indicators and search; this is renderer partial mounting, not backend pagination or transcript loading. Subagent rows remain nested beneath a mounted parent. No storage, permissions or network access are added.
+
+Opening a hidden agent (including a terminal or a child of a hidden parent) keeps its top-level row in the twentieth slot without mounting the intervening rows. Completed selection follows the same rule, and with no completed chat open, the chat the completion tip points at is the one kept in reach. Shift-selection ranges include only displayed rows.
+
+Acceptance: boundary tests for 0, 19, 20, 21 and larger lists; independent one-click full expansion; selected hidden rows remain reachable; no full-transcript reads or hidden-card PR prefetches; matching wide/narrow and horizontal renderer captures. Native phone lists and backend summary pagination are outside this change. Visual verification status is recorded in the PR evidence.
+
 ## Group header hierarchy
 
 Implemented: project, status, date and Completed group labels use the theme's primary accent color and 14px medium sentence-case text (no caps or letter spacing since the 2026-11 design pass), with accent disclosure chevrons. Vertical groups have 20px of separation and a faint inset 1px divider centred in each gap (2026-11 panel polish), with 4px between each heading and its contents. Horizontal groups use a 24px gap and a vertical divider instead, retaining their column alignment and compact card density. Dividers appear only between groups, never before the first, and do not intercept input or replace the project drag/drop padding. Collapsing, project actions, drag/drop, and ungrouped lists are unchanged. No new storage, network access or permissions.
@@ -119,3 +129,17 @@ Acceptance: actual pointer hover/leave restores the resting state, selected and 
 ## First-class terminal rows
 
 Implemented: terminal entries come from the terminal registry, not only terminal-anchored workspaces. Every real terminal has one row, including split, minimized and exited terminals; read-only agent command logs stay out. Terminals retain the dedicated Terminals activity group, existing project/date/name sorting, and drag-to-zone behavior. Rows use terminal-reported smart titles with saved-title fallback, explicit activity/attention/exit state, and a PR-number hint. The active terminal keeps its selection highlight rather than jumping to a chat. Working shell Close uses the existing confirmation before stopping processes. See [terminal session context](terminal-session-context.md) for signal boundaries, verification and limitations.
+
+
+## Independent card details (2026-11-06, #2000)
+
+Implemented in source; native visual acceptance is pending the linked evidence runs:
+
+- View > Card details exposes independent Model, Context window, Pull requests and Last reply time (Last updated on phones) switches. Desktop/Local Web UI also expose Git branch, Sub-agent count and Window count. Existing preview/computer choices stay in Show. The desktop Metadata switch remains as a legacy master for the metadata rows; PR and reply time follow their own switches even with Metadata off.
+- Missing or malformed detail keys default on. Explicit saved booleans, including legacy Metadata off and Always show groups on, are preserved. Reset restores all details on and empty groups off. Preferences are device-local, not host settings.
+- Hiding a model does not hide context or PRs. The PR chip follows the last visible detail row, or the title if none remain. Titles, pins, activity, attention and pending offline prompts are never hidden by detail choices. A context compaction label follows the context toggle.
+- All clients default empty groups off (iOS already did); an explicit saved opt-in survives.
+- iOS chat-list row/section separators are hidden. Its group headings use the desktop's accent chevron and medium label; only live Building/Verifying/Watching show Nekko's activity mark after the label and a green count capsule. Other collapsed headings use a neutral count; expanded inactive headings omit it. Native activity marks use still frames, not the desktop animation.
+- Phone rows project existing summary model IDs, transcript token estimates and model-matched Claude-reported used/window counts. A missing window stays unknown (used tokens only); no model capacity is invented. Android PR numbers come from summary URLs; iOS retains state-aware PR badges. Neither toggle changes model requests, context budgeting or PR fetching.
+
+Acceptance: preference migration and roundtrip tests on all three clients; desktop server-render matrix for independent visibility and PR relocation; native real-view UI toggle tests plus matching baseline/head screenshots. Native simulator evidence and published media remain required before landing. Full live context-gauge parity on phones (catalog capacity and open-chat bundle estimates) is not implemented by this change.

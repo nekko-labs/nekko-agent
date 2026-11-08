@@ -30,10 +30,11 @@ The monitors you tick in the panel's **Configure** menu are exactly the ones it 
 In the message box's bottom row, Simple shows the folder, the model, how the agent asks you, and a ring for how full the chat is. Hover over the ring for the numbers.
 
 - **Effort** is inside the model menu.
-- **Asks first** is how the agent checks with you. Choose **Asks first**, **Asks when it matters** or **Works on its own**. Each choice has the same icon as in Expert's Mode panel (a hand, a shield and a bolt) and a one-line description. Choosing **Works on its own** (YOLO) first shows a warning: in that mode the agent never asks, so a web page or tool output it reads can get your files or data sent out. Tick **Don't warn me again** to skip it; **Settings > General > Warn before YOLO** turns it back on. The same warning shows wherever YOLO can be turned on: the Mode panel, the default in Settings, a saved mode and the approval bar's **Allow all** buttons.
+- **Approvals** controls when the agent checks with you. Choose **Always ask**, **Ask when it matters** or **No restrictions**. These names are the same in Simple, Detailed, Settings, and on phones. Each choice uses a Gentleface icon: hand, shield with a check, and running person. Detailed shows approvals beside the model too, with **Mode** and its secondary controls on the next row inside the message box. The row wraps when needed instead of squeezing the labels.
+- Choosing **No restrictions** first shows a warning on desktop and phones: the agent never asks, so a web page or tool output it reads can get your files or data sent out. Deny rules still block. Tick **Don't warn me again** to skip the warning; **Settings > General > Warn before No restrictions** turns it back on on desktop. The desktop warning applies in the Mode panel, the Settings default, saved modes, and the approval bar's **Allow all** buttons. Sandbox remains locked to **Always ask**.
 - **Incognito and Automate** are in the **+** menu.
 - **The Agent Monitor** appears while agents are working in the background.
-- **In replies:** each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them.
+- **In replies:** the agent's steps sit under the same one-line summary as in Detailed, such as *Read guidance*. Click the arrow beside it to see each step. The model's thinking stays out of sight; Detailed shows it. On a phone, each reply's thinking and steps fold into one line, such as *Took 4 steps*, with **Show steps** to open them.
 
 Simple keeps these for Detailed:
 
@@ -68,9 +69,10 @@ In Detailed on the desktop, the bottom row (folder, model, effort, context, cost
 ## On the phones
 
 - **Effort** is in the menu under the model's name: a bar you slide or tap to set how hard the model thinks. The fuller the bar, the higher the effort. Detailed also shows a small dial beside the name.
-- **Asks first** sits beside the model in Simple, and in **More** in Detailed.
+- **Approvals** sits beside the model in Simple, and in **More** in Detailed.
 - **Changes** is in **More** on the iPhone and an icon with a count on Android, once the agent has changed files.
 - **The pill:** it shows while the hardware gauges do (on Android it also holds the switch). Tap the gauges and the pill opens into the agent's details (hardware, loaded models, this chat). Point at one gauge with a mouse for its reading in full. The pill slides away while you scroll on and comes back when you scroll back.
 - **Moving the pill:** touch and hold it, then drag. Let go near the left or right edge to dock it there, stacked; anywhere else it lies across the screen at that height. Drag it back near the top to put it under the bar again.
+- **Tucking the pill away:** swipe it into its edge (a side it is docked at, or up into the bar) and only a slim arrow tab stays. Tap the tab, or swipe it back out, to bring the pill back.
 - **Search** is in the computer menu at the top left: **Search chats**.
 - **Logs** in the same menu are grouped: what this phone logged, then each computer.

@@ -6,17 +6,33 @@ import SwiftUI
 /// Where the floating pill sits (option B, 2026-10-28): across the screen
 /// (centred; at the top just under the bar by default), or stacked against
 /// the left or right edge. Saved on this device, shared by every chat and Chats.
+/// At a side or under the bar it can also be tucked away into a slim arrow tab.
 struct PillPlacement: Equatable {
     enum Dock: String { case across, leading, trailing }
 
     var dock: Dock = .across
     /// 0 at the top of the space the pill may use, 1 at its bottom.
     var y: Double = 0
+    /// Swiped into its edge: only the slim tab shows.
+    var tucked = false
 
     static let standard = PillPlacement()
 
     /// Just under the bar, where content leaves room for it.
-    var isStandard: Bool { dock == .across && y == 0 }
+    var isStandard: Bool { dock == .across && y == 0 && !tucked }
+
+    /// It sits against an edge it can be swiped into: a side, or the bar.
+    var canTuck: Bool { dock != .across || y == 0 }
+
+    /// Whether a swipe by `t` (or flung towards `predicted`) goes into the pill's edge.
+    func swipesIn(_ t: CGSize, predicted: CGSize) -> Bool {
+        guard canTuck else { return false }
+        switch dock {
+        case .across: return abs(t.height) > abs(t.width) && (t.height < -24 || predicted.height < -90)
+        case .leading: return abs(t.width) > abs(t.height) && (t.width < -24 || predicted.width < -90)
+        case .trailing: return abs(t.width) > abs(t.height) && (t.width > 24 || predicted.width > 90)
+        }
+    }
 
     /// Where a pill let go of with its centre at `center` settles: against an
     /// edge within 22% of the width of it, else across, snapping back under the
@@ -28,12 +44,15 @@ struct PillPlacement: Equatable {
         return center.y - minY < snap ? .standard : PillPlacement(dock: .across, y: y)
     }
 
-    var encoded: String { "\(dock.rawValue):\(y)" }
+    var encoded: String { "\(dock.rawValue):\(y)" + (tucked ? ":tucked" : "") }
 
     static func parse(_ s: String?) -> PillPlacement {
         let parts = (s ?? "").split(separator: ":")
-        guard parts.count == 2, let dock = Dock(rawValue: String(parts[0])), let y = Double(parts[1]), y.isFinite else { return .standard }
-        return PillPlacement(dock: dock, y: min(1, max(0, y)))
+        guard parts.count == 2 || (parts.count == 3 && parts[2] == "tucked"),
+              let dock = Dock(rawValue: String(parts[0])), let y = Double(parts[1]), y.isFinite else { return .standard }
+        var place = PillPlacement(dock: dock, y: min(1, max(0, y)))
+        place.tucked = parts.count == 3 && place.canTuck
+        return place
     }
 }
 
@@ -41,9 +60,10 @@ struct PillPlacement: Equatable {
 
 /// The minimal monitor in a glass capsule floating over the screen (option B),
 /// while the hardware shows. Tap the gauges and it opens into the agent's
-/// details; touch and hold to move it, or to dock it at a side. Simple and
-/// Detailed moved out of it into the menus (`ModeMenuPicker`, 2026-11-05), so
-/// with no gauges there is no pill.
+/// details; touch and hold to move it, or to dock it at a side; swipe it into
+/// its edge to tuck it away as a slim arrow tab, which a tap brings back. Simple
+/// and Detailed moved out of it into the menus (`ModeMenuPicker`, 2026-11-05),
+/// so with no gauges there is no pill.
 struct AgentPillLayer: ViewModifier {
     /// The minimal monitor's readings, while the gauges show.
     var gauges: HardwareMonitorModel?
@@ -80,7 +100,9 @@ struct AgentPillLayer: ViewModifier {
             .overlay {
                 GeometryReader { geo in
                     ZStack(alignment: .topLeading) {
-                        if !expanded, let gauges { pill(gauges, in: geo.size) }
+                        if !expanded, let gauges {
+                            if prefs.pillPlacement.tucked { tab(in: geo.size) } else { pill(gauges, in: geo.size) }
+                        }
                     }
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
                 }
@@ -114,13 +136,91 @@ struct AgentPillLayer: ViewModifier {
             .opacity(hidden && !lifted ? 0 : 1)
             .allowsHitTesting(!hidden)
             .simultaneousGesture(move(area))
+            .simultaneousGesture(tuck)
+            .transition(.opacity)
             .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: hidden)
             .animation(reduceMotion ? nil : .spring(duration: 0.4, bounce: 0.2), value: place)
             .accessibilityElement(children: .contain)
             .accessibilityAction(named: "Move to the top") { prefs.pillPlacement = .standard }
             .accessibilityAction(named: "Dock on the left") { prefs.pillPlacement = PillPlacement(dock: .leading, y: 0) }
             .accessibilityAction(named: "Dock on the right") { prefs.pillPlacement = PillPlacement(dock: .trailing, y: 0) }
+            .accessibilityAction(named: "Tuck away") { setTucked(true) }
             .accessibilityIdentifier("chat.pill")
+    }
+
+    /// A quick swipe into the pill's edge tucks it away. A held pill is moving, not swiping.
+    private var tuck: some Gesture {
+        DragGesture(minimumDistance: 16)
+            .onEnded { v in
+                if !lifted && prefs.pillPlacement.swipesIn(v.translation, predicted: v.predictedEndTranslation) { setTucked(true) }
+            }
+    }
+
+    private func setTucked(_ tucked: Bool) {
+        guard prefs.pillPlacement.canTuck else { return }
+        Haptics.tap()
+        withAnimation(morph) { prefs.pillPlacement.tucked = tucked }
+    }
+
+    /// The tucked pill: a slim tab against its edge, its arrow pointing the way the pill comes back.
+    @ViewBuilder private func tab(in area: CGSize) -> some View {
+        let place = prefs.pillPlacement
+        let across = place.dock == .across
+        let shape = UnevenRoundedRectangle(cornerRadii: Self.tabCorners(place.dock), style: .continuous)
+        let size = across ? CGSize(width: 56, height: 18) : CGSize(width: 18, height: 56)
+        TabArrow(dock: place.dock)
+            .stroke(palette.inkSoft, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+            .frame(width: across ? 14 : 5, height: across ? 5 : 14)
+            .frame(width: size.width, height: size.height)
+            .background {
+                shape.fill(.ultraThinMaterial)
+                    .overlay(shape.fill(palette.surface.opacity(0.55)))
+                    .overlay(shape.strokeBorder(palette.line, lineWidth: 0.5))
+                    .matchedGeometryEffect(id: "pill", in: space)
+                    .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+            }
+            // A finger-sized target around the slim tab.
+            .padding(across ? .horizontal : .vertical, 4)
+            .frame(width: across ? nil : 44, height: across ? 44 : nil,
+                   alignment: across ? .top : place.dock == .leading ? .leading : .trailing)
+            .contentShape(Rectangle())
+            .position(Self.tabCenter(place, area: area))
+            .offset(hidden ? Self.away(place.dock, pill: CGSize(width: 44, height: 44)) : .zero)
+            .opacity(hidden ? 0 : 1)
+            .allowsHitTesting(!hidden)
+            .onTapGesture { setTucked(false) }
+            .gesture(DragGesture(minimumDistance: 12).onEnded { v in
+                // Swiping it back out of its edge brings the pill back too.
+                let out = PillPlacement(dock: place.dock, y: place.y)
+                if !out.swipesIn(CGSize(width: -v.translation.width, height: -v.translation.height),
+                                 predicted: CGSize(width: -v.predictedEndTranslation.width, height: -v.predictedEndTranslation.height)) { return }
+                setTucked(false)
+            })
+            .transition(.opacity)
+            .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: hidden)
+            .accessibilityElement()
+            .accessibilityLabel("Show the hardware monitor")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { setTucked(false) }
+            .accessibilityIdentifier("chat.pill.tab")
+    }
+
+    /// Flush against its edge, so only the inner corners round.
+    static func tabCorners(_ dock: PillPlacement.Dock) -> RectangleCornerRadii {
+        switch dock {
+        case .across: return RectangleCornerRadii(bottomLeading: 9, bottomTrailing: 9)
+        case .leading: return RectangleCornerRadii(bottomTrailing: 9, topTrailing: 9)
+        case .trailing: return RectangleCornerRadii(topLeading: 9, bottomLeading: 9)
+        }
+    }
+
+    /// The tab's 44-point target's centre: hanging from the bar, or against its side at the pill's height.
+    static func tabCenter(_ place: PillPlacement, area: CGSize) -> CGPoint {
+        switch place.dock {
+        case .across: return CGPoint(x: area.width / 2, y: 22)
+        case .leading: return CGPoint(x: 22, y: center(place, pill: CGSize(width: 44, height: 112), area: area).y)
+        case .trailing: return CGPoint(x: area.width - 22, y: center(place, pill: CGSize(width: 44, height: 112), area: area).y)
+        }
     }
 
     /// Touch and hold lifts the pill; it follows the finger and settles where it is let go.
@@ -222,6 +322,21 @@ struct AgentPillLayer: ViewModifier {
                     withAnimation(.snappy) { swipe = 0 }
                 })
             .accessibilityAction(.escape) { close() }
+        }
+    }
+}
+
+/// The tab's flat arrow, pointing out of the edge the way the pill comes back.
+struct TabArrow: Shape {
+    var dock: PillPlacement.Dock
+
+    func path(in r: CGRect) -> Path {
+        Path { p in
+            switch dock {
+            case .across: p.addLines([CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.midX, y: r.maxY), CGPoint(x: r.maxX, y: r.minY)])
+            case .leading: p.addLines([CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.midY), CGPoint(x: r.minX, y: r.maxY)])
+            case .trailing: p.addLines([CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.minX, y: r.midY), CGPoint(x: r.maxX, y: r.maxY)])
+            }
         }
     }
 }

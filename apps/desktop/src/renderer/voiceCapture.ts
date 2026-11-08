@@ -34,33 +34,47 @@ const concat = (chunks: Float32Array[], count: number) => {
 
 export async function startVoiceCapture(options: { deviceId?: string; sensitivity?: number; silenceMs?: number; onLevel: (n: number) => void; onSilence: () => void; onSegment?: (wav: number[]) => void }) {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: options.deviceId ? { exact: options.deviceId } : undefined, channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
-  let context: AudioContext;
-  try { context = new AudioContext(); } catch (e) { stream.getTracks().forEach(t => t.stop()); throw e; }
-  const source = context.createMediaStreamSource(stream);
-  const processor = context.createScriptProcessor(4096, 1, 1);
-  let chunks: Float32Array[] = []; let count = 0; let speech = false; let lastSpeech = performance.now(); let ended = false;
-  const threshold = 0.05 - Math.max(0, Math.min(100, options.sensitivity ?? 60)) * 0.00045;
-  processor.onaudioprocess = (event) => {
-    if (ended) return;
-    const data = new Float32Array(event.inputBuffer.getChannelData(0)); chunks.push(data); count += data.length;
-    const rms = Math.sqrt(data.reduce((n, x) => n + x * x, 0) / data.length); options.onLevel(Math.min(1, rms * 8));
-    if (rms > threshold) { speech = true; lastSpeech = performance.now(); }
-    if (options.onSegment && !speech) { chunks = trimPreRoll(chunks, context.sampleRate); count = chunks.reduce((n, c) => n + c.length, 0); }
-    const seconds = count / context.sampleRate;
-    if (!shouldCut({ speech, silentMs: performance.now() - lastSpeech, silenceMs: options.silenceMs, seconds, maxSeconds: options.onSegment ? SEGMENT_MAX_SECONDS : CAPTURE_MAX_SECONDS })) return;
-    if (!options.onSegment) { options.onSilence(); return; }
-    if (keepSegment(speech, seconds)) options.onSegment(pcmWav(concat(chunks, count), context.sampleRate));
-    chunks = []; count = 0; speech = false; lastSpeech = performance.now();
+  let context: AudioContext | undefined;
+  let source: MediaStreamAudioSourceNode | undefined;
+  let processor: ScriptProcessorNode | undefined;
+  let ended = false;
+  const cleanup = () => {
+    ended = true;
+    if (processor) processor.onaudioprocess = null;
+    // One failed disconnect must not leave the microphone or the other node alive.
+    try { source?.disconnect(); } catch { /* already disconnected */ }
+    try { processor?.disconnect(); } catch { /* already disconnected */ }
+    for (const track of stream.getTracks()) { try { track.stop(); } catch { /* already stopped */ } }
+    try { void context?.close().catch(() => {}); } catch { /* already closed */ }
   };
-  source.connect(processor); processor.connect(context.destination);
-  try { await context.resume(); }
-  catch (e) { source.disconnect(); processor.disconnect(); stream.getTracks().forEach(t => t.stop()); await context.close(); throw e; }
-  const stop = () => {
-    if (ended) return [];
-    ended = true; processor.onaudioprocess = null; source.disconnect(); processor.disconnect(); stream.getTracks().forEach(t => t.stop()); void context.close();
-    // In segment mode the tail obeys the same keep rule as every other segment.
-    if (options.onSegment && !keepSegment(speech, count / context.sampleRate)) return [];
-    return pcmWav(concat(chunks, count), context.sampleRate);
-  };
-  return { stop, abort: () => { stop(); } };
+  try {
+    context = new AudioContext();
+    source = context.createMediaStreamSource(stream);
+    processor = context.createScriptProcessor(4096, 1, 1);
+    const audio = context;
+    let chunks: Float32Array[] = []; let count = 0; let speech = false; let lastSpeech = performance.now();
+    const threshold = 0.05 - Math.max(0, Math.min(100, options.sensitivity ?? 60)) * 0.00045;
+    processor.onaudioprocess = (event) => {
+      if (ended) return;
+      const data = new Float32Array(event.inputBuffer.getChannelData(0)); chunks.push(data); count += data.length;
+      const rms = Math.sqrt(data.reduce((n, x) => n + x * x, 0) / data.length); options.onLevel(Math.min(1, rms * 8));
+      if (rms > threshold) { speech = true; lastSpeech = performance.now(); }
+      if (options.onSegment && !speech) { chunks = trimPreRoll(chunks, audio.sampleRate); count = chunks.reduce((n, c) => n + c.length, 0); }
+      const seconds = count / audio.sampleRate;
+      if (!shouldCut({ speech, silentMs: performance.now() - lastSpeech, silenceMs: options.silenceMs, seconds, maxSeconds: options.onSegment ? SEGMENT_MAX_SECONDS : CAPTURE_MAX_SECONDS })) return;
+      if (!options.onSegment) { options.onSilence(); return; }
+      if (keepSegment(speech, seconds)) options.onSegment(pcmWav(concat(chunks, count), audio.sampleRate));
+      chunks = []; count = 0; speech = false; lastSpeech = performance.now();
+    };
+    source.connect(processor); processor.connect(context.destination);
+    await context.resume();
+    const stop = () => {
+      if (ended) return [];
+      ended = true; cleanup();
+      // In segment mode the tail obeys the same keep rule as every other segment.
+      if (options.onSegment && !keepSegment(speech, count / audio.sampleRate)) return [];
+      return pcmWav(concat(chunks, count), audio.sampleRate);
+    };
+    return { stop, abort: () => { stop(); } };
+  } catch (e) { cleanup(); throw e; }
 }

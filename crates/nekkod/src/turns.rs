@@ -138,6 +138,9 @@ struct PendingInner {
     /// per kind. Its payload restores the visible map when a newer one resolves.
     approvals: HashMap<String, (String, oneshot::Sender<bool>, Value)>,
     questions: HashMap<String, (String, oneshot::Sender<Value>, Value)>,
+    /// Who answered each approval (`{ via, device? }`), for the chat's audit
+    /// trail; taken by the waiting turn.
+    answered_by: HashMap<String, Value>,
 }
 
 impl PendingInner {
@@ -190,11 +193,17 @@ impl Pending {
 
     /// `resolveApproval`: false when no turn here waits on that call.
     pub fn approve(&self, session_id: &str, call_id: &str, approved: bool) -> bool {
+        self.approve_by(session_id, call_id, approved, json!({ "via": "this computer" }))
+    }
+
+    /// [`Self::approve`], saying who answered (`{ via, device? }`).
+    pub fn approve_by(&self, session_id: &str, call_id: &str, approved: bool, by: Value) -> bool {
         let mut p = lock(&self.inner);
         if p.approvals.get(call_id).is_none_or(|(sid, _, _)| sid != session_id) {
             return false;
         }
         let Some((_, tx, _)) = p.approvals.remove(call_id) else { return false };
+        p.answered_by.insert(call_id.to_string(), by);
         let _ = tx.send(approved);
         let current = p.by_session.get(session_id).and_then(|e| e.get("approval")).and_then(|a| a.get("call"));
         if current.and_then(|c| str_at(c, "id")) == Some(call_id) {
@@ -204,6 +213,11 @@ impl Pending {
             p.set(session_id, "approval", remaining);
         }
         true
+    }
+
+    /// Who answered approval `call_id`, once.
+    fn take_answered_by(&self, call_id: &str) -> Option<Value> {
+        lock(&self.inner).answered_by.remove(call_id)
     }
 
     /// `resolveQuestion`: false when no turn here waits on that question.
@@ -276,6 +290,10 @@ struct Shared {
     /// chat's Claude Code child (it may wait for a wake-up turn to end), so
     /// a permission prompt goes to the turn that is reading that child.
     active: std::sync::atomic::AtomicBool,
+    turn_id: String,
+    /// The data folder the chat's audit trail is written in; `None` until the
+    /// chat is loaded, and for an incognito chat.
+    audit_to: Mutex<Option<PathBuf>>,
 }
 
 /// What an unattended turn tracks: its tool access (`toolAccess`,
@@ -308,6 +326,15 @@ fn note_error(slot: &Mutex<Option<String>>, event: &Value) {
 impl Shared {
     fn emit(&self, event: Value) {
         let _ = self.events.send(Out::Event(event));
+    }
+
+    /// One event in the chat's audit trail (crate::audit), with this turn's id.
+    fn audit(&self, mut event: Value) {
+        let Some(dir) = lock(&self.audit_to).clone() else { return };
+        if let Some(o) = event.as_object_mut() {
+            o.insert("turnId".into(), json!(self.turn_id));
+        }
+        crate::audit::record(&dir, &self.session_id, event);
     }
 }
 
@@ -584,15 +611,26 @@ impl Turns {
     /// rest of the turn while it waits), then park and ask.
     async fn request_approval(&self, shared: &Shared, call: &Value, reason: &str, severity: &Value) -> bool {
         let call_id = str_at(call, "id").unwrap_or_default().to_string();
+        // The audit trail keeps what was asked and who answered, never the
+        // reason (it quotes addresses and recipients).
+        let note = |answer: &str, by: Value| {
+            shared.audit(json!({
+                "type": "approval", "callId": call_id, "tool": call.get("name"), "severity": severity,
+                "answer": answer, "by": by,
+            }))
+        };
         if shared.unattended.is_on() && lock(&shared.unattended.auto).contains(&call_id) {
+            note("approved", json!({ "via": "workflow policy" }));
             return true;
         }
         if self.live_mode(shared).await == "yolo" {
+            note("approved", json!({ "via": "yolo" }));
             return true;
         }
         // A workflow run never parks: the call is denied at once, with the
         // reason, and the tool result says so.
         if shared.unattended.is_on() {
+            note("denied", json!({ "via": "workflow policy" }));
             let name = str_at(call, "name").unwrap_or_default();
             lock(&shared.unattended.denied).insert(call_id, turn::workflow_access::unattended_denial(name, reason));
             return false;
@@ -605,7 +643,15 @@ impl Turns {
             "reason": reason,
             "severity": severity,
         }));
-        rx.await.unwrap_or(false)
+        let answer = rx.await;
+        let by = self.pending.take_answered_by(&call_id).unwrap_or(Value::Null);
+        match answer {
+            Ok(true) => note("approved", by),
+            Ok(false) if !by.is_null() => note("denied", by),
+            // Stopped, or the turn ended, before anyone answered.
+            _ => note("unanswered", Value::Null),
+        }
+        answer.unwrap_or(false)
     }
 
     /// `POST /harness/approve`: one of Claude Code's permission prompts, from
@@ -659,11 +705,24 @@ impl Turns {
             .and_then(|g| serde_json::from_value(g).ok())
             .unwrap_or_else(nekko_tools::default_guardrails);
         let allow = || json!({ "behavior": "allow", "updatedInput": input });
+        // Claude Code runs its own tools: the trail keeps each permission it
+        // asked Nekko for, and how it was decided (crate::audit).
+        let detail = crate::audit::detail(&tool, &input);
+        let note = |decision: &str, by: Value| {
+            shared.audit(json!({
+                "type": "permission", "executedBy": "claude-code", "tool": tool, "decision": decision, "by": by,
+                "detail": detail,
+            }))
+        };
         match crate::harness::decide(&mode, &tool, &input, &rules, &entry.roots) {
             crate::harness::Decision::Allow => {
+                note("allowed", json!({ "via": "mode" }));
                 Some(json!({ "behavior": "allow", "updatedInput": crate::harness::auto_run_input(&tool, &input) }))
             }
-            crate::harness::Decision::Deny(message) => Some(deny(&message)),
+            crate::harness::Decision::Deny(message) => {
+                note("denied", json!({ "via": "rule" }));
+                Some(deny(&message))
+            }
             crate::harness::Decision::Ask { reason, severity } => {
                 let id = str_at(prompt, "tool_use_id")
                     .or_else(|| str_at(prompt, "toolUseID"))
@@ -679,7 +738,14 @@ impl Turns {
                     "reason": reason,
                     "severity": severity,
                 }));
-                Some(if rx.await.unwrap_or(false) { allow() } else { deny("The user denied this action.") })
+                let answer = rx.await;
+                let by = self.pending.take_answered_by(&id).unwrap_or(Value::Null);
+                match answer {
+                    Ok(true) => note("approved", by),
+                    Ok(false) if !by.is_null() => note("denied", by),
+                    _ => note("unanswered", Value::Null),
+                }
+                Some(if answer.unwrap_or(false) { allow() } else { deny("The user denied this action.") })
             }
         }
     }
@@ -709,7 +775,7 @@ impl Turns {
         let store = self.store.clone();
         let id = entry.session_id.clone();
         let session = tokio::task::spawn_blocking(move || store.meta(&id)).await.ok().flatten();
-        let Some(session) = session else { return Some(fail("Chat no longer exists")) };
+        let Some(session) = session.map(|s| s.into_value()) else { return Some(fail("Chat no longer exists")) };
         let provider_id = session.get("providerId").cloned().unwrap_or(Value::Null);
         let settings = self.settings.shared();
         let provider = settings
@@ -717,6 +783,47 @@ impl Turns {
             .and_then(Value::as_array)
             .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(&provider_id)).cloned())
             .unwrap_or(Value::Null);
+        let input = call.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
+        if name == crate::harness::BRIDGE_TITLE {
+            if !self.claude_title_allowed(&provider, &session).await {
+                return Some(fail("Automatic naming is not available for this chat and Claude sign-in."));
+            }
+            // Naming belongs to the ordinary turn, never an extra or idle turn.
+            let shared = lock(&self.running)
+                .values()
+                .find(|s| {
+                    s.session_id == entry.session_id && s.active.load(Ordering::SeqCst) && !s.cancel.is_cancelled()
+                })
+                .cloned();
+            let Some(shared) = shared else { return Some(fail("Automatic naming requires an active turn.")) };
+            let title = str_at(&input, "title")
+                .map(|t| js::slice16(&js::fold_space(js::trim(t)), 64).to_string())
+                .unwrap_or_default();
+            if title.is_empty() {
+                return Some(fail("A nonblank title is required."));
+            }
+            let (store, id) = (self.store.clone(), entry.session_id.clone());
+            let landed = tokio::task::spawn_blocking(move || {
+                // Re-read privacy/eligibility after the async capability checks.
+                if !store.meta(&id).is_some_and(|s| claude_title_eligible(&s.into_value())) {
+                    return Ok(false);
+                }
+                store.set_auto_title(&id, &title)
+            })
+            .await;
+            return Some(match landed {
+                Ok(Ok(true)) => {
+                    shared.emit(json!({ "type": "session_meta", "sessionId": entry.session_id }));
+                    json!({ "ok": true, "text": "Chat title updated." })
+                }
+                Ok(Ok(false)) => fail("The chat is no longer eligible for automatic naming; it was not changed."),
+                Ok(Err(e)) => fail(&e),
+                Err(e) => fail(&e.to_string()),
+            });
+        }
+        if name != crate::harness::BRIDGE_WATCH {
+            return Some(fail("Unknown Nekko tool."));
+        }
         if !(self.claude_allows(&provider, "nekko_tools").await
             && self.claude_allows(&provider, "unattended_runs").await)
         {
@@ -724,11 +831,17 @@ impl Turns {
                 "Nekko's watch is not available for this Claude sign-in: on a Claude plan it waits for Anthropic's approval (Settings > Agents > Claude plan features).",
             ));
         }
-        let input = call.get("input").filter(|i| i.is_object()).cloned().unwrap_or_else(|| json!({}));
         Some(match self.watches.tool(&entry.session_id, &input).await {
             Ok(text) => json!({ "ok": true, "text": text }),
             Err(e) => fail(&e),
         })
+    }
+
+    async fn claude_title_allowed(&self, provider: &Value, session: &Value) -> bool {
+        claude_title_eligible(session)
+            && str_at(provider, "kind") == Some("claude-code")
+            && self.claude_allows(provider, "nekko_tools").await
+            && self.claude_allows(provider, "context_note").await
     }
 
     /// `getSession(id)?.mode ?? settings.defaultChatMode ?? 'guardrails'`.
@@ -795,6 +908,8 @@ impl Turns {
             last_error: Arc::default(),
             unattended: Unattended::default(),
             active: std::sync::atomic::AtomicBool::new(!claude_code),
+            turn_id: turn_id.clone(),
+            audit_to: Mutex::new(None),
         });
         {
             let mut running = lock(&self.running);
@@ -938,7 +1053,7 @@ impl Turns {
         if !js::truthy(fresh.get("incognito"))
             && !crate::connections::offline(&fresh)
             && fresh.get("titleAuto") == Some(&Value::Bool(true))
-            && spec.pointer("/facts/provider").is_some_and(Value::is_object)
+            && sideband_title_supported(&spec["facts"]["provider"])
             && let Some(flight) = self.title_flights.claim(&session_id)
         {
             tokio::spawn(generate_title(hub.clone(), store.clone(), self.accounts.clone(), spec.clone(), flight));
@@ -1016,6 +1131,16 @@ impl Turns {
             return early("chat:turn is unsupported for sandbox sessions; use the host container router");
         }
         let incognito = js::truthy(loaded.get("incognito"));
+        if !incognito {
+            *lock(&shared.audit_to) = Some(self.data_dir.clone());
+            shared.audit(json!({
+                "type": "turn",
+                "mode": str_at(&loaded, "mode").map(str::to_string).or_else(|| shared.default_mode.clone()).unwrap_or_else(|| "guardrails".into()),
+                "provider": opts.get("providerId").cloned().unwrap_or(Value::Null),
+                "model": opts.get("modelId").cloned().unwrap_or(Value::Null),
+                "claudeCode": facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code"),
+            }));
+        }
         // A Claude Agent chat: the user's Claude Code runs the turn and its
         // own tools, so none of Nekko's tools or MCP servers are set up.
         let claude_code = facts.pointer("/provider/kind").and_then(Value::as_str) == Some("claude-code");
@@ -1429,6 +1554,7 @@ impl Turns {
             let counts = shield.lock().unwrap_or_else(|e| e.into_inner()).counts_by_kind();
             if !counts.is_empty() {
                 crate::logs::note(&format!("privacy shield: replaced {counts:?}"));
+                shared.audit(json!({ "type": "redactions", "counts": counts }));
             }
         }
         self.end_turn(&store, shared, &session, forwarder, incognito).await
@@ -1519,6 +1645,10 @@ impl Turns {
         {
             tools.push(crate::harness::BRIDGE_WATCH.to_string());
         }
+        let title_session = lock(session).clone();
+        if !incognito && self.claude_title_allowed(provider, &title_session).await {
+            tools.push(crate::harness::BRIDGE_TITLE.to_string());
+        }
         // A child launched with other Nekko tools is relaunched (a provider
         // switch, or the policy changed), so its bridge lists the right ones.
         let same_tools = self.harness.bridge_tools(&session_id).as_deref() == Some(&tools[..]);
@@ -1602,7 +1732,11 @@ impl Turns {
             ))
         });
         let input = TurnInput {
-            content: if wake { None } else { user.as_ref().map(nekko_harness::user_content) },
+            content: if wake {
+                None
+            } else {
+                user.as_ref().map(|u| claude_turn_content(u, tools.iter().any(|t| t == crate::harness::BRIDGE_TITLE)))
+            },
             cancel: &shared.cancel,
             steering: &shared.steering,
             interrupt_grace: INTERRUPT_GRACE,
@@ -1611,7 +1745,12 @@ impl Turns {
         let mut seen: Option<String> = None;
         let mut model: Option<String> = None;
         let exit = nekko_harness::run_turn(child, &mut mapper, input, &mut |m| match m {
-            Mapped::Message(message) => history.push(message),
+            Mapped::Message(mut message) => {
+                if let Some(compaction) = message.get_mut("compaction") {
+                    compaction["summarized"] = json!(summarized_since_last_compaction(&history));
+                }
+                history.push(message)
+            }
             Mapped::Event(event) => send(event, &history),
             Mapped::Init(init) => {
                 seen = Some(init.session_id);
@@ -1740,6 +1879,39 @@ impl Turns {
     }
 }
 
+/// Claude Code has no completion sideband; naming stays in its ordinary turn.
+fn sideband_title_supported(provider: &Value) -> bool {
+    provider.is_object() && str_at(provider, "kind") != Some("claude-code")
+}
+
+fn claude_title_eligible(session: &Value) -> bool {
+    session.get("titleAuto") == Some(&Value::Bool(true))
+        && !js::truthy(session.get("incognito"))
+        && !crate::connections::offline(session)
+        && !js::truthy(session.get("parentSessionId"))
+        && !js::truthy(session.get("trainingRunId"))
+}
+
+/// A context note on the existing user message, not a system flag, extra
+/// message or persisted user edit. Both policy capabilities gate `name_chat`.
+fn claude_turn_content(user: &Value, name_chat: bool) -> Value {
+    let mut content = nekko_harness::user_content(user);
+    // Leave CLI commands such as /compact intact.
+    if !name_chat || str_at(user, "content").is_some_and(|s| s.trim_start().starts_with('/')) {
+        return content;
+    }
+    const NOTE: &str = "Nekko chat naming note: During this turn, use mcp__nekko_bridge__set_chat_title to give this new chat a concise, specific 3-6 word title describing the user's task. Never overwrite a user-chosen title. Continue the user's task normally; do not start another turn just to name the chat.";
+    match &mut content {
+        Value::String(text) => {
+            text.push_str("\n\n");
+            text.push_str(NOTE);
+        }
+        Value::Array(blocks) => blocks.push(json!({ "type": "text", "text": NOTE })),
+        _ => {}
+    }
+    content
+}
+
 /// A Claude Agent chat's `agentPlan` after Claude Code changed its own plan
 /// (nekko_harness::PlanCall), through the same rules as `update_plan`;
 /// `None` when nothing changed.
@@ -1759,6 +1931,13 @@ fn claude_code_plan(current: Option<&Value>, call: nekko_harness::PlanCall, now:
         turn::PlanOutcome::Applied { plan, .. } => Some(plan),
         _ => None,
     }
+}
+
+/// How many transcript messages a Claude Code compaction landing now stands
+/// in for: everything after the last summary, or the whole transcript.
+fn summarized_since_last_compaction(history: &[Value]) -> usize {
+    let start = history.iter().rposition(|m| js::truthy(m.get("compaction"))).map_or(0, |i| i + 1);
+    history.len() - start
 }
 
 /// `claudeCodeContext`: what a Claude Agent chat's context gauge shows, as
@@ -1814,7 +1993,7 @@ async fn generate_title(
     if js::truthy(fresh.get("incognito"))
         || crate::connections::offline(&fresh)
         || fresh.get("titleAuto") != Some(&Value::Bool(true))
-        || !facts.get("provider").is_some_and(Value::is_object)
+        || !sideband_title_supported(&facts["provider"])
     {
         return;
     }
@@ -2456,11 +2635,25 @@ impl TurnTools {
     /// brought in outside text taints the chat, and every address in any
     /// output counts as shown to it.
     async fn attended(&self, call: &Value) -> Result<Value, String> {
+        let started = std::time::Instant::now();
         let out = self.dispatch(call).await;
+        let name = str_at(call, "name").unwrap_or_default();
+        let input = call.get("input").cloned().unwrap_or(Value::Null);
         if let Ok(v) = &out {
-            let name = str_at(call, "name").unwrap_or_default();
             let text = v.get("output").map(js::display).unwrap_or_default();
-            lock(&self.taint).observe(name, &text, js::truthy(v.get("isError")));
+            let failed = js::truthy(v.get("isError"));
+            let was = lock(&self.taint).tainted();
+            lock(&self.taint).observe(name, &text, failed);
+            if !was && lock(&self.taint).tainted() {
+                self.shared.audit(json!({ "type": "taint", "callId": call.get("id"), "by": name }));
+            }
+            self.shared.audit(json!({
+                "type": "tool", "callId": call.get("id"), "tool": name, "isError": failed,
+                "ms": started.elapsed().as_millis() as u64, "outputChars": text.chars().count(),
+                "detail": crate::audit::detail(name, &input),
+            }));
+        } else {
+            self.shared.audit(json!({ "type": "tool", "callId": call.get("id"), "tool": name, "isError": true, "detail": crate::audit::detail(name, &input) }));
         }
         out
     }
@@ -2694,7 +2887,18 @@ impl TurnTools {
             // In a tainted chat, a public address the chat was never shown
             // (a new query string included) can carry data out.
             let unseen = self.gated() && !lock(&self.taint).allows(&url);
-            let ask = if asks {
+            // Outbound DLP (decision 0064): the address itself carries data.
+            let carried =
+                if self.mode == "yolo" { Vec::new() } else { crate::dlp::in_text(&url, &self.private_terms().await) };
+            let ask = if !carried.is_empty() {
+                Some((
+                    format!(
+                        "Fetch {url}? The address carries {}, which would leave this computer with the request. Approve only if you meant to share it.",
+                        crate::dlp::describe(&carried)
+                    ),
+                    "high",
+                ))
+            } else if asks {
                 Some((format!("Fetch {url}"), "low"))
             } else if unseen {
                 Some((
@@ -2965,6 +3169,24 @@ impl TurnTools {
             )),
             None => None,
         };
+        // Outbound DLP (decision 0064): a key, a card or a private term in the
+        // arguments of any MCP call, read-only ones too (a search query reaches
+        // the search engine), asks, or is named in the approval already asked.
+        let carried =
+            if self.mode == "yolo" { Vec::new() } else { crate::dlp::in_input(&input, &self.private_terms().await) };
+        let ask = match ask {
+            Some((reason, _)) if !carried.is_empty() => {
+                Some((format!("{reason} It carries {}.", crate::dlp::describe(&carried)), "high"))
+            }
+            None if !carried.is_empty() => Some((
+                format!(
+                    "{name} would send {} out of this computer in its arguments. Approve only if you meant to share it.",
+                    crate::dlp::describe(&carried)
+                ),
+                "high",
+            )),
+            other => other,
+        };
         if let Some((reason, severity)) = ask {
             if !self.turns.request_approval(&self.shared, call, &reason, &json!(severity)).await {
                 return error(id, "Call not approved by user.");
@@ -2979,6 +3201,18 @@ impl TurnTools {
             }
         }
         mcp.call(call).await
+    }
+
+    /// The user's private terms (`settings.privacyTerms`), which the outbound
+    /// DLP looks for as the Privacy Shield does.
+    async fn private_terms(&self) -> Vec<String> {
+        let settings = self.turns.settings.clone();
+        tokio::task::spawn_blocking(move || settings.get())
+            .await
+            .ok()
+            .and_then(|s| s.get("privacyTerms").and_then(Value::as_array).cloned())
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default()
     }
 
     async fn disk(&self) -> Option<Value> {
@@ -3118,6 +3352,42 @@ impl TurnTools {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_naming_eligibility_preserves_manual_titles_and_private_chats() {
+        assert!(claude_title_eligible(&json!({ "titleAuto": true })));
+        for title in [Value::Null, json!(false), json!("true")] {
+            assert!(!claude_title_eligible(&json!({ "titleAuto": title })));
+        }
+        for field in ["incognito", "offline", "parentSessionId", "trainingRunId"] {
+            let mut session = json!({ "titleAuto": true });
+            session[field] = json!(true);
+            assert!(!claude_title_eligible(&session), "{field}");
+        }
+        assert!(!sideband_title_supported(&json!({ "kind": "claude-code" })));
+        assert!(!sideband_title_supported(&Value::Null));
+        assert!(sideband_title_supported(&json!({ "kind": "anthropic" })));
+    }
+
+    #[test]
+    fn claude_naming_note_uses_only_the_existing_user_content() {
+        let user = json!({ "content": "Fix the login form" });
+        assert_eq!(claude_turn_content(&user, false), user["content"]);
+        let named = claude_turn_content(&user, true);
+        let text = named.as_str().unwrap();
+        assert!(text.starts_with("Fix the login form\n\n"));
+        assert!(text.contains("mcp__nekko_bridge__set_chat_title"));
+        assert!(text.contains("Never overwrite a user-chosen title"));
+        assert!(text.contains("do not start another turn"));
+        assert_eq!(user["content"], "Fix the login form");
+        let image = json!({ "content": "Fix this", "images": ["data:image/png;base64,AAAA"] });
+        let original = nekko_harness::user_content(&image);
+        let named = claude_turn_content(&image, true);
+        assert_eq!(named[0], original[0]);
+        assert_eq!(named[1], original[1]);
+        assert!(named[2]["text"].as_str().unwrap().contains("Nekko chat naming note"));
+        assert_eq!(claude_turn_content(&json!({ "content": "/compact" }), true), json!("/compact"));
+    }
 
     #[test]
     fn claude_question_returns_original_input_with_answers_by_question_text() {
@@ -3416,6 +3686,15 @@ mod tests {
             claude_code_context(Some(&before), stopped, Some("claude-sonnet-5-5".into()), Some("sonnet".into())),
             json!({ "used": 52_000, "model": "claude-sonnet-5-5", "modelId": "sonnet" })
         );
+    }
+
+    #[test]
+    fn a_claude_code_compaction_summarizes_what_followed_the_last_one() {
+        let m = |id: &str| json!({ "id": id, "role": "user", "content": "x" });
+        let summary = json!({ "id": "c1", "role": "assistant", "content": "s", "compaction": { "summarized": 2 } });
+        assert_eq!(summarized_since_last_compaction(&[m("a"), m("b"), m("c")]), 3);
+        assert_eq!(summarized_since_last_compaction(&[m("a"), summary.clone(), m("b")]), 1);
+        assert_eq!(summarized_since_last_compaction(&[m("a"), summary]), 0);
     }
 
     #[test]

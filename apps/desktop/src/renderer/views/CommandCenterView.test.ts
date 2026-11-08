@@ -16,6 +16,7 @@ import { wallLayoutShortcut, WallToolbar } from './CommandCenterView.js';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
 import { AgentWindowDropdown } from '../components/AgentWindowPicker.js';
 import { readFileSync } from 'node:fs';
+import { allPanes } from '../layout.js';
 
 it.each(['focus', 'grid', 'fixed'] as const)('plus menu forwards all creation kinds without changing the %s layout', (mode) => {
   vi.mocked(useState).mockReturnValueOnce([null, vi.fn()]);
@@ -33,6 +34,15 @@ it.each(['focus', 'grid', 'fixed'] as const)('plus menu forwards all creation ki
   for (const kind of ['chat', 'image', 'terminal']) menu.props.onCreate(kind);
   expect(setAddOpen).not.toHaveBeenCalled();
   expect(setWall).not.toHaveBeenCalled();
+  menu.props.onAddZone();
+  expect(setWall).toHaveBeenCalledTimes(1);
+  const before = { ...DEFAULT_WALL_STATE, layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } };
+  const after = setWall.mock.calls[0][0](before);
+  expect(allPanes(after.root)).toHaveLength(1);
+  expect(allPanes(after.root)[0].kind).toBe('zone');
+  expect(after.activeZone).toBe(allPanes(after.root)[0].id);
+  expect(after.layout).toBe(before.layout);
+  expect(setAddOpen).not.toHaveBeenCalled();
 });
 
 it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
@@ -50,6 +60,12 @@ it('hosts the detailed picker in the toolbar rather than a wall tile', () => {
   const menu = elements.find((e) => e.type === CreateMenu)!;
   expect(picker!.props.anchorRef).toBe(menu.props.anchorRef);
   // That the page never hands the wall an add tile is rendered in newAgentSetup.test.ts.
+});
+
+it('treats the wall lists as ready only once they really loaded, so an engine still starting closes no windows', () => {
+  const source = readFileSync(new URL('./CommandCenterView.tsx', import.meta.url), 'utf8');
+  expect(source).toContain('retryUntilAnswered(() => Promise.all([refreshSessions(), refreshTerminals()]).then(() => setListsReady(true)))');
+  expect(source).not.toMatch(/finally\(\(\) => setListsReady/);
 });
 
 // Source pin, pending the wall e2e journey: the title-bar slot is found by a

@@ -12,6 +12,16 @@ fs.rmSync(path.join(out, 'profile'), { recursive: true, force: true });
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], checks: {}, errors: [] };
+// Where the island sits, and anything in the composer it overlaps.
+const islandLayout = `(() => {
+  const box = el => el.getBoundingClientRect();
+  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const island = document.querySelector('[data-voice-island]');
+  const a = box(island);
+  const others = [...island.parentElement.children].filter(el => el !== island).concat([island.closest('.composer').querySelector('[contenteditable]')]);
+  const mic = box(island.querySelector('button'));
+  return { width: Math.round(a.width), status: !!island.querySelector('[data-voice-strip]'), micAtRight: Math.abs(a.right - mic.right) < 1, overlaps: others.filter(el => box(el).width && hit(a, box(el))).map(el => el.tagName + '.' + el.className) };
+})()`;
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:|devtools:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
@@ -32,7 +42,7 @@ app.whenReady().then(async () => {
       f.store.setState({ settings: { ...s.settings, voice: { enabled: true, commandsEnabled: true, silenceMs: 1200 } } });
       f.transcripts = 0;
       f.bridge.voiceStatus = async () => ({ installed: true });
-      f.bridge.voiceTranscribe = async () => (f.transcripts++ === 0 ? 'Fix the bug. Nekko, send it. Then add tests.' : '');
+      f.bridge.voiceTranscribe = async () => (f.transcripts++ === 0 ? 'Fix the bug. Neco, send it. Then ask Necco to add tests.' : '');
       navigator.mediaDevices.getUserMedia = async () => {
         const ctx = new AudioContext(); const osc = ctx.createOscillator(); const gain = ctx.createGain(); const dest = ctx.createMediaStreamDestination();
         osc.frequency.value = 220; gain.gain.setValueAtTime(0.4, ctx.currentTime); gain.gain.setValueAtTime(0, ctx.currentTime + 1.2);
@@ -49,12 +59,23 @@ app.whenReady().then(async () => {
     await shot('intro-dark');
     await run(`document.documentElement.dataset.theme = 'light'`); await sleep(300);
     await shot('intro-light');
+    // The second scene: words arriving above the island, never under it.
+    await sleep(7000);
+    await shot('intro-talk-light');
     await run(`document.documentElement.dataset.theme = 'dark'`);
     await run(`Array.from(document.querySelectorAll('[role=dialog] button')).find(b => b.textContent === 'Turn on').click()`);
     await sleep(700);
     report.checks.introSeen = await run('layoutFixture.store.getState().settings.voice.introSeen === true && !document.querySelector("[data-voice-intro]")');
     report.checks.listening = await run(`document.querySelector('[aria-label="Stop listening"]')?.getAttribute('aria-pressed')`);
     await shot('listening-dark');
+    report.checks.islandWide = await run(islandLayout);
+    // The island must not cover the editor or any control in the bar, however narrow the composer gets.
+    for (const width of [640, 480]) {
+      win.setContentSize(width, 700); await sleep(500);
+      report.checks[`island${width}`] = await run(islandLayout);
+      await shot(`listening-${width}`);
+    }
+    win.setContentSize(900, 700); await sleep(500);
     await run(`document.documentElement.dataset.theme = 'light'`); await sleep(300);
     await shot('listening-light');
     await run(`document.documentElement.dataset.theme = 'dark'`);
@@ -69,6 +90,12 @@ app.whenReady().then(async () => {
     await sleep(5000);
     report.checks.stillListeningAfter5sSilence = await run(`document.querySelector('[aria-label="Stop listening"]')?.getAttribute('aria-pressed') ?? 'off'`);
     report.checks.transcribeCalls = await run('layoutFixture.transcripts');
+    // The island opening, at real speed: stop, tap again, grab what the compositor shows.
+    await run(`document.querySelector('[aria-label="Stop listening"]').click()`);
+    await sleep(600);
+    await run(`document.querySelector('[aria-label="Start listening"]').click()`);
+    for (let i = 0; i < 40 && !(await run(`!!document.querySelector('[data-voice-strip]')`)); i++) await sleep(5);
+    for (let i = 0; i < 8; i++) await shot(`open-${i}`);
   } catch (e) { report.errors.push(String(e && e.stack || e)); }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));

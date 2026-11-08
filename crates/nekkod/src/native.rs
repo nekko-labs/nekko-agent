@@ -61,6 +61,7 @@ pub struct Native {
     found: Mutex<Found>,
     /// One check or download at a time, as electron-updater's promises were.
     busy: tokio::sync::Mutex<()>,
+    remote_install_started: std::sync::atomic::AtomicBool,
     client: reqwest::Client,
 }
 
@@ -75,6 +76,7 @@ impl Native {
             state: Mutex::new(state),
             found: Mutex::default(),
             busy: tokio::sync::Mutex::new(()),
+            remote_install_started: std::sync::atomic::AtomicBool::new(false),
             client: reqwest::Client::builder()
                 .user_agent("nekko-agent-updater")
                 .connect_timeout(std::time::Duration::from_secs(20))
@@ -304,6 +306,62 @@ impl Native {
         }
     }
 
+    /// Host support only. Permission is checked separately by the phone gate.
+    pub(crate) fn remote_update_problem(&self) -> Option<&'static str> {
+        if !self.cfg.is_packaged && self.cfg.update_feed_url.is_none() {
+            Some("app-not-packaged")
+        } else if self.feed().is_err() {
+            Some("update-feed-unavailable")
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn remote_install_pending(&self) -> bool {
+        self.remote_install_started.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    pub(crate) fn remote_install_problem(&self) -> Option<&'static str> {
+        if self.remote_install_pending() {
+            return Some("install-already-requested");
+        }
+        if lock(&self.found).file.as_ref().is_some_and(|f| f.info.is_admin_rights_required) {
+            return Some("interactive-admin-install");
+        }
+        let installed = self.installed();
+        if !self.cfg.is_packaged || installed.app_pid.is_none_or(|p| p == 0) || installed.exe_path.is_empty() {
+            return Some("packaged-install-required");
+        }
+        let linux = update::linux_package(&installed);
+        // A package-manager update may need interactive authentication. Never
+        // quit a remotely managed app in anticipation of that prompt.
+        if self.platform == Platform::Linux && linux == update::LinuxPackage::Deb {
+            return Some("interactive-package-install");
+        }
+        update::install_plan(self.platform, linux, &installed, std::path::Path::new("update"), false)
+            .err()
+            .map(|_| "install-layout-unsupported")
+    }
+
+    pub(crate) async fn remote_install(&self, ctx: &Ctx) -> Result<Value, String> {
+        let _busy = self.busy.try_lock().map_err(|_| "service-busy: updater operation in progress")?;
+        if let Some(reason) = self.remote_install_problem() {
+            return Err(format!("service-unsupported: {reason}"));
+        }
+        if self.current().get("state").and_then(Value::as_str) != Some("downloaded") {
+            return Err("service-not-ready: download an update first".into());
+        }
+        if self.remote_install_started.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            return Err("service-busy: install already requested; inspect the host before retrying".into());
+        }
+        // Reserve Electron's lock before any installer can launch, so a
+        // concurrently accepted restart cannot race this handoff.
+        crate::service_management::prepare_install(ctx).await?;
+        // A failed handoff may already have spawned the installer. Do not
+        // launch it twice; local inspection or a new host process is required.
+        self.install(ctx).await
+    }
+
     /// `quitAndInstall()`: start the installer (detached, outliving the app),
     /// then have main quit. Errors when nothing is downloaded.
     pub async fn install(&self, ctx: &Ctx) -> Result<Value, String> {
@@ -459,6 +517,41 @@ pub async fn bridge(ctx: &Ctx, body: Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remote_installs_refuse_interactive_or_unrelaunchable_layouts() {
+        let mut owned = Native::new(
+            NativeConfig { is_packaged: true, exe_path: "app".into(), app_pid: Some(42), ..Default::default() },
+            None,
+        );
+        let native = Arc::get_mut(&mut owned).unwrap();
+        native.platform = Platform::Windows;
+        assert_eq!(native.remote_install_problem(), None);
+        native.cfg.app_pid = None;
+        assert_eq!(native.remote_install_problem(), Some("packaged-install-required"));
+        native.cfg.app_pid = Some(42);
+        native.platform = Platform::Mac;
+        assert_eq!(native.remote_install_problem(), Some("install-layout-unsupported"));
+        native.cfg.exe_path = "/Applications/Nekko Agent.app/Contents/MacOS/Nekko Agent".into();
+        assert_eq!(native.remote_install_problem(), None);
+        native.platform = Platform::Linux;
+        native.cfg.app_image = Some("relative.AppImage".into());
+        assert_eq!(native.remote_install_problem(), Some("install-layout-unsupported"));
+        native.cfg.app_image = Some(std::env::temp_dir().join("Nekko.AppImage").to_string_lossy().into_owned());
+        assert_eq!(native.remote_install_problem(), None);
+        let resources = tempfile::tempdir().unwrap();
+        std::fs::write(resources.path().join("package-type"), "deb").unwrap();
+        native.cfg.app_image = None;
+        native.cfg.resources_path = Some(resources.path().to_string_lossy().into_owned());
+        assert_eq!(native.remote_install_problem(), Some("interactive-package-install"));
+        lock(&native.found).file = Some(update::Resolved {
+            url: "https://example.invalid/update.exe".parse().unwrap(),
+            info: serde_json::from_value(json!({ "url": "update.exe", "isAdminRightsRequired": true })).unwrap(),
+        });
+        assert_eq!(native.remote_install_problem(), Some("interactive-admin-install"));
+        native.remote_install_started.store(true, std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(native.remote_install_problem(), Some("install-already-requested"));
+    }
 
     #[test]
     fn every_channel_main_answered_is_listed() {

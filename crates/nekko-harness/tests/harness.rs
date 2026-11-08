@@ -301,6 +301,42 @@ fn an_interrupted_turn_with_no_model_usage_keeps_the_occupancy() {
 }
 
 #[test]
+fn claude_codes_compaction_is_a_divider_with_its_summary() {
+    // A one-line turn, then `/compact` (Claude Code 2.1.319).
+    let items = map_all(&fixture("subscription/compact.jsonl"));
+    let msgs = messages(&items);
+    assert_eq!(msgs.len(), 2, "the first turn's reply, then the divider");
+    let divider = &msgs[1];
+    assert_eq!(divider["role"], "assistant");
+    assert_eq!(
+        divider["compaction"],
+        json!({ "summarized": 0, "by": "claude-code", "trigger": "manual", "tokensBefore": 20_313, "tokensAfter": 4_626 })
+    );
+    let summary = divider["content"].as_str().unwrap();
+    assert!(summary.starts_with("1. Primary Request and Intent:"), "{summary}");
+    assert!(!summary.contains("system-reminder") && !summary.contains("being continued"), "{summary}");
+    // The `/compact` turn makes no model call: the gauge takes the size after it.
+    assert_eq!(contexts(&items), [reported(20_309, Some(1_000_000)), reported(4_626, Some(1_000_000))]);
+}
+
+#[test]
+fn a_compaction_whose_summary_never_comes_still_shows_its_divider() {
+    let mut m = Mapper::new("s1");
+    let boundary = json!({ "type": "system", "subtype": "compact_boundary",
+        "compact_metadata": { "trigger": "auto", "pre_tokens": 950_000, "post_tokens": 41_000 } });
+    assert!(m.map(&boundary).is_empty());
+    let reply = json!({ "type": "assistant", "message": { "id": "m1", "content": [{ "type": "text", "text": "Carrying on." }],
+        "usage": { "input_tokens": 3, "cache_read_input_tokens": 42_000 } } });
+    let msgs = messages(&m.map(&reply));
+    assert_eq!(msgs.len(), 1);
+    assert_eq!((msgs[0]["content"].as_str(), msgs[0]["compaction"]["trigger"].as_str()), (Some(""), Some("auto")));
+    // A synthetic message with no compaction pending is not a summary.
+    let synthetic =
+        json!({ "type": "user", "isSynthetic": true, "message": { "role": "user", "content": "Summary:\nx" } });
+    assert!(messages(&m.map(&synthetic)).is_empty());
+}
+
+#[test]
 fn a_sub_agents_calls_are_not_the_chats_context() {
     let mut lines = fixture("api-key/turn.jsonl");
     let at = lines.iter().position(|l| l.contains("\"type\":\"result\"")).unwrap();

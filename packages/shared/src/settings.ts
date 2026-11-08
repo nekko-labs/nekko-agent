@@ -317,7 +317,7 @@ export interface AppSettings {
    */
   notices?: AppNotice[];
   skipDeleteConfirmation?: boolean;
-  /** Turning YOLO on skips its warning (Settings > General, "Warn before YOLO"). */
+  /** Turning No restrictions on skips its warning (Settings > General, "Warn before No restrictions"). */
   skipYoloWarning?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
@@ -330,6 +330,14 @@ export interface AppSettings {
    * Settings → Remote access; never settable from a phone.
    */
   quitFromPhone?: boolean;
+  /** Explicit desktop opt-in for signed phone service actions. Absent means false. */
+  manageServiceFromPhone?: boolean;
+  /**
+   * Hold off idle sleep while any agent runs here, so a run another device
+   * started does not stop when nobody touches this one. Off unless the owner
+   * turns it on under Settings > Computers; never settable from another device.
+   */
+  keepAwakeWhileAgentsRun?: boolean;
   /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
   machineIcon?: string;
   /** Display name shared with paired devices; blank uses the system hostname. */
@@ -426,8 +434,13 @@ export interface AppSettings {
   engineBinPath?: string;
   /** Experimental feature toggles (Settings → Experimental). Off = surface hidden. */
   experimental?: ExperimentalFlags;
-  /** Desktop developer controls; absent means disabled. */
-  developer?: { serverControls?: boolean };
+  /** Developer controls; each preference documents its own default. */
+  developer?: {
+    /** Desktop server controls, off by default. */
+    serverControls?: boolean;
+    /** Explain next-turn tokens after model/effort changes. On unless explicitly false. */
+    showContextChangeNotice?: boolean;
+  };
   /** First-run setup wizard progress (undefined on installs that predate it). */
   onboarding?: OnboardingState;
   /**

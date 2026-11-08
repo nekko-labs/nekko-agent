@@ -85,8 +85,19 @@ export interface ChatMessage {
    * before it. The earlier messages stay in the transcript so the chat can
    * still show them, but from here on a model is sent this summary and what
    * follows it, never what came before (`sinceCompaction`).
+   *
+   * `by: 'claude-code'` marks a compaction Claude Code made itself in a
+   * Claude Agent chat: `trigger` says whether it did so on its own near the
+   * window (`auto`) or for a typed `/compact` (`manual`), and `tokensBefore` /
+   * `tokensAfter` are its context size either side, as it reported them.
    */
-  compaction?: { summarized: number };
+  compaction?: {
+    summarized: number;
+    by?: 'claude-code';
+    trigger?: 'auto' | 'manual';
+    tokensBefore?: number;
+    tokensAfter?: number;
+  };
   /**
    * Measurements for the reply this message ends, recorded by the host when the
    * turn finishes. On the last assistant message of a turn only. Counts and
@@ -138,6 +149,9 @@ export interface ContextPrefs {
  */
 export type ChatMode = 'ask' | 'guardrails' | 'yolo';
 
+/** What people read for each value. The values themselves are stored and sent, so they stay. */
+export const CHAT_MODE_LABEL: Record<ChatMode, string> = { ask: 'Always ask', guardrails: 'Ask when it matters', yolo: 'No restrictions' };
+
 /**
  * What a chat is for. `multimodal` (the default, and what an absent value
  * means) talks to a chat model with text and images in and text out.
@@ -176,6 +190,10 @@ export interface ImageTurnOptions {
   sessionId: string;
   prompt: string;
   params: ImageChatParams & { modelId: string };
+  /** Pictures to edit, as data URLs (at most 4). Without them the prompt makes a new picture. */
+  images?: string[];
+  /** The size to make an edit at (the photo's shape), for this turn only; the chat keeps `params`' size. */
+  size?: { width: number; height: number };
 }
 
 /** `Session.claudeCodeContext`. */
@@ -533,7 +551,13 @@ export type AgentEvent =
    * commands, sub-agents). It keeps working after the turn's `done` and wakes
    * on its own when one finishes, so the chat says so meanwhile.
    */
-  | { type: 'claude_code_background'; sessionId: string; tasks: number };
+  | { type: 'claude_code_background'; sessionId: string; tasks: number }
+  /**
+   * Claude Code is compacting a Claude Agent chat's context (on its own near
+   * the window, or for a typed `/compact`): `running` while it summarizes,
+   * then `done`, or `failed` with Claude Code's reason.
+   */
+  | { type: 'claude_code_compacting'; sessionId: string; state: 'running' | 'done' | 'failed'; error?: string };
 
 /**
  * What a session is waiting on a person for, right now.

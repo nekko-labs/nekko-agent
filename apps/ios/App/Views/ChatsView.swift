@@ -46,7 +46,7 @@ struct ChatsView: View {
             if let selection {
                 List(selection: selection) { rows }
             } else {
-                List { rows }
+                List { rows.listRowSeparator(.hidden).listSectionSeparator(.hidden) }
             }
         }
         // Flat rows straight on the coloured ground, hairline separated, as the
@@ -171,7 +171,7 @@ struct ChatsView: View {
                     if g.isOpen(opened: opened, searching: !query.isEmpty) { sectionRows(g) }
                 } header: {
                     if g.key != ChatGroup.general && g.key != "all" { sectionHeading(g) }
-                }
+                }.listSectionSeparator(.hidden)
             }
             // The computer's Monitors (FD-5): hardware, running chats, what needs you, the next automations.
             if query.isEmpty && !store.computers.isEmpty && prefs.shows("ph-monitors", localModelLoaded: monitor?.localModelLoaded ?? false) {
@@ -210,22 +210,30 @@ struct ChatsView: View {
     /// A group's heading: tap to fold it, and on project groups, drag it to a new place.
     @ViewBuilder private func sectionHeading(_ g: ChatSection) -> some View {
         let open = g.isOpen(opened: opened, searching: !query.isEmpty)
+        let live = g.key == "status:watching" ? g.watchingCount > 0 : ["status:building", "status:verifying"].contains(g.key) && g.headerActivity(listActivity) == .running
         let heading = Button {
             withAnimation { flip(&opened, g.key) }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.inkFaint)
+                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.accent)
                     .rotationEffect(.degrees(open ? 90 : 0))
                 // By computer: the place's mark in its colour, as on its rows.
                 if let id = sourceId(g), let place = ChatPlace.of(id, store: store) {
                     PlaceMark(place: place, showIcon: view.showComputerIcons, size: 14)
                 }
-                if !g.chats.isEmpty {
-                    ChatStatusIcon(activity: g.headerActivity(listActivity), activeWatchCount: g.watchingCount)
-                        .frame(width: 18, height: 18)
-                }
                 VStack(alignment: .leading, spacing: 3) {
-                    GroupHeading(groupTitle(g), count: counts(g))
+                    HStack(spacing: 6) {
+                        Text(groupTitle(g)).font(.subheadline.weight(.medium)).foregroundStyle(palette.accent).lineLimit(1)
+                        if live { ChatGroupActivity(kind: g.key) }
+                        Spacer(minLength: 4)
+                        if live || !open {
+                            Text("\(g.chats.count)")
+                                .font(.caption2.weight(live ? .semibold : .regular).monospacedDigit())
+                                .foregroundStyle(live ? palette.success : palette.inkFaint)
+                                .padding(.horizontal, 8).padding(.vertical, 2)
+                                .background((live ? palette.success : palette.inkFaint).opacity(0.12), in: Capsule())
+                        }
+                    }.textCase(nil)
                     if let path = listFolders.first(where: { $0.id == g.key })?.path {
                         Text(path).font(.caption).foregroundStyle(palette.inkSoft).textCase(nil)
                     }
@@ -287,6 +295,12 @@ struct ChatsView: View {
                     Text(view.sortBy == .name ? String(localized: "Z to A") : String(localized: "Newest first")).tag(false)
                 }
                 .pickerStyle(.menu)
+            }
+            Menu("Card details") {
+                Toggle("Model", isOn: bind(\.showModel))
+                Toggle("Context window", isOn: bind(\.showContext))
+                Toggle("Pull requests", isOn: bind(\.showPullRequests))
+                Toggle("Last updated", isOn: bind(\.showUpdated))
             }
             // Keep these controls in the popover: a second popup menu did not
             // expose its toggles reliably when hosted inside this Form.
@@ -487,9 +501,11 @@ struct ChatsView: View {
         return NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
                     showPreview: view.showPreviews, place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons,
-                    prs: store.rowPrs[s.id] ?? [])
+                    prs: view.showPullRequests ? store.rowPrs[s.id] ?? [] : [],
+                    showModel: view.showModel, showContext: view.showContext, showUpdated: view.showUpdated)
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
+        .listRowSeparator(.hidden)
         .listRowBackground(RowBackground(needsYou: listActivity[s.id] == .needsYou,
                                          selected: selection.map { $0.wrappedValue == .chat(s.id) } ?? (highlighted == s.id)))
         .accessibilityIdentifier("chats.row")
@@ -544,6 +560,9 @@ struct ChatRow: View {
     var showPlaceIcon = true
     /// The pull requests the chat made, with their state (`pr:sessionList`).
     var prs: [PullRequest] = []
+    var showModel = true
+    var showContext = true
+    var showUpdated = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -556,6 +575,16 @@ struct ChatRow: View {
                 HStack(spacing: 6) {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
+                }
+                if showModel, let model = summary.modelId {
+                    Text(AgentRows.shortModelName(model)).font(.caption2).foregroundStyle(palette.accent)
+                        .lineLimit(1).accessibilityLabel("Model \(model)").accessibilityIdentifier("chats.row.model")
+                }
+                if showContext, let used = summary.contextUsed ?? summary.transcriptTokens {
+                    Text(summary.contextWindow.map { "\(MonitorFormat.tokens(used))/\(MonitorFormat.tokens($0))" } ?? "\(MonitorFormat.tokens(used)) tokens")
+                        .font(.caption2.monospacedDigit()).foregroundStyle(palette.inkFaint)
+                        .accessibilityLabel("Context window: \(used) tokens used")
+                        .accessibilityIdentifier("chats.row.context")
                 }
                 if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
                 if activity != nil || waiting > 0 || place != nil || !prs.isEmpty {
@@ -574,10 +603,10 @@ struct ChatRow: View {
             }
             Spacer(minLength: 6)
             // Re-rendered each minute, so "2m" doesn't stay "2m".
-            TimelineView(.periodic(from: .now, by: 60)) { _ in
+            if showUpdated { TimelineView(.periodic(from: .now, by: 60)) { _ in
                 Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
                     .font(.caption2).foregroundStyle(palette.inkFaint).padding(.top, 3)
-            }
+            } }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)

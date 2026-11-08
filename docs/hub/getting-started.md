@@ -21,6 +21,8 @@ We care about three things:
 - **Take it with you.** Pair your phone to drive the agent on your computer from anywhere, end-to-end encrypted.
 - **Plug it into your tools.** Use it from the terminal, or as an MCP server inside Claude Code, Codex, Cursor and other agents.
 
+**Find a feature by what you want to do:** the [feature guide](/docs/features) maps local models, file recovery, memory, approvals, automation and MCP to setup instructions and honest limits.
+
 ## Install the app
 
 The quickest way to start is the installer.
@@ -43,6 +45,12 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 ## Returning to the latest message
 
 When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
+
+## Recovering file edits
+
+Use the chat's **Changes** view to compare native text-tool edits, keep them or revert them. New source builds can retain the saved chat's original text across restart and validate up to 100 ordered replacements before writing. Incognito originals remain memory-only; accepting a change discards its baseline.
+
+See [File recovery and batch edits](/docs/file-recovery) for availability, the exact tool-call example, privacy and storage limits. This is not whole-workspace backup, binary-perfect restoration or protection from concurrent external writers. Keep version control and backups for important work.
 
 ## Reviewing visual changes
 
@@ -169,6 +177,10 @@ For an identified subagent, **Open ↗** beside its activity row opens the child
 
 ### Model and effort controls
 
+Changing the model or effort in an existing chat shows **Tokens on your next turn**: an estimate of the input tokens needed to resend the chat’s context. Nothing is sent just by changing your selection. To save tokens, start a new chat and include only what it needs instead of carrying over the old history. Actual usage and cost depend on context trimming and provider caching and billing.
+
+Check **Got it. Don’t show me again.** and click **Got it** to hide this notice across chats. To bring it back, enable **Settings → System → Developer → Show model-switch token notice**. Closing the notice without acknowledging does not save that checkbox.
+
 The composer shows the model title without a subscription suffix. Open its menu for provider and account details. Cloud providers appear first under **Cloud**, followed by **Local**; when both exist they occupy independently scrolling columns. Your default model is marked inside its provider group instead of repeated at the top.
 
 **Effort** appears beside the model in Simple and Expert. Its borderless button opens a slider of choices reported by that model's provider. There is no **Normal** stop. ChatGPT and Anthropic catalogs can supply these choices; providers without verified capability metadata show an unavailable control rather than guessed levels. Existing saved Normal settings remain compatible. Native phone choices have not yet moved to this dynamic catalog. On a Claude subscription, the choices are the ones Claude Code takes, and it applies the closest level a model has.
@@ -195,6 +207,8 @@ By default the panel follows each working agent around its loop: **Draft** (noth
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Accessibility > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
 
+Each group initially shows up to **20 agent rows**. Choose **Show more (N)** below a group to show its full list in one click; other groups stay limited. Completed lists also start at 20 when opened. Hidden cards are not loaded into the panel until needed, while group counts and search still cover all your chats. Opening an agent outside the first 20 brings its row into the last visible slot. Changing the grouping resets these expanded lists.
+
 ### Delegated agents in the Agents panel
 
 Delegated subagents appear as compact rows beneath their parent, joined to its card by a tree line, each led by its status (a rocket while it works, a check when done). This works in Claude chats too, where a subagent's chat is a live copy you can read but not write to. The plan above the composer also shows each subagent as a live card along its bottom: its status, its task on one line, and what it is doing right now; click a card to open that subagent. A subagent's chat opens under a banner naming the chat that spawned it; click the name to go back to it. A working subagent always has a row; finished ones stay while their chat is working or open, then fold into the count on the card. When you type a follow-up, or the agent suggests a next step, the end of the conversation offers **Do it here**, which runs it in this chat and uses more of its context, and **In a subagent**, which hands it off and gets a report back. Opening a child transcript does not add a duplicate full agent card. Closing the parent's windows keeps the saved parent and its nested children accessible.
@@ -204,6 +218,8 @@ A turn's working steps fold into one work group whose header says what the agent
 ### Reading a compaction summary
 
 When older conversation is summarized, a **Conversation compacted** event card shows how many earlier messages were summarized. It starts collapsed, including the newest summary. Click **Show summary** to read it and **Hide summary** to fold it again. Earlier messages remain readable above the card. Expanding or collapsing the card does not change what the model receives.
+
+In a Claude Agent chat, Claude Code compacts the conversation itself: on its own when the context nears its limit, or when you type `/compact`. The card then reads **Claude Code compacted the conversation** and says which of the two it was, how far the context fell (for example `968k → 41k tokens`), and how many messages the summary replaces. That is why the context gauge drops sharply after a compaction: Claude Code carries on from the summary, not from the full history.
 
 ### Answering agent questions
 
@@ -222,6 +238,9 @@ Click a file link to open the file in a window beside the chat. Code is coloured
 Click the plus button in the Agents panel to open a new agent window. Hover over it for the Agent, Photos and Videos, and Terminal choices. Terminals and photo/video projects appear in separate groups at the top of the panel only when there are items to show.
 
 The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
+
+Immediately to its right, **View** brings together **Single agent** (one focused chat), **Multi-agent** (tiled chats), **Snap to grid**, and desktop screen/desktop controls. Cmd/Ctrl+Shift+1 and +2 still switch the two views. Snap to grid is available in free-form Multi-agent view; it keeps windows evenly spaced and attracts dividers only when they are within 3% of a grid boundary. The menu scrolls on smaller windows. Desktop screen selection and new-agent placement keep their existing behavior; these controls are not shown in the Local Web UI.
+
 
 | Action | macOS | Windows/Linux |
 | --- | --- | --- |
@@ -248,7 +267,7 @@ opening on the board. Click a zone to make it the active one (it gets a heavier
 outline), then click an agent in the Agents list to show it there, or drag the
 agent from the list straight into a zone. Clicking an agent that is already on
 the board just switches to its zone. Each zone has a colour, shown as a small
-square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips.
+square before its name and as a thin bar on the cards of the agents it holds. One plus on the right, aligned with the zone headers, adds an empty full-height column. Hover or focus it to see existing zones reflow around the new column preview; move away to cancel. Click to add it, then drag its header to move it elsewhere. There are no bottom plus strips. You can also choose **+ > Add agent zone** in the board toolbar to add and select an empty right-hand column without creating an agent or switching views.
 Press a zone's name bar and move the pointer to start dragging it; a click without movement only selects the zone and does not lift it. Hold Shift at a board edge to span the
 whole side, and right-click the name bar to change its colour, rename it or close it. Minimizing or completing
 an agent leaves its zone in place, dotted, until you fill it.

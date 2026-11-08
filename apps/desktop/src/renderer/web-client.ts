@@ -608,6 +608,7 @@ function makeWebClient(): NekkoApi {
     readLog: (id, opts) => call(IpcChannels.logsRead, id, opts ?? {}),
     fetchRemoteImage: (url) => call(IpcChannels.imageFetch, url),
 
+    readAudit: (sessionId) => call(IpcChannels.auditRead, sessionId),
     listChanges: (sessionId) => call(IpcChannels.changesList, sessionId),
     acceptChange: (sessionId, path) => call(IpcChannels.changeAccept, sessionId, path),
     acceptAllChanges: (sessionId) => call(IpcChannels.changeAcceptAll, sessionId),
@@ -620,6 +621,7 @@ function makeWebClient(): NekkoApi {
     createPr: (workspaceId, opts) => call(IpcChannels.prCreate, workspaceId, opts),
     getPrChecks: (url) => call(IpcChannels.prChecks, url),
     getPrInfo: (url) => call(IpcChannels.prInfo, url),
+    getIssueInfo: (url) => call(IpcChannels.prInfo, url),
 
     gitDiff: (workspaceId, opts) => call(IpcChannels.gitDiff, workspaceId, opts),
     gitLog: (workspaceId, opts) => call(IpcChannels.gitLog, workspaceId, opts),

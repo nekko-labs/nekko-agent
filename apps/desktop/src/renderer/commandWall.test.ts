@@ -82,8 +82,10 @@ describe('snap to grid', () => {
     expect(splitBoundary(even, 'split_row', 0)).toBeCloseTo(0.5);
     expect(splitBoundary(even, 'split_row', 1)).toBeNull();
     expect(splitBoundary(even, 'missing', 0)).toBeNull();
-    expect(snapFraction(0.53, 0.5)).toBe(0.5);
-    expect(snapFraction(0.47, 0.5)).toBe(0.5);
+    expect(snapFraction(0.529, 0.5)).toBe(0.5);
+    expect(snapFraction(0.471, 0.5)).toBe(0.5);
+    expect(snapFraction(0.535, 0.5)).toBe(0.535);
+    expect(snapFraction(0.465, 0.5)).toBe(0.465);
     expect(snapFraction(0.6, 0.5)).toBe(0.6);
     expect(snapFraction(0.53, null)).toBe(0.53);
   });

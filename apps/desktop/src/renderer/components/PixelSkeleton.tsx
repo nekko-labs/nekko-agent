@@ -3,8 +3,9 @@ import { prefersReducedMotion } from '../displays.js';
 
 /**
  * A loading placeholder in the same chunky ASCII-pixel language as the view
- * reveal: each 16px cell is one of four shades (█ ▓ ▒ ░), the fuller ones in
- * paper and the lighter ones tinted with the theme accent over a faint aura.
+ * reveal: each 8px cell is one of four shades (█ ▓ ▒ ░), the fuller ones in
+ * paper and the lighter ones tinted with the theme accent over a faint aura, all held
+ * soft so the placeholder sits back rather than shouting.
  * On mount it dissolves in from clear in about 320ms, then stays still so a
  * wall of skeletons stays cheap. When the real content lands, the caller swaps
  * the skeleton for it.
@@ -12,7 +13,7 @@ import { prefersReducedMotion } from '../displays.js';
  * Takes its size from its container: size the wrapper with Tailwind classes or
  * a style, and the canvas fills it (devicePixelRatio and resizes handled).
  */
-export const PIXEL_SKELETON = { cell: 16, revealMs: 320 } as const;
+export const PIXEL_SKELETON = { cell: 8, revealMs: 320 } as const;
 
 /** Stable pseudo-random noise per cell, so the pattern is the same between paints and across resizes. */
 export function pixelSkeletonNoise(col: number, row: number): number {
@@ -46,20 +47,21 @@ export function PixelSkeleton({ className, style, label }: { className?: string;
       const css = getComputedStyle(document.documentElement);
       const paper = css.getPropertyValue('--paper').trim() || '#0c0c11';
       const accent = css.getPropertyValue('--accent').trim() || '#8b7dff';
-      const cell = Math.max(8, Math.round(PIXEL_SKELETON.cell * scale));
+      const cell = Math.max(4, Math.round(PIXEL_SKELETON.cell * scale));
+      const gap = cell / 8;
       const cols = Math.ceil(cvs.width / cell), rows = Math.ceil(cvs.height / cell);
       const shades = [
-        { inset: 0, color: paper, alpha: 0.92 },
-        { inset: Math.round(2 * scale), color: paper, alpha: 0.74 },
-        { inset: Math.round(4 * scale), color: accent, alpha: 0.28 },
-        { inset: Math.round(6 * scale), color: accent, alpha: 0.16 },
+        { inset: 0, color: paper, alpha: 0.5 },
+        { inset: Math.round(gap), color: paper, alpha: 0.38 },
+        { inset: Math.round(gap * 2), color: accent, alpha: 0.16 },
+        { inset: Math.round(gap * 3), color: accent, alpha: 0.09 },
       ];
       ctx.clearRect(0, 0, cvs.width, cvs.height);
       // Faint accent aura, held behind the blocks so an idle skeleton still has depth.
       const aura = ctx.createRadialGradient(cvs.width / 2, cvs.height / 2, 0, cvs.width / 2, cvs.height / 2, Math.hypot(cvs.width, cvs.height) / 2);
       aura.addColorStop(0, accent);
       aura.addColorStop(1, 'transparent');
-      ctx.globalAlpha = 0.09 * progress;
+      ctx.globalAlpha = 0.06 * progress;
       ctx.fillStyle = aura;
       ctx.fillRect(0, 0, cvs.width, cvs.height);
       // Dissolve-in: a cell appears only once `progress` has reached its noise threshold.

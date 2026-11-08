@@ -32,6 +32,7 @@ pub fn start(ctx: &Ctx, auto_start_engine: bool) {
         let ctx = ctx.clone();
         tokio::spawn(async move { start_engine(&ctx, auto_start_engine).await });
     }
+    keep_awake(ctx);
     {
         crate::auto_continue::start(ctx);
         let ctx = ctx.clone();
@@ -46,6 +47,25 @@ pub fn start(ctx: &Ctx, auto_start_engine: bool) {
             }
         });
     }
+}
+
+/// How often the hold is re-decided: a turn that starts waits at most this long for it.
+const KEEP_AWAKE_EVERY: Duration = Duration::from_secs(15);
+
+/// *Keep this computer awake while agents run*: hold off idle sleep while the
+/// setting is on and any turn runs here. Off, nothing is spawned.
+fn keep_awake(ctx: &Ctx) {
+    use crate::awake::{Awake, Hold};
+    let ctx = ctx.clone();
+    tokio::spawn(async move {
+        let hold = Hold::default();
+        let mut tick = tokio::time::interval(KEEP_AWAKE_EVERY);
+        loop {
+            tick.tick().await;
+            let on = crate::settings::current(&ctx).await.get("keepAwakeWhileAgentsRun") == Some(&Value::Bool(true));
+            hold.set(on && !ctx.turns.running_sessions().is_empty());
+        }
+    });
 }
 
 /// `reconcileInterruptedChats` with nothing still running: every chat that

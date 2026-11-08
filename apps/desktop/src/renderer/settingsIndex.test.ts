@@ -31,6 +31,17 @@ describe('command palette settings search', () => {
     expect(confirm.set(true, s)).toEqual({ skipDeleteConfirmation: false });
   });
 
+  it('finds and restores the model-switch notice without changing other developer settings', () => {
+    expect(ids('tokens')).toContain('model-switch-notice');
+    expect(ids('effort')).toContain('model-switch-notice');
+    const control = SETTINGS_INDEX.find(e => e.id === 'model-switch-notice')!.control;
+    if (control.kind !== 'toggle') throw new Error('toggle expected');
+    expect(control.get({} as AppSettings)).toBe(true);
+    const settings = { developer: { serverControls: true, showContextChangeNotice: false } } as AppSettings;
+    expect(control.get(settings)).toBe(false);
+    expect(control.set(true, settings)).toEqual({ developer: { serverControls: true, showContextChangeNotice: true } });
+  });
+
   it('gives every select a current value that is one of its options', () => {
     for (const e of SETTINGS_INDEX) {
       if (e.control.kind === 'select') expect(e.control.options.map((o) => o.value)).toContain(e.control.get({} as AppSettings));

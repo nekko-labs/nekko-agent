@@ -34,7 +34,7 @@ app.whenReady().then(async () => {
     await check('cancel does not release an approval', `!document.getElementById('yolo-warning-title') && approvalDecisions.length === 1`);
     await click('Allow all this session');
     await sleep(100);
-    await run(`[...document.querySelectorAll('button')].find(button => button.textContent === 'Turn on YOLO').click()`);
+    await run(`[...document.querySelectorAll('button')].find(button => button.textContent === 'Turn on No restrictions').click()`);
     await sleep(100);
     await check('confirm releases the session approval', `!document.getElementById('yolo-warning-title') && approvalDecisions.length === 2 && approvalDecisions[1].scope === 'session'`);
     await click('Always allow all');

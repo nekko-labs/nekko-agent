@@ -10,7 +10,7 @@ import {
   type AgentGroupBy, type AgentPanelView, type AgentSortBy,
 } from '../views/agentPanelView.js';
 
-type Sub = 'group' | 'sort' | 'show';
+type Sub = 'group' | 'sort' | 'show' | 'details';
 
 const MENU_W = 236;
 const SUB_W = 210;
@@ -131,6 +131,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         {topRow('group', 'Group by', GROUP_BY_LABELS[view.groupBy])}
         {topRow('sort', 'Sort by', SORT_BY_LABELS[view.sortBy])}
         {topRow('show', 'Show')}
+        {topRow('details', 'Card details')}
         <div className="mx-2 my-1 h-px bg-line" role="separator" />
         <button
           role="menuitem"
@@ -146,9 +147,9 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         <div
           ref={subRef}
           role="menu"
-          aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : 'Show'}
+          aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : sub === 'details' ? 'Card details' : 'Show'}
           data-agent-view-submenu={sub}
-          className="context-menu card fixed z-[1001] p-2 shadow-(--shadow-float)"
+          className="context-menu card fixed z-[1001] max-h-[calc(100vh-16px)] overflow-y-auto p-2 shadow-(--shadow-float)"
           style={{ width: SUB_W, left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
           onMouseEnter={keepSub}
           onMouseLeave={closeSubSoon}
@@ -180,6 +181,15 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
             {/* Manual order has no direction: it is whatever you dragged. */}
             <Choice checked={view.sortBy !== 'manual' && view.direction === 'desc'} disabled={view.sortBy === 'manual'} onClick={() => set({ direction: 'desc' })}>Descending</Choice>
             <Choice checked={view.sortBy !== 'manual' && view.direction === 'asc'} disabled={view.sortBy === 'manual'} onClick={() => set({ direction: 'asc' })}>Ascending</Choice>
+          </>}
+          {sub === 'details' && <>
+            <Choice toggle checked={view.showModel} onClick={() => set({ showModel: !view.showModel })}>Model</Choice>
+            <Choice toggle checked={view.showContext} onClick={() => set({ showContext: !view.showContext })}>Context window</Choice>
+            <Choice toggle checked={view.showPullRequests} onClick={() => set({ showPullRequests: !view.showPullRequests })}>Pull requests</Choice>
+            <Choice toggle checked={view.showGit} onClick={() => set({ showGit: !view.showGit })}>Git branch</Choice>
+            <Choice toggle checked={view.showSubagents} onClick={() => set({ showSubagents: !view.showSubagents })}>Sub-agent count</Choice>
+            <Choice toggle checked={view.showWindows} onClick={() => set({ showWindows: !view.showWindows })}>Window count</Choice>
+            <Choice toggle checked={view.showUpdated} onClick={() => set({ showUpdated: !view.showUpdated })}>Last reply time</Choice>
           </>}
           {sub === 'show' && <>
             <Choice toggle checked={view.showMetadata} onClick={() => set({ showMetadata: !view.showMetadata })}

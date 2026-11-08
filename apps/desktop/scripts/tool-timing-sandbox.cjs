@@ -4,6 +4,7 @@ const path = require('node:path');
 const { PNG } = require('pngjs');
 const { GifWriter } = require('omggif');
 const out = process.env.NEKKO_COMPONENT_OUT;
+const width = process.env.NEKKO_EVIDENCE_WIDTH === '460' ? 460 : 820;
 if (!out) throw Error('Launch through tool-timing-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -35,13 +36,13 @@ function gif(frames) {
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
-  const win = new BrowserWindow({ width: 820, height: 400, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: -10000, y: -10000, title: 'Tool timing, isolated evidence', webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
+  const win = new BrowserWindow({ width, height: 500, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: -10000, y: -10000, title: 'Tool timing, isolated evidence', webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false } });
   win.on('show', () => report.errors.push('Window became visible'));
   win.on('focus', () => report.errors.push('Window took focus'));
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message); });
   const run = code => win.webContents.executeJavaScript(code, true);
   const frames = [];
-  const image = async () => (await win.capturePage(undefined, { stayHidden: true })).resize({ width: 820 }).toPNG();
+  const image = async () => (await win.capturePage(undefined, { stayHidden: true })).resize({ width }).toPNG();
   try {
     await win.loadFile(path.join(out, 'index.html')); await sleep(600);
     const first = await run("Array.from(document.querySelectorAll('[data-tool-elapsed]')).map(e => e.textContent)");
@@ -55,14 +56,20 @@ app.whenReady().then(async () => {
       }
       const file = path.join(out, ['parallel-running.png', 'model-wait.png', 'public-thinking.png', 'completed.png'][phase]);
       fs.writeFileSync(file, await image()); report.captures.push(file);
-      report.checks.push(await run(`({ timers: Array.from(document.querySelectorAll('[data-tool-elapsed]')).map(e => ({ text: e.textContent, running: e.hasAttribute('data-running') })), model: !!document.querySelector('[data-model-activity]'), publicText: document.querySelector('[data-public-reasoning]')?.textContent || '' })`));
+      report.checks.push(await run(`({ timers: Array.from(document.querySelectorAll('[data-tool-elapsed]')).map(e => ({ text: e.textContent, running: e.hasAttribute('data-running') })), model: !!document.querySelector('[data-model-activity]'), turn: document.querySelector('[data-turn-activity]')?.textContent || '', publicText: document.body.textContent || '' })`));
+      if (phase === 1) {
+        await run('timingFixture.mode(false)'); await sleep(150);
+        fs.writeFileSync(path.join(out, 'simple-model-wait.png'), await image());
+        report.simpleWait = await run("document.querySelector('[data-turn-activity]')?.textContent || ''");
+        await run('timingFixture.mode(true)'); await sleep(150);
+      }
     }
     report.initialTimers = first; report.bounds = win.getBounds(); report.hidden = !win.isVisible(); report.focused = win.isFocused();
     if (!process.env.NEKKO_TEST_SOURCE) {
       const [parallel, wait, thinking, completed] = report.checks;
       if (!parallel.timers.some(t => t.running && t.text !== '1.0s') || parallel.timers.at(-1).running) throw Error('Parallel timers incorrect');
       if (!wait.model || wait.timers.some(t => t.running)) throw Error('Model wait not distinct from tool execution');
-      if (!thinking.publicText.includes('same settings store') || completed.model) throw Error('Public thinking/completion incorrect');
+      if (!thinking.publicText.includes('same settings store') || !thinking.turn.includes('Thinking') || completed.turn || !report.simpleWait.includes('Tools finished')) throw Error('Public thinking/completion incorrect');
     }
     if (!report.hidden || report.focused || report.errors.length) throw Error('Isolation or console failure');
     gif(frames); report.success = true;
