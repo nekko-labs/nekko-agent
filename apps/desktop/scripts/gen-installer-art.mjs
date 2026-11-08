@@ -7,8 +7,8 @@ import { dirname, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const build = resolve(__dirname, '../build');
-const BG = rgbaToInt(16, 23, 20, 255); // Nekko Agent dark #14141a
-const ACCENT = rgbaToInt(167, 200, 172, 255); // #6d5efc
+const BG = rgbaToInt(16, 23, 20, 255); // Nekko Agent dark green #101714
+const ACCENT = rgbaToInt(167, 200, 172, 255); // sage #a7c8ac
 
 const tintFont = (font) => {
   for (const page of font.pages) {
