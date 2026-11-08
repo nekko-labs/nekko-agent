@@ -65,7 +65,9 @@ jobs:
         with:
           ref: ${{ github.sha }}
           path: .release-tools
-          sparse-checkout: scripts/release-electron.mjs
+          sparse-checkout: |
+            scripts/release-electron.mjs
+            scripts/release-builder-binaries.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -286,6 +288,19 @@ jobs:
               echo 'macOS: building UNSIGNED (no Developer ID cert configured).'
             fi
           fi
+          # electron-builder's tools (NSIS, AppImage, icons, 7-Zip) through a
+          # local mirror that fetches them over the release-assets API, as
+          # Electron itself is: GitHub's browser-download URLs 504'd for hours
+          # on 2026-11-08. electron-builder still checks its pinned checksums.
+          mirror_url="$RUNNER_TEMP/builder-binaries-mirror"
+          node .release-tools/scripts/release-builder-binaries.mjs > "$mirror_url" &
+          mirror_pid=$!
+          trap 'kill "$mirror_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 30); do [ -s "$mirror_url" ] && break; sleep 1; done
+          [ -s "$mirror_url" ] || { echo 'The builder-binaries mirror did not start.' >&2; exit 1; }
+          ELECTRON_BUILDER_BINARIES_MIRROR="$(cat "$mirror_url")"
+          export ELECTRON_BUILDER_BINARIES_MIRROR
+          export ELECTRON_BUILDER_BINARIES_ALLOW_HTTP=true
           npm run release -w @nekko-agent/desktop -- "-c.electronDist=$ELECTRON_DIST" ${EXTRA[@]+"${EXTRA[@]}"}
 
       # Sign the update feed electron-builder just published (latest*.yml) with

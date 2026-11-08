@@ -53,6 +53,9 @@ version/platform, size and official SHASUMS256; available GitHub asset digests m
 also match. Checksum or API errors fail closed, without retry loops. The verified
 ZIP goes to electron-builder without changing macOS signing/notarization, Windows
 publisher checks, feed checks or the complete-matrix publication dependency.
+electron-builder's own tool downloads (NSIS, AppImage, icons, 7-Zip) also come
+through the release-assets API, via a localhost mirror for the build step, and
+still pass electron-builder's pinned checksums.
 Acceptance: tagged application SHA is logged and checked independently from the
 workflow SHA; published installer metadata, hashes, signing and notarization still
 require real release artifact verification. No user app/profile is touched.

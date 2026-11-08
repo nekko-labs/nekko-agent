@@ -67,6 +67,11 @@ platform asset, archive size and SHA256 from SHASUMS; when GitHub supplies asset
 SHA256 digests those must match too. No third-party mirror or checksum bypass.
 Only the verified ZIP is passed to electron-builder's `electronDist` option;
 Developer ID/notarization, entitlement and publisher checks remain unchanged.
+electron-builder's own tools (NSIS, AppImage, icons, 7-Zip, from
+`electron-userland/electron-builder-binaries`) go through the same API: the
+build step runs `scripts/release-builder-binaries.mjs`, a localhost mirror set
+as `ELECTRON_BUILDER_BINARIES_MIRROR`. electron-builder still checks its pinned
+checksum on each file, and the mirror also checks GitHub's asset digest.
 
 If a tag's older workflow cannot package, dispatch the **current** workflow with
 an existing full tag explicitly, rather than rewriting that tag:
