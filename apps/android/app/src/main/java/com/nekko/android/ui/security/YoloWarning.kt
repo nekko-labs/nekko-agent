@@ -81,11 +81,11 @@ fun YoloWarningDialog(onKeepAsking: () -> Unit, onTurnOn: () -> Unit) {
     AlertDialog(
         onDismissRequest = onKeepAsking,
         modifier = Modifier.testTag(YoloWarning.Tags.DIALOG),
-        title = { Text(stringResource(R.string.yolo_warning_title)) },
+        title = { Text(stringResource(R.string.no_restrictions_warning_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.yolo_warning_text), style = MaterialTheme.typography.bodyMedium, color = p.ink)
-                Text(stringResource(R.string.yolo_warning_recommend), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                Text(stringResource(R.string.no_restrictions_warning_text), style = MaterialTheme.typography.bodyMedium, color = p.ink)
+                Text(stringResource(R.string.no_restrictions_warning_recommend), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -109,7 +109,7 @@ fun YoloWarningDialog(onKeepAsking: () -> Unit, onTurnOn: () -> Unit) {
                     onTurnOn()
                 },
                 modifier = Modifier.testTag(YoloWarning.Tags.TURN_ON),
-            ) { Text(stringResource(R.string.yolo_warning_turn_on), color = p.danger) }
+            ) { Text(stringResource(R.string.no_restrictions_warning_turn_on), color = p.danger) }
         },
         dismissButton = {
             TextButton(onClick = onKeepAsking, modifier = Modifier.testTag(YoloWarning.Tags.KEEP_ASKING)) {

@@ -1,4 +1,4 @@
-import type { CatalogModel, EngineMemory, GpuFit, LocalModel } from '@nekko-agent/shared';
+import { modelModality, type CatalogModel, type EngineMemory, type GpuFit, type LocalModel } from '@nekko-agent/shared';
 
 export type LibraryModel = LocalModel & { loaded: boolean; gpuFit?: GpuFit };
 export interface ModelFamily {
@@ -45,4 +45,27 @@ export function gpuGuidance(sizeBytes: number | undefined, memory?: EngineMemory
   if (sizeBytes * 1.2 <= memory.budgetBytes * 0.55) return 'Fits on GPU';
   if (sizeBytes * 1.2 <= memory.budgetBytes * 0.85) return 'Fits on GPU, but limited context size';
   return 'Too big';
+}
+
+/** What a family makes: text (chat, code, vision, embeddings), pictures, or video. */
+export type FamilyKind = 'chat' | 'image' | 'video';
+
+/** Video diffusion families (sd.cpp runs Wan, LTX and HunyuanVideo). */
+const VIDEO_NAME = /(?:^|[ /_.-])(?:wan[-_ ]?\d|ltx[-_ ]?(?:v|video|\d)|hunyuan[-_ ]?video|cogvideo|mochi[-_ ]?\d|text-to-video|image-to-video)/i;
+
+/**
+ * Which filter a family belongs under. Video is checked first: a Wan file on
+ * disk is classified `image` (the engine runs it on its picture runtime), but
+ * what it makes is video.
+ */
+export function familyKind(f: ModelFamily): FamilyKind {
+  const names = [f.name, ...f.local.flatMap(m => [m.name, m.id, m.architecture ?? '']), ...f.catalog.flatMap(m => [m.id, m.name, m.baseModel ?? ''])];
+  const tags = f.catalog.flatMap(m => m.tags);
+  if (tags.includes('video') || names.some(n => VIDEO_NAME.test(n))) return 'video';
+  if (
+    tags.includes('image') ||
+    f.local.some(m => m.modality === 'image') ||
+    names.some(n => modelModality({ name: n }) === 'image')
+  ) return 'image';
+  return 'chat';
 }

@@ -973,6 +973,204 @@
     ]
   },
   {
+    "name": "ol-tools-model-cant",
+    "provider": "ollama",
+    "request": "system-and-tools",
+    "responses": [
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"qwen3-coder-30b\\\" does not support tools\"}"
+      },
+      {
+        "body": "{\"capabilities\":[\"completion\"]}"
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-model-can",
+    "provider": "ollama",
+    "request": "system-and-tools",
+    "responses": [
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"qwen3-coder-30b\\\" does not support tools\"}"
+      },
+      {
+        "body": "{\"capabilities\":[\"completion\",\"tools\"]}"
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-capabilities-missing",
+    "provider": "ollama",
+    "request": "system-and-tools",
+    "responses": [
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"qwen3-coder-30b\\\" does not support tools\"}"
+      },
+      {
+        "body": "{\"details\":{}}"
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-show-404",
+    "provider": "ollama",
+    "request": "system-and-tools",
+    "responses": [
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"qwen3-coder-30b\\\" does not support tools\"}"
+      },
+      {
+        "status": 404,
+        "body": "{\"error\":\"model 'qwen3-coder-30b' not found\"}"
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-show-network-error",
+    "provider": "ollama",
+    "request": "system-and-tools",
+    "responses": [
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"qwen3-coder-30b\\\" does not support tools\"}"
+      },
+      {
+        "networkError": "fetch failed"
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-chat-ok-no-show",
+    "provider": "ollama",
+    "request": "system-and-tools",
+    "responses": [
+      {
+        "chunks": [
+          "{\"message\":{\"content\":\"Rayleigh.\"}}\n",
+          "{\"done\":true}\n"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-empty-no-show",
+    "provider": "ollama",
+    "request": "wrap-up-no-tools",
+    "responses": [
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"m\\\" does not support tools\"}"
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-and-think-model-can",
+    "provider": "ollama",
+    "request": "think-on",
+    "requestExtra": {
+      "tools": [
+        {
+          "name": "read_file",
+          "description": "Read a file from the workspace.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "name": "bash",
+          "description": "Run a shell command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "timeout": {
+                "type": "number",
+                "default": 120
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responses": [
+      {
+        "body": "{\"capabilities\":[\"completion\",\"tools\",\"thinking\"]}"
+      },
+      {
+        "chunks": [
+          "{\"message\":{\"content\":\"Rayleigh.\"}}\n",
+          "{\"done\":true}\n"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ol-tools-and-think-model-cant",
+    "provider": "ollama",
+    "request": "think-on",
+    "requestExtra": {
+      "tools": [
+        {
+          "name": "read_file",
+          "description": "Read a file from the workspace.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ]
+          }
+        },
+        {
+          "name": "bash",
+          "description": "Run a shell command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "timeout": {
+                "type": "number",
+                "default": 120
+              }
+            }
+          }
+        }
+      ]
+    },
+    "responses": [
+      {
+        "body": "{\"capabilities\":[\"completion\"]}"
+      },
+      {
+        "status": 400,
+        "body": "{\"error\":\"\\\"qwen3-8b\\\" does not support tools\"}"
+      },
+      {
+        "body": "{\"capabilities\":[\"completion\"]}"
+      }
+    ]
+  },
+  {
     "name": "openai-cache-on",
     "provider": "openai",
     "request": "cache-on",

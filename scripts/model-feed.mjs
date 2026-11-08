@@ -301,13 +301,83 @@ async function build(source, previous) {
     hardware,
     calibration,
     measured: source.measured,
+    imageTasks: (source.imageTasks ?? []).map(withoutComment),
+    imageModels: await buildImageModels(source.imageModels ?? [], previous),
   };
+}
+
+function withoutComment({ $comment, ...rest }) {
+  return rest;
+}
+
+/** A built image model still describes its source entry: same repo, quants and companion files. */
+export function sameImageFiles(built, m) {
+  const key = list => (list ?? []).map(c => `${c.repo}/${c.file}`).join();
+  return (
+    !!built &&
+    built.repo === m.repo &&
+    built.quants.map(q => q.label).join() === m.quants.join() &&
+    key(built.companions) === key(m.companions)
+  );
+}
+
+/** Sizes of files anywhere in a repo, by path (Hugging Face's paths-info; follows renamed repos). */
+async function sizes(repo, paths) {
+  const res = await fetch(`${HF}/api/models/${repo}/paths-info/main`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'user-agent': 'nekko-agent model-feed' },
+    body: JSON.stringify({ paths }),
+  });
+  if (!res.ok) throw new Error(`${repo} paths-info: HTTP ${res.status}`);
+  const found = new Map((await res.json()).map(f => [f.path, f.lfs?.size ?? f.size]));
+  return paths.map(p => {
+    if (!found.get(p)) throw new Error(`${repo}: no ${p}`);
+    return found.get(p);
+  });
+}
+
+/**
+ * Image models: each quant's files and size from the repo's tree, and the size
+ * of every companion file (text encoders, VAE) the engine fetches beside it.
+ * Diffusion files have no decode geometry to read, so no header is fetched.
+ */
+async function buildImageModels(list, previous) {
+  const out = [];
+  for (const raw of list) {
+    const m = withoutComment(raw);
+    const kept = previous?.imageModels?.find(b => b.id === m.id);
+    if (sameImageFiles(kept, m)) {
+      out.push({ ...kept, name: m.name, owner: m.owner, license: m.license, capabilities: m.capabilities });
+      continue;
+    }
+    const tree = await json(`${HF}/api/models/${m.repo}/tree/main?recursive=true`);
+    const quants = m.quants.map(label => {
+      const files = quantFiles(tree, label);
+      if (!files.length) throw new Error(`${m.repo}: no file for ${label}`);
+      return { label, files: files.map(f => f.path), sizeBytes: files.reduce((s, f) => s + f.size, 0) };
+    });
+    const companions = [];
+    for (const c of m.companions) {
+      const [sizeBytes] = await sizes(c.repo, [c.file]);
+      companions.push({ repo: c.repo, file: c.file, sizeBytes });
+    }
+    console.error(`${m.repo}: ${quants.length} quant(s), ${companions.length} companion file(s)`);
+    out.push({ ...m, quants, companions });
+  }
+  return out;
 }
 
 async function run() {
   const source = JSON.parse(readFileSync(SOURCE, 'utf8'));
   const known = new Set(source.models.map(m => m.id));
   for (const t of source.tasks) for (const c of t.candidates) if (!known.has(c)) throw new Error(`Task ${t.id} names unknown model ${c}`);
+  const images = new Map((source.imageModels ?? []).map(m => [m.id, m]));
+  for (const t of source.imageTasks ?? []) {
+    for (const c of t.candidates) {
+      if (!images.has(c)) throw new Error(`Image task ${t.id} names unknown model ${c}`);
+      if (!images.get(c).capabilities.includes(t.capability)) throw new Error(`Image task ${t.id} names ${c}, which cannot ${t.capability}`);
+    }
+  }
   // `--keep`: reuse what the current feed already read for unchanged models,
   // for an edit to ranks, tasks or tables; a release build reads everything again.
   const previous = process.argv.includes('--keep') ? JSON.parse(readFileSync(OUT, 'utf8')) : undefined;

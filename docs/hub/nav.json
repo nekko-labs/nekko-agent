@@ -11,6 +11,12 @@
           "description": "What Nekko Agent is, who makes it, and how to install it or run it from source."
         },
         {
+          "slug": "features",
+          "title": "Features by task",
+          "source": "docs/hub/features.md",
+          "description": "Find Nekko Agent features for local AI coding, file recovery, batch edits, memory, approvals, automation and MCP, with setup guides and limits."
+        },
+        {
           "slug": "walkthrough",
           "title": "Walkthrough",
           "source": "docs/WALKTHROUGH.md",
@@ -21,6 +27,18 @@
     {
       "title": "Using Nekko Agent",
       "pages": [
+        {
+          "slug": "file-recovery",
+          "title": "File recovery and batch edits",
+          "source": "docs/file-recovery.md",
+          "description": "Review and undo native AI file edits, keep saved-chat originals across restart, and validate ordered batch replacements. Availability, privacy and limits."
+        },
+        {
+          "slug": "context-memory-safety",
+          "title": "Context, memory and safety",
+          "source": "docs/context-memory-safety.md",
+          "description": "Control AI agent context and persistent memory, understand approvals and sandbox boundaries, and recover from tool loops or interrupted work."
+        },
         {
           "slug": "chat-progress",
           "title": "Verification and PR progress",

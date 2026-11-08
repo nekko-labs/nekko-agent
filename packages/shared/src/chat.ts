@@ -149,6 +149,9 @@ export interface ContextPrefs {
  */
 export type ChatMode = 'ask' | 'guardrails' | 'yolo';
 
+/** What people read for each value. The values themselves are stored and sent, so they stay. */
+export const CHAT_MODE_LABEL: Record<ChatMode, string> = { ask: 'Always ask', guardrails: 'Ask when it matters', yolo: 'No restrictions' };
+
 /**
  * What a chat is for. `multimodal` (the default, and what an absent value
  * means) talks to a chat model with text and images in and text out.
@@ -187,6 +190,10 @@ export interface ImageTurnOptions {
   sessionId: string;
   prompt: string;
   params: ImageChatParams & { modelId: string };
+  /** Pictures to edit, as data URLs (at most 4). Without them the prompt makes a new picture. */
+  images?: string[];
+  /** The size to make an edit at (the photo's shape), for this turn only; the chat keeps `params`' size. */
+  size?: { width: number; height: number };
 }
 
 /** `Session.claudeCodeContext`. */

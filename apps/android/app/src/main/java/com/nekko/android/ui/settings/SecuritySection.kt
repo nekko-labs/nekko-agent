@@ -74,8 +74,8 @@ private fun YoloWarningCard(deps: SettingsDeps) {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.settings_warn_yolo), style = MaterialTheme.typography.bodyLarge, color = p.ink)
-                    Text(stringResource(R.string.settings_warn_yolo_detail), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
+                    Text(stringResource(R.string.settings_warn_no_restrictions), style = MaterialTheme.typography.bodyLarge, color = p.ink)
+                    Text(stringResource(R.string.settings_warn_no_restrictions_detail), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                 }
                 // The row handles the toggle, so the switch itself is not a second target.
                 Switch(checked = !skip, onCheckedChange = null)

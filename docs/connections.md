@@ -4,9 +4,9 @@
 
 ## All connections off
 
-Turn on **All connections off** to make Nekko Agent fully offline:
+Turn on **All connections off** to disable Nekko-managed network access:
 
-- Nothing reaches or leaves your computer over the network.
+- Nekko-managed network connections are disabled. Terminal commands and other applications are outside these controls; see [What it does not cover](#what-it-does-not-cover).
 - Every chat runs as Offline, so only local models on this computer answer, and web and MCP tools are not offered.
 - The API server, the relay on this computer and Visible on this network stop. Model Server only listens on this computer.
 

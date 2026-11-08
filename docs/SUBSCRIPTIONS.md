@@ -17,6 +17,14 @@ In a chat that runs on Claude Code, each finished reply starts with a left-align
 
 When you pick Claude, Nekko first checks whether Claude Code is installed (it runs `claude --version` and `claude auth status`). If it isn't, **Install Claude Code** opens a terminal inside Nekko and runs Anthropic's own installer (`curl -fsSL https://claude.ai/install.sh | bash`, or `irm https://claude.ai/install.ps1 | iex` on Windows). If it isn't signed in, **Connect** opens Claude Code in that terminal so you can type `/login`. Once it's connected, the panel says so in green, with the account and plan it uses.
 
+### Automatic chat titles with Claude Code
+
+Claude Code does not automatically name a chat through its print-mode integration ([session naming in Claude Code](https://code.claude.com/docs/en/sessions#name-your-sessions)). By default, a Claude subscription chat keeps Nekko's prompt-prefix title unless you rename it yourself.
+
+When the existing **Nekko tools** and **context note** capabilities both permit it for your sign-in, Nekko can ask Claude to name a new chat during the ordinary turn using `set_chat_title`. This names the Nekko chat, not Claude Code's own session. It uses the selected Claude Code only: no other provider, no title-only request, and no hidden extra turn. Nekko does not enable any capability or change your settings for naming.
+
+Your chosen title is never replaced, even if you rename while Claude is working. Incognito, offline, delegated child and training-run chats are excluded. Claude may not call the tool, and existing permissions still apply; in that case the placeholder remains and manual rename is available. An unread sign-in or a subscription without the existing capability approval does not support this automatic path. Live subscription behavior has not been verified by the local fake-Claude tests.
+
 ### If Anthropic has approved your use
 
 Some people have Anthropic's permission of their own, for example through an agreement with Anthropic. They can turn the plan's off-for-now features on in **Settings > Agents > Claude plan features** with **Anthropic has approved my use**. It is off by default and changes nothing for API keys or cloud accounts.
