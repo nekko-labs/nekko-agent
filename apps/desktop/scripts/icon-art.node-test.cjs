@@ -3,97 +3,158 @@ const { createHash } = require('node:crypto');
 const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { test } = require('node:test');
-const { iconSvg, bannerSvg, bareMarkSvg, INK, ICON_INK, TILE, TILE_END } = require('./icon-art.cjs');
+const { PNG } = require('pngjs');
+const { iconSvg, bannerSvg, bareMarkSvg, logoSvg, HEAD, INK, ICON_INK, TILE, TILE_END } = require('./icon-art.cjs');
 
-const hash = (svg) => createHash('sha256').update(svg).digest('hex');
-// Frozen output from #1943: the fix must not alter white icon art at any size.
-const icons = [
-  [16, '52e7c99a898d6a9273c61371f91ea8fedee2a2066978bc7ac571f8d25dfc5fa5'],
-  [24, 'ee14d20d7729515edea36aaea951e8979f2d9f038a6fd3e75cf2a970aef7297b'],
-  [32, 'a42484295ef3d2beafbd87507d1f530ddd6b88b7b9c6349ebdb19a330fa6b12a'],
-  [48, '3aa6ba59a253ddf5f36087923435fd848ca30917e75784ba41d111d0492051cb'],
-  [64, 'd2f8ec6ec5def4230b6bbd7d8e44c7b74f8f52633f9fbf2a6d164a17fd096bf4'],
-  [128, '13fb2fa6f58fb39f3ee36fb9ae2df4a7e4eb0db81038340e06782cab6d85dda9'],
-  [256, '105bac1e243a2f9350625875772c0c461bb4873f545dae58a4ef32b9c54a4e46'],
-  [512, 'e49cde8df78e1d6ee381b3d88f713508c4ae7d5329328aadb0632c65cc69c960'],
-  [1024, '0e0b5bc8ce99b948559a7c150fbacf9c1fba2b727ddb31aa377a5c0f95d96235'],
-];
+const root = join(__dirname, '../../..');
+const text = (file) => readFileSync(join(root, file), 'utf8');
+const legacy = /#(?:190019|5a2352|854f6c|c084b5)\b/i;
+const hash = (value) => createHash('sha256').update(value).digest('hex');
 
-for (const [size, expected] of icons) {
-  test(`app icon stays white with unchanged geometry and gradient at ${size}px`, () => {
+for (const size of [16, 24, 32, 48, 64, 128, 256, 512, 1024]) {
+  test(`app icon uses cream on the green tile at ${size}px, preserving the cat geometry`, () => {
     const svg = iconSvg(size);
-    assert.equal(ICON_INK, '#FFFFFF');
-    assert.match(svg, /fill="#FFFFFF" fill-rule="evenodd"/);
-    assert.equal(hash(svg), expected);
-  });
-
-  test(`explicit ink changes only the cat fill and thickening stroke at ${size}px`, () => {
-    const white = iconSvg(size);
-    const plum = iconSvg(size, size, INK);
-    assert.equal(INK, '#854F6C');
-    assert.equal(plum, white.replaceAll('#FFFFFF', '#854F6C'));
-    assert.match(plum, /fill="#854F6C" fill-rule="evenodd"/);
-    if (size < 64) assert.match(plum, /stroke="#854F6C"/);
+    assert.equal(ICON_INK, '#F2F1E9');
+    assert.equal(TILE, '#101714');
+    assert.equal(TILE_END, '#263D2D');
+    assert.ok(svg.includes(`d="${HEAD}"`));
+    assert.ok(svg.includes(`fill="${ICON_INK}"`));
+    assert.ok(svg.includes(`stop-color="${TILE}"`));
+    assert.ok(svg.includes(`stop-color="${TILE_END}"`));
+    assert.doesNotMatch(svg, legacy);
+    assert.equal(iconSvg(size, size, INK), svg.replaceAll(ICON_INK, INK));
+    if (size < 64) assert.ok(svg.includes(`stroke="${ICON_INK}"`));
   });
 }
 
-// Frozen banner output from f5d8f34b^ (before #1943), using make-icons.cjs's
-// actual layouts. Exact equality protects geometry, colours, text and gradients.
+test('the icon and live in-app mark retain identical outline geometry', () => {
+  assert.ok(text('apps/desktop/src/renderer/components/BrandMark.tsx').includes(`'${HEAD}'`));
+});
+
 const banners = [
-  {
-    name: 'header', w: 150, h: 57,
-    opts: { markSize: 40, markX: 10, markY: 8, title: 'Nekko Agent', titleSize: 12, layout: 'row' },
-    expected: '9f941ca454be1c8d7b607c66f6e361ab77f5894d152d53c12b5a3b892979d7b7',
-    scaled: '533a27b7c5640a79000d60f023f37792bfdbd8a9d6e077aad7c509893dbe6b70',
-  },
-  {
-    name: 'sidebar', w: 164, h: 314,
-    opts: { markSize: 88, markX: 38, markY: 62, title: 'Nekko Agent', tagline: 'Local-first AI coding', titleSize: 22, layout: 'column' },
-    expected: '62db2ffb4909d9eeeb5788dc0332e8464d1d017ccf4c41886bd25f8f5b9b0380',
-    scaled: '52091334f2500bea01e708d3b74f1ec4d01a1d6f9f15905b66f3b46e1a7d87f9',
-  },
+  { name: 'header', w: 150, h: 57, opts: { markSize: 40, markX: 10, markY: 8, title: 'Nekko Agent', titleSize: 12, layout: 'row' } },
+  { name: 'sidebar', w: 164, h: 314, opts: { markSize: 88, markX: 38, markY: 62, title: 'Nekko Agent', titleSize: 22, layout: 'column' } },
 ];
-
-for (const { name, w, h, opts, expected, scaled } of banners) {
-  test(`installer ${name} preserves the original plum art, including supersampling`, () => {
-    const svg = bannerSvg(w, h, opts);
-    assert.doesNotMatch(svg, /#FFFFFF/i);
-    assert.match(svg, /fill="#854F6C" fill-rule="evenodd"/);
-    assert.equal(hash(svg), expected);
-    assert.equal(hash(bannerSvg(w, h, opts, w * 2, h * 2)), scaled);
-  });
-
-  test(`committed installer ${name} has the expected dimensions and plum, not white, cat pixels`, () => {
-    const filename = name === 'header' ? 'installerHeader.bmp' : 'installerSidebar.bmp';
-    const bmp = readFileSync(join(__dirname, '../build', filename));
+for (const { name, w, h, opts } of banners) {
+  test(`installer ${name} uses legible sage on green, including its committed bitmap`, () => {
+    assert.equal(INK, '#A7C8AC');
+    for (const svg of [bannerSvg(w, h, opts), bannerSvg(w, h, opts, w * 2, h * 2)]) {
+      assert.doesNotMatch(svg, legacy);
+      assert.ok(svg.includes(`fill="${INK}"`));
+      assert.match(svg, /Nekko Agent/);
+    }
+    const file = name === 'header' ? 'installerHeader.bmp' : 'installerSidebar.bmp';
+    const bmp = readFileSync(join(__dirname, '../build', file));
     assert.equal(bmp.toString('ascii', 0, 2), 'BM');
     assert.equal(bmp.readInt32LE(18), w);
     assert.equal(bmp.readInt32LE(22), h);
     assert.equal(bmp.readUInt16LE(28), 24);
-    const offset = bmp.readUInt32LE(10);
-    const stride = Math.ceil(w * 3 / 4) * 4;
-    let plumPixels = 0;
+    const offset = bmp.readUInt32LE(10), stride = Math.ceil(w * 3 / 4) * 4;
+    let sage = 0;
     for (let y = opts.markY; y < opts.markY + opts.markSize; y++) {
       for (let x = opts.markX; x < opts.markX + opts.markSize; x++) {
         const at = offset + (h - 1 - y) * stride + x * 3;
-        const rgb = [bmp[at + 2], bmp[at + 1], bmp[at]];
-        if (rgb.every((v, i) => Math.abs(v - [133, 79, 108][i]) <= 4)) plumPixels++;
-        // Resampling can overshoot plum slightly, but never approaches white.
-        assert.ok(rgb.every((v) => v < 200), `unexpected bright cat pixel at ${x},${y}`);
+        if ([bmp[at + 2], bmp[at + 1], bmp[at]].every((v, i) => Math.abs(v - [167, 200, 172][i]) <= 4)) sage++;
       }
     }
-    assert.ok(plumPixels > 0, 'cat crop must contain plum ink');
+    assert.ok(sage > 0, 'cat crop contains sage ink');
   });
 }
 
-test('app SVG generation still matches the committed desktop and web icons exactly', () => {
-  assert.equal(iconSvg(512), readFileSync(join(__dirname, '../build/icon.svg'), 'utf8'));
-  assert.equal(iconSvg(512, 64), readFileSync(join(__dirname, '../src/renderer/public/icon.svg'), 'utf8'));
+test('committed web, desktop and iOS vectors match their generators', () => {
+  assert.equal(iconSvg(512), text('apps/desktop/build/icon.svg'));
+  assert.equal(iconSvg(512, 64), text('apps/desktop/src/renderer/public/icon.svg'));
+  assert.equal(iconSvg(32).replace(/ width="\d+" height="\d+"/, ''), text('apps/website/favicon.svg'));
+  assert.equal(logoSvg(), text('apps/website/logo.svg'));
+  for (const [file, color, background] of [['icon.svg', ICON_INK, 'gradient'], ['icon-dark.svg', INK, TILE]]) {
+    assert.equal(bareMarkSvg(1024, { color, background, inset: 0.687 }), text(`apps/ios/App/Assets.xcassets/AppIcon.appiconset/${file}`));
+  }
 });
 
-test('non-icon marks and the plum gradient keep their original colours', () => {
-  assert.equal(TILE, '#190019');
-  assert.equal(TILE_END, '#5A2352');
-  assert.match(bareMarkSvg(512), /fill="#854F6C" fill-rule="evenodd"/);
-  assert.doesNotMatch(bareMarkSvg(512), /#FFFFFF/i);
+function checkPng(bytes, size) {
+  const png = PNG.sync.read(bytes);
+  assert.equal(png.width, size);
+  assert.equal(png.height, size);
+  let green = 0, cream = 0;
+  for (let i = 0; i < png.data.length; i += 4) {
+    const [r, g, b, a] = png.data.subarray(i, i + 4);
+    if (a === 0) continue;
+    assert.ok(!(r > g + 8 && b > g + 8), `no plum pixels: ${r},${g},${b}`);
+    if (g > r + 3 && r < 80) green++;
+    if (r > 150 && g > 190 && b > 150) cream++;
+  }
+  assert.ok(green > 0, 'green ground');
+  assert.ok(cream > 0, 'cream or sage mark');
+  return png;
+}
+
+for (const [file, size] of [
+  ['apps/desktop/build/icon.png', 512],
+  ['apps/desktop/src/renderer/public/icon-512.png', 512],
+  ['apps/ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png', 1024],
+  ['apps/ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon-Dark-1024.png', 1024],
+  ['apps/ios/Watch/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png', 1024],
+]) {
+  test(`${file} contains current green/cream artwork, not stale purple pixels`, () => {
+    const bytes = readFileSync(join(root, file));
+    const png = checkPng(bytes, size);
+    if (file.includes('/ios/')) {
+      assert.equal(bytes[25], 2, 'native icon is opaque RGB');
+      for (let i = 3; i < png.data.length; i += 4) assert.equal(png.data[i], 255);
+    }
+  });
+}
+
+test('desktop/PWA and iOS/Watch raster copies stay synchronized', () => {
+  const same = (a, b) => assert.equal(hash(readFileSync(join(root, a))), hash(readFileSync(join(root, b))));
+  same('apps/desktop/build/icon.png', 'apps/desktop/src/renderer/public/icon-512.png');
+  same('apps/ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png', 'apps/ios/Watch/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png');
+});
+
+test('Windows ICO contains correct PNG dimensions and current art for every requested size', () => {
+  const ico = readFileSync(join(__dirname, '../build/icon.ico'));
+  assert.equal(ico.readUInt16LE(2), 1);
+  const sizes = [16, 24, 32, 48, 64, 128, 256];
+  assert.equal(ico.readUInt16LE(4), sizes.length);
+  sizes.forEach((size, i) => {
+    const at = 6 + i * 16;
+    assert.equal(ico[at] || 256, size);
+    assert.equal(ico[at + 1] || 256, size);
+    const offset = ico.readUInt32LE(at + 12), length = ico.readUInt32LE(at + 8);
+    checkPng(ico.subarray(offset, offset + length), size);
+  });
+});
+
+test('Android launcher uses the current opaque ARGB palette without recoloring widget surfaces', () => {
+  const colors = text('apps/android/app/src/main/res/values/colors.xml');
+  assert.match(colors, /name="ic_launcher_background">#FF101714</);
+  assert.match(colors, /name="ic_launcher_mark">#FFF2F1E9</);
+  assert.match(colors, /name="widget_surface">#FFFFFFFF</);
+  const tile = text('apps/android/app/src/main/res/drawable/ic_launcher_background.xml');
+  assert.ok(tile.includes(`android:startColor="${TILE}"`));
+  assert.ok(tile.includes(`android:endColor="${TILE_END}"`));
+  assert.doesNotMatch(tile, legacy);
+});
+
+test('every live favicon, logo and social-card reference is cache-busted consistently', () => {
+  for (const file of ['apps/website/index.html', 'apps/website/privacy.html', 'scripts/build-docs.mjs']) {
+    const source = text(file);
+    const refs = [...source.matchAll(/(?:favicon\.svg|logo\.svg|og\.png)\?v=([^"\s]+)/g)];
+    assert.ok(refs.length >= 2);
+    for (const ref of refs) assert.equal(ref[1], 'green-cream-1');
+  }
+  const html = text('apps/desktop/src/renderer/index.html');
+  assert.match(html, /rel="icon" type="image\/svg\+xml" href="\.\/icon.svg\?v=green-cream-1"/);
+  assert.match(html, /rel="apple-touch-icon" href="\.\/icon-512.png\?v=green-cream-1"/);
+  const manifest = JSON.parse(text('apps/desktop/src/renderer/public/manifest.webmanifest'));
+  assert.equal(manifest.background_color, TILE);
+  assert.equal(manifest.theme_color, TILE);
+  assert.equal(manifest.icons[0].src, 'icon-512.png?v=green-cream-1');
+});
+
+test('the old Agent Nekko social card is replaced by the current brand banner', () => {
+  const png = PNG.sync.read(readFileSync(join(root, 'apps/website/og.png')));
+  assert.equal(png.width, 1200);
+  assert.equal(png.height, 630);
+  assert.ok(text('scripts/make-site-icon.cjs').includes('docs/brand/nekko-banner-1280x640.png'));
 });

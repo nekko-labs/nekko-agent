@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="paper">#FFFBFBFD</color>
-    <color name="ic_launcher_background">#FF190019</color>
-    <color name="ic_launcher_mark">#FFFFFFFF</color>
+    <color name="ic_launcher_background">#FF101714</color>
+    <color name="ic_launcher_mark">#FFF2F1E9</color>
     <!-- The Home Screen widget, in the app's AA palette (ui/theme/Theme.kt). -->
     <color name="widget_surface">#FFFFFFFF</color>
     <color name="widget_ink">#FF17171D</color>
