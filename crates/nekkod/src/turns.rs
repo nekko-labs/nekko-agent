@@ -2269,6 +2269,8 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     let mut deltas = Deltas::default();
     // A step's save still being written.
     let mut saving: Option<tokio::task::JoinHandle<()>> = None;
+    // When the chat's deferred checkpoint save is due to be written.
+    let mut save_due: Option<tokio::time::Instant> = None;
     let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
     loop {
         let due = deltas.due();
@@ -2276,6 +2278,14 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             out = rx.recv() => out,
             _ = tokio::time::sleep_until(due.unwrap_or_else(tokio::time::Instant::now)), if due.is_some() => {
                 deltas.flush(&f.hub);
+                continue;
+            }
+            _ = tokio::time::sleep_until(save_due.unwrap_or_else(tokio::time::Instant::now)), if save_due.is_some() => {
+                save_due = None;
+                if let Some(save) = saving.take() {
+                    let _ = save.await;
+                }
+                saving = Some(flush_deferred(f.store.clone(), f.session_id.clone()));
                 continue;
             }
         };
@@ -2345,6 +2355,21 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             if let Some(save) = saving.take() {
                 let _ = save.await;
             }
+            // A step or a tool result is held and written with the next ones
+            // at most every [`SAVE_EVERY`]: any read of the chat writes it
+            // first, so a pane that re-reads it now still sees it. The end of
+            // the turn, a steering message and a phase change are written now.
+            let kind = str_at(&event, "type");
+            if !f.incognito && !moved && matches!(kind, Some("step" | "tool_result")) {
+                f.store.defer_turn_save(&f.session, snapshot);
+                save_due.get_or_insert_with(|| tokio::time::Instant::now() + SAVE_EVERY);
+                note_error(&f.last_error, &event);
+                f.hub.publish("agent:event", event, false);
+                continue;
+            }
+            // Written whole below; a held save of the same chat would only be older.
+            f.store.discard_deferred(&f.session_id);
+            save_due = None;
             match snapshot {
                 Some(messages) if str_at(&event, "type") == Some("step") => {
                     note_error(&f.last_error, &event);
@@ -2379,7 +2404,22 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     if let Some(save) = saving.take() {
         let _ = save.await;
     }
+    if save_due.is_some() {
+        let _ = flush_deferred(f.store.clone(), f.session_id.clone()).await;
+    }
     last_stop
+}
+
+/// How often a running turn's held checkpoint saves are written at most.
+const SAVE_EVERY: Duration = Duration::from_secs(2);
+
+/// Write a chat's held checkpoint save, off the async threads.
+fn flush_deferred(store: Arc<SessionStore>, id: String) -> tokio::task::JoinHandle<()> {
+    tokio::task::spawn_blocking(move || {
+        if let Err(e) = store.flush(&id) {
+            eprintln!("nekkod: could not save a running turn's chat: {e}");
+        }
+    })
 }
 
 /// The `decide` tool on the local decision model (chat.ts: `decisions.run`

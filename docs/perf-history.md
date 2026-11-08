@@ -39,6 +39,20 @@ single sequential runs or compare different machines as a time-series speedup.
 Link durable reports where possible: CI artifacts can expire, so retain the key
 numbers and conditions here even when raw traces are linked elsewhere.
 
+## Chat pictures beside the chat, held turn saves (2026-11-09)
+Area: engine daemon
+Result: improvement
+Conditions: the maintainer's real data folder, 663 readable chat files, Windows 11; sizes computed by re-serializing each file in memory with the new rule (image data URLs of 4 KB or more replaced by a 77-character reference), compared with the file as it was on disk (pretty-printed, pictures inline). No files were changed.
+
+| Metric | Before | After |
+|---|---|---|
+| All chat files | 466.6 MB | 297.3 MB (-36.3%) |
+| Largest chat, bytes per save | 13.80 MB | 3.68 MB |
+| Third-largest chat, bytes per save | 10.43 MB | 1.93 MB |
+| Compact JSON alone | 469.7 MB | 453.4 MB (-3.5%) |
+
+What fills the files (same data, compact): tool output text 48.4%, tool screenshots 27.9%, tool-call arguments 7.6%, user and generated images 6.8%. A picture is now written once to `sessions/blobs` and never again on later saves; a chat's text-heavy saves are unchanged (the second-largest chat, 12.30 to 12.23 MB, is almost all tool output). Not measured: write volume per minute with several running chats, where the held saves (step and tool-result checkpoints written at most every 2 s) should cut the number of saves as well as their size. Why: [decision 0072](decisions/0072-chat-pictures-beside-the-chat-and-held-turn-saves.md).
+
 ## Perf setup selects the shipped Single agent View (#2200, 2026-11-08)
 
 Area: perf harness. Result: measurement fix, not a production renderer optimization.
