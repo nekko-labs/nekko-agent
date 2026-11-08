@@ -146,7 +146,7 @@ preview entries out of it, or out of your commit.
 
 Set `NEKKO_LAYOUT_SANDBOX=composer-folders-sandbox.cjs` for new/active text
 composers at 1000px and 390px in Simple/Detailed. It checks one folder picker
-immediately before +, Suggestions below the actions, removal from Mode, folder
+immediately after +, Suggestions at the far right of the Mode row, removal from Mode, folder
 selection and per-chat removal without revoking saved access, and Escape focus
 restoration. Synthetic bridge folders and drafts never touch real app data.
 Capture the unchanged renderer with `NEKKO_TEST_SOURCE=<base-worktree>` and

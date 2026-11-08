@@ -33,15 +33,17 @@ app.whenReady().then(async () => {
         const plus = bar.querySelector('[aria-label="Add a photo, video, file, folder, or skill"]');
         const suggest = document.querySelector('[data-prompt-suggestions]');
         const rect = e => e?.getBoundingClientRect();
-        return { first: !!folder && bar.firstElementChild === folder, count: document.querySelectorAll('[aria-label^="Selected folders:"]').length,
-          next: !!folder && folder.nextElementSibling?.contains(plus),
-          below: !!suggest && rect(suggest).top >= rect(bar).bottom - 1,
+        const modeRow = document.querySelector('[data-composer-mode-row]');
+        const mode = modeRow?.querySelector('button');
+        return { first: !!plus && bar.firstElementChild.contains(plus), count: document.querySelectorAll('[aria-label^="Selected folders:"]').length,
+          next: !!folder && folder.previousElementSibling?.contains(plus),
+          aligned: !!suggest && !!mode && modeRow.contains(suggest) && Math.abs((rect(suggest).top + rect(suggest).bottom) / 2 - (rect(mode).top + rect(mode).bottom) / 2) < 2 && Math.abs(rect(suggest).right - (rect(modeRow).right - 8)) < 2,
           overflow: document.documentElement.scrollWidth > innerWidth,
           fits: !!folder && rect(folder).width >= 28 && rect(folder).right <= innerWidth };
       })()`);
-      check(label + ': one folders control first in bar', metrics.first && metrics.count === 1 && metrics.fits && metrics.next);
+      check(label + ': one folders control immediately after plus', metrics.first && metrics.count === 1 && metrics.fits && metrics.next);
       check(label + ': no page overflow', !metrics.overflow);
-      check(label + ': suggestions on next line only in Detailed', expert ? metrics.below : !await run('!!document.querySelector("[data-composer-suggestions]")'));
+      check(label + ': suggestions at far right of Mode only in Detailed', expert ? metrics.aligned : !await run('!!document.querySelector("[data-composer-suggestions]")'));
       await shot(label);
       if (expert) {
         const mode = await run(`(() => { const b = document.querySelector('[data-composer-mode-row] button'); if (!b) return false; b.click(); return true; })()`);
@@ -53,6 +55,12 @@ app.whenReady().then(async () => {
         }
       }
       if (!baseline) {
+        if (expert) {
+          await run(`document.querySelector('[data-prompt-suggestions]').click()`); await sleep(150);
+          check(label + ': suggestions dialog opens within viewport', await run(`(() => { const r = document.querySelector('[role="dialog"][aria-label="Prompt suggestions"]')?.getBoundingClientRect(); return !!r && r.left >= 0 && r.right <= innerWidth && r.top >= 0; })()`));
+          await run(`window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}))`); await sleep(100);
+          check(label + ': suggestions Escape restores focus', await run(`!document.querySelector('[aria-label="Prompt suggestions"]') && document.activeElement === document.querySelector('[data-prompt-suggestions]')`));
+        }
         await run(`document.querySelector('.composer-folders button').click()`); await sleep(200);
         check(label + ': folder menu opens', await run(`!!document.querySelector('[role="menu"][aria-label="Primary folder"]')`));
         if (expert && !clean) await shot('folders-menu-' + width);
@@ -66,9 +74,12 @@ app.whenReady().then(async () => {
         check(label + ': Escape closes and restores focus', await run(`!document.querySelector('[role="menu"][aria-label="Primary folder"]') && document.activeElement === document.querySelector('.composer-folders button')`));
       }
     }
-    for (const surface of ['full', 'composer']) {
+    for (const width of [1000, 390]) for (const surface of ['full', 'composer']) {
+      win.setContentSize(width, 800);
       await run(`layoutFixture.showFolderComposer(false, true, ${js(surface)})`); await sleep(350);
-      check(surface + ': folders first', await run(`document.querySelector('.composer-bar').firstElementChild.classList.contains('composer-folders')`));
+      check(surface + ': folders after plus', await run(`document.querySelector('.composer-bar').children[1].classList.contains('composer-folders')`));
+      check(surface + ': suggestions share Mode row', await run(`!!document.querySelector('[data-composer-mode-row] [data-composer-suggestions]')`));
+      await shot(surface + '-detailed-' + width);
     }
     if (!baseline) {
       win.setContentSize(1000, 800);

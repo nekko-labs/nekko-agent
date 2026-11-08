@@ -19,17 +19,18 @@ beforeEach(() => {
 
 describe('folders have one stable composer location (#2339)', () => {
   for (const expert of [false, true]) for (const cleanStart of [false, true]) {
-    it.each([{}, { commandCenter: true }, { surface: 'composer' as const }])(`keeps folders before plus, expert=${expert}, new=${cleanStart}: %j`, (props) => {
+    it.each([{}, { commandCenter: true }, { surface: 'composer' as const }])(`keeps folders after plus, expert=${expert}, new=${cleanStart}: %j`, (props) => {
       mode.expert = expert;
       const session = chatSession({ messages: cleanStart ? [] : chatSession().messages, workspaceId: 'code', supportingWorkspaceIds: ['docs'] });
       const html = renderChatPane(session, { ...props, cleanStart });
       const box = composerBox(html);
       expect(html.match(/aria-label="Selected folders:/g)).toHaveLength(1);
-      expect(box).toMatch(/class="composer-bar[^"]*"><div class="composer-folders/);
+      expect(box).toMatch(/class="composer-bar[^"]*"><div class="relative/);
       const folder = box.indexOf('aria-label="Selected folders: code, docs"');
       const plus = box.indexOf('aria-label="Add a photo, video, file, folder, or skill"');
       expect(folder).toBeGreaterThan(-1);
-      expect(plus).toBeGreaterThan(folder);
+      expect(plus).toBeGreaterThan(-1);
+      expect(folder).toBeGreaterThan(plus);
       expect(html).not.toContain('aria-label="Primary folder:');
       expect(box).not.toContain('mode-folders');
     });
