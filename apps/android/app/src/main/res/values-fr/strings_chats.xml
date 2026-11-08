@@ -248,4 +248,9 @@
     <string name="chats_group_month">30 derniers jours</string>
     <string name="chats_group_older">Plus ancien</string>
     <string name="chats_tool_step_up">Toujours autoriser %2$s dans cette discussion sur %1$s</string>
+    <string name="chats_pair_success_title">Connecté !</string>
+    <string name="chats_pair_success_named">%1$s est associé. Ses discussions arrivent.</string>
+    <string name="chats_pair_success_body">Votre ordinateur est associé. Ses discussions arrivent.</string>
+    <string name="chats_pair_success_done">C’est parti</string>
+    <string name="chats_pair_success_illustration">Votre ordinateur et ce téléphone sont liés</string>
 </resources>

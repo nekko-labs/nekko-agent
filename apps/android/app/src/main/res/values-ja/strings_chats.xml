@@ -248,4 +248,9 @@
     <string name="chats_group_month">過去30日間</string>
     <string name="chats_group_older">それ以前</string>
     <string name="chats_tool_step_up">%1$s のこのチャットで %2$s を常に許可</string>
+    <string name="chats_pair_success_title">つながりました！</string>
+    <string name="chats_pair_success_named">%1$s とペアリングしました。チャットを読み込んでいます。</string>
+    <string name="chats_pair_success_body">コンピュータとペアリングしました。チャットを読み込んでいます。</string>
+    <string name="chats_pair_success_done">はじめる</string>
+    <string name="chats_pair_success_illustration">コンピュータとこのスマートフォンがつながりました</string>
 </resources>
