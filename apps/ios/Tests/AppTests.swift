@@ -540,6 +540,13 @@ final class LiveCardViewTests: XCTestCase {
         ("crowd", .standard, card(.standard, chats: crowd)),
         ("crowd-detailed", .detailed, card(.detailed, chats: crowd)),
         ("one-chat", .standard, card(.standard, chats: [chats[1]])),
+        ("processing", .detailed, LiveCardState(chats: [], focusId: nil, more: 0, listening: true, heard: "Processing…", counts: [:])),
+        ("empty-voice", .minimal, LiveCardState(chats: [], focusId: nil, more: 0, listening: true, heard: "", counts: [:])),
+        ("voice-result", .standard, LiveCardState(chats: [], focusId: nil, more: 0, listening: false,
+                                                 heard: "Nothing sent yet. To confirm, say confirm send to, then the same exact chat name, saying, and message. Or say cancel. Open app to review.", counts: [:])),
+        ("legacy-partial", .standard, LiveCardState(chats: chats, focusId: "a", more: 12, listening: false, heard: "")),
+        ("large-counts", .detailed, LiveCardState(chats: [], focusId: nil, more: 9999, listening: false, heard: "",
+                                                counts: ["working": 9999, "needsYou": 1234, "done": 5678, "watching": 999, "failed": 42])),
     ]
 
     func framed(_ state: LiveCardState, _ level: LiveLevel) -> some View {
@@ -567,11 +574,9 @@ final class LiveCardViewTests: XCTestCase {
         }
     }
 
-    /// A unit test can't read SwiftUI's accessibility tree (it is only built
-    /// for VoiceOver), so this checks the pixels: Minimal draws the same card
-    /// whatever the chats say, while Standard does not. The state still carries
-    /// the text, so it is the view that hides it, not `buildCard`.
-    func testMinimalShowsNoChatText() throws {
+    /// Compare pixels with deliberately different private text. Every enabled
+    /// level is a count dashboard, even when its payload still carries details.
+    func testEveryLevelShowsNoChatText() throws {
         var real = Self.card(.detailed)
         // A ticking elapsed time could differ between the two renders.
         for i in real.chats.indices { real.chats[i].startedAt = nil }
@@ -582,11 +587,33 @@ final class LiveCardViewTests: XCTestCase {
             other.chats[i].step = "Something else entirely"
             other.chats[i].reply = "A different reply"
         }
-        XCTAssertEqual(try png(real, .minimal), try png(other, .minimal))
-        XCTAssertNotEqual(try png(real, .standard), try png(other, .standard))
+        for level in [LiveLevel.minimal, .standard, .detailed] {
+            XCTAssertEqual(try png(real, level), try png(other, level), "\(level) must hide chat text")
+        }
     }
 
-    /// Minimal's line covers questions too, not only approvals.
+    func testDashboardCountsEveryChatIncludingClippedDetails() {
+        for level in [LiveLevel.minimal, .standard, .detailed] {
+            let card = Self.card(level, chats: Self.crowd)
+            XCTAssertLessThan(card.chats.count, Self.crowd.count)
+            for status in [LiveChatState.working, .needsYou, .done, .watching, .failed] {
+                XCTAssertEqual(LiveCardView.count(status, in: card), Self.crowd.filter { $0.state == status }.count)
+            }
+        }
+    }
+
+    func testDashboardLegacyCountsIncludeAllCachedChatsAndClampInvalidTotals() {
+        var card = LiveCardState(chats: Self.chats, focusId: "a", more: 4, listening: false, heard: "")
+        for status in [LiveChatState.working, .needsYou, .done, .watching, .failed] {
+            XCTAssertEqual(LiveCardView.count(status, in: card), 1)
+        }
+        card.counts = ["working": 12, "failed": -1]
+        XCTAssertEqual(LiveCardView.count(.working, in: card), 12)
+        XCTAssertEqual(LiveCardView.count(.needsYou, in: card), 0)
+        XCTAssertEqual(LiveCardView.count(.failed, in: card), 0)
+    }
+
+    /// Protocol fallback remains generic even though the dashboard draws counts.
     func testMinimalNeedsYouLineIsGeneric() {
         XCTAssertEqual(LiveChatState.needsYou.phaseLine, "Needs you")
     }
@@ -881,6 +908,129 @@ final class RunActivitiesTests: XCTestCase {
         XCTAssertEqual(started.count, 1)
     }
 
+    func testCountOnlyChangesAreNotThrottled() throws {
+        summaries = (0..<9).map { chat("\($0)", "Task \($0)") }
+        activity = Dictionary(uniqueKeysWithValues: (0..<8).map { ("\($0)", NekkoProtocol.Activity.running) })
+        activity["8"] = .failed
+        let r = make()
+        r.refresh()
+        defer { r.endAll() }
+        let card = try XCTUnwrap(started.first)
+        let before = card.state
+        activity["8"] = nil
+        summaries[8] = SessionSummary.from(["id": .string("8"), "title": .string("Task 8"), "activeWatchCount": .int(1)])!
+        r.refresh()
+        XCTAssertEqual(card.state.chats, before.chats, "only the hidden ninth chat changed")
+        XCTAssertEqual(card.state.more, before.more)
+        XCTAssertEqual(card.state.counts?["watching"], 1)
+        XCTAssertNil(card.state.counts?["failed"])
+        XCTAssertEqual(card.updates, 1, "dashboard count changes are visible immediately")
+    }
+
+    func testUnloadedRefreshPreservesFullCountsAndLegacyUnknownCounts() throws {
+        loaded = false
+        for counts: [String: Int]? in [["working": 21, "watching": 4], nil] {
+            let r = make()
+            let cached = LiveCardState(chats: [LiveCardViewTests.chats[1]], focusId: "b", more: 24,
+                                       listening: false, heard: "", counts: counts)
+            let card = FakeCard(.init(computerId: "pc", computerName: "Mac", level: level), cached)
+            r.adopt(card)
+            r.refresh(urgent: true)
+            r.focus("b")
+            XCTAssertEqual(card.state.counts, counts, "clipped details cannot replace authoritative or unknown totals")
+            XCTAssertEqual(card.state.more, 24)
+            XCTAssertFalse(card.ended)
+            r.endAll()
+        }
+    }
+
+    func testUnloadedDismissSubtractsOnlyTheKnownChat() throws {
+        loaded = false
+        let r = make()
+        let cached = LiveCardState(chats: [LiveCardViewTests.chats[3]], focusId: "d", more: 12,
+                                   listening: false, heard: "", counts: ["done": 5, "working": 8])
+        let card = FakeCard(.init(computerId: "pc", computerName: "Mac", level: level), cached)
+        r.adopt(card)
+        defer { r.endAll() }
+        r.dismiss("d")
+        XCTAssertFalse(card.ended, "hidden chats still own the dashboard")
+        XCTAssertTrue(card.state.chats.isEmpty)
+        XCTAssertEqual(card.state.counts, ["done": 4, "working": 8])
+        XCTAssertEqual(card.state.more, 12)
+    }
+
+    func testActiveVoiceSurvivesLastChatExpiryUntilProcessingFinishes() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        let card = try XCTUnwrap(started.first)
+        let expired = Date().addingTimeInterval(LiveCardRules.finishedTail + 5)
+        r.talk(listening: true, heard: "")
+        r.refresh(now: expired, urgent: true)
+        XCTAssertTrue(r.card === card)
+        XCTAssertFalse(card.ended)
+        XCTAssertTrue(card.state.chats.isEmpty)
+        XCTAssertEqual(card.state.counts, [:])
+        r.talk(listening: true, heard: "Processing…", now: expired)
+        r.refresh(now: expired, urgent: true)
+        XCTAssertTrue(card.state.listening, "the active flag spans dispatch, not just capture")
+        XCTAssertEqual(card.state.heard, "Processing…")
+        r.talk(listening: false, heard: "Finished.", now: expired)
+        XCTAssertTrue(card.ended, "voice no longer owns an otherwise empty card")
+        XCTAssertNil(r.card)
+    }
+
+    func testVoiceRunnerKeepsCardActiveDuringDispatch() async throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.done(sessionId: "a", messageId: nil))
+        r.refresh()
+        defer { r.endAll() }
+        let card = try XCTUnwrap(started.first)
+        let expired = Date().addingTimeInterval(LiveCardRules.finishedTail + 5)
+        let runner = NekkoVoiceRunner()
+        runner.capture = { "status" }
+        runner.show = { active, reply in r.talk(listening: active, heard: reply, now: expired) }
+        var routed = false
+        runner.route = { _ in
+            routed = true
+            XCTAssertTrue(card.state.listening, "the actual runner must keep voice active while dispatching")
+            XCTAssertEqual(card.state.heard, "Processing…")
+            r.refresh(now: expired, urgent: true)
+            XCTAssertTrue(r.card === card)
+            XCTAssertFalse(card.ended)
+            return "Status checked."
+        }
+        await runner.talk()
+        XCTAssertTrue(routed)
+        XCTAssertFalse(runner.busy)
+        XCTAssertTrue(card.ended, "dispatch completion releases the otherwise empty card")
+    }
+
+    func testExpiredCachedChatDuringVoiceDoesNotScheduleARefreshLoop() async throws {
+        loaded = false
+        let r = make()
+        var calls = 0
+        r.source = { calls += 1; return nil }
+        var chat = LiveCardViewTests.chats[3]
+        chat.finishedAt = Date().addingTimeInterval(-LiveCardRules.finishedTail - 5)
+        let cached = LiveCardState(chats: [chat], focusId: chat.id, more: 0,
+                                   listening: true, heard: "Processing…", counts: ["done": 1])
+        let card = FakeCard(.init(computerId: "pc", computerName: "Mac", level: level), cached)
+        r.adopt(card)
+        defer { r.endAll() }
+        r.refresh(urgent: true)
+        XCTAssertFalse(card.ended)
+        XCTAssertTrue(card.state.chats.isEmpty)
+        XCTAssertEqual(card.state.counts?["done"], 0)
+        XCTAssertEqual(card.state.heard, "Processing…")
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(calls, 1, "an elapsed expiry must not wake itself repeatedly")
+        r.talk(listening: false, heard: "Finished.")
+        XCTAssertTrue(card.ended)
+    }
+
     func testADismissedChatComesBackWhenItRunsAgain() throws {
         summaries = [chat("a", "Billing fix")]
         let r = make()
@@ -1012,6 +1162,17 @@ final class RunActivitiesTests: XCTestCase {
         XCTAssertEqual(content.state, ended, "an empty pushed card cannot retain old chats")
     }
 
+    func testCountOnlyPushReplacesTotalsWithoutEcho() {
+        let old = LiveCardState(chats: [], focusId: nil, more: 20, listening: false, heard: "", counts: ["working": 20])
+        var content = CardContent(state: old)
+        var pushed = old
+        pushed.counts = ["working": 11, "done": 9]
+        XCTAssertNil(content.receive(pushed))
+        XCTAssertEqual(content.state.counts, pushed.counts)
+        XCTAssertEqual(content.state.more, 20)
+        XCTAssertNil(content.receive(pushed))
+    }
+
     func testCardActionBeforeChatsLoadUsesPushedChats() throws {
         loaded = false
         let r = make()
@@ -1037,16 +1198,19 @@ final class RunActivitiesTests: XCTestCase {
     }
 
     func testPushedContentCachesVoiceCorrectionWithoutAnEchoLoop() {
-        let local = LiveCardState(chats: [], focusId: nil, more: 6, listening: true, heard: "Fix it")
+        let local = LiveCardState(chats: [], focusId: nil, more: 6, listening: true, heard: "Processing…", counts: ["working": 6])
         var pushed = local
         pushed.more = 0
+        pushed.counts = ["done": 12, "needsYou": 2]
         pushed.listening = false
         pushed.heard = ""
         var content = CardContent(state: local)
         let correction = content.receive(pushed)
         XCTAssertEqual(correction?.more, 0)
+        XCTAssertEqual(correction?.counts, pushed.counts)
+        XCTAssertEqual(content.state.counts, pushed.counts, "new totals win while local processing survives")
         XCTAssertEqual(content.state.more, 0)
-        XCTAssertEqual(content.state.heard, "Fix it")
+        XCTAssertEqual(content.state.heard, "Processing…")
         XCTAssertTrue(content.state.listening)
         XCTAssertNil(content.receive(content.state), "observing our correction must not write it again")
         content.state.listening = false

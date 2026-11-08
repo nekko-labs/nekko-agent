@@ -77,3 +77,5 @@ One file per decision that closes off alternatives, technical or product: `NNNN-
 | [0067](0067-edit-photos-inside-the-photo-agent.md) | Edit existing photos inside the Photo agent: an attached image means edit, no separate menu entry; models declare create, edit or both | proposed |
 | [0068](0068-local-video-clips-run-as-sd-server-jobs.md) | Local video clips are jobs on the model's own sd-server (not routed), returned as animated WebP, made in Photo chats until the Video chat (#2149) lands | proposed |
 | [0069](0069-models-has-a-section-menu.md) | Models is one page with Cloud above Local and a side menu listing both and Local's own sections | accepted |
+| [0069](0069-prefer-account-connected-provider-imports.md) | Prefer connected-account imports of history and personalization; retain export-file import as the secondary route and disclose unavailable data access | accepted |
+| [0070](0070-live-activity-dashboard-replaces-chat-chips.md) | The Live Activity dashboard replaces tappable chat chips: scoped counts, app-wide voice and Open app; chat-specific actions stay in the app | accepted |
