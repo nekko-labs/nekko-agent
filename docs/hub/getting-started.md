@@ -198,8 +198,8 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
-The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
-(it offers no Auto, so no Fusion).
+The iPhone and Android apps' model lists have **All**, **Cloud** and **Local** at
+the top too (they offer no Auto, so no Fusion).
 
 ### How the Agents panel groups your agents
 

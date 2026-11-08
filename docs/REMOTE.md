@@ -160,7 +160,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
 > servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
 > filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
-> Local tab says to start the chat on a computer for local models.
+> Local tab says to start the chat on a computer for local models. On Android the computer's
+> model list (New chat, and a chat's Model and effort sheet) has the same **All**, **Cloud** and
+> **Local** buttons above it, opening on All.
 >
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one

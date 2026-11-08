@@ -49,7 +49,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by re
 | Voice conversations and always-on dictation | One recording per tap | [#2110](https://github.com/nekko-labs/nekko-agent/issues/2110) |
 | Full-screen photos, previews before and after sending | No photo viewer | [#2111](https://github.com/nekko-labs/nekko-agent/issues/2111) |
 | Turn metrics and completion checkmark | Step count and duration only | [#2112](https://github.com/nekko-labs/nekko-agent/issues/2112) |
-| All, Cloud and Local tabs in the model picker | No tabs | [#2113](https://github.com/nekko-labs/nekko-agent/issues/2113) |
 | Usage by computer and by this phone | One computer's totals | [#2114](https://github.com/nekko-labs/nekko-agent/issues/2114) |
 | Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | [#2115](https://github.com/nekko-labs/nekko-agent/issues/2115) |
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
