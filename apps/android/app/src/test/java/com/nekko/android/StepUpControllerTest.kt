@@ -151,7 +151,7 @@ class StepUpControllerTest {
     }
 
     @Test fun `the words around the sheet and the methods`() {
-        assertEquals("Switch new chats on Studio to YOLO", stepUpAction(PcSettings.patch(mode = PcSettings.ChatMode.YOLO), "Studio"))
+        assertEquals("Switch new chats on Studio to No restrictions", stepUpAction(PcSettings.patch(mode = PcSettings.ChatMode.YOLO), "Studio"))
         assertEquals("Change Studio’s settings", stepUpAction(PcSettings.patch(skipConfirm = true), "Studio"))
         assertEquals(listOf("Security key", "Passkey", "One-time code"), StepUpController.KIND_ORDER.map(::stepUpMethodLabel))
         assertEquals("Shows once Studio is connected.", stepUpStatusLine("Studio", null))

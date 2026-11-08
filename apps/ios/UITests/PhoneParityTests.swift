@@ -28,10 +28,10 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.buttons["tools.guardrails"].waitForExistence(timeout: 3))
         attach(app, "policy-keyboard-after")
         app.buttons["tools.yolo"].tap()
-        // Turning YOLO on warns first (decision 0054).
+        // Turning No restrictions on warns first (decision 0054).
         XCTAssertTrue(app.buttons["yoloWarning.confirm"].waitForExistence(timeout: 5))
         app.buttons["yoloWarning.confirm"].tap()
-        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "Works on its own")
+        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "No restrictions")
         XCTAssertTrue((field.value as? String)?.contains("**Bold**") == true)
     }
 

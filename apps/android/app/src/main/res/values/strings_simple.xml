@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Simple and Expert: controls, Settings > Simple mode, and the phone chrome that branch added. -->
 <resources>
+    <!-- Renamed permission copy is temporarily English-only (#2095). Remove translatable=false when retranslated; old localized keys are not used. -->
     <string name="simple_steps_one">1 step</string>
     <string name="simple_steps_other">%1$d steps</string>
     <string name="simple_steps_working">Working · %1$s so far</string>
@@ -12,9 +13,9 @@
     <string name="simple_dismiss">Dismiss</string>
     <string name="simple_files_changed_one">1 file changed</string>
     <string name="simple_files_changed_other">%1$d files changed</string>
-    <string name="simple_asks_first">Asks first</string>
-    <string name="simple_asks_matters">Asks when it matters</string>
-    <string name="simple_asks_own">Works on its own</string>
+    <string name="permission_simple_always_ask" translatable="false">Always ask</string>
+    <string name="permission_simple_ask_when_matters" translatable="false">Ask when it matters</string>
+    <string name="permission_simple_no_restrictions" translatable="false">No restrictions</string>
     <string name="simple_asks_detail_first">Checks with you before it changes a file or runs a command.</string>
     <string name="simple_asks_detail_matters">Reads and looks around freely, and asks before anything else.</string>
     <string name="simple_asks_detail_own">Runs everything, except what your rules block.</string>
@@ -107,4 +108,8 @@
     <string name="simple_part_trip">Plan the trip</string>
     <string name="simple_part_monitors">Monitors · hardware and loaded models</string>
     <string name="simple_share">Share</string>
+    <!-- Legacy translation keys, unused by permission UI. Kept until locales are retranslated. -->
+    <string name="simple_asks_first">Asks first</string>
+    <string name="simple_asks_matters">Asks when it matters</string>
+    <string name="simple_asks_own">Works on its own</string>
 </resources>

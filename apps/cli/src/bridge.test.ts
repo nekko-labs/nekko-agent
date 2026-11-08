@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { APPROVE_TOOL, WATCH_TOOL, askNekkod, callNekkod, handleBridgeMessage, offeredTools } from './bridge.js';
+import { APPROVE_TOOL, WATCH_TOOL, TITLE_TOOL, askNekkod, callNekkod, handleBridgeMessage, offeredTools } from './bridge.js';
 
 const prompt = { tool_name: 'Bash', input: { command: 'ls' }, tool_use_id: 'toolu_1' };
 
@@ -107,5 +107,41 @@ describe('the Nekko watch tool on the bridge', () => {
     for (const bad of [reply(401, {}), reply(200, { ok: true }), vi.fn(async () => { throw new Error('ECONNREFUSED'); }) as unknown as typeof fetch]) {
       expect((await callNekkod('http://x', 't', { name: 'agent_watch', input: {} }, bad)).ok).toBe(false);
     }
+  });
+});
+
+
+describe('the in-turn title tool on the bridge', () => {
+  const allow = vi.fn(async () => ({ behavior: 'allow' as const, updatedInput: {} }));
+
+  it('registers naming only when requested, independently of watches', async () => {
+    expect(offeredTools('set_chat_title,set_chat_title,unknown')).toEqual([TITLE_TOOL]);
+    const tools = offeredTools('agent_watch,set_chat_title');
+    expect(tools).toEqual([WATCH_TOOL, TITLE_TOOL]);
+    const listed = await handleBridgeMessage({ id: 1, method: 'tools/list' }, allow, tools) as any;
+    expect(listed.result.tools).toEqual([APPROVE_TOOL, WATCH_TOOL, TITLE_TOOL]);
+    expect(TITLE_TOOL.inputSchema.required).toEqual(['title']);
+  });
+
+  it('runs only offered naming calls and surfaces daemon refusals', async () => {
+    const msg = { id: 2, method: 'tools/call', params: { name: 'set_chat_title', arguments: { title: 'Fix chat naming' } } };
+    const run = vi.fn(async () => ({ ok: true as const, text: 'Chat title updated.' }));
+    await handleBridgeMessage(msg, allow, [], run);
+    expect(run).not.toHaveBeenCalled();
+    const answer = await handleBridgeMessage(msg, allow, [TITLE_TOOL], run) as any;
+    expect(run).toHaveBeenCalledWith({ name: 'set_chat_title', input: { title: 'Fix chat naming' } });
+    expect(answer.result.content[0].text).toBe('Chat title updated.');
+    const refused = await handleBridgeMessage(msg, allow, [TITLE_TOOL], async () => ({ ok: false, error: 'Title already chosen.' })) as any;
+    expect(refused.result.isError).toBe(true);
+  });
+
+  it('sends naming only through the authenticated tool endpoint', async () => {
+    const fetchImpl = reply(200, { ok: true, text: 'Chat title updated.' });
+    const call = { name: 'set_chat_title', input: { title: 'Fix chat naming' } };
+    await callNekkod('http://127.0.0.1:9', 'title-token', call, fetchImpl);
+    const [url, init] = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:9/harness/tool');
+    expect(init.headers.Authorization).toBe('Bearer title-token');
+    expect(JSON.parse(init.body)).toEqual(call);
   });
 });

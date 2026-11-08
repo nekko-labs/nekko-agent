@@ -1,5 +1,7 @@
 package com.nekko.android.ui.chat
 
+import com.nekko.android.ui.components.PermissionIcon
+
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
@@ -234,9 +236,9 @@ fun effortLabel(e: Effort): String = stringResource(
 
 /** The tool policy in plain words, as Simple shows it. Same values as the computer's own. */
 fun asksTitleRes(mode: ChatMode) = when (mode) {
-    ChatMode.ASK -> R.string.simple_asks_first
-    ChatMode.GUARDRAILS -> R.string.simple_asks_matters
-    ChatMode.YOLO -> R.string.simple_asks_own
+    ChatMode.ASK -> R.string.permission_simple_always_ask
+    ChatMode.GUARDRAILS -> R.string.permission_simple_ask_when_matters
+    ChatMode.YOLO -> R.string.permission_simple_no_restrictions
 }
 
 fun asksDetailRes(mode: ChatMode) = when (mode) {
@@ -317,6 +319,8 @@ fun ChatOptionsRow(chat: ChatUi, enabled: Boolean, onOpenModelEffort: () -> Unit
         if (model || effort) ModelEffortButton(chat, enabled, onOpenModelEffort, model, effort && (simple.expert || !model))
         plainAsks?.let { mode ->
             TextButton(onClick = onOpenAsks, enabled = enabled, modifier = Modifier.testTag("chat.asksFirst")) {
+                PermissionIcon(mode)
+                Spacer(Modifier.size(4.dp))
                 Text(stringResource(asksTitleRes(mode)), style = MaterialTheme.typography.labelMedium, color = Nekko.palette.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
