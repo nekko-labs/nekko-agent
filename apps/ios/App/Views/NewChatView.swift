@@ -41,8 +41,8 @@ struct NewChatView: View {
     @State private var onPhone = false
     @State private var phoneModel: (String, String)?
     @State private var pickingPhoneModel = false
-    @State private var cloudBusy = false
-    @State private var cloudError: String?
+    /// "Send your first prompt", over someone's first ever new chat (FirstPromptIntroView.shouldShow).
+    @State private var firstPromptIntro = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
     /// Auto (2026-11-05): a chat on a local model starts on a free computer.
@@ -98,7 +98,6 @@ struct NewChatView: View {
                 }
                 if let refusal { note(Label(refusal, systemImage: "exclamationmark.bubble"), color: palette.danger) }
                 // Above the box, as nothing goes below it (#1599).
-                if let cloudError { Text(cloudError).font(.footnote).foregroundStyle(palette.danger) }
                 if let error { Text(error).font(.footnote).foregroundStyle(palette.danger) }
                 // The desktop's clean start (2026-10-26): a peeking Nekko and a question over a glass message box.
                 NewChatGreeting(paused: !text.isEmpty || !images.isEmpty)
@@ -116,6 +115,8 @@ struct NewChatView: View {
         .navigationTitle("New chat")
         .navigationBarTitleDisplayMode(.inline)
         .keyboardDoneButton()
+        .sheet(isPresented: $firstPromptIntro, onDismiss: { app.prefs.firstPromptIntroSeen = true }) { FirstPromptIntroView() }
+        .task(id: "\(onPhone) \(store.summariesLoaded)") { checkFirstPromptIntro() }
         .sheet(isPresented: $pickingPhoneModel) {
             PhoneModelPicker(selected: phoneModel) { p, m in
                 phoneModel = (p, m)
@@ -151,6 +152,10 @@ struct NewChatView: View {
         .onAppear(perform: takeShared)
         .onAppear { autoOn = app.prefs.chatsFilter == nil }
         .task(id: autoRun) { await runAuto() }
+        .task(id: cloud.fleetRefreshKey) {
+            guard cloud.fleetEnabled, cloud.signedIn else { return }
+            try? await cloud.loadMachines()
+        }
         // The computer's providers may arrive after this screen opened.
         .onChange(of: isLocal) { _, local in if local && autoPick == nil && !autoFinding { autoRun += 1 } }
         // Kept on the phone like a chat's composer: text, photos, model, folder and tool policy.
@@ -170,6 +175,13 @@ struct NewChatView: View {
         .onChange(of: store.pcSettings.defaultWorkspaceIds) { _, _ in pickDefaultFolder() }
         .onChange(of: store.workspaces) { _, _ in pickDefaultFolder() }
         .onChange(of: store.defaults) { _, _ in pickDefault() }
+    }
+
+    private func checkFirstPromptIntro() {
+        guard !firstPromptIntro, FirstPromptIntroView.shouldShow(seen: app.prefs.firstPromptIntroSeen, onPhone: onPhone, listLoaded: store.summariesLoaded,
+                                                                 chats: store.chats(on: nil) + phone.summaries) else { return }
+        typing = false
+        firstPromptIntro = true
     }
 
     /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
@@ -361,7 +373,7 @@ struct NewChatView: View {
                     .accessibilityIdentifier("newChat.folder")
                     if app.prefs.shows("asks") {
                         ToolPolicyPicker(selection: toolsChoice)
-                        .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Guardrails is recommended for general use.")
+                        .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Ask when it matters is recommended for general use.")
                         .accessibilityIdentifier("newChat.tools")
                     }
                 }
@@ -377,23 +389,18 @@ struct NewChatView: View {
                     .font(.caption).foregroundStyle(palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("newChat.phoneNote")
-            } else if cloud.account?.canSync == true {
-                // A chat can run on a Nekko Cloud machine instead of a paired computer (decision 0017).
-                if let m = cloud.machines.first, let id = cloud.computerId(for: m), store.computers.contains(where: { $0.id == id }) {
+            } else if cloud.fleetConnected {
+                let fleet = cloud.fleet(pairedComputerIds: Set(store.computers.map(\.id)))
+                if let row = fleet.rows.first(where: { $0.computerId != nil && $0.explanation == nil }), let id = row.computerId {
                     Button { switchComputer(id) } label: {
-                        chip(m.name, icon: store.activeId == id ? "checkmark.icloud" : "cloud")
+                        chip(row.machine.name, icon: store.activeId == id ? "checkmark.icloud" : "cloud")
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(store.activeId == id ? .isSelected : [])
                     .accessibilityIdentifier("newChat.cloud")
                 } else {
-                    Button { Task { await makeCloudMachine() } } label: {
-                        if cloudBusy { ProgressView().frame(minHeight: 44) } else { chip(String(localized: "Run on a new Nekko Cloud machine"), icon: "cloud") }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(cloudBusy)
-                    .accessibilityHint("A sandboxed machine in the cloud, with no computer needed. It sees only what you put in its scope.")
-                    .accessibilityIdentifier("newChat.cloud")
+                    Text("No paired Nekko Cloud computers available. Pair an existing machine in Computers to use it here.")
+                        .font(.caption).foregroundStyle(palette.inkSoft)
                 }
             }
         }
@@ -457,22 +464,6 @@ struct NewChatView: View {
         case .xhigh: return String(localized: "Extra high")
         case .max: return String(localized: "Max")
         }
-    }
-
-    /// Start the chat on another paired computer: its own models and folders,
-    /// so those are chosen again there; the words carry over.
-    /// Make a Nekko Cloud machine, pair it and point this chat at it.
-    private func makeCloudMachine() async {
-        cloudBusy = true
-        cloudError = nil
-        defer { cloudBusy = false }
-        do {
-            let made = try await cloud.createMachine(name: "Nekko Cloud", region: "nrt", scope: CloudSync.MachineScope())
-            let id = try await store.pair(made.link)
-            store.rename(id, to: made.machine.name)
-            cloud.link(made.machine, computer: id)
-            switchComputer(id)
-        } catch { cloudError = error.localizedDescription }
     }
 
     // MARK: Auto

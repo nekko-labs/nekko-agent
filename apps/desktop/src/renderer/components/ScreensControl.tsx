@@ -12,8 +12,8 @@ export function MultiMonitorIcon({ className }: { className?: string }) {
 }
 
 export const PLACEMENT_OPTIONS: Array<{ key: DisplayPlacement; label: string; hint: string }> = [
-  { key: 'empty-first', label: 'Prioritize empty windows', hint: 'New agent windows open on an empty screen first, then wherever has the fewest.' },
-  { key: 'main-first', label: 'Prioritize the main window', hint: 'New agent windows open on the main screen; the others keep what you open there.' },
+  { key: 'empty-first', label: 'Spread across screens', hint: 'Use an empty screen first, then the one with the fewest agents.' },
+  { key: 'main-first', label: 'Prefer main screen', hint: 'Start on the main screen. Other screens keep their agents.' },
 ];
 
 export const SPACES_OPTIONS: Array<{ key: Exclude<SpacesMode, 'ask'>; label: string; hint: string }> = [
@@ -89,7 +89,7 @@ function ScreenTile({ display, scale, busy, onToggle }: { display: DisplayInfo; 
  * view options choose where new agent windows open. A window switched on
  * opens in `mode`, the opener's Focused or Dynamic.
  */
-export function ScreensControl({ mode = 'grid' }: { mode?: WallLayoutMode }) {
+export function ScreensControl({ mode = 'grid', embedded = false }: { mode?: WallLayoutMode; embedded?: boolean }) {
   const [state, setState] = useDisplays();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -106,8 +106,8 @@ export function ScreensControl({ mode = 'grid' }: { mode?: WallLayoutMode }) {
   }, [open]);
   // Only the desktop shell has screens to spread over.
   if (!displaysBridge || !state) return null;
-  return <ScreensMenu state={state} open={open} busy={busy} rootRef={ref}
-    onHover={(over) => { clearTimeout(closeTimer.current); if (over) setOpen(true); else closeTimer.current = setTimeout(() => setOpen(false), 180); }}
+  return <ScreensMenu embedded={embedded} state={state} open={embedded || open} busy={busy} rootRef={ref}
+    onHover={embedded ? undefined : (over) => { clearTimeout(closeTimer.current); if (over) setOpen(true); else closeTimer.current = setTimeout(() => setOpen(false), 180); }}
     // Hover has usually opened it already, so a click must not toggle it shut;
     // Escape or a click outside closes it.
     onToggleOpen={() => { clearTimeout(closeTimer.current); setOpen(true); }}
@@ -138,7 +138,8 @@ export function ScreensControl({ mode = 'grid' }: { mode?: WallLayoutMode }) {
 }
 
 /** The control's markup, separate so it renders without the desktop bridge (tests, fixtures). */
-export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onToggleOpen, onToggle, onPlacement, onToggleDesktop, onSpacesMode, asking: initialAsking = null }: {
+export function ScreensMenu({ embedded = false, state, open, busy = false, rootRef, onHover, onToggleOpen, onToggle, onPlacement, onToggleDesktop, onSpacesMode, asking: initialAsking = null }: {
+  embedded?: boolean;
   state: DisplaysState;
   open: boolean;
   busy?: boolean;
@@ -166,22 +167,27 @@ export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onTog
   const on = state.displays.filter((d) => d.enabled).length;
   // Fit the row: the widest screen is drawn 96px wide, the rest to scale.
   const scale = 96 / Math.max(1, ...state.displays.map((d) => d.bounds.width));
-  return <div className="screens-control" ref={rootRef} onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)}>
-    <button type="button" className="btn btn-outline gap-2 py-1 text-xs" aria-haspopup="dialog" aria-expanded={open}
+  return <div className={embedded ? "screens-embedded" : "screens-control"} ref={rootRef} onMouseEnter={() => onHover?.(true)} onMouseLeave={() => onHover?.(false)} onFocus={() => onHover?.(true)}>
+    {!embedded && <button type="button" className="btn btn-outline gap-2 py-1 text-xs" aria-haspopup="dialog" aria-expanded={open}
       aria-label={state.displays.length < 2 && state.spaces ? `Desktops: ${state.spaces.desktops.filter((d) => d.enabled).length} of ${state.spaces.desktops.length} on` : `Screens: ${on} of ${state.displays.length} on`} title="Screens" data-screens-button onClick={onToggleOpen}>
       <MultiMonitorIcon className="h-4 w-4" />{state.displays.length > 1
         ? <span className="tabular-nums">{on}/{state.displays.length}</span>
         : state.spaces && <span className="tabular-nums">{state.spaces.desktops.filter((d) => d.enabled).length}/{state.spaces.desktops.length}</span>}
-    </button>
-    {open && <div className="screens-picker" role="dialog" aria-label="Screens">
+    </button>}
+    {open && <div className={embedded ? "screens-picker-inline" : "screens-picker"} role={embedded ? "group" : "dialog"} aria-label="Screens">
       {/* One screen with desktops: a lone Main tile says nothing, so only the desktops show. */}
       {(state.displays.length > 1 || !spaces) && <>
         <p className="screens-picker__title">Screens</p>
-        <div className="screens-row" role="group" aria-label="Screens to use">
+        {embedded && state.displays.length === 1 ? <div className="screens-single" role="group" aria-label="Screens to use">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="13" rx="2" /><path d="M12 16v5m-4 0h8" /></svg>
+          <span><strong>Screen {mainDisplay.label}</strong><span>Main screen · always on</span></span>
+          <span className="screens-single__status">Connected</span>
+        </div> : <div className="screens-row" role="group" aria-label="Screens to use">
           {state.displays.map((d) => <ScreenTile key={d.id} display={d} scale={scale} busy={busy} onToggle={() => onToggle(d)} />)}
-        </div>
+        </div>}
+        {state.displays.length > 1 && <p className="screens-picker__note">Select a screen to open or close its Nekko window.</p>}
       </>}
-      {state.displays.length < 2 && !spaces && <p className="screens-picker__note">Connect another screen to spread agents across it.</p>}
+      {state.displays.length < 2 && !spaces && <p className="screens-picker__note">Connect another display to use agents on both screens.</p>}
       {spaces && <>
         <p className={`screens-picker__title ${state.displays.length > 1 ? 'screens-picker__title--sub' : ''}`}>Desktops</p>
         <div className="screens-row" role="group" aria-label="Desktops to use">
@@ -199,7 +205,8 @@ export function ScreensMenu({ state, open, busy = false, rootRef, onHover, onTog
         {spaces.mode === 'switch' && !spaces.access && <p className="screens-picker__note">Accessibility is off for Nekko in System Settings, so desktop windows open when you get there.</p>}
       </>}
       <hr className="screens-picker__divider" />
-      <p className="screens-picker__title">View options</p>
+      <p className="screens-picker__title">Open new agents</p>
+      {embedded && state.displays.length < 2 && !spaces && <p className="screens-picker__note screens-placement-note">For when you connect more screens.</p>}
       <div role="radiogroup" aria-label="Where new agent windows open" className="screens-options">
         {PLACEMENT_OPTIONS.map((o) => <label key={o.key} className="screens-option">
           <input type="radio" name="screens-placement" checked={state.placement === o.key} onChange={() => onPlacement(o.key)} />

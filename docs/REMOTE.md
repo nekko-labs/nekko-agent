@@ -4,9 +4,15 @@ Drive the Nekko Agent running on your computer from your phone: start and manage
 training runs and goals, approve risky commands, and get a push when a long run finishes. Inference
 and tools always execute on **your** machine, under its guardrails; the phone is a thin client.
 
+## Draft photos and appearance on iPhone
+
+Photos added with **+ → Photos** or **Paste image** appear inside the message composer. Tap a thumbnail to preview it, or its remove button to leave it out. Adding or removing a photo saves the draft immediately on the phone; reopening the app restores its text and attachments. Photos stay local until you send the message.
+
+The primary Home Screen icon follows iOS icon appearance: the light version keeps the white Nekko outline on plum, and the dark version uses the brand-plum outline on charcoal. Choose **Dark** or **Automatic** in the Home Screen customization controls. The seasonal alternate icon is unchanged.
+
 ## Groups on iPhone
 
-Chat-list groups start folded. Tap a heading to reveal its chats; its activity icon stays visible while folded, showing attention, working, watching or done. Search reveals matching chats without changing which groups you opened. General and ungrouped chats stay visible, as does the separate Needs you section.
+New chat-list groups start folded. Tap a heading to reveal its chats or fold it again. Your last choice for each group is remembered on this iPhone or iPad, including after leaving the list or restarting the app; it does not sync to your computer. Its activity icon stays visible while folded, showing attention, working, watching or done. Search temporarily reveals matching chats without changing your saved group choices. General and ungrouped chats stay visible, as does the separate Needs you section.
 
 Inside a conversation, related tool calls fold under a purpose heading with an icon for reading, searching, editing, checking, running commands or other work. Running dots and failure text remain visible beside that purpose. Failed groups start open so errors are not hidden; you can fold them yourself.
 
@@ -14,7 +20,7 @@ Inside a conversation, related tool calls fold under a purpose heading with an i
 
 A desktop can connect to another computer the same way a phone does (Settings, Computers). It uses the same sealed relay, the same Read and Change switches, the same activity list and the same revocation, and it can do more: read tool output whole, compact a chat and accept changes.
 
-**Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in YOLO mode, and an agent in YOLO mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
+**Treat a connected computer like sitting at this one.** A phone asks for Face ID or the passcode before a change. A computer does not: the check is its own screen lock. It can start a chat in No restrictions mode, and an agent in No restrictions mode can do anything your account can on this computer, including reading files and keys. So a stolen, unlocked laptop can act on your other computers until you revoke it under *Paired devices*. What the computer can't do directly is call the app's own settings for provider keys, sign-ins and remote access, open a terminal, or attach a file from this computer to a chat.
 
 If you turn on step-up (Settings, Security), raising a chat's mode from a computer is refused until you confirm it on this computer.
 
@@ -23,6 +29,8 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 **Its Model Server from here.** While the Monitors panel watches a connected computer, Local models can load a model there, unload one or all, and set how many stay loaded, when an idle one unloads and whether a chat may load one, unless that Model Server keeps its own model settings.
 
 **Using its models from here.** Each connected computer adds its Model Server to your model picker, so a chat on this computer can use a model running there. Only that computer's Model Server is reachable this way: a Claude or ChatGPT plan stays on the computer it signed in on. To stop this, turn off *Let connected computers use these models* on the Model Server's Server tab.
+
+**Keeping a computer awake for its agents.** A run you start on another computer stops when that computer falls asleep. On the computer that runs the agents, turn on *Keep this computer awake while agents run* (Settings, Computers). While any agent runs there it won't go to sleep on its own, and once the last one finishes it sleeps as usual. Closing the lid still sleeps it.
 
 ## How it works
 
@@ -85,9 +93,19 @@ credentials. For safety the phone does not merge different keys just because the
 Remove the obsolete computer entry on the phone after pairing the reset computer. The same applies
 to old duplicates that were saved with different identity keys.
 
+## iPhone computer controls (in progress)
+
+In **Computers**, each paired computer has a connection switch. Turn it off to disconnect without forgetting the pairing; the phone will not reconnect automatically until you turn it back on. Re-pairing explicitly enables it again. On the computer's page, **Models** starts collapsed; expand it and use **All**, **Cloud**, or **Local** to narrow the list.
+
+A separate Nekko Cloud group is off by default and appears only when fleet access is enabled, you are signed in, and the fleet list is fetched successfully. The current iPhone app source does not yet offer a switch to enable fleet access. Viewing the group does not create or pair a cloud computer. This is separate from encrypted chat sync.
+
+The computer's **Nekko Agent service** section can show status and supported update actions. To allow changes from an eligible phone, the owner must first turn on **Manage service from phone** in desktop Settings under System. It is off by default and separate from the permission to quit. Phone permissions and security checks still apply. Restart and install ask for confirmation and may interrupt chats; an accepted request is not proof it finished. Reconnect and check the status and version. These controls do not restart your operating system. Unsupervised or headless restart and install are not supported.
+
+These iPhone and desktop controls are implemented in source for [#2053](https://github.com/nekko-labs/nekko-agent/issues/2053), with native build and visual checks still in progress. Real installations and live cloud have not been tested. Android equivalents are a follow-up tracked under that issue until a separate issue exists.
+
 ## iPhone chat controls
 
-New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Asks first**, **Asks when it matters**, and **Works on its own**. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
+New chat and phone-only chat support Markdown formatting while you type. Effort is a gauge, including in Simple mode. The permission picker shows separate icons and single-line choices: **Always ask**, **Ask when it matters**, and **No restrictions**. On the iPhone, choosing **No restrictions** first shows **Turn on No restrictions?**: in that mode the agent never asks, so a web page or tool output it reads can get your files or data sent out. **Keep asking** changes nothing. The same warning shows for the chat's tool policy in Expert's menu, in New chat and for the default in **Settings → On <computer>**. **Don't warn me again** applies to this iPhone only; **Settings → Security → Warn before No restrictions** turns it back on. When an MCP tool waits for approval in a chat that read the web or a tool's output, the iPhone's approval card also offers **Always allow this tool**: it allows the call and stops asking for that tool in this chat (other tools still ask), after Face ID or your passcode. [Voice conversation](https://nekkoagent.com/docs/voice#hands-free-conversation-on-iphone) is separate from draft dictation.
 
 The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
 
@@ -142,7 +160,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
 > servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
 > filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
-> Local tab says to start the chat on a computer for local models.
+> Local tab says to start the chat on a computer for local models. On Android the computer's
+> model list (New chat, and a chat's Model and effort sheet) has the same **All**, **Cloud** and
+> **Local** buttons above it, opening on All.
 >
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one
@@ -301,16 +321,30 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > off. It never vibrates in silent mode or Do Not Disturb, or while the app is in the background.
 >
 > **Your computer's settings from the phone** (Android): **Settings → On <computer>** changes three
-> of the computer's own settings: the chat mode for new chats (Ask, Guardrails or YOLO; YOLO asks once
-> before switching), what a long-press on a chat does (Complete, which moves it to Completed, or
+> of the computer's own settings: the chat mode for new chats (Always ask, Ask when it matters or No restrictions; switching to
+> No restrictions shows the No restrictions warning first), what a long-press on a chat does (Complete, which moves it to Completed, or
 > Delete), and whether deleting asks first. They are saved on the computer, the same settings as in
 > its Settings. A long-press on a chat in the list offers that action, plus **Pin** (or **Unpin**)
 > and **Rename**; a pinned chat shows a pin beside its time.
 >
-> **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Ask, Guardrails
-> or YOLO; a chat without its own follows the computer's default; switching to a mode that asks less
-> is confirmed with your fingerprint, face or screen lock, and YOLO asks once first), **Rename**,
+> **A chat's own actions** (Android): **⋮** in a chat has **Chat mode** (this chat's Always ask, Ask when it matters
+> or No restrictions; a chat without its own follows the computer's default; switching to a mode that asks less
+> is confirmed with your fingerprint, face or screen lock, and No restrictions shows the No restrictions warning first), **Rename**,
 > **Pin** / **Unpin** and **Complete**, each saved on the computer.
+>
+> **Turn on No restrictions?** (Android): before a chat, or the computer's default for new chats, switches to
+> No restrictions, the phone explains that the agent will then run commands, edit files, fetch addresses and
+> call tools without asking, and that a page, search result or tool output it reads can get your
+> files or data sent out; your deny rules still block. **Keep asking** changes nothing; **Turn on
+> No restrictions** goes ahead. **Don't warn me again** is kept on this phone only; **Settings → Security →
+> Warn before No restrictions** turns the warning back on.
+>
+> **Always allow this tool** (Android): once a chat has read web pages, search results or a tool's
+> output, the computer asks before every MCP tool call. On such an approval the chat's card offers
+> **Always allow this tool** beside Allow and Deny: it allows this call and stops asking for that one
+> tool in that chat, after your fingerprint, face or screen lock (and your security key or code
+> when the computer asks for one). Other tools keep asking, a new chat starts with none allowed, and
+> the chat never switches to No restrictions. Monitors and notifications still offer Allow and Deny only.
 >
 > **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or
@@ -426,9 +460,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
 > **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
-> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails you
-> can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
-> them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
+> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails
+> inside the message box that you can remove. Adding or removing a photo saves the draft at once, so
+> reopening the app brings back its text and photos. They are scaled to 1600 px and sent end-to-end
+> encrypted to the computer, which hands them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
 > The photos stay in the message's bubble on the phone too, as small previews the computer makes
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
@@ -487,9 +522,16 @@ inference or close the native apps' remaining feature and release gaps; see the
 
 **The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
-the Dynamic Island, with a chip per chat, **Allow / Deny** for a waiting tool and **Stop**, and a
-level in **Settings → Live Activities** (None, Minimal, Standard, Detailed) that decides how much
-of the chat it shows (at Detailed, a mic sends one spoken message to the chat it shows, after Face ID; see [Voice](voice.md#from-the-lock-screen)); until the relay can push it, the card changes only while the app is running; notifications with Allow /
+the Dynamic Island (only ever one, scoped to the active computer). The current
+[status dashboard](voice.md#from-the-status-dashboard) replaces tappable chat chips with
+Building, Need input and Done counts, primary **Talk to Nekko**, and secondary **Open app**.
+On iOS 18+ voice requires authentication; on iOS 17 it opens the list without automatic
+listening. The dashboard replaces the old focused-chat microphone and chip actions;
+review chats and approvals in the app. **Settings → Live Activities** still offers None,
+Minimal, Standard and Detailed; Minimal removes chat text from push payloads, whereas
+Standard/Detailed still permit it even though the dashboard draws counts. Native/device
+verification for the redesign remains incomplete; background push delivery requires
+APNs configuration. Separate notifications retain Allow /
 Deny actions while the app is in the background (Allow asks you to unlock first); photo attachments;
 and dictation (Whisper on your computer when Nekko Voice is installed, else the iPhone's own
 speech recognition). Its pairing screen leads with Tailscale and shows whether Tailscale is on on
@@ -546,7 +588,7 @@ changes how the computer itself is set up:
   or removing voice models, connecting or disconnecting connectors, provider keys and sign-ins, MCP
   servers and hooks. Everything not on the allowed list is refused too, with an error that starts
   *Not allowed from a paired phone*.
-- **Settings a phone may change:** the chat mode for new chats (Ask, Guardrails or YOLO), what the chat pane's top-right button does (Complete or Delete),
+- **Settings a phone may change:** the chat mode for new chats (Always ask, Ask when it matters or No restrictions), what the chat pane's top-right button does (Complete or Delete),
   whether deleting asks first, and voice on/off and its language. An update that touches any other
   setting is refused as a whole: nothing in it is applied.
 - **Settings a phone can read:** only the theme and accents, the default and starred models, your
@@ -605,10 +647,10 @@ changes how the computer itself is set up:
   uses the model loads it again. Loading, downloading, deleting models and the Model Server's
   settings stay on the computer.
 - **One chat's options:** a phone can change a chat's model, effort, title, pin and tags, complete it, and
-  switch it between Ask, Guardrails and YOLO, but not its tools, isolation or
-  offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
-  default for new chats) to a mode with fewer approvals, Ask to Guardrails or anything to YOLO, is
-  confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
+  switch it between Always ask, Ask when it matters and No restrictions, always allow an MCP tool in it (**Always allow this
+  tool** on an approval, iPhone), but not its tools, isolation or offline/incognito switches. Messages cannot attach files from the computer. Moving a chat (or the
+  default for new chats) to a mode with fewer approvals, Always ask to Ask when it matters or anything to No restrictions, or
+  always allowing an MCP tool, is confirmed on the phone like any other change: Face ID or the passcode on the iPhone, the
   fingerprint, face or screen lock on Android (the default for new chats, in **Settings → On
   <computer>**).
 
@@ -630,7 +672,7 @@ your computer refuses those requests from that phone, whatever the phone app doe
 phone can watch but can't make the agent do anything, and with Read off it sees nothing. Every
 request a phone can make is in one of the two; anything else is refused.
 
-**File, git, terminal and SSH changes, and moving a chat to Guardrails or YOLO, are confirmed on
+**File, git, terminal and SSH changes, and moving a chat to Ask when it matters or No restrictions, are confirmed on
 the phone and checked by your computer.** (Sending a prompt or approving a tool needs only the Change
 switch, so it doesn't ask for Face ID each time.) The first time a phone
 makes a change, it creates a key in its Secure Enclave (on iPhone) that only Face ID, Touch ID or
@@ -688,7 +730,9 @@ Connection metadata (IPs, timing, frame sizes), the room code, and, if you enabl
 tokens plus the content-free fact "a run finished". If you turn on the iPhone's Live Activity, the
 short status it shows (chat titles, the current step and, at Detailed, reply lines, at the level you
 choose) is the exception: ActivityKit draws only what the push holds, so that text goes through the
-relay and Apple's push service (APNs) as plain text. Lock Screen notifications on both phones also
+relay and Apple's push service (APNs) as plain text. A step never shows what a call waiting on your approval
+would send (only what it does: "fetch url", "Run"), and a step whose detail holds a key, card, ID
+number, email address or phone number shows only what it does. Lock Screen notifications on both phones also
 pass through Apple's and Google's push services, with generic text. The relay keeps all of this in
 memory only. Everything else (chats, commands, files, model output) is end-to-end encrypted, which is
 why relayed local-model use is zero-data-retention for content.
@@ -853,3 +897,7 @@ Nekko sits at the top center of the iOS Chats screen, outside the toolbar chips.
 pixel cat for a brief greeting. This is a local animation, not a message to an
 agent. The mascot respects Reduce Motion and pauses its animation in the
 background.
+
+### Card details
+
+View options → Card details lets you independently hide model, context window, PRs and update time on iOS and Android. Choices persist on the phone. Empty groups default off; explicit saved choices are preserved. Context uses reported summary counts and never invents an unknown window size. iOS groups are separator-free and use desktop-style chevrons, activity motifs and count capsules.

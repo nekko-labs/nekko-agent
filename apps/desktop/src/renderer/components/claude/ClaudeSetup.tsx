@@ -44,7 +44,7 @@ export function claudeAccountFolder(account?: string): string {
 /** Who a signed-in Claude Code is, in a few words: "me@example.com · Max plan". */
 export function claudeIdentityLine(status: ClaudeCodeStatus | null | undefined): string {
   if (!status?.installed || !status.loggedIn) return '';
-  return [status.email, claudePlanLabel(status.subscriptionType)].filter(Boolean).join(' · ');
+  return [status.email, status.orgName, claudePlanLabel(status.subscriptionType)].filter(Boolean).join(' · ');
 }
 
 /**

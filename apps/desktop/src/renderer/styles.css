@@ -247,8 +247,16 @@
   }
 }
 
+/* The target grows, not the glyph. Real layout space avoids overlapping
+   invisible hit areas; compact padding/height overrides cannot shrink it. */
+@utility action-target {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
+  @apply action-target inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
   transition:
     transform 160ms var(--ease-out),
     background 0.12s ease,
@@ -826,7 +834,8 @@
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
 #command-titlebar-slot .screens-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
-#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { padding-top: 2px; padding-bottom: 2px; }
+/* Desktop chrome is constrained by the native caption strip, not a CTA row. */
+#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { min-height: 28px; padding-top: 2px; padding-bottom: 2px; }
 
 .titlebar-updater {
   position: relative;
@@ -2835,11 +2844,43 @@
 .chat-mascot .peek-paws-slot { transform: translateY(5px); opacity: 0; transition: transform 160ms var(--ease-out), opacity 120ms var(--ease-out); }
 .chat-mascot .peek-paws-slot[data-shown] { transform: none; opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .chat-mascot .peek-paws-slot { transition: none; } }
+/* While an approval waits he looks alarmed, hops, then ducks down behind the
+   composer's edge, where the face window cuts him off, so nothing of him sits
+   over the approval bar's buttons. 34 units takes the "!" above his ear below
+   the edge too. Once it is answered he pops back up, quickly, smiling. With
+   reduced motion he simply goes and comes back. */
+.chat-mascot[data-chat-mascot-pose="ducking"] [data-part="peek-head"],
+.chat-mascot[data-chat-mascot-pose="away"] [data-part="peek-head"] { transform: translateY(34px); }
+@media (prefers-reduced-motion: no-preference) {
+  .chat-mascot[data-chat-mascot-pose="ducking"] [data-part="peek-head"] { animation: chat-mascot-duck 760ms both; }
+  .chat-mascot[data-chat-mascot-pose="popping"] [data-part="peek-head"] { animation: chat-mascot-pop 260ms both; }
+}
+@keyframes chat-mascot-duck {
+  0% { transform: none; animation-timing-function: ease-out; }
+  10% { transform: translateY(-3px); animation-timing-function: ease-in; }
+  22%, 52% { transform: none; animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5); }
+  100% { transform: translateY(34px); }
+}
+@keyframes chat-mascot-pop {
+  0% { transform: translateY(34px); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1); }
+  70% { transform: translateY(-3px); animation-timing-function: ease-in-out; }
+  100% { transform: none; }
+}
 .composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock { width: auto; margin-left: max(8%, 92px); margin-right: 8%; }
 /* The note sits right above the box, where the cat peeks: it starts clear of him. */
 .composer-column:has(> .composer > .chat-mascot) .chat-long-note { margin-left: 92px; }
+/* In a chat pane the plan floats over the transcript's foot instead of taking
+   a row of its own, so the conversation scrolls on behind it and the cat.
+   It still rises out from under the composer: the clip stops at the
+   composer's top edge (the dock's last 10px are tucked under it) rather than
+   painting over the box. ChatPane sets --chat-plan-clearance from the plan's
+   height so the last row can scroll clear of it. */
+[data-chat-surface="full"] .composer-column { position: relative; }
+[data-chat-surface="full"] .composer-column > .plan-sheet-dock { position: absolute; bottom: 100%; left: 0; right: 0; z-index: 1; clip-path: inset(-2px -14px 10px -14px); }
+[data-chat-surface="full"] [data-transcript-scroll] { padding-bottom: max(1.25rem, var(--chat-plan-clearance, 0px)); }
+[data-chat-surface="full"] [data-scroll-latest] { bottom: max(0.75rem, var(--chat-plan-clearance, 0px)); }
 /* The transcript's last row stops above his ears. */
-[data-session-id]:has(.composer > .chat-mascot) [data-transcript-scroll] { padding-bottom: 68px; }
+[data-session-id]:has(.composer > .chat-mascot) [data-transcript-scroll] { padding-bottom: max(68px, var(--chat-plan-clearance, 0px)); }
 .plan-sheet-dock::before, .plan-sheet-dock::after { content: ''; position: absolute; bottom: 10px; width: 12px; height: 12px; pointer-events: none; }
 .plan-sheet-dock::before { left: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
 .plan-sheet-dock::after { right: -12px; background: radial-gradient(circle at 100% 0, transparent 11.5px, var(--plan-sheet-bg) 12px); }
@@ -2884,13 +2925,8 @@
 .plan-sheet-agent-line { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .plan-sheet-agent-detail { display: block; padding-left: 18px; font-size: var(--text-2xs); color: var(--ink-faint); }
 @media (hover: hover) { .plan-sheet-agent:hover { background: var(--surface); border-color: color-mix(in srgb, var(--ink) 16%, transparent); } }
-/* The small CI/state icon on a PR chip. `is-pending` spins so a watcher can see
- * the checks are still running even if the colour reads the same as another
- * state's tone. */
-.plan-sheet-status { display: inline-grid; place-items: center; width: 12px; height: 12px; flex-shrink: 0; }
-.plan-sheet-status.is-pending svg { animation: plan-sheet-spin 1.4s linear infinite; transform-origin: 50% 50%; }
-@keyframes plan-sheet-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .plan-sheet-status.is-pending svg { animation: none; } }
+/* The row's label on its left; it stays put while the cards scroll under it. */
+.plan-sheet-agents-head { position: sticky; left: 0; z-index: 1; display: flex; flex: 0 0 auto; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding-right: 4px; background: var(--plan-sheet-bg); font-size: var(--text-2xs); font-weight: 600; color: var(--ink-soft); }
 
 /* A PR wears its three actions as rounded pills: Approve, Decline, Merge.
  * They fade in when the pointer or keyboard focus is on the chip (or its
@@ -3546,6 +3582,16 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .wall-send { margin-right: 4px; color: var(--accent); }
 .wall-send:disabled { color: var(--ink-faint); }
 .composer-action { background: transparent; border: 0; box-shadow: none; }
+/* Listening grows out of the microphone to the left, inside the bar's own flow, so it can never
+   cover the words being dictated. Black in every theme, like the island it is named for. It gives
+   way to the bar's controls when the composer is narrow, and only suggestions give way before it. */
+.voice-island { position: relative; display: flex; align-items: center; flex: 0 0 44px; min-width: 0; border-radius: 9999px; transition: flex-basis 240ms cubic-bezier(0.2, 0.9, 0.3, 1.05), background-color 160ms ease; }
+.voice-island.is-open { flex: 0 9999 22rem; min-width: 7.5rem; background: #000; }
+.voice-island.is-open > button { border-radius: 9999px; }
+.voice-island.is-open > button:hover { background: rgb(255 255 255 / 0.14); }
+.voice-island-status { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; padding-left: 14px; overflow: hidden; color: rgb(255 255 255 / 0.82); font-size: var(--text-xs); white-space: nowrap; }
+.voice-island-meter { flex: 0 1 2.5rem; min-width: 1rem; height: 6px; overflow: hidden; border-radius: 9999px; background: rgb(255 255 255 / 0.18); }
+@media (prefers-reduced-motion: reduce) { .voice-island { transition: none; } }
 /* The wall composer's bar stays one line: the model and Mode buttons keep their labels and truncate, never wrap. */
 .composer-section[data-wall-composer] .composer-bar { min-width: 0; }
 .composer-section[data-wall-composer] [data-composer-foot] { flex: 0 1 auto; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; }
@@ -3570,6 +3616,16 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Rows stay flat at rest; pointer/focus feedback is a wash and soft light,
    not a raised card. The inset glow survives the group's overflow clipping. */
+/* Hidden row actions must not reserve title space beyond the timestamp.
+   Focus reveals them before keyboard navigation enters the row's buttons. */
+.agent-chip-actions { display: none; }
+.agent-chip:is(:hover, :focus-within) .agent-chip-actions { display: flex; }
+.agent-chip:is(:hover, :focus-within) .agent-chip-heading > time { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .agent-chip-actions { display: flex; }
+  .agent-chip-heading > time { display: none; }
+}
+
 .agent-chip-chat {
   background: transparent; border: 0; box-shadow: none;
   transition: background-color 120ms ease-out, box-shadow 120ms ease-out;
@@ -3686,7 +3742,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (hover: hover) {
   .composer-foot-controls .ctl-menu:hover { border-color: var(--line); }
 }
-.composer-foot-controls { flex-shrink: 1; overflow: hidden; }
+.composer-foot-controls { flex-shrink: 1; overflow: hidden; white-space: nowrap; }
 .composer-foot-controls .ctl-toggle .ctl-dot { display: none; }
 /* A narrow composer keeps the mode value and the incognito glyph; their
    words go to the tooltip so the bar never runs into the microphone. */
@@ -3949,6 +4005,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 }
 .mode-tiles button[aria-checked="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: var(--shadow-sm); }
 .mode-tiles button[aria-checked="true"] svg { color: var(--accent); }
+/* Approval names must remain readable in the narrow Mode panel columns. */
+.mode-approval-tiles { flex-direction: column; min-width: 0; }
+.mode-approval-tiles button { flex-direction: row; gap: 8px; padding: 6px 8px; text-align: left; }
+.mode-approval-tiles button span { white-space: normal; overflow-wrap: anywhere; }
 
 .mode-folders { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .mode-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 24px; padding: 0 4px 0 8px; border-radius: 7px; background: var(--surface-2); font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-soft); }
@@ -4025,7 +4085,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) { .conversation-question { animation: none; } }
 
 /* One Models workspace, quiet navigation and compact provider actions. */
-.models-add-provider:focus-visible, .models-connected-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.models-add-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .models-workspace { height: 100%; overflow-y: auto; padding: 12px 16px 64px; }
 /* The biggest heading in its section: titles nested below step down a size. */
 .models-section-heading { display: flex; align-items: center; gap: 8px; font-size: var(--text-2xl); font-weight: 600; margin-bottom: 16px; }
@@ -4033,11 +4093,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-section-title { font-size: var(--text-sm); font-weight: 600; margin-bottom: 12px; }
 .models-providers { overflow-anchor: none; }
 .models-provider-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-bottom: 24px; }
-.models-connected { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.models-connected-provider { display: flex; align-items: center; gap: 8px; border-radius: 10px; padding: 8px 12px; background: var(--surface-2); font-size: var(--text-sm); }
-.models-add-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-left: 1px solid var(--line); padding-left: 20px; }
+.models-add-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .models-add-provider { position: relative; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 11px; color: white; }
-.models-connected-provider img, .models-add-provider img { width: 22px; height: 22px; filter: brightness(0) invert(1); }
 @media (hover: hover) {
   .models-add-provider:hover { opacity: .85; }
 }
@@ -4046,13 +4103,19 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; max-width: 1800px; }
 .models-provider-grid > div { min-width: 0; scroll-margin-top: 20px; }
 .models-local-connections { margin-top: 36px; }
-.models-section { scroll-margin-top: 12px; }
-/* Tall enough to scroll to the top even with one provider, so the `models` destination lands on it. */
-.models-section-cloud { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); min-height: 100%; }
+.models-section { scroll-margin-top: 12px; min-width: 0; }
+/* Cloud (left) and Local (right) share the page in two columns on a wide
+   window, and stack with Cloud first on anything narrower than a laptop. */
+.models-workspace-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; max-width: 1800px; margin-inline: auto; }
+.models-workspace-split .models-section { max-width: none; margin-inline: 0; }
+@media (max-width: 1199px) {
+  .models-workspace-split { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .models-workspace-split .models-section:not(.models-section-cloud) { padding-top: 24px; border-top: 1px solid var(--line); }
+}
 @media (max-width: 767px) {
   .models-workspace { padding: 16px 16px 48px; }
+  .models-workspace-split { gap: 28px; }
   .models-provider-bar { gap: 12px; }
-  .models-add-strip { gap: 8px; padding-left: 12px; }
   .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
 }
 
@@ -4267,4 +4330,112 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 }
 @media (prefers-reduced-motion: reduce) {
   .save-spinner, .save-flash { animation: none; }
+}
+
+/* The Agents View popover is portaled out of the draggable title bar. */
+.wall-view-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: var(--text-xs); font-weight: 500; -webkit-app-region: no-drag; }
+.wall-view-trigger:hover, .wall-view-trigger[aria-expanded='true'] { background: var(--surface-2); color: var(--ink); }
+.wall-view-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wall-view-icon { width: 20px; height: 16px; stroke-width: 2.5; }
+.wall-view-chevron { width: 12px; height: 12px; color: var(--ink-faint); }
+.wall-view-menu { position: fixed; z-index: 1000; width: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--win); box-shadow: var(--shadow-float); -webkit-app-region: no-drag; }
+.wall-view-heading { margin-bottom: 14px; }
+.wall-view-heading h2 { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
+.wall-view-heading p { margin: 4px 0 0; font-size: var(--text-xs); color: var(--ink-soft); }
+.wall-view-layout { border: 0; padding: 0; margin: 0; min-width: 0; }
+.wall-view-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wall-view-choice { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); cursor: pointer; }
+.wall-view-choice:hover { background: var(--surface-2); }
+.wall-view-choice:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 65%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--win)); }
+.wall-view-choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wall-view-choice input { position: absolute; top: 12px; right: 12px; width: 13px; height: 13px; margin: 0; accent-color: var(--accent); }
+.wall-view-preview { width: 64px; height: 45px; margin: 0 0 7px; color: var(--ink-faint); }
+.wall-view-preview__frame { stroke: var(--ink-faint); }
+.wall-view-preview__pane { fill: color-mix(in srgb, currentColor 12%, transparent); }
+.wall-view-choice:has(input:checked) .wall-view-preview { color: var(--accent); }
+.wall-view-choice strong { font-size: var(--text-xs); font-weight: 600; color: var(--ink); }
+.wall-view-choice__hint { font-size: var(--text-2xs); color: var(--ink-soft); }
+.wall-view-choice kbd { margin-top: 5px; font-family: inherit; font-size: var(--text-2xs); color: var(--ink-faint); }
+.wall-view-snap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0 2px; cursor: pointer; }
+.wall-view-snap > span { display: grid; gap: 3px; }
+.wall-view-snap strong { font-size: var(--text-xs); font-weight: 500; color: var(--ink); }
+.wall-view-snap > span > span { font-size: var(--text-2xs); color: var(--ink-soft); }
+.wall-view-snap[aria-disabled='true'] { cursor: default; }
+.wall-view-snap[aria-disabled='true'] strong { color: var(--ink-soft); }
+.wall-view-snap input { appearance: none; position: relative; flex-shrink: 0; width: 28px; height: 16px; margin: 0; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-2); cursor: inherit; }
+.wall-view-snap input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink-soft); }
+.wall-view-snap input:checked { background: var(--accent-soft); border-color: var(--accent); }
+.wall-view-snap input:checked::before { left: 14px; background: var(--accent); }
+.wall-view-snap input:disabled { opacity: .45; }
+.wall-view-snap input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.screens-embedded { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+.screens-embedded .screens-picker__title { color: var(--ink); font-weight: 600; }
+.screens-embedded .screens-picker__note { color: var(--ink-soft); line-height: 1.45; margin-top: 8px; }
+.screens-embedded .screens-picker__divider { margin: 14px 0; }
+.screens-embedded .screens-row { overflow-x: auto; padding: 2px 2px 6px; }
+.screens-embedded .screens-tile { flex-shrink: 0; }
+.screens-embedded .screens-options { gap: 4px; }
+.screens-embedded .screens-option { border: 1px solid transparent; padding: 9px; }
+.screens-embedded .screens-option:has(input:checked) { background: var(--surface-2); border-color: var(--line); }
+.screens-embedded .screens-option > span > span { color: var(--ink-soft); line-height: 1.45; }
+.screens-embedded .screens-placement-note { margin: -3px 0 8px; }
+.screens-single { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: var(--surface-2); }
+.screens-single > svg { width: 26px; height: 26px; color: var(--ink-soft); flex-shrink: 0; }
+.screens-single > span:not(.screens-single__status) { display: grid; gap: 2px; }
+.screens-single strong { font-size: var(--text-xs); font-weight: 500; }
+.screens-single span span { font-size: var(--text-2xs); color: var(--ink-soft); }
+.screens-single__status { margin-left: auto; font-size: var(--text-2xs); color: var(--ink-soft); }
+
+/* Provider identities stay the same in setup and connected cards. */
+.provider-mark { display: inline-grid; place-items: center; flex-shrink: 0; color: white; }
+.provider-mark img { width: 22px; height: 22px; filter: brightness(0) invert(1); }
+.provider-mark-tile { width: 32px; height: 32px; border-radius: 9px; }
+.provider-choice .provider-mark-tile { width: 46px; height: 46px; border-radius: 14px; }
+.models-add-revealed { animation: provider-reveal 160ms ease-out both; }
+@keyframes provider-reveal { from { opacity: 0; transform: scale(.7); width: 0; } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .models-add-revealed { animation: none; } }
+.composer-bar:has(> .composer-folders) { gap: 4px; }
+.composer-folders { flex: 0 1 auto; min-width: 0; max-width: min(240px, 35%); }
+.composer-folders > div, .composer-folders button { max-width: 100%; }
+.composer-folders .ctl-menu { height: 28px; gap: 6px; border: 0; padding: 4px; }
+.composer-permissions { flex-shrink: 0; justify-content: center; width: 28px; height: 28px; padding: 0; border-color: transparent; background: transparent; }
+
+@container (max-width: 520px) {
+  /* Let the folder summary truncate before pushing the 44px actions outside. */
+  .composer-bar > .composer-folders { min-width: 44px; }
+  .composer-bar:has(> .composer-folders) .composer-foot-controls { min-width: 80px; }
+}
+
+/* ---------- First-run setup: the about-you steps (components/onboarding) ---------- */
+.setup-card { transition: background-color 120ms ease, border-color 120ms ease; }
+.setup-card.is-on { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.setup-switch { appearance: none; position: relative; flex: none; width: 44px; height: 26px; border-radius: 13px; background: var(--line); cursor: pointer; transition: background-color 150ms ease; }
+.setup-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 25%, transparent); transition: transform 150ms ease; }
+.setup-switch:checked { background: var(--accent); }
+.setup-switch:checked::after { transform: translateX(18px); }
+.setup-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-swatch-row { flex-wrap: nowrap; justify-content: center; gap: 4px; }
+.theme-swatch-row .theme-swatch-button { width: 64px; }
+.setup-nekko-eyes { transform-box: fill-box; transform-origin: center; animation: setup-blink 4.2s steps(1) infinite; }
+@keyframes setup-blink { 0%, 94%, 100% { transform: none; } 95%, 98% { transform: scaleY(0.34); } }
+
+.setup-welcome .setup-hop { display: block; animation: setup-hop-in 700ms cubic-bezier(.34, 1.56, .64, 1) both, setup-bob 2.6s ease-in-out 1.6s infinite; }
+.setup-welcome .setup-wave { transform-origin: 50% 90%; animation: setup-wave 1s ease-in-out 700ms 1 both; }
+.setup-welcome .setup-hi { position: absolute; right: 6px; top: 40px; padding: 6px 12px; border-radius: 12px 12px 12px 4px; background: var(--accent); color: var(--on-accent); font-size: var(--text-sm); font-weight: 600; animation: setup-pop 300ms cubic-bezier(.34, 1.56, .64, 1) 900ms both; }
+.setup-welcome .setup-shadow { display: block; width: 110px; height: 9px; margin-top: 2px; border-radius: 50%; background: var(--line); animation: setup-shadow 2.6s ease-in-out 1.6s infinite; }
+.setup-welcome .setup-rise { animation: setup-rise 500ms ease-out 450ms both; }
+.setup-sparkle { position: absolute; width: 15px; height: 15px; background: var(--accent); clip-path: polygon(40% 0, 60% 0, 60% 40%, 100% 40%, 100% 60%, 60% 60%, 60% 100%, 40% 100%, 40% 60%, 0 60%, 0 40%, 40% 40%); animation: setup-twinkle 2.2s ease-in-out infinite both; }
+.setup-sparkle-0 { left: 20px; top: 40px; animation-delay: 600ms; }
+.setup-sparkle-1 { right: 34px; top: 8px; width: 11px; height: 11px; animation-delay: 1.1s; }
+.setup-sparkle-2 { left: 52px; top: 0; width: 9px; height: 9px; background: var(--ink-soft); animation-delay: 1.5s; }
+.setup-sparkle-3 { right: 0; top: 112px; width: 12px; height: 12px; background: var(--ink-soft); animation-delay: 900ms; }
+@keyframes setup-hop-in { from { opacity: 0; transform: translateY(60px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes setup-bob { 0%, 70%, 100% { transform: none; } 80% { transform: translateY(-8px); } 90% { transform: translateY(-2px); } }
+@keyframes setup-shadow { 0%, 70%, 100% { transform: none; } 80% { transform: scaleX(.85); } }
+@keyframes setup-wave { 0%, 100% { transform: none; } 20%, 60% { transform: rotate(-7deg); } 40%, 80% { transform: rotate(7deg); } }
+@keyframes setup-pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes setup-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes setup-twinkle { 0%, 100% { opacity: 0; transform: scale(.6); } 50% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .setup-welcome *, .setup-nekko-eyes { animation: none !important; }
 }

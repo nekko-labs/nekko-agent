@@ -11,6 +11,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.FileProvider
 import com.nekko.android.chat.PhotoTray
 import com.nekko.android.lock.LocalAppLock
+import com.nekko.android.lock.AppLock
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import com.nekko.android.ui.chat.AttachUi
 import java.io.File
 import com.nekko.android.ui.chat.MicUi
@@ -33,6 +39,7 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +60,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Difference
 import com.nekko.android.ui.chat.ChangesSheet
+import com.nekko.android.ui.chat.AuditSheet
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -159,6 +167,7 @@ import com.nekko.android.ui.settings.modeTitleRes
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Shield
 
@@ -214,6 +223,8 @@ private fun ChatScreenContent(
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
+    var showAudit by remember { mutableStateOf(false) }
+    val auditLoad by vm.audit.collectAsStateWithLifecycle()
     // Read with the chat and after each turn: Changes shows only with something in it.
     // A short turn can start and end between two frames, so `running` alone may never appear to change.
     LaunchedEffect(vm.sessionId, chat.running, chat.blocks.size, changesAllowed) { if (changesAllowed && !chat.running) vm.loadChanges() }
@@ -347,6 +358,10 @@ private fun ChatScreenContent(
         )
     }
 
+    if (showAudit) {
+        AuditSheet(auditLoad.trail, auditLoad.error, onRefresh = vm::loadAudit, onDismiss = { showAudit = false })
+    }
+
     // ⋮ → Rename, Pin, Complete, Chat mode: changes on the computer; a refusal is said in a toast.
     val chatAction: (String, suspend () -> Unit) -> Unit = { failed, action ->
         scope.launch {
@@ -460,6 +475,13 @@ private fun ChatScreenContent(
                                         onClick = { showMenu = false; showMode = true },
                                         enabled = online,
                                         modifier = Modifier.testTag("chat.toolMode"),
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chat_audit_trail)) },
+                                        leadingIcon = { Icon(Icons.Filled.Policy, contentDescription = null) },
+                                        onClick = { showMenu = false; vm.loadAudit(); showAudit = true },
+                                        enabled = online,
+                                        modifier = Modifier.testTag("chat.audit"),
                                     )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chats_rename)) },
@@ -594,7 +616,17 @@ private fun ChatScreenContent(
                 }
             }
             val controls: @Composable () -> Unit = {
-                chat.approval?.let { ApprovalCard(it, onDecide = vm::approve) }
+                chat.approval?.let { a ->
+                    ApprovalCard(a, onDecide = vm::approve, onAlwaysAllow = {
+                        try {
+                            vm.alwaysAllowTool()
+                        } catch (e: RelayException) {
+                            // A second factor first (SK-7): the sheet asks, then saves and allows; the card stays meanwhile.
+                            if (e.refusal?.asksForStepUp != true) throw e
+                            modeStepUp = PendingStepUp(res.getString(R.string.chats_tool_step_up, computerName, a.call.name)) { proof -> vm.alwaysAllowTool(proof) }
+                        }
+                    })
+                }
                 chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
                 // A completed chat reads like the desktop's: no message box until it is restored.
@@ -771,23 +803,59 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
 private fun rememberMic(d: DictationController?): MicUi? {
     if (d == null) return null
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val lock = LocalAppLock.current
+    val scope = rememberCoroutineScope()
     val state by d.state.collectAsStateWithLifecycle()
     val error by d.error.collectAsStateWithLifecycle()
-    var pending by remember { mutableStateOf<((String) -> Unit)?>(null) }
+    var pending by remember(d) { mutableStateOf<((String) -> Unit)?>(null) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val onText = pending
         pending = null
-        if (granted && onText != null) d.toggle(onText)
-        else if (!granted) d.denied()
-    }
-    // Leaving the chat drops a recording in progress; nothing is kept.
-    DisposableEffect(d) { onDispose { d.cancel() } }
-    return MicUi(state, error, d.computerName()) { onText ->
-        val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (has) d.toggle(onText) else {
-            pending = onText
-            ask.launch(Manifest.permission.RECORD_AUDIO)
+        if (onText != null && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && lock?.locked != true) {
+            if (granted) d.toggle(onText) else d.denied()
         }
+    }
+    DisposableEffect(d, lifecycle, lock, scope) {
+        val dispose = observeMicLifecycle(d, lifecycle, lock, scope) { pending = null }
+        onDispose { dispose() }
+    }
+    return MicUi(state, error, d.computerName()) { onText ->
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && lock?.locked != true) {
+            val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            if (has) d.toggle(onText) else {
+                pending = onText
+                ask.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
+}
+
+/** LockGate keeps the chat composed, so disposal alone cannot protect the microphone. */
+internal fun observeMicLifecycle(
+    d: DictationController,
+    lifecycle: Lifecycle,
+    lock: AppLock?,
+    scope: CoroutineScope,
+    clearPending: () -> Unit,
+): () -> Unit {
+    val cancel = {
+        clearPending()
+        d.cancel()
+    }
+    val observer = LifecycleEventObserver { _, event ->
+        if (event == Lifecycle.Event.ON_STOP) cancel()
+    }
+    lifecycle.addObserver(observer)
+    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) cancel()
+    // Deliberately not lifecycle-aware: locking must cancel even while the chat is stopped.
+    val lockJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        lock?.status?.collect { if (it.locked) cancel() }
+    }
+    return {
+        lifecycle.removeObserver(observer)
+        lockJob.cancel()
+        cancel()
     }
 }
 

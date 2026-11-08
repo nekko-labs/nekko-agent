@@ -65,3 +65,21 @@ Implemented and verified with 25 focused tests, desktop typecheck and production
 - Acceptance: matched light/dark 1400px and 760px captures, simple navigation
   reveal, panel enter/exit and rapid reversal checks, focused tests, typecheck
   and production build. Packaged builds and non-macOS platforms remain unverified.
+
+## Consolidated View dropdown
+
+Implemented; 102 focused tests and desktop typecheck pass. Matching 1440px/460px dark-theme captures were inspected; 15 isolated Electron checks cover layout/snap/dismissal, keyboard opening and focus return, screen-toggle and placement bridge callbacks, and 460×400 short-window scrolling. Desktop production build passes. Physical display placement and packaged builds have not been exercised.
+
+The Agents toolbar has a **View** button immediately to the right of **+**. Its viewport-bounded dropdown consolidates **Single agent** (formerly Focused), **Multi-agent** (formerly Dynamic), **Snap to grid**, and desktop screen/desktop selection and new-agent placement. Screen controls are embedded, not another nested popup; the Local Web UI omits desktop-only controls. The dropdown opens by click or keyboard, closes on Escape/outside click or focus leaving, and scrolls within short windows. Single/Multi-agent retain the saved `focus`/`grid` keys and Cmd/Ctrl+Shift+1/2 shortcuts. This changes how many agents are visible, not how many may run.
+
+### View panel visual hierarchy
+
+Implemented in source; visual review pending. Seventy focused tests, desktop typecheck, the production app build, and 25 isolated Windows Electron interaction/layout checks pass. Matched default-dark-theme captures exist at 1440/768/460/320 widths and a short window. Browser screenshot inspection timed out, the capture tool returned `UnknownVizError`, and native capture did not expose the hidden fixture, so captured pixels have not been inspected and this redesign is not yet verified for landing. The View trigger is a quiet, borderless toolbar control with an original single-pane or tiled-pane glyph reflecting the current layout and an SVG chevron. Keyboard focus still receives a visible accent outline. The panel leads with **Workspace view** and two illustrated radio cards: **Single agent / One chat at a time** and **Multi-agent / Chats side by side**, with the existing shortcuts below. Selection uses a restrained accent tint, not a bright outline around the toolbar button.
+
+**Snap to grid** is a secondary switch with an explanatory disabled state. A single connected display appears as a compact **Screen 1 / Main screen · always on / Connected** status row instead of an oversized locked tile. Multiple displays retain their proportional toggles with a visible explanation of what selecting them does. **Open new agents** uses **Spread across screens** and **Prefer main screen**, retaining the existing `empty-first` and `main-first` values. With one display, the panel explains that this preference applies when more screens are connected. macOS desktop controls and their permission boundaries are unchanged.
+
+Acceptance: native radio/switch semantics, readable descriptions, no horizontal panel overflow at 320/460/768/1440 CSS pixels, internal scrolling in short windows, the same screen-toggle/placement callbacks, and no new permissions or external calls. These responsive widths include folded/unfolded-sized viewports, not a claim of native foldable-device testing. Visual inspection of captured before/after evidence is required before landing.
+
+Snap to grid remains available only in free-form Multi-agent; Single agent and Fixed grid disable it without clearing the saved preference. The divider's magnetic capture range is reduced by 25%, from 4% to 3% of its containing split on either side of an evenly spaced boundary. Pane sizes, equal-spacing targets and persistence do not change.
+
+Acceptance: View follows + at wide/narrow widths; selection and snap controls update the existing wall; screens and placement call the existing bridge; Escape restores trigger focus; the popover fits the viewport; a divider within 2.9% snaps and one 3.5% away does not. No new data access, network calls, OS permissions or automatic monitor changes are introduced. Actual physical multi-monitor window placement remains the existing implementation, not a new capability.

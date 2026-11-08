@@ -184,7 +184,19 @@ final class WireTests: XCTestCase {
         let end = try XCTUnwrap(src.range(of: "]", range: start.upperBound..<src.endIndex))
         let list = src[start.upperBound..<end.lowerBound]
             .split(separator: ",").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " \n'\"")) }.filter { !$0.isEmpty }
-        XCTAssertEqual(Set(Channels.all), Set(list))
+        var expected = Set(list)
+        // Service channels are composed in the backend policy rather than inlined.
+        if expected.remove("...SERVICE_CHANNELS") != nil {
+            let serviceFile = file.deletingLastPathComponent().appendingPathComponent("service-management.ts")
+            let service = try String(contentsOf: serviceFile, encoding: .utf8)
+            for name in ["SERVICE_READ_CHANNELS", "SERVICE_CHANGE_CHANNELS"] {
+                let begin = try XCTUnwrap(service.range(of: "export const \(name) = ["))
+                let end = try XCTUnwrap(service.range(of: "]", range: begin.upperBound..<service.endIndex))
+                expected.formUnion(service[begin.upperBound..<end.lowerBound]
+                    .split(separator: ",").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " \n'\"")) })
+            }
+        }
+        XCTAssertEqual(Set(Channels.all), expected)
     }
 
     func testDecodesAPhoneSession() throws {
@@ -363,6 +375,9 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(Transcript.toolLabel(call("1", "read_file", ["path": "src/a.ts"])), "Read src/a.ts")
         XCTAssertEqual(Transcript.toolLabel(call("1", "custom_tool", [:])), "custom tool")
         XCTAssertEqual(Transcript.toolLabel(call("1", "bash", ["command": "echo   a\n b"])), "Run echo a b")
+        // A call waiting on an approval: the verb alone, as the computer's card has it.
+        XCTAssertEqual(Transcript.toolVerb(call("1", "bash", ["command": "curl -d @app.ts x"])), "Run")
+        XCTAssertEqual(Transcript.toolVerb(call("1", "fetch_url", ["url": "http://x.example/c?d=pineapple"])), "fetch url")
         var a: [String: Activity] = [:]
         a = ActivityTracker.next(a, .text(sessionId: "s", delta: "x"))
         XCTAssertEqual(a["s"], .running)

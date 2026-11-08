@@ -42,7 +42,7 @@ describe('agent question in the window', () => {
     expect(pane).not.toContain('<ComposerQuestion');
     expect(cssRule(styles, '.conversation-question')).not.toHaveProperty('overflow-y');
     const html = renderToStaticMarkup(<QuestionCard request={request} onAnswer={() => {}} onSkip={() => {}} />);
-    expect(html).toContain('data-pixel-question');
+    expect(html).toContain('data-question-navigation');
     expect(html).not.toContain('💬');
   });
   it('says what a window is waiting on inside it, not in a frame banner', async () => {

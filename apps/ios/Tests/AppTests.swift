@@ -597,6 +597,22 @@ final class LiveCardViewTests: XCTestCase {
         XCTAssertEqual(LiveCardView.count(.failed, in: card), 0)
     }
 
+    /// Protocol fallback remains generic even though the dashboard draws counts.
+    func testMinimalNeedsYouLineIsGeneric() {
+        XCTAssertEqual(LiveChatState.needsYou.phaseLine, "Needs you")
+    }
+
+    /// The two that need you are the first chips (sorted to the top from the
+    /// end of the list); the rest, and the chats past the eight the card
+    /// carries, are one "+N".
+    func testTheCrowdShowsWhatNeedsYouFirst() {
+        let card = Self.card(.standard, chats: Self.crowd)
+        let all = cardChips(card)
+        XCTAssertEqual(all.chips.prefix(2).map(\.id), ["a", "q"])
+        XCTAssertEqual(all.chips.count, 5)
+        XCTAssertEqual(all.more, 7)
+    }
+
     /// Evidence for review: apps/ios/.shots/live-card/ (git-ignored). Runs only
     /// with `TEST_RUNNER_LIVE_CARD_SHOTS=1 xcodebuild test ...`.
     func testRendersEvidence() throws {
@@ -665,11 +681,15 @@ final class RunActivitiesTests: XCTestCase {
     var loaded = true
 
     func make() -> RunActivities {
+        // The cards "iOS" has up: every one started here (or put up by a test) that has not ended.
+        let up = CardsUp(ids: { [unowned self] in started.filter { !$0.ended && $0.isLive }.map(\.id) },
+                         end: { [unowned self] id in started.first { $0.id == id }?.ended = true },
+                         take: { [unowned self] id in started.first { $0.id == id } })
         let r = RunActivities(request: { [unowned self] attributes, state in
             let card = FakeCard(attributes, state)
             started.append(card)
             return card
-        }, adoptLeftover: false)
+        }, adoptLeftover: false, cardsUp: up)
         r.level = { [unowned self] in level }
         r.source = { [unowned self] in loaded ? .init(summaries: summaries, activity: activity, computerId: "pc", computerName: "Mac") : nil }
         return r
@@ -743,6 +763,55 @@ final class RunActivitiesTests: XCTestCase {
         r.adopt(extra)
         XCTAssertTrue(extra.ended, "one card: a second is ended")
         XCTAssertTrue(r.card === pushed)
+    }
+
+    /// One card (#1912): a second card iOS has up that the app never heard of (a
+    /// push-to-start while it was suspended, an earlier launch's) ends on the next refresh.
+    func testARefreshEndsEveryOtherCardThatIsUp() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        r.refresh()
+        let mine = try XCTUnwrap(started.first)
+        let stray = FakeCard(mine.attributes, mine.state)
+        started.append(stray)
+        r.refresh()
+        XCTAssertTrue(stray.ended)
+        XCTAssertFalse(mine.ended)
+        XCTAssertTrue(r.card === mine)
+    }
+
+    /// With no card of its own the app carries on with the one that is up
+    /// (the last listed) instead of starting another, and ends the rest.
+    func testWithNoCardOfItsOwnTheAppCarriesOnWithTheOneUp() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        let attributes = NekkoCardAttributes(computerId: "pc", computerName: "Mac", level: .standard)
+        let state = LiveCardState(chats: [], focusId: nil, more: 0, listening: false, heard: "")
+        let old = FakeCard(attributes, state), pushed = FakeCard(attributes, state)
+        started = [old, pushed]
+        r.refresh()
+        XCTAssertTrue(old.ended)
+        XCTAssertTrue(r.card === pushed)
+        XCTAssertFalse(pushed.ended)
+        XCTAssertEqual(started.count, 2, "no new card")
+        XCTAssertEqual(pushed.state.chats.map(\.id), ["a"], "brought up to date")
+    }
+
+    /// A card another computer started (it was active before) is not this one's: it ends and one for the active computer starts.
+    func testACardForAnotherComputerIsReplaced() throws {
+        summaries = [chat("a", "Billing fix")]
+        activity = ["a": .running]
+        let r = make()
+        let theirs = FakeCard(NekkoCardAttributes(computerId: "other", computerName: "Laptop", level: .standard),
+                              LiveCardState(chats: [], focusId: nil, more: 0, listening: false, heard: ""))
+        started = [theirs]
+        r.refresh()
+        XCTAssertTrue(theirs.ended)
+        XCTAssertEqual(started.count, 2)
+        XCTAssertEqual(r.card?.attributes.computerId, "pc")
+        XCTAssertEqual(started.filter { !$0.ended }.count, 1)
     }
 
     func testDismissingTheOnlyFinishedChatEndsTheCard() throws {
@@ -1536,25 +1605,153 @@ final class VoiceTests: XCTestCase {
         XCTAssertNil(Dictation.phoneRefusal(authorized: true, recognizer: StubRecognizer(onDevice: true)))
     }
 
-    func testAComputerHiccupIsRetriedAndNeverFallsToThePhoneWhileOnline() async throws {
+    func testComputerDeadlineIncludesColdStartInferenceAndTransport() async throws {
+        // The daemon loops 150 times, each with a 500 ms health timeout and 200 ms sleep.
+        let startup = 150.0 * (0.5 + 0.2)
+        XCTAssertGreaterThan(Dictation.computerTranscriptionTimeout, startup + 120 + 10)
+        XCTAssertEqual(Dictation.computerTranscriptionTimeout, 300)
+        let wav = Dictation.wav([0, 0.5])
+        let responses: [JSONValue] = [.string("computer"), ["text": "computer"]]
+        for response in responses {
+            var calls = 0
+            let text = try await Dictation.transcribeOnComputer(wav) { channel, args, timeout in
+                calls += 1
+                XCTAssertEqual(channel, Channels.voiceTranscribe)
+                XCTAssertEqual(args, [wavArg(wav)])
+                XCTAssertEqual(timeout, Dictation.computerTranscriptionTimeout)
+                return response
+            }
+            XCTAssertEqual(text, "computer")
+            XCTAssertEqual(calls, 1)
+        }
+    }
+
+    func testAComputerTimeoutIsNotRetriedOrSentToThePhoneWhileOnline() async throws {
         var calls = 0
         var phoned = 0
         let phone: (Data) async throws -> String? = { _ in phoned += 1; return "phone" }
-        let flaky: (Data) async throws -> String = { _ in calls += 1; if calls == 1 { throw RelayError("Timed out") }; return "computer" }
-        let once = try await Dictation.transcribe(Data(), computer: flaky, online: { true }, phone: phone)
-        XCTAssertEqual(once, "computer")
-        let down: (Data) async throws -> String = { _ in throw RelayError("Timed out") }
+        let down: (Data) async throws -> String = { _ in calls += 1; throw RelayError("Timed out") }
         do {
             _ = try await Dictation.transcribe(Data(), computer: down, online: { true }, phone: phone)
             XCTFail("the computer's failure is said")
         } catch {
             XCTAssertEqual(error.localizedDescription, "Timed out")
         }
+        XCTAssertEqual(calls, 1, "a timed-out request may still be running on the computer")
         XCTAssertEqual(phoned, 0)
         let offline = try await Dictation.transcribe(Data(), computer: down, online: { false }, phone: phone)
         XCTAssertEqual(offline, "phone")
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(phoned, 1)
         let noWhisper = try await Dictation.transcribe(Data(), computer: nil, online: { true }, phone: phone)
         XCTAssertEqual(noWhisper, "phone")
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(phoned, 2)
+    }
+
+    func testComputerCancellationNeverRetriesOrFallsBackEvenWhenOffline() async {
+        for online in [true, false] {
+            var calls = 0
+            var phoned = 0
+            do {
+                _ = try await Dictation.transcribe(Data(), computer: { _ in
+                    calls += 1
+                    throw CancellationError()
+                }, online: { online }, phone: { _ in phoned += 1; return "phone" })
+                XCTFail("cancellation must propagate")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(calls, 1)
+            XCTAssertEqual(phoned, 0)
+        }
+    }
+
+    func testAlreadyCancelledTranscriptionNeverStartsEitherEngine() async {
+        for hasComputer in [true, false] {
+            var calls = 0
+            var phoned = 0
+            let task = Task { () throws -> String? in
+                withUnsafeCurrentTask { $0?.cancel() }
+                let computer: ((Data) async throws -> String)? = hasComputer ? { _ in
+                    calls += 1
+                    return "computer"
+                } : nil
+                return try await Dictation.transcribe(Data(), computer: computer, online: { false }, phone: { _ in
+                    phoned += 1
+                    return "phone"
+                })
+            }
+            do {
+                _ = try await task.value
+                XCTFail("cancellation must propagate before either engine starts")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(calls, 0)
+            XCTAssertEqual(phoned, 0)
+        }
+    }
+
+    func testCancellationDuringComputerRequestRejectsLateSuccessAndFailure() async {
+        for fails in [false, true] {
+            var calls = 0
+            var phoned = 0
+            let task = Task { () throws -> String? in
+                try await Dictation.transcribe(Data(), computer: { _ in
+                    calls += 1
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    if fails { throw RelayError("Connection lost") }
+                    return "late computer words"
+                }, online: { false }, phone: { _ in phoned += 1; return "phone" })
+            }
+            do {
+                _ = try await task.value
+                XCTFail("cancellation must win over a late result or transport error")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(calls, 1)
+            XCTAssertEqual(phoned, 0)
+        }
+    }
+
+    func testCancellationDuringPhoneRequestRejectsLateSuccessAndFailure() async {
+        for fails in [false, true] {
+            var phoned = 0
+            let task = Task { () throws -> String? in
+                try await Dictation.transcribe(Data(), computer: nil, online: { false }, phone: { _ in
+                    phoned += 1
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    if fails { throw RelayError("Recognizer stopped") }
+                    return "late phone words"
+                })
+            }
+            do {
+                _ = try await task.value
+                XCTFail("phone cancellation must propagate")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(phoned, 1)
+        }
+    }
+
+    func testSuccessfulComputerTranscriptionUsesOneRequest() async throws {
+        var calls = 0
+        let text = try await Dictation.transcribe(Data(), computer: { _ in
+            calls += 1
+            return "computer"
+        }, online: { true }, phone: { _ in
+            XCTFail("no fallback after success")
+            return "phone"
+        })
+        XCTAssertEqual(text, "computer")
+        XCTAssertEqual(calls, 1)
     }
 
     func testWordsAfterTheComposerIsGoneGoToTheChatsDraft() async {

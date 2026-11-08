@@ -1,3 +1,4 @@
+import { SubagentRoute } from './SubagentRoute.js';
 import { chatArtifacts } from '../chatArtifacts.js';
 import { MonitorArtifacts } from './MonitorArtifacts.js';
 import { MonitorProject } from './MonitorProject.js';
@@ -102,6 +103,7 @@ export function PlanRail({ sessionId, session, onMinimize }: {
               return <button key={c.id} className="flex w-full items-start gap-2 rounded-lg px-1 py-1 text-left hover:bg-surface-2" onClick={() => openChatPane(c.id)} title={`Open ${c.title}`}>
                 <RobotIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
                 <span className="min-w-0 flex-1"><span className="block truncate text-xs text-ink-soft">{c.title}</span>
+                  <SubagentRoute child={c} />
                   <span className="block truncate text-2xs text-ink-faint">{activitySentence(a)}</span>
                 </span>
               </button>;

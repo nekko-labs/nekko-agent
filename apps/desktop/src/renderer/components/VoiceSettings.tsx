@@ -16,24 +16,49 @@ export function VoiceSettings({ compact = false }: { compact?: boolean }) {
   const [level, setLevel] = useState<number | null>(null);
   const [intro, setIntro] = useState(false);
   const capture = useRef<Awaited<ReturnType<typeof startVoiceCapture>> | null>(null);
+  const testGeneration = useRef(0);
+  const testStarting = useRef(false);
+  const stopTest = () => {
+    testGeneration.current++;
+    testStarting.current = false;
+    capture.current?.abort();
+    capture.current = null;
+  };
   useEffect(() => {
     let live = true;
     const refresh = () => window.nekko.voiceStatus().then(s => { if (live) setStatus(s); }).catch(e => { if (live) setError(e.message); });
     void refresh(); const timer = setInterval(refresh, 1000);
-    return () => { live = false; clearInterval(timer); capture.current?.abort(); };
+    return () => { live = false; clearInterval(timer); stopTest(); };
   }, []);
+  useEffect(() => { if (voice.enabled === false) { stopTest(); setLevel(null); } }, [voice.enabled]);
   const update = async (patch: Preferences) => {
-    try { const next = await window.nekko.updateSettings({ voice: { ...useStore.getState().settings?.voice, ...patch } }); useStore.setState({ settings: next }); if (patch.enabled === false) { capture.current?.abort(); capture.current = null; setLevel(null); } }
+    if (patch.enabled === false) { stopTest(); setLevel(null); }
+    try { const next = await window.nekko.updateSettings({ voice: { ...useStore.getState().settings?.voice, ...patch } }); useStore.setState({ settings: next }); }
     catch (e) { setError((e as Error).message); }
   };
   const act = async (work: () => Promise<unknown>) => { setError(''); try { await work(); setStatus(await window.nekko.voiceStatus()); } catch (e) { setError((e as Error).message); } };
   const test = async () => {
-    if (capture.current) { capture.current.abort(); capture.current = null; setLevel(null); return; }
-    await act(async () => {
-      capture.current = await startVoiceCapture({ ...voice, onLevel: setLevel, onSilence: () => { capture.current?.abort(); capture.current = null; setLevel(null); } });
-      setDevices((await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput'));
+    if (capture.current || testStarting.current) { stopTest(); setLevel(null); return; }
+    const generation = ++testGeneration.current;
+    const current = () => generation === testGeneration.current;
+    testStarting.current = true;
+    setError('');
+    try {
+      const local = await startVoiceCapture({ ...voice, onLevel: n => { if (current()) setLevel(n); }, onSilence: () => { if (current()) { stopTest(); setLevel(null); } } });
+      if (!current()) { local.abort(); return; }
+      capture.current = local;
+      testStarting.current = false;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      if (!current()) return;
+      setDevices(devices.filter(d => d.kind === 'audioinput'));
       setPermission('Microphone accessible');
-    });
+      const status = await window.nekko.voiceStatus();
+      if (current()) setStatus(status);
+    } catch (e) {
+      if (!current()) return;
+      stopTest(); setLevel(null);
+      setError((e as Error).message);
+    }
   };
   const rows = engineRows(status, voice);
   return <section className={compact ? 'space-y-3' : 'card mt-5 p-5'} aria-label="Voice settings">

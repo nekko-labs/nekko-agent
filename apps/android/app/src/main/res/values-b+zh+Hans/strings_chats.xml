@@ -199,6 +199,12 @@
     <string name="chats_no_providers">你电脑上的 Nekko Agent 没有开启任何模型提供方。请在其模型设置中添加或启用一个。</string>
     <string name="chats_search_models">搜索模型</string>
     <string name="chats_starred">已加星标</string>
+    <string name="chats_model_source">模型来源</string>
+    <string name="chats_scope_all">全部</string>
+    <string name="chats_scope_cloud">云</string>
+    <string name="chats_scope_local">本地</string>
+    <string name="chats_scope_no_local">这台电脑上没有本地模型服务器。</string>
+    <string name="chats_scope_no_cloud">这台电脑上没有云端提供商。</string>
     <string name="chats_list_models_failed">无法列出其模型。%1$s</string>
     <string name="chats_retry">重试</string>
     <string name="chats_asking">正在询问你的电脑…</string>
@@ -241,4 +247,5 @@
     <string name="chats_group_week">过去 7 天</string>
     <string name="chats_group_month">过去 30 天</string>
     <string name="chats_group_older">更早</string>
+    <string name="chats_tool_step_up">在 %1$s 上的此聊天中始终允许 %2$s</string>
 </resources>

@@ -74,6 +74,30 @@ class DraftStoreTest {
         assertEquals("""{}""", (files.files["c1" to "drafts"] as kotlinx.serialization.json.JsonObject)["drafts"].toString())
     }
 
+    @Test fun `adding or removing a photo survives a restart without waiting for the typing pause`() = runTest {
+        val files = MemoryOfflineFiles()
+        val store = DraftStore(files, backgroundScope, debounceMs = 60_000)
+        store.load("c1")
+        val photo = "data:image/jpeg;base64," + "A".repeat(200_000)
+        for (key in listOf("s1", DraftStore.NEW_CHAT)) {
+            store.set(key, Draft("Keep this", images = listOf(photo)))
+            val restarted = DraftStore(files, backgroundScope)
+            restarted.load("c1")
+            assertEquals(Draft("Keep this", images = listOf(photo)), restarted.draft(key))
+
+            store.set(key, Draft("Keep this"))
+            val removed = DraftStore(files, backgroundScope)
+            removed.load("c1")
+            assertEquals("Keep this", removed.draft(key).text)
+            assertTrue(removed.draft(key).images.isEmpty())
+        }
+        // Typing alone still waits for the pause.
+        val saves = files.saves
+        store.set("s1", Draft("Keep this, and more"))
+        runCurrent()
+        assertEquals(saves, files.saves)
+    }
+
     @Test fun `an empty draft is dropped, hand back and move merge`() = runTest {
         val store = DraftStore(MemoryOfflineFiles(), backgroundScope, debounceMs = 0)
         store.load("c1")

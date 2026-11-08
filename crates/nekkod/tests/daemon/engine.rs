@@ -311,13 +311,13 @@ async fn downloads_models_itself_and_merges_the_hosts_jobs() {
 /// system's own tar (bsdtar on Windows and macOS writes zip from the name).
 fn engine_archive(dir: &std::path::Path) -> (String, &'static str, Vec<u8>) {
     let (build, name, exe) = if cfg!(windows) {
-        ("win-x64-cpu", "llama-b12017-bin-win-cpu-x64.zip", "llama-server.exe")
+        ("win-x64-cpu", "llama-b12024-bin-win-cpu-x64.zip", "llama-server.exe")
     } else if cfg!(target_os = "macos") {
-        ("macos-arm64-metal", "llama-b12017-bin-macos-arm64.tar.gz", "llama-server")
+        ("macos-arm64-metal", "llama-b12024-bin-macos-arm64.tar.gz", "llama-server")
     } else if cfg!(target_arch = "aarch64") {
-        ("linux-arm64-cpu", "llama-b12017-bin-ubuntu-arm64.tar.gz", "llama-server")
+        ("linux-arm64-cpu", "llama-b12024-bin-ubuntu-arm64.tar.gz", "llama-server")
     } else {
-        ("linux-x64-cpu", "llama-b12017-bin-ubuntu-x64.tar.gz", "llama-server")
+        ("linux-x64-cpu", "llama-b12024-bin-ubuntu-x64.tar.gz", "llama-server")
     };
     let src = dir.join("archive-src/build/bin");
     std::fs::create_dir_all(&src).unwrap();
@@ -354,11 +354,11 @@ async fn fake_github(name: &'static str, archive: Vec<u8>) -> u16 {
     let port = listener.local_addr().unwrap().port();
     let digest: String = sha2::Sha256::digest(&archive).iter().map(|b| format!("{b:02x}")).collect();
     let release = json!({
-        "tag_name": "b12017",
+        "tag_name": "b12024",
         "assets": [{ "name": name, "browser_download_url": format!("http://127.0.0.1:{port}/dl/{name}"), "size": archive.len(), "digest": format!("sha256:{digest}") }],
     });
     let app = axum::Router::new()
-        .route("/repos/ggml-org/llama.cpp/releases/tags/b12017", get(move || async move { axum::Json(release) }))
+        .route("/repos/ggml-org/llama.cpp/releases/tags/b12024", get(move || async move { axum::Json(release) }))
         .route(&format!("/dl/{name}"), get(move || async move { archive }));
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -380,12 +380,12 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, preview) = post(d.port, "engine:installPreview", json!(["llama", build]), Some(TOKEN)).await;
     assert_eq!(
         (preview["version"].clone(), preview["files"][0]["name"].clone()),
-        (json!("b12017"), json!(name)),
+        (json!("b12024"), json!(name)),
         "{preview}"
     );
     let (status, started) = post(d.port, "engine:install", json!([build, "llama"]), Some(TOKEN)).await;
     assert_eq!(status, 200, "{started}");
-    assert_eq!(started["message"], "Downloading llama.cpp b12017.", "{started}");
+    assert_eq!(started["message"], "Downloading llama.cpp b12024.", "{started}");
     let job =
         job_until(d.port, started["jobId"].as_str().unwrap(), |j| j["state"] == "done" || j["state"] == "failed").await;
     assert_eq!(job["state"], "done", "{job}");
@@ -395,7 +395,7 @@ async fn installs_and_removes_the_engine_itself() {
     assert!(!data.join("engine").join(&build).join(name).exists(), "the archive is gone once unpacked");
     let record: Value =
         serde_json::from_str(&std::fs::read_to_string(data.join("engine/engine.json")).unwrap()).unwrap();
-    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12017")));
+    assert_eq!((record["buildId"].clone(), record["version"].clone()), (json!(build), json!("b12024")));
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -405,7 +405,7 @@ async fn installs_and_removes_the_engine_itself() {
     let (_, detected) = post(d.port, "engine:detect", json!(["llama"]), Some(TOKEN)).await;
     assert_eq!(
         (detected["source"].clone(), detected["version"].clone()),
-        (json!("managed"), json!("b12017")),
+        (json!("managed"), json!("b12024")),
         "{detected}"
     );
     assert!(
@@ -641,7 +641,7 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
         json!({ "engineBinPath": fake_llama(), "engine": { "port": port, "modelFolders": [] } }).to_string(),
     )
     .unwrap();
-    let session = json!({ "id": "s_img", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let session = json!({ "id": "s_img", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
     let d = start_with_env(&data, json!({}), &[]);
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
@@ -670,6 +670,8 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     assert_eq!(drawn, fake_base64(expected.as_bytes()), "{reply}");
     assert_eq!(reply["generated"]["seed"], 42);
     assert_eq!(reply["generated"]["modelId"], json!(id));
+    let (_, photo) = post(d.port, "session:photo", json!(["s_img", reply["id"], 0]), Some(TOKEN)).await;
+    assert_eq!(photo, image, "the actual generated assistant attachment is readable without image:fetch");
 
     // The stages, then done: loading (the model was cold), generating.
     let mut stages = Vec::new();
@@ -717,22 +719,35 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     let seed = saved["imageParams"]["seed"].clone();
     assert_eq!(seed, -1, "the chat keeps asking for a fresh seed");
 
-    // A missing prompt is refused with the host's words, told to the chat.
-    let (_, _) = post(
+    // Invalid input is refused before a turn or transcript write.
+    let (_, refused) = post(
         d.port,
         "chat:generateImage",
         json!([{ "sessionId": "s_img", "prompt": " ", "params": params }]),
         Some(TOKEN),
     )
     .await;
-    let mut refused = false;
-    while let Some(frame) = next_json(&mut events, Duration::from_secs(5)).await {
-        if frame["channel"] == "agent:event" && frame["payload"]["message"] == "Describe the image you want first." {
-            refused = true;
-            break;
-        }
-    }
-    assert!(refused, "the chat was told why");
+    assert_eq!(refused["error"], "Invalid image request: prompt");
+
+    // Photos to a model that cannot edit them (this one has no known set) are refused by
+    // the turn itself, whichever client sent them (decision 0069): the chat is told, nothing is drawn.
+    let photo = "data:image/png;base64,iVBORw0KGgo=";
+    let edit = json!({ "sessionId": "s_img", "prompt": "make it blue", "params": params, "images": [photo], "size": { "width": 768, "height": 1024 } });
+    let (status, body) = post(d.port, "chat:generateImage", json!([edit]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
+    let messages = saved["messages"].as_array().unwrap();
+    let (asked, last) = (&messages[messages.len() - 2], messages.last().unwrap());
+    assert_eq!((asked["content"].clone(), asked["images"].clone()), (json!("make it blue"), json!([photo])));
+    assert_eq!(
+        last["content"],
+        "The image could not be generated: This model can't change photos. Choose a model that edits photos, or send the prompt without a photo.",
+        "{last}"
+    );
+    assert_eq!(last.get("images"), None, "nothing was generated");
+    let (_, running) = post(d.port, "chat:running", json!([]), Some(TOKEN)).await;
+    assert_eq!(running, json!([]));
     post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
     drop(d);
     std::fs::remove_dir_all(root).ok();
@@ -878,4 +893,174 @@ async fn downloads_a_decision_model_from_its_release_through_the_queue_and_check
     assert_eq!(job["state"], "done", "{job}");
     drop(d);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_downloaded_picture_model_fetches_its_supporting_files_itself() {
+    use axum::extract::Path;
+    use axum::routing::get;
+    let root = std::env::temp_dir().join(format!("nekkod-image-companions-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let home = root.join("home");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
+
+    // A Z-Image Turbo quant, and every other repo's files as a few bytes.
+    let gguf = tiny_gguf("z-image", "Z-Image Turbo");
+    let size = gguf.len();
+    let app = axum::Router::new()
+        .route("/api/models/acme/z-image-turbo-GGUF", get(|| async { axum::Json(json!({ "tags": ["gguf"] })) }))
+        .route(
+            "/api/models/acme/z-image-turbo-GGUF/tree/main",
+            get(move || async move {
+                axum::Json(json!([{ "type": "file", "oid": "x", "size": size, "path": "z_image_turbo-Q4_K.gguf" }]))
+            }),
+        )
+        .route("/acme/z-image-turbo-GGUF/resolve/main/{file}", get(move || async move { gguf.clone() }))
+        .route(
+            "/{owner}/{repo}/resolve/main/{*file}",
+            get(|Path((_o, _r, file)): Path<(String, String, String)>| async move { format!("weights of {file}") }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let hf = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    let h = home.to_string_lossy().to_string();
+    let d = start_with_env(
+        &data,
+        json!({ "huggingFaceUrl": format!("http://127.0.0.1:{hf}") }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+
+    let (_, started) =
+        post(d.port, "engine:downloadModel", json!(["acme/z-image-turbo-GGUF", "Q4_K"]), Some(TOKEN)).await;
+    assert_eq!(started["ok"], true, "{started}");
+    let id = started["jobId"].as_str().unwrap().to_string();
+    let done =
+        job_until(d.port, &id, |j| !matches!(j["state"].as_str(), Some("queued" | "downloading" | "verifying"))).await;
+    assert_eq!(done["state"], "done", "{done}");
+
+    // Nobody asked for them: the finished download queued the VAE and the text encoder.
+    for file in ["vae-z-image.safetensors", "llm-qwen3-4b-instruct-2507-q4_k_m.gguf"] {
+        let job = job_until(d.port, &format!("image-companions:{file}"), |j| j["state"] == "done").await;
+        assert_eq!(job["group"].as_str().map(|g| g.starts_with("image-companions:")), Some(true), "{job}");
+        assert!(data.join("models/.companions/image").join(file).exists(), "{file}");
+    }
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().unwrap();
+    let (_, status) = post(d.port, "engine:imageCompanions", json!([row["id"]]), Some(TOKEN)).await;
+    assert_eq!((status["setId"].clone(), status["ready"].clone()), (json!("z-image"), json!(true)), "{status}");
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_makes_a_clip_with_a_video_model() {
+    let root = std::env::temp_dir().join(format!("nekkod-clip-turn-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // A Wan 2.2 TI2V 5B quant, its VAE and text encoder in place, and the stand-in runtime.
+    let model = data.join("models/image/QuantStack_Wan2.2-TI2V-5B-GGUF/Wan2.2-TI2V-5B-Q4_K_M.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("wan2", "Wan2.2 TI2V 5B")).unwrap();
+    let shared = data.join("models/.companions/image");
+    std::fs::create_dir_all(&shared).unwrap();
+    for f in ["vae-wan2.2.safetensors", "t5xxl-umt5-xxl-q8_0.gguf"] {
+        std::fs::write(shared.join(f), "x").unwrap();
+    }
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    let port = free_port();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": port, "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let session = json!({ "id": "s_clip", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_clip.json"), session.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let id = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").expect("the video model")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), Some("null")).await.unwrap();
+
+    // The chat's 1344x768 becomes the clip's 832x480; a photo is the first frame.
+    let photo = "data:image/png;base64,AAAA";
+    let params = json!({ "modelId": id, "width": 1344, "height": 768, "steps": 20, "cfgScale": 6, "seed": 5 });
+    let opts = json!({ "sessionId": "s_clip", "prompt": "waves rolling in", "params": params, "images": [photo] });
+    let (status, body) = post(d.port, "chat:generateImage", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_clip.json")).unwrap()).unwrap();
+    let reply = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    let clip = reply["images"][0].as_str().unwrap_or_else(|| panic!("no clip in the reply: {reply}"));
+    let sent = clip.strip_prefix("data:image/webp;base64,").unwrap_or_else(|| panic!("not an animated WebP: {clip}"));
+    assert_eq!(sent, fake_base64(format!("waves rolling in|832x480|33@16|webp|{photo}").as_bytes()));
+    assert_eq!(reply["generated"]["video"], json!({ "frames": 33, "fps": 16 }));
+    assert_eq!((reply["generated"]["width"].clone(), reply["generated"]["height"].clone()), (json!(832), json!(480)));
+    // The chat keeps its own size for pictures.
+    assert_eq!(saved["imageParams"]["width"], 1344);
+
+    let mut stages = Vec::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(2)).await {
+        let p = &ev["payload"];
+        if ev["channel"] == "agent:event" && p["sessionId"] == "s_clip" {
+            stages.push(format!("{}:{}", p["type"].as_str().unwrap(), p["label"].as_str().unwrap_or("")));
+            if p["type"] == "done" {
+                break;
+            }
+        }
+    }
+    assert_eq!(
+        stages,
+        [
+            "image_status:Making a 832×480 clip",
+            "image_status:Loading the video model",
+            "image_status:Making a 832×480 clip",
+            "image_status:Making a 832×480 clip · step 1 of 2",
+            "done:",
+        ],
+        "{stages:?}"
+    );
+
+    // A job that completes with no clip is a failure the chat is told, not a broken picture.
+    let empty = json!({ "sessionId": "s_clip", "prompt": "empty sea", "params": params });
+    post(d.port, "chat:generateImage", json!([empty]), Some(TOKEN)).await;
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_clip.json")).unwrap()).unwrap();
+    let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(last["content"], "The image could not be generated: The video model finished without a clip.", "{last}");
+    assert_eq!(last.get("images"), None, "{last}");
+
+    // Stopping a clip cancels its job on the server.
+    let port2 = d.port;
+    let slow = json!({ "sessionId": "s_clip", "prompt": "slow tide", "params": params });
+    let running = tokio::spawn(async move { post(port2, "chat:generateImage", json!([slow]), Some(TOKEN)).await });
+    let marker = std::path::PathBuf::from(format!("{}.cancelled", model.display()));
+    until("the clip to be generating", Duration::from_secs(20), || async {
+        let (_, running) = post(port2, "chat:running", json!([]), Some(TOKEN)).await;
+        running.as_array().is_some_and(|r| r.contains(&json!("s_clip"))).then_some(())
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    post(d.port, "chat:abort", json!(["s_clip"]), Some(TOKEN)).await;
+    let (status, _) = running.await.unwrap();
+    assert_eq!(status, 200);
+    until("the job to be cancelled on the server", Duration::from_secs(10), || {
+        let marker = marker.clone();
+        async move { marker.is_file().then_some(()) }
+    })
+    .await;
+    post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
 }

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Settings and its sections, the computers and computer pages, monitors, automations, usage, providers, step-up, safety exits and the app lock. -->
 <resources>
+    <!-- Renamed permission copy is temporarily English-only (#2095). Remove translatable=false when retranslated; old localized keys are not used. -->
     <!-- Shared -->
     <string name="settings_title">Settings</string>
     <string name="settings_back">Back</string>
@@ -185,14 +186,11 @@
     <string name="settings_confirm_delete_detail">Ask first, here and on %1$s</string>
     <string name="settings_pc_footer_online">Saved on %1$s, the same settings as in Nekko Agent there. Each chat can still change its own mode.</string>
     <string name="settings_pc_footer_offline">%1$s is offline. Connect to change its settings.</string>
-    <string name="settings_yolo_title">Use YOLO for new chats?</string>
-    <string name="settings_yolo_text">New chats on %1$s will run commands and edit files without asking you first. Your deny rules still block. You can switch back here or on %1$s at any time.</string>
-    <string name="settings_use_yolo">Use YOLO</string>
     <string name="settings_step_up_switch">Switch new chats on %1$s to %2$s</string>
     <string name="settings_step_up_change">Change %1$s’s settings</string>
-    <string name="settings_mode_ask">Ask</string>
-    <string name="settings_mode_guardrails">Guardrails</string>
-    <string name="settings_mode_yolo">YOLO</string>
+    <string name="permission_always_ask" translatable="false">Always ask</string>
+    <string name="permission_ask_when_matters" translatable="false">Ask when it matters</string>
+    <string name="permission_no_restrictions" translatable="false">No restrictions</string>
     <string name="settings_mode_ask_detail">Confirm every file write and command before it runs</string>
     <string name="settings_mode_guardrails_detail">Run freely, but ask or deny per your guardrail rules</string>
     <string name="settings_mode_yolo_detail">Run everything without confirming; deny rules still block</string>
@@ -427,4 +425,12 @@
     <string name="settings_card_detailed_detail">Adds the first line of the latest reply</string>
     <string name="settings_card_footer_private">No chat text leaves your computer for the lock screen.</string>
     <string name="settings_card_footer_text">Chat names and steps show when the phone is unlocked; a locked phone that hides sensitive content shows the Minimal words. Allow asks you to unlock first.</string>
+    <string name="settings_warn_no_restrictions" translatable="false">Warn before No restrictions</string>
+    <string name="settings_warn_no_restrictions_detail" translatable="false">Explain what No restrictions lets through before a chat or a computer\'s default switches to it</string>
+    <!-- Legacy translation keys, unused by permission UI. Kept until locales are retranslated. -->
+    <string name="settings_mode_ask">Ask</string>
+    <string name="settings_mode_guardrails">Guardrails</string>
+    <string name="settings_mode_yolo">YOLO</string>
+    <string name="settings_warn_yolo">Warn before YOLO</string>
+    <string name="settings_warn_yolo_detail">Explain what YOLO lets through before a chat or a computer\'s default switches to it</string>
 </resources>

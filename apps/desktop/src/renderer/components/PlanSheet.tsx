@@ -1,5 +1,6 @@
+import { SubagentRoute } from './SubagentRoute.js';
 import React, { useMemo, useState } from 'react';
-import type { ChatMessage, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
+import type { ChatMessage, IssueInfo, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
 import { getLiveRun, runningSessionIds, useLiveRunsVersion } from '../liveRuns.js';
 import { planStepLinks, type PlanStepLinks, type ProjectLink } from '../planStepLinks.js';
@@ -7,11 +8,14 @@ import { sheetPlan } from '../claudeAgentPlan.js';
 import { useShown } from '../simpleMode.js';
 import { useStore } from '../store.js';
 import { CheckIcon, CloseIcon, RocketIcon, TagIcon, WarningIcon } from '../icons.js';
+import { GfIcon } from '../gentleface-icons.js';
 import type { ChatArtifact } from '../chatArtifacts.js';
 import { canonicalPrUrl, progressAge, safeProgressLink } from './WorkProgress.js';
 import { runPrAction } from './PrCard.js';
 import { PlanWorking } from './PlanWorking.js';
 import { StatusIcon, type AgentStatus } from './WorkspaceCard.js';
+import { PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
+import { useIssueInfo } from './PrLinkChip.js';
 import { NO_STATUS, childActivity } from '../subagentActivity.js';
 
 /**
@@ -47,28 +51,20 @@ function StepMark({ step, paused }: { step: Pick<PlanStep, 'status' | 'verificat
   return <span className="mt-1 grid h-3 w-3 shrink-0 place-items-center" data-plan-check={v?.status} role="img" aria-label={label} title={title}>{glyph}</span>;
 }
 
-/** One PR as a chip: number, state, and CI from the PR poller's cached rollup. */
-export function prChipLabel(url: string, info?: PrInfo): { text: string; tone: string; status: PrStatus } {
+/**
+ * One PR as a chip: number, state, and CI from the PR poller's cached rollup.
+ * The glyph's hue is the live status: an open PR takes its CI's colour, a
+ * draft without CI stays grey, merged and closed take GitHub's.
+ */
+export function prChipLabel(url: string, info?: PrInfo): { text: string; tone: string } {
   const number = info?.number ?? parsePrUrl(url)?.number;
-  if (!info) return { text: `PR #${number}`, tone: 'var(--ink-faint)', status: 'unknown' };
-  if (info.state === 'merged') return { text: `PR #${number} · Merged`, tone: 'var(--accent)', status: 'merged' };
-  if (info.state === 'closed') return { text: `PR #${number} · Closed`, tone: 'var(--ink-faint)', status: 'closed' };
+  if (!info) return { text: `PR #${number}`, tone: 'var(--ink-faint)' };
+  if (info.state === 'merged') return { text: `PR #${number} · Merged`, tone: 'var(--merged-ink)' };
+  if (info.state === 'closed') return { text: `PR #${number} · Closed`, tone: 'var(--danger)' };
   const p = info.checkProgress;
   const ci = info.checks === 'failing' ? 'CI failing' : info.checks === 'passing' ? 'CI passing' : info.checks === 'pending' ? (p?.total ? `CI ${p.completed} of ${p.total}` : 'CI running') : 'No CI';
-  const tone = info.checks === 'failing' ? 'var(--danger)' : info.checks === 'passing' ? 'var(--success)' : info.checks === 'pending' ? 'var(--warning)' : 'var(--ink-faint)';
-  const status: PrStatus = info.checks === 'failing' ? 'failing' : info.checks === 'passing' ? 'passing' : info.checks === 'pending' ? 'pending' : info.isDraft ? 'draft' : 'open';
-  return { text: `PR #${number} · ${info.isDraft ? 'Draft' : 'Open'} · ${ci}`, tone, status };
-}
-
-type PrStatus = 'draft' | 'open' | 'pending' | 'passing' | 'failing' | 'merged' | 'closed' | 'unknown';
-
-/** The dot the chip wears, matching the PR status badges elsewhere in the app. */
-function PrStatusDot({ status, tone }: { status: PrStatus; tone: string }) {
-  if (status === 'passing') return <span className="plan-sheet-status" data-pr-status="passing" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.4" opacity="0.3" /><path d="m5 8.2 2.2 2.2L11 6.6" /></svg></span>;
-  if (status === 'failing') return <span className="plan-sheet-status" data-pr-status="failing" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.4" opacity="0.3" /><path d="M5.5 5.5 10.5 10.5M10.5 5.5 5.5 10.5" /></svg></span>;
-  if (status === 'pending') return <span className="plan-sheet-status is-pending" data-pr-status="pending" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="8" cy="8" r="6.4" opacity="0.3" /><path d="M8 3.6a4.4 4.4 0 0 1 4.4 4.4" /></svg></span>;
-  if (status === 'merged') return <span className="plan-sheet-status" data-pr-status="merged" style={{ color: tone }} aria-hidden><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="4" r="1.6" /><circle cx="5" cy="12" r="1.6" /><circle cx="11.5" cy="12" r="1.6" /><path d="M5 5.6v4.8M6.6 12h3.3" /><path d="M5 8.4c0 2 2 3.6 4.6 3.6" /></svg></span>;
-  return <span className="plan-sheet-dot" style={{ background: tone }} />;
+  const tone = info.checks === 'failing' ? 'var(--danger)' : info.checks === 'pending' ? 'var(--warning)' : info.checks === 'passing' ? 'var(--success)' : prTone(info);
+  return { text: `PR #${number} · ${info.isDraft ? 'Draft' : 'Open'} · ${ci}`, tone };
 }
 
 /** The approve, decline and merge round pills that fade in when the pointer is on a PR chip. */
@@ -142,8 +138,22 @@ function Pass({ step }: { step: PlanStep }) {
   </span>;
 }
 
+/** A GitHub issue's glyph and hue, as GitHub draws them: open, done, or closed as not planned. */
+export function issueLook(issue: IssueInfo) {
+  if (issue.state === 'open') return { icon: 'record', tone: 'var(--success)', label: 'Open' } as const;
+  if (issue.stateReason === 'not_planned') return { icon: 'ban', tone: 'var(--ink-faint)', label: 'Not planned' } as const;
+  return { icon: 'check-circle', tone: 'var(--merged-ink)', label: 'Done' } as const;
+}
+
+/** A task link. A GitHub issue wears its live state; other trackers keep the tag. */
 function ProjectChip({ link }: { link: ProjectLink }) {
-  return <button type="button" className="plan-sheet-chip" data-plan-chip="project" title={link.url} onClick={() => open(link.url)}><TagIcon className="h-3 w-3" />Task: {link.label}</button>;
+  const issue = useIssueInfo(link.url);
+  const look = issue && issueLook(issue);
+  return <button type="button" className="plan-sheet-chip" data-plan-chip="project" data-issue-state={look ? look.icon : undefined}
+    title={issue ? `${link.label} · ${look!.label} · ${issue.title}` : link.url} onClick={() => open(link.url)}>
+    {look ? <span className="inline-flex" style={{ color: look.tone }}><GfIcon name={look.icon} className="h-3 w-3" /></span> : <TagIcon className="h-3 w-3" />}
+    Task: {link.label}{look && <span className="sr-only"> ({look.label})</span>}
+  </button>;
 }
 
 type Child = { id: string; title: string; running: boolean };
@@ -186,6 +196,7 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
     .map(child => ({ child, ...subagentCardState(child, running.has(child.id) || !!getLiveRun(child.id) || !!child.activeRun) }))
     .sort((a, b) => CARD_ORDER[a.status] - CARD_ORDER[b.status] || b.child.createdAt - a.child.createdAt);
   return <div className="plan-sheet-agents" data-plan-subagents role="group" aria-label="Sub-agents">
+    <span className="plan-sheet-agents-head" aria-hidden><GfIcon name="bots" className="h-3.5 w-3.5" />Agents</span>
     {cards.map(({ child, status, detail }) => {
       const title = child.title || 'Sub-agent';
       return <button key={child.id} type="button" className="plan-sheet-agent" data-subagent-card={child.id} data-status={status}
@@ -194,6 +205,7 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
           <StatusIcon status={status} />
           <span className="min-w-0 flex-1 truncate text-ink" dir="auto">{title}</span>
         </span>
+        <SubagentRoute child={child} />
         <span className="plan-sheet-agent-detail truncate" dir="auto">{CARD_STATUS[status]}{detail ? ` · ${detail}` : ''}</span>
       </button>;
     })}
@@ -291,10 +303,11 @@ export function PlanSheet({ sessionId, session, streaming, prs, basePath, onOpen
   }
   const prChip = (url: string) => {
     const info = prInfo.get(url);
-    const { text, tone, status } = prChipLabel(url, info);
+    const status = prStatus(info ?? null);
+    const { text, tone } = prChipLabel(url, info);
     return <span key={url} className="plan-sheet-pr" data-plan-pr={info?.number ?? 'unknown'}>
-      <button type="button" className="plan-sheet-chip" data-plan-chip="pr" title={info?.title ?? url} onClick={() => open(url)}>
-        <PrStatusDot status={status} tone={tone} />{text}
+      <button type="button" className="plan-sheet-chip" data-plan-chip="pr" data-pr-status={status} title={info?.title ?? url} onClick={() => open(url)}>
+        <span className="inline-flex" style={{ color: tone }}><PrStatusIcon status={status} className="h-3 w-3" /></span>{text}
       </button>
       <PrHoverActions url={url} info={info} sessionId={sessionId} />
     </span>;

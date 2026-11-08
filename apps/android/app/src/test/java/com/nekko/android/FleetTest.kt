@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -40,6 +41,8 @@ class FleetTest {
     private class Rooms : RemoteFactory {
         val created = CopyOnWriteArrayList<FakeRemote>()
         fun of(room: String) = created.last { it.config.room == room }
+        /** What each computer still waits on (`chat:pending`); none set answers null. */
+        val pending = java.util.concurrent.ConcurrentHashMap<String, () -> JsonElement>()
 
         override fun create(config: com.nekko.protocol.RelayConfig, scope: kotlinx.coroutines.CoroutineScope) =
             FakeRemote(config) { c -> answer(config.room, c) }.also { created += it }
@@ -48,6 +51,7 @@ class FleetTest {
             Channels.SESSIONS_SUMMARIES -> Json.parseToJsonElement("""[{"id":"${room}1","title":"One","updatedAt":5}]""")
             Channels.WORKSPACE_LIST -> Json.parseToJsonElement("""[{"id":"w-$room","name":"App"}]""")
             Channels.APP_INFO -> Json.parseToJsonElement("""{"version":"0.9.0","platform":"win32"}""")
+            Channels.CHAT_PENDING -> pending[room]?.invoke() ?: FakeRemotes.defaultAnswer(c)
             // `aaaa` has someone at its keyboard; both have Ollama, `bbbb` with its `small` model loaded.
             Channels.ACTIVITY_STATE -> Json.parseToJsonElement("""{"userActive":${room == "aaaa"},"chatActive":false,"headless":false,"strain":[]}""")
             Channels.PROVIDERS_LIST -> Json.parseToJsonElement("""[{"id":"ollama","kind":"ollama","label":"Ollama","enabled":true}]""")
@@ -180,6 +184,65 @@ class FleetTest {
         remotes.of("bbbb").status.value = com.nekko.protocol.RelayStatus(RelayState.OFFLINE)
         runCurrent()
         assertEquals(com.nekko.protocol.MachinePick(a, com.nekko.protocol.MachinePick.Reason.ALL_BUSY), repo.pickMachine(lastUsed = a))
+    }
+
+    /**
+     * The phone was away from a fleet computer when its question was answered and
+     * the turn ended: the events that end a wait reach only a connected phone, so
+     * the reconnect read is what settles "Needs you".
+     */
+    @Test
+    fun `a fleet computer's reconnect read settles needs you the phone missed`() = runTest {
+        val remotes = Rooms()
+        val repo = repo(FakeStore(), remotes)
+        val a = repo.pair(link("aaaa"))
+        val ca = remotes.of("aaaa")
+        ca.goOnline()
+        runCurrent()
+        repo.pair(link("bbbb"))
+        remotes.of("bbbb").goOnline()
+        runCurrent()
+        fun activity() = repo.state.value.peers.getValue(a).activity
+        fun question(sid: String, id: String) = Json.parseToJsonElement(
+            """{"type":"question","sessionId":"$sid","request":{"callId":"$id","questions":[]}}""",
+        )
+        ca.events.tryEmit(Events.AGENT_EVENT to question("aaaa1", "q1"))
+        ca.events.tryEmit(Events.AGENT_EVENT to question("aaaa2", "q2"))
+        runCurrent()
+        assertEquals(Activity.NEEDS_YOU, activity()["aaaa1"])
+        assertEquals(Activity.NEEDS_YOU, activity()["aaaa2"])
+
+        // Away: both are answered there and nothing waits any more.
+        fun reconnect() {
+            ca.status.value = com.nekko.protocol.RelayStatus(RelayState.CONNECTING)
+            runCurrent()
+            ca.goOnline()
+            runCurrent()
+        }
+        remotes.pending["aaaa"] = { Json.parseToJsonElement("{}") }
+        reconnect()
+        assertNull("answered while the phone was away: nothing needs you", activity()["aaaa1"])
+        assertNull(activity()["aaaa2"])
+
+        // A computer that still waits keeps it; one asked while away is shown.
+        remotes.pending["aaaa"] = { Json.parseToJsonElement("""{"aaaa2":{"question":{"callId":"q3","questions":[]}}}""") }
+        reconnect()
+        assertNull(activity()["aaaa1"])
+        assertEquals(Activity.NEEDS_YOU, activity()["aaaa2"])
+
+        // A computer that could not say what waits leaves it as it was.
+        remotes.pending["aaaa"] = { JsonNull }
+        reconnect()
+        assertEquals(Activity.NEEDS_YOU, activity()["aaaa2"])
+
+        // A question that arrives with the read still needs you, whatever the read says.
+        remotes.pending["aaaa"] = {
+            ca.events.tryEmit(Events.AGENT_EVENT to question("aaaa1", "q4"))
+            Json.parseToJsonElement("{}")
+        }
+        reconnect()
+        assertEquals(Activity.NEEDS_YOU, activity()["aaaa1"])
+        assertNull(activity()["aaaa2"])
     }
 
     @Test

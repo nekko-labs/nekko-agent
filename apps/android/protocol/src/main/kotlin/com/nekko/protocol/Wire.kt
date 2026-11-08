@@ -85,6 +85,7 @@ object Channels {
     const val TOOLS_LIST = "tools:list"
     /** What the agent changed in a chat, as a capped read-only diff ([PhoneChanges]); refused unless the computer allows it. */
     const val CHANGES_LIST = "changes:list"
+    const val AUDIT_READ = "audit:read"
     /** The Monitors pane: hardware, running chats, what needs the owner, next automations ([MonitorSummary]); read class. */
     const val MONITOR_SUMMARY = "monitor:summary"
     /** The Expert monitor ([SystemStats], [GpuStats], [EngineStatus]) and a chat's context totals ([ContextUsage]); read class. */
@@ -144,7 +145,7 @@ object Channels {
     val ALL = listOf(
         SETTINGS_GET, SETTINGS_UPDATE, SESSION_DELETE, VOICE_STATUS, VOICE_TRANSCRIBE, PROVIDERS_LIST, MODELS_LIST, SESSIONS_SUMMARIES, SESSION_CREATE, SESSION_GET,
         SESSION_SET_OPTIONS, CHAT_SEND, CHAT_ABORT, CHAT_QUEUE, CHAT_PENDING, CHAT_ANSWER, TOOL_APPROVE,
-        WORKSPACE_LIST, APP_INFO, ACTIVITY_STATE, MACHINE_SUMMARY, SKILLS_RUNNABLE, TOOLS_LIST, CHANGES_LIST, MONITOR_SUMMARY,
+        WORKSPACE_LIST, APP_INFO, ACTIVITY_STATE, MACHINE_SUMMARY, SKILLS_RUNNABLE, TOOLS_LIST, CHANGES_LIST, AUDIT_READ, MONITOR_SUMMARY,
         SYSTEM_STATS, GPU_STATS, ENGINE_STATUS, CONTEXT_PREVIEW, SESSION_WATCHES, MODEL_UNLOAD,
         SECURITY_CHALLENGE, DEVICE_SIGN_OUT, REMOTE_STOP, APP_QUIT,
         FILES_LIST, FILES_SEARCH, FILES_READ, FILES_WRITE, WORKSPACE_ADD_BY_PATH, WORKSPACE_REMOVE, LOGS_LIST, LOGS_READ, ARTIFACT_READ, PREVIEW_FETCH,
@@ -289,6 +290,8 @@ data class Session(
     val chatType: String? = null,
     val executionMode: String? = null,
     val disabledTools: List<String> = emptyList(),
+    /** MCP tools (`mcp__<server>__<tool>`) the user chose to always allow in this chat (decision 0054). */
+    val allowedMcpTools: List<String> = emptyList(),
 ) {
     /** Whether this chat can hand a follow-up to a sub-agent (`canOfferSubagent` in shared/orchestration.ts). */
     fun canOfferSubagent(strategy: String?): Boolean =
@@ -327,6 +330,7 @@ data class Session(
                 chatType = o.str("chatType"),
                 executionMode = o.str("executionMode"),
                 disabledTools = o["disabledTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
+                allowedMcpTools = o["allowedMcpTools"].arr()?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content } ?: emptyList(),
             )
         }
     }
@@ -353,6 +357,10 @@ data class SessionSummary(
     val activeWatchCount: Long = 0,
     /** Pinned on the computer (the desktop's pin), from here or there. */
     val pinned: Boolean = false,
+    val prUrls: List<String> = emptyList(),
+    val transcriptTokens: Long? = null,
+    val contextUsed: Long? = null,
+    val contextWindow: Long? = null,
 ) {
     /** Real, top-level chats, active or completed: what the phone's list shows. */
     val isVisible: Boolean get() = parentSessionId == null && taskId == null && trainingRunId == null
@@ -378,6 +386,10 @@ data class SessionSummary(
                 order = o.dbl("order"),
                 activeWatchCount = o.long("activeWatchCount") ?: 0,
                 pinned = o.bool("pinned"),
+                prUrls = o["prUrls"].arr()?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull } ?: emptyList(),
+                transcriptTokens = o.long("transcriptTokens")?.takeIf { it > 0 },
+                contextUsed = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("used")?.takeIf { it >= 0 },
+                contextWindow = o["claudeCodeContext"].obj()?.takeIf { o.str("modelId") != null && it.str("modelId") == o.str("modelId") }?.long("window")?.takeIf { it > 0 },
             )
         }
 

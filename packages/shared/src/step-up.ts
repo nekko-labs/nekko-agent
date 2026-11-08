@@ -15,16 +15,19 @@
  * Uses WebCrypto only (browser and Node 20+), like `e2e.ts`.
  */
 
+import { SERVICE_STEP_UP_CHANNELS } from './service-management.js';
+
 // ---- the guarded actions ----
 
 /**
- * A guarded action from a phone: raising a chat's mode or the default mode
+ * Guarded actions from a phone: service restart/install, or raising a chat's mode or the default mode
  * (`PHONE_MODE_PROOF`, the same channels, held equal by a test: `session:setOptions` setting `mode`, `settings:update`
  * setting `defaultChatMode`, to a more permissive mode). The computer checks
  * the Change proof first, then the step-up, when `security.json` has
  * `enabled: true`. Every other phone channel keeps today's rules.
  */
 export const STEP_UP_PHONE_GUARDED = {
+  service: SERVICE_STEP_UP_CHANNELS,
   modeRaise: { channels: ['session:setOptions', 'settings:update'], keys: { 'session:setOptions': 'mode', 'settings:update': 'defaultChatMode' } },
 } as const;
 
@@ -503,7 +506,7 @@ export function stepUpPolicy() {
     totp: { ...STEP_UP_TOTP },
     recovery: { ...STEP_UP_RECOVERY },
     minMethods: STEP_UP_MIN_METHODS,
-    phoneGuarded: { channels: [...STEP_UP_PHONE_GUARDED.modeRaise.channels] },
+    phoneGuarded: { channels: [...STEP_UP_PHONE_GUARDED.modeRaise.channels], serviceChannels: [...STEP_UP_PHONE_GUARDED.service] },
     desktopGuarded: Object.fromEntries(Object.entries(STEP_UP_DESKTOP_GUARDED).map(([k, v]) => [k, [...v]])),
     neverGuarded: [...STEP_UP_NEVER_GUARDED],
   };

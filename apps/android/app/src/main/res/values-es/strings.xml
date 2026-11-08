@@ -7,4 +7,9 @@
     <string name="dashboard_talk">Hablar con Nekko</string>
     <string name="dashboard_open">Abrir app</string>
     <string name="dashboard_voice_fallback">La voz abre la app. Desbloquea y toca Escuchar.</string>
+    <string name="chats_showmodel">Modelo</string>
+    <string name="chats_card_details">Detalles de la tarjeta</string>
+    <string name="chats_showupdated">Hora de actualización</string>
+    <string name="chats_showcontext">Ventana de contexto</string>
+    <string name="chats_showpullrequests">Pull requests</string>
 </resources>

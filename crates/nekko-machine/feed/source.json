@@ -1,6 +1,6 @@
 {
  "$comment": "The editorial half of the model recommendations feed. `node scripts/model-feed.mjs` reads this, asks Hugging Face for each file's real size and GGUF header, and writes src/model-feed.json, which the daemon ships. Ranks, tasks and speed targets are editorial choices; every number about a file comes from the file.",
- "version": "2026-10-22.1",
+ "version": "2026-11-08.2",
  "tasks": [
   {
    "id": "chat",
@@ -55,6 +55,76 @@
   { "id": "qwen3-embedding-0.6b", "repo": "Qwen/Qwen3-Embedding-0.6B-GGUF", "name": "Qwen3 Embedding 0.6B", "owner": "Qwen", "quants": ["Q8_0"] },
   { "id": "embeddinggemma-300m", "repo": "ggml-org/embeddinggemma-300M-GGUF", "name": "EmbeddingGemma 300M", "owner": "Google", "quants": ["Q8_0"] },
   { "id": "bge-small-en-v1.5", "repo": "CompendiumLabs/bge-small-en-v1.5-gguf", "name": "BGE Small (English)", "owner": "BAAI", "quants": ["f16"] }
+ ],
+ "imageTasks": [
+  {
+   "$comment": "Image models are picked by memory alone: no seconds-per-image figure is measured yet, so none is shown. `computeAllowanceBytes` is the room left for sd.cpp's working buffers at 1024x1024 on top of every file being resident; it is an assumption (2 GiB), not a measurement, until peak memory is measured per family. Candidates are best first; the pick is the first that fits.",
+   "id": "imageCreate",
+   "label": "Create pictures",
+   "capability": "create",
+   "computeAllowanceBytes": 2147483648,
+   "candidates": ["qwen-image", "z-image-turbo", "flux2-klein-4b"]
+  },
+  {
+   "id": "imageEdit",
+   "label": "Edit photos",
+   "capability": "edit",
+   "computeAllowanceBytes": 2147483648,
+   "candidates": ["qwen-image-edit-2511", "flux2-klein-4b"]
+  },
+  {
+   "$comment": "Video decoding holds every frame: sd.cpp warns the Wan VAE needs a lot of memory. 4 GiB is an assumption for a short 480p clip (33 frames), not a measurement.",
+   "id": "videoCreate",
+   "label": "Create video clips",
+   "capability": "video",
+   "computeAllowanceBytes": 4294967296,
+   "gpuOnly": true,
+   "candidates": ["wan2.2-ti2v-5b"]
+  }
+ ],
+ "imageModels": [
+  {
+   "$comment": "`companions` must match the engine's companion set for the downloaded file (crates/nekko-engine/src/acquire.rs); a nekkod test checks it. Licenses are read from each model card; only permissive ones are listed here (spec/models/photo-and-video-models.md).",
+   "id": "qwen-image", "repo": "QuantStack/Qwen-Image-GGUF", "name": "Qwen Image", "owner": "Qwen", "license": "Apache-2.0",
+   "capabilities": ["create"], "companionSet": "qwen-image", "quants": ["Q8_0", "Q4_K_M"],
+   "companions": [
+    { "repo": "Comfy-Org/Qwen-Image", "file": "split_files/vae/qwen_image_vae.safetensors" },
+    { "repo": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF", "file": "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf" }
+   ]
+  },
+  {
+   "id": "z-image-turbo", "repo": "leejet/Z-Image-Turbo-GGUF", "name": "Z-Image Turbo", "owner": "Tongyi-MAI", "license": "Apache-2.0",
+   "capabilities": ["create"], "companionSet": "z-image", "quants": ["Q8_0", "Q4_K"],
+   "companions": [
+    { "repo": "Comfy-Org/Z-Image-Turbo", "file": "split_files/vae/ae.safetensors" },
+    { "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF", "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf" }
+   ]
+  },
+  {
+   "id": "flux2-klein-4b", "repo": "leejet/FLUX.2-klein-4B-GGUF", "name": "FLUX.2 klein 4B", "owner": "Black Forest Labs", "license": "Apache-2.0",
+   "capabilities": ["create", "edit"], "companionSet": "flux2-klein-4b", "quants": ["Q8_0", "Q4_0"],
+   "companions": [
+    { "repo": "Comfy-Org/flux2-dev", "file": "split_files/vae/flux2-vae.safetensors" },
+    { "repo": "unsloth/Qwen3-4B-GGUF", "file": "Qwen3-4B-Q4_K_M.gguf" }
+   ]
+  },
+  {
+   "id": "wan2.2-ti2v-5b", "repo": "QuantStack/Wan2.2-TI2V-5B-GGUF", "name": "Wan 2.2 TI2V 5B", "owner": "Wan-AI", "license": "Apache-2.0",
+   "capabilities": ["video"], "companionSet": "wan2.2-ti2v-5b", "quants": ["Q8_0", "Q4_K_M"],
+   "companions": [
+    { "repo": "Comfy-Org/Wan-2.2", "file": "split_files/vae/wan2.2_vae.safetensors" },
+    { "repo": "city96/umt5-xxl-encoder-gguf", "file": "umt5-xxl-encoder-Q8_0.gguf" }
+   ]
+  },
+  {
+   "id": "qwen-image-edit-2511", "repo": "unsloth/Qwen-Image-Edit-2511-GGUF", "name": "Qwen Image Edit 2511", "owner": "Qwen", "license": "Apache-2.0",
+   "capabilities": ["edit"], "companionSet": "qwen-image-edit", "quants": ["Q8_0", "Q4_K_M"],
+   "companions": [
+    { "repo": "Comfy-Org/Qwen-Image", "file": "split_files/vae/qwen_image_vae.safetensors" },
+    { "repo": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF", "file": "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf" },
+    { "repo": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF", "file": "Qwen2.5-VL-7B-Instruct.mmproj-Q8_0.gguf" }
+   ]
+  }
  ],
  "hardware": {
   "$comment": "Memory bandwidth in GB/s from the vendor's specification. A name matches when it contains `match` (case-insensitive) and no laptop or mobile marker; the first match wins, so a longer name comes before its prefix. `gpuCores` and `vramGb` separate variants that share a name.",

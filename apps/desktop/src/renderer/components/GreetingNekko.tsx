@@ -84,27 +84,46 @@ export function useComposerGaze(ref: React.RefObject<SVGSVGElement | null>, { re
 /** Same hat geometry as `NekkoAvatar`, on the peek face's identical 32px grid. */
 const WIZARD_HAT_TRANSFORM = 'translate(16.5 9) scale(0.8) translate(-16.5 -12)';
 
+/**
+ * The faces the per-chat Nekko can wear instead of following the caret:
+ * `alert` is the low-memory card's alarm pose (ring eyes, open mouth, an amber
+ * "!" over his right ear; `ALERT_MASCOT` in main/memoryWatch.ts), `smile` is
+ * the laugh's ^ ^ eyes without the open mouth.
+ */
+export type PeekFace = 'alert' | 'smile';
+
 /** The pixel head peeking over a composer edge, paws hanging over it. */
-export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string; look: { x: number; y: number }; laugh?: boolean; wizardHat?: boolean; paws?: boolean }>(function PeekNekkoArt(
-  { className, look, laugh = false, wizardHat = false, paws = true },
+export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string; look: { x: number; y: number }; laugh?: boolean; face?: PeekFace; wizardHat?: boolean; paws?: boolean }>(function PeekNekkoArt(
+  { className, look, laugh = false, face, wizardHat = false, paws = true },
   ref,
 ) {
+  const happyEyes = 'M10 17V15H11V14H13V15H14V17H13V16H11V17Z M19 17V15H20V14H22V15H23V17H22V16H20V17Z';
   return (
-    <svg ref={ref} className={className} viewBox="0 0 32 30" width="80" height="75" shapeRendering="crispEdges" aria-hidden="true" focusable="false" overflow={wizardHat ? 'visible' : undefined}>
-      {/* Only the paws hang over the composer; the chin stays behind its edge. */}
-      <svg data-part="peek-face" width="32" height="25" viewBox="0 0 32 25" overflow="hidden">
-        <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2" />
-        {laugh ? <g data-nekko-laugh fill="var(--ink)">
-          <path d="M10 17V15H11V14H13V15H14V17H13V16H11V17Z M19 17V15H20V14H22V15H23V17H22V16H20V17Z M14 20H19V22H18V23H15V22H14Z" />
-        </g> : <g data-nekko-look transform={`translate(${look.x} ${look.y})`} fill="var(--ink)">
-          <path d="M11 15H13V18H11Z M20 15H22V18H20Z" />
-        </g>}
+    <svg ref={ref} className={className} viewBox="0 0 32 30" width="80" height="75" shapeRendering="crispEdges" aria-hidden="true" focusable="false" overflow={wizardHat || face === 'alert' ? 'visible' : undefined}>
+      {/* Only the paws hang over the composer; the chin stays behind its edge.
+          The window reaches 12 units higher so the hat and the "!" fit in it,
+          startled hop included: the head (and all it wears) can then sink
+          below the edge and be cut off there, not paint over the composer. */}
+      <svg data-part="peek-face" y="-12" width="32" height="37" viewBox="0 -12 32 37" overflow="hidden">
+        <g data-part="peek-head">
+          <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2" />
+          {face === 'alert' ? <g data-nekko-face="alert">
+            <path d="M10 14H14V15H10Z M10 17H14V18H10Z M10 15H11V17H10Z M13 15H14V17H13Z M19 14H23V15H19Z M19 17H23V18H19Z M19 15H20V17H19Z M22 15H23V17H22Z M15 22H17V24H15Z" fill="var(--ink)" />
+            <path d="M29 -7H32V-2H29Z M29 -1H32V2H29Z" fill="var(--warning)" />
+          </g> : face === 'smile' ? <g data-nekko-face="smile" fill="var(--ink)">
+            <path d={happyEyes} />
+          </g> : laugh ? <g data-nekko-laugh fill="var(--ink)">
+            <path d={`${happyEyes} M14 20H19V22H18V23H15V22H14Z`} />
+          </g> : <g data-nekko-look transform={`translate(${look.x} ${look.y})`} fill="var(--ink)">
+            <path d="M11 15H13V18H11Z M20 15H22V18H20Z" />
+          </g>}
+          {wizardHat && <g data-part="orange-wizard-hat" strokeLinejoin="miter" transform={WIZARD_HAT_TRANSFORM}>
+            <polygon points="9,10 16,0 19,2 23,10" fill="#fb923c" stroke="#9a3412" strokeWidth="1" />
+            <rect x="8" y="9" width="17" height="3" fill="#ea580c" stroke="#9a3412" strokeWidth="1" />
+            <rect x="16" y="7" width="3" height="2" fill="#fde68a" />
+          </g>}
+        </g>
       </svg>
-      {wizardHat && <g data-part="orange-wizard-hat" strokeLinejoin="miter" transform={WIZARD_HAT_TRANSFORM}>
-        <polygon points="9,10 16,0 19,2 23,10" fill="#fb923c" stroke="#9a3412" strokeWidth="1" />
-        <rect x="8" y="9" width="17" height="3" fill="#ea580c" stroke="#9a3412" strokeWidth="1" />
-        <rect x="16" y="7" width="3" height="2" fill="#fde68a" />
-      </g>}
       {/* The outer group carries the show/hide motion; the inner one keeps the
           mirror transform, which a CSS transform would otherwise replace. */}
       <g className="peek-paws-slot" data-shown={paws || undefined}><g data-part="peek-paws" transform="translate(0 50) scale(1 -1)">

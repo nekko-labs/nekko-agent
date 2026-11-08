@@ -1,6 +1,6 @@
 {
  "format": 1,
- "version": "2026-10-22.1",
+ "version": "2026-11-08.2",
  "tasks": [
   {
    "id": "chat",
@@ -1074,6 +1074,242 @@
    "tokensPerSecond": 108,
    "engine": "llama.cpp b11429 (Homebrew), llama-bench -n 128 -r 5",
    "date": "2026-10-22"
+  }
+ ],
+ "imageTasks": [
+  {
+   "id": "imageCreate",
+   "label": "Create pictures",
+   "capability": "create",
+   "computeAllowanceBytes": 2147483648,
+   "candidates": [
+    "qwen-image",
+    "z-image-turbo",
+    "flux2-klein-4b"
+   ]
+  },
+  {
+   "id": "imageEdit",
+   "label": "Edit photos",
+   "capability": "edit",
+   "computeAllowanceBytes": 2147483648,
+   "candidates": [
+    "qwen-image-edit-2511",
+    "flux2-klein-4b"
+   ]
+  },
+  {
+   "id": "videoCreate",
+   "label": "Create video clips",
+   "capability": "video",
+   "computeAllowanceBytes": 4294967296,
+   "gpuOnly": true,
+   "candidates": [
+    "wan2.2-ti2v-5b"
+   ]
+  }
+ ],
+ "imageModels": [
+  {
+   "id": "qwen-image",
+   "repo": "QuantStack/Qwen-Image-GGUF",
+   "name": "Qwen Image",
+   "owner": "Qwen",
+   "license": "Apache-2.0",
+   "capabilities": [
+    "create"
+   ],
+   "companionSet": "qwen-image",
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Qwen_Image-Q8_0.gguf"
+     ],
+     "sizeBytes": 21761817120
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Qwen_Image-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 13065746976
+    }
+   ],
+   "companions": [
+    {
+     "repo": "Comfy-Org/Qwen-Image",
+     "file": "split_files/vae/qwen_image_vae.safetensors",
+     "sizeBytes": 253806246
+    },
+    {
+     "repo": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+     "file": "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf",
+     "sizeBytes": 4683072512
+    }
+   ]
+  },
+  {
+   "id": "z-image-turbo",
+   "repo": "leejet/Z-Image-Turbo-GGUF",
+   "name": "Z-Image Turbo",
+   "owner": "Tongyi-MAI",
+   "license": "Apache-2.0",
+   "capabilities": [
+    "create"
+   ],
+   "companionSet": "z-image",
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "z_image_turbo-Q8_0.gguf"
+     ],
+     "sizeBytes": 6577440704
+    },
+    {
+     "label": "Q4_K",
+     "files": [
+      "z_image_turbo-Q4_K.gguf"
+     ],
+     "sizeBytes": 3864250304
+    }
+   ],
+   "companions": [
+    {
+     "repo": "Comfy-Org/Z-Image-Turbo",
+     "file": "split_files/vae/ae.safetensors",
+     "sizeBytes": 335304388
+    },
+    {
+     "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+     "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+     "sizeBytes": 2497281120
+    }
+   ]
+  },
+  {
+   "id": "flux2-klein-4b",
+   "repo": "leejet/FLUX.2-klein-4B-GGUF",
+   "name": "FLUX.2 klein 4B",
+   "owner": "Black Forest Labs",
+   "license": "Apache-2.0",
+   "capabilities": [
+    "create",
+    "edit"
+   ],
+   "companionSet": "flux2-klein-4b",
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "flux-2-klein-4b-Q8_0.gguf"
+     ],
+     "sizeBytes": 4300629440
+    },
+    {
+     "label": "Q4_0",
+     "files": [
+      "flux-2-klein-4b-Q4_0.gguf"
+     ],
+     "sizeBytes": 2460378560
+    }
+   ],
+   "companions": [
+    {
+     "repo": "Comfy-Org/flux2-dev",
+     "file": "split_files/vae/flux2-vae.safetensors",
+     "sizeBytes": 336213556
+    },
+    {
+     "repo": "unsloth/Qwen3-4B-GGUF",
+     "file": "Qwen3-4B-Q4_K_M.gguf",
+     "sizeBytes": 2497281312
+    }
+   ]
+  },
+  {
+   "id": "wan2.2-ti2v-5b",
+   "repo": "QuantStack/Wan2.2-TI2V-5B-GGUF",
+   "name": "Wan 2.2 TI2V 5B",
+   "owner": "Wan-AI",
+   "license": "Apache-2.0",
+   "capabilities": [
+    "video"
+   ],
+   "companionSet": "wan2.2-ti2v-5b",
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Wan2.2-TI2V-5B-Q8_0.gguf"
+     ],
+     "sizeBytes": 5400179040
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Wan2.2-TI2V-5B-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 3433116000
+    }
+   ],
+   "companions": [
+    {
+     "repo": "Comfy-Org/Wan-2.2",
+     "file": "split_files/vae/wan2.2_vae.safetensors",
+     "sizeBytes": 1409400960
+    },
+    {
+     "repo": "city96/umt5-xxl-encoder-gguf",
+     "file": "umt5-xxl-encoder-Q8_0.gguf",
+     "sizeBytes": 6043068256
+    }
+   ]
+  },
+  {
+   "id": "qwen-image-edit-2511",
+   "repo": "unsloth/Qwen-Image-Edit-2511-GGUF",
+   "name": "Qwen Image Edit 2511",
+   "owner": "Qwen",
+   "license": "Apache-2.0",
+   "capabilities": [
+    "edit"
+   ],
+   "companionSet": "qwen-image-edit",
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "qwen-image-edit-2511-Q8_0.gguf"
+     ],
+     "sizeBytes": 22354590304
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "qwen-image-edit-2511-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 12842830432
+    }
+   ],
+   "companions": [
+    {
+     "repo": "Comfy-Org/Qwen-Image",
+     "file": "split_files/vae/qwen_image_vae.safetensors",
+     "sizeBytes": 253806246
+    },
+    {
+     "repo": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+     "file": "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf",
+     "sizeBytes": 4683072512
+    },
+    {
+     "repo": "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+     "file": "Qwen2.5-VL-7B-Instruct.mmproj-Q8_0.gguf",
+     "sizeBytes": 853119712
+    }
+   ]
   }
  ]
 }

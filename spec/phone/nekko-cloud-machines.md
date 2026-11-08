@@ -9,9 +9,9 @@ area: phone
 
 ## What the user sees
 
-- **New chat → Runs on** offers a paired computer, **Nekko Cloud** and **This iPhone**. Choosing Nekko Cloud with no machine running makes one (a few seconds) and the chat starts there; the chat's computer pill shows a cloud glyph.
-- **Computers** lists the cloud machine beside the paired computers. Its page is the computer details page (round trip, models, providers, hardware, connection) plus **Repositories**, **What the cloud may see**, **Sandbox**, **Hours this month**, **Sleeps in …**, and **Stop and delete this machine**.
-- **Settings → Nekko Cloud → Machines** lists every machine on the account with its region, size and state.
+- **New chat → Runs on**, in the iOS #2053 source, can offer an existing paired cloud computer when the authenticated fleet is connected. It does not create a machine when none is available; it explains that an existing machine must be paired.
+- **Computers**, in the iOS #2053 source, shows a separate Nekko Cloud group only when `CloudSync.fleetEnabled` is enabled, the user is authenticated, and the fleet fetch succeeds. It is off by default. The group lists fetched machines, with navigation and the connection toggle for machines paired on this iPhone; unavailable or unpaired machines show an explanation. Merely viewing or fetching the group never provisions or pairs a machine. Fleet visibility and encrypted chat sync are separate. Native build and visual verification are in progress; no live cloud was tested.
+- The legacy **Settings → Nekko Cloud → Machines** entry uses the same gated group, rather than an unconditional account list. The current iOS source has no user-facing control that sets `fleetEnabled` to true; enabling that gate is not yet exposed in the app.
 - A cloud machine behaves as a computer in every chat screen: streaming, tool rows, approvals, questions, watches, files, git and pull requests, through the same end-to-end encrypted relay path.
 
 ## What the cloud may see (the scope)

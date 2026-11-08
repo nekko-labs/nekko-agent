@@ -358,7 +358,12 @@ async fn every_stream_yields_exactly_the_chunks_the_ts_provider_yields() {
         let req_name = c.get("request").and_then(Value::as_str).unwrap_or("minimal");
         let mut chats = Vec::new();
         for _ in 0..c.get("chats").and_then(Value::as_u64).unwrap_or(1) {
-            let mut req: ChatRequest = serde_json::from_value(requests[req_name].clone()).unwrap();
+            let mut fields = requests[req_name].clone();
+            if let Some(extra) = c.get("requestExtra").and_then(Value::as_object) {
+                fields.as_object_mut().unwrap().extend(extra.clone());
+            }
+
+            let mut req: ChatRequest = serde_json::from_value(fields).unwrap();
             let seen = seen.clone();
             req.on_headers = Some(Arc::new(move |h: &Headers| seen.lock().unwrap().push(h.clone())));
             chats.push(run_chat(&provider, req).await.iter().map(chunk_json).collect::<Vec<_>>());

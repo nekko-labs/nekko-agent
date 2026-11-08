@@ -123,8 +123,9 @@ final class CardVoiceIntegrationTests: XCTestCase {
         while resume == nil { await Task.yield() }
         XCTAssertEqual(box.items.count, 1)
         XCTAssertFalse(runner.canCancel)
+        XCTAssertEqual(shown, "Sending…", "Persistence must hide Cancel and show the committed delivery state")
         runner.cancel()
-        XCTAssertEqual(shown, "Processing…")
+        XCTAssertEqual(shown, "Sending…", "Cancel cannot recall a persisted message or report nothing sent")
         resume?.resume()
         await task.value
         XCTAssertEqual(box.items.first?.text, "hello")

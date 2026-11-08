@@ -15,6 +15,7 @@
 //! | `parent_tool_use_id` set (a sub-agent's own lines) | [`Subagent::Line`], for the child chat's own mapper |
 //! | the delegating call's `tool_result`, or `system/task_notification` for a background one | [`Subagent::Ended`] |
 //! | `system/api_retry` | `retry` |
+//! | `system/status` `compacting`, then `status: null` with `compact_result` | `claude_code_compacting` (`running`, then `done` or `failed`) |
 //! | `system/permission_denied` | the call's `tool_result` marked `denied` |
 //! | `assistant` with `is_api_error_message` | `error` |
 //! | `command_lifecycle` (a message Nekko wrote, queued / started / completed), its `isReplay` echo | [`Mapped::Command`] |
@@ -22,6 +23,7 @@
 //! | `result` | [`Mapped::End`]; then [`Mapper::finish`] gives `usage` + `done`, or `error` |
 //! | main-thread `assistant` `message.usage`, `result.modelUsage[model].contextWindow` | [`TurnEnd::context`] (what the context gauge shows) |
 //! | `result` `terminal_reason: aborted_*` | an interrupted turn, not a failure |
+//! | `system/compact_boundary`, then the `isSynthetic` user message with the summary | a `compaction` message (the "Conversation compacted" divider); `post_tokens` becomes the context's `used` |
 //!
 //! With `--include-partial-messages` text arrives twice: as deltas, then as
 //! the complete `assistant` block. A message whose deltas were seen is not
@@ -242,6 +244,9 @@ pub struct Mapper {
     /// Delegating calls waiting for their result: id to whether the sub-agent
     /// runs in the background, where that result only says it started.
     delegating: HashMap<String, bool>,
+    /// A `compact_boundary` whose summary message has not arrived yet: the
+    /// divider's `compaction` fields, waiting for its text.
+    compacted: Option<Value>,
 }
 
 /// A user message's content for stream-json: its text, and its images as
@@ -286,6 +291,24 @@ fn result_text(content: Option<&Value>) -> String {
     }
 }
 
+/// The summary a compaction continues from, when `v` is the synthetic user
+/// message that carries it: its text without the `<system-reminder>` blocks
+/// and the preamble addressed to the model ("This session is being continued
+/// ... Summary:").
+fn compact_summary(v: &Value) -> Option<String> {
+    if str_at(v, "type") != Some("user") || v.get("isSynthetic") != Some(&Value::Bool(true)) {
+        return None;
+    }
+    let mut text = result_text(v.pointer("/message/content"));
+    while let Some(start) = text.find("<system-reminder>") {
+        let end =
+            text[start..].find("</system-reminder>").map_or(text.len(), |e| start + e + "</system-reminder>".len());
+        text.replace_range(start..end, "");
+    }
+    let body = text.split_once("\nSummary:\n").map_or(text.as_str(), |(_, rest)| rest);
+    Some(body.trim().to_string())
+}
+
 fn num(v: Option<&Value>) -> u64 {
     v.and_then(Value::as_u64).unwrap_or(0)
 }
@@ -315,6 +338,7 @@ impl Mapper {
             context: ReportedContext::default(),
             planning: HashMap::new(),
             delegating: HashMap::new(),
+            compacted: None,
         }
     }
 
@@ -370,6 +394,17 @@ impl Mapper {
             let mut line = v.clone();
             line["parent_tool_use_id"] = Value::Null;
             return vec![Mapped::Subagent(Subagent::Line { call_id: call_id.into(), line })];
+        }
+        if self.compacted.is_some() {
+            if let Some(summary) = compact_summary(v) {
+                out.extend(self.compaction_message(&summary));
+                return out;
+            }
+            // The summary never came (an older Claude Code): the divider
+            // still goes above whatever the model says next.
+            if matches!(str_at(v, "type"), Some("stream_event" | "assistant" | "user" | "result")) {
+                out.extend(self.compaction_message(""));
+            }
         }
         match str_at(v, "type") {
             Some("system") => self.system(v, &mut out),
@@ -437,6 +472,23 @@ impl Mapper {
                     api_key_source: str_at(v, "apiKeySource").map(str::to_string),
                 }));
             }
+            // Claude Code is compacting its context (near the window, or a
+            // typed `/compact`): the chat says so while it lasts. Other
+            // statuses (a permission mode change) say nothing to show.
+            Some("status") => {
+                let compacting = str_at(v, "status") == Some("compacting");
+                let result = str_at(v, "compact_result");
+                let fields = match (compacting, result) {
+                    (true, _) => json!({ "state": "running" }),
+                    (false, Some("success")) => json!({ "state": "done" }),
+                    (false, Some(_)) => {
+                        let why = str_at(v, "compact_error").filter(|e| !e.trim().is_empty());
+                        json!({ "state": "failed", "error": why.unwrap_or("Claude Code could not compact the conversation.") })
+                    }
+                    (false, None) => return,
+                };
+                out.push(self.event("claude_code_compacting", fields));
+            }
             Some("api_retry") => {
                 // Whatever the failed call streamed is discarded and redone.
                 self.draft = None;
@@ -483,8 +535,45 @@ impl Mapper {
                     out.push(Mapped::Subagent(Subagent::Ended { call_id: call_id.into(), outcome }));
                 }
             }
+            // Claude Code compacted its context, on its own near the window
+            // or for a typed `/compact`. The divider waits for the summary,
+            // the next line; the gauge drops to the new size now, since a
+            // `/compact` makes no model call that would report it.
+            Some("compact_boundary") => {
+                self.flush_into(false, false, out);
+                // A second boundary before the first one's summary.
+                out.extend(self.compaction_message(""));
+                let meta = v.get("compact_metadata").unwrap_or(&Value::Null);
+                let mut fields = json!({ "summarized": 0, "by": "claude-code" });
+                if let Some(trigger) = str_at(meta, "trigger").filter(|t| matches!(*t, "auto" | "manual")) {
+                    fields["trigger"] = json!(trigger);
+                }
+                let (before, after) = (num(meta.get("pre_tokens")), num(meta.get("post_tokens")));
+                if before > 0 {
+                    fields["tokensBefore"] = json!(before);
+                }
+                if after > 0 {
+                    fields["tokensAfter"] = json!(after);
+                    self.context.used = Some(after);
+                }
+                self.compacted = Some(fields);
+            }
             _ => {}
         }
+    }
+
+    /// The divider for the pending compaction, holding `summary`; nothing
+    /// when none is pending. `summarized` is left at 0 for the daemon, which
+    /// knows how many transcript messages the summary stands in for.
+    fn compaction_message(&mut self, summary: &str) -> Option<Mapped> {
+        let fields = self.compacted.take()?;
+        Some(Mapped::Message(json!({
+            "id": new_id(),
+            "role": "assistant",
+            "content": summary,
+            "compaction": fields,
+            "createdAt": nekko_js::now_ms(),
+        })))
     }
 
     fn stream_event(&mut self, e: &Value, out: &mut Vec<Mapped>) {
@@ -798,6 +887,8 @@ fn tool_call(b: &Value) -> Value {
     // `agent_watch`, so every client draws its watch row and live chip.
     if name == NEKKO_WATCH_TOOL {
         name = "agent_watch";
+    } else if name == "mcp__nekko_bridge__set_chat_title" {
+        name = "set_chat_title";
     }
     json!({ "id": str_at(b, "id").unwrap_or_default(), "name": name, "input": input, "executedBy": "claude-code" })
 }
@@ -808,6 +899,15 @@ const NEKKO_WATCH_TOOL: &str = "mcp__nekko_bridge__agent_watch";
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bridge_title_call_uses_nekkos_title_tool_name() {
+        let input = json!({ "title": "Fix chat naming" });
+        let call = tool_call(&json!({ "id": "t1", "name": "mcp__nekko_bridge__set_chat_title", "input": input }));
+        assert_eq!(call["name"], "set_chat_title");
+        assert_eq!(call["input"], input);
+        assert_eq!(call["executedBy"], "claude-code");
+    }
 
     #[test]
     fn user_content_is_text_or_blocks() {
@@ -869,6 +969,32 @@ mod tests {
         let mut sub_result = result("t3", false);
         sub_result["parent_tool_use_id"] = json!("agent_1");
         assert!(!m.map(&sub_result).iter().any(|o| matches!(o, Mapped::Plan(_))));
+    }
+
+    #[test]
+    fn claude_codes_compaction_status_is_an_event() {
+        let mut m = Mapper::new("s");
+        let status = |extra: Value| {
+            let mut v = json!({ "type": "system", "subtype": "status", "status": null, "session_id": "x" });
+            v.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+            v
+        };
+        let state = |out: Vec<Mapped>| match out.as_slice() {
+            [Mapped::Event(e)] if e["type"] == "claude_code_compacting" => Some(e.clone()),
+            _ => None,
+        };
+        // As Claude Code 2.1.319 printed them for a `/compact`.
+        assert_eq!(state(m.map(&status(json!({ "status": "compacting" })))).unwrap()["state"], "running");
+        assert_eq!(state(m.map(&status(json!({ "compact_result": "success" })))).unwrap()["state"], "done");
+        let failed =
+            state(m.map(&status(json!({ "compact_result": "failed", "compact_error": "Not enough messages" }))))
+                .unwrap();
+        assert_eq!((failed["state"].as_str(), failed["error"].as_str()), (Some("failed"), Some("Not enough messages")));
+        let bare = state(m.map(&status(json!({ "compact_result": "failed" })))).unwrap();
+        assert_eq!(bare["error"], "Claude Code could not compact the conversation.");
+        // Any other status (a permission mode change, a request starting) shows nothing.
+        assert!(m.map(&status(json!({ "status": "requesting" }))).is_empty());
+        assert!(m.map(&status(json!({ "permissionMode": "plan" }))).is_empty());
     }
 
     #[test]

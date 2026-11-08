@@ -126,7 +126,7 @@ fn kind_of(event_type: &str) -> Kind {
         "done" | "error" => Kind::End,
         "session_meta" | "compaction" | "claude_code_background" => Kind::Meta,
         "tool_approval_required" | "question" => Kind::Wait,
-        "question_resolved" | "steered" => Kind::Resume,
+        "question_resolved" | "approval_resolved" | "steered" => Kind::Resume,
         _ => Kind::Stream,
     }
 }

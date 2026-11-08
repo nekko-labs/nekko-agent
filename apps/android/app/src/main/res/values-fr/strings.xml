@@ -7,4 +7,9 @@
     <string name="dashboard_talk">Parler à Nekko</string>
     <string name="dashboard_open">Ouvrir l’application</string>
     <string name="dashboard_voice_fallback">La commande vocale ouvre l’application. Déverrouillez, puis appuyez sur Écouter.</string>
+    <string name="chats_showmodel">Modèle</string>
+    <string name="chats_card_details">Détails de la carte</string>
+    <string name="chats_showupdated">Heure de mise à jour</string>
+    <string name="chats_showcontext">Fenêtre de contexte</string>
+    <string name="chats_showpullrequests">Pull requests</string>
 </resources>

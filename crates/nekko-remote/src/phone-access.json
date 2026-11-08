@@ -1,20 +1,81 @@
 {
+ "image": {
+  "requestKeys": [
+   "sessionId",
+   "prompt",
+   "params",
+   "images",
+   "size"
+  ],
+  "paramKeys": [
+   "modelId",
+   "width",
+   "height",
+   "steps",
+   "cfgScale",
+   "seed"
+  ],
+  "promptChars": 8000,
+  "idChars": 512,
+  "sessionIdChars": 128,
+  "width": [
+   256,
+   2048
+  ],
+  "height": [
+   256,
+   2048
+  ],
+  "sizeMultiple": 64,
+  "steps": [
+   1,
+   100
+  ],
+  "cfgScale": [
+   0,
+   30
+  ],
+  "seed": [
+   -1,
+   2147483647
+  ],
+  "editImages": 4,
+  "editImageTypes": [
+   "png",
+   "jpeg",
+   "webp"
+  ],
+  "editImageChars": 6291456,
+  "sizeKeys": [
+   "width",
+   "height"
+  ]
+ },
  "channels": [
+  "service:status",
+  "service:updateState",
+  "service:restart",
+  "service:updateCheck",
+  "service:updateDownload",
+  "service:updateInstall",
   "activity:state",
   "app:info",
   "app:quit",
   "artifact:read",
+  "audit:read",
   "changes:list",
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
   "chat:interruptQueued",
   "chat:pending",
+  "chat:generateImage",
   "chat:queue",
   "chat:send",
   "chat:steer",
   "context:preview",
   "device:signOut",
+  "engine:models",
   "engine:status",
   "files:list",
   "files:read",
@@ -152,8 +213,12 @@
   ]
  },
  "readChannels": [
+  "service:status",
+  "service:updateState",
+  "audit:read",
   "changes:list",
   "chat:pending",
+  "engine:models",
   "limits:get",
   "machine:summary",
   "models:list",
@@ -199,6 +264,11 @@
   "security:challenge"
  ],
  "changeChannels": [
+  "chat:generateImage",
+  "service:restart",
+  "service:updateCheck",
+  "service:updateDownload",
+  "service:updateInstall",
   "session:setSupportingWorkspaces",
   "workspace:addByPath",
   "workspace:remove",
@@ -1036,6 +1106,10 @@
    "channels": [
     "session:setOptions",
     "settings:update"
+   ],
+   "serviceChannels": [
+    "service:restart",
+    "service:updateInstall"
    ]
   },
   "desktopGuarded": {

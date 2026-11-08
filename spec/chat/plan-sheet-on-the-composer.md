@@ -124,6 +124,16 @@ PR, CI, Task, File, Preview and Sub-agent chips use text prefixes so their purpo
 
 Acceptance: inactive children and children of other parents do not enter the Running row; running children remain visible above collapsed steps; labels identify link types. Focused rendering regressions and isolated Electron evidence cover these behaviors. Live-provider delegation and packaged builds are not verified by fixtures.
 
+## The conversation scrolls behind the plan (implemented 2026-11-06)
+
+Issue: [#1666](https://github.com/nekko-labs/nekko-agent/issues/1666).
+
+- **Intent.** The plan took a full-width row above the composer, so the transcript stopped at the plan's top edge and a tall plan squeezed the conversation. The conversation should keep scrolling behind the plan and the per-chat Nekko, as it already did behind the composer's top edge.
+- **Behavior.** In a chat pane (the Agent tab and wall windows, `data-chat-surface="full"`) the plan floats over the foot of the transcript instead of taking a row. Its shape, width, shoulders and tuck under the composer are unchanged; it is clipped at the composer's top edge, so it never paints over the message box. Opening, folding or growing the plan no longer moves the transcript.
+- **Reaching the last row.** The transcript's bottom padding follows the plan's height plus 16 px (`--chat-plan-clearance`, from a ResizeObserver on the plan; the composer column's children are watched for the plan mounting, never the editor's text), and never drops below the mascot's 68 px. The **Scroll to latest** pill sits just above the plan.
+- **Unchanged.** The lone wall composer (`surface="composer"`) and archived chats have no floating plan; a clean-start chat and an open question still hide it.
+
+Verification: hidden, off-screen, non-focusable Electron captures (`chat-visibility-sandbox.cjs` through `layout-evidence-integration.cjs`) check that the transcript's scroll area reaches the composer behind the plan, the padding clears the plan, and the plan's bottom meets the composer's top. Not checked in a packaged build or at narrow widths beyond the fixture.
 ## Flat list with related step details (implemented; #2007)
 
 Issue: [#2007](https://github.com/nekko-labs/nekko-agent/issues/2007).
@@ -135,3 +145,15 @@ Issue: [#2007](https://github.com/nekko-labs/nekko-agent/issues/2007).
 - **Scope.** Shared desktop/web renderer only. Native iOS/Android presentation is unchanged; parity would be a separate change.
 
 Verification: focused `PlanSheet.test.tsx`, `PlanRail.test.tsx`, `planStepLinks.test.ts` and `claudeAgentPlan.test.ts` cover original order/progress, report marks, per-check link ownership, folded summary and preserved disclosures. `plan-sheet-sandbox.cjs` covers hidden Electron screenshots at 1440×900 and the standalone composer at 390×844, step click/Enter, chip placement, ripple/reduced motion and interruption. Packaged builds, a live provider and native mobile apps are not verified by these fixtures.
+
+## Live status on PR and task chips, and an Agents label (implemented; #2089)
+
+Issue: [#2089](https://github.com/nekko-labs/nekko-agent/issues/2089).
+
+- **Intent.** Philip: task and PR chips had no pull request glyph, and a grey task chip looked like a draft whatever its real state. The sub-agent cards needed a heading and icon on their left.
+- **PR chips.** Each wears the Gentleface pull request glyph for its state (open, draft, merged, closed), the same glyphs every PR chip in the app now uses. Its hue is the live status: an open PR takes its CI's colour (failing red, running amber, passing green), an open PR without CI green and a draft grey, merged purple, closed red. The words are unchanged ("PR #2031 · Open · CI failing").
+- **GitHub issue task chips.** The chip reads the issue's live state through the same cached, minute-long read as a PR (`pr:info`; gh first, the REST API as fallback) and wears GitHub's glyph and colour: open green, closed as completed purple ("Done"), closed as not planned grey. Until the state is read, and for every other tracker (Linear, Jira, Trello, Asana, ClickUp, Todoist), the chip keeps the grey tag.
+- **Agents label.** The sub-agent card row leads with "Agents" under the Gentleface bots icon. It stays at the left edge while the cards scroll sideways.
+- **Scope.** Desktop and Local Web UI. The phone apps' plan sheets are unchanged.
+
+Verification: `PlanSheet.test.tsx` (issue glyphs and colours, the Agents label leading the cards), the `nekko-workspace` unit test for the issue read (gh and REST shapes, not-planned), and hidden, off-screen Electron captures (`plan-chip-status-sandbox.cjs`: the three issue states, the PR glyph on an open PR with failing CI, the label left of the first card, folded and open). Not checked against a live GitHub read in the app or in a packaged build.

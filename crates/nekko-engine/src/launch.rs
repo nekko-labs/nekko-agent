@@ -373,7 +373,7 @@ fn extract_template(dir: &str, entries: &[String], model_file: &str, work_dir: &
 
 /* ------------------------------------------------------ stable-diffusion */
 
-const ROLES: [&str; 6] = ["clip_l", "clip_g", "t5xxl", "vae", "llm", "taesd"];
+const ROLES: [&str; 7] = ["clip_l", "clip_g", "t5xxl", "vae", "llm", "taesd", "llm_vision"];
 
 /// `sd-server`'s arguments for one image model (`diffusionArgs`).
 pub fn diffusion_args(
@@ -420,7 +420,8 @@ pub fn diffusion_args(
         "--listen-port".into(),
         port.to_string(),
     ];
-    if let Some(family) = image_companion_set_for(model) {
+    let family = image_companion_set_for(model);
+    if let Some(family) = &family {
         let has = |r: &str| paths.get(r).is_some_and(|v| nekko_js::truthy(Some(v)));
         let missing: Vec<String> = family["files"]
             .as_array()
@@ -446,6 +447,11 @@ pub fn diffusion_args(
         }
         args.push(format!("--{key}"));
         args.push(p);
+    }
+    // A family's own switches (sampler, flow shift, model args); sd-server takes
+    // them as its default generation settings.
+    for a in family.as_ref().and_then(|f| f["launchArgs"].as_array()).into_iter().flatten() {
+        args.push(text(Some(a)));
     }
     if truthy(&preset, "offloadToCpu") {
         args.push("--offload-to-cpu".into());
@@ -584,6 +590,12 @@ pub fn explain_load_error(log: &[String]) -> String {
 
 /// One image request as stable-diffusion.cpp's server takes it, or why it is
 /// refused (`imageGenerationBody`).
+/// At most this many pictures to edit from, as the Photo composer allows.
+pub const MAX_REF_IMAGES: usize = 4;
+/// Their data URLs together, under the engine router's 25 MB request limit.
+const MAX_REF_BYTES: usize = 20 * 1024 * 1024;
+const REF_PROBLEM: &str = "Attach up to 4 pictures to edit, each a PNG, JPEG or WebP image, 20 MB in all.";
+
 pub fn image_generation_body(request: &Value) -> Result<String, String> {
     let problem = || {
         "Use a prompt, dimensions from 256 to 2048 in multiples of 64, 1 to 100 steps and CFG from 0 to 30.".to_string()
@@ -608,9 +620,24 @@ pub fn image_generation_body(request: &Value) -> Result<String, String> {
     if !ok {
         return Err(problem());
     }
-    let extra = nekko_js::stringify(
-        &json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed }),
-    );
+    // Pictures to edit: sd.cpp's reference images, as data URLs (`ref_images`).
+    let refs: Vec<Value> = match request.get("refImages") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(list)) => list.clone(),
+        Some(_) => return Err(REF_PROBLEM.into()),
+    };
+    let ref_ok = refs.len() <= MAX_REF_IMAGES
+        && refs.iter().all(|r| r.as_str().is_some_and(|s| s.starts_with("data:image/") && s.contains(";base64,")))
+        && refs.iter().filter_map(Value::as_str).map(str::len).sum::<usize>() <= MAX_REF_BYTES;
+    if !ref_ok {
+        return Err(REF_PROBLEM.into());
+    }
+    let mut native =
+        json!({ "sample_params": { "sample_steps": steps, "guidance": { "txt_cfg": cfg } }, "seed": seed });
+    if !refs.is_empty() {
+        native["ref_images"] = Value::Array(refs);
+    }
+    let extra = nekko_js::stringify(&native);
     let mut body = Map::new();
     if let Some(m) = request.get("modelId") {
         body.insert("model".into(), m.clone());
@@ -621,6 +648,70 @@ pub fn image_generation_body(request: &Value) -> Result<String, String> {
     body.insert("n".into(), json!(1));
     body.insert("output_format".into(), json!("png"));
     Ok(nekko_js::stringify(&Value::Object(body)))
+}
+
+const CLIP_PROBLEM: &str = "A clip is 1 to 121 frames in steps of 4 (1, 5, 9 ... 121) at 1 to 60 frames a second.";
+
+/// A short clip's pixel count: about sd.cpp's documented 832x480 for Wan.
+const CLIP_AREA: f64 = 832.0 * 480.0;
+/// Frames and playback rate when the request names none: sd.cpp's Wan example (about 2 s).
+const CLIP_FRAMES: u64 = 33;
+const CLIP_FPS: u64 = 16;
+
+/// A clip's size: the requested shape at about [`CLIP_AREA`], in multiples of 32 from 256 to 1280.
+pub fn clip_size(width: f64, height: f64) -> (u64, u64) {
+    let ratio = if width > 0.0 && height > 0.0 { width / height } else { 832.0 / 480.0 };
+    let snap = |n: f64| ((n / 32.0).round() * 32.0).clamp(256.0, 1280.0) as u64;
+    (snap((CLIP_AREA * ratio).sqrt()), snap((CLIP_AREA / ratio).sqrt()))
+}
+
+/// `POST /sdcpp/v1/vid_gen`'s body for one clip (sd.cpp's native schema).
+///
+/// The request is an image request (`image_generation_body`'s fields) plus
+/// optional `videoFrames` (1-121) and `fps` (1-60); a first picture to start
+/// from comes as `refImages[0]` and goes as `init_image`. The clip comes back
+/// as an animated WebP, which any image element plays: WebM needs an sd-server
+/// built with it, and fails the request otherwise.
+pub fn video_generation_body(request: &Value) -> Result<String, String> {
+    // The image checks cover the prompt, steps, CFG, seed and pictures.
+    let checked: Value = serde_json::from_str(&image_generation_body(request)?).map_err(|e| e.to_string())?;
+    let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or_default();
+    let p = checked["prompt"].as_str().unwrap_or_default();
+    // The last block is ours: a prompt may itself contain the tag.
+    let native: Value = p
+        .rfind("<sd_cpp_extra_args>")
+        .and_then(|i| serde_json::from_str(&p[i + "<sd_cpp_extra_args>".len()..p.rfind("</sd_cpp_extra_args>")?]).ok())
+        .unwrap_or_else(|| json!({}));
+    let count = |k: &str, d: u64, max: u64| -> Result<u64, String> {
+        match request.get(k) {
+            None | Some(Value::Null) => Ok(d),
+            Some(v) => v
+                .as_f64()
+                .filter(|f| f.fract() == 0.0 && *f >= 1.0 && *f <= max as f64)
+                // Wan's video VAE packs 4 frames after the first: 1, 5, 9 ... 121.
+                .filter(|f| k != "videoFrames" || (*f as u64) % 4 == 1)
+                .map(|f| f as u64)
+                .ok_or_else(|| CLIP_PROBLEM.to_string()),
+        }
+    };
+    let frames = count("videoFrames", CLIP_FRAMES, 121)?;
+    let fps = count("fps", CLIP_FPS, 60)?;
+    let num = |k: &str| request.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    let (width, height) = clip_size(num("width"), num("height"));
+    let mut body = json!({
+        "prompt": prompt,
+        "width": width,
+        "height": height,
+        "seed": native["seed"],
+        "video_frames": frames,
+        "fps": fps,
+        "sample_params": native["sample_params"],
+        "output_format": "webp",
+    });
+    if let Some(first) = native.get("ref_images").and_then(Value::as_array).and_then(|r| r.first()) {
+        body["init_image"] = first.clone();
+    }
+    Ok(nekko_js::stringify(&body))
 }
 
 /// The memory pool a model would be loaded into (`engineMemory`).

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { parsePrUrl, type PrInfo } from '@nekko-agent/shared';
+import { parsePrUrl, type IssueInfo, type PrInfo } from '@nekko-agent/shared';
 import { PR_STATUS_LABEL as STATUS_LABEL, PrStatusIcon, prStatus, prTone } from './SessionPrChip.js';
 
 export { prStatus };
@@ -7,34 +7,46 @@ export { prStatus };
 /** How long a looked-up PR state is trusted before a chip asks again. */
 const FRESH_MS = 60_000;
 
-type Entry = { info: PrInfo | null; at: number };
+type Info = PrInfo | IssueInfo;
+type Entry = { info: Info | null; at: number };
 const known = new Map<string, Entry>();
-const inflight = new Map<string, Promise<PrInfo | null>>();
-const listeners = new Map<string, Set<(info: PrInfo | null) => void>>();
+const inflight = new Map<string, Promise<Info | null>>();
+const listeners = new Map<string, Set<(info: Info | null) => void>>();
 
-/** One shared lookup per PR, however many chips in the transcript name it. */
-function lookup(url: string): void {
+/** One shared lookup per PR or issue, however many chips name it. */
+function lookup(url: string, read: ((url: string) => Promise<Info | null>) | undefined): void {
   const hit = known.get(url);
-  if ((hit && Date.now() - hit.at < FRESH_MS) || inflight.has(url) || !window.nekko?.getPrInfo) return;
-  const read = window.nekko.getPrInfo(url).catch(() => hit?.info ?? null);
-  inflight.set(url, read);
-  void read.then((info) => {
+  if ((hit && Date.now() - hit.at < FRESH_MS) || inflight.has(url) || !read) return;
+  const pending = read(url).catch(() => hit?.info ?? null);
+  inflight.set(url, pending);
+  void pending.then((info) => {
     inflight.delete(url);
     known.set(url, { info, at: Date.now() });
     listeners.get(url)?.forEach((notify) => notify(info));
   });
 }
 
-export function usePrInfo(url: string): PrInfo | null {
-  const [info, setInfo] = useState<PrInfo | null>(() => known.get(url)?.info ?? null);
+function useInfo(url: string, read: () => ((url: string) => Promise<Info | null>) | undefined): Info | null {
+  const [info, setInfo] = useState<Info | null>(() => known.get(url)?.info ?? null);
   useEffect(() => {
     let set = listeners.get(url);
     if (!set) listeners.set(url, (set = new Set()));
     set.add(setInfo);
-    lookup(url);
+    lookup(url, read());
     return () => { set.delete(setInfo); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
   return info;
+}
+
+export function usePrInfo(url: string): PrInfo | null {
+  return useInfo(url, () => window.nekko?.getPrInfo) as PrInfo | null;
+}
+
+/** A GitHub issue's live state; null for any other task link, or until it is read. */
+export function useIssueInfo(url: string): IssueInfo | null {
+  const info = useInfo(url, () => window.nekko?.getIssueInfo);
+  return info && 'kind' in info && info.kind === 'issue' ? info : null;
 }
 
 /** Test seam: forget every looked-up state. */

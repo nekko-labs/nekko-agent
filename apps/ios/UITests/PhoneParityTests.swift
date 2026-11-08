@@ -28,7 +28,10 @@ final class PhoneParityTests: XCTestCase {
         XCTAssertTrue(app.buttons["tools.guardrails"].waitForExistence(timeout: 3))
         attach(app, "policy-keyboard-after")
         app.buttons["tools.yolo"].tap()
-        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "Works on its own")
+        // Turning No restrictions on warns first (decision 0054).
+        XCTAssertTrue(app.buttons["yoloWarning.confirm"].waitForExistence(timeout: 5))
+        app.buttons["yoloWarning.confirm"].tap()
+        XCTAssertEqual(app.buttons["newChat.tools"].value as? String, "No restrictions")
         XCTAssertTrue((field.value as? String)?.contains("**Bold**") == true)
     }
 
@@ -115,7 +118,8 @@ final class PhoneParityTests: XCTestCase {
     private func launch(_ fixture: String, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES",
-                               "-uiTestReset", "YES", "-theme", "dark", "-AppleLanguages", "(en)", "-expertMode", "NO", fixture] + extra
+                               "-uiTestReset", "YES", "-theme", "dark", "-AppleLanguages", "(en)", "-expertMode", "NO",
+                               "-skipYoloWarning", "NO", fixture] + extra
         app.terminate()
         app.launch()
         return app

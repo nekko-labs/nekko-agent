@@ -7,4 +7,9 @@
     <string name="dashboard_talk">Nekko に話しかける</string>
     <string name="dashboard_open">アプリを開く</string>
     <string name="dashboard_voice_fallback">音声操作はアプリで行います。ロックを解除して「聞き取り」をタップしてください。</string>
+    <string name="chats_showmodel">モデル</string>
+    <string name="chats_card_details">カードの詳細</string>
+    <string name="chats_showupdated">更新時刻</string>
+    <string name="chats_showcontext">コンテキストウィンドウ</string>
+    <string name="chats_showpullrequests">プルリクエスト</string>
 </resources>

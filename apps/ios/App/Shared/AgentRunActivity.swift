@@ -102,7 +102,7 @@ struct StopRunIntent: LiveActivityIntent {
     }
 }
 
-/// A row on the card: bring that chat into focus (the buttons answer it).
+/// Bring that chat into focus on the card. The card no longer has a button for it (a chip opens the chat, #1912).
 struct FocusChatIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Show a chat on the card"
     static let isDiscoverable = false

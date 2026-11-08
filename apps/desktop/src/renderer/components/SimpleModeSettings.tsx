@@ -4,7 +4,7 @@ import { useExpertMode, useSimpleChoices } from '../simpleMode.js';
 import { ChatIcon, CodeIcon, FolderIcon, GlobeIcon, PlusIcon } from '../icons.js';
 
 /*
- * Settings > Simple mode: per control, Show (both modes, when it applies),
+ * Settings > Customize > Simple mode: per control, Show (both modes, when it applies),
  * Detailed only, or Hide; a monitor offers When running (its default), Always or
  * Hide. Each area is drawn beside its switches, and a control the previewed
  * mode leaves out keeps a dashed outline where it would be.
@@ -51,14 +51,15 @@ const PREVIEWS: Record<string, () => React.JSX.Element> = {
   'Chat · message box': () => (
     <div className="sm-frame sm-composer">
       <div className="sm-placeholder">Ask a follow-up</div>
-      <div className="sm-row"><M><PlusIcon className="h-3 w-3" /></M><M id="mode">Mode · Guardrails</M><M id="privacy">Privacy Shield</M><span className="flex-1" /><M id="suggest">Suggestions</M><M>Send</M></div>
-      <div className="sm-row sm-details"><M><FolderIcon className="h-3 w-3" /> nekko-agent</M><M id="model">Claude Opus 5.5</M><M id="effort">Effort · Medium</M><M id="asks">Asks first</M><M id="cost">$0.42</M><span className="flex-1" /><M id="tools">Tools</M><M id="tools">MCP</M><M id="internet"><GlobeIcon className="h-3 w-3" /></M><M id="context">Ring</M></div>
+      <div className="sm-row"><M><PlusIcon className="h-3 w-3" /></M><M id="privacy">Privacy Shield</M><span className="flex-1" /><M id="suggest">Suggestions</M><M>Send</M></div>
+      <div className="sm-row sm-details"><M><FolderIcon className="h-3 w-3" /> nekko-agent</M><M id="model">Claude Opus 5.5</M><M id="effort">Effort · Medium</M><M id="asks">Ask when it matters</M><M id="cost">$0.42</M><span className="flex-1" /><M id="tools">Tools</M><M id="tools">MCP</M><M id="internet"><GlobeIcon className="h-3 w-3" /></M><M id="context">Ring</M></div>
+      <div className="sm-row"><M id="mode">Mode · Fusion</M></div>
     </div>
   ),
   'Chat · conversation': () => (
     <div className="sm-frame">
       <div className="sm-row justify-end"><span className="sm-bubble">Summarize these three PDFs</span></div>
-      <div className="sm-row"><M id="thinking" wide>Thought for 12s · Read 3 files</M></div>
+      <div className="sm-row"><M id="thinking">Thought for 12s</M><M wide>▸ Read 3 files</M></div>
       <div className="sm-lines"><i /><i /><i style={{ width: '60%' }} /></div>
       <div className="sm-row"><M id="stats">Opus 5.5 · 2.1k in · 640 out · 48 tok/s</M></div>
       <div className="sm-row"><M id="pr-status" wide>Pull request #482 · Checks passing</M></div>
@@ -75,7 +76,7 @@ const PREVIEWS: Record<string, () => React.JSX.Element> = {
     <div className="sm-frame"><div className="sm-row"><M>Qwen3 8B · Load</M><M id="engine">Detailed load flags</M></div><div className="sm-row"><M id="engine" wide>Model server settings</M></div></div>
   ),
   Settings: () => (
-    <div className="sm-frame"><div className="sm-row"><M>General</M><M>Style</M><M>Agents</M><M>Safety</M><M id="set-tools">Tools</M></div></div>
+    <div className="sm-frame"><div className="sm-row"><M>General</M><M>Customize</M><M>Agents</M><M>Safety</M><M id="set-tools">Tools</M></div></div>
   ),
 };
 

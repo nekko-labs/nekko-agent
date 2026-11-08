@@ -5,7 +5,7 @@ import { ResidentModels } from './ResidentModels.js';
 import { ModelDetail } from './ModelDetail.js';
 import { RecommendedModels } from './RecommendedModels.js';
 import { CheckIcon } from '../../icons.js';
-import { groupModelFamilies, gpuGuidance, type LibraryModel } from './modelFamilies.js';
+import { familyKind, groupModelFamilies, gpuGuidance, type FamilyKind, type LibraryModel } from './modelFamilies.js';
 import { VoiceSettings } from '../VoiceSettings.js';
 
 /**
@@ -22,6 +22,21 @@ import { VoiceSettings } from '../VoiceSettings.js';
  * "download" to what is not — but they share the query, the empty states, and
  * the size/fit vocabulary.
  */
+/** The kind filter above the list: what a model makes. */
+export const KIND_FILTERS: { id: 'all' | FamilyKind; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'image', label: 'Pictures' },
+  { id: 'video', label: 'Video' },
+];
+
+/** One line under the filter when it needs saying: what the list can and cannot do for that kind. */
+export function kindNote(kind: 'all' | FamilyKind, query: string, shown: number): string | null {
+  if (kind === 'video') return 'Wan 2.2 TI2V 5B makes short clips in a Photo chat (experimental, needs a graphics card). Other video models are listed but not supported yet.';
+  if (kind === 'image' && !query.trim() && !shown) return 'No picture models here yet. Download one of the picks above, or search Hugging Face.';
+  return null;
+}
+
 export function ModelsHome({
   providerId,
   models,
@@ -57,6 +72,7 @@ export function ModelsHome({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [repoId, setRepoId] = useState<string | null>(null);
   const [format, setFormat] = useState<'gguf' | 'mlx'>('gguf');
+  const [kind, setKind] = useState<'all' | FamilyKind>('all');
 
   useEffect(() => {
     let live = true;
@@ -75,8 +91,9 @@ export function ModelsHome({
   const families = useMemo(() => groupModelFamilies(models, catalog), [models, catalog]);
   const visible = useMemo(() => {
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return families.filter(f => words.every(word => [f.name, ...f.local.flatMap(m => [m.name, m.sourceRepo, m.quantization, m.folderProvider]), ...f.catalog.flatMap(m => [m.name, m.id, ...m.tags])].join(' ').toLowerCase().includes(word)));
-  }, [families, query]);
+    return families.filter(f => (kind === 'all' || familyKind(f) === kind) && words.every(word => [f.name, ...f.local.flatMap(m => [m.name, m.sourceRepo, m.quantization, m.folderProvider]), ...f.catalog.flatMap(m => [m.name, m.id, ...m.tags])].join(' ').toLowerCase().includes(word)));
+  }, [families, query, kind]);
+  const note = kindNote(kind, query, visible.length);
   const selected = visible.find(f => f.key === selectedKey) ?? visible[0];
   const repositories = [...new Set([...(selected?.catalog.map(m => m.id) ?? []), ...(selected?.local.map(m => m.sourceRepo).filter((id): id is string => Boolean(id)) ?? [])])];
   const selectedRepo = repositories.includes(repoId ?? '') ? repoId! : repositories[0];
@@ -87,6 +104,10 @@ export function ModelsHome({
     <div className="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.6fr)]">
       <div className="min-w-0 lg:border-r lg:border-line lg:pr-5">
         <input className="input w-full text-xs" aria-label="Search models" placeholder="Search models and Hugging Face" value={query} onChange={e => setQuery(e.target.value)} spellCheck={false} />
+        <div className="mt-2 flex flex-wrap gap-1" role="radiogroup" aria-label="Kind of model">
+          {KIND_FILTERS.map(k => <button key={k.id} type="button" role="radio" aria-checked={kind === k.id} data-kind-filter={k.id} className="rounded-full border px-2.5 py-0.5 text-2xs" style={kind === k.id ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)', color: 'var(--ink)' } : { borderColor: 'var(--line)', color: 'var(--ink-soft)' }} onClick={() => { setKind(k.id); setSelectedKey(null); }}>{k.label}</button>)}
+        </div>
+        {note && <p role="status" className="mt-2 text-2xs text-ink-soft" data-kind-note>{note}</p>}
         {mlx && <select className="input mt-2 text-xs" aria-label="Catalog format" value={format} onChange={e => setFormat(e.target.value as 'gguf' | 'mlx')}><option value="gguf">GGUF</option><option value="mlx">MLX</option></select>}
         <p className="mt-2 text-2xs text-ink-faint">{searching ? 'Searching…' : `${visible.length} models`} · Checkmarks mean downloaded</p>
         {error && <p role="status" className="mt-2 text-xs text-ink-faint">{error}</p>}
@@ -100,7 +121,7 @@ export function ModelsHome({
               {f.local.length > 0 && <span className="shrink-0 text-success" aria-label="Downloaded"><CheckIcon className="h-4 w-4" /></span>}
             </button>;
           })}
-          {!searching && !visible.length && <p className="py-4 text-xs text-ink-faint">No matching models. Try a shorter search.</p>}
+          {!searching && !visible.length && !note && <p className="py-4 text-xs text-ink-faint">No matching models. Try a shorter search.</p>}
         </div>
       </div>
       <div className="min-w-0" aria-label="Model details">

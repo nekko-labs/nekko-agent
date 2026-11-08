@@ -43,6 +43,8 @@ final class Prefs {
     var dictationHold: Bool { didSet { d.set(dictationHold, forKey: "dictationHold") } }
     /// The first-open video for always-on dictation was closed, any way (IO-28); the mic's first tap shows it until then.
     var voiceIntroSeen: Bool { didSet { d.set(voiceIntroSeen, forKey: "voiceIntroSeen") } }
+    /// "Send your first prompt" was closed, any way; it opens once over the first ever new chat until then.
+    var firstPromptIntroSeen: Bool { didSet { d.set(firstPromptIntroSeen, forKey: "firstPromptIntroSeen") } }
     /// The first run (IO-31) was finished or skipped; it never shows again.
     var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
@@ -72,6 +74,9 @@ final class Prefs {
     var lastFolder: [String: String] { didSet { d.set(lastFolder, forKey: "lastFolder") } }
     /// How the chat list is grouped, sorted and what it shows (the desktop Agents panel's view menu).
     var chatListView: ChatListView { didSet { d.set(chatListView.encoded, forKey: "chatListView") } }
+    /// Explicitly opened chat groups, by stable group key. New groups start folded.
+    /// Kept on this device across navigation and launches, never synced to a computer.
+    var openedChatGroups: Set<String> { didSet { d.set(openedChatGroups.sorted(), forKey: "openedChatGroups") } }
     /// Per computer, the project groups' order as dragged on this iPhone (folder ids and `ChatGroup.general`).
     var groupOrder: [String: [String]] { didSet { d.set(groupOrder, forKey: "groupOrder") } }
     /// Per computer, the two panes on a folding phone or iPad (`PaneLayout` JSON, FD-3). Never leaves this iPhone.
@@ -80,6 +85,9 @@ final class Prefs {
     var paneTipShown: Bool { didSet { d.set(paneTipShown, forKey: "paneTipShown") } }
     /// The note that the panes were made without a foldable to test on was dismissed (on this device).
     var foldNoteDismissed: Bool { didSet { d.set(foldNoteDismissed, forKey: "foldNoteDismissed") } }
+    /// "Don't warn me again" on the YOLO warning (decision 0054). On this device
+    /// only, not the computer's setting; Settings > Warn before YOLO turns it back off.
+    var skipYoloWarning: Bool { didSet { d.set(skipYoloWarning, forKey: YoloWarning.skipKey) } }
 
     init(defaults: UserDefaults = .standard) {
         d = defaults
@@ -108,6 +116,8 @@ final class Prefs {
         dictationOnComputer = flag("dictationOnComputer", true)
         dictationHold = flag("dictationHold", false)
         voiceIntroSeen = flag("voiceIntroSeen", false)
+        // UI test runs start with it seen, so it never covers a test's new chat; a test opts in with `-firstPromptIntroSeen NO`.
+        firstPromptIntroSeen = flag("firstPromptIntroSeen", ProcessInfo.processInfo.arguments.contains("-uiTestReset"))
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))
@@ -118,10 +128,12 @@ final class Prefs {
         lastTools = d.dictionary(forKey: "lastTools") as? [String: String] ?? [:]
         lastFolder = d.dictionary(forKey: "lastFolder") as? [String: String] ?? [:]
         chatListView = ChatListView.parse(d.data(forKey: "chatListView"))
+        openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])
         groupOrder = d.dictionary(forKey: "groupOrder") as? [String: [String]] ?? [:]
         paneLayouts = d.dictionary(forKey: "paneLayouts") as? [String: Data] ?? [:]
         paneTipShown = flag("paneTipShown", false)
         foldNoteDismissed = flag("foldNoteDismissed", false)
+        skipYoloWarning = flag(YoloWarning.skipKey, false)
         // On unless the user turned them off: an install that never touched a switch has nothing stored.
         func choice(_ k: String) -> Bool? { defaults.object(forKey: k) == nil ? nil : defaults.bool(forKey: k) }
         keepChatList = OfflineSetting.isOn(stored: choice("keepChatList"))

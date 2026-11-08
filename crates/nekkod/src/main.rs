@@ -14,8 +14,10 @@ mod admission;
 mod agent_logs;
 mod api_server;
 mod artifacts;
+mod audit;
 mod auto_continue;
 mod automation;
+mod awake;
 mod background;
 
 mod boot;
@@ -35,6 +37,7 @@ mod datalock;
 mod decide;
 mod decisions;
 mod desktop;
+mod dlp;
 mod downloads;
 mod engine;
 mod federation;
@@ -76,6 +79,7 @@ mod runner;
 mod runtimes;
 mod sandbox;
 mod security;
+mod service_management;
 mod settings;
 mod side;
 mod sideband;
@@ -185,7 +189,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let data_dir = std::path::PathBuf::from(&cfg.data_dir);
     let sessions = Arc::new(nekko_store::SessionStore::new(&cfg.data_dir));
     let mcp: Arc<mcp::Mcp> = Arc::default();
-    let changes = Arc::new(nekko_tools::ChangeTracker::new());
+    let changes = Arc::new(nekko_tools::ChangeTracker::persistent(sessions.clone()));
     {
         // The UI (and a paired phone, through the relay agent here) hears that a chat's changes moved.
         let hub = hub.clone();

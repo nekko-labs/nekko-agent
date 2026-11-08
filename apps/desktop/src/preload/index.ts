@@ -107,6 +107,7 @@ const api: NekkoApi = {
   telemetryStatus: () => inv(IpcChannels.telemetryStatus),
   feedbackInfo: () => inv(IpcChannels.feedbackInfo),
   feedbackSend: (message, includeAppInfo, screenshots) => inv(IpcChannels.feedbackSend, message, includeAppInfo, screenshots),
+  updatesJoin: (email, name) => inv(IpcChannels.updatesJoin, email, name),
   syncTurnOn: () => inv(IpcChannels.syncTurnOn),
   syncConfirmRecoveryKey: (text) => inv(IpcChannels.syncConfirmRecoveryKey, text),
   syncRestore: (text) => inv(IpcChannels.syncRestore, text),
@@ -284,6 +285,7 @@ const api: NekkoApi = {
   readLog: (id, opts) => inv(IpcChannels.logsRead, id, opts ?? {}),
   fetchRemoteImage: (url) => inv(IpcChannels.imageFetch, url),
 
+  readAudit: (sessionId) => inv(IpcChannels.auditRead, sessionId),
   listChanges: (sessionId) => inv(IpcChannels.changesList, sessionId),
   acceptChange: (sessionId, path) => inv(IpcChannels.changeAccept, sessionId, path),
   acceptAllChanges: (sessionId) => inv(IpcChannels.changeAcceptAll, sessionId),
@@ -296,6 +298,7 @@ const api: NekkoApi = {
   createPr: (workspaceId, opts) => inv(IpcChannels.prCreate, workspaceId, opts),
   getPrChecks: (url) => inv(IpcChannels.prChecks, url),
   getPrInfo: (url) => inv(IpcChannels.prInfo, url),
+  getIssueInfo: (url) => inv(IpcChannels.prInfo, url),
 
   gitDiff: (workspaceId, opts) => inv(IpcChannels.gitDiff, workspaceId, opts),
   gitLog: (workspaceId, opts) => inv(IpcChannels.gitLog, workspaceId, opts),

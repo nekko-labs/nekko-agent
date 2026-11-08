@@ -166,9 +166,6 @@
     <string name="settings_confirm_delete_detail">Demander d’abord, ici et sur %1$s</string>
     <string name="settings_pc_footer_online">Enregistré sur %1$s, les mêmes paramètres que dans Nekko Agent là-bas. Chaque discussion peut toujours changer son propre mode.</string>
     <string name="settings_pc_footer_offline">%1$s est hors ligne. Connectez-vous pour modifier ses paramètres.</string>
-    <string name="settings_yolo_title">Utiliser YOLO pour les nouvelles discussions ?</string>
-    <string name="settings_yolo_text">Les nouvelles discussions sur %1$s exécuteront des commandes et modifieront des fichiers sans vous demander. Vos règles de refus bloquent toujours. Vous pouvez revenir en arrière ici ou sur %1$s à tout moment.</string>
-    <string name="settings_use_yolo">Utiliser YOLO</string>
     <string name="settings_step_up_switch">Passer les nouvelles discussions de %1$s en %2$s</string>
     <string name="settings_step_up_change">Modifier les paramètres de %1$s</string>
     <string name="settings_mode_ask">Demander</string>
@@ -388,4 +385,6 @@
     <string name="settings_card_detailed_detail">Ajoute la première ligne de la dernière réponse</string>
     <string name="settings_card_footer_private">Aucun texte de discussion ne quitte votre ordinateur pour l’écran verrouillé.</string>
     <string name="settings_card_footer_text">Les noms et étapes des discussions s’affichent quand le téléphone est déverrouillé ; un téléphone verrouillé qui masque les contenus sensibles affiche les textes de Minimal. Autoriser demande d’abord de déverrouiller.</string>
+    <string name="settings_warn_yolo">Avertir avant YOLO</string>
+    <string name="settings_warn_yolo_detail">Expliquer ce que YOLO laisse passer avant qu’une discussion ou le mode par défaut d’un ordinateur y passe</string>
 </resources>

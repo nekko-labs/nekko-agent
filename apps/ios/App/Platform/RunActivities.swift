@@ -22,6 +22,20 @@ protocol CardActivity: AnyObject {
     func end()
 }
 
+/// The cards iOS has up, whoever started them, for `RunActivities` to keep one:
+/// ActivityKit in the app, a fake in the tests.
+@MainActor
+struct CardsUp {
+    /// Their ActivityKit ids, in the order iOS lists them.
+    var ids: @MainActor () -> [String]
+    /// End one by its id.
+    var end: @MainActor (String) -> Void
+    /// Carry on with one, when the app has no card of its own.
+    var take: @MainActor (String) -> CardActivity?
+
+    static var system: CardsUp { CardsUp(ids: SystemCard.upIds, end: SystemCard.end(id:), take: SystemCard.take(id:)) }
+}
+
 /// The one Live Activity card for all of the computer's chats (`buildCard`),
 /// rebuilt from the chat list, who is running, and what each run is doing
 /// (the computer's events). Updates are throttled (ActivityKit budgets them)
@@ -61,7 +75,7 @@ final class RunActivities {
     private var runs: [String: Run] = [:]
     /// Closed with the card's button; off the card until the chat runs again.
     private var dismissed: Set<String> = []
-    /// The chat a row tap brought up, until another chat newly needs you.
+    /// The chat brought into focus (`focus`), until another chat newly needs you.
     var pinnedFocus: String?
     /// The chat the card's mic last sent to, and its reply line then: "Sent: ..." stays until that changes.
     private var sentTo: (id: String, reply: String)?
@@ -76,6 +90,7 @@ final class RunActivities {
     /// `activity` (a reconnect empties it until the next event).
     static let quietRun: TimeInterval = 30 * 60
     private let request: @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity?
+    private let cardsUp: CardsUp
 
     var level: () -> LiveLevel = { .none }
     /// The card's push token for the relay, nil once the card is gone.
@@ -84,8 +99,10 @@ final class RunActivities {
     var source: () -> Source? = { nil }
 
     /// `adoptLeftover`: carry on with a card an earlier launch left up.
-    init(request: @escaping @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true) {
+    init(request: @escaping @MainActor (NekkoCardAttributes, LiveCardState) -> CardActivity? = SystemCard.request, adoptLeftover: Bool = true,
+         cardsUp: CardsUp = .system) {
         self.request = request
+        self.cardsUp = cardsUp
         if adoptLeftover, let leftover = SystemCard.leftover() {
             card = leftover
             attach(leftover)
@@ -116,7 +133,7 @@ final class RunActivities {
         switch e {
         case .text, .reasoning: running(String(localized: "Writing…"))
         case .toolCall(_, let call): running(Transcript.toolLabel(call))
-        case .approvalRequired(_, let a): running(Transcript.toolLabel(a.call), callId: a.call.id, severity: a.severity.rawValue)
+        case .approvalRequired(_, let a): running(Transcript.toolVerb(a.call), callId: a.call.id, severity: a.severity.rawValue)
         case .question(_, let q): running(q.questions.first?.question ?? String(localized: "A question for you"))
         case .toolResult, .questionResolved: running(String(localized: "Working…"))
         case .done: finish(.done, String(localized: "Finished"))
@@ -129,7 +146,7 @@ final class RunActivities {
         Task { @MainActor [weak self] in self?.refresh() }
     }
 
-    /// A row tap: that chat takes the focus (and the buttons).
+    /// That chat takes the focus (`FocusChatIntent`): the detail line and the mic follow it.
     func focus(_ sessionId: String) {
         pinnedFocus = sessionId
         refresh(urgent: true)
@@ -168,6 +185,7 @@ final class RunActivities {
             trailing?.cancel()
             trailing = nil
         }
+        reconcile()
         let level = level()
         let chats: [LiveChat], computerId: String, computerName: String
         var cached: LiveCardState?
@@ -234,6 +252,7 @@ final class RunActivities {
             card = request(attributes, state)
             if let card { attach(card) }
             lastUpdate = now
+            reconcile()
             return
         }
         guard state != previous else { return }
@@ -277,6 +296,21 @@ final class RunActivities {
         card = new
         attach(new)
         lastUpdate = Date()
+    }
+
+    /// One card, never two (`consolidateCards`): every card iOS has up but this
+    /// app's own ends. A second can be one the relay push-started while the app
+    /// was suspended, one a computer that was active before started, or one an
+    /// earlier launch left up. With no card of its own the app carries on with
+    /// the last one listed; a card for another computer or level then ends in `refresh`
+    /// and a new one starts.
+    private func reconcile() {
+        let (keep, extra) = consolidateCards(live: cardsUp.ids(), current: card?.id)
+        for id in extra { cardsUp.end(id) }
+        guard card == nil, let keep, let taken = cardsUp.take(keep) else { return }
+        swiped = nil
+        card = taken
+        attach(taken)
     }
 
     private func attach(_ c: CardActivity) {
@@ -457,14 +491,29 @@ final class SystemCard: CardActivity {
         }
     }
 
-    /// The card an earlier launch left up, if any. Extra cards, and the
-    /// one-per-chat activities of earlier versions, end.
+    /// The card an earlier launch left up, if any (the last listed). Extra cards, and
+    /// the one-per-chat activities of earlier versions, end.
     static func leftover() -> CardActivity? {
         for a in ActivityKit.Activity<AgentRunAttributes>.activities { Task { await a.end(nil, dismissalPolicy: .immediate) } }
-        // A stale card (past its staleDate while the app was suspended) is still up.
-        let cards = ActivityKit.Activity<NekkoCardAttributes>.activities.filter { $0.activityState != .ended && $0.activityState != .dismissed }
-        for a in cards.dropFirst() { Task { await a.end(nil, dismissalPolicy: .immediate) } }
-        return cards.first.map { SystemCard($0, state: $0.content.state) }
+        let (keep, extra) = consolidateCards(live: upIds(), current: nil)
+        for id in extra { end(id: id) }
+        return keep.flatMap(take(id:))
+    }
+
+    /// The cards that are up, as iOS lists them. A stale card (past its staleDate
+    /// while the app was suspended) is still up.
+    private static var up: [ActivityKit.Activity<NekkoCardAttributes>] {
+        ActivityKit.Activity<NekkoCardAttributes>.activities.filter { $0.activityState != .ended && $0.activityState != .dismissed }
+    }
+
+    static func upIds() -> [String] { up.map(\.id) }
+
+    static func end(id: String) {
+        for a in up where a.id == id { Task { await a.end(nil, dismissalPolicy: .immediate) } }
+    }
+
+    static func take(id: String) -> CardActivity? {
+        up.first { $0.id == id }.map { SystemCard($0, state: $0.content.state) }
     }
 }
 

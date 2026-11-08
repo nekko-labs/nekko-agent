@@ -7,6 +7,7 @@ import { usePaneVisible } from '../../paneVisibility.js';
 import { ActivityGroup } from './ActivityGroup.js';
 import { MessageBubble } from './MessageBubble.js';
 import { midTurnVoice } from './transcript.js';
+import { TurnActivityStatus } from './TurnActivityStatus.js';
 
 /**
  * The reply being written right now: its working steps and its text, read
@@ -58,11 +59,14 @@ export const LiveTurn = memo(function LiveTurn({
         return card ? <PrCard key={`pr_${card.toolCallId}`} url={card.url} event={card.event} info={prs.find((pr) => pr.url === card.url)} sessionId={sessionId} live={card.live} /> : null;
       })() : (
         <Fragment key={i}>
-          {block.kind === 'activity'
+          {block.kind === 'ask-reply'
+            ? <MessageBubble message={block.message} chronological />
+            : block.kind === 'activity'
             ? <ActivityGroup items={block.items} streaming={!!live && i === run.blocks.length - 1} turnRunning={!!live} toolActivity={live?.activity} pendingCallId={pendingCallId} />
             : <MessageBubble message={{ id: `live_${i}`, role: 'assistant', content: block.text, createdAt: 0 }} voice={i < last ? midTurnVoice(block.text) : !live && run.tools.length ? 'reply' : undefined} onImageClick={onImageClick} chronological />}
         </Fragment>
       ))}
+      {live && <TurnActivityStatus run={live} pendingCallId={pendingCallId} />}
     </>
   );
 });

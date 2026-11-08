@@ -171,6 +171,13 @@ function WorkspaceCardImpl({
   projects,
   subAgentCount = 0,
   showMetadata = true,
+  showModel = true,
+  showContext = true,
+  showPullRequests = true,
+  showGit = true,
+  showSubagents = true,
+  showWindows = true,
+  showUpdated = true,
   showComputer = true,
   showComputerIcons = true,
   zoneTint,
@@ -194,6 +201,13 @@ function WorkspaceCardImpl({
   subAgentCount?: number;
   /** The lines under the title; off, the card is its title row alone. */
   showMetadata?: boolean;
+  showModel?: boolean;
+  showContext?: boolean;
+  showPullRequests?: boolean;
+  showGit?: boolean;
+  showSubagents?: boolean;
+  showWindows?: boolean;
+  showUpdated?: boolean;
   /** The computer a remote agent runs on, on a line under the model. */
   showComputer?: boolean;
   /** That computer's icon, when it has one. */
@@ -270,13 +284,14 @@ function WorkspaceCardImpl({
       : 'Shell';
 
   const computerLine = showComputer && computersShown && !!computer;
-  const spawnLine = subAgentCount > 0 || windows > 1;
+  const modelLine = showModel || (showContext && isChat && (ctxUsed > 0 || compacting)) || (showPullRequests && !!terminal && !!terminalPrUrl(terminal));
+  const spawnLine = (showSubagents && subAgentCount > 0) || (showWindows && windows > 1);
   // The PR chip rides the end of the card's last line: its bottom right.
   const prLine: 'title' | 'model' | 'computer' | 'git' | 'spawn' = !showMetadata
     ? 'title'
-    : spawnLine ? 'spawn' : git ? 'git' : computerLine ? 'computer' : 'model';
+    : spawnLine ? 'spawn' : showGit && git ? 'git' : computerLine ? 'computer' : modelLine ? 'model' : 'title';
   const prChip = (line: typeof prLine) =>
-    prs.length > 0 && prLine === line ? <span className="ml-auto inline-flex shrink-0 pl-1 text-2xs leading-[15px]"><SessionPrChip prs={prs} /></span> : null;
+    showPullRequests && prs.length > 0 && prLine === line ? <span className="ml-auto inline-flex shrink-0 pl-1 text-2xs leading-[15px]"><SessionPrChip prs={prs} /></span> : null;
 
   return (
     <div
@@ -297,7 +312,7 @@ function WorkspaceCardImpl({
       data-zone-tint={zoneTint}
     >
       {zoneTint !== undefined && <span className="agent-chip-zone" style={{ background: `var(--zone-tint-${zoneTint})` }} aria-hidden />}
-      <div className="flex items-center gap-2">
+      <div className="agent-chip-heading flex items-center gap-2">
         {terminal ? <TerminalIcon className="h-3.5 w-3.5 shrink-0" /> : <StatusIcon status={status ?? (session ? agentStatusOfLane('idle', undefined, wakeSourcesOf(session)) : 'idle')} />}
         {renaming && onRename
           ? <RenameField title={title} onDone={onRename} />
@@ -305,15 +320,16 @@ function WorkspaceCardImpl({
             {title}
           </span>}
         {/* A title-only card has no room for both: its PR says more than the time. */}
-        {lastReply && (!status || status === 'done' || status === 'idle') && !(prLine === 'title' && prs.length > 0) && (
+        {showUpdated && lastReply && (!status || status === 'done' || status === 'idle') && !(showPullRequests && prLine === 'title' && prs.length > 0) && (
           <time className="shrink-0 text-2xs tabular-nums text-ink-faint" dateTime={new Date(lastReply).toISOString()} title={`Last reply ${new Date(lastReply).toLocaleString()}`}>
             {timeAgo(now - lastReply)}
           </time>
         )}
         {prChip('title')}
+        <span className="agent-chip-actions shrink-0 items-center gap-2">
         {isChat && onRenameStart && !renaming && (
           <button
-            className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
+            className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink"
             title="Rename this chat"
             aria-label={`Rename ${title}`}
             onClick={(e) => { e.stopPropagation(); onRenameStart(); }}
@@ -325,7 +341,7 @@ function WorkspaceCardImpl({
             deleting and then the chat was nowhere to be found. Archived chats
             stay readable until explicitly deleted. A shell has nothing to keep, so it closes. */}
         <button
-          className="shrink-0 rounded-sm p-0.5 text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover:opacity-100 touch:opacity-100"
+          className="shrink-0 rounded-sm p-0.5 text-ink-faint hover:text-ink"
           title={isChat ? 'Complete this chat (kept until you delete it)' : 'Close this agent'}
           aria-label={isChat ? `Complete ${title}` : `Close ${title}`}
           onClick={async (e) => {
@@ -340,6 +356,7 @@ function WorkspaceCardImpl({
           <CloseIcon className={isChat ? 'h-3.5 w-3.5' : 'h-3 w-3'} />
 
         </button>
+        </span>
       </div>
 
       {terminalView && <div className="mt-0.5 truncate pl-3 text-2xs leading-[15px]" style={{ color: terminalView.tone }} title={terminalView.detail || terminalView.status}>{terminalView.status}{showMetadata && terminalView.detail ? ` · ${terminalView.detail}` : ''}</div>}
@@ -347,17 +364,17 @@ function WorkspaceCardImpl({
       {/* Line 2: what is running it: the model, then how full the context
           window is. Where it comes from is in the tooltip, not a line of its own. */}
       {showMetadata && <>
-      <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-        <Fact
+      {modelLine && <div className="mt-0.5 flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
+        {showModel && <Fact
           grow
           tone={isChat ? 'var(--accent-2)' : 'var(--success)'}
           icon={isChat ? undefined : <TerminalIcon className="h-2.5 w-2.5 shrink-0" />}
           title={`${provider ? `${provider.label} / ` : ''}${session?.modelId ?? model}`}
         >
           {model}
-        </Fact>
-        {terminal && terminalPrUrl(terminal) && <Fact title="PR link observed in terminal output; open the terminal to check its status">PR #{terminalPrUrl(terminal)!.split('/').pop()}</Fact>}
-        {compacting && (
+        </Fact>}
+        {showPullRequests && terminal && terminalPrUrl(terminal) && <Fact title="PR link observed in terminal output; open the terminal to check its status">PR #{terminalPrUrl(terminal)!.split('/').pop()}</Fact>}
+        {showContext && compacting && (
           <span
             className="status-compacting inline-grid shrink-0 place-items-center"
             style={{ color: 'var(--info)' }}
@@ -368,7 +385,7 @@ function WorkspaceCardImpl({
             <CompactIcon className="h-2.5 w-2.5" />
           </span>
         )}
-        {isChat && ctxUsed > 0 && (
+        {showContext && isChat && ctxUsed > 0 && (
           <Fact
             tone={fillTone(ctxPct)}
             title={`Context window: about ${ctxUsed.toLocaleString()} of ${ctxWindow.toLocaleString()} tokens (${ctxPct < 1 ? '<1' : Math.round(ctxPct)}%)`}
@@ -377,7 +394,7 @@ function WorkspaceCardImpl({
           </Fact>
         )}
         {prChip('model')}
-      </div>
+      </div>}
 
       {showComputer && computersShown && computer && (
         <div className="flex min-w-0 items-center gap-1 truncate pl-3 text-2xs leading-[13px] text-ink-faint">
@@ -388,7 +405,7 @@ function WorkspaceCardImpl({
 
       {/* Line 3: its git position. The project is the group heading the card
           sits under, so the card does not repeat it. */}
-      {git && (
+      {showGit && git && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
           <Fact
             shrink
@@ -416,7 +433,7 @@ function WorkspaceCardImpl({
           card for a plain one-window chat should not carry an empty row. */}
       {spawnLine && (
         <div className="flex items-center gap-1 pl-3 text-2xs leading-[15px] text-ink-faint">
-          {subAgentCount > 0 && (
+          {showSubagents && subAgentCount > 0 && (
             <Fact
               tone="var(--accent-2)"
               icon={<RobotIcon className="h-2.5 w-2.5 shrink-0" />}
@@ -425,7 +442,7 @@ function WorkspaceCardImpl({
               {subAgentCount} sub-agent{subAgentCount === 1 ? '' : 's'}
             </Fact>
           )}
-          {windows > 1 && <span className="shrink-0">{windows} windows</span>}
+          {showWindows && windows > 1 && <span className="shrink-0">{windows} windows</span>}
           {prChip('spawn')}
         </div>
       )}

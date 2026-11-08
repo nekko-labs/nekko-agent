@@ -2,6 +2,12 @@
 
 Agent chats show verification progress above the footer pull-request panel in the desktop app and Local Web UI.
 
+## Tool duration versus the ongoing reply
+
+While a reply is active, a status line outside the collapsible steps identifies running tools, thinking, model response/wait, approval, pause or retry. It stays visible in both Simple and Expert modes. **Turn elapsed** measures the entire reply, not just the last tool.
+
+A tool's duration freezes when that call returns—even if it returned an error and the assistant continues working. For example, a fixed **1.1s** tool time can sit beside an increasing turn timer. That is not evidence that the tool is still running. The turn status disappears when the reply ends; it does not diagnose a quiet provider as stuck or infer background CI progress from a command's output.
+
 ## Thoughts in the conversation
 
 When a provider supplies thought text, the desktop app and Local Web UI show it directly in the conversation with a thought-bubble icon. Thoughts stay visible while streaming and after the reply is saved, even when the tool activity is collapsed. They appear between tool groups in the order they arrived.
@@ -56,8 +62,8 @@ The initial presentation is shared by desktop and Local Web UI. Native phone pro
 
 ## Message times and starting a chat
 
-Swipe horizontally on the trackpad, or drag left from non-interactive chat space, to reveal local times beside messages and working steps in the desktop or Local Web UI transcript. Swiping right or left shifts the whole row left. Expand working steps and purpose groups to see each tool call's start time. The gutter leaves room for the full time, including AM/PM.
+Swipe left on the trackpad, or drag left from non-interactive chat space, to reveal local times beside messages and working steps in the desktop or Local Web UI transcript. The pull stops at its limit; reversing direction pulls it back immediately. Swiping right does not reveal times. Expand working steps and purpose groups to see each tool call's start time. The gutter leaves room for the full time, including AM/PM.
 
-A mouse or touch drag keeps the times visible while held still, then springs back on release. Vertical scrolling, buttons, links, editors and code blocks keep their normal behavior. Trackpad wheel events do not report finger release to the renderer, so the reveal returns after 450ms without horizontal input rather than using an exact finger-up event.
+A mouse or touch drag keeps the times visible while held still, then springs back on release. Vertical scrolling, buttons, links, editors and code blocks keep their normal behavior. Trackpad wheel events do not report finger release to the renderer, so the return starts after a brief 80ms without horizontal input rather than using an exact finger-up event. Trackpad momentum can still generate input after your fingers lift.
 
 A new, empty focused chat places Nekko beside a welcoming question. Ten questions rotate every eight seconds while idle. Starting a draft or attaching a file pauses the questions. Reduced-motion preferences and hidden windows disable automatic rotation. The questions are bundled text, not requests sent to a model.

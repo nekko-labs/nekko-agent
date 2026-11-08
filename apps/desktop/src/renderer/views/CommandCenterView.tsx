@@ -11,10 +11,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
 import { newAgentSetup } from '../newAgentSetup.js';
+import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { runningSessionIds } from '../liveRuns.js';
-import { BoltIcon, MagnetIcon } from '../icons.js';
-import { FocusIcon } from '../gentleface-icons.js';
-import { HoverTip } from '../components/HoverTip.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
 import { type Vitals } from '../components/InsightsBox.js';
@@ -23,12 +21,14 @@ import { MonitorsDock } from '../components/MonitorsDock.js';
 import { usePanelPresence } from '../usePanelPresence.js';
 import { hasAppChrome } from '../chrome.js';
 import { claimAgent, displaysBridge, isScreenWindow, openerMode, useDisplays, wallStorageKey, windowKey } from '../displays.js';
-import { ScreensControl } from '../components/ScreensControl.js';
+import { WallViewMenu } from '../components/WallViewMenu.js';
+export { LAYOUT_LABEL } from '../components/WallViewMenu.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
 import { newScreenLayout, reusableEmptyChat, shouldStartFromEmptyWall } from '../emptyWallStart.js';
 
 import { allPanes, type PaneKind } from '../layout.js';
 import {
+  addZone,
   applySnap,
   DEFAULT_ASPECT,
   openWallPane,
@@ -67,18 +67,6 @@ export function wallLayoutShortcut(e: Pick<KeyboardEvent, 'code' | 'key' | 'ctrl
   if (e.defaultPrevented || e.repeat || e.isComposing || e.altKey || !e.shiftKey || !(e.ctrlKey || e.metaKey) || (e.ctrlKey && e.metaKey)) return null;
   const digit = /^Digit[12]$/.test(e.code) ? e.code.slice(-1) : /^[12]$/.test(e.key) ? e.key : null;
   return digit === '1' ? 'focus' : digit === '2' ? 'grid' : null;
-}
-
-/**
- * What each saved layout mode is called. The tiled wall reads as Dynamic
- * (even rows and columns are its Fixed grid setting). Saved values keep their
- * original keys so existing walls load unchanged.
- */
-export const LAYOUT_LABEL: Record<'focus' | 'grid', string> = { focus: 'Focused', grid: 'Dynamic' };
-
-function layoutShortcutLabel(mode: 'focus' | 'grid') {
-  const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-  return `${mac ? '⌘' : 'Ctrl'}+Shift+${mode === 'focus' ? 1 : 2}`;
 }
 
 /**
@@ -197,7 +185,9 @@ export function CommandCenterView() {
 
   useEffect(() => {
     window.nekko.getUsageSummary().then(setUsage);
-    Promise.all([refreshSessions(), refreshTerminals()]).finally(() => setListsReady(true));
+    // Only lists that really loaded count: reconciling the wall against the empty
+    // ones a failed load leaves would close every window on it.
+    const stopLists = retryUntilAnswered(() => Promise.all([refreshSessions(), refreshTerminals()]).then(() => setListsReady(true)));
     window.nekko.listTasks().then(setTasks).catch(() => setTasks([]));
     window.nekko.pendingInput().then(setPending).catch(() => {});
     window.nekko.runningSessions().then((ids) => setRunning((r) => (ids.every((id) => r.has(id)) ? r : new Set([...r, ...ids])))).catch(() => {});
@@ -210,7 +200,7 @@ export function CommandCenterView() {
       if (!disposed) timer = setTimeout(poll, 3000);
     };
     timer = setTimeout(poll, 3000);
-    return () => { disposed = true; clearTimeout(timer); off(); };
+    return () => { disposed = true; clearTimeout(timer); stopLists(); off(); };
   }, [refreshSessions, refreshTerminals]);
 
   const refreshPending = () => { window.nekko.pendingInput().then(setPending).catch(() => {}); };
@@ -241,7 +231,7 @@ export function CommandCenterView() {
           setPending(inputs);
         }).catch(() => {}); // An unavailable input state must not hide a window.
       }
-      if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
+      if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'approval_resolved' || e.type === 'tool_result') refreshPending();
       if (e.type === 'done' || e.type === 'error') {
         setRunning((r) => { const n = new Set(r); n.delete(e.sessionId); return n; });
         window.nekko.getUsageSummary().then(setUsage);
@@ -507,7 +497,9 @@ export function CommandCenterView() {
   }, [wall.root, selected, typeInto, setWall]);
   const chatFinderOpen = useStore((s) => s.chatFinderOpen);
   const onAgentsView = useStore((s) => s.view) === 'command';
-  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro;
+  // Waits for first-run setup to close: it would otherwise open on top of the wizard.
+  const setupOpen = useStore((s) => s.onboardingOpen);
+  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro && !setupOpen;
   useEffect(() => {
     if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
   }, [chatFinderOpen, setWall]);
@@ -609,27 +601,6 @@ export function CommandCenterView() {
 
 /* ---------- toolbar ---------- */
 
-/** Focused / Dynamic. The selected pill slides under whichever one the pointer is over, uncommitted until a click. */
-function LayoutSegments({ mode, onPick }: { mode: 'focus' | 'grid'; onPick: (mode: 'focus' | 'grid') => void }) {
-  const [hover, setHover] = useState<'focus' | 'grid' | null>(null);
-  const buttons = useRef<Partial<Record<'focus' | 'grid', HTMLButtonElement | null>>>({});
-  const [pill, setPill] = useState<{ x: number; width: number } | null>(null);
-  const lit = hover ?? mode;
-  useLayoutEffect(() => {
-    const b = buttons.current[lit];
-    if (b) setPill({ x: b.offsetLeft, width: b.offsetWidth });
-  }, [lit, mode]);
-  return (
-    <div className="wall-layout-segments" role="group" aria-label="Wall layout" data-pill={pill ? '' : undefined} onMouseLeave={() => setHover(null)}>
-      {pill && <span className="wall-layout-pill" aria-hidden="true" style={{ width: pill.width, transform: `translateX(${pill.x}px)` }} />}
-      {(['focus', 'grid'] as const).map((m) => (
-        <button key={m} ref={(el) => { buttons.current[m] = el; }} type="button" title={`${LAYOUT_LABEL[m]} (${layoutShortcutLabel(m)})`} aria-pressed={mode === m} data-lit={lit === m ? '' : undefined}
-          onMouseEnter={() => setHover(m)} onClick={() => onPick(m)}>{React.createElement(m === 'focus' ? FocusIcon : BoltIcon, { className: 'h-4 w-4' })}{LAYOUT_LABEL[m]}</button>
-      ))}
-    </div>
-  );
-}
-
 export function WallToolbar({
   wall,
   setWall,
@@ -647,8 +618,6 @@ export function WallToolbar({
   onPick?: (selection: AgentWindowSelection) => Promise<void>;
 }) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
-  const snapOn = !!wall.snap;
-  const snapAvailable = wall.layout.mode === 'grid' && !wall.layout.fixedGrid;
   // In the desktop shell the controls share the title bar's row with the
   // Agents heading instead of costing a row of their own.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
@@ -684,26 +653,13 @@ export function WallToolbar({
             terminal of its own. An agent's Changes, Files and Browser live in that agent's own
             header beside Logs. The empty wall can still open the full picker. */}
         <div className="wall-add-bar" role="group" aria-label="Add to the wall">
-          <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} />
+          <CreateMenu anchorRef={addButtonRef} onCreate={onAdd} onAddZone={() => setWall((w) => {
+            const { root, id } = addZone(w.root, { edge: 'right' });
+            return id ? { ...w, root, activeZone: id } : w;
+          })} />
         </div>
         {addOpen && onPick && <AgentWindowDropdown anchorRef={addButtonRef} onClose={() => setAddOpen(false)} onAdd={onPick} />}
-        <div className="wall-layout-control">
-          <LayoutSegments mode={wall.layout.mode} onPick={(mode) => setWall((w) => ({ ...w, layout: { ...w.layout, mode } }))} />
-          {/* Snap to grid, only in free-form Dynamic (a Fixed grid is already
-              even). Its space stays reserved so revealing it never shifts the controls. */}
-          <div className="wall-auto-arrange" data-visible={snapAvailable}>
-            <HoverTip label={snapOn ? 'Snap to grid is on: windows stay evenly spaced' : 'Snap to grid: keep windows evenly spaced'}>
-              <button type="button" className="wall-snap-toggle" aria-label="Snap to grid" aria-pressed={snapOn}
-                tabIndex={snapAvailable ? 0 : -1} disabled={!snapAvailable}
-                onClick={() => setWall((w) => ({ ...w, snap: !w.snap }))}>
-                <MagnetIcon className="h-4 w-4" />
-              </button>
-            </HoverTip>
-          </div>
-        </div>
-        {/* Multi-monitor, in either mode, at the end of the toolbar (the
-            Monitors toggle now lives in the panel's own header). */}
-        <ScreensControl mode={wall.layout.mode} />
+        <WallViewMenu wall={wall} setWall={setWall} />
       </div>
     </div>
   );

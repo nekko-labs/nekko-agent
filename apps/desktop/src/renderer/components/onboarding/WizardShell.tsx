@@ -27,6 +27,8 @@ export function WizardShell({
   onGoTo,
   nextLabel = 'Next',
   showSkipStep = true,
+  skipLabel = 'Skip step',
+  wide = false,
   children,
 }: {
   steps: WizardStepDef[];
@@ -38,6 +40,10 @@ export function WizardShell({
   onGoTo: (index: number) => void;
   nextLabel?: string;
   showSkipStep?: boolean;
+  /** The per-step skip's words, e.g. "No thanks" on an optional question. */
+  skipLabel?: string;
+  /** Lay the step out in a wider column (card grids, side-by-side previews). */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   const stepRef = useRef<HTMLElement>(null);
@@ -122,7 +128,7 @@ export function WizardShell({
         {/* `my-auto` centers a short step but collapses to top-aligned when the
             content overflows, so nothing is clipped above the scroll area (a
             justify-center column would push the top out of reach). */}
-        <div className="my-auto flex w-full max-w-xl flex-col items-center">{children}</div>
+        <div className={`my-auto flex w-full flex-col items-center ${wide ? 'max-w-5xl' : 'max-w-xl'}`}>{children}</div>
       </section>
 
       {/* Footer: Back on the left, Skip step + Next on the right. */}
@@ -133,7 +139,7 @@ export function WizardShell({
         <div className="flex items-center gap-2">
           {showSkipStep && (
             <button className="btn btn-ghost" onClick={onSkipStep}>
-              Skip step
+              {skipLabel}
             </button>
           )}
           <button className="btn btn-primary" onClick={onNext}>

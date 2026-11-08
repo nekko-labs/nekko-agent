@@ -23,6 +23,8 @@ const bridge: any = {
   getAppInfo: async () => ({ version: '0.0.0-fixture', platform: 'darwin' }),
   getSettings: async () => settings, updateSettings: async (p: any) => ({ ...Object.assign(settings, p) }), listProviders: async () => [provider],
   listSessionSummaries: async () => [],
+  // CiRunnersView mounts with the App: its list contract is an array, not null.
+  listRunners: async (): Promise<import('@nekko-agent/shared').RunnerView[]> => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
   createSession: async () => { const s = session('n' + records.length, 'New chat'); records.push(s); return s; },
   listTerminals: async () => [],
@@ -46,7 +48,7 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
   document.documentElement.dataset.theme = 'dark';
   const root = createRoot(document.getElementById('root')!);
   root.render(React.createElement(UpdateProvider, null, React.createElement(App)));
-  (window as any).layoutFixture = { store: useStore, records, bridge, putCachedSession, emitAgent, showTheme: async () => {
+  (window as any).layoutFixture = { store: useStore, records, bridge, settings, putCachedSession, emitAgent, showTheme: async () => {
     const { ThemeStep } = await import('../src/renderer/components/onboarding/ThemeStep');
     root.render(React.createElement('main', { style: { padding: 24, minHeight: '100vh', background: 'var(--paper)', color: 'var(--ink)' } },
       React.createElement('div', { style: { maxWidth: 640, margin: 'auto' } }, React.createElement(ThemeStep))));
@@ -65,12 +67,37 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { sessionId: 'a' })));
     const { applyEvent } = await import('../src/renderer/liveRuns');
     (window as any).layoutFixture.emit = (event: any) => { applyEvent({ ...event, sessionId: 'a' }); emitAgent({ ...event, sessionId: 'a' }); };
-  }, showComposer: async (surface: 'full' | 'composer' | 'window' = 'composer') => {
+  }, showProviderCleanup: async () => {
+    const { ModelsView } = await import('../src/renderer/views/ModelsView');
+    const providers: any[] = [
+      { id: 'claude', kind: 'claude-code', label: 'Claude subscription', enabled: true, claudeCode: {} },
+      { id: 'chatgpt', kind: 'chatgpt', label: 'ChatGPT (subscription)', enabled: true, auth: 'subscription', tokenKey: 'fixture', accountId: 'fixture-account', baseUrl: 'https://chatgpt.com/backend-api' },
+    ];
+    bridge.listProviders = async () => providers;
+    bridge.testProvider = async () => ({ ok: true });
+    bridge.listModelsStatus = async (id: string) => ({ models: [{ id: id === 'claude' ? 'sonnet' : 'gpt-fixture', name: id === 'claude' ? 'Claude Sonnet' : 'GPT fixture', providerId: id }] });
+    bridge.getClaudeCodeStatus = async () => ({ installed: true, version: '2.1.319', loggedIn: true, email: 'person@example.test', subscriptionType: 'pro', orgName: 'Personal' });
+    bridge.oauthStatus = async () => ({ provider: 'chatgpt', connected: true, state: 'connected', expiresAt: Date.now() + 9 * 86400e3 });
+    bridge.getLimits = async (key: string) => ({ updatedAt: now, staleAfterMs: 300000, planType: 'pro', windows: [{ id: 'weekly', label: '7-day', scope: 'weekly', usedPercent: 41, resetAt: Date.now() + 5 * 86400e3, status: 'allowed' }] });
+    useStore.setState({ providers, activeModelId: 'gpt-fixture' } as any);
+    root.render(React.createElement('main', { style: { padding: 24, height: '100vh', overflow: 'auto', background: 'var(--paper)' } }, React.createElement('h2', { className: 'models-section-heading', style: { marginBottom: 24 } }, 'Cloud providers'), React.createElement(ModelsView, { key: performance.now() })));
+  }, showProviderSetupCleanup: async (surface: 'add' | 'onboarding' | 'choices') => {
+    const { AddProvider } = await import('../src/renderer/components/providers/AddProvider');
+    const { ProvidersStep } = await import('../src/renderer/components/onboarding/ProvidersStep');
+    const { ProviderChoices } = await import('../src/renderer/components/providers/ProviderChoices');
+    useStore.setState({providers: []});
+    bridge.listProviders = async () => [];
+    bridge.oauthStatus = async () => ({provider:'chatgpt', connected:false, state:'idle'});
+    bridge.probeProviders = async () => [];
+    const noop = () => {};
+    const content = surface === 'onboarding' ? React.createElement(ProvidersStep, {key: performance.now()}) : surface === 'choices' ? React.createElement(ProviderChoices, {onPick:noop, current:'gemini', cloudOnly:true}) : React.createElement(AddProvider, {onDone:noop, fixedKind:'chatgpt'});
+    root.render(React.createElement('main', {style: {padding:24, height:'100vh', overflow:'auto', background:'var(--paper)'}}, content));
+  }, showComposer: async (surface: 'full' | 'composer' | 'window' = 'composer', cleanStart = false) => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'a', running: new Set(['a']) } as any);
     bridge.abortChat = async (id: string) => { (window as any).layoutFixture.lastAbort = id; };
     bridge.queuePrompt = async (id: string, prompt: any) => { (window as any).layoutFixture.lastQueue = { sessionId: id, prompt }; return records.find(s => s.id === id); };
-    root.render(React.createElement('div', { style: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 24 } }, React.createElement(ChatPane, { key: surface, sessionId: 'a', surface: surface === 'window' ? 'full' : surface, commandCenter: surface === 'window', header: surface === 'composer' ? React.createElement('span', null, 'Persist quota history') : undefined })));
+    root.render(React.createElement('div', { className: surface === 'window' ? 'wall-composer' : undefined, style: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 24 } }, React.createElement(ChatPane, { key: surface, sessionId: 'a', cleanStart, surface: surface === 'window' ? 'full' : surface, commandCenter: surface === 'window', header: surface === 'composer' ? React.createElement('span', null, 'Persist quota history') : undefined })));
   }, showPrLifecycle: async (stream = false) => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     const { applyEvent } = await import('../src/renderer/liveRuns');
@@ -110,6 +137,20 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
       applyEvent({ type: 'done', sessionId: 'a', messageId: 'answer' });
       emitAgent({ type: 'done', sessionId: 'a', messageId: 'answer' });
     } };
+  }, showVisibility: async () => {
+    // #1666: a long answer under a plan, with a thought and a tool step before it.
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    const record = records[0] as any;
+    record.messages = [
+      { id: 'prompt', role: 'user', content: 'Review the changes and verify the interface.', createdAt: now - 5000 },
+      { id: 'work', role: 'assistant', content: '', reasoning: 'Check the project guidance before editing.', toolCalls: [{ id: 'read', name: 'read_file', input: { path: 'README.md' } }], createdAt: now - 4000 },
+      { id: 'result', role: 'tool', content: 'Project guidance', toolResult: { toolCallId: 'read', output: 'Project guidance' }, createdAt: now - 3000 },
+      { id: 'answer', role: 'assistant', content: Array.from({ length: 30 }, (_, i) => `### Review section ${i + 1}\n\nEach section of the review is long enough to fill the pane, so the transcript has to scroll behind the floating plan and the cat to reach its last row.`).join('\n\n'), createdAt: now - 2000 },
+    ];
+    record.agentPlan = ['Inspect the interface', 'Make the changes', 'Verify scrolling', 'Publish the result'].map((title, i) => ({ id: String(i), title, kind: ['build', 'build', 'verify', 'ship'][i], status: i < 2 ? 'done' : i === 2 ? 'active' : 'pending', createdAt: now, updatedAt: now }));
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], sessions: records.map(summarizeSession), settings, activeSessionId: 'a', running: new Set() } as any);
+    root.render(React.createElement('div', { style: { height: '100vh' } }, React.createElement(ChatPane, { key: 'visibility', sessionId: 'a' })));
   }, showGreeting: async () => {
 
     const { ChatPane } = await import('../src/renderer/components/ChatPane');

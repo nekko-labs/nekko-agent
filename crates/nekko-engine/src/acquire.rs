@@ -224,14 +224,59 @@ pub fn image_companion_sets() -> &'static Vec<Value> {
         let sd3 = "Comfy-Org/stable-diffusion-3.5-fp8";
         let clip_l = json!({ "role": "clip_l", "repo": sd3, "file": "text_encoders/clip_l.safetensors", "saveAs": "clip_l.safetensors", "bytes": 246_144_152u64 });
         let t5 = json!({ "role": "t5xxl", "repo": sd3, "file": "text_encoders/t5xxl_fp8_e4m3fn.safetensors", "saveAs": "t5xxl_fp8_e4m3fn.safetensors", "bytes": 4_893_934_904u64 });
+        // Qwen Image and Qwen Image Edit share the VAE and the Qwen2.5-VL encoder;
+        // editing adds the encoder's vision half (sd.cpp docs/qwen_image_edit.md).
+        let qwen_vae = json!({ "role": "vae", "repo": "Comfy-Org/Qwen-Image", "file": "split_files/vae/qwen_image_vae.safetensors", "saveAs": "vae-qwen-image.safetensors", "bytes": 253_806_246u64 });
+        let qwen_vl = "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF";
+        let qwen_llm = json!({ "role": "llm", "repo": qwen_vl, "file": "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf", "saveAs": "llm-qwen2.5-vl-7b-instruct-q4_k_m.gguf", "bytes": 4_683_072_512u64 });
+        // Flow shift and the euler sampler are what sd.cpp documents for every Qwen Image model.
+        let qwen_args = json!(["--flow-shift", "3", "--sampling-method", "euler"]);
         vec![
             json!({
                 "id": "flux2-klein-9b", "label": "FLUX.2 klein 9B", "defaults": { "steps": 4, "cfgScale": 1 },
                 "files": [flux2_vae, { "role": "llm", "repo": "unsloth/Qwen3-8B-GGUF", "file": "Qwen3-8B-Q4_K_M.gguf", "saveAs": "llm-qwen3-8b-q4_k_m.gguf", "bytes": 5_027_784_512u64 }],
+                "capabilities": ["create", "edit"],
             }),
             json!({
                 "id": "flux2-klein-4b", "label": "FLUX.2 klein 4B", "defaults": { "steps": 4, "cfgScale": 1 },
                 "files": [flux2_vae, { "role": "llm", "repo": "unsloth/Qwen3-4B-GGUF", "file": "Qwen3-4B-Q4_K_M.gguf", "saveAs": "llm-qwen3-4b-q4_k_m.gguf", "bytes": 2_497_281_312u64 }],
+                "capabilities": ["create", "edit"],
+            }),
+            json!({
+                // Turbo's 8-step schedule; the base model is given its own below.
+                "id": "z-image", "label": "Z-Image", "defaults": { "steps": 8, "cfgScale": 1 },
+                "files": [
+                    // FLUX.1's autoencoder, from Comfy-Org's ungated copy (BFL's own repo is gated).
+                    { "role": "vae", "repo": "Comfy-Org/Z-Image-Turbo", "file": "split_files/vae/ae.safetensors", "saveAs": "vae-z-image.safetensors", "bytes": 335_304_388u64 },
+                    { "role": "llm", "repo": "unsloth/Qwen3-4B-Instruct-2507-GGUF", "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "saveAs": "llm-qwen3-4b-instruct-2507-q4_k_m.gguf", "bytes": 2_497_281_120u64 },
+                ],
+                "capabilities": ["create"],
+            }),
+            json!({
+                "id": "qwen-image-edit", "label": "Qwen Image Edit", "defaults": { "steps": 20, "cfgScale": 2.5 },
+                "files": [
+                    qwen_vae,
+                    qwen_llm,
+                    { "role": "llm_vision", "repo": qwen_vl, "file": "Qwen2.5-VL-7B-Instruct.mmproj-Q8_0.gguf", "saveAs": "llm_vision-qwen2.5-vl-7b-instruct-q8_0.gguf", "bytes": 853_119_712u64 },
+                ],
+                "capabilities": ["edit"],
+                "launchArgs": qwen_args,
+            }),
+            json!({
+                // Text or a first frame to a short clip; sd.cpp docs/wan.md (TI2V 5B has its own VAE).
+                "id": "wan2.2-ti2v-5b", "label": "Wan 2.2 TI2V 5B", "defaults": { "steps": 20, "cfgScale": 6 },
+                "files": [
+                    { "role": "vae", "repo": "Comfy-Org/Wan-2.2", "file": "split_files/vae/wan2.2_vae.safetensors", "saveAs": "vae-wan2.2.safetensors", "bytes": 1_409_400_960u64 },
+                    { "role": "t5xxl", "repo": "city96/umt5-xxl-encoder-gguf", "file": "umt5-xxl-encoder-Q8_0.gguf", "saveAs": "t5xxl-umt5-xxl-q8_0.gguf", "bytes": 6_043_068_256u64 },
+                ],
+                "capabilities": ["video"],
+                "launchArgs": ["--flow-shift", "3", "--sampling-method", "euler"],
+            }),
+            json!({
+                "id": "qwen-image", "label": "Qwen Image", "defaults": { "steps": 20, "cfgScale": 2.5 },
+                "files": [qwen_vae, qwen_llm],
+                "capabilities": ["create"],
+                "launchArgs": qwen_args,
             }),
             json!({
                 "id": "sd3", "label": "Stable Diffusion 3.5", "defaults": { "steps": 28, "cfgScale": 4.5 },
@@ -244,6 +289,7 @@ pub fn image_companion_sets() -> &'static Vec<Value> {
                         "fallback": { "role": "taesd", "repo": "madebyollin/taesd3", "file": "diffusion_pytorch_model.safetensors", "saveAs": "taesd-sd3.safetensors", "bytes": 9_848_636u64 },
                     },
                 ],
+                "capabilities": ["create"],
             }),
             json!({
                 "id": "flux1", "label": "FLUX.1", "defaults": { "steps": 20, "cfgScale": 1 },
@@ -255,6 +301,7 @@ pub fn image_companion_sets() -> &'static Vec<Value> {
                         "fallback": { "role": "taesd", "repo": "madebyollin/taef1", "file": "diffusion_pytorch_model.safetensors", "saveAs": "taesd-flux1.safetensors", "bytes": 9_848_636u64 },
                     },
                 ],
+                "capabilities": ["create"],
             }),
         ]
     })
@@ -271,6 +318,39 @@ pub fn image_companion_set_for(model: &Value) -> Option<Value> {
     );
     let text = nekko_js::slice16(&joined, 1024).to_lowercase();
     let by_id = |id: &str| image_companion_sets().iter().find(|s| s["id"] == id).cloned();
+    // Wan 2.2 TI2V 5B only: the other Wan models need the 2.1 VAE (and some a CLIP vision encoder).
+    static WAN_TI2V: OnceLock<Regex> = OnceLock::new();
+    if test(WAN_TI2V.get_or_init(|| re(r"wan[-_ .]?2[._]?2.*ti2v.*5b", "")), &text) {
+        return by_id("wan2.2-ti2v-5b");
+    }
+    static QWEN: OnceLock<Regex> = OnceLock::new();
+    if test(QWEN.get_or_init(|| re(r"qwen[-_ ]?image", "")), &text) {
+        static EDIT: OnceLock<Regex> = OnceLock::new();
+        if test(EDIT.get_or_init(|| re(r"qwen[-_ ]?image[-_ ]?edit", "")), &text) {
+            let mut edit = by_id("qwen-image-edit")?;
+            // 2511 edits badly without its zero-conditioning switch (sd.cpp docs/qwen_image_edit.md).
+            if text.contains("2511") {
+                let args = edit["launchArgs"].as_array_mut()?;
+                args.extend([json!("--model-args"), json!("qwen_image_zero_cond_t=true")]);
+            }
+            return Some(edit);
+        }
+        // 2.1 pairs with a Qwen3-VL 8B encoder and its own VAE; no set (research license).
+        static TWO_ONE: OnceLock<Regex> = OnceLock::new();
+        if test(TWO_ONE.get_or_init(|| re(r"qwen[-_ ]?image[-_ ]?2[._-]1(?!\d)", "")), &text) {
+            return None;
+        }
+        return by_id("qwen-image");
+    }
+    static Z_IMAGE: OnceLock<Regex> = OnceLock::new();
+    if test(Z_IMAGE.get_or_init(|| re(r"(?:^|[^a-z0-9])z[-_ ]?image", "")), &text) {
+        let mut z = by_id("z-image")?;
+        if !text.contains("turbo") {
+            // The undistilled base model wants a full schedule and real guidance.
+            z["defaults"] = json!({ "steps": 20, "cfgScale": 5 });
+        }
+        return Some(z);
+    }
     static FLUX2: OnceLock<Regex> = OnceLock::new();
     let flux2 = FLUX2.get_or_init(|| re(r"flux[._ -]?2", ""));
     if test(flux2, &text) && text.contains("klein") {
@@ -356,12 +436,13 @@ pub fn image_companion_status(model: &Value, dir: &str, beside: &Map<String, Val
         "files": files,
         "missingBytes": num(missing),
         "defaults": set["defaults"],
+        "capabilities": set["capabilities"],
     })
     .as_object()
     .map(|o| {
-        // The TS key order: setId, label, files, ready, missingBytes, defaults.
+        // The TS key order: setId, label, files, ready, missingBytes, defaults, then capabilities.
         let mut out = Map::new();
-        for k in ["setId", "label", "files", "ready", "missingBytes", "defaults"] {
+        for k in ["setId", "label", "files", "ready", "missingBytes", "defaults", "capabilities"] {
             out.insert(k.into(), o[k].clone());
         }
         Value::Object(out)
@@ -373,9 +454,13 @@ pub fn image_companion_status(model: &Value, dir: &str, beside: &Map<String, Val
 pub fn companions_beside(model: &Value, dirs: &[String]) -> Map<String, Value> {
     static ROLES: OnceLock<Vec<(&'static str, Regex)>> = OnceLock::new();
     let roles = ROLES.get_or_init(|| {
-        ["clip_l", "clip_g", "t5xxl", "vae", "llm", "taesd"]
+        ["clip_l", "clip_g", "t5xxl", "vae", "llm", "llm_vision", "taesd"]
             .into_iter()
-            .map(|role| (role, re(&format!("^{}[_.-]", role.replacen('_', "[_-]", 1)), "i")))
+            .map(|role| {
+                // `llm_vision-…` also starts with `llm_`: the text encoder must not claim it.
+                let not_vision = if role == "llm" { "(?![_-]?vision)" } else { "" };
+                (role, re(&format!("^{}[_.-]{not_vision}", role.replacen('_', "[_-]", 1)), "i"))
+            })
             .collect()
     });
     static EXT: OnceLock<Regex> = OnceLock::new();

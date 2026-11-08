@@ -14,10 +14,13 @@ struct ChatView: View {
     @State private var chat: ChatModel?
     @State private var showModels = false
     @State private var showChanges = false
+    @State private var showAudit = false
     @State private var changedFiles = 0
     @State private var renaming = false
     @State private var renameText = ""
     @State private var actionError: String?
+    /// A switch of this chat to YOLO, waiting on the warning.
+    @State private var yoloAsk: YoloAsk?
     @State private var showGit = false
     @State private var showGitScreen = false
     @State private var showTerminals = false
@@ -299,9 +302,13 @@ struct ChatView: View {
                             Menu {
                                 ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
                                     Button {
-                                        act { try await chat.setOptions(mode: m) }
+                                        let current = chat.session?.mode.flatMap(PcSettings.ChatMode.init(rawValue:)) ?? store.pcSettings.effectiveMode
+                                        yoloAsk = prefs.gateYolo(from: current, to: m) { act { try await chat.setOptions(mode: m) } }
                                     } label: {
-                                        if chat.session?.mode == m.rawValue { Label(modeName(m), systemImage: "checkmark") } else { Text(modeName(m)) }
+                                        Label {
+                                            Text(modeName(m))
+                                            if chat.session?.mode == m.rawValue { Image(systemName: "checkmark") }
+                                        } icon: { ToolPolicyPicker.image(m) }
                                     }
                                 }
                             } label: { Label("Tool policy", systemImage: "shield.lefthalf.filled") }
@@ -322,6 +329,9 @@ struct ChatView: View {
                             Button { showTerminals = true } label: { Label("Terminals", systemImage: "terminal") }
                                 .accessibilityIdentifier("chat.terminals")
                         }
+                        // Who allowed what in this chat: read only, value-free.
+                        Button { showAudit = true } label: { Label("Audit trail", systemImage: "checkmark.shield") }
+                            .accessibilityIdentifier("chat.audit")
                         Button { renameText = chat.title; renaming = true } label: { Label("Rename", systemImage: "pencil") }
                         Button { act { try await store.completeChat(sessionId) } } label: { Label("Complete", systemImage: "checkmark.circle") }
                     }
@@ -337,6 +347,9 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
+        .sheet(isPresented: $showAudit) {
+            AuditTrailView(load: { try await chat.auditTrail() }, incognito: chat.session?.runOptions["incognito"]?.bool == true)
+        }
         // Read with the chat and after each turn: Changes shows only with something in it.
         .task(id: chat.session?.updatedAt) {
             guard store.pcSettings.phoneChanges, let c = try? await chat.changes() else { return }
@@ -357,13 +370,16 @@ struct ChatView: View {
         .alert("Couldn’t do that", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
+        .yoloWarning($yoloAsk)
     }
 
     /// The approval and question cards, the queue, the PR chip and the composer.
     private func bottomBar(_ chat: ChatModel) -> some View {
         VStack(spacing: 8) {
             if let a = chat.turn.approval {
-                ApprovalCard(approval: a) { ok in try await chat.approve(ok) }.id(a.call.id)
+                ApprovalCard(approval: a, answer: { ok in try await chat.approve(ok) },
+                             alwaysAllow: ChatModel.offersAlwaysAllow(a.call) ? { try await chat.alwaysAllowTool() } : nil)
+                    .id(a.call.id)
             }
             if let q = chat.turn.question {
                 // A new question starts with nothing picked.
@@ -395,7 +411,7 @@ struct ChatView: View {
         if let text = b.copyText, !text.isEmpty {
             Button { UIPasteboard.general.string = text } label: { Label("Copy", systemImage: "doc.on.doc") }
         }
-        if chat.savedAt == nil, chat.forkPoint(b) != nil {
+        if chat.savedAt == nil, !b.id.hasPrefix("ask-answer:"), chat.forkPoint(b) != nil {
             Button {
                 act {
                     let id = try await chat.fork(from: b)
@@ -496,11 +512,7 @@ struct WaitingRow: View {
 }
 
 func modeName(_ m: PcSettings.ChatMode) -> String {
-    switch m {
-    case .ask: return String(localized: "Ask before every tool")
-    case .guardrails: return String(localized: "Guardrails (ask for risky tools)")
-    case .yolo: return String(localized: "YOLO (never ask)")
-    }
+    SimpleMode.asksName(m)
 }
 
 /// The transcript's rows: each block on its own, except adjacent calls with one
@@ -694,7 +706,11 @@ struct BlockView: View {
                     VStack(alignment: .trailing, spacing: 4) {
                         // Markdown, as on the desktop (T101). No text selection here: touch and
                         // hold opens the menu (Copy, Edit in a new chat); a table keeps its own menu.
-                        MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
+                        if block.id.hasPrefix("ask-answer:") {
+                            Text(text).foregroundStyle(palette.userInk)
+                        } else {
+                            MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
+                        }
                         if photos.contains(where: { !$0.isEmpty }) {
                             PhotoStrip(photos: photos, open: openPhoto)
                         } else if images > 0 {
@@ -779,6 +795,9 @@ private struct Voiced: ViewModifier {
 struct ApprovalCard: View {
     let approval: Approval
     var answer: (Bool) async throws -> Void
+    /// "Always allow this tool", offered for MCP tools only (decision 0054): saves the
+    /// tool for this chat, then allows the call. Never switches the chat to YOLO.
+    var alwaysAllow: (() async throws -> Void)? = nil
     @Environment(\.palette) private var palette
     @State private var busy = false
     @State private var failed: String?
@@ -814,6 +833,22 @@ struct ApprovalCard: View {
             }
             .controlSize(.large)
             .disabled(busy)
+            if alwaysAllow != nil {
+                // Its own full-width row, so a long translation wraps instead of squeezing Deny and Allow.
+                Button { decide(true, always: true) } label: {
+                    Text("Always allow this tool").font(.subheadline.weight(.semibold)).multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .foregroundStyle(palette.accent)
+                        .padding(.vertical, 8).padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: 8).stroke(palette.accent.opacity(0.6)))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+                .accessibilityHint("Allows this call and stops asking for this tool in this chat. Other tools still ask.")
+                .accessibilityIdentifier("approval.alwaysAllow")
+            }
         }
         .padding(14)
         // A card, because it needs you; tinted by its risk rather than outlined.
@@ -822,11 +857,13 @@ struct ApprovalCard: View {
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
     }
 
-    private func decide(_ ok: Bool) {
+    private func decide(_ ok: Bool, always: Bool = false) {
         busy = true
         failed = nil
         Task {
-            do { try await answer(ok) } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
+            do {
+                if always, let alwaysAllow { try await alwaysAllow() } else { try await answer(ok) }
+            } catch { failed = "Couldn’t send that: \(error.localizedDescription) Try again." }
             busy = false
         }
     }
@@ -853,6 +890,7 @@ struct QuestionCard: View {
     let request: AskRequest
     var submit: ([AskAnswer]) async throws -> Void
     @Environment(\.palette) private var palette
+    @State private var step = 0
     @State private var picked: [String: Set<String>] = [:]
     @State private var notes: [String: String] = [:]
     @State private var busy = false
@@ -860,7 +898,23 @@ struct QuestionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(request.questions) { q in
+            HStack {
+                Button { step = max(0, step - 1); failed = nil } label: {
+                    Image(systemName: "chevron.left").font(.footnote)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel("Previous question").disabled(step == 0 || busy)
+                Spacer()
+                Text("\(step + 1) of \(request.questions.count)").font(.caption).foregroundStyle(palette.inkSoft)
+                Spacer()
+                Button {
+                    guard let q = current else { return }
+                    picked[q.id] = nil; notes[q.id] = nil
+                    advance()
+                } label: {
+                    Text("Skip").font(.footnote).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).disabled(busy)
+            }
+            if let q = current {
                 VStack(alignment: .leading, spacing: 6) {
                     if !q.header.isEmpty { Text(q.header).font(.caption.weight(.semibold)).foregroundStyle(palette.accent) }
                     Text(q.question).font(.subheadline).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -876,13 +930,13 @@ struct QuestionCard: View {
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                     }
-                }
+                }.disabled(busy)
             }
             if let failed {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
             }
-            Button(action: send) {
-                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer").font(.footnote.weight(.semibold)) } }
+            Button(action: advance) {
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text(step == request.questions.count - 1 ? "Send answers" : "Next").font(.footnote.weight(.semibold)) } }
                     .foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
                     .frame(maxWidth: .infinity, minHeight: 36)
                     .background(ready ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
@@ -897,10 +951,22 @@ struct QuestionCard: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
     }
 
-    private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
-
+    private var current: AskQuestion? { request.questions.indices.contains(step) ? request.questions[step] : nil }
+    private var ready: Bool {
+        guard let q = current else { return false }
+        return !(picked[q.id] ?? []).subtracting([askOtherLabel]).isEmpty || !(notes[q.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    private func advance() {
+        guard !busy else { return }
+        if step < request.questions.count - 1 { step += 1; failed = nil } else { send() }
+    }
     private func send() {
-        let answers = request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) }
+        guard !busy else { return }
+        let answers = request.questions.compactMap { q -> AskAnswer? in
+            let labels = q.options.map(\.label).filter { (picked[q.id] ?? []).contains($0) }
+            let note = (notes[q.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return labels.isEmpty && note.isEmpty ? nil : AskAnswer(questionId: q.id, labels: labels, note: note.isEmpty ? nil : note)
+        }
         busy = true
         failed = nil
         Task {
@@ -1014,18 +1080,6 @@ struct Composer: View {
                 .padding(.horizontal, 10).padding(.vertical, 4).background(palette.accent.opacity(0.15), in: Capsule()).foregroundStyle(palette.accent)
                 .accessibilityIdentifier("chat.savedPrompt")
             }
-            if loadingPhotos {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Adding photos…").font(.caption)
-                }.foregroundStyle(palette.inkSoft)
-            }
-            if !images.isEmpty {
-                ComposerPhotos(photos: images) { index in
-                    images.remove(at: index)
-                    photos = []
-                }
-            }
             if !skillMatches.isEmpty || !promptMatches.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
@@ -1073,6 +1127,21 @@ struct Composer: View {
             }
             // One box the width of the screen: the message on top, + and Send below it, then model and context.
             VStack(alignment: .leading, spacing: 0) {
+                if loadingPhotos {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Adding photos…").font(.caption)
+                    }
+                    .foregroundStyle(palette.inkSoft)
+                    .padding(.horizontal, 12).padding(.top, 10)
+                }
+                if !images.isEmpty {
+                    ComposerPhotos(photos: images) { index in
+                        images.remove(at: index)
+                        photos = []
+                    }
+                    .padding(.horizontal, 12).padding(.top, 10)
+                }
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
                 // "Hide keyboard" action is on the text view itself.
                 MarkdownComposerField(text: $text, focused: $focused,

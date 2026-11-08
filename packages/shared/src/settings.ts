@@ -66,6 +66,9 @@ export interface OnboardingState {
   steps?: Record<string, 'done' | 'skipped'>;
 }
 
+/** Setup's "What do you mostly do?" answer. */
+export type WorkProfile = 'developer' | 'designer' | 'writer' | 'business' | 'student' | 'exploring';
+
 /** Bump when the wizard's steps change enough that existing users should see it again. */
 export const ONBOARDING_VERSION = 1;
 
@@ -317,6 +320,8 @@ export interface AppSettings {
    */
   notices?: AppNotice[];
   skipDeleteConfirmation?: boolean;
+  /** Turning No restrictions on skips its warning (Settings > General, "Warn before No restrictions"). */
+  skipYoloWarning?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a
    * chat (Settings → Remote access). On by default; only `false` turns it off. Phones can never accept,
@@ -328,6 +333,14 @@ export interface AppSettings {
    * Settings → Remote access; never settable from a phone.
    */
   quitFromPhone?: boolean;
+  /** Explicit desktop opt-in for signed phone service actions. Absent means false. */
+  manageServiceFromPhone?: boolean;
+  /**
+   * Hold off idle sleep while any agent runs here, so a run another device
+   * started does not stop when nobody touches this one. Off unless the owner
+   * turns it on under Settings > Computers; never settable from another device.
+   */
+  keepAwakeWhileAgentsRun?: boolean;
   /** This computer's icon, one of `COMPUTER_ICONS`. Absent or empty, it shows none. */
   machineIcon?: string;
   /** Display name shared with paired devices; blank uses the system hostname. */
@@ -424,10 +437,21 @@ export interface AppSettings {
   engineBinPath?: string;
   /** Experimental feature toggles (Settings → Experimental). Off = surface hidden. */
   experimental?: ExperimentalFlags;
-  /** Desktop developer controls; absent means disabled. */
-  developer?: { serverControls?: boolean };
+  /** Developer controls; each preference documents its own default. */
+  developer?: {
+    /** Desktop server controls, off by default. */
+    serverControls?: boolean;
+    /** Explain next-turn tokens after model/effort changes. On unless explicitly false. */
+    showContextChangeNotice?: boolean;
+  };
   /** First-run setup wizard progress (undefined on installs that predate it). */
   onboarding?: OnboardingState;
+  /** What Nekko calls the person: greetings and the chat welcome. Set in setup or Settings > General. */
+  userName?: string;
+  /** The optional email given in setup for product updates; also joined to Nekko Cloud's `app` list then. */
+  userEmail?: string;
+  /** The closest of setup's "What do you mostly do?" cards; it only seeded the detail level. */
+  workProfile?: WorkProfile;
   /**
    * The Agent board wall: the split tree of windows and the toolbar
    * switches, as the renderer saves them, so the desktop, web and phone

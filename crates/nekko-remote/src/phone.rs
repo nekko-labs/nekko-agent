@@ -113,6 +113,19 @@ pub struct Policy {
 
 /// `allowedMcpTools` from a phone: MCP tool names (`mcp__<server>__<tool>`) only,
 /// as `isMcpToolList` in packages/shared/src/phone-access.ts.
+/// A `tool:approve` that passed the gate, with who answered as its fourth
+/// argument for the chat's audit trail. Whatever the device sent there is
+/// replaced: a device never names itself.
+fn with_approver(channel: &str, args: Value, via: &str, device: &str) -> Value {
+    if channel != "tool:approve" {
+        return args;
+    }
+    let mut list = args.as_array().cloned().unwrap_or_default();
+    list.truncate(3);
+    list.push(json!({ "via": via, "device": device }));
+    Value::Array(list)
+}
+
 fn mcp_tool_list(v: &Value) -> bool {
     v.as_array().is_some_and(|a| {
         a.len() <= 200
@@ -375,6 +388,19 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         if arg(i).as_str().is_none_or(|s| s.is_empty()) { Err(denied("value-invalid", what)) } else { Ok(()) }
     };
     match channel {
+        "engine:models" => {
+            if !args.is_empty() {
+                return Err(denied("option-denied", "extra argument"));
+            }
+        }
+        "chat:generateImage" => {
+            if args.len() != 1 {
+                return Err(denied("value-invalid", "image request"));
+            }
+            if let Some(problem) = crate::phone_image::request_problem(arg(0)) {
+                return Err(denied("value-invalid", problem));
+            }
+        }
         "session:setSupportingWorkspaces" => {
             if args.len() != 2 || args[0].as_str().is_none_or(|s| s.is_empty()) {
                 return Err(denied("value-invalid", "session id"));
@@ -471,6 +497,11 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         "settings:update" => out.settings = Some(check_settings_patch(arg(0))?),
         "session:setOptions" => {
             keys_within(arg(1), &policy().session_option_keys, "chat options")?;
+            if let Some(params) = arg(1).get("imageParams")
+                && let Some(problem) = crate::phone_image::params_problem(params, false)
+            {
+                return Err(denied("value-invalid", problem));
+            }
             if let Some(mode) = arg(1).get("mode") {
                 chat_mode(mode, "mode")?;
             }
@@ -617,6 +648,8 @@ pub fn redact(channel: &str, result: Value) -> Value {
             }
             view
         }
+        "engine:models" => crate::phone_image::models(&result),
+        "chat:generateImage" => Value::Null,
         "providers:list" => match result {
             Value::Array(list) => Value::Array(list.iter().map(|p| pick(p, &policy().provider_view)).collect()),
             _ => json!([]),
@@ -1127,6 +1160,11 @@ impl Gate {
         if channel == policy().key_channel {
             return self.register_key(&who, &channel, &args);
         }
+        // Service controls use the same explicit opt-in and proof policy for
+        // phones and paired computers, before any computer-specific shortcuts.
+        if channel.starts_with("service:") {
+            return self.service_call(&who, &channel, &args).await;
+        }
         // First: a computer's refusals cover the terminal channels answered next.
         if let Some(out) = self.computer_call(&who, &channel, &args).await {
             return out;
@@ -1151,6 +1189,7 @@ impl Gate {
                     self.record(&who, &channel, Err(d.code.to_string()));
                     return Err(d.to_string());
                 }
+                let args = with_approver(&channel, args, "phone", &who.device_id);
                 let result = call(&self.run, channel.clone(), args).await;
                 self.record(&who, &channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
                 result
@@ -1175,6 +1214,62 @@ impl Gate {
                 result
             }
         }
+    }
+
+    /// A narrow service surface. Discovery explains host support even while
+    /// management is off; no other service call can bypass the owner's switch.
+    async fn service_call(&self, who: &PhoneCall, channel: &str, args: &Value) -> Result<Value, String> {
+        let change = matches!(
+            channel,
+            "service:restart" | "service:updateCheck" | "service:updateDownload" | "service:updateInstall"
+        );
+        let checked = async {
+            if !channel_allowed(channel) || self.classes.of(channel).is_none() {
+                return Err(denied("channel-denied", channel));
+            }
+            let device = self.devices.device(&who.device_id).ok_or_else(|| denied("device-unknown", channel))?;
+            if !device.access.read {
+                return Err(denied("read-off", channel));
+            }
+            if change && !device.access.change {
+                return Err(denied("change-off", channel));
+            }
+            if args.as_array().is_none_or(|a| !a.is_empty()) {
+                return Err(denied("value-invalid", channel));
+            }
+            if channel != "service:status" {
+                let settings = (self.run)("settings:get".into(), json!([]))
+                    .await
+                    .map_err(|_| denied("service-disabled", channel))?;
+                if settings.get("manageServiceFromPhone") != Some(&Value::Bool(true)) {
+                    return Err(denied("service-disabled", channel));
+                }
+            }
+            if change {
+                if who.proof.is_none() {
+                    return Err(denied("proof-required", channel));
+                }
+                self.check_change(who, channel, args)?;
+                if matches!(channel, "service:restart" | "service:updateInstall")
+                    || has(&policy().step_up.service_channels, channel)
+                {
+                    self.check_step_up(who, channel)?;
+                }
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(d) = checked {
+            if change {
+                self.record(who, channel, Err(d.code.to_string()));
+            }
+            return Err(d.to_string());
+        }
+        let result = (self.run)(channel.to_string(), args.clone()).await;
+        if change {
+            self.record(who, channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
+        }
+        result
     }
 
     /// What a paired computer may do beyond a phone (`COMPUTER_ACCESS`), or
@@ -1224,6 +1319,7 @@ impl Gate {
             self.record(who, channel, Err(d.code.to_string()));
             return Some(Err(d.to_string()));
         }
+        let args = with_approver(channel, args, "paired computer", &who.device_id);
         let result = (self.run)(channel.to_string(), args).await;
         self.record(who, channel, result.as_ref().map(|_| ()).map_err(|e| reason_of(e)));
         Some(result)
@@ -2209,6 +2305,109 @@ mod tests {
         }
 
         #[test]
+        fn image_generation_requires_exact_fresh_change_proof_and_switches() {
+            const C: &str = "chat:generateImage";
+            let k = signer(21);
+            let args = json!([{ "sessionId": "s1", "prompt": "cat", "params": {
+                "modelId": "image/sd", "width": 512, "height": 512, "steps": 28, "cfgScale": 4, "seed": -1
+            } }]);
+            let r = policy_rig(ON, Some(&k), None, "ask");
+            assert_eq!(r.ask(C, args.clone(), None), refused("proof-required", C));
+            assert_eq!(ran(&r, C), 0);
+            for (key, value) in
+                [("width", json!(257)), ("cfgScale", json!(31)), ("outputPath", json!("/private/image.png"))]
+            {
+                let mut invalid = args.clone();
+                invalid[0]["params"][key] = value;
+                let signed = proof(&k, "phone-1", C, &invalid, NOW as i64);
+                assert!(r.ask(C, invalid, Some(signed)).unwrap_err().contains("value-invalid"));
+                assert_eq!(ran(&r, C), 0, "even a valid signature cannot authorize unsafe parameters");
+            }
+            let signed = proof(&k, "phone-1", C, &args, NOW as i64);
+            for (path, value) in [("prompt", json!("different prompt")), ("sessionId", json!("s_other"))] {
+                let mut tampered = args.clone();
+                tampered[0][path] = value;
+                assert!(r.ask(C, tampered, Some(signed.clone())).unwrap_err().contains("proof-invalid"));
+            }
+            for (key, value) in [("modelId", json!("image/other")), ("cfgScale", json!(5)), ("seed", json!(42))] {
+                let mut tampered = args.clone();
+                tampered[0]["params"][key] = value;
+                assert!(r.ask(C, tampered, Some(signed.clone())).unwrap_err().contains("proof-invalid"));
+            }
+            let mut fractional = args.clone();
+            fractional[0]["params"]["cfgScale"] = json!(4.5);
+            assert!(crate::proof::payload("phone-1", C, &fractional, NOW as i64).is_none());
+            assert_eq!(ran(&r, C), 0);
+            assert_eq!(r.ask(C, args.clone(), Some(signed.clone())), Ok(Value::Null));
+            assert_eq!(ran(&r, C), 1);
+            assert_eq!(r.ask(C, args.clone(), Some(signed)), refused("proof-replayed", C));
+            let old = proof(&k, "phone-1", C, &args, NOW as i64 - 600_000);
+            assert!(r.ask(C, args.clone(), Some(old)).unwrap_err().contains("proof-stale"));
+            let other = proof(&k, "other-device", C, &args, NOW as i64);
+            assert!(r.ask(C, args.clone(), Some(other)).unwrap_err().contains("proof-invalid"));
+            let off = policy_rig(DeviceAccess { read: true, change: false }, Some(&k), None, "ask");
+            let signed = proof(&k, "phone-1", C, &args, NOW as i64);
+            assert_eq!(off.ask(C, args.clone(), Some(signed)), refused("change-off", C));
+            assert_eq!(ran(&off, C), 0);
+            let read_off = policy_rig(DeviceAccess { read: false, change: true }, Some(&k), None, "ask");
+            assert_eq!(read_off.ask("engine:models", json!([]), None), refused("read-off", "engine:models"));
+            let no_key = policy_rig(ON, None, None, "ask");
+            let signed = proof(&k, "phone-1", C, &args, NOW as i64);
+            assert!(no_key.ask(C, args.clone(), Some(signed)).is_err());
+            assert_eq!(ran(&no_key, C), 0);
+            let unknown = policy_rig(ON, Some(&k), None, "ask");
+            unknown.devices.devices.lock().unwrap().remove("phone-1");
+            let signed = proof(&k, "phone-1", C, &args, NOW as i64);
+            assert_eq!(unknown.ask(C, args, Some(signed)), refused("device-unknown", C));
+            assert_eq!(ran(&unknown, C), 0);
+        }
+
+        /// Decision 0069 (#2222): photos to edit and the edit's size ride inside
+        /// the same Change v1 proof, which covers the whole arguments.
+        #[test]
+        fn image_edit_photos_and_size_are_bound_by_the_change_proof() {
+            const C: &str = "chat:generateImage";
+            let k = signer(22);
+            let png = "data:image/png;base64,iVBORw0KGgo=";
+            let args = json!([{ "sessionId": "s1", "prompt": "make it blue", "params": {
+                "modelId": "image/sd", "width": 1024, "height": 1024, "steps": 4, "cfgScale": 1, "seed": -1
+            }, "images": [png], "size": { "width": 768, "height": 1024 } }]);
+            let r = policy_rig(ON, Some(&k), None, "ask");
+            assert_eq!(r.ask(C, args.clone(), None), refused("proof-required", C));
+            let signed = proof(&k, "phone-1", C, &args, NOW as i64);
+            let mut tampered = Vec::new();
+            for photos in [
+                json!(["data:image/png;base64,iVBORw0KGgp="]),
+                json!([png, png]),
+                json!(["data:image/jpeg;base64,iVBORw0KGgo="]),
+            ] {
+                let mut t = args.clone();
+                t[0]["images"] = photos;
+                tampered.push(t);
+            }
+            for size in [json!({ "width": 1024, "height": 768 }), json!({ "width": 768, "height": 1088 })] {
+                let mut t = args.clone();
+                t[0]["size"] = size;
+                tampered.push(t);
+            }
+            let mut dropped = args.clone();
+            dropped[0].as_object_mut().unwrap().remove("size");
+            tampered.push(dropped);
+            for t in tampered {
+                assert!(r.ask(C, t.clone(), Some(signed.clone())).unwrap_err().contains("proof-invalid"), "{t}");
+            }
+            assert_eq!(ran(&r, C), 0, "a changed photo or size never runs on the original signature");
+            // Signed but unsafe photos are still refused by shape.
+            let mut svg = args.clone();
+            svg[0]["images"] = json!(["data:image/svg+xml;base64,PHN2Zz4="]);
+            let signed_svg = proof(&k, "phone-1", C, &svg, NOW as i64);
+            assert!(r.ask(C, svg, Some(signed_svg)).unwrap_err().contains("value-invalid"));
+            assert_eq!(ran(&r, C), 0);
+            assert_eq!(r.ask(C, args, Some(signed)), Ok(Value::Null));
+            assert_eq!(ran(&r, C), 1);
+        }
+
+        #[test]
         fn every_phone_channel_is_classed() {
             let classes = Classes::from_policy();
             let p = policy();
@@ -2833,6 +3032,152 @@ mod tests {
                 let s = sk(true);
                 *s.store.state.lock().unwrap() = Some(json!({ "enabled": true }));
                 assert_eq!(s.raise(Some(json!({ "totp": "123456" }))), refused("step-up-invalid", YOLO));
+            }
+        }
+
+        mod service_management {
+            use super::*;
+
+            struct Security(Mutex<Value>);
+            impl crate::step_up::SecurityStore for Security {
+                fn load(&self) -> Option<Value> {
+                    Some(self.0.lock().unwrap().clone())
+                }
+                fn save(&self, v: &Value) -> Result<(), String> {
+                    *self.0.lock().unwrap() = v.clone();
+                    Ok(())
+                }
+            }
+
+            fn service_rig(setting: Value, secured: bool) -> Rig {
+                let devices = Arc::new(MemDevices::default());
+                *devices.now.lock().unwrap() = NOW;
+                devices.devices.lock().unwrap().insert(
+                    "phone-1".into(),
+                    PhoneDevice { access: ON, key: Some(public(&signer(31))), computer: false },
+                );
+                let calls: Arc<Mutex<Vec<(String, Value)>>> = Arc::default();
+                let seen = calls.clone();
+                let host: Dispatcher = Arc::new(move |channel: String, args: Value| {
+                    seen.lock().unwrap().push((channel.clone(), args));
+                    let out = if channel == "settings:get" {
+                        json!({ "manageServiceFromPhone": setting, "quitFromPhone": true })
+                    } else {
+                        json!({ "ok": channel })
+                    };
+                    Box::pin(std::future::ready(Ok(out)))
+                });
+                let security = secured.then(|| {
+                    Arc::new(Security(Mutex::new(json!({
+                        "enabled": true, "totp": { "secret": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" }
+                    })))) as Arc<dyn crate::step_up::SecurityStore>
+                });
+                let gated = gate_secured(
+                    host,
+                    devices.clone(),
+                    Classes::from_policy(),
+                    crate::phone_terminal::PhoneTerminals::new(),
+                    security,
+                );
+                let rt = tokio::runtime::Builder::new_current_thread().build().unwrap();
+                Rig { devices, calls, gated, rt }
+            }
+
+            const CHANGES: &[&str] =
+                &["service:restart", "service:updateCheck", "service:updateDownload", "service:updateInstall"];
+            fn signed(r: &Rig, channel: &str, at: i64, step_up: Option<Value>) -> Result<Value, String> {
+                let args = json!([]);
+                let who = PhoneCall {
+                    device_id: "phone-1".into(),
+                    proof: Some(proof(&signer(31), "phone-1", channel, &args, at)),
+                    step_up,
+                };
+                r.rt.block_on((r.gated)(who, channel.into(), args))
+            }
+
+            #[test]
+            fn remote_service_is_disabled_by_default_and_independent_of_quit() {
+                for setting in [Value::Null, json!(false), json!("true"), json!(1)] {
+                    let r = service_rig(setting, false);
+                    assert!(r.ask("service:status", json!([]), None).is_ok());
+                    for channel in CHANGES.iter().copied().chain(["service:updateState"]) {
+                        assert_eq!(r.ask(channel, json!([]), None), refused("service-disabled", channel));
+                        assert_eq!(ran(&r, channel), 0);
+                    }
+                }
+                let r = service_rig(json!(true), false);
+                assert!(r.ask("service:updateState", json!([]), None).is_ok());
+                // The owner-only opt-in cannot be enabled by a phone's settings patch.
+                assert!(r.ask("settings:update", json!([{ "manageServiceFromPhone": true }]), None).is_err());
+            }
+
+            #[test]
+            fn unknown_read_off_change_off_and_computers_cannot_bypass_the_gate() {
+                for computer in [false, true] {
+                    let r = service_rig(json!(true), false);
+                    r.devices.devices.lock().unwrap().get_mut("phone-1").unwrap().computer = computer;
+                    for channel in CHANGES {
+                        assert_eq!(r.ask(channel, json!([]), None), refused("proof-required", channel));
+                        assert!(signed(&r, channel, NOW as i64, None).is_ok());
+                        assert_eq!(signed(&r, channel, NOW as i64, None), refused("proof-replayed", channel));
+                        assert_eq!(ran(&r, channel), 1);
+                    }
+                    r.devices.devices.lock().unwrap().get_mut("phone-1").unwrap().access.change = false;
+                    assert_eq!(
+                        signed(&r, "service:restart", NOW as i64 + 1, None),
+                        refused("change-off", "service:restart")
+                    );
+                    r.devices.devices.lock().unwrap().get_mut("phone-1").unwrap().access.read = false;
+                    assert_eq!(r.ask("service:status", json!([]), None), refused("read-off", "service:status"));
+                    r.devices.devices.lock().unwrap().clear();
+                    assert_eq!(r.ask("service:status", json!([]), None), refused("device-unknown", "service:status"));
+                }
+            }
+
+            #[test]
+            fn signed_arguments_are_exact_and_raw_updater_and_shell_stay_denied() {
+                let r = service_rig(json!(true), false);
+                for channel in CHANGES {
+                    assert_eq!(r.ask(channel, json!(["reboot"]), None), refused("value-invalid", channel));
+                    assert_eq!(signed(&r, channel, NOW as i64 - 300_001, None), refused("proof-stale", channel));
+                    let p = proof(&signer(32), "phone-1", channel, &json!([]), NOW as i64);
+                    assert_eq!(r.ask(channel, json!([]), Some(p)), refused("proof-invalid", channel));
+                    assert_eq!(ran(&r, channel), 0);
+                }
+                for channel in [
+                    "update:state",
+                    "update:check",
+                    "update:download",
+                    "update:install",
+                    "service:reboot",
+                    "shell:openPath",
+                ] {
+                    assert_eq!(r.ask(channel, json!([]), None), refused("channel-denied", channel));
+                    assert_eq!(ran(&r, channel), 0);
+                }
+            }
+
+            #[test]
+            fn restart_and_install_use_existing_step_up_policy_but_check_download_do_not() {
+                for channel in ["service:restart", "service:updateInstall"] {
+                    let r = service_rig(json!(true), true);
+                    assert_eq!(r.ask(channel, json!([]), None), refused("proof-required", channel));
+                    assert_eq!(signed(&r, channel, NOW as i64, None), refused("step-up-required", channel));
+                    assert_eq!(ran(&r, channel), 0);
+                    assert_eq!(
+                        signed(&r, channel, NOW as i64 + 1, Some(json!({ "totp": "wrong" }))),
+                        refused("step-up-invalid", channel)
+                    );
+                    let secret = crate::step_up::base32_decode("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ").unwrap();
+                    let code = crate::step_up::totp_at(&secret, crate::step_up::totp_step(NOW, 30.0), 6);
+                    assert!(signed(&r, channel, NOW as i64 + 2, Some(json!({ "totp": code }))).is_ok());
+                    assert!(signed(&r, channel, NOW as i64 + 3, None).is_ok(), "existing coverage applies");
+                    assert_eq!(ran(&r, channel), 2);
+                }
+                let r = service_rig(json!(true), true);
+                for channel in ["service:updateCheck", "service:updateDownload"] {
+                    assert!(signed(&r, channel, NOW as i64, None).is_ok());
+                }
             }
         }
 

@@ -26,7 +26,7 @@ import { completedDate, completedInGroup } from './completedChats.js';
 import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
-import { LIST_PAGE, pagedCount, showMoreLabel } from '../listPaging.js';
+import { agentGroupRows } from './agentGroupRows.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
@@ -137,6 +137,7 @@ export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): A
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
+    case 'approval_resolved':
     case 'tool_result': return 'working';
     case 'error': return 'error';
     case 'done': return null;
@@ -242,7 +243,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const selectRow = (e: React.MouseEvent, id: string) => {
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) { setSelected([]); anchor.current = id; return false; }
     e.preventDefault(); e.stopPropagation();
-    const rows = groups.filter(g => !collapsed.has(g.key)).flatMap(g => g.items.flatMap(e => e.s ? [e.s.id] : []));
+    const rows = groups.filter(g => !collapsed.has(g.key)).flatMap(g => visibleItems(g).flatMap(e => e.s ? [e.s.id] : []));
     setSelected(prev => selectWorkspaceRows(prev, rows, id, anchor.current, e.shiftKey));
     if (!e.shiftKey) anchor.current = id;
     return true;
@@ -306,8 +307,9 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   const computerCatalogs = useStore((s) => s.computerCatalogs);
   const showTips = useStore((s) => s.settings?.showTips !== false);
   const [showCompleted, setShowCompleted] = useState<Set<string>>(new Set());
-  /** Completed rows rendered per group past the first page ("Show more"). */
-  const [completedShown, setCompletedShown] = useState<Record<string, number>>({});
+  /** Expansion is per grouping and list, and lasts while the panel is mounted. */
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [expandedCompleted, setExpandedCompleted] = useState<Set<string>>(new Set());
   const [sidebarW, setSidebarW] = useState(readSidebarWidth);
   const saveSidebarW = (px: number) => {
     const w = clampSidebarWidth(px);
@@ -316,7 +318,10 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   };
   // What the panel groups by, its order, and what it shows (the sliders menu).
   const [view, setViewState] = useState<AgentPanelView>(readAgentPanelView);
-  const setView = (next: AgentPanelView) => { setViewState(next); saveAgentPanelView(next); };
+  const setView = (next: AgentPanelView) => {
+    if (next.groupBy !== view.groupBy) { setExpandedGroups(new Set()); setExpandedCompleted(new Set()); }
+    setViewState(next); saveAgentPanelView(next);
+  };
   const [viewMenu, setViewMenu] = useState<{ x: number; y: number } | null>(null);
   const closeViewMenu = React.useCallback(() => setViewMenu(null), []);
   const viewButtonRef = useRef<HTMLButtonElement>(null);
@@ -441,17 +446,6 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     return off;
   }, [sessions, refreshSessions]);
 
-  // Populate PR badges for chats that reference a PR in their transcript. Only
-  // sessions with a detected PR URL and no cached state get a (host-cached)
-  // fetch, bounded so we never shell out to gh for a whole list at once.
-  useEffect(() => {
-    const loaded = useStore.getState().prsBySession;
-    sessions
-      .filter((s) => !(s.id in loaded) && s.prUrls.length > 0)
-      .slice(0, 8)
-      .forEach((s) => { void useStore.getState().refreshSessionPrs(s.id); });
-  }, [sessions]);
-
   const childrenOf = useMemo(() => {
     const m = new Map<string, SessionSummary[]>();
     for (const s of sessions) if (s.parentSessionId && !s.archivedAt) {
@@ -563,6 +557,26 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
     ];
   })()];
 
+  /** The open agent's top-level row: its own card, its terminal, or the parent of the open subagent. */
+  const holdsSelection = (e: Entry) =>
+    e.s?.id === selectedId || e.t?.id === selectedId || !!(e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId));
+  const visibleItems = (g: PanelGroup) => agentGroupRows(g.items, expandedGroups.has(g.key), g.items.findIndex(holdsSelection));
+  /** Completed rows on show: the open chat, else the one the completion tip points at, stays in reach. */
+  const visibleDone = (g: PanelGroup) => {
+    const open = g.done.findIndex((s) => s.id === selectedId);
+    const keep = open >= 0 || !showTips ? open : g.done.findIndex((s) => s.id === completionTipSessionId);
+    return agentGroupRows(g.done, expandedCompleted.has(g.key), keep);
+  };
+
+  // Hidden cards do not prefetch PR details. Summaries still supply group counts.
+  const visiblePrIds = groups.filter((g) => !collapsed.has(g.key)).flatMap((g) =>
+    visibleItems(g).flatMap((e) => e.s && e.s.prUrls.length > 0 ? [e.s.id] : [])).join('\0');
+  useEffect(() => {
+    const loaded = useStore.getState().prsBySession;
+    visiblePrIds.split('\0').filter((id) => id && !(id in loaded)).slice(0, 8)
+      .forEach((id) => { void useStore.getState().refreshSessionPrs(id); });
+  }, [sessions, visiblePrIds]);
+
   // When a card changes group (Building to Verifying), note where every card was
   // before this render commits, then fly the movers from there. Not when the
   // grouping itself changed: then every card moves and none of them is news.
@@ -581,7 +595,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   }, [layoutSig, computersShown]);
 
   const activeRowRef = useRef<HTMLDivElement>(null);
-  const selectedGroup = groups.find((g) => g.items.some((e) => e.s?.id === selectedId || e.t?.id === selectedId || (e.s && childrenOf.get(e.s.id)?.some((kid) => kid.id === selectedId))) || g.done.some((s) => s.id === selectedId));
+  const selectedGroup = groups.find((g) => g.items.some(holdsSelection) || g.done.some((s) => s.id === selectedId));
   const selectedGroupKey = selectedGroup?.key;
   const selectedCompleted = !!selectedGroup?.done.some((s) => s.id === selectedId);
   useEffect(() => {
@@ -743,9 +757,8 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
           const completedOpen = completedGroup || showCompleted.has(b.key);
           const activity = view.groupBy === 'status' ? groupActivityOf(b.key, items.map((e) => (e.s ? statuses.get(e.s.id) : undefined))) : null;
           const tipHere = showTips && done.some((s) => s.id === completionTipSessionId);
-          // A page of completed rows at a time; the selected or just-completed
-          // chat is always in it.
-          const completedCount = pagedCount(done.length, completedShown[b.key] ?? LIST_PAGE, Math.max(done.findIndex((s) => s.id === selectedId), done.findIndex((s) => s.id === completionTipSessionId)));
+          const visible = visibleItems(b);
+          const completedRows = visibleDone(b);
           const bucketActive = dropTarget === 'bucket:' + b.key;
           const groupGap = bucketActive && drag?.kind === 'project' && drag.id !== b.key;
           return (
@@ -818,7 +831,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                   {items.length === 0 && !completedGroup && (
                     <p className="px-4 py-1 text-2xs text-ink-faint"><span aria-hidden="true">–</span><span className="sr-only">No active agents</span></p>
                   )}
-                  {items.map((entry) => {
+                  {visible.map((entry) => {
                     const { w, s } = entry;
                     const kids = s ? childrenOf.get(s.id) ?? [] : [];
                     return (
@@ -856,6 +869,13 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           projects={settings?.workspaces ?? []}
                           subAgentCount={kids.length}
                           showMetadata={view.showMetadata}
+                          showModel={view.showModel}
+                          showContext={view.showContext}
+                          showPullRequests={view.showPullRequests}
+                          showGit={view.showGit}
+                          showSubagents={view.showSubagents}
+                          showWindows={view.showWindows}
+                          showUpdated={view.showUpdated}
                           showComputer={view.showComputer}
                           showComputerIcons={view.showComputerIcons}
                           zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}
@@ -889,6 +909,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                       </div>
                     );
                   })}
+                  {items.length > visible.length && (
+                    <button type="button" data-agent-more
+                      className="w-full rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
+                      onClick={() => setExpandedGroups((previous) => new Set(previous).add(b.key))}
+                    >
+                      Show more ({(items.length - visible.length).toLocaleString()})
+                    </button>
+                  )}
                   {/* Completed chats stay with their group, folded away under
                       the active ones until asked for. */}
                   {done.length > 0 && (
@@ -911,7 +939,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                         {completedGroup ? 'Your completed chat is here. Open Completed to find or restore it.' : 'Your completed chat is here. Open Show completed to find or restore it.'}
                         <button className="ml-2 text-accent" onClick={() => useStore.setState({ completionTipSessionId: null })}>Dismiss</button>
                       </div>}
-                      {completedOpen && done.slice(0, completedCount).map((s) => (
+                      {completedOpen && !isCollapsed && completedRows.map((s) => (
                         <div key={s.id} ref={s.id === selectedId ? activeRowRef : undefined}><CompletedRow
                           session={s}
                           now={now}
@@ -920,14 +948,14 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(null); setDoneMenu({ x: e.clientX, y: e.clientY, id: s.id }); }}
                         /></div>
                       ))}
-                      {completedOpen && done.length > completedCount && (
+                      {completedOpen && done.length > completedRows.length && (
                         <button
                           type="button"
                           data-completed-more
                           className="w-full rounded-md px-2 py-1 text-left text-2xs text-ink-faint hover:bg-surface-2 hover:text-ink"
-                          onClick={() => setCompletedShown((m) => ({ ...m, [b.key]: completedCount + LIST_PAGE }))}
+                          onClick={() => setExpandedCompleted((previous) => new Set(previous).add(b.key))}
                         >
-                          {showMoreLabel(done.length - completedCount)}
+                          Show more ({(done.length - completedRows.length).toLocaleString()})
                         </button>
                       )}
                     </div>

@@ -156,8 +156,6 @@ export function AddProvider({
   // wizard) that already present the subscription path themselves and embed
   // this form purely as the key fallback.
   const [useApiKey, setUseApiKey] = useState(apiKeyOnly);
-  // Free-text ChatGPT model override, for model ids not in the curated list.
-  const [customModelId, setCustomModelId] = useState('');
   // Anthropic workspace for an organization-level API key; a key created
   // inside a workspace leaves it blank.
   const [workspaceId, setWorkspaceId] = useState('');
@@ -198,7 +196,6 @@ export function AddProvider({
     setLabel(providerSetupDefaults(k).label);
     setUseApiKey(false);
     setApiKey('');
-    setCustomModelId('');
     setWorkspaceId('');
     setGoogleProject('');
     setGoogleLocation('global');
@@ -214,7 +211,7 @@ export function AddProvider({
     const chatgpt = status.provider === 'chatgpt' || kind === 'chatgpt';
     try {
     await window.nekko.saveProvider(
-      subscriptionProviderConfig(status, { kind, label, baseUrl, customModelId }),
+      subscriptionProviderConfig(status, { kind, label, baseUrl }),
     );
     pushToast(
       'success',
@@ -362,17 +359,6 @@ export function AddProvider({
             <div className="mt-2">
               <SubscriptionSignIn oauthProvider={oauthProvider} onConnected={connectSubscription} />
             </div>
-            {kind === 'chatgpt' && (
-              <label className="mt-3 block text-xs font-medium text-ink-soft">
-                Custom model id (optional)
-                <input
-                  className="input mt-1 text-xs"
-                  value={customModelId}
-                  onChange={(e) => setCustomModelId(e.target.value)}
-                  placeholder="Override the curated list, e.g. gpt-5-codex"
-                />
-              </label>
-            )}
           </div>
         )}
         {(defaults.needsKey || optionalKey) && (!keyBehindSignIn || useApiKey) && (

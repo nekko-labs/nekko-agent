@@ -7,6 +7,17 @@ area: phone
 
 **Status: implemented in the current worktree, native-unverified; not shipped.** The dashboard and deterministic voice paths supersede the chat-row card described historically in [native iOS](native-ios-app.md). Native builds/tests, matched native before/after evidence and physical-device checks for this redesign remain pending. The [editable visual proposal](live-card-status-dashboard.html) is design reference, not native evidence.
 
+## Dashboard replacement decision
+
+For PR #2047, the user explicitly chose this dashboard over main's tappable
+Live Activity chat chips (#1912). Main's chip helpers/protocol tests and single-card
+lifecycle safeguards remain compatible, but the rendered card and its Settings
+preview stay counts-first with Talk to Nekko and Open app. See
+[decision 0069](../../docs/decisions/0069-live-activity-dashboard-replaces-chat-chips.md).
+Extra visual/device verification is skipped for this repair at the user's request;
+that is not a waiver of required CI or evidence checks, nor a claim that the
+hardware and accessibility limitations below have been verified.
+
 ## The three goals
 
 1. **See what is happening.** The card is a status dashboard of agents, not a miniature chat list. Lead with counts such as **3 Building**, **2 Need input**, and **20 Done**. Make attention distinguishable without relying on color alone.
@@ -49,7 +60,7 @@ Missing, ambiguous, changed or expired targets/confirmations are refused with an
 - **iOS 17:** Open app for voice opens the chat list, without automatic listening or an app-wide voice sheet. No no-app voice promise applies.
 - **Android:** the notification opens a foreground sheet behind the app lock, then requires an explicit Listen tap. No background microphone. Capture and dispatch require the resumed, unlocked, uncovered app on the original computer; pause, cover, disposal or computer change cancels capture and invalidates late results. The existing Dictation engine is used; phone recognition may use its provider's network service, unlike iOS's on-device-only phone fallback.
 - **iOS capture scope:** capture pins the intent's computer and its transcription caller before capability/permission waits. The active computer must still match and must not be explicitly denied before opening the microphone, dispatching words or uploading audio. Capability and upload calls share the pinned caller, never a fresh mutable-selection lookup. Archived chats are excluded and the confirmed id/name, archive state, card scope and authorization are checked again at persistence.
-- **Delivery:** iOS distinguishes queued from confirmed delivery and explicitly says delivery is not completion. Legitimate offline delivery still queues. Processing keeps the card alive and remains cancellable throughout preparation, including the connection wait. A generation guard runs synchronously immediately before outbox persistence; once committed, Cancel cannot recall it or claim nothing was sent. Android reports queued, not yet confirmed sent or completed. No secret, credential, raw error or full captured transcript belongs in the Lock Screen payload; dispatcher guidance/results do not echo the full target/message.
+- **Delivery:** iOS distinguishes queued from confirmed delivery and explicitly says delivery is not completion. Legitimate offline delivery still queues. Processing keeps the card alive and remains cancellable throughout preparation, including the connection wait. A generation guard runs synchronously immediately before outbox persistence; once committed, Sending replaces Processing and hides Cancel; Cancel cannot recall it or claim nothing was sent. Android reports queued, not yet confirmed sent or completed. No secret, credential, raw error or full captured transcript belongs in the Lock Screen payload; dispatcher guidance/results do not echo the full target/message.
 
 ## Levels and localization
 

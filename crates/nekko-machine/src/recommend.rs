@@ -20,6 +20,11 @@
 //! measured per backend and the bandwidth from the vendor's specification.
 //! A backend whose efficiency is borrowed, or hardware not in the table, says
 //! so; a GPU the table does not know gets no figure rather than a guess.
+//!
+//! **Pictures** (`imageTasks`) are picked by memory alone: the weights, the
+//! companion files and an allowance for working buffers, or with sd.cpp's CPU
+//! offload the largest of them. No seconds-per-image figure is claimed until
+//! one is measured.
 
 use crate::measured::{LocalSpeeds, machine_key};
 use crate::profile::HardwareProfile;
@@ -65,6 +70,60 @@ pub struct Feed {
     pub calibration: BTreeMap<String, Calibration>,
     #[serde(default)]
     pub measured: Vec<Measured>,
+    /// Picture tasks (create, edit), picked by memory alone.
+    #[serde(default)]
+    pub image_tasks: Vec<ImageTask>,
+    #[serde(default)]
+    pub image_models: Vec<ImageModel>,
+}
+
+/// A picture task: a diffusion model that can do `capability`, at 1024x1024.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageTask {
+    pub id: String,
+    pub label: String,
+    /// `create` or `edit`; every candidate can do it.
+    pub capability: String,
+    /// Room for sd.cpp's working buffers on top of every file resident (an
+    /// editorial assumption until peak memory is measured per family).
+    pub compute_allowance_bytes: f64,
+    /// Never picked from system RAM: on a CPU it would take hours (video).
+    #[serde(default)]
+    pub gpu_only: bool,
+    pub candidates: Vec<String>,
+}
+
+/// A diffusion model with the companion files (text encoders, VAE) it starts with.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageModel {
+    pub id: String,
+    pub repo: String,
+    pub name: String,
+    pub owner: String,
+    pub license: String,
+    pub capabilities: Vec<String>,
+    /// The engine's companion set the downloaded file resolves to (`acquire.rs`).
+    pub companion_set: String,
+    pub quants: Vec<ImageQuant>,
+    pub companions: Vec<ImageCompanion>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageQuant {
+    pub label: String,
+    pub files: Vec<String>,
+    pub size_bytes: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageCompanion {
+    pub repo: String,
+    pub file: String,
+    pub size_bytes: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -197,6 +256,50 @@ pub struct Recommendations {
     pub hardware: HardwareMatch,
     pub budget: Budget,
     pub tasks: Vec<TaskPick>,
+    pub image_tasks: Vec<ImageTaskPick>,
+}
+
+/// One picture model at one quant, with everything it downloads.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageChoice {
+    pub model_id: String,
+    pub name: String,
+    pub owner: String,
+    pub repo: String,
+    pub license: String,
+    pub capabilities: Vec<String>,
+    /// The engine's companion set; `engine:downloadImageCompanions` fetches it after the weights.
+    pub companion_set: String,
+    pub quant: String,
+    /// The label `engine:downloadModel` takes for this quant.
+    pub download_label: String,
+    pub files: Vec<String>,
+    pub weights_bytes: f64,
+    /// Text encoders and VAE, before counting any already on disk.
+    pub companion_bytes: f64,
+    /// Weights and companions together.
+    pub download_bytes: f64,
+    /// Every file resident plus the task's compute allowance (an estimate; no speed is claimed).
+    pub memory_bytes: f64,
+    pub headroom_bytes: f64,
+    pub placement: Placement,
+    /// Fits only with sd.cpp's `--offload-to-cpu` (the model's `offloadToCpu`
+    /// preset): set it when installing, or the load runs out of VRAM.
+    pub offload_to_cpu: bool,
+    pub fit: Fit,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageTaskPick {
+    pub task: String,
+    pub label: String,
+    pub capability: String,
+    /// The first candidate that fits, best first; `None` when none does.
+    pub pick: Option<ImageChoice>,
+    /// Each candidate at the quant it would be offered at, best first.
+    pub options: Vec<ImageChoice>,
 }
 
 /// Which row of the hardware table this machine is, and what it runs on.
@@ -560,6 +663,92 @@ fn choose(options: &[Choice]) -> (Option<Choice>, bool) {
     (fastest.cloned(), fastest.is_some())
 }
 
+/* ------------------------------------------------------------- pictures */
+
+fn fit_for(memory: f64, budget: f64) -> Fit {
+    if memory <= budget * COMFORT_SHARE {
+        Fit::Fits
+    } else if memory <= budget * PICK_SHARE {
+        Fit::Tight
+    } else {
+        Fit::TooBig
+    }
+}
+
+/// One quant on one target. Every file resident is the fast way; on a
+/// discrete GPU that cannot hold them all, sd.cpp's `--offload-to-cpu` keeps
+/// the weights in RAM and brings each stage's into VRAM when it runs, so the
+/// GPU needs the largest file plus the working buffers, and RAM needs them all.
+fn image_choice(
+    task: &ImageTask,
+    model: &ImageModel,
+    quant: &ImageQuant,
+    target: &Target,
+    ram_budget: f64,
+) -> ImageChoice {
+    let companions: f64 = model.companions.iter().map(|c| c.size_bytes).sum();
+    let files = quant.size_bytes + companions;
+    let resident = files + task.compute_allowance_bytes;
+    let largest = model.companions.iter().map(|c| c.size_bytes).fold(quant.size_bytes, f64::max);
+    let staged = largest + task.compute_allowance_bytes;
+    let offload = target.placement == Placement::Gpu
+        && fit_for(resident, target.budget) == Fit::TooBig
+        && fit_for(staged, target.budget) != Fit::TooBig
+        && files <= ram_budget * PICK_SHARE;
+    let memory = if offload { staged } else { resident };
+    ImageChoice {
+        model_id: model.id.clone(),
+        name: model.name.clone(),
+        owner: model.owner.clone(),
+        repo: model.repo.clone(),
+        license: model.license.clone(),
+        capabilities: model.capabilities.clone(),
+        companion_set: model.companion_set.clone(),
+        quant: quant.label.clone(),
+        download_label: download_label(&quant.files[0]),
+        files: quant.files.clone(),
+        weights_bytes: quant.size_bytes,
+        companion_bytes: companions,
+        download_bytes: quant.size_bytes + companions,
+        memory_bytes: memory.round(),
+        headroom_bytes: (target.budget - memory).round(),
+        placement: target.placement,
+        offload_to_cpu: offload,
+        fit: fit_for(memory, target.budget),
+    }
+}
+
+/// Each candidate at the quant to offer, quants being best first: one that
+/// fits with every file resident (comfortably, then tightly) before one that
+/// needs offloading, else the smallest.
+fn image_options(feed: &Feed, task: &ImageTask, target: &Target, ram_budget: f64) -> Vec<ImageChoice> {
+    task.candidates
+        .iter()
+        .filter_map(|id| feed.image_models.iter().find(|m| &m.id == id))
+        .filter(|m| m.capabilities.contains(&task.capability))
+        .filter_map(|m| {
+            let all: Vec<ImageChoice> = m.quants.iter().map(|q| image_choice(task, m, q, target, ram_budget)).collect();
+            let at = |fit: Fit, offload: bool| all.iter().find(|o| o.fit == fit && o.offload_to_cpu == offload);
+            at(Fit::Fits, false)
+                .or_else(|| at(Fit::Tight, false))
+                .or_else(|| at(Fit::Fits, true))
+                .or_else(|| at(Fit::Tight, true))
+                .or_else(|| all.iter().min_by(|a, b| a.memory_bytes.total_cmp(&b.memory_bytes)))
+                .cloned()
+        })
+        .collect()
+}
+
+/// The first candidate that fits, best first. From system RAM every step runs
+/// on the CPU, where time grows with the weights, so there the smallest that fits.
+fn image_pick(options: &[ImageChoice]) -> Option<ImageChoice> {
+    let mut fitting = options.iter().filter(|o| o.fit != Fit::TooBig);
+    match options.first().map(|o| o.placement) {
+        Some(Placement::Cpu) => fitting.min_by(|a, b| a.weights_bytes.total_cmp(&b.weights_bytes)).cloned(),
+        _ => fitting.next().cloned(),
+    }
+}
+
 /// `machine:recommendations`: a pick per task for this profile.
 ///
 /// A quant this machine has run takes its own measured speed (`local`), in
@@ -593,6 +782,27 @@ pub fn recommend(profile: &HardwareProfile, feed: &Feed, local: &LocalSpeeds) ->
         })
         .collect();
 
+    let image_tasks = feed
+        .image_tasks
+        .iter()
+        .map(|task| {
+            let mut options = image_options(feed, task, main, cpu.budget);
+            let mut pick = image_pick(&options).filter(|p| !(task.gpu_only && p.placement == Placement::Cpu));
+            // A discrete GPU too small for every candidate, even offloading: what runs from system RAM instead.
+            if pick.is_none() && main.placement == Placement::Gpu && !task.gpu_only {
+                options = image_options(feed, task, &cpu, cpu.budget);
+                pick = image_pick(&options);
+            }
+            ImageTaskPick {
+                task: task.id.clone(),
+                label: task.label.clone(),
+                capability: task.capability.clone(),
+                pick,
+                options,
+            }
+        })
+        .collect();
+
     Recommendations {
         feed_version: feed.version.clone(),
         hardware: HardwareMatch {
@@ -607,5 +817,6 @@ pub fn recommend(profile: &HardwareProfile, feed: &Feed, local: &LocalSpeeds) ->
         },
         budget: Budget { bytes: main.budget.round(), placement: main.placement },
         tasks,
+        image_tasks,
     }
 }

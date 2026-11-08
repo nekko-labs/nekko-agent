@@ -253,6 +253,7 @@ export const IpcChannels = {
   imageFetch: 'image:fetch',
 
   changesList: 'changes:list',
+  auditRead: 'audit:read',
   changeAccept: 'changes:accept',
   changeAcceptAll: 'changes:acceptAll',
 
@@ -449,7 +450,15 @@ export const IpcChannels = {
   mcpStatus: 'mcp:status',
   mcpHypergate: 'mcp:hypergate',
   mcpHypergateConnect: 'mcp:hypergate:connect',
-  // Transport-local update controls (desktop = electron-updater, web = refresh).
+  // Narrow capability-driven service controls for paired devices.
+  serviceStatus: 'service:status',
+  serviceRestart: 'service:restart',
+  serviceUpdateState: 'service:updateState',
+  serviceUpdateCheck: 'service:updateCheck',
+  serviceUpdateDownload: 'service:updateDownload',
+  serviceUpdateInstall: 'service:updateInstall',
+  // Transport-local native updater controls; raw update:* stays denied to phones.
+  updateState: 'update:state',
   updateCheck: 'update:check',
   updateDownload: 'update:download',
   updateInstall: 'update:install',
@@ -484,6 +493,8 @@ export const IpcChannels = {
   // Send feedback (crates/nekkod/src/feedback.rs): no sign-in needed.
   feedbackInfo: 'feedback:info',
   feedbackSend: 'feedback:send',
+  // Setup's optional email: joins Nekko Cloud's `app` list (crates/nekkod/src/feedback.rs).
+  updatesJoin: 'updates:join',
   voiceStatus: 'voice:status',
   voiceInstall: 'voice:install',
   voiceCancelInstall: 'voice:cancel',
@@ -551,6 +562,27 @@ export interface AgentReplay {
 }
 
 /** The typed API the preload bridge exposes as window.nekko. */
+/** Who answered an approval or decided a permission (`audit.rs`). */
+export interface AuditBy {
+  via: string;
+  device?: string;
+  /** The device's current name in Paired devices, added by `audit:read`; never stored in the trail. */
+  deviceName?: string;
+}
+
+/**
+ * One event of a chat's audit trail, as the engine writes it: value-free by
+ * design (no arguments, URLs, reasons, output or message text).
+ */
+export type AuditEvent = { at: number; turnId?: string } & (
+  | { type: 'turn'; mode?: string; provider?: string | null; model?: string | null; claudeCode?: boolean }
+  | { type: 'tool'; callId?: string; tool: string; isError?: boolean; ms?: number; outputChars?: number; detail?: Record<string, unknown> }
+  | { type: 'approval'; callId?: string; tool?: string; severity?: string; answer: 'approved' | 'denied' | 'unanswered'; by: AuditBy | null }
+  | { type: 'permission'; tool: string; executedBy?: string; decision: string; by: AuditBy | null; detail?: Record<string, unknown> }
+  | { type: 'taint'; callId?: string; by: string }
+  | { type: 'redactions'; counts: Record<string, number> }
+);
+
 export interface NekkoApi {
   /** Nekko Cloud sign-in and end-to-end encrypted sync (crates/nekko-cloud). */
   cloudStatus(): Promise<import('./cloud.js').CloudStatus>;
@@ -576,6 +608,8 @@ export interface NekkoApi {
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
   /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`, and any screenshots. */
   feedbackSend(message: string, includeAppInfo: boolean, screenshots?: import('./feedback.js').FeedbackScreenshot[]): Promise<{ ok: true }>;
+  /** Setup's optional email (and the name given, if any) joins Nekko Cloud's update list; one confirmation email follows. */
+  updatesJoin(email: string, name?: string): Promise<{ ok: true }>;
   syncTurnOn(): Promise<import('./cloud.js').SyncTurnOnResult>;
   syncConfirmRecoveryKey(text: string): Promise<import('./cloud.js').CloudStatus>;
   syncRestore(text: string): Promise<import('./cloud.js').CloudStatus>;
@@ -1015,6 +1049,8 @@ export interface NekkoApi {
    */
   fetchRemoteImage(url: string): Promise<RemoteImage>;
 
+  /** The chat's audit trail: what the agent did and who allowed it, never the data (crates/nekkod/src/audit.rs). */
+  readAudit(sessionId: string): Promise<AuditEvent[]>;
   /** Files the agent changed this session (diff/approve). */
   listChanges(sessionId: string): Promise<FileChange[]>;
   /** Keep a file's changes, stop tracking it. */
@@ -1036,6 +1072,8 @@ export interface NekkoApi {
   getPrChecks(url: string): Promise<import('./pr.js').PrCheckList>;
   /** Live state of any GitHub PR by URL (cached for a minute), or null when unreadable. */
   getPrInfo(url: string): Promise<import('./pr.js').PrInfo | null>;
+  /** A GitHub issue's live state (open, completed, not planned), cached like a PR. */
+  getIssueInfo(url: string): Promise<import('./pr.js').IssueInfo | null>;
 
   /**
    * Git in a workspace's folder (IO-33 FA-2). `workspaceId` is a saved folder's

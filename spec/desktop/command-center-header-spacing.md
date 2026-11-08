@@ -66,3 +66,19 @@ Wide/narrow light/dark full-app screenshots and companion/dock motion are verifi
 - **Composer:** windows always stop one gap above a composer docked below them, with or without rails; the composer's resize handle lives in that gap and never covers a window's footer.
 - **Agent panel:** a vertical agent panel spans exactly the wall's windows: its top lines up with the top of their panels (below a zone's name bar) and its bottom with their bottom, in Dynamic and Focused, at every window size. The Agents view measures those offsets from the wall, so the composer's height and the rails are accounted for.
 - **Not covered:** a horizontal agent panel above the wall, and a composer docked above the windows (it keeps the wall's 14px top inset). At widths where the wall stacks its windows and scrolls, the panel ends at the composer's gap rather than at the last window.
+
+
+## Add agent zone from the plus menu
+
+Implemented: the Agents board toolbar's plus menu includes **Add agent zone** after
+Agent, Create or Edit Photos and Videos, and Terminal. It closes the menu, adds an
+empty zone at the right edge through the existing zone layout rules, and selects
+that zone. It preserves Focused, Dynamic or Fixed grid mode and existing agents.
+The existing board size limit still applies. No separate Space feature, session,
+provider call or permission is introduced; only the existing wall setting is saved.
+Empty-zone and sidebar creation rows still offer only their existing session types.
+
+Acceptance: the menu fits desktop and narrow web widths; activating the action
+adds exactly one empty active zone and dismisses the menu without switching layout.
+Verification: focused tests and isolated renderer interaction/captures cover this
+behavior; native mobile apps are unchanged.

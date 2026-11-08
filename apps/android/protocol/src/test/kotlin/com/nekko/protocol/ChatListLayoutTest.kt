@@ -25,7 +25,7 @@ class ChatListLayoutTest {
                {"id":"e","title":"E","updatedAt":8,"workspaceId":"w1","archivedAt":100}]""",
         )
         val s = ChatSections.make(list, folders, ChatListView.STANDARD, emptyMap(), now = now, zone = utc)
-        assertEquals(listOf("General", "App", "Empty"), s.map { it.name })
+        assertEquals(listOf("General", "App"), s.map { it.name })
         assertEquals("active in dragged order, then completed", listOf("c", "b", "e"), s[1].chats.map { it.id })
         assertEquals(2, s[1].activeCount)
         assertEquals(1, s[1].doneCount)
@@ -90,7 +90,7 @@ class ChatListLayoutTest {
 
     @Test fun `group order follows the arranged order`() {
         val list = chats("""[{"id":"a","title":"A","updatedAt":5},{"id":"b","title":"B","updatedAt":5,"workspaceId":"w1"}]""")
-        val s = ChatSections.make(list, folders, ChatListView.STANDARD, emptyMap(), groupOrder = listOf("w2", "w1"), now = now)
+        val s = ChatSections.make(list, folders, ChatListView.STANDARD.copy(showEmptyGroups = true), emptyMap(), groupOrder = listOf("w2", "w1"), now = now)
         assertEquals("a group the saved order doesn't name keeps its place after", listOf("Empty", "App", "General"), s.map { it.name })
         assertEquals(listOf("c", "a", "b"), ChatGroupOrder.move(listOf("a", "b", "c"), "c", before = "a"))
         assertEquals(listOf("b", "c", "a"), ChatGroupOrder.move(listOf("a", "b", "c"), "a", before = null))

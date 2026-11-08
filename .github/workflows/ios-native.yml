@@ -28,12 +28,20 @@ on:
     - cron: '37 18 * * *'
   workflow_dispatch:
     inputs:
+      relay_baseline_ref:
+        description: 'Focused relay callback regression: full before SHA'
+        required: false
+        default: ''
       batch:
         description: 'Set by ios-batch.yml: the PRs in this batch, [{"number":1,"sha":"..."}]'
         required: false
         default: ''
       baseline_ref:
         description: 'Evidence only: before app full SHA. Runs focused iOS + Android captures instead of the full suite.'
+        required: false
+        default: ''
+      photos_baseline_ref:
+        description: 'Evidence only: full before SHA for draft photos and the dark app icon.'
         required: false
         default: ''
       groups_baseline_ref:
@@ -63,6 +71,33 @@ concurrency:
   group: ios-native-${{ inputs.batch && 'batch' || github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ !inputs.batch }}
 jobs:
+  relay-regression:
+    if: github.event_name == 'workflow_dispatch' && inputs.relay_baseline_ref != ''
+    # Pure Swift package tests need no iOS simulator or custom Xcode runner.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Prove callback regressions on base and fix
+        env:
+          BASE: ${{ inputs.relay_baseline_ref }}
+        run: bash scripts/relay-handshake-regression.sh "$BASE"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: relay-handshake-regression
+          path: .shots/relay-handshake/*.log
+  photo-evidence:
+    if: github.event_name == 'workflow_dispatch' && inputs.photos_baseline_ref != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ios-photo-evidence.yml
+    with:
+      baseline_ref: ${{ inputs.photos_baseline_ref }}
+      source_ref: ${{ inputs.source_ref || github.sha }}
+      ios_runtime: com.apple.CoreSimulator.SimRuntime.iOS-27-0
   group-evidence:
     if: github.event_name == 'workflow_dispatch' && inputs.groups_baseline_ref != ''
     permissions:
@@ -101,7 +136,7 @@ jobs:
     # workflows), so a labeled PR always runs hosted. The picker is not the boundary against fork
     # code (a fork PR's own workflow file could name the runner directly): that is the repo's
     # fork-approval setting and the runner group (see docs/runbooks/ci-runner-pilot.md).
-    if: ${{ !inputs.baseline_ref && !inputs.groups_baseline_ref && !inputs.automatic_baseline_ref && vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/ios-batch') }}
+    if: ${{ !inputs.relay_baseline_ref && !inputs.photos_baseline_ref && !inputs.baseline_ref && !inputs.groups_baseline_ref && !inputs.automatic_baseline_ref && vars.NEKKO_MAC_RUNNERS == 'on' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/ios-batch') }}
     # A failed picker leaves its output empty (protocol-and-build falls back) and must not fail the run.
     continue-on-error: true
     runs-on: ubuntu-latest
@@ -124,7 +159,7 @@ jobs:
   protocol-and-build:
     needs: pick
     # !cancelled(): a skipped or failed picker must not skip this job.
-    if: ${{ !inputs.baseline_ref && !inputs.groups_baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
+    if: ${{ !inputs.relay_baseline_ref && !inputs.photos_baseline_ref && !inputs.baseline_ref && !inputs.groups_baseline_ref && !cancelled() && (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'deploy:ios') && contains(fromJSON('["deploy:ios","ci:theme"]'), github.event.label.name))) }}
     runs-on: ${{ fromJSON(needs.pick.outputs.runs-on || '"xcode-27"') }}
     # Light and dark live tests alone take 35-45 min on macos-14 (2026-10-25), so 50 cut
     # passing runs off mid-test. A slow runner reaches 75 by itself, and a retried journey adds about 8.

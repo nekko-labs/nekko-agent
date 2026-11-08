@@ -88,6 +88,12 @@ To add speech to a draft without sending it, use the iPhone keyboard's own dicta
 
 **Verification note:** simulator state/lifecycle checks do not prove physical microphone, speech quality or Bluetooth routing. These require an on-device check before claiming hardware support for the new hands-free flow.
 
+## Cancellation and startup safety
+
+Desktop/Local Web UI capture and command handling invalidate pending work when aborted; normal toggle-off still applies the final utterance. A microphone test that finishes opening after its Settings view closes is aborted, and partial audio setup failures release the microphone. The desktop lock bridge also invalidates queued transcripts, so a delayed “Nekko, send it” cannot execute after lock. Browsers do not have that native OS-lock callback.
+
+Android dictation reserves one startup job, ignores stale callbacks/results, and cancels on app lock or background independently of screen disposal. Both phone clients allow 300 seconds for host cold startup, inference and relay overhead. iOS no longer blindly retries a failed or timed-out host transcription and propagates cancellation without fallback. Native build and hardware verification remain pending; these fixes do **not** add Android hands-free conversations. See [the readiness audit](../reports/voice-image-readiness.md).
+
 ## Privacy
 
 Speech is turned into text on this computer, by Apple's on-device recognizer or by Whisper running locally. Audio is never sent anywhere and is not kept once it has been turned into text.

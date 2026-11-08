@@ -47,8 +47,8 @@ public enum StepUp {
     public static let maxAttempts = 3
 
     /// The phone channels the computer may ask a step-up for
-    /// (`STEP_UP_PHONE_GUARDED`): raising a chat's mode or the default mode.
-    public static let guardedChannels: Set<String> = [Channels.sessionSetOptions, Channels.settingsUpdate]
+    /// (`STEP_UP_PHONE_GUARDED`): mode raises, service restart and update install.
+    public static let guardedChannels: Set<String> = [Channels.sessionSetOptions, Channels.settingsUpdate, Channels.serviceRestart, Channels.serviceUpdateInstall]
     /// Never guarded, never proved (`STEP_UP_NEVER_GUARDED`): a safety exit
     /// must never be harder than the attack.
     public static let neverGuarded: Set<String> = [Channels.appQuit, Channels.deviceSignOut, Channels.remoteStop]

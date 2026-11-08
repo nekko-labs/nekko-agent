@@ -7,4 +7,9 @@
     <string name="dashboard_talk">与 Nekko 对话</string>
     <string name="dashboard_open">打开应用</string>
     <string name="dashboard_voice_fallback">语音会打开应用。解锁后点击“聆听”。</string>
+    <string name="chats_showmodel">模型</string>
+    <string name="chats_card_details">卡片详情</string>
+    <string name="chats_showupdated">更新时间</string>
+    <string name="chats_showcontext">上下文窗口</string>
+    <string name="chats_showpullrequests">拉取请求</string>
 </resources>

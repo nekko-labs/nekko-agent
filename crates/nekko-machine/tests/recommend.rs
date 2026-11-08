@@ -5,7 +5,9 @@
 use nekko_machine::measured::LocalSpeeds;
 use nekko_machine::profile::{Cpu, EngineBuild, Gpu, HardwareProfile};
 use nekko_machine::recommend::Feed;
-use nekko_machine::recommend::{Fit, Placement, Recommendations, SpeedBasis, TaskPick, kv_bytes, match_class};
+use nekko_machine::recommend::{
+    Fit, ImageTaskPick, Placement, Recommendations, SpeedBasis, TaskPick, kv_bytes, match_class,
+};
 use nekko_machine::{bundled_feed, recommend};
 
 /// A pick with nothing measured on this machine yet.
@@ -377,4 +379,101 @@ fn speeds_measured_here_replace_the_estimate_and_move_the_pick() {
     // Measured on another machine: the estimate stands.
     let other = recommend(&rtx_5090(), feed, &local);
     assert_eq!(task(&other, "chat").pick.as_ref().unwrap().model_id, "qwen3.8-27b");
+}
+
+/* -------------------------------------------------------------- pictures */
+
+fn image<'a>(r: &'a Recommendations, id: &str) -> &'a ImageTaskPick {
+    r.image_tasks.iter().find(|t| t.task == id).unwrap_or_else(|| panic!("image task {id}"))
+}
+
+/// The pick for a picture task: model, quant, offloaded, placement.
+fn image_pick(p: &HardwareProfile, id: &str) -> (String, String, bool, Placement) {
+    let r = rec(p, bundled_feed());
+    let pick = image(&r, id).pick.clone().unwrap_or_else(|| panic!("no {id} pick"));
+    assert_ne!(pick.fit, Fit::TooBig);
+    assert!(pick.capabilities.contains(&image(&r, id).capability), "{id}: {pick:?}");
+    assert_eq!(pick.download_bytes, pick.weights_bytes + pick.companion_bytes);
+    (pick.model_id, pick.quant, pick.offload_to_cpu, pick.placement)
+}
+
+fn want(model: &str, quant: &str, offload: bool, placement: Placement) -> (String, String, bool, Placement) {
+    (model.into(), quant.into(), offload, placement)
+}
+
+#[test]
+fn every_picture_task_is_answered_with_a_model_that_can_do_it() {
+    let feed = bundled_feed();
+    assert_eq!(
+        feed.image_tasks.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+        ["imageCreate", "imageEdit", "videoCreate"]
+    );
+    for t in &feed.image_tasks {
+        for c in &t.candidates {
+            let m = feed.image_models.iter().find(|m| &m.id == c).unwrap_or_else(|| panic!("{c}"));
+            assert!(m.capabilities.contains(&t.capability), "{} lists {c}", t.id);
+            assert!(!m.companions.is_empty() && m.companions.iter().all(|f| f.size_bytes > 0.0), "{c}");
+        }
+    }
+}
+
+#[test]
+fn a_big_nvidia_card_keeps_every_file_on_the_gpu() {
+    // Q8_0 of Qwen Image would leave little room: the comfortable Q4_K_M wins.
+    assert_eq!(image_pick(&rtx_5090(), "imageCreate"), want("qwen-image", "Q4_K_M", false, Placement::Gpu));
+    assert_eq!(image_pick(&rtx_5090(), "imageEdit"), want("qwen-image-edit-2511", "Q4_K_M", false, Placement::Gpu));
+}
+
+#[test]
+fn an_8_gb_card_runs_pictures_by_offloading_to_the_cpu_and_says_so() {
+    let p = rtx_4060_vulkan();
+    assert_eq!(image_pick(&p, "imageCreate"), want("z-image-turbo", "Q4_K", true, Placement::Gpu));
+    // FLUX.2 klein edits too; at Q4_0 the largest stage fits with room to spare.
+    assert_eq!(image_pick(&p, "imageEdit"), want("flux2-klein-4b", "Q4_0", true, Placement::Gpu));
+    // Qwen Image is offered, and said not to fit, rather than left out.
+    let r = rec(&p, bundled_feed());
+    let qwen = image(&r, "imageCreate").options.iter().find(|o| o.model_id == "qwen-image").unwrap();
+    assert_eq!(qwen.fit, Fit::TooBig);
+}
+
+#[test]
+fn apple_silicon_never_offloads_one_pool_to_itself() {
+    assert_eq!(
+        image_pick(&apple("Apple M5 Max", 64.0, 40), "imageCreate"),
+        want("qwen-image", "Q8_0", false, Placement::Unified)
+    );
+    let m2 = apple("Apple M2", 16.0, 10);
+    assert_eq!(image_pick(&m2, "imageCreate"), want("z-image-turbo", "Q4_K", false, Placement::Unified));
+    assert_eq!(image_pick(&m2, "imageEdit"), want("flux2-klein-4b", "Q4_0", false, Placement::Unified));
+    let r = rec(&m2, bundled_feed());
+    assert!(r.image_tasks.iter().flat_map(|t| &t.options).all(|o| !o.offload_to_cpu));
+}
+
+#[test]
+fn without_a_gpu_the_smallest_picture_model_that_fits_is_picked() {
+    let p = cpu_only();
+    assert_eq!(image_pick(&p, "imageCreate"), want("z-image-turbo", "Q4_K", false, Placement::Cpu));
+    assert_eq!(image_pick(&p, "imageEdit"), want("flux2-klein-4b", "Q8_0", false, Placement::Cpu));
+}
+
+#[test]
+fn a_card_too_small_even_to_offload_falls_back_to_system_ram() {
+    let p = machine("win32", 16.0, vec![gpu("NVIDIA GeForce GTX 1650", 4.0)], false, &["cuda", "cpu"], Some("cuda"));
+    assert_eq!(image_pick(&p, "imageCreate"), want("z-image-turbo", "Q4_K", false, Placement::Cpu));
+}
+
+#[test]
+fn video_clips_need_a_graphics_card_or_unified_memory() {
+    assert_eq!(image_pick(&rtx_5090(), "videoCreate"), want("wan2.2-ti2v-5b", "Q8_0", false, Placement::Gpu));
+    assert_eq!(
+        image_pick(&apple("Apple M5 Max", 64.0, 40), "videoCreate"),
+        want("wan2.2-ti2v-5b", "Q8_0", false, Placement::Unified)
+    );
+    // An 8 GB card cannot hold the text encoder even offloading, and a clip on the processor would take hours: no pick.
+    for p in [rtx_4060_vulkan(), cpu_only()] {
+        let r = rec(&p, bundled_feed());
+        let t = image(&r, "videoCreate");
+        assert!(t.pick.is_none(), "{:?}", t.pick);
+        assert!(!t.options.is_empty(), "the model is still listed, said not to fit");
+    }
 }

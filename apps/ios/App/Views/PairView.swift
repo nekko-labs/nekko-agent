@@ -317,14 +317,22 @@ struct QRScanner: UIViewControllerRepresentable {
         /// open and close could stop before it started, leaving the camera on.
         private let sessionQueue = DispatchQueue(label: "nekko.capture")
         private var preview: AVCaptureVideoPreviewLayer?
+        /// Keeps the preview level with the horizon as the device turns (iPad in
+        /// any orientation, iPhone sideways); without it the picture stayed
+        /// portrait and sideways on screen.
+        private var rotation: AVCaptureDevice.RotationCoordinator?
+        private var rotationWatch: NSKeyValueObservation?
         private var lastCode: String?
         private var lastAt = Date.distantPast
 
         override func viewDidLoad() {
             super.viewDidLoad()
             view.backgroundColor = .black
-            guard let device = AVCaptureDevice.default(for: .video), let input = try? AVCaptureDeviceInput(device: device),
+            guard let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+                    ?? AVCaptureDevice.default(for: .video),
+                  let input = try? AVCaptureDeviceInput(device: device),
                   session.canAddInput(input) else { return }
+            Self.focusForCodes(device)
             session.addInput(input)
             let output = AVCaptureMetadataOutput()
             guard session.canAddOutput(output) else { return }
@@ -335,11 +343,42 @@ struct QRScanner: UIViewControllerRepresentable {
             layer.videoGravity = .resizeAspectFill
             view.layer.addSublayer(layer)
             preview = layer
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: layer)
+            rotation = coordinator
+            applyRotation(coordinator.videoRotationAngleForHorizonLevelPreview)
+            rotationWatch = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.new]) { [weak self] c, _ in
+                let angle = c.videoRotationAngleForHorizonLevelPreview
+                Task { @MainActor in self?.applyRotation(angle) }
+            }
+        }
+
+        private func applyRotation(_ angle: CGFloat) {
+            guard let connection = preview?.connection, connection.isVideoRotationAngleSupported(angle) else { return }
+            connection.videoRotationAngle = angle
+        }
+
+        /// A pairing code is held close: keep refocusing, favour near subjects,
+        /// and aim focus and exposure at the middle, where the code is framed.
+        private static func focusForCodes(_ device: AVCaptureDevice) {
+            guard (try? device.lockForConfiguration()) != nil else { return }
+            defer { device.unlockForConfiguration() }
+            if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+            if device.isAutoFocusRangeRestrictionSupported { device.autoFocusRangeRestriction = .near }
+            if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5) }
+            if device.isExposurePointOfInterestSupported {
+                device.exposurePointOfInterest = CGPoint(x: 0.5, y: 0.5)
+                if device.isExposureModeSupported(.continuousAutoExposure) { device.exposureMode = .continuousAutoExposure }
+            }
         }
 
         override func viewDidLayoutSubviews() {
             super.viewDidLayoutSubviews()
+            // No implicit animation: the frame follows the rotation at once.
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
             preview?.frame = view.bounds
+            CATransaction.commit()
+            if let rotation { applyRotation(rotation.videoRotationAngleForHorizonLevelPreview) }
         }
 
         override func viewWillAppear(_ animated: Bool) {
