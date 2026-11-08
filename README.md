@@ -120,9 +120,56 @@ with SignPath signing in progress according to the website. See
 
 ### From source
 
-Use **Node.js 22.12.0 or newer** and the build prerequisites in
-[CONTRIBUTING.md](CONTRIBUTING.md). Building the engine requires Rust/Cargo.
-From a source checkout:
+Building from source requires **Node.js, npm and Rust**, even if you only plan
+to use the desktop app. You do not need these tools to use a downloaded installer.
+
+1. Install **[Node.js](https://nodejs.org/en/download) 22.12.0 or newer** with npm.
+2. Install **[Rust through rustup](https://rustup.rs/)**, which includes Cargo,
+   the Rust build tool. Follow the installer's platform-specific requirements,
+   including any compiler or linker tools it asks you to install.
+3. **After installing Rust, close and reopen your terminal** so it picks up the
+   updated PATH. Do the same after installing Node.js. If you use a terminal
+   inside an editor, restart the editor too if it still cannot find the tools.
+4. In the new terminal, check that all four commands work:
+
+```bash
+node --version       # must be 22.12.0 or newer
+npm --version
+rustc --version
+cargo --version
+```
+
+If a command is not found, finish that tool's installation and reopen the terminal
+before continuing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup.
+
+#### Want AI help with setup?
+
+Paste this prompt into an AI assistant you already use. An assistant with terminal
+access can help check your setup; otherwise, ask it to guide you through the commands.
+Review any suggested commands before running them, especially installers and
+anything requiring administrator access.
+
+```text
+Help me set up Nekko Agent from source:
+https://github.com/nekko-labs/nekko-agent
+
+First identify my operating system and shell, and read the repository's current
+README.md and CONTRIBUTING.md. Check what is already installed before changing
+anything. Help me install a supported Node.js version (at least 22.12.0), npm,
+Rust through rustup (including Cargo), Git if needed, and any compiler/linker
+prerequisites for my platform. Use official installation sources, explain each
+command, and ask before administrator-level or destructive changes. Do not
+change system security settings or overwrite an existing development setup.
+
+After installation, remind me to close and reopen my terminal (and editor if
+needed), then verify node --version, npm --version, rustc --version and
+cargo --version. Once those work, help me clone the repository, run npm install
+and npm run local. Diagnose errors rather than repeatedly rerunning commands.
+```
+
+#### Build and launch
+
+From a source checkout, after the prerequisite checks pass:
 
 ```bash
 npm install
