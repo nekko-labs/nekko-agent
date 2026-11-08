@@ -641,7 +641,7 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
         json!({ "engineBinPath": fake_llama(), "engine": { "port": port, "modelFolders": [] } }).to_string(),
     )
     .unwrap();
-    let session = json!({ "id": "s_img", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    let session = json!({ "id": "s_img", "title": "New chat", "chatType": "image", "messages": [], "createdAt": 1, "updatedAt": 1 });
     std::fs::write(data.join("sessions/s_img.json"), session.to_string()).unwrap();
     let d = start_with_env(&data, json!({}), &[]);
     let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
@@ -670,6 +670,8 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     assert_eq!(drawn, fake_base64(expected.as_bytes()), "{reply}");
     assert_eq!(reply["generated"]["seed"], 42);
     assert_eq!(reply["generated"]["modelId"], json!(id));
+    let (_, photo) = post(d.port, "session:photo", json!(["s_img", reply["id"], 0]), Some(TOKEN)).await;
+    assert_eq!(photo, image, "the actual generated assistant attachment is readable without image:fetch");
 
     // The stages, then done: loading (the model was cold), generating.
     let mut stages = Vec::new();
@@ -717,22 +719,15 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
     let seed = saved["imageParams"]["seed"].clone();
     assert_eq!(seed, -1, "the chat keeps asking for a fresh seed");
 
-    // A missing prompt is refused with the host's words, told to the chat.
-    let (_, _) = post(
+    // Invalid input is refused before a turn or transcript write.
+    let (_, refused) = post(
         d.port,
         "chat:generateImage",
         json!([{ "sessionId": "s_img", "prompt": " ", "params": params }]),
         Some(TOKEN),
     )
     .await;
-    let mut refused = false;
-    while let Some(frame) = next_json(&mut events, Duration::from_secs(5)).await {
-        if frame["channel"] == "agent:event" && frame["payload"]["message"] == "Describe the image you want first." {
-            refused = true;
-            break;
-        }
-    }
-    assert!(refused, "the chat was told why");
+    assert_eq!(refused["error"], "Invalid image request: prompt");
     post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
     drop(d);
     std::fs::remove_dir_all(root).ok();

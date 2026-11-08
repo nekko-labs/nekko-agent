@@ -13,6 +13,7 @@
  */
 
 import { clientMessageIdOf } from './chat.js';
+import { PHONE_IMAGE_POLICY, phoneImageModels, phoneImageParamsProblem, phoneImageRequestProblem } from './phone-access-image.js';
 import { SERVICE_CHANNELS, SERVICE_READ_CHANNELS, SERVICE_CHANGE_CHANNELS } from './service-management.js';
 import { COMPUTER_ICONS } from './computers.js';
 import { skillTurnText } from './skills.js';
@@ -150,11 +151,13 @@ export const PHONE_CHANNELS = [
   'chat:editQueued',
   'chat:interruptQueued',
   'chat:pending',
+  'chat:generateImage',
   'chat:queue',
   'chat:send',
   'chat:steer',
   'context:preview',
   'device:signOut',
+  'engine:models',
   'engine:status',
   'files:list',
   'files:read',
@@ -376,6 +379,7 @@ export const PHONE_CHAT_READ_CHANNELS: readonly string[] = [
   'audit:read',
   'changes:list',
   'chat:pending',
+  'engine:models',
   'limits:get',
   'machine:summary',
   'models:list',
@@ -476,6 +480,7 @@ export const PHONE_OPEN_CHANNELS: readonly string[] = ['app:info'];
  */
 export const PHONE_PROVIDER_CHANGE_CHANNELS: readonly string[] = ['providers:saveSealed', 'providers:setEnabled'];
 export const PHONE_CHANGE_CHANNELS: readonly string[] = [
+  'chat:generateImage',
   ...SERVICE_CHANGE_CHANNELS,
   // Saved-folder access changes need a signed proof, including revocation.
   'session:setSupportingWorkspaces',
@@ -1018,6 +1023,15 @@ export function screenPhoneCall(
     }
   }
   switch (channel) {
+    case 'engine:models':
+      if (args.length) throw new PhoneAccessError('option-denied', 'extra argument');
+      return {};
+    case 'chat:generateImage': {
+      if (args.length !== 1) throw new PhoneAccessError('value-invalid', 'image request');
+      const problem = phoneImageRequestProblem(args[0]);
+      if (problem) throw new PhoneAccessError('value-invalid', problem);
+      return {};
+    }
     case 'session:setSupportingWorkspaces':
       if (args.length !== 2 || typeof args[0] !== 'string' || !args[0]) throw new PhoneAccessError('value-invalid', 'session id');
       settingValue('defaultWorkspaceIds', args[1]);
@@ -1121,6 +1135,10 @@ export function screenPhoneCall(
       for (const key of Object.keys(patch)) {
         if (!(PHONE_SESSION_OPTION_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
       }
+      if (own(patch, 'imageParams')) {
+        const problem = phoneImageParamsProblem(patch.imageParams, false);
+        if (problem) throw new PhoneAccessError('value-invalid', problem);
+      }
       if (own(patch, 'mode')) chatMode(patch.mode, 'mode');
       if (own(patch, 'allowedMcpTools') && !isMcpToolList(patch.allowedMcpTools)) throw new PhoneAccessError('value-invalid', 'allowedMcpTools');
       if (own(patch, 'effort') && !(PHONE_EFFORT_LEVELS as readonly unknown[]).includes(patch.effort)) throw new PhoneAccessError('value-invalid', 'effort');
@@ -1219,6 +1237,10 @@ export function phoneSettingsUpdate(sets: Array<[string, unknown]>, current: unk
 /** What a phone receives for a channel's result: secrets never leave the computer. */
 export function redactPhoneResult(channel: string, result: unknown): unknown {
   switch (channel) {
+    case 'engine:models':
+      return phoneImageModels(result);
+    case 'chat:generateImage':
+      return null;
     case 'settings:get':
     case 'settings:update': {
       const view = pick(result, PHONE_SETTINGS_VIEW);
@@ -1478,6 +1500,7 @@ export async function callFromPhone(
 /** The policy as data: what `phone-access.json` holds for the Rust gate. */
 export function phoneAccessPolicy() {
   return {
+    image: PHONE_IMAGE_POLICY,
     channels: [...PHONE_CHANNELS],
     alwaysDenied: PHONE_ALWAYS_DENIED,
     readChannels: [...PHONE_READ_CHANNELS],
