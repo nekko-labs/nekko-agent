@@ -6,6 +6,12 @@ split-from: SPEC.md (2026-10-22)
 
 # Models & providers
 
+## Provider billing-mode chiplets (#2356)
+
+Implemented in the shared desktop/web renderer: provider cards show **Subscription** for a Claude Code login whose current status reports a signed-in plan, as well as ChatGPT. Claude Code API-key/cloud logins and API-backed providers show **API**, including OpenRouter sign-in, whose key remains metered. Local servers, disabled cards, retired Anthropic-plan cards and unknown/signed-out Claude Code states get no billing chip. The Claude source line and chip share one provider-scoped status read, refreshed on window focus; disabled cards do not probe Claude Code. Connection health remains a separate badge. No credentials, provider requests or billing behavior change.
+
+Verified: 45 focused renderer tests, desktop typecheck, and isolated hidden Electron checks at 1100/360/768 CSS px (desktop, folded/narrow and unfolded/tablet). Live paid-provider auth, packaged apps, native phones and other desktop operating systems remain unverified. [Verification and reproduction](../../docs/provider-mode-chips-verification.md).
+
 ## Compact provider settings (#2094, 2026-11-07)
 
 Implemented in the desktop/shared web renderer:
