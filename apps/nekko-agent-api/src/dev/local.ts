@@ -28,6 +28,7 @@ await db.query(`alter table users alter column plan set default '${plan}'`);
 let jwks: { keys: unknown[] } = { keys: [] };
 const app = buildServer({
   db,
+  fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1",
   allowedOrigins: [],
   logger: false,
   // Tests sign several devices in from one address.

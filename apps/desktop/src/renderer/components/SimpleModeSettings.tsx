@@ -51,8 +51,9 @@ const PREVIEWS: Record<string, () => React.JSX.Element> = {
   'Chat · message box': () => (
     <div className="sm-frame sm-composer">
       <div className="sm-placeholder">Ask a follow-up</div>
-      <div className="sm-row"><M><PlusIcon className="h-3 w-3" /></M><M id="mode">Mode · Guardrails</M><M id="privacy">Privacy Shield</M><span className="flex-1" /><M id="suggest">Suggestions</M><M>Send</M></div>
-      <div className="sm-row sm-details"><M><FolderIcon className="h-3 w-3" /> nekko-agent</M><M id="model">Claude Opus 5.5</M><M id="effort">Effort · Medium</M><M id="asks">Asks first</M><M id="cost">$0.42</M><span className="flex-1" /><M id="tools">Tools</M><M id="tools">MCP</M><M id="internet"><GlobeIcon className="h-3 w-3" /></M><M id="context">Ring</M></div>
+      <div className="sm-row"><M><PlusIcon className="h-3 w-3" /></M><M id="privacy">Privacy Shield</M><span className="flex-1" /><M id="suggest">Suggestions</M><M>Send</M></div>
+      <div className="sm-row sm-details"><M><FolderIcon className="h-3 w-3" /> nekko-agent</M><M id="model">Claude Opus 5.5</M><M id="effort">Effort · Medium</M><M id="asks">Ask when it matters</M><M id="cost">$0.42</M><span className="flex-1" /><M id="tools">Tools</M><M id="tools">MCP</M><M id="internet"><GlobeIcon className="h-3 w-3" /></M><M id="context">Ring</M></div>
+      <div className="sm-row"><M id="mode">Mode · Fusion</M></div>
     </div>
   ),
   'Chat · conversation': () => (

@@ -7,6 +7,7 @@ import {
   type Session,
 } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
+import { ensureRecommendedOffload } from './imageOffload.js';
 
 export const IMAGE_SIZES = ['512x512', '768x768', '1024x1024', '576x1024', '768x1024', '1024x768', '1024x576', '1344x768', '768x1344'];
 export function imageSizeLabel(size: string): string {
@@ -37,6 +38,9 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
     window.nekko.setSessionOptions(session.id, { imageParams: { ...params, ...patch } }).then((s) => { if (s) onChange(s); }).catch(() => {});
 
   const choose = async (modelId: string) => {
+    // A model that only fits with CPU offload gets it before its first load.
+    const model = models?.find((m) => m.id === modelId);
+    if (model) await ensureRecommendedOffload(model).catch(() => false);
     const c = await window.nekko.engineImageCompanions(modelId).catch(() => null);
     setCompanions(c);
     await save({ modelId, ...(c ? { steps: c.defaults.steps, cfgScale: c.defaults.cfgScale } : {}) });

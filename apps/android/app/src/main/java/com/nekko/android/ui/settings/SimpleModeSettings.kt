@@ -1,5 +1,8 @@
 package com.nekko.android.ui.settings
 
+import com.nekko.android.ui.components.PermissionIcon
+import com.nekko.protocol.PcSettings.ChatMode
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Row
@@ -90,7 +93,7 @@ private val ITEM_TEXT: Map<String, Pair<Int, Int>> = mapOf(
     "ph-subtitle" to (R.string.simple_item_subtitle to R.string.simple_hint_subtitle),
     "model" to (R.string.simple_item_model to R.string.simple_hint_model),
     "effort" to (R.string.simple_item_effort to R.string.simple_hint_effort),
-    "asks" to (R.string.simple_asks_first to R.string.simple_hint_asks),
+    "asks" to (R.string.permission_simple_always_ask to R.string.simple_hint_asks),
     "context" to (R.string.simple_item_context to R.string.simple_hint_context),
     "run-settings" to (R.string.simple_item_run to R.string.simple_hint_run),
     "thinking" to (R.string.simple_item_thinking to R.string.simple_hint_thinking),
@@ -130,7 +133,7 @@ private val PREVIEWS: Map<String, List<Line>> = mapOf(
     ),
     SimpleMode.BOX to listOf(
         line(Part(R.string.simple_part_add), Part(R.string.simple_part_message), Part(R.string.simple_part_send)),
-        line(Part(R.string.simple_part_dial, "effort"), Part(id = "model", name = "Opus 5.5"), Part(R.string.simple_asks_first, "asks"), Part(R.string.simple_part_tokens, "context")),
+        line(Part(R.string.simple_part_dial, "effort"), Part(id = "model", name = "Opus 5.5"), Part(R.string.permission_simple_always_ask, "asks"), Part(R.string.simple_part_tokens, "context")),
         line(Part(R.string.simple_item_run, "run-settings")),
     ),
     SimpleMode.CONVERSATION to listOf(
@@ -287,6 +290,7 @@ private fun PreviewPart(part: Part, expert: Boolean, choices: Map<String, Simple
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        if (part.id == "asks") PermissionIcon(ChatMode.ASK)
         if (part.gauges) {
             listOf(0.12f to "12%", 0.41f to "41%", 0.3f to "30%").forEach { (f, t) ->
                 Canvas(Modifier.size(10.dp)) {

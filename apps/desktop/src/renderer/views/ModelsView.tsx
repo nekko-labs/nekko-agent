@@ -2,7 +2,7 @@ import { FirstProviderSetup } from '../components/providers/FirstProviderSetup.j
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
 import { useEffect, useRef, useState } from 'react';
 import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
-import { formatUSD, isLocalProvider, isRuntimeKind, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
+import { formatUSD, isLocalProvider, limitsKeyFor, isRuntimeKind, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { Badge, Toggle } from '../components/primitives/index.js';
@@ -10,7 +10,7 @@ import { SubscriptionSignIn } from '../components/SubscriptionSignIn.js';
 import { type ProviderSetupKind } from '../components/providers/providerPresets.js';
 import { AddProvider, SUBSCRIPTION_KINDS, reconnectProviderConfig } from '../components/providers/AddProvider.js';
 import { ClaudeWhyLink, useClaudeCodeStatus } from '../components/claude/ClaudeAgent.js';
-import { claudeSourceLine, isClaudeKind } from '../components/claude/ClaudeSetup.js';
+import { claudeSourceLine, claudeIdentityLine, isClaudeKind } from '../components/claude/ClaudeSetup.js';
 import { TrashIcon, CheckIcon, StarIcon } from '../icons.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { RuntimeCard } from '../components/runtimes/RuntimeCard.js';
@@ -18,6 +18,7 @@ import { matchesModelQuery } from '../components/agent-console/modelPickerIntera
 import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js';
 import { MiddleTruncate } from '../components/primitives/MiddleTruncate.js';
 import { ModelRowName } from './ModelRowName.js';
+import { ProviderMark, providerColor, providerMarkKind } from '../components/providers/ProviderMark.js';
 
 const isLocal = (k: ProviderKind) => isLocalProvider(k);
 
@@ -117,14 +118,7 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   return (
     <section className="models-providers" aria-label={localOnly ? 'Connected local servers' : 'Cloud providers'}>
       <div className="models-provider-bar">
-        <div className="models-connected" aria-label="Current providers">
-          {visible.map((p) => <a key={p.id} href={`#provider-${p.id}`} className="models-connected-provider" title={p.label}>
-            <ProviderMark kind={p.kind} />
-            <span>{p.label}</span>
-          </a>)}
-          {!visible.length && <span className="text-sm text-ink-faint">{localOnly ? 'Connect a local server' : 'Add your first provider'}</span>}
-        </div>
-        <div ref={shortcutsRef}><ProviderShortcuts localOnly={localOnly} onAdd={openAdd} moreExpanded={adding && !addKind} /></div>
+        <div ref={shortcutsRef}><ProviderShortcuts localOnly={localOnly} onAdd={openAdd} /></div>
       </div>
       {localOnly && <button className="btn btn-outline mb-4 text-xs" onClick={discover} disabled={discovering}>
         {discovering ? 'Scanning…' : 'Discover local servers'}
@@ -140,37 +134,36 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
   );
 }
 
-const PROVIDER_MARKS: Partial<Record<ProviderSetupKind, string>> = {
-  chatgpt: 'openai', openai: 'openai', anthropic: 'anthropic', 'claude-code': 'anthropic',
-  gemini: 'google', 'ollama-cloud': 'ollama', vertex: 'google', openrouter: 'openrouter', ollama: 'ollama', lmstudio: 'lmstudio', vllm: 'vllm',
-};
-const CLOUD_SHORTCUTS: { kind: ProviderSetupKind; label: string; color: string }[] = [
-  { kind: 'chatgpt', label: 'ChatGPT', color: '#167d65' },
-  { kind: 'anthropic', label: 'Claude', color: '#bc694d' },
-  { kind: 'openai', label: 'OpenAI API', color: '#354759' },
-  { kind: 'openrouter', label: 'OpenRouter', color: '#5555a6' },
-  { kind: 'gemini', label: 'Google Gemini', color: '#315db0' },
+const CLOUD_SHORTCUTS: { kind: ProviderSetupKind; label: string }[] = [
+  { kind: 'chatgpt', label: 'ChatGPT' },
+  { kind: 'anthropic', label: 'Claude' },
+  { kind: 'openai', label: 'OpenAI API' },
+  { kind: 'openrouter', label: 'OpenRouter' },
+  { kind: 'gemini', label: 'Google Gemini' },
 ];
-const LOCAL_SHORTCUTS = [
-  { kind: 'ollama' as const, label: 'Ollama', color: '#42424c' },
-  { kind: 'lmstudio' as const, label: 'LM Studio', color: '#6850b8' },
-  { kind: 'vllm' as const, label: 'vLLM', color: '#246676' },
+const MORE_SHORTCUTS: { kind: ProviderSetupKind; label: string }[] = [
+  { kind: 'vertex', label: 'Claude on Vertex AI' },
+  { kind: 'ollama-cloud', label: 'Ollama Cloud' },
+  { kind: 'openai-compat', label: 'OpenAI-compatible' },
+];
+const LOCAL_SHORTCUTS: { kind: ProviderSetupKind; label: string }[] = [
+  { kind: 'ollama', label: 'Ollama' },
+  { kind: 'lmstudio', label: 'LM Studio' },
+  { kind: 'vllm', label: 'vLLM' },
 ];
 
-function ProviderMark({ kind }: { kind: ProviderSetupKind }) {
-  const icon = PROVIDER_MARKS[kind];
-  return icon ? <img src={`./providers/${icon}.svg`} alt="" width="22" height="22" />
-    : <span aria-hidden="true">{kind === 'vertex' ? 'G' : '↗'}</span>;
-}
-
-export function ProviderShortcuts({ localOnly = false, onAdd, moreExpanded = false }: { localOnly?: boolean; moreExpanded?: boolean; onAdd: (kind?: ProviderSetupKind) => void }) {
+export function ProviderShortcuts({ localOnly = false, onAdd }: { localOnly?: boolean; onAdd: (kind: ProviderSetupKind) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const firstRevealed = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (expanded) firstRevealed.current?.focus({ preventScroll: true }); }, [expanded]);
+  const choices = localOnly ? LOCAL_SHORTCUTS : [...CLOUD_SHORTCUTS, ...(expanded ? MORE_SHORTCUTS : [])];
   return <div className="models-add-strip" role="group" aria-label="Add provider">
-    {(localOnly ? LOCAL_SHORTCUTS : CLOUD_SHORTCUTS).map(({ kind, label, color }) =>
-      <button key={kind} type="button" className="models-add-provider" style={{ background: color }} title={`Add ${label}`} aria-label={`Add ${label}`} onClick={() => onAdd(kind)}>
+    {choices.map(({ kind, label }, index) =>
+      <button key={kind} ref={!localOnly && index === CLOUD_SHORTCUTS.length ? firstRevealed : undefined} type="button" className={`models-add-provider${!localOnly && index >= CLOUD_SHORTCUTS.length ? ' models-add-revealed' : ''}`} style={{ background: providerColor(kind), animationDelay: `${Math.max(0, index - CLOUD_SHORTCUTS.length) * 35}ms` }} title={`Add ${label}`} aria-label={`Add ${label}`} onClick={() => onAdd(kind)}>
         <ProviderMark kind={kind} />
         <span className="models-add-plus" aria-hidden="true">+</span>
       </button>)}
-    <button type="button" className="models-add-provider models-add-more" title="More providers" aria-label="More providers" aria-expanded={moreExpanded} onClick={() => onAdd()}>···</button>
+    {!localOnly && !expanded && <button type="button" className="models-add-provider models-add-more" title="More providers" aria-label="More providers" aria-expanded={false} onClick={() => setExpanded(true)}>···</button>}
   </div>;
 }
 
@@ -182,7 +175,7 @@ function ClaudeSource({ provider }: { provider: ProviderConfig }) {
 
 function ClaudeCodeSource({ provider }: { provider: ProviderConfig }) {
   const { status } = useClaudeCodeStatus(provider.id);
-  return <p className="claude-source">{claudeSourceLine(provider, status)}</p>;
+  return <p className="claude-source" title={claudeSourceLine(provider, status)}>{[claudeIdentityLine(status) || 'Through Claude Code', provider.claudeCode?.account].filter(Boolean).join(' · ')}</p>;
 }
 
 const LIMIT_STATUS_COLOR: Record<LimitWindow['status'], string> = {
@@ -191,7 +184,7 @@ const LIMIT_STATUS_COLOR: Record<LimitWindow['status'], string> = {
   rate_limited: 'var(--danger)',
 };
 
-function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | null; now: number; subName: string }) {
+export function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | null; now: number; subName: string }) {
   if (!limits) return null;
   const windowOrder: LimitWindow['scope'][] = ['session', 'weekly', 'model'];
   const sorted = [...limits.windows].sort(
@@ -201,8 +194,9 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
     <div className="mt-3 space-y-1 border-t border-line pt-3">
       <div className="flex items-center justify-between text-2xs text-ink-faint">
         <span title={`Live read from ${subName}`}>Plan: {limits.planType ?? '—'}</span>
-        <span>Credits: {limits.creditsBalance === undefined ? 'Unlimited' : formatUSD(limits.creditsBalance)}</span>
+        {limits.creditsBalance !== undefined && <span>Credits: {formatUSD(limits.creditsBalance)}</span>}
       </div>
+      {now - limits.updatedAt > limits.staleAfterMs && <p className="text-2xs text-ink-faint">Last reported usage · may be out of date</p>}
       {sorted.length === 0 ? (
         <p className="text-2xs text-ink-faint">No usage windows reported yet.</p>
       ) : (
@@ -216,14 +210,13 @@ function LimitsPanel({ limits, now, subName }: { limits: SubscriptionLimits | nu
               />
               <span className="min-w-0 flex-1 truncate text-ink-soft">{w.label}</span>
               <span className="shrink-0 tabular-nums font-medium">{Math.round(w.usedPercent)}%</span>
-              <span className="w-14 shrink-0 text-right tabular-nums text-ink-faint">
-                {w.resetAt > now ? timeUntil(w.resetAt - now) : 'soon'}
+              <span className="shrink-0 text-right tabular-nums text-ink-faint" title={Number.isFinite(w.resetAt) && w.resetAt > 0 ? `Resets ${new Date(w.resetAt).toLocaleString()}` : undefined}>
+                {Number.isFinite(w.resetAt) && w.resetAt > 0 ? `Resets ${timeUntil(w.resetAt - now)}` : 'Reset unavailable'}
               </span>
             </div>
           ))}
         </div>
       )}
-      <p className="text-2xs text-ink-faint">Live reads from {subName}; not a bill.</p>
     </div>
   );
 }
@@ -330,7 +323,6 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   const [sub, setSub] = useState<OAuthStatus | null>(null);
   const [limits, setLimits] = useState<SubscriptionLimits | null>(null);
   const [relinking, setRelinking] = useState(false);
-  const [customModel, setCustomModel] = useState(provider.customModelId ?? '');
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -345,10 +337,6 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
   // (OpenAI, openai-compat) keep the remove-and-re-add path.
   const reconnectOAuth = SUBSCRIPTION_KINDS[provider.kind];
   const [reconnecting, setReconnecting] = useState(false);
-
-  useEffect(() => {
-    setCustomModel(provider.customModelId ?? '');
-  }, [provider.customModelId]);
 
   const isFavorite = (key: string) => (settings?.favoriteModels ?? []).includes(key);
   const toggleFavorite = async (key: string) => {
@@ -410,17 +398,18 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
     });
   }, [subscription, provider.tokenKey]);
 
-  // Live subscription limits for this provider's token key.
+  // Canonical limits key: Claude Code reports its own usage; no credential reads.
   useEffect(() => {
-    const tokenKey = provider.tokenKey;
-    if (!tokenKey) { setLimits(null); return; }
+    const tokenKey = enabled ? limitsKeyFor(provider) : null;
+    setLimits(null);
+    if (!tokenKey) return;
     let live = true;
     window.nekko.getLimits(tokenKey).then((l) => { if (live) setLimits(l ?? null); }).catch(() => {});
     const off = window.nekko.onLimitsUpdated((e) => {
       if (e.tokenKey === tokenKey) setLimits(e.limits);
     });
     return () => { live = false; off(); };
-  }, [provider.tokenKey]);
+  }, [provider.id, provider.kind, provider.tokenKey, provider.auth, enabled]);
 
   const signOutSubscription = async () => {
     setRelinking(false);
@@ -476,18 +465,6 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
     void test();
   };
 
-  // Persist a chatgpt custom model override without disturbing the rest of the card.
-  const saveCustomModel = async (next: string) => {
-    const trimmed = next.trim();
-    if (trimmed === (provider.customModelId ?? '')) return;
-    await window.nekko.saveProvider({
-      ...provider,
-      customModelId: trimmed || undefined,
-    });
-    onChanged();
-    load();
-  };
-
   // While connected, refresh the loaded state periodically — local servers
   // JIT-load/evict models as they're used, so this keeps the badges honest.
   useEffect(() => {
@@ -537,6 +514,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
       <div className="flex items-start justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            <ProviderMark kind={providerMarkKind(provider)} tile />
             <h3 className={`text-sm font-semibold ${enabled ? '' : 'text-ink-faint'}`}>{provider.label}</h3>
             {!enabled && <span className="chip">disabled</span>}
             {enabled && conn.state === 'ok' && (
@@ -564,7 +542,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
             {provider.discovered && <span className="chip">discovered</span>}
           </div>
           {isClaudeKind(provider.kind) && <ClaudeSource provider={provider} />}
-          {(!local || !enabled) && provider.baseUrl && <p className="mt-0.5 font-mono text-2xs text-ink-faint">{provider.baseUrl}</p>}
+          {(!local || !enabled) && !subscription && provider.baseUrl && <p className="mt-0.5 font-mono text-2xs text-ink-faint">{provider.baseUrl}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
         <Toggle
@@ -663,17 +641,18 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
         </div>
       )}
 
+      {provider.kind === 'claude-code' && limits && <LimitsPanel limits={limits} now={now} subName="Claude Code" />}
       {subscription && (
         <div className="mt-3 rounded-xl border p-3 text-xs" style={{ borderColor: 'var(--line)' }}>
           {sub === null ? (
             <span className="text-ink-faint">Checking sign-in…</span>
           ) : sub.connected ? (
             <div className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="inline-flex min-w-0 items-center gap-2 text-ink-soft">
                   <CheckIcon className="h-3.5 w-3.5 shrink-0 text-success" />
-                  <span className="truncate">
-                    Signed in with {subName}{provider.accountId ? ` · ${provider.accountId}` : ''}
+                  <span className="truncate" title={provider.accountId}>
+                    Signed in
                   </span>
                 </span>
                 <div className="flex shrink-0 items-center gap-2">
@@ -681,7 +660,7 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
                     className="text-ink-faint hover:text-ink"
                     onClick={() => setRelinking(true)}
                   >
-                    {provider.kind === 'openrouter' ? 'New key' : 'Re-authenticate'}
+                    {provider.kind === 'openrouter' ? 'New key' : 'Sign in again'}
                   </button>
                   <span className="text-ink-faint">·</span>
                   <button className="text-ink-faint hover:text-ink" onClick={() => void signOutSubscription()}>
@@ -703,18 +682,6 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
                     onConnected={relinkSubscription}
                   />
                 </div>
-              )}
-              {provider.kind === 'chatgpt' && (
-                <label className="mt-2 block text-xs font-medium text-ink-soft">
-                  Custom model id (optional)
-                  <input
-                    className="input mt-1 text-xs"
-                    value={customModel}
-                    onChange={(e) => setCustomModel(e.target.value)}
-                    onBlur={(e) => void saveCustomModel(e.target.value)}
-                    placeholder="Override the curated list, e.g. gpt-5-codex"
-                  />
-                </label>
               )}
 
               <LimitsPanel limits={limits} now={now} subName={subName} />

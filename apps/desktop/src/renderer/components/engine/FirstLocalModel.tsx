@@ -291,7 +291,7 @@ export function FirstModelSteps({
   );
 }
 
-function Step({ state, label, children }: { state: 'done' | 'active' | 'pending'; label: string; children?: React.ReactNode }) {
+export function Step({ state, label, children }: { state: 'done' | 'active' | 'pending'; label: string; children?: React.ReactNode }) {
   return (
     <li className="flex items-start gap-3" data-step={state}>
       <span
@@ -314,7 +314,7 @@ function Step({ state, label, children }: { state: 'done' | 'active' | 'pending'
   );
 }
 
-function Progress({ group }: { group: DownloadGroup }) {
+export function Progress({ group }: { group: DownloadGroup }) {
   const pct = group.totalBytes ? Math.min(100, (group.receivedBytes / group.totalBytes) * 100) : 0;
   const left = eta(group);
   return (

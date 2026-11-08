@@ -83,7 +83,7 @@ if (!deleteAuthUser) console.warn("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not 
 const retryAuth = () => retryAuthDeletions(db, deleteAuthUser).catch(failed("Supabase user deletion retry"));
 await retryAuth();
 setInterval(retryAuth, 60 * 60 * 1000).unref();
-const app = buildServer({ db, allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
+const app = buildServer({ db, fleetEnabled: process.env.NEKKO_FLEET_ENABLED === "1", allowedOrigins, logger: true, signIn, machines, mailer, publicUrl: process.env.PUBLIC_URL || undefined, deleteAuthUser, alert });
 await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? 4320) });
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {

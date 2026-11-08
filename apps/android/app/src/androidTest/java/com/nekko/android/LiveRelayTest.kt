@@ -24,7 +24,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
+import androidx.test.espresso.Espresso
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -203,7 +203,12 @@ class LiveRelayTest {
     }
 
     private fun hideKeyboard(scenario: ActivityScenario<MainActivity>) {
-        scenario.onActivity { a -> WindowCompat.getInsetsController(a.window, a.window.decorView).hide(WindowInsetsCompat.Type.ime()) }
+        // The Changes sheet can still be giving IME control back to the activity
+        // after its quote appears. Drain Compose work first, then dismiss through
+        // Espresso's synchronized action on the active window rather than sending
+        // a hide request to the activity while the sheet still owns the keyboard.
+        compose.waitForIdle()
+        Espresso.closeSoftKeyboard()
         // Wait for the keyboard to be gone, not just asked to go.
         compose.waitUntil(5_000) {
             var open = true

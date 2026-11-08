@@ -4,7 +4,6 @@
 //! readings, the `nekko-vm` helper, GitHub and GitLab into the daemon (`runner:*`).
 
 pub mod audit;
-pub mod awake;
 pub mod egress;
 pub mod github;
 pub mod github_setup;
@@ -239,7 +238,8 @@ impl Runners {
         let vault = github.vault();
         let gitlab = || GitLab::new(Net::default(), vault.clone(), now_secs);
         let provider = ByLink { github: github.clone(), gitlab: gitlab() };
-        let mut sup = Supervisor::new(dir.clone(), sense, vm, provider, Box::new(awake::Hold::default()), host_name);
+        let mut sup =
+            Supervisor::new(dir.clone(), sense, vm, provider, Box::new(crate::awake::Hold::default()), host_name);
         let building = Arc::new(AtomicBool::new(false));
         sup.set_building(building.clone());
         let gh =
