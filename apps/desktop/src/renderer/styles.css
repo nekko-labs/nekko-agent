@@ -4106,12 +4106,16 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Cloud on top, Local below, on one page; the side menu jumps to each and to Local's own sections. */
 [data-models-section] { scroll-margin-top: 12px; }
 .models-section-local { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
-.models-nav-sub { padding-left: 32px; font-size: var(--text-sm); color: var(--ink-soft); }
+/* Local's own entries hang off a tree line under its icon, their labels in line with its label; the line lights beside the current one. */
+.settings-nav .models-nav-sub { position: relative; margin-left: 15px; width: calc(100% - 15px); padding-left: 17px; border-radius: 0 var(--radius-lg) var(--radius-lg) 0; font-size: var(--text-sm); color: var(--ink-soft); }
+.models-nav-sub::before { content: ''; position: absolute; left: 0; top: -2px; bottom: 0; width: 1px; background: var(--line); }
 .models-nav-sub[aria-current] { color: var(--ink); }
+.models-nav-sub[aria-current]::before { top: 0; width: 2px; background: var(--accent); }
 @media (max-width: 767px) {
   .models-workspace { padding: 16px 16px 48px; }
   .models-section-local { margin-top: 28px; }
-  .models-nav-sub { padding-left: 8px; }
+  .settings-nav .models-nav-sub { margin-left: 0; width: auto; padding-left: 12px; }
+  .models-nav-sub::before { top: 6px; bottom: 6px; }
   .models-provider-bar { gap: 12px; }
   .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
 }
