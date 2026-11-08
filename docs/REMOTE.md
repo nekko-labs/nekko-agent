@@ -460,9 +460,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
 > **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
-> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails you
-> can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
-> them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
+> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails
+> inside the message box that you can remove. Adding or removing a photo saves the draft at once, so
+> reopening the app brings back its text and photos. They are scaled to 1600 px and sent end-to-end
+> encrypted to the computer, which hands them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
 > The photos stay in the message's bubble on the phone too, as small previews the computer makes
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
