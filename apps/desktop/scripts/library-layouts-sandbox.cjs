@@ -10,6 +10,8 @@ app.setPath('userData', path.join(out, 'profile'));
 const baseline = process.env.NEKKO_LIBRARY_BASELINE === '1';
 const motion = process.env.NEKKO_LIBRARY_MOTION === '1';
 const slow = Number(process.env.NEKKO_LIBRARY_SLOW) || 4;
+// Escape characters JSON.stringify leaves raw before splicing into evaluated code.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const report = { checks: {}, errors: [], captures: [], frames: {} };
 
@@ -29,7 +31,7 @@ app.whenReady().then(async () => {
   const run = source => win.webContents.executeJavaScript(source);
   const check = async (source, label) => { const ok = await run(source); report.checks[label] = ok; if (!ok) throw Error(label); };
   const shot = async name => { const file = path.join(out, `${name}.png`); fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(file); };
-  const radio = (group, name) => run(`(() => { const g = document.querySelector('[role="radiogroup"][aria-label="${group}"]'); const b = [...g.querySelectorAll('[role="radio"]')].find(b => (b.getAttribute('aria-label') || b.textContent).trim().startsWith(${JSON.stringify(name)})); if (!b) throw Error('Missing ${group} ' + ${JSON.stringify(name)}); b.click(); })()`);
+  const radio = (group, name) => run(`(() => { const g = [...document.querySelectorAll('[role="radiogroup"]')].find(g => g.getAttribute('aria-label') === ${js(group)}); const b = [...g.querySelectorAll('[role="radio"]')].find(b => (b.getAttribute('aria-label') || b.textContent).trim().startsWith(${js(name)})); if (!b) throw Error('Missing control'); b.click(); })()`);
   // Frames of one change, captured as fast as the window paints.
   const record = async (name, act, ms) => {
     const dir = path.join(out, 'frames', name); fs.mkdirSync(dir, { recursive: true });
@@ -47,7 +49,7 @@ app.whenReady().then(async () => {
       document.querySelector('.zones-intro button[aria-label="Close"]')?.click();
       localStorage.setItem('nekko.libraryIntroSeen', '1');
       localStorage.removeItem('nekko.libraryLayout'); localStorage.removeItem('nekko.libraryCollapsed');
-      const f = layoutFixture, files = ${JSON.stringify(FILES)}, now = Date.now();
+      const f = layoutFixture, files = ${js(FILES)}, now = Date.now();
       f.records.slice(0, 3).forEach((s, n) => {
         const list = files['abc'[n]];
         s.messages = [{ id: 'q' + n, role: 'user', content: 'Make these', createdAt: now - 100000 * (n + 1) }];

@@ -4249,7 +4249,7 @@ html[data-library-transition]::view-transition-new(.library-label) { animation: 
 html[data-library-transition="list"]::view-transition-group(library-list) { overflow: clip; background: var(--win, var(--paper)); }
 html[data-library-transition="list"]::view-transition-old(library-list),
 html[data-library-transition="list"]::view-transition-new(library-list) { width: auto; height: 100%; object-fit: none; object-position: left top; }
-html[data-library-transition="list"]::view-transition-old(library-list) { animation: library-fade-out 90ms ease-out both; }
+html[data-library-transition="list"]::view-transition-old(library-list) { animation: library-fade-out 70ms ease-out both; }
 html[data-library-transition="list"]::view-transition-new(library-list) { animation: library-fade-in 160ms ease-out both; }
 @media (prefers-reduced-motion: reduce) {
   .slide-toggle-thumb[data-animate], .library-fold, .library-chevron, .library-tile-preview { transition: none; }
