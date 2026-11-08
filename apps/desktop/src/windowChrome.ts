@@ -30,6 +30,13 @@ export const TITLEBAR_OVERLAY_CHANNEL = 'chrome:titlebar-overlay';
 /** Main → renderer: Ctrl+R was pressed and the page reloads after this many ms. */
 export const PAGE_RELOADING_EVENT = 'chrome:page-reloading';
 
+/**
+ * Renderer → main, fire-and-forget: the page is listening for deep links. A
+ * link sent before this (a cold launch from a notification) would be dropped,
+ * so main holds it until then.
+ */
+export const DEEP_LINKS_READY_CHANNEL = 'chrome:deep-links-ready';
+
 /** How long the page gets to fade its cover in before a reload. */
 export const RELOAD_FADE_MS = 120;
 
@@ -45,6 +52,8 @@ export interface WindowChromeBridge {
   /** `process.platform`; the renderer only cares whether it is `'darwin'`. */
   serviceControl: (action: import('./engineChannels.js').ServiceAction) => Promise<import('./engineChannels.js').ServiceStatus>;
   reportNotificationVisibility: (report: import('./notificationVisibility.js').NotificationVisibilityReport) => void;
+  /** The page's deep-link listeners are attached (`DEEP_LINKS_READY_CHANNEL`). */
+  deepLinksReady: () => void;
   platform: string;
   titleBarHeight: number;
   setTitleBarOverlay: (theme: TitleBarOverlayTheme) => void;

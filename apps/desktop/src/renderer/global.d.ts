@@ -10,6 +10,7 @@ declare global {
      */
     nekkoChrome?: {
       reportNotificationVisibility: (report: import('../notificationVisibility.js').NotificationVisibilityReport) => void;
+      deepLinksReady?: () => void;
       platform: string;
       titleBarHeight: number;
       setTitleBarOverlay: (theme: { color: string; symbolColor: string }) => void;
