@@ -31,16 +31,16 @@ describe('Models workspace', () => {
     expect(html).not.toContain('data-first-run');
     expect(html).toContain('data-providers="cloud"');
     // Local's own sections are not listed until the full local page is shown.
-    expect(html).not.toContain('>Agent server</button>');
+    expect(html).not.toContain('>Connected servers</button>');
   });
   it('lists the local sections in page order under Local model server', () => {
     const ids = MODELS_SECTIONS.map((s) => s.id);
-    expect(ids).toEqual(['cloud', 'local', 'model-server', 'agent-server', 'library', 'connections']);
+    expect(ids).toEqual(['cloud', 'local', 'library', 'connections']);
     expect(MODELS_SECTIONS.filter((s) => 'parent' in s).every((s) => s.parent === 'local')).toBe(true);
   });
   it('spies the section at the top of the page, and the last one at the end', () => {
     const scroller = { scrollTop: 0, clientHeight: 300, scrollHeight: 2000, getBoundingClientRect: () => ({ top: 0 }), querySelectorAll: () => sections };
-    const sections = ([['cloud', 0], ['local', 500], ['model-server', 560]] as const).map(([id, top]) => (
+    const sections = ([['cloud', 0], ['local', 500], ['library', 900]] as const).map(([id, top]) => (
       { dataset: { modelsSection: id }, getBoundingClientRect: () => ({ top: top - scroller.scrollTop }) }
     ));
     const spy = () => activeModelsSection(scroller as unknown as HTMLElement);
@@ -48,7 +48,7 @@ describe('Models workspace', () => {
     scroller.scrollTop = 510;
     expect(spy()).toBe('local');
     scroller.scrollTop = 1700;
-    expect(spy()).toBe('model-server');
+    expect(spy()).toBe('library');
   });
   it('guides only someone with no local model and no local server of their own', () => {
     const engine = { enabled: true, kind: 'llamacpp' } as const;

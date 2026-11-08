@@ -85,7 +85,7 @@ export function LocalServerSection() {
   return (
     // Four rows (header, description, status, the rest) on the grid it shares
     // with the model server, so the two panels' matching rows line up.
-    <section data-models-section="agent-server" className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
+    <section className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
       {/* Same header shape as the model server's: the power switch and the
           launch toggle, so the two servers on this page switch the same way.
           The switch reads `running` (is it listening) but flips `enabled`

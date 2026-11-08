@@ -167,7 +167,7 @@ export function EngineSection({
           (header, description, status, the rest), so a two-line description
           on one does not push its status row below the other's. */}
       <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-2">
-      <div data-models-section="model-server" className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
+      <div className="row-span-4 grid min-w-0 grid-rows-subgrid gap-y-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: 'var(--accent)' }} />
         <h2 className="text-base font-semibold">Model server</h2>

@@ -15,8 +15,6 @@ import { FirstLocalModel } from '../components/engine/FirstLocalModel.js';
 export const MODELS_SECTIONS = [
   { id: 'cloud', label: 'Cloud providers', Icon: CloudIcon },
   { id: 'local', label: 'Local model server', Icon: ComputerIcon },
-  { id: 'model-server', label: 'Model server', parent: 'local' },
-  { id: 'agent-server', label: 'Agent server', parent: 'local' },
   { id: 'library', label: 'Models', parent: 'local' },
   { id: 'connections', label: 'Connected servers', parent: 'local' },
 ] as const;
@@ -54,8 +52,8 @@ export function ModelsWorkspace() {
     settle.current = window.setTimeout(() => { jumping.current = false; }, ms);
   };
   const goTo = useCallback((to: ModelsSectionId) => {
-    // A local section that is not on screen (the agent server before it
-    // answers, a model's own page) lands on Local's heading instead.
+    // A local section that is not on screen (behind a model's own page)
+    // lands on Local's heading instead.
     const find = (id: string) => scrollRef.current?.querySelector<HTMLElement>(`[data-models-section="${id}"]`);
     const id = find(to) ? to : 'local';
     const target = find(id);

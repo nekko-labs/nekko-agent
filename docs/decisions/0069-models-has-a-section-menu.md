@@ -16,7 +16,7 @@ date: 2026-11-08
 
 ## Decision
 
-Models is one scrolling page: **Cloud providers** on top, **Local model server** below. A side menu in the Settings rail style lists Cloud providers and Local model server, with Model server, Agent server, Models and Connected servers indented under Local. Choosing an entry scrolls to it, and the entry for the section at the top of the page is highlighted as you scroll. Local's own entries appear only once the full local page shows, not on the first-local-model screen; one whose section is not on screen lands on Local's heading. The `models` and `modelserver` view identifiers stay and still scroll to their section. This supersedes 0057.
+Models is one scrolling page: **Cloud providers** on top, **Local model server** below. A side menu in the Settings rail style lists Cloud providers and Local model server, with Models and Connected servers indented under Local. Choosing an entry scrolls to it, and the entry for the section at the top of the page is highlighted as you scroll. Local's own entries appear only once the full local page shows, not on the first-local-model screen; one whose section is not on screen lands on Local's heading. The `models` and `modelserver` view identifiers stay and still scroll to their section. This supersedes 0057.
 
 ## Consequences
 
