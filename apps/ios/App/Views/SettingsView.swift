@@ -148,6 +148,14 @@ struct SettingsView: View {
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
+                NavigationLink {
+                    PermissionChecklistView()
+                } label: {
+                    Label("Permissions", systemImage: "checklist")
+                }
+                .accessibilityIdentifier("settings.permissions")
+            } header: { SectionHeader("Device access") }
+            Section {
                 Toggle("App lock (Face ID / passcode)", isOn: Binding(get: { prefs.appLock }, set: { on in
                     if on { prefs.appLock = true } else {
                         Task { if await app.lock.confirmDisable() { prefs.appLock = false; app.lock.disable() } }

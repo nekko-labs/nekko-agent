@@ -48,9 +48,13 @@ public struct LiveChat: Codable, Hashable, Sendable {
     public var callId: String?
     /// low / medium / high (the computer's guardrail rating).
     public var severity: String?
+    /// The waiting call is an MCP tool, so the card offers "Always allow this
+    /// tool" (decision 0054). Left out of the state when false.
+    public var alwaysAllow: Bool
 
     public init(id: String, short: String, state: LiveChatState, step: String, reply: String, closeWord: String,
-                finishedAt: Date?, callId: String?, severity: String?, startedAt: Date? = nil, title: String = "") {
+                finishedAt: Date?, callId: String?, severity: String?, startedAt: Date? = nil, title: String = "",
+                alwaysAllow: Bool = false) {
         self.id = id
         self.short = short
         self.title = title
@@ -62,10 +66,11 @@ public struct LiveChat: Codable, Hashable, Sendable {
         self.callId = callId
         self.severity = severity
         self.startedAt = startedAt
+        self.alwaysAllow = alwaysAllow
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, short, title, state, step, reply, closeWord, finishedAt, startedAt, callId, severity
+        case id, short, title, state, step, reply, closeWord, finishedAt, startedAt, callId, severity, alwaysAllow
     }
 
     /// Pushes may omit anything but the id and state.
@@ -82,6 +87,7 @@ public struct LiveChat: Codable, Hashable, Sendable {
         callId = try c.decodeIfPresent(String.self, forKey: .callId)
         severity = try c.decodeIfPresent(String.self, forKey: .severity)
         startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        alwaysAllow = try c.decodeIfPresent(Bool.self, forKey: .alwaysAllow) ?? false
     }
 
     /// Written as the synthesized encoder would, except an empty title is left
@@ -100,6 +106,7 @@ public struct LiveChat: Codable, Hashable, Sendable {
         try c.encodeIfPresent(startedAt, forKey: .startedAt)
         try c.encodeIfPresent(callId, forKey: .callId)
         try c.encodeIfPresent(severity, forKey: .severity)
+        if alwaysAllow { try c.encode(true, forKey: .alwaysAllow) }
     }
 }
 
@@ -109,13 +116,16 @@ public struct LiveCardState: Codable, Hashable, Sendable {
     public var focusId: String?
     /// Chats past the eight the state carries.
     public var more: Int
+    /// Full eligible-set totals by raw state, before detail clipping; nil on legacy pushes.
+    public var counts: [String: Int]?
     public var listening: Bool
     /// What the mic heard so far.
     public var heard: String
 
-    public init(chats: [LiveChat], focusId: String?, more: Int, listening: Bool, heard: String) {
+    public init(chats: [LiveChat], focusId: String?, more: Int, listening: Bool, heard: String, counts: [String: Int]? = nil) {
         self.chats = chats
         self.focusId = focusId
+        self.counts = counts
         self.more = more
         self.listening = listening
         self.heard = heard
@@ -126,6 +136,7 @@ public struct LiveCardState: Codable, Hashable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         chats = try c.decodeIfPresent([LiveChat].self, forKey: .chats) ?? []
         focusId = try c.decodeIfPresent(String.self, forKey: .focusId)
+        counts = try c.decodeIfPresent([String: Int].self, forKey: .counts)
         more = try c.decodeIfPresent(Int.self, forKey: .more) ?? 0
         listening = try c.decodeIfPresent(Bool.self, forKey: .listening) ?? false
         heard = try c.decodeIfPresent(String.self, forKey: .heard) ?? ""
@@ -163,6 +174,7 @@ public func buildCard(chats: [LiveChat], previous: LiveCardState?, pinnedFocus: 
     }.map(\.element)
     guard !sorted.isEmpty else { return nil }
 
+    let counts = Dictionary(sorted.map { ($0.state.rawValue, 1) }, uniquingKeysWith: +)
     var kept = Array(sorted.prefix(LiveCardRules.maxChats))
     let more = sorted.count - kept.count
 
@@ -177,7 +189,7 @@ public func buildCard(chats: [LiveChat], previous: LiveCardState?, pinnedFocus: 
         if level != .detailed { kept[i].reply = "" }
     }
     var card = LiveCardState(chats: kept, focusId: focus ?? pinned ?? kept[0].id, more: more,
-                             listening: previous?.listening ?? false, heard: previous?.heard ?? "")
+                             listening: previous?.listening ?? false, heard: previous?.heard ?? "", counts: counts)
     // ActivityKit refuses a state over 4 KB (a request returns no card, an update is
     // dropped): replies go first, then the last chats move into "+N", never the focused one.
     func tooBig() -> Bool { ((try? JSONEncoder().encode(card))?.count ?? 0) > LiveCardRules.maxBytes }

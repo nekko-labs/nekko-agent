@@ -73,6 +73,8 @@ export interface CardState {
   chats: Record<string, unknown>[];
   focusId?: string;
   more?: number;
+  /** Full eligible-set totals, absent on legacy producers. */
+  counts?: Record<string, number>;
   listening?: boolean;
   heard?: string;
 }
@@ -113,7 +115,12 @@ export function capBytes(v: unknown, max: number): string {
 export function cardPriority(previous: CardState | undefined, push: CardPush): 5 | 10 {
   if (push.event !== 'update' || !previous) return 10;
   const shape = (s: CardState) =>
-    JSON.stringify([s.focusId ?? null, s.more ?? 0, s.chats.map((c) => [c.id, c.state, c.callId ?? null])]);
+    JSON.stringify([
+      s.focusId ?? null,
+      s.more ?? 0,
+      s.counts ? [...CHAT_STATES].map((state) => s.counts?.[state] ?? 0) : null,
+      s.chats.map((c) => [c.id, c.state, c.callId ?? null]),
+    ]);
   return shape(previous) === shape(push.state) ? 5 : 10;
 }
 
@@ -161,6 +168,13 @@ export function cardForLevel(state: unknown, level: CardLevel): CardState | null
     chats.push(chat);
   }
   const card: CardState = { chats };
+  // Never derive authoritative totals from clipped details, or accept a partially valid map.
+  if (s.counts && typeof s.counts === 'object' && !Array.isArray(s.counts)) {
+    const entries = Object.entries(s.counts);
+    if (entries.every(([key, value]) => CHAT_STATES.has(key) && typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 2147483647)) {
+      card.counts = Object.fromEntries(entries);
+    }
+  }
   if (id(s.focusId)) card.focusId = s.focusId as string;
   card.more = Math.max(0, Math.floor(date(s.more) ?? 0)) + Math.max(0, s.chats.length - 8);
   card.listening = s.listening === true;

@@ -106,8 +106,10 @@ it('preserves failure and abort when done closes the same turn, then resets on n
     applyEvent({ type: 'done', sessionId: 'c', messageId: 'm', stop: 'complete' });
     expect(childActivity(child)).toEqual(failed);
     expect(childActivity(child, true).status).toBe('working');
-    // Usage may be the first event of a fresh run, before any visible activity.
+    // Accounting can arrive after the error; only real activity starts a turn.
     applyEvent({ type: 'usage', sessionId: 'c', inputTokens: 1, outputTokens: 1 });
+    expect(childActivity(child)).toEqual(failed);
+    applyEvent({ type: 'text', sessionId: 'c', delta: 'Trying again.' });
     expect(childActivity(child).status).toBe('working');
     applyEvent({ type: 'done', sessionId: 'c', messageId: 'next', stop: 'complete' });
     expect(childActivity(child).status).toBe('completed');

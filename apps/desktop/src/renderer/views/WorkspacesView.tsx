@@ -152,7 +152,7 @@ type SidebarActions = {
   onOpenChat: (id: string) => void;
   onOpenTerminal: (id: string) => void;
   selectedId: string | null;
-  onCreate: (kind: 'chat' | 'image' | 'terminal', projectId?: string, shell?: string) => Promise<void>;
+  onCreate: (kind: 'chat' | 'image' | 'video' | 'terminal', projectId?: string, shell?: string) => Promise<void>;
   /** A column beside the wall, or a row of cards above it. */
   orientation?: AgentPanelOrientation;
   onOrientation?: (orientation: AgentPanelOrientation) => void;
@@ -511,7 +511,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
    * in manual order this is exactly the bucket list drag-and-drop writes to;
    * every other arrangement is a read-only view of the same cards.
    */
-  const utilityKind = (e: Entry) => e.t ? 'terminal' : e.s?.chatType === 'image' ? 'media' : null;
+  const utilityKind = (e: Entry) => e.t ? 'terminal' : (e.s?.chatType === 'image' || e.s?.chatType === 'video') ? 'media' : null;
   const shown = (e: Entry) => !utilityKind(e) && (view.showAutomations || !e.s?.taskId);
   const shownDone = (s: SessionSummary) => view.showAutomations || !s.taskId;
   const order = (items: Entry[]) => (view.sortBy === 'manual' ? items : [...items].sort((a, b) => compareCards(view)(sortable(a), sortable(b))));
@@ -739,7 +739,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
             >
               <CreateMenuRows onCreate={(kind) => {
                 closeNewMenu();
-                const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : newTerminalWorkspace();
+                const action = kind === 'chat' ? newChat() : kind === 'image' ? newImageChat() : kind === 'video' ? onCreate('video', activeProjectId()) : newTerminalWorkspace();
                 void Promise.resolve(action).catch((e: Error) => useStore.getState().pushToast('error', e.message));
               }} />
             </div>,

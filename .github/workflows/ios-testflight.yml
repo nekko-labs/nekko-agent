@@ -43,12 +43,13 @@ name: iOS TestFlight
 # builds were numbered run number + 100, up to 179; the new numbers start at
 # 80001.)
 #
-# Internal testing only (Philip, 2026-11-06): a new marketing version every
-# night is fine because no build from here goes to external testers. The
-# export marks each build testFlightInternalTestingOnly, so App Store Connect
-# refuses to add it to an external group, send it to Beta App Review or submit
-# it to the App Store; the internal-testers job then adds it to the internal
-# groups. A dispatch with internal_only=false is the only way around that.
+# Who can test (Philip, 2026-11-08): the scheduled nightly uploads a build that
+# can go to external groups (it still needs Beta App Review there, and adding
+# it to an external group stays a step done by hand). A run started by hand is
+# internal testing only unless dispatched with internal_only=false: the export
+# then marks it testFlightInternalTestingOnly, so App Store Connect refuses to
+# add it to an external group, send it to Beta App Review or submit it to the
+# App Store. Either way the internal-testers job adds it to the internal groups.
 
 on:
   schedule:
@@ -66,7 +67,7 @@ on:
         required: false
         default: false
       internal_only:
-        description: Internal TestFlight testing only (never external testers or the App Store). Scheduled runs always are.
+        description: Internal TestFlight testing only (never external testers or the App Store). Scheduled nightlies never are.
         type: boolean
         required: false
         default: true
@@ -255,11 +256,11 @@ jobs:
 
       # testFlightInternalTestingOnly makes App Store Connect itself refuse to
       # put the build in an external group, send it to Beta App Review or submit
-      # it to the App Store (Philip, 2026-11-06: nightlies are for internal
-      # testers only). Only a dispatch with internal_only=false leaves it off.
+      # it to the App Store. Set on hand-started runs unless internal_only=false;
+      # never on the scheduled nightly (Philip, 2026-11-08).
       - name: Export and upload to App Store Connect
         env:
-          INTERNAL_ONLY: ${{ github.event_name != 'workflow_dispatch' || inputs.internal_only }}
+          INTERNAL_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.internal_only }}
         run: |
           set -o pipefail
           if [ "$INTERNAL_ONLY" = true ]; then internal='<true/>'; else internal='<false/>'; fi
@@ -293,13 +294,18 @@ jobs:
         env:
           # By hand, what the dispatcher typed; on a push, the merged PR's title.
           NOTES: ${{ inputs.notes || github.event.head_commit.message }}
+          INTERNAL_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.internal_only }}
         run: |
           {
             echo "### iOS TestFlight upload"
             echo "- Version $VERSION, build $BUILD_NUMBER, commit \`${GITHUB_SHA::7}\`"
             echo "- Team ${TEAM_ID:-unknown}; bundle id dev.nekkolabs.nekkoagent"
             [ -n "$NOTES" ] && echo "- What to test: $(printf '%s\n' "$NOTES" | head -n1)"
-            echo "- Internal TestFlight testing only: the internal-testers job adds it to the internal groups once Apple has processed it."
+            if [ "$INTERNAL_ONLY" = true ]; then
+              echo "- Internal TestFlight testing only: the internal-testers job adds it to the internal groups once Apple has processed it."
+            else
+              echo "- Can go to external groups (after Beta App Review); the internal-testers job adds it to the internal groups once Apple has processed it."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
           rm -f "${API_KEY_PATH:-}"
 

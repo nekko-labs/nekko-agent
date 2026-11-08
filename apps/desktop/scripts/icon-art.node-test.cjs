@@ -8,15 +8,15 @@ const { iconSvg, bannerSvg, bareMarkSvg, logoSvg, HEAD, INK, ICON_INK, TILE, TIL
 
 const root = join(__dirname, '../../..');
 const text = (file) => readFileSync(join(root, file), 'utf8');
-const legacy = /#(?:190019|5a2352|854f6c|c084b5)\b/i;
+const legacy = /#(?:101714|263d2d|f2f1e9|a7c8ac|9d8ce6|6d5efc)\b/i;
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 
 for (const size of [16, 24, 32, 48, 64, 128, 256, 512, 1024]) {
-  test(`app icon uses cream on the green tile at ${size}px, preserving the cat geometry`, () => {
+  test(`app icon uses white on the plum tile at ${size}px, preserving the cat geometry`, () => {
     const svg = iconSvg(size);
-    assert.equal(ICON_INK, '#F2F1E9');
-    assert.equal(TILE, '#101714');
-    assert.equal(TILE_END, '#263D2D');
+    assert.equal(ICON_INK, '#FFFFFF');
+    assert.equal(TILE, '#190019');
+    assert.equal(TILE_END, '#3A1438');
     assert.ok(svg.includes(`d="${HEAD}"`));
     assert.ok(svg.includes(`fill="${ICON_INK}"`));
     assert.ok(svg.includes(`stop-color="${TILE}"`));
@@ -36,8 +36,8 @@ const banners = [
   { name: 'sidebar', w: 164, h: 314, opts: { markSize: 88, markX: 38, markY: 62, title: 'Nekko Agent', titleSize: 22, layout: 'column' } },
 ];
 for (const { name, w, h, opts } of banners) {
-  test(`installer ${name} uses legible sage on green, including its committed bitmap`, () => {
-    assert.equal(INK, '#A7C8AC');
+  test(`installer ${name} uses legible light plum on plum, including its committed bitmap`, () => {
+    assert.equal(INK, '#C99BB3');
     for (const svg of [bannerSvg(w, h, opts), bannerSvg(w, h, opts, w * 2, h * 2)]) {
       assert.doesNotMatch(svg, legacy);
       assert.ok(svg.includes(`fill="${INK}"`));
@@ -50,14 +50,14 @@ for (const { name, w, h, opts } of banners) {
     assert.equal(bmp.readInt32LE(22), h);
     assert.equal(bmp.readUInt16LE(28), 24);
     const offset = bmp.readUInt32LE(10), stride = Math.ceil(w * 3 / 4) * 4;
-    let sage = 0;
+    let lightPlum = 0;
     for (let y = opts.markY; y < opts.markY + opts.markSize; y++) {
       for (let x = opts.markX; x < opts.markX + opts.markSize; x++) {
         const at = offset + (h - 1 - y) * stride + x * 3;
-        if ([bmp[at + 2], bmp[at + 1], bmp[at]].every((v, i) => Math.abs(v - [167, 200, 172][i]) <= 4)) sage++;
+        if ([bmp[at + 2], bmp[at + 1], bmp[at]].every((v, i) => Math.abs(v - [201, 155, 179][i]) <= 4)) lightPlum++;
       }
     }
-    assert.ok(sage > 0, 'cat crop contains sage ink');
+    assert.ok(lightPlum > 0, 'cat crop contains lightPlum ink');
   });
 }
 
@@ -75,16 +75,16 @@ function checkPng(bytes, size) {
   const png = PNG.sync.read(bytes);
   assert.equal(png.width, size);
   assert.equal(png.height, size);
-  let green = 0, cream = 0;
+  let plum = 0, mark = 0;
   for (let i = 0; i < png.data.length; i += 4) {
     const [r, g, b, a] = png.data.subarray(i, i + 4);
     if (a === 0) continue;
-    assert.ok(!(r > g + 8 && b > g + 8), `no plum pixels: ${r},${g},${b}`);
-    if (g > r + 3 && r < 80) green++;
-    if (r > 150 && g > 190 && b > 150) cream++;
+    assert.ok(!(g > r + 3 && r < 80), `no retired green ground: ${r},${g},${b}`);
+    if (r > g + 8 && b > g + 8 && r < 100) plum++;
+    if (r > 180 && g > 140 && b > 160) mark++;
   }
-  assert.ok(green > 0, 'green ground');
-  assert.ok(cream > 0, 'cream or sage mark');
+  assert.ok(plum > 0, 'deep plum ground');
+  assert.ok(mark > 0, 'white or light plum mark');
   return png;
 }
 
@@ -95,7 +95,7 @@ for (const [file, size] of [
   ['apps/ios/App/Assets.xcassets/AppIcon.appiconset/AppIcon-Dark-1024.png', 1024],
   ['apps/ios/Watch/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png', 1024],
 ]) {
-  test(`${file} contains current green/cream artwork, not stale purple pixels`, () => {
+  test(`${file} contains current plum/white artwork, not stale green pixels`, () => {
     const bytes = readFileSync(join(root, file));
     const png = checkPng(bytes, size);
     if (file.includes('/ios/')) {
@@ -127,8 +127,8 @@ test('Windows ICO contains correct PNG dimensions and current art for every requ
 
 test('Android launcher uses the current opaque ARGB palette without recoloring widget surfaces', () => {
   const colors = text('apps/android/app/src/main/res/values/colors.xml');
-  assert.match(colors, /name="ic_launcher_background">#FF101714</);
-  assert.match(colors, /name="ic_launcher_mark">#FFF2F1E9</);
+  assert.match(colors, /name="ic_launcher_background">#FF190019</);
+  assert.match(colors, /name="ic_launcher_mark">#FFFFFFFF</);
   assert.match(colors, /name="widget_surface">#FFFFFFFF</);
   const tile = text('apps/android/app/src/main/res/drawable/ic_launcher_background.xml');
   assert.ok(tile.includes(`android:startColor="${TILE}"`));
@@ -141,15 +141,15 @@ test('every live favicon, logo and social-card reference is cache-busted consist
     const source = text(file);
     const refs = [...source.matchAll(/(?:favicon\.svg|logo\.svg|og\.png)\?v=([^"\s]+)/g)];
     assert.ok(refs.length >= 2);
-    for (const ref of refs) assert.equal(ref[1], 'green-cream-1');
+    for (const ref of refs) assert.equal(ref[1], 'plum-white-2');
   }
   const html = text('apps/desktop/src/renderer/index.html');
-  assert.match(html, /rel="icon" type="image\/svg\+xml" href="\.\/icon.svg\?v=green-cream-1"/);
-  assert.match(html, /rel="apple-touch-icon" href="\.\/icon-512.png\?v=green-cream-1"/);
+  assert.match(html, /rel="icon" type="image\/svg\+xml" href="\.\/icon.svg\?v=plum-white-2"/);
+  assert.match(html, /rel="apple-touch-icon" href="\.\/icon-512.png\?v=plum-white-2"/);
   const manifest = JSON.parse(text('apps/desktop/src/renderer/public/manifest.webmanifest'));
   assert.equal(manifest.background_color, TILE);
   assert.equal(manifest.theme_color, TILE);
-  assert.equal(manifest.icons[0].src, 'icon-512.png?v=green-cream-1');
+  assert.equal(manifest.icons[0].src, 'icon-512.png?v=plum-white-2');
 });
 
 test('the old Agent Nekko social card is replaced by the current brand banner', () => {

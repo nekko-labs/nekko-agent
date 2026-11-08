@@ -47,7 +47,7 @@ app.whenReady().then(async () => {
       }
       await sleep(200);
       report.checks.saved = await run('settingsFixture.patches.some(p => p.showTips === true) && settingsFixture.patches.some(p => p.sidebarViews?.skills === true)');
-      report.checks.membership = await run(`['settings-style', 'settings-accessibility', 'settings-simple', 'customization'].every(id => document.getElementById(id)?.closest('[data-settings-group]')?.dataset.settingsGroup === 'customize')`);
+      report.checks.membership = await run(`['settings-style', 'settings-animations', 'settings-simple', 'customization'].every(id => document.getElementById(id)?.closest('[data-settings-group]')?.dataset.settingsGroup === 'customize')`);
       report.checks.separate = await run('!!document.querySelector("[data-settings-group=system]") && !!document.querySelector("[data-settings-group=computers]")');
       // Chromium suspends rAF in a never-shown window. Drain only this navigation
       // helper's two mount frames explicitly; this checks destinations, not frame timing.
@@ -66,7 +66,7 @@ app.whenReady().then(async () => {
         await sleep(100);
         report.checks[`search-${query}`] = await run('document.querySelector(".settings-nav [aria-current=true]")?.textContent === "Customize"');
       }
-      for (const group of ['style', 'accessibility', 'simple']) {
+      for (const group of ['style', 'animations', 'simple']) {
         await navigate(`settingsFixture.openSettingsGroup(${js(group)})`);
         await sleep(500);
         const position = await run(`({ top: document.getElementById(${js('settings-' + group)}).getBoundingClientRect().top, container: document.querySelector('.settings-content').getBoundingClientRect().top, scroll: document.querySelector('.settings-content').scrollTop })`);

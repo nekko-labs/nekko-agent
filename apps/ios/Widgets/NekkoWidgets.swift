@@ -71,28 +71,30 @@ struct StatusProvider: TimelineProvider {
 struct NekkoCardLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: NekkoCardAttributes.self) { context in
-            LiveCardView(state: context.state, level: context.attributes.level, interactive: true)
+            LiveCardView(state: context.state, level: context.attributes.level, interactive: true,
+                         computerId: context.attributes.computerId, computerName: context.attributes.computerName, stale: context.isStale)
                 .padding(14)
                 .activityBackgroundTint(LiveCardView.background.opacity(0.92))
                 .activitySystemActionForegroundColor(.white)
-                .widgetURL(chatURL(context.state.focusId))
+                .widgetURL(LiveCardView.chatsURL)
         } dynamicIsland: { context in
             let urgent = context.state.chats.first?.state ?? .working
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.bottom) {
-                    LiveCardView(state: context.state, level: context.attributes.level, interactive: true)
+                    LiveCardView(state: context.state, level: context.attributes.level, interactive: true,
+                                 computerId: context.attributes.computerId, computerName: context.attributes.computerName, stale: context.isStale)
                 }
             } compactLeading: {
                 PixelCat().frame(width: 22, height: 22)
             } compactTrailing: {
                 HStack(spacing: 3) {
                     LiveStatusGlyph(state: urgent, size: 14)
-                    Text("\(context.state.chats.count + context.state.more)").font(.caption2.weight(.semibold)).monospacedDigit()
+                    Text("\(context.state.counts?.values.reduce(0, +) ?? (context.state.chats.count + context.state.more))").font(.caption2.weight(.semibold)).monospacedDigit()
                 }
             } minimal: {
                 LiveStatusGlyph(state: urgent, size: 14)
             }
-            .widgetURL(chatURL(context.state.focusId))
+            .widgetURL(LiveCardView.chatsURL)
             .keylineTint(urgent.tint)
         }
     }

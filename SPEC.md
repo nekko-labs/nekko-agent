@@ -86,6 +86,10 @@ The initial loading/login UI resolves light or dark from the system preference b
 
 Implemented and checked with fresh Rust defaults, rejected/empty settings responses, rejected server status, retry recovery, a synthetic rendering failure, and matched hidden desktop/narrow captures in both themes. The friend's exact installed version, OS and original exception are unavailable; these checks verify the reproduced blank-page failure paths, not the cause of their service failure or a packaged-install upgrade. General async event-handler failures still need local handling; render boundaries do not intercept those.
 
+### Plum startup and shared app icons (#2272)
+
+Implemented: the desktop startup splash uses main plum, ignores obsolete unversioned colour caches before first paint, and preserves chosen alternate/custom palettes and quiet reload covers. Shared app icons now use plum/white across desktop packaging, tray/notifications, web/PWA and native launcher assets, with matching installer art. Development bundles invalidate their baked icon by content hash on the next launch. See [Colour palette](spec/brand/colour-palette.md#app-icon) and [Startup splash](spec/platform/startup-splash-and-window-launch.md). Focused palette/container tests and hidden matched asset/splash captures cover the source change; installed OS Settings/Dock cache refresh, native launcher selection, packaged installers and physical devices are not established by these checks. Separate mascot illustrations and iPhone startup-cover colours are unchanged.
+
 ## Search within Settings (desktop)
 
 User intent: find a setting by keyword without scrolling through the whole Settings page.
@@ -109,7 +113,7 @@ The personality is a capable, approachable assistant: clear task status, quiet c
 
 Quality bar: on par with Zed / Cursor / Warp / OpenClaw, generous whitespace, minimal chrome, dark/light themes, fast.
 
-The mascot redesign is in draft review: an icon-inspired 8-bit cat head in cream on dark green replaces the secret-agent accessories across desktop, live chat status, marketing, and mobile. It blinks, occasionally shows happy ^ ^ eyes, and uses stepped hops with reduced-motion support. The existing app icon remains unchanged. Cross-platform visual evidence and animation review are still required before shipping.
+The mascot redesign is in draft review: an icon-inspired 8-bit cat head in cream on dark green replaces the secret-agent accessories across desktop, live chat status, marketing, and mobile. It blinks, occasionally shows happy ^ ^ eyes, and uses stepped hops with reduced-motion support. The app icon keeps its outline-cat geometry; its plum/white palette is tracked separately below. Cross-platform visual evidence and animation review are still required before shipping.
 
 ## Why It Exists
 
@@ -952,6 +956,8 @@ On the desktop, Nekko Agent runs as two processes `[updated 2026-10-19]`:
 ### Nekko Agent
 
 ## Completion and interruption reconciliation
+
+Implemented (#2253): late provider usage accounting cannot create or resurrect a live reply after completion/error, or resume a wait. The daemon only appends it to an existing replay and the desktop only folds it into an existing run. Focused regressions and a hidden synthetic renderer journey cover the empty “Working” failure; exact reported-chat and multi-device reproduction remain unverified. See [the reconciliation spec](spec/chat/completion-and-interruption-reconciliation.md#late-provider-accounting-cannot-restart-a-reply).
 
 Implemented and verified with 1,124 desktop tests, typecheck, and 80 isolated renderer assertions plus matched completion screenshots: an explicit successful terminal record (`turnStats.stop: complete`) takes precedence over unmatched historical tool bookkeeping when inferring a persisted interruption. An explicit interrupted marker still wins, and unresolved tool calls without successful terminal evidence remain recoverable. A transient inferred interruption banner clears when the completed transcript arrives; provider errors and user-requested stops are not silently cleared. No transcript or private app data is rewritten. Acceptance: completed and genuinely interrupted fixture cases, delayed transcript reconciliation, and isolated light/dark wide/narrow evidence. The exact triggering transcript in the reported screenshot was not accessible in the workspace sandbox.
 

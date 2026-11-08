@@ -24,17 +24,17 @@ export const APPS_X = 480;
 
 const S = 2; // drawn at 2x, downscaled with nearest neighbour for 1x
 const rgb = (hex) => rgbaToInt((hex >> 16) & 255, (hex >> 8) & 255, hex & 255, 255);
-const BG_TOP = 0x161d19;
-const BG_BOTTOM = 0x0f1311;
-const GRID = rgb(0x1a221d);
-const CREAM = rgb(0xf2efe6);
-const SAGE = rgb(0xa7c8ac);
-const DARK = rgb(0x121714);
+const BG_TOP = 0x241424;
+const BG_BOTTOM = 0x190019;
+const GRID = rgb(0x301c2c);
+const WHITE = rgb(0xffffff);
+const PLUM_LIGHT = rgb(0xc99bb3);
+const DARK = rgb(0x190019);
 // Finder draws the icon labels in black over the background, dark mode
-// included (checked on macOS 27), so the labels sit on light sage ledges.
-const LEDGE = rgb(0x9dbfa3);
-const LEDGE_EDGE = rgb(0xc4dcc8);
-const LEDGE_SHADOW = rgb(0x5f7c66);
+// included (checked on macOS 27), so the labels sit on light light plum ledges.
+const LEDGE = rgb(0xc99bb3);
+const LEDGE_EDGE = rgb(0xe6d0dc);
+const LEDGE_SHADOW = rgb(0x854f6c);
 
 const img = new Jimp({ width: W * S, height: H * S, color: rgb(BG_TOP) });
 
@@ -106,8 +106,8 @@ const text = (s, cx, y, px, color, gap = 1) => {
 // Copy.
 // Copy goes at the top: a user whose Finder shows the path and status bars
 // loses the bottom ~50px of the window to them.
-text('DRAG THE CAT INTO APPLICATIONS', W / 2, 16, 2, CREAM);
-text("THEN OPEN IT FROM APPLICATIONS. THAT'S IT.", W / 2, 38, 1, SAGE, 1);
+text('DRAG THE CAT INTO APPLICATIONS', W / 2, 16, 2, WHITE);
+text("THEN OPEN IT FROM APPLICATIONS. THAT'S IT.", W / 2, 38, 1, PLUM_LIGHT, 1);
 
 // Ledges the two icons stand on, with the gap between them for the leap.
 const ledge = (cx) => {
@@ -137,16 +137,16 @@ const arcY = (x) => {
 for (let x = arcStart; x <= arcEnd - 10; x += 14) {
   const t = (x - arcStart) / (arcEnd - arcStart);
   if (t > 0.18 && t < 0.84) continue; // the cat is here
-  rect(Math.round(x / 2) * 2 - 2, Math.round(arcY(x) / 2) * 2 - 2, 4, 4, SAGE);
+  rect(Math.round(x / 2) * 2 - 2, Math.round(arcY(x) / 2) * 2 - 2, 4, 4, PLUM_LIGHT);
 }
-sprite(['#######', '.#####.', '..###..', '...#...'], arcEnd - 7, arcBase - 2, 2, { '#': SAGE });
+sprite(['#######', '.#####.', '..###..', '...#...'], arcEnd - 7, arcBase - 2, 2, { '#': PLUM_LIGHT });
 
 // The leaping cat, in the brand style: the app's own pixel head (the path in
 // renderer/components/Mascot.tsx, on its 32-unit grid) on a black leaping body,
-// all filled #101714 with the same 2-unit cream outline centred on the edge,
-// cream 2x3 eyes and the sage mouth. Built as a mask so head, body, legs and
+// all filled #190019 with the same 2-unit white outline centred on the edge,
+// white 2x3 eyes and the light plum mouth. Built as a mask so head, body, legs and
 // tail share one continuous outline.
-const INK = rgb(0x101714);
+const INK = rgb(0x190019);
 const HEAD = [[4, 5], [6, 5], [6, 7], [8, 7], [8, 9], [11, 9], [11, 10], [21, 10], [21, 9], [24, 9], [24, 7], [26, 7], [26, 5], [28, 5], [28, 19], [27, 19], [27, 22], [25, 22], [25, 24], [22, 24], [22, 26], [10, 26], [10, 24], [7, 24], [7, 22], [5, 22], [5, 19], [4, 19]];
 const inPoly = (poly, x, y) => {
   let inside = false;
@@ -213,19 +213,19 @@ const catY = apex - 42;
 for (let y = 0; y < GH; y++)
   for (let x = 0; x < GW; x++) {
     let c;
-    if (at(x, y)) c = nearEdge(x, y, false) ? CREAM : INK; // inner half of the outline
-    else if (nearEdge(x, y, true)) c = CREAM; // outer half
+    if (at(x, y)) c = nearEdge(x, y, false) ? WHITE : INK; // inner half of the outline
+    else if (nearEdge(x, y, true)) c = WHITE; // outer half
     if (c !== undefined) rect(catX + x * u, catY + y * u, u, u, c);
   }
 // Face, on the head's own grid.
 const face = (x, y, w, h, c) => rect(catX + (HX + x) * u, catY + (HY + OY + y) * u, w * u, h * u, c);
-face(11, 15, 2, 3, CREAM);
-face(20, 15, 2, 3, CREAM);
-face(15, 20, 2, 1, SAGE);
+face(11, 15, 2, 3, WHITE);
+face(20, 15, 2, 3, WHITE);
+face(15, 20, 2, 1, PLUM_LIGHT);
 
 // Motion streaks behind the cat.
-rect(catX - 2, catY + 26, 12, 2, SAGE);
-rect(catX - 12, catY + 32, 20, 2, SAGE);
+rect(catX - 2, catY + 26, 12, 2, PLUM_LIGHT);
+rect(catX - 12, catY + 32, 20, 2, PLUM_LIGHT);
 
 await img.write(resolve(build, 'background@2x.png'));
 const one = img.clone().resize({ w: W, h: H, mode: 'nearestNeighbor' });

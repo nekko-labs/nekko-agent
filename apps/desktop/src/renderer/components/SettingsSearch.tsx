@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom';
 import { ChevronDownIcon, ChevronUpIcon, CloseIcon, SearchIcon } from '../icons.js';
 import { zoomOf } from '../textScale.js';
+import { SHORTCUTS } from '../shortcuts.js';
 
 /**
- * Search within Settings. The search icon in the Settings rail turns into
- * a floating search box in the same spot. It stays put on screen while the page
+ * Search within Settings. The "Search settings" row in the Settings rail (or
+ * Ctrl/⌘+F anywhere on the page) turns into a floating search box covering
+ * that row, exactly as wide as the rail. It stays put on screen while the page
  * scrolls under it. One second after the user stops typing (or at once on
  * Enter), the page scrolls to the first match and highlights it. The up/down
  * buttons, the ArrowUp/ArrowDown keys and Enter / Shift+Enter step through
@@ -88,8 +90,8 @@ export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | n
   const [applied, setApplied] = useState('');
   const [current, setCurrent] = useState(0);
   const [total, setTotal] = useState(0);
-  /** Where the icon was when opened; the floating box is pinned there. */
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  /** Where the row was when opened; the floating box is pinned over it. */
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const anchor = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -97,14 +99,28 @@ export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | n
 
   const close = useCallback(() => { setOpen(false); setQuery(''); setApplied(''); setTotal(0); clear(); }, []);
 
-  const openBox = () => {
+  const openBox = useCallback(() => {
     const r = anchor.current?.getBoundingClientRect();
-    // Keep the bar on screen even if the header is partly scrolled out of view.
-    if (r) setPos({ top: Math.max(8, r.top), right: Math.max(8, window.innerWidth - r.right) });
+    // Centre the bar on the row and keep it on screen even if the rail is partly scrolled out of view.
+    if (r) setPos({ top: Math.max(8 + r.height / 2, r.top + r.height / 2), left: r.left, width: r.width });
     setOpen(true);
-  };
+    // Already open (Ctrl+F again): put the caret back in the box with the query selected.
+    input.current?.focus();
+    input.current?.select();
+  }, []);
 
   useLayoutEffect(() => { if (open) input.current?.focus(); }, [open]);
+
+  // Ctrl/⌘+F opens the search while Settings is on screen.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!SHORTCUTS.findInChat.matches(e) || e.defaultPrevented || !root.current || root.current.offsetParent === null) return;
+      e.preventDefault();
+      openBox();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [root, openBox]);
 
   // Wait for a 1 s pause in typing before searching.
   useEffect(() => {
@@ -147,22 +163,20 @@ export function SettingsSearch({ root }: { root: React.RefObject<HTMLElement | n
   const shown = total ? (((current % total) + total) % total) + 1 : 0;
 
   return (
-    <div ref={anchor} className="ml-auto" data-settings-search>
-      {!open ? (
-        <button type="button" className="settings-search-btn" aria-label="Search settings" title="Search settings" onClick={openBox}>
-          <SearchIcon className="h-4 w-4" />
-        </button>
-      ) : (
-        // Placeholder keeps the header height while the box floats above it.
-        <div className="h-7 w-7" />
-      )}
+    // The row is excluded from matches (data-settings-search), so its own label never counts as a result.
+    <div ref={anchor} className="flex items-center gap-2 px-3 py-2 text-sm text-ink-soft" data-settings-search>
+      <span>Search settings</span>
+      {/* While open the button stays, hidden under the box, so the row keeps its height. */}
+      <button type="button" className={`settings-search-btn ml-auto${open ? ' invisible' : ''}`} aria-label="Search settings" title={`Search settings (${SHORTCUTS.findInChat.label})`} onClick={openBox}>
+        <SearchIcon className="h-4 w-4" />
+      </button>
       {open && createPortal(
         <div
           className="settings-search-pop"
           role="search"
           aria-label="Search settings"
           data-settings-search
-          style={pos ? { top: pos.top, right: pos.right } : { top: 16, right: 16 }}
+          style={pos ? { top: pos.top, left: pos.left, width: pos.width } : { top: 32, right: 16, width: 280 }}
         >
           <input
             ref={input}

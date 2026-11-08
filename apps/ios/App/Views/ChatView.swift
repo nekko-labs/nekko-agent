@@ -21,6 +21,9 @@ struct ChatView: View {
     @State private var actionError: String?
     /// A switch of this chat to YOLO, waiting on the warning.
     @State private var yoloAsk: YoloAsk?
+    /// The waiting call whose "Always allow this tool" a notification or the Live
+    /// Activity asked for (`AppModel.alwaysAllowIn`): its card runs it once.
+    @State private var alwaysNow: String?
     @State private var showGit = false
     @State private var showGitScreen = false
     @State private var showTerminals = false
@@ -376,6 +379,17 @@ struct ChatView: View {
             Button("OK", role: .cancel) {}
         } message: { Text(actionError ?? "") }
         .yoloWarning($yoloAsk)
+        // "Always allow this tool" from a notification or the Live Activity: taken once the
+        // app is unlocked and this chat's card shows that very call.
+        .onChange(of: app.alwaysAllowIn, initial: true) { _, _ in takeAlwaysAllow(chat) }
+        .onChange(of: app.lock.locked) { _, _ in takeAlwaysAllow(chat) }
+        .onChange(of: chat.turn.approval?.call.id) { _, _ in takeAlwaysAllow(chat) }
+    }
+
+    private func takeAlwaysAllow(_ chat: ChatModel) {
+        guard let a = chat.turn.approval, ChatModel.offersAlwaysAllow(a.call),
+              app.takeAlwaysAllow(chat.sessionId, callId: a.call.id) else { return }
+        alwaysNow = a.call.id
     }
 
     /// The approval and question cards, the queue, the PR chip and the composer.
@@ -383,7 +397,8 @@ struct ChatView: View {
         VStack(spacing: 8) {
             if let a = chat.turn.approval {
                 ApprovalCard(approval: a, answer: { ok in try await chat.approve(ok) },
-                             alwaysAllow: ChatModel.offersAlwaysAllow(a.call) ? { try await chat.alwaysAllowTool() } : nil)
+                             alwaysAllow: ChatModel.offersAlwaysAllow(a.call) ? { try await chat.alwaysAllowTool() } : nil,
+                             startAlways: alwaysNow == a.call.id, startedAlways: { alwaysNow = nil })
                     .id(a.call.id)
             }
             if let q = chat.turn.question {
@@ -809,6 +824,10 @@ struct ApprovalCard: View {
     /// "Always allow this tool", offered for MCP tools only (decision 0054): saves the
     /// tool for this chat, then allows the call. Never switches the chat to YOLO.
     var alwaysAllow: (() async throws -> Void)? = nil
+    /// Run "Always allow this tool" once, as if tapped: asked for from a notification
+    /// or the Live Activity. A refusal or failure shows on this card, nothing allowed.
+    var startAlways = false
+    var startedAlways: () -> Void = {}
     @Environment(\.palette) private var palette
     @State private var busy = false
     @State private var failed: String?
@@ -866,6 +885,11 @@ struct ApprovalCard: View {
         .background { RoundedRectangle(cornerRadius: 12).fill(palette.surface).overlay(RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.09))) }
         // The haptic comes from AppModel, per the user's vibration setting; VoiceOver gets told here.
         .onAppear { AccessibilityNotification.Announcement("Approval needed: \(Transcript.toolLabel(approval.call))").post() }
+        .task(id: startAlways) {
+            guard startAlways, alwaysAllow != nil, !busy else { return }
+            startedAlways()
+            decide(true, always: true)
+        }
     }
 
     private func decide(_ ok: Bool, always: Bool = false) {

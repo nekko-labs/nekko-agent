@@ -32,7 +32,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary.js';
 import { SettingsSearch } from '../components/SettingsSearch.js';
 import { ProjectManagementToggles, PullRequestToggles } from '../components/WorkTrackingToggles.js';
 import { WallLayoutSettings } from './WallLayoutSettings.js';
-import { AccessibilitySection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
+import { AnimationsSection, DesktopBehaviorSection, FunSection } from './DesktopBehaviorSections.js';
 import { SkillsColorIcon, ConnectorsColorIcon } from '../navIcons.js';
 import { HistorySettings } from '../components/HistorySettings.js';
 import { DeleteEverythingDialog, wipeEverything } from '../components/DeleteEverythingDialog.js';
@@ -192,7 +192,7 @@ export function SettingsView() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 px-3 py-2 text-sm text-ink-soft"><span>Search settings</span><SettingsSearch root={pageRef} /></div>
+        <SettingsSearch root={pageRef} />
         <nav aria-label="Settings sections" className="settings-nav">
           {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
             <button
@@ -352,8 +352,8 @@ export function SettingsView() {
               <div id="settings-style">
                 <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
               </div>
-              <div id="settings-accessibility">
-                <AccessibilitySection settings={settings} update={update} />
+              <div id="settings-animations">
+                <AnimationsSection settings={settings} update={update} />
               </div>
               <div id="settings-simple">
                 <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>

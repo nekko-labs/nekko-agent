@@ -1,5 +1,5 @@
-// Regression and matched evidence for placement controls with an open question.
-// An empty composer is not an action; only a typed, non-command draft gets the row.
+// Regression and matched evidence: no legacy placement row, even with a typed draft.
+// Suggested actions keep their own slider; ordinary typed drafts use the composer.
 // Run through layout-evidence-integration.cjs with
 // NEKKO_LAYOUT_SANDBOX=question-chips-sandbox.cjs. NEKKO_TEST_SOURCE captures the
 // unchanged baseline without enforcing the new visibility expectations.
@@ -80,31 +80,17 @@ app.whenReady().then(async () => {
       for (const [name, text] of [['whitespace', '   '], ['slash command', '/help'], ['typed answer', 'Pull locally']]) {
         await typeDraft(text);
         const visible = await run("!!document.querySelector('[data-work-place]')");
-        check(label + ': ' + name + ' visibility', visible === (name === 'typed answer'));
+        check(label + ': ' + name + ' visibility', !visible);
       }
-      check(label + ': placement controls fit viewport', await run(`(() => {
-        const row = document.querySelector('[data-work-place]');
-        return !!row && [...row.querySelectorAll('button')].every(b => {
-          const r = b.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth;
-        });
-      })()`));
       await shot(label + '-question-draft');
       await typeDraft('');
       check(label + ': clearing draft hides controls again', await run("!document.querySelector('[data-work-place]')"));
       check(label + ': editing has not sent anything', await run('!layoutFixture.lastSend'));
       await typeDraft('Pull locally');
-      await run("document.querySelector('[data-work-place] button').click()");
+      await run("document.querySelector('[data-composer-action=send]').click()");
       await sleep(500);
       check(label + ': direct action sends exact draft', await run("layoutFixture.lastSend?.text === 'Pull locally'"));
       check(label + ': direct send hides empty row', await run("!document.querySelector('[data-work-place]')"));
-      await run("layoutFixture.emitAgent({type:'done', sessionId:'a', messageId:'a1'})");
-      await sleep(400);
-      await run(seedQuestion);
-      await typeDraft('Pull locally');
-      await run("document.querySelectorAll('[data-work-place] button')[1].click()");
-      await sleep(500);
-      check(label + ': delegated action wraps exact draft', await run("layoutFixture.lastSend?.text === 'Do this in a subagent, then report back:\\n\\nPull locally'"));
-      check(label + ': delegated send hides empty row', await run("!document.querySelector('[data-work-place]')"));
     }
     report.bounds = win.getBounds();
     report.hidden = !win.isVisible();
