@@ -7,6 +7,8 @@ const path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through layout-evidence-integration.cjs');
 app.setPath('userData', path.join(out, 'profile'));
+// Escape code delimiters and line separators before embedding JSON in evaluated code.
+const js = v => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const label = process.env.NEKKO_TEST_LABEL || 'head';
 app.whenReady().then(async () => {
@@ -20,8 +22,8 @@ app.whenReady().then(async () => {
   const run = s => win.webContents.executeJavaScript(s, true);
   const png = async () => (await win.capturePage(undefined, { stayHidden: true })).toPNG();
   const shot = async name => { await sleep(400); const f = path.join(out, `${name}-${label}.png`); fs.writeFileSync(f, await png()); report.captures.push(f); };
-  const click = text => run(`(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find(b => b.textContent.trim() === ${JSON.stringify(text)}); if (!b) return false; b.click(); return true; })()`);
-  const type = (sel, value) => run(`(() => { const i = document.querySelector(${JSON.stringify(sel)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${JSON.stringify(value)}); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  const click = text => run(`(() => { const b = [...document.querySelectorAll('[role=dialog] button')].find(b => b.textContent.trim() === ${js(text)}); if (!b) return false; b.click(); return true; })()`);
+  const type = (sel, value) => run(`(() => { const i = document.querySelector(${js(sel)}); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, ${js(value)}); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
   const step = () => run("document.querySelector('[role=dialog] section')?.getAttribute('aria-label')");
   try {
     // A hidden window doesn't tick CSS animations, so stills use reduced motion
