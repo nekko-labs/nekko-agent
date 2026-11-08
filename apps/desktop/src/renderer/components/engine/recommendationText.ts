@@ -40,8 +40,8 @@ export function memoryText(option: RecommendedOption, budget: Recommendations['b
 
 export function fitText(option: RecommendedOption): { text: string; title: string } {
   return option.fit === 'fits'
-    ? { text: 'fits', title: `Leaves ${formatBytes(option.headroomBytes)} for longer conversations and other programs.` }
-    : { text: 'tight fit', title: `Leaves ${formatBytes(option.headroomBytes)}: it runs, with little to spare.` };
+    ? { text: 'Fits', title: `Leaves ${formatBytes(option.headroomBytes)} for longer conversations and other programs.` }
+    : { text: 'Tight fit', title: `Leaves ${formatBytes(option.headroomBytes)}: it runs, with little to spare.` };
 }
 
 /** One line on what the picks were made for. */
