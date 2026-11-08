@@ -42,6 +42,7 @@ mod downloads;
 mod engine;
 mod federation;
 mod feedback;
+mod support;
 mod gcp;
 mod harness;
 mod hub;

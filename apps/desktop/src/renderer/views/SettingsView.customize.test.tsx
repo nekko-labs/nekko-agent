@@ -14,8 +14,8 @@ import { SettingsView, SETTINGS_GROUPS } from './SettingsView.js';
 import { UpdateProvider } from '../components/UpdateBanner.js';
 
 describe('Settings Customize section', () => {
-  it('replaces the separate presentation groups without moving phone pairing', () => {
-    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['general', 'phone', 'computers', 'customize', 'agents', 'safety', 'connections', 'tools', 'system']);
+  it('replaces the separate presentation groups with team support before General and phone pairing', () => {
+    expect(SETTINGS_GROUPS.map(group => group.id)).toEqual(['support', 'general', 'phone', 'computers', 'customize', 'agents', 'safety', 'connections', 'tools', 'system']);
     expect(SETTINGS_GROUPS.find(group => group.id === 'customize')?.label).toBe('Customize');
   });
 

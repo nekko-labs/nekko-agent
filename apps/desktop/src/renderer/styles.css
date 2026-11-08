@@ -4445,3 +4445,13 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @media (prefers-reduced-motion: reduce) {
   .setup-welcome *, .setup-nekko-eyes { animation: none !important; }
 }
+
+/* One brief thank-you for a newly confirmed GitHub star, never an idle loop. */
+.support-star-celebrate { animation: support-star-thanks 1.2s ease-in-out both; }
+@keyframes support-star-thanks {
+  0%, 100% { transform: translateY(0) rotate(0) scale(1); }
+  25% { transform: translateY(-6px) rotate(-10deg) scale(1.18); }
+  55% { transform: translateY(-3px) rotate(10deg) scale(1.1); }
+  80% { transform: translateY(0) rotate(-4deg) scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) { .support-star-celebrate { animation: none; } }
