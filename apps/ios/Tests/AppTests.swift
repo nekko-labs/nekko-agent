@@ -553,6 +553,7 @@ final class LiveCardViewTests: XCTestCase {
         LiveCardView(state: state, level: level, interactive: false)
             .padding(14)
             .frame(width: 360)
+            .background(LiveCardView.wash)
             .background(LiveCardView.background)
     }
 
