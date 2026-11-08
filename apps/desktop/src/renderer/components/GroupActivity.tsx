@@ -74,7 +74,7 @@ const SEQUENCES: Record<GroupActivityKind, { frameMs: number; still: number; fra
  * A status group's heading while its chats are at it: Nekko building, checking
  * or keeping watch. The frames sit side by side in one strip that steps
  * past a one-frame window, so each heading runs a single compositor animation.
- * Settings > Accessibility turns it off; the system's reduced-motion preference
+ * Settings > Animations turns it off; the system's reduced-motion preference
  * deliberately does not.
  */
 export function GroupActivity({ kind, animated = true }: { kind: GroupActivityKind; animated?: boolean }) {

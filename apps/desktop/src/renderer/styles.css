@@ -2273,7 +2273,7 @@
 /* A live status group's heading: a strip of pixel frames stepping past a one-frame window. */
 .group-activity { display: block; flex-shrink: 0; width: 24px; height: 16px; margin-inline-start: 4px; overflow: hidden; line-height: 0; }
 .group-activity svg { display: block; max-width: none; fill: var(--success); animation: group-activity-strip var(--group-activity-duration) steps(var(--group-activity-frames), end) infinite; }
-/* Settings > Accessibility decides this one, so it stands against the app-wide reduced-motion rule. */
+/* Settings > Animations decides this one, so it stands against the app-wide reduced-motion rule. */
 .group-activity svg { animation-duration: var(--group-activity-duration) !important; animation-iteration-count: infinite !important; }
 .group-activity-soft { fill: color-mix(in srgb, var(--success) 45%, transparent); }
 /* The frames set Nekko's eyes themselves, so the mascot's blink stays out of the strip. */
