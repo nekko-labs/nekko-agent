@@ -166,7 +166,10 @@ function markDirty(sessionId: string): void {
   });
 }
 
-/** Events that mean a turn is actually producing something, so may open a run. */
+/**
+ * Events that mean a turn is actually producing something, so may open a run.
+ * Usage only enriches an existing run: Claude Code can send it after an error.
+ */
 const STARTS_RUN = new Set<AgentEvent['type']>([
   'text',
   'reasoning',
@@ -175,7 +178,6 @@ const STARTS_RUN = new Set<AgentEvent['type']>([
   'tool_approval_required',
   'question',
   'image_status',
-  'usage',
   // A first call that fails before its first token is still a turn in flight,
   // and the rail should say it is being retried rather than nothing at all.
   'retry',
