@@ -36,6 +36,8 @@ final class RelayClientTests: XCTestCase {
         var welcomeProtocol: Int?
         /// Send a challenge to each socket as it opens.
         var challenges = true
+        /// Let receive callbacks beat the delegate's open callback.
+        var deferOpenCallback = false
         /// Sign challenges with this instead of the host key: someone who only holds the room secret.
         var forger: P256.Signing.PrivateKey?
         /// Hosts (host:port) that say `agent-offline` as a socket opens, instead of a challenge.
@@ -99,7 +101,7 @@ final class RelayClientTests: XCTestCase {
                     self.lock.lock()
                     self._open = true
                     self.lock.unlock()
-                    self.handlers.onOpen()
+                    if !self.relay.sync({ self.relay.deferOpenCallback }) { self.handlers.onOpen() }
                     if self.relay.sync({ self.relay.sayOffline.contains(self.hostPort) }) {
                         self.plain(["type": "agent-offline"])
                     } else if self.relay.sync({ self.relay.challenges }) {

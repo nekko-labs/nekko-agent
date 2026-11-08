@@ -24,7 +24,7 @@ export function IntegrationsStep({
   commitRef,
 }: {
   /** Set to the step's commit action; the wizard runs it on Next. */
-  commitRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  commitRef?: React.MutableRefObject<(() => Promise<void | boolean>) | null>;
 } = {}) {
   const { pushToast } = useStore(useShallow((s) => ({ pushToast: s.pushToast })));
   const [tools, setTools] = useState<AgentToolStatus[] | null>(null);

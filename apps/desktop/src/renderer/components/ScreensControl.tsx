@@ -12,8 +12,8 @@ export function MultiMonitorIcon({ className }: { className?: string }) {
 }
 
 export const PLACEMENT_OPTIONS: Array<{ key: DisplayPlacement; label: string; hint: string }> = [
-  { key: 'empty-first', label: 'Prioritize empty windows', hint: 'New agent windows open on an empty screen first, then wherever has the fewest.' },
-  { key: 'main-first', label: 'Prioritize the main window', hint: 'New agent windows open on the main screen; the others keep what you open there.' },
+  { key: 'empty-first', label: 'Spread across screens', hint: 'Use an empty screen first, then the one with the fewest agents.' },
+  { key: 'main-first', label: 'Prefer main screen', hint: 'Start on the main screen. Other screens keep their agents.' },
 ];
 
 export const SPACES_OPTIONS: Array<{ key: Exclude<SpacesMode, 'ask'>; label: string; hint: string }> = [
@@ -178,11 +178,16 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
       {/* One screen with desktops: a lone Main tile says nothing, so only the desktops show. */}
       {(state.displays.length > 1 || !spaces) && <>
         <p className="screens-picker__title">Screens</p>
-        <div className="screens-row" role="group" aria-label="Screens to use">
+        {embedded && state.displays.length === 1 ? <div className="screens-single" role="group" aria-label="Screens to use">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="13" rx="2" /><path d="M12 16v5m-4 0h8" /></svg>
+          <span><strong>Screen {mainDisplay.label}</strong><span>Main screen · always on</span></span>
+          <span className="screens-single__status">Connected</span>
+        </div> : <div className="screens-row" role="group" aria-label="Screens to use">
           {state.displays.map((d) => <ScreenTile key={d.id} display={d} scale={scale} busy={busy} onToggle={() => onToggle(d)} />)}
-        </div>
+        </div>}
+        {state.displays.length > 1 && <p className="screens-picker__note">Select a screen to open or close its Nekko window.</p>}
       </>}
-      {state.displays.length < 2 && !spaces && <p className="screens-picker__note">Connect another screen to spread agents across it.</p>}
+      {state.displays.length < 2 && !spaces && <p className="screens-picker__note">Connect another display to use agents on both screens.</p>}
       {spaces && <>
         <p className={`screens-picker__title ${state.displays.length > 1 ? 'screens-picker__title--sub' : ''}`}>Desktops</p>
         <div className="screens-row" role="group" aria-label="Desktops to use">
@@ -200,7 +205,8 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
         {spaces.mode === 'switch' && !spaces.access && <p className="screens-picker__note">Accessibility is off for Nekko in System Settings, so desktop windows open when you get there.</p>}
       </>}
       <hr className="screens-picker__divider" />
-      <p className="screens-picker__title">New agent placement</p>
+      <p className="screens-picker__title">Open new agents</p>
+      {embedded && state.displays.length < 2 && !spaces && <p className="screens-picker__note screens-placement-note">For when you connect more screens.</p>}
       <div role="radiogroup" aria-label="Where new agent windows open" className="screens-options">
         {PLACEMENT_OPTIONS.map((o) => <label key={o.key} className="screens-option">
           <input type="radio" name="screens-placement" checked={state.placement === o.key} onChange={() => onPlacement(o.key)} />

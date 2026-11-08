@@ -51,13 +51,13 @@ export type SubagentModelSource = 'child' | 'requested' | 'inherited';
  * Which model a delegation ran on. A matched child chat is the truth. Failing
  * that the call's own `model_id`, then what an unrouted call inherits.
  */
-export function subagentModel(call: ToolCall, child: SessionSummary | undefined, children: SessionSummary[], inherited?: string): { id: string; source: SubagentModelSource } | undefined {
-  if (child?.modelId) return { id: child.modelId, source: 'child' };
+export function subagentModel(call: ToolCall, child: SessionSummary | undefined, children: SessionSummary[], inherited?: string): { id: string; source: SubagentModelSource; providerId?: string } | undefined {
+  if (child?.modelId) return { id: child.modelId, source: 'child', ...(child.providerId ? { providerId: child.providerId } : {}) };
   // Persisted rows are not matched live; a uniquely titled child is still this call's.
   const title = typeof call.input.title === 'string' && call.input.title.trim() ? call.input.title.trim() : typeof call.input.task === 'string' ? call.input.task.trim().slice(0, 40) : '';
   const named = title ? children.filter((c) => c.title === title) : [];
-  if (named.length === 1 && named[0].modelId) return { id: named[0].modelId, source: 'child' };
-  if (typeof call.input.model_id === 'string' && call.input.model_id.trim()) return { id: call.input.model_id.trim(), source: 'requested' };
+  if (named.length === 1 && named[0].modelId) return { id: named[0].modelId, source: 'child', ...(named[0].providerId ? { providerId: named[0].providerId } : {}) };
+  if (typeof call.input.model_id === 'string' && call.input.model_id.trim()) return { id: call.input.model_id.trim(), source: 'requested', ...(typeof call.input.provider_id === 'string' ? { providerId: call.input.provider_id } : {}) };
   if (!('provider_id' in call.input) && inherited) return { id: inherited, source: 'inherited' };
   return undefined;
 }
@@ -71,11 +71,12 @@ export function useSubagentModel(call: ToolCall) {
 /** The child's model, as a quiet chip beside its status. */
 export function SubagentModelChip({ call }: { call: ToolCall }) {
   const model = useSubagentModel(call);
+  const provider = useStore(s => s.providers?.find(p => p.id === model?.providerId)?.label) || model?.providerId;
   if (!model) return null;
   const why = model.source === 'child' ? 'from the child chat' : model.source === 'requested' ? 'requested by the delegation call' : 'inherited from this chat';
   return (
-    <span className="max-w-[40%] shrink-0 truncate rounded border border-line px-2 py-0.5 text-2xs font-normal text-ink-faint" title={`Model: ${model.id} (${why})`} data-subagent-model>
-      {shortModelName(model.id)}
+    <span className="max-w-[40%] shrink-0 truncate rounded border border-line px-2 py-0.5 text-2xs font-normal text-ink-faint" title={`${provider ? `Provider: ${provider} · ` : ''}Model: ${model.id} (${why})`} data-subagent-model>
+      {provider ? `${provider} · ` : ''}{shortModelName(model.id)}
     </span>
   );
 }

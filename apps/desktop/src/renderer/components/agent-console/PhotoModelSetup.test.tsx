@@ -18,7 +18,7 @@ const recs = { hardware: { device: 'NVIDIA GeForce RTX 4060', classId: null, ban
 const job = (j: Partial<DownloadJob>): DownloadJob => ({ id: 'j', kind: 'model', label: 'x', target: 'x', state: 'downloading', receivedBytes: 0, startedAt: 0, ...j });
 const onDisk = (file: string, extra: Partial<LocalModel> = {}): LocalModel => ({ id: `image/leejet_Z-Image-Turbo-GGUF/${file}`, name: 'z', path: `/models/image/leejet_Z-Image-Turbo-GGUF/${file}`, sizeBytes: 1, addedAt: 0, modality: 'image', ...extra } as LocalModel);
 const ready = (r: boolean): ImageCompanionStatus => ({ setId: 'z-image', label: 'Z-Image', files: [], ready: r, missingBytes: r ? 0 : 1, defaults: { steps: 8, cfgScale: 1 }, capabilities: ['create'] });
-const phase = (p: Partial<Parameters<typeof photoSetupPhase>[0]>) => photoSetupPhase({ jobs: [], models: [], options: task.options, companions: null, ...p });
+const phase = (p: Partial<Parameters<typeof photoSetupPhase>[0]>) => photoSetupPhase({ jobs: [], models: [], options: task.options, companions: null, runtimeReady: true, ...p });
 
 describe('where the Photo setup is', () => {
   it('offers the choice when there is no picture model', () => {
@@ -32,7 +32,7 @@ describe('where the Photo setup is', () => {
   });
 
   it('follows the engine, then the weights, then the supporting files', () => {
-    expect(phase({ jobs: [job({ kind: 'engine', id: 'e' })] })).toMatchObject({ kind: 'working', step: 'engine' });
+    expect(phase({ jobs: [job({ kind: 'engine', id: 'engine:diffusion:fixture' })] })).toMatchObject({ kind: 'working', step: 'engine' });
     expect(phase({ jobs: [job({ dest: '/m/image/x/z_image_turbo-Q4_K.gguf', group: 'g' })] })).toMatchObject({ kind: 'working', step: 'model' });
     expect(phase({ jobs: [job({ id: 'image-companions:vae', group: 'image-companions:m' })] })).toMatchObject({ kind: 'working', step: 'files' });
     // Someone else's download is not this setup's.
@@ -45,6 +45,13 @@ describe('where the Photo setup is', () => {
     expect(phase({ models: [m], companions: ready(false) })).toMatchObject({ kind: 'needsFiles', model: m, option: zImage });
     expect(phase({ models: [m], companions: ready(true) })).toMatchObject({ kind: 'finish', model: m, option: zImage });
     expect(phase({ models: [m], companions: ready(true), chatModelId: m.id }).kind).toBe('hidden');
+  });
+
+  it('does not finish without an engine or a verified companion set', () => {
+    const models = [onDisk('z_image_turbo-Q4_K.gguf')];
+    expect(phase({ models, companions: ready(true), runtimeReady: false })).toMatchObject({ kind: 'failed', message: expect.stringContaining('image engine') });
+    expect(phase({ models, companions: null })).toMatchObject({ kind: 'failed', message: expect.stringContaining('supporting files') });
+    expect(phase({ jobs: [job({ kind: 'engine', id: 'engine:llama:other' })] }).kind).toBe('choose');
   });
 
   it('says when a download stopped', () => {
@@ -103,7 +110,7 @@ describe('the Photo setup screen', () => {
   it('shows the download as steps with progress and a way to cancel', () => {
     const p = photoSetupPhase({
       jobs: [job({ dest: '/m/z_image_turbo-Q4_K.gguf', group: 'g', groupLabel: 'Z-Image Turbo · Q4_K', receivedBytes: 1e9, totalBytes: 4e9 })],
-      models: [], options: task.options, companions: null,
+      models: [], options: task.options, companions: null, runtimeReady: true,
     });
     const html = render(p, true);
     expect(html).toContain('Setting up a picture model');

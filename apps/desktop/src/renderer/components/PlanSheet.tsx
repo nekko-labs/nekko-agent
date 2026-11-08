@@ -1,3 +1,4 @@
+import { SubagentRoute } from './SubagentRoute.js';
 import React, { useMemo, useState } from 'react';
 import type { ChatMessage, IssueInfo, PlanStep, PrInfo, Session, SessionSummary } from '@nekko-agent/shared';
 import { lastReplyInterrupted, parsePrUrl, planProgress } from '@nekko-agent/shared';
@@ -204,6 +205,7 @@ function SubagentCards({ children, running, onOpen }: { children: SessionSummary
           <StatusIcon status={status} />
           <span className="min-w-0 flex-1 truncate text-ink" dir="auto">{title}</span>
         </span>
+        <SubagentRoute child={child} />
         <span className="plan-sheet-agent-detail truncate" dir="auto">{CARD_STATUS[status]}{detail ? ` · ${detail}` : ''}</span>
       </button>;
     })}

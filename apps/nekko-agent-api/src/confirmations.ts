@@ -5,6 +5,17 @@ import { emailHash, isSuppressed } from "./retention.js";
 export const CONFIRM_FROM = "Nekko Agent <hello@mail.nekkoagent.com>";
 export const CONFIRM_REPLY_TO = "hello@nekkoagent.com";
 export const CONFIRM_SUBJECT = "Confirm you want to join the Nekko Agent beta";
+
+/** What the confirmation says per list: the website's beta form, or the app's setup wizard. */
+const COPY: Record<string, { subject: string; line: string; button: string }> = {
+  beta: { subject: CONFIRM_SUBJECT, line: "Thanks for signing up for the Nekko Agent beta.", button: "Confirm I want to join" },
+  app: {
+    subject: "Confirm your email for Nekko Agent updates",
+    line: "Thanks for asking for Nekko Agent updates: at most one email a month about new features and important fixes.",
+    button: "Confirm my email",
+  },
+};
+const copyFor = (list: string) => COPY[list] ?? COPY.beta;
 const LINK_DAYS = 7;
 
 export interface Email {
@@ -65,7 +76,7 @@ export async function sendConfirmation(
   // sends nothing rather than risk it.
   const target = await db.query<{ email: string }>("select email from signups where id = $1", [signupId]);
   if (!target.rows[0] || (await isSuppressed(db, target.rows[0].email))) return false;
-  const { rows } = await db.query<{ email: string; name: string | null; unsubscribe_token: string; prev: string | null }>(
+  const { rows } = await db.query<{ email: string; name: string | null; list: string; unsubscribe_token: string; prev: string | null }>(
     `update signups s set
        confirm_token_hash = $2,
        confirm_expires_at = now() + make_interval(days => ${LINK_DAYS}),
@@ -73,7 +84,7 @@ export async function sendConfirmation(
      from (select confirmation_sent_at as prev from signups where id = $1) old
      where s.id = $1 and s.status = 'pending'
        and (s.confirmation_sent_at is null or s.confirmation_sent_at < now() - interval '1 day')
-     returning s.email, s.name, s.unsubscribe_token, old.prev`,
+     returning s.email, s.name, s.list, s.unsubscribe_token, old.prev`,
     [signupId, hashToken(token)],
   );
   const row = rows[0];
@@ -82,7 +93,8 @@ export async function sendConfirmation(
   const confirm = `${base}/v1/signups/confirm?token=${token}`;
   const unsubscribe = `${base}/v1/signups/unsubscribe?token=${row.unsubscribe_token}`;
   try {
-    await mailer({ to: row.email, subject: CONFIRM_SUBJECT, ...confirmationBody(row.name, confirm, unsubscribe), headers: unsubscribeHeaders(unsubscribe) });
+    const copy = copyFor(row.list);
+    await mailer({ to: row.email, subject: copy.subject, ...confirmationBody(row.name, copy, confirm, unsubscribe), headers: unsubscribeHeaders(unsubscribe) });
     return true;
   } catch (e) {
     await db.query(
@@ -98,11 +110,11 @@ export function unsubscribeHeaders(url: string): Record<string, string> {
   return { "List-Unsubscribe": `<${url}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" };
 }
 
-function confirmationBody(name: string | null, confirm: string, unsubscribe: string) {
+function confirmationBody(name: string | null, copy: { line: string; button: string }, confirm: string, unsubscribe: string) {
   const hi = name ? `Hi ${name},` : "Hi,";
   const text = `${hi}
 
-Thanks for signing up for the Nekko Agent beta. Please confirm it was you:
+${copy.line} Please confirm it was you:
 
 ${confirm}
 
@@ -115,8 +127,8 @@ Nekko Labs LLC · hello@nekkoagent.com`;
 <div style="max-width:520px;margin:0 auto;padding:32px 24px">
 <p style="font-size:20px;font-weight:700;color:#5a2352;margin:0 0 24px">Nekko Agent</p>
 <p>${escape(hi)}</p>
-<p>Thanks for signing up for the Nekko Agent beta. Please confirm it was you:</p>
-<p style="margin:28px 0"><a href="${escape(confirm)}" style="background:linear-gradient(115deg,#190019,#3a1438);color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;display:inline-block">Confirm I want to join</a></p>
+<p>${escape(copy.line)} Please confirm it was you:</p>
+<p style="margin:28px 0"><a href="${escape(confirm)}" style="background:linear-gradient(115deg,#190019,#3a1438);color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:999px;display:inline-block">${escape(copy.button)}</a></p>
 <p style="color:#52525e;font-size:14px">The link works once and expires in ${LINK_DAYS} days. If you didn't sign up, ignore this email and we won't write again.</p>
 <p style="color:#52525e;font-size:12px;margin-top:32px">Nekko Labs LLC · <a href="mailto:hello@nekkoagent.com" style="color:#52525e">hello@nekkoagent.com</a> · <a href="${escape(unsubscribe)}" style="color:#52525e">Unsubscribe</a></p>
 </div></body></html>`;

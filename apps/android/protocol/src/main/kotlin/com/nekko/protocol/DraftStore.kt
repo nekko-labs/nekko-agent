@@ -28,9 +28,9 @@ interface OfflineFiles {
 
 /**
  * The active computer's drafts: one per chat, plus New chat's under [NEW_CHAT].
- * Saved shortly after each edit (and at once when one is cleared or the app
- * leaves the screen), so a draft survives leaving the chat and Android ending
- * the app. A draft is cleared only once its prompt is sent or in the outbox,
+ * Saved shortly after each edit (and at once when a photo is added or removed,
+ * a draft is cleared or the app leaves the screen), so a draft survives leaving
+ * the chat and Android ending the app. A draft is cleared only once its prompt is sent or in the outbox,
  * which is saved first. The iPhone's `DraftStore`, same file shape.
  */
 class DraftStore(
@@ -61,13 +61,18 @@ class DraftStore(
 
     fun draft(key: String): Draft = _drafts.value[key] ?: Draft()
 
-    /** Keep what the composer holds now; saved after a short pause in typing. */
+    /**
+     * Keep what the composer holds now; saved after a short pause in typing.
+     * Adding or removing a photo is a single edit, so it is written at once:
+     * Android ending the app during the typing pause must not lose it (#2043).
+     */
     @Synchronized
     fun set(key: String, draft: Draft) {
         val next = draft.takeUnless { it.isEmpty }
-        if (_drafts.value[key] == next) return
+        val before = _drafts.value[key]
+        if (before == next) return
         _drafts.value = if (next == null) _drafts.value - key else _drafts.value + (key to next)
-        scheduleSave()
+        if (before?.images.orEmpty() != next?.images.orEmpty()) flush() else scheduleSave()
     }
 
     /** The prompt was sent (or is in the outbox now), or the user cleared it. */

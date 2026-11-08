@@ -77,7 +77,7 @@ public enum Transcript {
                 guard let r = m.toolResult, let i = toolIndex[r.toolCallId],
                       case .tool(let id, let name, let label, _, _, let input) = out[i] else { continue }
                 out[i] = .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok,
-                               output: clip(r.output, full: r.outputChars, images: r.omittedImages), input: input)
+                               output: QuestionReplies.body(name: name, output: r.output) != nil ? r.output : clip(r.output, full: r.outputChars, images: r.omittedImages), input: input)
             default:
                 continue
             }
@@ -104,7 +104,7 @@ public enum Transcript {
             if t.approval?.call.id == r.toolCallId { t.approval = nil }
             t.blocks = t.blocks.map { b in
                 if case .tool(let id, let name, let label, _, _, let input) = b, id == r.toolCallId {
-                    return .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok, output: clip(r.output), input: input)
+                    return .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok, output: QuestionReplies.body(name: name, output: r.output) != nil ? r.output : clip(r.output), input: input)
                 }
                 return b
             }
