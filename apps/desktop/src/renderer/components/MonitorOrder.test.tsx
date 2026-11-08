@@ -7,21 +7,21 @@ import { DEFAULT_WALL_STATE, sanitizeMonitorsDock } from '../commandWall.js';
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
 vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>()), useShown: () => true }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => ({ byToken: {}, answered: new Set() }) }));
-vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useWatchedComputer: () => null, useMonitors: () => ({}), useResourceSample: () => ({ system: null, gpu: null }) }));
 import { MonitorsDock } from './MonitorsDock.js';
 
 function render(side: string) {
-  const dock = sanitizeMonitorsDock({ side, monitorOrder: ['budget', 'hardware', 'insights'], panels: { automations: false, utilization: false, insights: true }, minimized: { budget: true } });
-  return renderToStaticMarkup(<MonitorsDock state={{ ...DEFAULT_WALL_STATE, dock }} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+  const dock = sanitizeMonitorsDock({ side, monitorOrder: ['budget', 'hardware', 'automations'], panels: { automations: true, utilization: false }, minimized: { budget: true } });
+  return renderToStaticMarkup(<MonitorsDock state={{ ...DEFAULT_WALL_STATE, dock }} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
 }
 
 describe('dock reorder headers', () => {
   it.each(['left', 'right'])('renders saved order and accessible draggable headers on the %s', side => {
     const html = render(side);
     expect(html.indexOf('aria-label="Hardware monitor"')).toBeGreaterThan(-1);
-    expect(html.indexOf('aria-label="Hardware monitor"')).toBeLessThan(html.indexOf('aria-label="Insights monitor"'));
+    expect(html.indexOf('aria-label="Hardware monitor"')).toBeLessThan(html.indexOf('aria-label="Automations monitor"'));
+    expect(html).not.toContain('aria-label="Insights monitor"');
     expect(html).not.toContain('aria-label="Vitals monitor"');
     expect(html).toContain('draggable="true" tabindex="0"');
     expect(html).toContain('Hardware monitor header; use Alt+ArrowUp or Alt+ArrowDown to reorder');

@@ -185,7 +185,7 @@ The Agents toolbar provides direct **New agent**, **New image session** and **Ne
 
 Each repository heading in the Agent panel also has a **plus** button for a new agent chat and a **terminal** button for a new shell in that repository. These actions use the repository you clicked, not another selected or default folder. In Focused view, the new window becomes visible; other layout modes stay unchanged. On narrow screens, the agent list closes after successful creation so it does not cover the result. If a wall filter would hide the window, it switches to All. The controls wait for creation to finish before accepting another click for the same repository, and failures show an error you can act on and retry.
 
-Utilization lists each enabled cloud provider on its own row. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Spend, tokens, top agent, local tokens, savings and compared model membership all follow that UTC range, not lifetime totals. See [usage limits and prices](/docs/usage-limits).
+Utilization lists each enabled cloud provider on its own row, with its logo. In Budget, choose today, 1wk, 1m, 6m, 1y or all-time; the active range is tinted. Budget splits **Actual spend** (metered API and cloud usage only) from **Theoretical spend** (what local models and subscriptions saved at API prices). Both, plus tokens, the top paid agent, local tokens and compared model membership, follow that UTC range, not lifetime totals. See [usage limits and prices](/docs/usage-limits).
 
 These 2026-10-13 changes are implemented and unit/fixture interaction tested. Matching captures exist, but image/motion inspection remains pending; earlier walkthrough pictures are not visual proof of this batch.
 
