@@ -114,32 +114,47 @@ impl ImageTurns {
                 p.insert(k.into(), v.clone());
             }
         }
+        // A video model makes a clip at its own size (the chat's shape at about 832x480).
+        let model_id = started.request.get("modelId").map(nekko_js::display).unwrap_or_default();
+        let video = server.makes_video(&model_id).await;
+        if video {
+            let num = |k: &str| params.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+            let (w, h) = nekko_engine::launch::clip_size(num("width"), num("height"));
+            if let Some(p) = params.as_object_mut() {
+                p.insert("width".into(), json!(w));
+                p.insert("height".into(), json!(h));
+            }
+        }
         let size = v::image_size(&params);
+        let label =
+            |stage: &str| if video { v::clip_stage_label(stage, &size) } else { v::image_stage_label(stage, &size) };
         say(
-            json!({ "type": "image_status", "sessionId": session_id, "stage": "generating", "label": v::image_stage_label("generating", &size) }),
+            json!({ "type": "image_status", "sessionId": session_id, "stage": "generating", "label": label("generating") }),
         );
         let clock = std::time::Instant::now();
         let generated = {
             let mut on_stage = |stage: &str| {
-                say(
-                    json!({ "type": "image_status", "sessionId": session_id, "stage": stage, "label": v::image_stage_label(stage, &size) }),
-                );
+                let kind = if stage.starts_with("step:") { "generating" } else { stage };
+                say(json!({ "type": "image_status", "sessionId": session_id, "stage": kind, "label": label(stage) }));
             };
-            tokio::select! {
-                r = server.generate_image_with(&started.request, &mut on_stage) => Some(r),
-                _ = cancel.cancelled() => None,
+            if video {
+                tokio::select! {
+                    r = server.generate_video_with(&started.request, &mut on_stage) => Some(r),
+                    _ = cancel.cancelled() => None,
+                }
+            } else {
+                tokio::select! {
+                    r = server.generate_image_with(&started.request, &mut on_stage) => Some(r),
+                    _ = cancel.cancelled() => None,
+                }
             }
         };
         let stopped = generated.is_none() || cancel.is_cancelled();
         let (reply, ending) = match generated {
             Some(Ok(result)) if !stopped => {
-                let reply = v::image_reply(
-                    &result,
-                    &params,
-                    &started.seed,
-                    clock.elapsed().as_millis() as u64,
-                    nekko_js::now_ms(),
-                );
+                let make = if video { v::video_reply } else { v::image_reply };
+                let reply =
+                    make(&result, &params, &started.seed, clock.elapsed().as_millis() as u64, nekko_js::now_ms());
                 let id = reply["id"].clone();
                 (reply, json!({ "type": "done", "sessionId": session_id, "messageId": id }))
             }

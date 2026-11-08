@@ -1,6 +1,6 @@
 {
  "format": 1,
- "version": "2026-11-08.1",
+ "version": "2026-11-08.2",
  "tasks": [
   {
    "id": "chat",
@@ -1097,6 +1097,16 @@
     "qwen-image-edit-2511",
     "flux2-klein-4b"
    ]
+  },
+  {
+   "id": "videoCreate",
+   "label": "Create video clips",
+   "capability": "video",
+   "computeAllowanceBytes": 4294967296,
+   "gpuOnly": true,
+   "candidates": [
+    "wan2.2-ti2v-5b"
+   ]
   }
  ],
  "imageModels": [
@@ -1215,6 +1225,45 @@
      "repo": "unsloth/Qwen3-4B-GGUF",
      "file": "Qwen3-4B-Q4_K_M.gguf",
      "sizeBytes": 2497281312
+    }
+   ]
+  },
+  {
+   "id": "wan2.2-ti2v-5b",
+   "repo": "QuantStack/Wan2.2-TI2V-5B-GGUF",
+   "name": "Wan 2.2 TI2V 5B",
+   "owner": "Wan-AI",
+   "license": "Apache-2.0",
+   "capabilities": [
+    "video"
+   ],
+   "companionSet": "wan2.2-ti2v-5b",
+   "quants": [
+    {
+     "label": "Q8_0",
+     "files": [
+      "Wan2.2-TI2V-5B-Q8_0.gguf"
+     ],
+     "sizeBytes": 5400179040
+    },
+    {
+     "label": "Q4_K_M",
+     "files": [
+      "Wan2.2-TI2V-5B-Q4_K_M.gguf"
+     ],
+     "sizeBytes": 3433116000
+    }
+   ],
+   "companions": [
+    {
+     "repo": "Comfy-Org/Wan-2.2",
+     "file": "split_files/vae/wan2.2_vae.safetensors",
+     "sizeBytes": 1409400960
+    },
+    {
+     "repo": "city96/umt5-xxl-encoder-gguf",
+     "file": "umt5-xxl-encoder-Q8_0.gguf",
+     "sizeBytes": 6043068256
     }
    ]
   },

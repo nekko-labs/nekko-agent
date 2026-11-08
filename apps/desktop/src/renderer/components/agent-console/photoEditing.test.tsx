@@ -96,3 +96,16 @@ describe('Edit on a generated picture', () => {
     expect(renderToStaticMarkup(<MessageBubble message={sent} chronological onEditImage={vi.fn()} />)).not.toContain('data-edit-image');
   });
 });
+
+describe('a clip from a video model', () => {
+  const clip = {
+    id: 'c', role: 'assistant' as const, content: '', createdAt: 1, images: ['data:image/webp;base64,UklGR'],
+    generated: { modelId: 'image/QuantStack_Wan2.2-TI2V-5B-GGUF/Wan2.2-TI2V-5B-Q4_K_M', width: 832, height: 480, steps: 20, cfgScale: 6, seed: 5, ms: 61000, video: { frames: 33, fps: 16 } },
+  };
+  it('plays as an animated picture, says how long it is, and offers no Edit', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={clip} chronological onEditImage={vi.fn()} />);
+    expect(html).toContain('Generated clip, 832×480');
+    expect(html).toContain('33 frames at 16 fps (2.1 s clip)');
+    expect(html).not.toContain('data-edit-image');
+  });
+});

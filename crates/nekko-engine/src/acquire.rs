@@ -263,6 +263,16 @@ pub fn image_companion_sets() -> &'static Vec<Value> {
                 "launchArgs": qwen_args,
             }),
             json!({
+                // Text or a first frame to a short clip; sd.cpp docs/wan.md (TI2V 5B has its own VAE).
+                "id": "wan2.2-ti2v-5b", "label": "Wan 2.2 TI2V 5B", "defaults": { "steps": 20, "cfgScale": 6 },
+                "files": [
+                    { "role": "vae", "repo": "Comfy-Org/Wan-2.2", "file": "split_files/vae/wan2.2_vae.safetensors", "saveAs": "vae-wan2.2.safetensors", "bytes": 1_409_400_960u64 },
+                    { "role": "t5xxl", "repo": "city96/umt5-xxl-encoder-gguf", "file": "umt5-xxl-encoder-Q8_0.gguf", "saveAs": "t5xxl-umt5-xxl-q8_0.gguf", "bytes": 6_043_068_256u64 },
+                ],
+                "capabilities": ["video"],
+                "launchArgs": ["--flow-shift", "3", "--sampling-method", "euler"],
+            }),
+            json!({
                 "id": "qwen-image", "label": "Qwen Image", "defaults": { "steps": 20, "cfgScale": 2.5 },
                 "files": [qwen_vae, qwen_llm],
                 "capabilities": ["create"],
@@ -308,6 +318,11 @@ pub fn image_companion_set_for(model: &Value) -> Option<Value> {
     );
     let text = nekko_js::slice16(&joined, 1024).to_lowercase();
     let by_id = |id: &str| image_companion_sets().iter().find(|s| s["id"] == id).cloned();
+    // Wan 2.2 TI2V 5B only: the other Wan models need the 2.1 VAE (and some a CLIP vision encoder).
+    static WAN_TI2V: OnceLock<Regex> = OnceLock::new();
+    if test(WAN_TI2V.get_or_init(|| re(r"wan[-_ .]?2[._]?2.*ti2v.*5b", "")), &text) {
+        return by_id("wan2.2-ti2v-5b");
+    }
     static QWEN: OnceLock<Regex> = OnceLock::new();
     if test(QWEN.get_or_init(|| re(r"qwen[-_ ]?image", "")), &text) {
         static EDIT: OnceLock<Regex> = OnceLock::new();

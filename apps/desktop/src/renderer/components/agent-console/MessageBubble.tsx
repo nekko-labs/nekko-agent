@@ -247,7 +247,7 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu, 
         <img
           key={`${message.id}-${i}`}
           src={image}
-          alt={g ? `Generated image, ${g.width}×${g.height}` : 'Generated image'}
+          alt={g ? `Generated ${g.video ? 'clip' : 'image'}, ${g.width}×${g.height}` : 'Generated image'}
           className="h-auto w-full max-w-[512px] cursor-pointer rounded-xl border border-line"
           style={g ? { aspectRatio: `${g.width} / ${g.height}` } : undefined}
           onClick={() => onImageClick?.(image)}
@@ -255,7 +255,7 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu, 
           title="Click to preview · right-click to copy or save"
         />
       ))}
-      {onEditImage && g && message.images!.map((image, i) => (
+      {onEditImage && g && !g.video && message.images!.map((image, i) => (
         <button key={`edit-${message.id}-${i}`} type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => onEditImage(image)} data-edit-image
           title="Attach this picture to the composer, then describe what to change">
           Edit{message.images!.length > 1 ? ` picture ${i + 1}` : ''}
@@ -263,7 +263,7 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu, 
       ))}
       {g && (
         <p className="text-2xs text-ink-faint">
-          {model} · {g.width}×{g.height} · {g.steps} steps · CFG {g.cfgScale} · seed {g.seed} · {(g.ms / 1000).toFixed(1)}s
+          {model} · {g.width}×{g.height}{g.video ? ` · ${g.video.frames} frames at ${g.video.fps} fps (${(g.video.frames / g.video.fps).toFixed(1)} s clip)` : ''} · {g.steps} steps · CFG {g.cfgScale} · seed {g.seed} · {(g.ms / 1000).toFixed(1)}s
         </p>
       )}
     </div>

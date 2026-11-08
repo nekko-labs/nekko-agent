@@ -294,3 +294,21 @@ fn an_image_turn_with_pictures_edits_them_and_keeps_them_in_the_transcript() {
     assert_eq!(started.request.get("refImages"), None);
     assert_eq!(plain["messages"][0].get("images"), None);
 }
+
+#[test]
+fn a_clip_reply_carries_the_clip_and_how_it_plays() {
+    let result = json!({ "output_format": "webp", "mime_type": "image/webp", "fps": 16, "frame_count": 33, "b64_json": "UklGR" });
+    let params = json!({ "modelId": "wan", "width": 832, "height": 480, "steps": 20, "cfgScale": 6 });
+    let reply = video_reply(&result, &params, &json!(5), 61_000, 1_000);
+    assert_eq!(reply["images"], json!(["data:image/webp;base64,UklGR"]));
+    assert_eq!(reply["generated"]["video"], json!({ "frames": 33, "fps": 16 }));
+    assert_eq!((reply["generated"]["width"].clone(), reply["generated"]["ms"].clone()), (json!(832), json!(61_000)));
+    assert_eq!(reply["role"], "assistant");
+}
+
+#[test]
+fn a_clip_says_what_it_is_doing() {
+    assert_eq!(clip_stage_label("loading", "832×480"), "Loading the video model");
+    assert_eq!(clip_stage_label("generating", "832×480"), "Making a 832×480 clip");
+    assert_eq!(clip_stage_label("step:7/20", "832×480"), "Making a 832×480 clip · step 7 of 20");
+}

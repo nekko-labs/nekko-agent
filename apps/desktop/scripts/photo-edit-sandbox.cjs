@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     report.bounds = win.getBounds();
-    await settle("!!document.querySelector('img[alt^=\"Generated image\"]')");
+    await settle("!!document.querySelector('img[alt^=\"Generated\"]')");
     if (process.env.NEKKO_PHOTO_BEFORE !== '1') await settle("!!document.querySelector('[data-photo-setup=choose]')");
     await sleep(500);
     report.checks.editButtons = await run("document.querySelectorAll('[data-edit-image]').length");

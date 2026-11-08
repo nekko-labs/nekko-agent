@@ -486,6 +486,31 @@ pub fn image_reply(result: &Value, params: &Value, seed: &Value, ms: u64, now: u
     })
 }
 
+/// The reply of a clip: the encoded clip (an animated WebP plays in an image
+/// element), how it was made, and its frames and playback rate.
+pub fn video_reply(result: &Value, params: &Value, seed: &Value, ms: u64, now: u64) -> Value {
+    let mime = result.get("mime_type").and_then(Value::as_str).unwrap_or("image/webp");
+    let clip = format!("data:{mime};base64,{}", display_field(result, "b64_json"));
+    let mut reply = image_reply(&json!({ "data": [] }), params, seed, ms, now);
+    reply["images"] = json!([clip]);
+    reply["generated"]["video"] = json!({
+        "frames": result.get("frame_count").cloned().unwrap_or(Value::Null),
+        "fps": result.get("fps").cloned().unwrap_or(Value::Null),
+    });
+    reply
+}
+
+/// `clipStageLabel`: what a clip turn is doing, from the model server's stage.
+pub fn clip_stage_label(stage: &str, size: &str) -> String {
+    if stage == "loading" {
+        return "Loading the video model".into();
+    }
+    match stage.strip_prefix("step:").and_then(|s| s.split_once('/')) {
+        Some((n, total)) => format!("Making a {size} clip · step {n} of {total}"),
+        None => format!("Making a {size} clip"),
+    }
+}
+
 /// `imageFailure(stopped, message, now)`: the reply of an image turn that was stopped or failed.
 pub fn image_failure(stopped: bool, message: &str, now: u64) -> Value {
     let mut m = Map::new();

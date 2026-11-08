@@ -91,6 +91,19 @@ Follow-up to [#2170](https://github.com/nekko-labs/nekko-agent/issues/2170), rec
 
 Acceptance: focused component tests and desktop typecheck/build pass; actual isolated Electron tests cover default/Advanced views, failure and retry, missing-runtime readiness, opening Photo and 1100/744/390/320 widths in dark/light. Captured pixels still require inspection: the browser screenshot tool timed out and native screenshot inspection returned `UnknownVizError`. No claim of real downloads, inference quality, native-phone parity or physical-foldable verification is made by these fixture checks. The earlier live sd-server verification gap in #2177 remains separate.
 
+## Local video clips (experimental) `[implemented 2026-11-08 (#2177); engine-, turn- and daemon-tested against a stand-in sd-server; not yet run against a real one]`
+
+Built overnight on 2026-11-08 with decisions taken without review (Davide asked for it); each is marked **Decision** so it can be revisited.
+
+- **One video model for now: Wan 2.2 TI2V 5B** (Apache-2.0), text or a first frame to a short clip. Its set is its own VAE (Wan 2.2, 1.4 GB) and the umt5-xxl Q8_0 text encoder (6.0 GB); it starts with flow shift 3 and the euler sampler, 20 steps, CFG 6, as sd.cpp's docs/wan.md does. The other Wan models (2.1, 2.2 A14B) need the 2.1 VAE and some a CLIP vision encoder: no set, so they are listed but never recommended.
+- **Recommendations:** a third picture task, **Create video clips** (`videoCreate`, `gpuOnly`): a 4 GiB working allowance (an assumption: sd.cpp warns the Wan VAE needs a lot of memory), and never picked from system RAM, where a clip would take hours. An RTX 5090 or an M5 Max gets Q8_0; an 8 GB card or a CPU-only machine gets no pick, with the model listed as too large.
+- **Decision: clips are made in a Photo chat for now.** The Video chat type is #2149, still a draft; until it lands, choosing a video model in a Photo chat makes clips, and the Video chat will use the same turn when it does. Models > Video says so.
+- **Decision: the daemon talks to the model's own sd-server for clips,** not through the router: a clip is an async job (`POST /sdcpp/v1/vid_gen`, then `GET /sdcpp/v1/jobs/{id}` every second), and a status read names no model to route by. The model is loaded the usual way and kept busy for the whole job, so the idle timer does not unload it; a stopped turn cancels the job on the server (`/cancel`).
+- **Decision: a clip comes back as an animated WebP,** which the transcript's picture element plays with no new player: WebM needs an sd-server built with it and fails the request otherwise. It is kept on the reply like a picture, with `generated.video` (frames and fps) and the transcript line says "33 frames at 16 fps (2.1 s clip)". Clips have no **Edit** button.
+- **Decision: size and length.** The chat's shape at about 832x480 (sd.cpp's example area), in multiples of 32 from 256 to 1280, for that turn only; 33 frames at 16 fps (about 2 s) unless the request names `videoFrames` (1-121) and `fps` (1-60). There is no control for length in the UI yet.
+- **A photo attached to a video model is the clip's first frame** (`init_image`): "animate this photo". A video model is never offered as an edit model and never sent the edit offer.
+- **Progress** reads the job's preview: "Making a 832×480 clip · step 7 of 20".
+
 ## What the pinned engine can already do `[checked against the sd.cpp README and docs at 37bc88b, 2026-11-08; not run]`
 
 - **Images:** SD 1.x/2.x/XL, SD 3/3.5, FLUX.1, FLUX.2 dev/klein, Z-Image, Qwen Image and 2.1, HiDream-O1, Chroma and more.
@@ -183,7 +196,7 @@ Each is one PR (a stack where noted). Tracked in the issue linked from this file
 4. **Photo: choose a model from the chat** `[implemented, see above]`: the cards, the hand-off to the shared download job, inline progress. The introduction's **Choose your first model** step follows when #2149 lands.
 5. **Models: Image and Video filters** `[implemented, see above]`: kind filters, picture picks in Best for this machine, supporting files fetched after any picture download, offload set from the recommendation.
 6. **Photo: edit an existing photo** `[implemented, see above]`: attachments and **Edit** on a reply, reference images to sd-server, the capability check and the edit-model offer.
-7. **Video: local generation (experimental, stack):** the Wan companion set, the video turn on `/sdcpp/v1/vid_gen`, job progress and recovery, the video reply in chat, the hardware gate.
+7. **Video: local generation (experimental)** `[implemented, see above]`: the Wan 2.2 TI2V 5B set, `videoCreate` recommendations, the clip job on `/sdcpp/v1/vid_gen` with progress and cancel, the clip in chat. Still open: the Video chat (#2149), a length control, measured memory and time per clip.
 8. **Cloud image and video providers:** bring-your-own-key providers, privacy prompts under decision 0065.
 9. **Phones:** the same menu, introductions and model choice on iOS and Android, driving the computer; a gaps row in [iOS and Android stay in step](../phone/ios-and-android-stay-in-step.md) for anything that lands on desktop first.
 10. **Docs:** a "Make pictures and videos" page on the docs site.

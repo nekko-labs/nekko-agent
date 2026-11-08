@@ -1655,16 +1655,17 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         return false;
       }
       // A model with no known set cannot be asked: offer one that surely edits rather than ignore the photo.
+      // A video model takes a photo as its first frame.
       const can = setup?.capabilities ?? [];
-      if (images.length && !can.includes('edit')) {
+      if (images.length && !can.includes('edit') && !can.includes('video')) {
         setEditOffer(true);
         return false;
       }
-      if (!images.length && setup && !can.includes('create')) {
+      if (!images.length && setup && !can.includes('create') && !can.includes('video')) {
         useStore.getState().pushToast('info', 'This model only changes photos. Add a photo to edit, or pick a model that makes new pictures. Your prompt is kept here.');
         return false;
       }
-      if (images.length) size = editSize(await photoSize(images[0]), params);
+      if (images.length && !can.includes('video')) size = editSize(await photoSize(images[0]), params);
     } catch {
       useStore.getState().pushToast('error', 'Could not check image setup. Try again or open Model Server.');
       return false;
