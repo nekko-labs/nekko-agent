@@ -153,7 +153,13 @@ class ChatController(
     private val _state = MutableStateFlow(ChatState())
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
+    /** The reservation survives terminal events until the image RPC/authorization actually returns. */
+    private class ImageSend(var job: kotlinx.coroutines.Job? = null, var error: String? = null)
+    private var imageSend: ImageSend? = null
+    private var imageRevision = 0L
+
     suspend fun reload() {
+        val revision = imageRevision
         try {
             val (raw, pending) = coroutineScope {
                 val s = async { caller.call(Channels.SESSION_GET, JsonPrimitive(sessionId)) }
@@ -179,6 +185,17 @@ class ChatController(
                 }
                 return
             }
+            // Rust image turns are separate from activeRun. Only the phone-safe monitor
+            // exposes them on reopen; its capped list can prove running, never idle.
+            val imageRunning = if (session.chatType == "image") {
+                try {
+                    com.nekko.protocol.MonitorSummary.from(caller.call(Channels.MONITOR_SUMMARY)).running.any { it.id == sessionId }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    false
+                }
+            } else false
             saved?.save(session)
             val mine = pending[sessionId]
             // The computer lists these prompts: whatever the outbox still held of them was delivered.
@@ -195,7 +212,7 @@ class ChatController(
                         blocks = if (t.running) t.blocks else emptyList(),
                         approval = mine?.approval,
                         question = mine?.question,
-                        running = t.running || mine != null,
+                        running = t.running || mine != null || (imageRunning && revision == imageRevision),
                     ),
                 )
             }
@@ -337,6 +354,8 @@ class ChatController(
     /** Fold one event; returns true when the caller should [reload]. */
     fun onEvent(e: AgentEvent): Boolean {
         if (e.sessionId != sessionId) return false
+        if (e is AgentEvent.Done || e is AgentEvent.Error || (e is AgentEvent.Other && e.type == "image_status")) imageRevision++
+        if (e is AgentEvent.Error) imageSend?.error = e.message
         val voiceProblem = when (e) {
             is AgentEvent.Error -> e.message
             is AgentEvent.Question, is AgentEvent.ApprovalRequired -> "This chat needs your answer or approval. Voice stopped."
@@ -439,23 +458,40 @@ class ChatController(
         require(text.isNotBlank()) { "Describe the image to generate." }
         check(env().conn == RelayState.ONLINE) { "Reconnect to generate an image. Image prompts are never queued as text." }
         check(env().imageGeneration) { "This computer does not advertise image generation. Update Nekko Agent on the computer." }
-        check(!_state.value.turn.running && !session.running) { "Wait for this image to finish or stop it first." }
+        check(imageSend == null && !_state.value.turn.running && !session.running) { "Wait for this image to finish or stop it first." }
         val params = session.imageParams ?: com.nekko.protocol.ImageChatParams(cfgScale = 4.5)
         val request = params.generation(sessionId, text)
         val generate = generateImage ?: throw RelayException("This phone cannot authorize image generation.")
         // Await authorization and the turn so a refusal/cancel keeps the composer's words.
         // There is no image idempotency token: never retry an ambiguous lost response automatically.
+        val attempt = ImageSend()
+        imageSend = attempt
+        imageRevision++
         _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now())))) }
         try {
-            generate(request)
+            coroutineScope {
+                // Stop cancels this child, including pending Change signing, not the composer's scope.
+                // ChangeCalls checks cancellation again after the system authentication returns.
+                val pending = async(start = kotlinx.coroutines.CoroutineStart.LAZY) { generate(request) }
+                attempt.job = pending
+                pending.await()
+            }
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            // image_turns.rs reports generation failures as an error event plus Ok(null).
+            attempt.error?.let { throw RelayException(it) }
             reload()
+            attempt.error?.let { throw RelayException(it) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _state.update { it.copy(turn = it.turn.copy(running = false, error = e.message ?: "Image generation failed. Reconnect and check the chat before trying again.")) }
             throw e
         } finally {
-            _state.update { it.copy(turn = it.turn.copy(running = false)) }
+            if (imageSend === attempt) {
+                imageSend = null
+                imageRevision++
+                _state.update { it.copy(turn = it.turn.copy(running = false)) }
+            }
         }
     }
 
@@ -487,6 +523,7 @@ class ChatController(
     }
 
     fun stop() {
+        imageSend?.job?.cancel(CancellationException("Image generation stopped."))
         scope.launch {
             try {
                 caller.call(Channels.CHAT_ABORT, JsonPrimitive(sessionId))

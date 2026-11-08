@@ -60,6 +60,22 @@ class ImageChatTest {
         assertEquals("f", session.imageParams!!.modelId)
     }
 
+    @Test fun `host image status starts live turn and activity until terminal event`() {
+        for (stage in listOf("loading", "generating")) {
+            val event = AgentEvent.from(json("""{"type":"image_status","sessionId":"s","stage":"$stage","label":"Working"}"""))!!
+            val turn = Transcript.apply(LiveTurn(), event)
+            assertTrue(turn.running)
+            assertTrue(turn.blocks.isEmpty())
+            assertEquals(Activity.RUNNING, ActivityTracker.next(emptyMap(), event)["s"])
+            for (end in listOf(AgentEvent.Done("s", null), AgentEvent.Error("s", "Failed"))) {
+                assertFalse(Transcript.apply(turn, end).running)
+                assertFalse(ActivityTracker.next(mapOf("s" to Activity.RUNNING), end).containsKey("s"))
+            }
+        }
+        assertFalse(Transcript.apply(LiveTurn(), AgentEvent.Other("s", "future_event")).running)
+        assertTrue(ActivityTracker.next(emptyMap(), AgentEvent.Other("s", "future_event")).isEmpty())
+    }
+
     @Test fun `offline copy preserves image intent and fractional settings but no image data`() {
         val s = Session.from(json("""{"id":"s","chatType":"image","imageParams":{"modelId":"f","cfgScale":4.5},"messages":[{"id":"a","role":"assistant","content":"","images":["data:image/png;base64,secret"]}]}"""))!!
         val encoded = SavedTranscript(42, s).json()

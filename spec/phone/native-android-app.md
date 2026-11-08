@@ -10,6 +10,8 @@ split-from: SPEC.md (2026-10-22)
 
 **Availability** `[limited beta, 2026-10-24]`: in a limited beta. Not yet published on Google Play.
 
+**Voice and image expansion (2026-11-08, #2162/#2110)** `[implemented; 134 SDK-free JVM checks passed; native compilation, interaction/evidence and hardware verification pending]`: connected text chats now expose explicit hands-free conversation, addressed commands and hold-to-talk with live lock/connection/target checks and one audio owner across panes. New modes require API 31+ on-device recognition; older devices retain existing dictation. See [Android hands-free voice](android-hands-free-voice.md). Image chats have kind/model/parameter selection, safe model discovery, signed generation, badges and generated-image viewing through existing session photos. Offline image prompts are never converted into text outbox requests. See [image host contract](image-chats.md) and the [platform verification matrix](../../reports/voice-image-readiness.md). Whole-number CFG defaults to 4 under existing Change proof; no silent rounding, cloud upload or model-install authority.
+
 **Scope of this version `[implemented; JVM, integration and build checks verified; not yet run on an emulator or device]`:**
 
 - **Pairing:** scan the computer's pairing QR with the Google code scanner (runs inside Play services, so the app never asks for the camera permission), paste the link, or open a `nekko-agent-pair:` link from the system camera. The phone enrolls with the one-time code, which it forgets as soon as the computer welcomes it. Several computers can be paired; one is active at a time and, since 2026-11-05, every other one stays connected beside it (below); rename, switch and forget are on the Computers screen.

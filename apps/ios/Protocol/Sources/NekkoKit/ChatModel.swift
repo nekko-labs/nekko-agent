@@ -137,6 +137,8 @@ public final class ChatModel {
     private(set) var reloadTask: Task<Void, Never>?
     /// The `chat:send` of the last prompt, which resolves when its turn ends (tests await it).
     private(set) var sendTask: Task<Void, Never>?
+    /// Includes image discovery and Change authorization, so Stop also fences a late dispatch.
+    private var imageSendTask: Task<String, Error>?
     /// Events and answers so far, so a re-read can tell whether the cards changed while it waited.
     private var cardChanges = 0
     private var agentStateTask: Task<Void, Never>?
@@ -254,6 +256,17 @@ public final class ChatModel {
             if !carried.isEmpty { shownIds.merge(carried) { a, _ in a } }
             if let outgoingPhotos, session.messages.contains(where: { (shownIds[$0.id] ?? $0.id) == outgoingPhotos.id }) {
                 self.outgoingPhotos = nil
+            }
+            // Rust image turns have no session.activeRun. The phone's authorized
+            // monitor view projects chat:running; the raw channel is computer-only.
+            // It is capped, so absence cannot prove this chat is idle.
+            if isImageChat, !sending {
+                let readVersion = cardChanges
+                if let raw = try? await r.call(Channels.monitorSummary), let summary = MonitorSummary.from(raw),
+                   summary.running.contains(where: { $0.id == sessionId }),
+                   cardChanges == readVersion, !sending, (try? store.remote()) === r {
+                    turn.running = true
+                }
             }
             await refreshAgentState()
             _ = await (skillsRead, contextRead)
@@ -472,20 +485,34 @@ public final class ChatModel {
             throw RelayError("Choose valid Image settings first. Existing Change proofs require a whole-number CFG; fractional settings are never rounded silently.")
         }
         let r = try store.remote()
-        let models = try await store.loadImageModels()
-        guard models.contains(where: { $0.id == params.modelId }) else { throw RelayError("This image model is unavailable. Choose a local image model.") }
-        guard try store.remote() === r else { throw RelayError("The selected computer changed. Your prompt has not been sent.") }
+        // Reserve before discovery's first await: a second send must not pass the same guard.
         sending = true
         turn = LiveTurn(running: true, blocks: [], startedAt: now())
-        defer { sending = false; turn.running = false }
-        do {
-            _ = try await store.call(change: Channels.chatGenerateImage, [params.generation(sessionId: sessionId, prompt: text)], timeout: turnTimeout)
-            await reload()
-            store.reloadList()
-            return "image-\(now())"
-        } catch {
-            await reload()
-            throw store.readable(error)
+        let task = Task { @MainActor in
+            do {
+                let models = try await store.loadImageModels()
+                try Task.checkCancellation()
+                guard models.contains(where: { $0.id == params.modelId }) else { throw RelayError("This image model is unavailable. Choose a local image model.") }
+                guard try store.remote() === r else { throw RelayError("The selected computer changed. Your prompt has not been sent.") }
+                _ = try await store.call(change: Channels.chatGenerateImage, [params.generation(sessionId: sessionId, prompt: text)], timeout: turnTimeout)
+                try Task.checkCancellation()
+                await reload()
+                // Rust image turns can emit an error and still resolve the RPC with null.
+                // Returning success here would make the composer discard the failed prompt.
+                if let error = turn.error { throw RelayError(error, fromComputer: true) }
+                store.reloadList()
+                return "image-\(now())"
+            } catch {
+                await reload()
+                throw store.readable(error)
+            }
+        }
+        imageSendTask = task
+        defer { imageSendTask = nil; sending = false; turn.running = false }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
         }
     }
 
@@ -509,6 +536,7 @@ public final class ChatModel {
     }
 
     public func abort() {
+        imageSendTask?.cancel()
         guard let r = try? store.remote() else { return }
         let id = sessionId
         Task { _ = try? await r.call(Channels.chatAbort, [.string(id)]) }

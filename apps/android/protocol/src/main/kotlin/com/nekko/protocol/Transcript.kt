@@ -125,7 +125,8 @@ object Transcript {
             // A user stop arrives as an error; it isn't one from the user's side.
             error = if (Regex("^(stopped|aborted)$", RegexOption.IGNORE_CASE).matches(e.message)) null else e.message,
         )
-        is AgentEvent.SessionMeta, is AgentEvent.Other -> turn
+        is AgentEvent.Other -> if (e.type == "image_status") turn.copy(running = true) else turn
+        is AgentEvent.SessionMeta -> turn
     }
 
     private fun appendStream(turn: LiveTurn, change: (Block.Assistant) -> Block.Assistant): LiveTurn {
@@ -229,6 +230,7 @@ object ActivityTracker {
             is AgentEvent.Text, is AgentEvent.Reasoning, is AgentEvent.ToolCallStarted,
             is AgentEvent.ToolResultReady, is AgentEvent.QuestionResolved -> Activity.RUNNING
             is AgentEvent.Done, is AgentEvent.Error -> null
+            is AgentEvent.Other -> if (e.type == "image_status") Activity.RUNNING else return activity
             else -> return activity
         }
         if (next == cur) return activity

@@ -132,6 +132,8 @@ public enum Transcript {
             // A user stop arrives as an error; it isn't one from the user's side.
             let m = message.lowercased()
             t.error = (m == "stopped" || m == "aborted") ? nil : message
+        case .other(_, "image_status"):
+            t.running = true
         case .sessionMeta, .other:
             break
         }
@@ -310,7 +312,7 @@ public enum ActivityTracker {
         let next: Activity?
         switch e {
         case .approvalRequired, .question: next = .needsYou
-        case .text, .reasoning, .toolCall, .toolResult, .questionResolved: next = .running
+        case .text, .reasoning, .toolCall, .toolResult, .questionResolved, .other(_, "image_status"): next = .running
         case .error: next = .failed
         case .done: next = activity[e.sessionId] == .failed ? .failed : nil
         default: return activity

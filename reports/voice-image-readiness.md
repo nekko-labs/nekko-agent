@@ -1,57 +1,61 @@
-# Voice and phone image-chat readiness
+# Voice and image-chat readiness
 
-Tracking: [#2162](https://github.com/nekko-labs/nekko-agent/issues/2162). Scope confirmed: both voice across platforms and the four quoted phone image-chat gaps. This is a source audit and implementation checkpoint, **not an all-platform functional certification**.
+Tracking: [#2162](https://github.com/nekko-labs/nekko-agent/issues/2162). Updated 2026-11-08. **Implementation and verification checkpoint, not all-platform functional certification. Keep the umbrella open.**
 
-## Findings and implementation
+## Delivery
 
-| Surface | Finding | Status in this change |
-| --- | --- | --- |
-| Desktop / Local Web UI voice | Pending transcription could execute a command after abort; lock during microphone startup also needs to invalidate the startup | Generation-fenced transcripts, commands, pending actions and startup; normal stop still flushes its tail |
-| Shared browser capture | Audio-node setup failure could leave the acquired microphone track alive | Cleanup covers partial initialization and tolerates individual cleanup failures |
-| Settings microphone test | Late startup after unmount or a second click could retain a live capture | Generation-owned startup and teardown, including voice-off |
-| Android dictation | Repeated tap during host-status lookup could start overlapping jobs; cancelled jobs could update a newer run | Synchronous job reservation, coroutine cancellation and generation checks around suspended work and callbacks |
-| Android privacy lifecycle | LockGate keeps the chat composed, so disposal was not enough to stop dictation | Cancel on ON_STOP, app lock and disposal; discard stale permission callbacks |
-| iOS host transcription | 60-second deadline and blind retry conflicted with host single-flight inference | 300-second deadline; one request, propagate cancellation, retain offline-only fallback |
-| Android host transcription | 150-second deadline left no transport margin after cold start + inference | 300 seconds, matching iOS |
+- Desktop/browser voice safety [#2188](https://github.com/nekko-labs/nekko-agent/pull/2188) merged as `4cc3b1317`. Abort/lock/voice-off fence stale transcription and commands; partial capture initialization and Settings microphone ownership clean up correctly. Ordinary Stop flushes its tail. Already invoked actions cannot be undone.
+- Native dictation safety [#2190](https://github.com/nekko-labs/nekko-agent/pull/2190): synchronous Android startup ownership, stale/cancelled callback fencing, lock/background cancellation; both phones allow one 300-second host request. iOS does not silently change recognizers after an online host failure. Pending landing and full native checks.
+- Approved image host boundary [#2211](https://github.com/nekko-labs/nekko-agent/pull/2211): image-only safe model listing, support capability, exact bounded payloads, signed Change proof, existing image session/model preflight and transcript-scoped generated-photo retrieval. No installation/removal, arbitrary file/image access or new cloud-upload authority. See [image-chats](../spec/phone/image-chats.md).
+- Native feature layer [#2212](https://github.com/nekko-labs/nekko-agent/pull/2212): Android hands-free, hold-to-talk and addressed commands; Android/iOS image kind/model/parameter selection, signed generation, badges, attachment-only replies and photo viewing. Offline image requests never enter the text outbox. See [Android voice](../spec/phone/android-hands-free-voice.md).
 
-The host allows up to 105 seconds to start Whisper (150 health checks, each allowing 500 ms plus 200 ms sleep) and 120 seconds for inference (`crates/nekkod/src/voice.rs`). A client deadline does not cancel host computation; no fix here claims otherwise. An action already invoked before an abort cannot be undone.
+The host Whisper cold-start budget is up to 105 seconds plus 120 seconds inference. Client cancellation stops local waiting; it does not claim to cancel host computation.
 
-## Remaining feature gaps
+## Platform matrix — what has actually been checked
 
-### Android voice parity
+| Platform/surface | Implemented | Verified evidence | Not yet established |
+|---|---|---|---|
+| Windows desktop | Existing image chats; hardened dictation/commands | 248 renderer tests, TypeScript check, merged safety CI | Real microphone, speakers, device routing, lock; real GPU image inference in this task |
+| macOS desktop | Shared desktop changes | Shared code tests only | Native build/runtime and physical audio on this platform |
+| Linux desktop | Shared desktop changes | Shared code tests only | Native audio/runtime/permissions and physical audio |
+| Secure-context Local Web UI | Shared browser capture/command safety; existing image UI | Shared capture/action tests | Browser microphone permission/device matrix; real host image generation |
+| iOS | Existing conversation voice; safer host dictation; new image flows | 66 focused XCTest + 3 Swift Testing using disposable Linux compatibility shims; baseline simulator VoiceTests passed in safety CI | Final Xcode/SwiftUI build, new UI evidence, paired-host generation, physical microphone/TTS/Bluetooth/interruptions |
+| Android | Legacy dictation plus new conversation/commands/hold; new image flows | 134 SDK-free JVM tests including controller correlation, live authority and image regressions | Full Compose/API compilation, emulator interactions/evidence, real on-device STT/offline TTS, Bluetooth, lock/interruptions and foldable posture tests |
+| Rust host / phone boundary | Approved local image protocol and authorization | 114 TS phone tests; 129 focused Rust phone tests; 4 image API tests; 2 app-info tests; fake-runtime generation/cancel/photo | Live paired relay generation with a real installed diffusion model/GPU |
 
-[#2110](https://github.com/nekko-labs/nekko-agent/issues/2110) remains open: Android records one clip per tap and inserts text into the draft. It does not yet implement iOS's hands-free send / wait / spoken reply / listen-again loop, or desktop-style always-on command segmentation. Desktop and Local Web UI support dictation and addressed commands, not a conversational TTS loop. These differences prevent an honest claim of full feature parity.
+Counts overlap: the separate 65 Android image tests and 51 initial voice core tests are included in the later integrated checks, not additional independent coverage.
 
-### Phone image chats
+## Explicit constraints
 
-All four quoted Android gaps are confirmed:
+- Android's new modes require Android 12/API 31+ installed on-device recognition and offline TTS. No hidden online recognizer fallback. Older devices retain existing one-shot dictation; equal voice functionality on all supported Android versions is not claimed.
+- Android voice commands and new fallback copy are English. Speech recognition language selection does not translate command grammar.
+- Existing Change v1 signs integer numbers only. Phones default CFG to **4**, reject fractional saved CFG without rounding, and require explicit settings correction. Desktop fractional CFG (including 4.5) remains supported.
+- Image capability means supported, not installed/healthy/ready. Model/runtime installation stays out of phone scope. Local GGUF diffusion only; no cloud upload or image-to-image input added.
+- Image creation uses `session:create` followed by validated `session:setOptions`; a failed second call can leave an empty session, never a silently substituted text-generation request.
+- Desktop/browser dictation and addressed commands are not a half-duplex conversational TTS loop. Full conversational feature parity across desktop/browser and phones is still a separate implementation gap, not certified by shared unit tests.
+- Physical audio, incoming calls, Bluetooth/headset route changes, OS lock/background and foldable folded/unfolded/tabletop transitions require actual supported hardware. SDK-free/simulator tests are not substitutes.
 
-1. `NewChatScreen.kt` and `Outbox.kt` create ordinary sessions. The daemon's `session:create` route accepts a workspace argument, not a chat-kind/params object. Desktop uses `session:setOptions` after creation; extending the create API is not required merely to select a kind.
-2. Android `Session` decodes `chatType`, but no `imageParams` model exists in `Wire.kt`.
-3. No explicit phone host capability for image generation is available.
-4. Android `SessionSummary` drops list-level `chatType`; the store already emits it. A badge additionally needs a UI change and matching evidence.
+## Native CI and evidence in flight
 
-The iOS protocol similarly decodes session-level `chatType` without a complete image-chat creation/send flow. Both phone implementations must be updated together.
+Feature source `35fb0a6e659641fef67c00dcd650d417184cf167`:
 
-**Additional permission boundary:** `crates/nekko-remote/src/phone-access.json` does not allow `chat:generateImage` or `engine:models`. Adding a picker or passing `chatType` through `chat:send` is not sufficient. Full support needs an explicitly reviewed phone permission change, request validation and proof classification, capability discovery that distinguishes supported from installed/ready, image-only model selection, correct image-turn routing, response display and offline/outbox behavior. The existing image flow is `chat:generateImage` with `{sessionId, prompt, params}`; `image:fetch` remains explicitly denied to phones. Do not open arbitrary image/file access to implement this.
+- [Android native build/tests](https://github.com/nekko-labs/nekko-agent/actions/runs/42433776558)
+- [iOS native build/tests](https://github.com/nekko-labs/nekko-agent/actions/runs/42433778603)
+- [Matched existing new-chat/image routes](https://github.com/nekko-labs/nekko-agent/actions/runs/42433820802), baseline `defd6001524a0419dbc404cec909f7cf95aa121a`
+- [New iOS image surfaces](https://github.com/nekko-labs/nekko-agent/actions/runs/42433823077); both refs deliberately use the feature revision because these surfaces have no before state. Never label that run as a baseline comparison.
 
-Before widening phone permissions, obtain the project-required approval. Proposed boundary: paired phones may list eligible image models and generate into their own authorized chats, subject to the existing phone Change proof; no model/runtime install, removal, arbitrary file reads or new cloud upload rights.
+Required evidence is not passed until captured, inspected and linked in the PR. Android voice motion/posture evidence remains to be run. Baseline iOS screenshots exist but have not yet been inspected by the parent.
 
-## Verification
+## Existing native baseline failures
 
-- Baseline desktop suite: 216 tests passed; mocked reproductions demonstrated post-lock send and an initialization-failure track leak.
-- Changed desktop code: **248 tests across seven suites passed** using the normal worktree config after `npm run build:core`; desktop TypeScript check passed. Covers capture, commands, segment ordering, actions, engine selection, local dictation and Settings microphone ownership.
-- Android: startup, stale callback/result, stop-and-transcribe and lifecycle regression tests added; native compilation/tests pending CI.
-- iOS: one-request, no-online-fallback, cancellation and deadline regression cases added; native compilation/tests pending CI.
-- No visual redesign. These changes alter microphone ownership/cancellation behavior, not control layout or styling. Unit tests do not prove physical-device lifecycle behavior.
-- No real microphone, speaker, Bluetooth, route-change, interruption or OS-lock test performed in this checkpoint.
-- Local host is Windows. Android SDK access was denied by the workspace sandbox; no alternate access was attempted. Swift/Xcode is unavailable locally. Use the existing Android/iOS hosted workflows for compilation and simulator tests; physical-device audio still needs hardware.
-- Folded, unfolded and tabletop/posture transitions remain part of required Android hardware follow-up, not claimed as verified.
+- Android translations: same 30 missing entries on exact base and safety head; #2125, fix #2130.
+- Android emulator keyboard-hide timeout also reproduces on main; #2209, separate experiment #2210.
+- iOS onboarding/floating-pill failures: #2031 and #2157; exact-base verification pending. A cancelled native run or successful batch composer is not a passing app suite.
 
-## Acceptance before claiming fully functional
+## Acceptance before closure
 
-1. Pass focused native regression tests and platform builds.
-2. Complete Android #2110 parity with explicit start/stop, interruption safety, local playback and no accidental sends.
-3. Approve and implement the phone image permission boundary, then both clients' capability/model selection, parameters, send path, badges and recoverable failure states.
-4. Capture and inspect matching native evidence for new UI, including narrow and foldable layouts.
-5. Exercise actual microphone/playback and permission denial/recovery on Windows, macOS, Linux, secure-context Local Web UI, iOS and Android, including Bluetooth, calls, lock/background and reconnection. Record precise supported OS/runtime versions and any limitations.
+1. Pass native builds and focused/integration tests without weakening checks; prove unrelated failures against exact base.
+2. Inspect matched native before/after, interaction and motion evidence, including foldable capability layouts.
+3. Exercise actual paired-host signed image generation and photo retrieval with an installed model; record runtime/GPU versions.
+4. Complete remaining supported-platform voice gaps and exercise actual audio permission, input/output, lock, interruption and reconnect cases on each platform.
+5. Record precise tested OS/device/runtime versions, unsupported combinations and residual limitations; only then assess #2162 closure.

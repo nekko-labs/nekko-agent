@@ -8,8 +8,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.*
-import com.nekko.android.ui.mode.LocalSimple
-import com.nekko.android.ui.mode.rememberSimpleView
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.rememberSimpleView
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.screens.NewChatScreen
 import com.nekko.android.ui.theme.NekkoTheme
@@ -123,12 +123,12 @@ class ImageChatEvidenceTest {
     }
 
     private fun showChat() {
-        vm = ChatViewModel(repo, "image-session")
+        vm = ChatViewModel("image-session", repo)
         viewModels.put("image", vm!!)
         compose.setContent {
             NekkoTheme(dark = false) {
                 CompositionLocalProvider(LocalSimple provides rememberSimpleView(prefs)) {
-                    ChatScreen(vm!!, onBack = {}, onFiles = {}, onWorkspace = {}, onSettings = {})
+                    ChatScreen(vm!!, onBack = {}, onSettings = {})
                 }
             }
         }
@@ -173,6 +173,7 @@ private class ImageEvidenceRemote : Remote {
     override fun connect() { status.value = RelayStatus(RelayState.CONNECTING) }
     override fun close() { status.value = RelayStatus(RelayState.IDLE) }
     override fun nudge() = Unit
+    override fun reconnect() = Unit
     override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = call(channel, *args)
     override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement) = call(channel, *args)
     override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?): JsonElement {

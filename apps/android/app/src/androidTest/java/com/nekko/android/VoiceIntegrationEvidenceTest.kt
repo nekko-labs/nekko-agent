@@ -10,8 +10,8 @@ import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.data.*
 import com.nekko.android.lock.AppLock
 import com.nekko.android.lock.LocalAppLock
-import com.nekko.android.ui.mode.LocalSimple
-import com.nekko.android.ui.mode.rememberSimpleView
+import com.nekko.android.ui.simple.LocalSimple
+import com.nekko.android.ui.simple.rememberSimpleView
 import com.nekko.android.ui.screens.ChatScreen
 import com.nekko.android.ui.theme.NekkoTheme
 import com.nekko.android.voice.AndroidMic
@@ -91,7 +91,7 @@ class VoiceIntegrationEvidenceTest {
         assertFalse(remote.calls.any { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE })
     }
     private fun shot(name: String) {
-        if (InstrumentationRegistry.getArguments().getString("nekkoVoiceEvidence") != "true") return
+        if (InstrumentationRegistry.getArguments().getString("nekkoModeEvidence") != "true") return
         compose.waitForIdle()
         val inst = InstrumentationRegistry.getInstrumentation()
         val device = InstrumentationRegistry.getArguments().getString("nekkoDevice", "phone")
@@ -121,6 +121,7 @@ private class VoiceEvidenceRemote : Remote {
     override fun connect() { status.value = RelayStatus(RelayState.CONNECTING) }
     override fun close() { status.value = RelayStatus(RelayState.IDLE) }
     override fun nudge() = Unit
+    override fun reconnect() = Unit
     override suspend fun callWithTimeout(timeoutMs: Long, channel: String, vararg args: JsonElement) = call(channel, *args)
     override suspend fun callWithStepUp(stepUp: StepUpProof, channel: String, vararg args: JsonElement) = call(channel, *args)
     override suspend fun callSigned(channel: String, args: JsonArray, proof: JsonObject, stepUp: StepUpProof?, timeoutMs: Long?) = call(channel, *args.toTypedArray())
