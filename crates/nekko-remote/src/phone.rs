@@ -44,10 +44,6 @@ pub struct Policy {
     pub queue_keys: Vec<String>,
     pub session_option_keys: Vec<String>,
     pub chat_send_keys: Vec<String>,
-    /// `chat:generateImage` from a phone: its fields, the picture settings, photos to edit at most.
-    pub image_turn_keys: Vec<String>,
-    pub image_param_keys: Vec<String>,
-    pub max_edit_images: usize,
     pub chat_modes: Vec<String>,
     pub effort_levels: Vec<String>,
     /// `PHONE_SESSION_VIEW`: newest messages kept, tool text cut to this many UTF-16 units.
@@ -163,9 +159,6 @@ pub fn policy() -> &'static Policy {
             queue_keys: strings(&v["queueKeys"]),
             session_option_keys: strings(&v["sessionOptionKeys"]),
             chat_send_keys: strings(&v["chatSendKeys"]),
-            image_turn_keys: strings(&v["imageTurnKeys"]),
-            image_param_keys: strings(&v["imageParamKeys"]),
-            max_edit_images: v["maxEditImages"].as_u64().unwrap_or(0) as usize,
             chat_modes: strings(&v["chatModes"]),
             effort_levels: strings(&v["effortLevels"]),
             // Missing numbers keep nothing rather than send a frame too large to arrive.
@@ -533,7 +526,6 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
                 out.skill = Some(phone_skill(skill)?);
             }
         }
-        "chat:generateImage" => phone_image_turn(arg(0))?,
         "chat:queue" => {
             let item = arg(1);
             if !item.is_string() {
@@ -550,49 +542,6 @@ pub fn screen(channel: &str, args: &[Value]) -> Result<Screened, Denied> {
         _ => {}
     }
     Ok(out)
-}
-
-/// A phone's Photo turn (`phoneImageTurn`): only its known fields, photos as
-/// image data URLs, and numbers where numbers go.
-fn phone_image_turn(opts: &Value) -> Result<(), Denied> {
-    let what = "chat:generateImage options";
-    keys_within(opts, &policy().image_turn_keys, what)?;
-    if !opts.get("sessionId").is_some_and(Value::is_string) || !opts.get("prompt").is_some_and(Value::is_string) {
-        return Err(denied("value-invalid", what));
-    }
-    if let Some(params) = opts.get("params") {
-        keys_within(params, &policy().image_param_keys, "params")?;
-        for (k, v) in params.as_object().into_iter().flatten() {
-            let ok = if k == "modelId" { v.is_string() } else { v.is_number() || v.is_null() };
-            if !ok {
-                return Err(denied("value-invalid", k.clone()));
-            }
-        }
-    }
-    if let Some(images) = opts.get("images") {
-        let photo = |i: &Value| {
-            i.as_str().is_some_and(|s| {
-                ["data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"]
-                    .iter()
-                    .any(|p| s.starts_with(p))
-            })
-        };
-        let ok = images.as_array().is_some_and(|a| a.len() <= policy().max_edit_images && a.iter().all(photo));
-        if !ok {
-            return Err(denied("value-invalid", "images"));
-        }
-    }
-    if let Some(size) = opts.get("size") {
-        let ok = size.as_object().is_some_and(|o| {
-            o.keys().all(|k| k == "width" || k == "height")
-                && o.get("width").is_some_and(Value::is_number)
-                && o.get("height").is_some_and(Value::is_number)
-        });
-        if !ok {
-            return Err(denied("value-invalid", "size"));
-        }
-    }
-    Ok(())
 }
 
 /// The text a skill turn sends: its template, then the input (`skillTurnText`).
@@ -1714,50 +1663,6 @@ pub fn gate_secured(
 
 #[cfg(test)]
 mod tests {
-
-    /// A Photo turn from a phone (decision 0069): its own fields, picture settings and real photos only.
-    #[test]
-    fn screens_a_phone_photo_turn() {
-        let photo = "data:image/jpeg;base64,/9j/4AAQ";
-        let turn = |extra: Value| {
-            let mut o = json!({ "sessionId": "s", "prompt": "a cat" });
-            for (k, v) in extra.as_object().unwrap() {
-                o[k] = v.clone();
-            }
-            screen("chat:generateImage", &[o]).map(|_| ())
-        };
-        assert!(has(&policy().agent_channels, "chat:generateImage"));
-        assert_eq!(
-            turn(
-                json!({ "params": { "modelId": "image/m", "width": 1024, "height": 768, "steps": 8, "cfgScale": 1, "seed": -1 } })
-            ),
-            Ok(())
-        );
-        assert_eq!(turn(json!({ "images": [photo], "size": { "width": 768, "height": 1024 } })), Ok(()));
-        assert_eq!(
-            turn(json!({ "params": { "diffusion": { "vae": "/etc/passwd" } } })),
-            Err(denied("option-denied", "diffusion"))
-        );
-        assert_eq!(turn(json!({ "params": { "steps": "8" } })), Err(denied("value-invalid", "steps")));
-        assert_eq!(turn(json!({ "attachedPaths": ["/etc/passwd"] })), Err(denied("option-denied", "attachedPaths")));
-        assert_eq!(turn(json!({ "images": ["/Users/me/a.png"] })), Err(denied("value-invalid", "images")));
-        assert_eq!(
-            turn(json!({ "images": ["data:image/svg+xml;base64,PHN2Zz4="] })),
-            Err(denied("value-invalid", "images"))
-        );
-        assert_eq!(
-            turn(json!({ "images": [photo, photo, photo, photo, photo] })),
-            Err(denied("value-invalid", "images"))
-        );
-        assert_eq!(
-            turn(json!({ "size": { "width": 1, "height": 1, "depth": 1 } })),
-            Err(denied("value-invalid", "size"))
-        );
-        assert_eq!(
-            screen("chat:generateImage", &[json!({ "sessionId": "s" })]).map(|_| ()),
-            Err(denied("value-invalid", "chat:generateImage options"))
-        );
-    }
 
     /// Provider setup from a phone (decision 0016): the sealed save is screened
     /// by shape, the switch takes an id and a bool, and the answers never carry a key.

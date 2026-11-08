@@ -116,23 +116,7 @@ impl ImageTurns {
         }
         // A video model makes a clip at its own size (the chat's shape at about 832x480).
         let model_id = started.request.get("modelId").map(nekko_js::display).unwrap_or_default();
-        let can = server.capabilities(&model_id).await;
-        let video = can.iter().any(|c| c == "video");
-        // Photos go only to a model that edits them or animates the first (decision 0067):
-        // the desktop asks first, but any client (a phone) reaches the turn directly.
-        if started.request.get("refImages").is_some() && !can.iter().any(|c| c == "edit" || c == "video") {
-            let message =
-                "This model can't change photos. Choose a model that edits photos, or send the prompt without a photo.";
-            if let Some(Value::Array(list)) = session.get_mut("messages") {
-                list.push(v::image_failure(false, message, nekko_js::now_ms()));
-            }
-            if !incognito {
-                let (st, mut s) = (store.clone(), session);
-                let _ = tokio::task::spawn_blocking(move || st.save_turn(&mut s, None)).await;
-            }
-            fail(message);
-            return Ok(Value::Null);
-        }
+        let video = server.makes_video(&model_id).await;
         if video {
             let num = |k: &str| params.get(k).and_then(Value::as_f64).unwrap_or(0.0);
             let (w, h) = nekko_engine::launch::clip_size(num("width"), num("height"));

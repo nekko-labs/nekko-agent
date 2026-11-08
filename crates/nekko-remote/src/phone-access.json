@@ -15,7 +15,6 @@
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
-  "chat:generateImage",
   "chat:interruptQueued",
   "chat:pending",
   "chat:queue",
@@ -241,7 +240,6 @@
   "chat:abort",
   "chat:answer",
   "chat:editQueued",
-  "chat:generateImage",
   "chat:interruptQueued",
   "chat:queue",
   "chat:send",
@@ -371,22 +369,6 @@
   "url": 512,
   "blob": 8192
  },
- "imageTurnKeys": [
-  "images",
-  "params",
-  "prompt",
-  "sessionId",
-  "size"
- ],
- "imageParamKeys": [
-  "cfgScale",
-  "height",
-  "modelId",
-  "seed",
-  "steps",
-  "width"
- ],
- "maxEditImages": 4,
  "watchView": [
   "id",
   "kind",

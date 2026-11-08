@@ -267,23 +267,6 @@ describe('chat options from a phone', () => {
     expect(code(() => screenPhoneCall('chat:send', [{ sessionId: 's', text: 'hi', attachedPaths: ['/etc/passwd'] }]))).toBe('option-denied');
   });
 
-  it('lets a phone run a Photo turn on the computer, with only its own fields and real photos', () => {
-    const photo = 'data:image/jpeg;base64,/9j/4AAQ';
-    const turn = (o: Record<string, unknown>) => code(() => screenPhoneCall('chat:generateImage', [{ sessionId: 's', prompt: 'a cat', ...o }]));
-    expect(phoneChannelClass('chat:generateImage')).toBe('agent');
-    expect(turn({ params: { modelId: 'image/m', width: 1024, height: 768, steps: 8, cfgScale: 1, seed: -1 } })).toBe('ok');
-    expect(turn({ images: [photo], size: { width: 768, height: 1024 } })).toBe('ok');
-    expect(turn({ params: { modelId: 'm', diffusion: { vae: '/etc/passwd' } } })).toBe('option-denied');
-    expect(turn({ params: { steps: '8' } })).toBe('value-invalid');
-    expect(turn({ attachedPaths: ['/etc/passwd'] })).toBe('option-denied');
-    expect(turn({ images: ['/Users/me/a.png'] })).toBe('value-invalid');
-    expect(turn({ images: ['data:image/svg+xml;base64,PHN2Zz4='] })).toBe('value-invalid');
-    expect(turn({ images: [photo, photo, photo, photo, photo] })).toBe('value-invalid');
-    expect(turn({ size: { width: 768, height: 1024, depth: 1 } })).toBe('value-invalid');
-    expect(code(() => screenPhoneCall('chat:generateImage', [{ sessionId: 's' }]))).toBe('value-invalid');
-    expect(code(() => screenPhoneCall('chat:generateImage', ['s']))).toBe('value-invalid');
-  });
-
   it('lets a phone send at the next step and interrupt, and checks what it sends', () => {
     expect(code(() => screenPhoneCall('chat:steer', ['s', 'look at the tests first']))).toBe('ok');
     expect(code(() => screenPhoneCall('chat:steer', ['', 'hi']))).toBe('value-invalid');

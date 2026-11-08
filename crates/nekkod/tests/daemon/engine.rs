@@ -733,19 +733,6 @@ async fn the_daemon_runs_an_image_turn_on_its_model_server() {
         }
     }
     assert!(refused, "the chat was told why");
-
-    // A photo to a model that cannot edit is refused by the turn itself (a phone has no desktop check).
-    let photo = json!({ "sessionId": "s_img", "prompt": "make it blue", "images": ["data:image/png;base64,AAAA"], "params": params });
-    post(d.port, "chat:generateImage", json!([photo]), Some(TOKEN)).await;
-    let saved: Value =
-        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_img.json")).unwrap()).unwrap();
-    let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
-    assert_eq!(
-        last["content"],
-        "The image could not be generated: This model can't change photos. Choose a model that edits photos, or send the prompt without a photo.",
-        "{last}"
-    );
-    assert_eq!(last.get("images"), None);
     post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
     drop(d);
     std::fs::remove_dir_all(root).ok();
