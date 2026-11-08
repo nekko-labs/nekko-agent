@@ -50,7 +50,7 @@ export function CommandPalette() {
     return [
       { id: 'new-chat', label: 'New agent', hint: SHORTCUTS.newAgent.label, run: () => newChat() },
       { id: 'new-terminal', label: 'New terminal', hint: SHORTCUTS.newTerminal.label, run: () => newTerminal() },
-      go('artifacts', 'Go to Artifacts'),
+      go('artifacts', 'Go to Library'),
       go('skills', 'Go to Skills'),
       go('models', 'Go to Models'),
       go('modelserver', 'Go to Model Server'),

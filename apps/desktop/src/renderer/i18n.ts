@@ -16,7 +16,7 @@ type Dict = Record<string, string>;
 // English is the source of truth; other locales fall back to it per-key.
 const en: Dict = {
   'nav.command': 'Agents',
-  'nav.artifacts': 'Artifacts',
+  'nav.artifacts': 'Library',
   'nav.design': 'Design',
   'nav.skills': 'Skills',
   'nav.training': 'Training',
