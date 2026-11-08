@@ -20,8 +20,10 @@ hardware and accessibility limitations below have been verified.
 
 The main-merge repair also keeps the Swift phone channel registry in parity with
 the host allow-list, including main's `chat:generateImage` and `engine:models`.
-This is protocol metadata synchronization, not image generation through the
-dashboard voice grammar; exact allow-list equality tests remain unchanged.
+Image generation remains a signed Change-class call, matching the host's policy;
+`engine:models` remains a read. This is protocol metadata synchronization, not
+image generation through the dashboard voice grammar; exact allow-list and
+Change-class equality tests remain unchanged.
 
 ## The three goals
 

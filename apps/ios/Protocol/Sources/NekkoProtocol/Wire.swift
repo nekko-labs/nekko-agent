@@ -132,7 +132,7 @@ public enum Channels {
     /// A provider added or switched from the phone (`PHONE_PROVIDER_CHANGE_CHANNELS`): change class, with a proof.
     public static let providersChange: Set<String> = [providersSaveSealed, providersSetEnabled]
     /// Every change-class channel the phone calls (`PHONE_CHANGE_CHANNELS`): signed, so Face ID or the passcode is asked.
-    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces])
+    public static let change: Set<String> = gitChange.union(filesChange).union(terminalChange).union(providersChange).union(serviceChange).union([workspaceAddByPath, workspaceRemove, sessionSetSupportingWorkspaces, "chat:generateImage"])
 
     public static let all = [
         settingsGet, settingsUpdate, providersList, modelsList, sessionsSummaries, sessionCreate, sessionGet, sessionPhoto,
