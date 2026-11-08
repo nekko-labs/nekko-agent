@@ -5,9 +5,9 @@
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0f0f11",
-  "theme_color": "#0f0f11",
+  "background_color": "#101714",
+  "theme_color": "#101714",
   "icons": [
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "icon-512.png?v=green-cream-1", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

@@ -21,6 +21,7 @@ import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
+import { startTextZoom } from './textZoom.js';
 import { NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
@@ -138,6 +139,8 @@ export function App() {
   useEffect(() => syncAppActivity(), []);
   // Step the looping decorations on a clock of their own, not every frame.
   useEffect(() => startDecorClock(), []);
+  // Ctrl/⌘ + Plus/Minus and Ctrl/⌘ + wheel step the text size; Ctrl/⌘+0 resets it.
+  useEffect(() => startTextZoom(), []);
 
   // Agents idle past Settings → Complete idle agents after (a month unless
   // changed) are completed: the same reversible archive the window's X does.
