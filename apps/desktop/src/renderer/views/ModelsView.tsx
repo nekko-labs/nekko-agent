@@ -1,7 +1,7 @@
 import { FirstProviderSetup } from '../components/providers/FirstProviderSetup.js';
 import { needsProviderSetup } from '../components/providers/providerSetup.js';
 import { useEffect, useRef, useState } from 'react';
-import type { LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
+import type { ClaudeCodeStatus, LimitWindow, ModelInfo, OAuthProvider, OAuthStatus, ProviderConfig, ProviderKind, SubscriptionLimits } from '@nekko-agent/shared';
 import { formatUSD, isLocalProvider, limitsKeyFor, isRuntimeKind, formatModelPriceLabel, modelPricing, oauthProviderOffered } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
@@ -19,6 +19,7 @@ import { MODEL_FILTER_THRESHOLD, modelListProblem } from './modelListProblem.js'
 import { MiddleTruncate } from '../components/primitives/MiddleTruncate.js';
 import { ModelRowName } from './ModelRowName.js';
 import { ProviderMark, providerColor, providerMarkKind } from '../components/providers/ProviderMark.js';
+import { ProviderBillingBadge } from '../components/providers/ProviderBillingBadge.js';
 
 const isLocal = (k: ProviderKind) => isLocalProvider(k);
 
@@ -168,14 +169,10 @@ export function ProviderShortcuts({ localOnly = false, onAdd }: { localOnly?: bo
 }
 
 /** Where a Claude card's models come from (subscription or API, and which account). */
-function ClaudeSource({ provider }: { provider: ProviderConfig }) {
-  // Only a subscription account needs Claude Code's own status; API cards describe themselves.
-  return provider.kind === 'claude-code' ? <ClaudeCodeSource provider={provider} /> : <p className="claude-source">{claudeSourceLine(provider)}</p>;
-}
-
-function ClaudeCodeSource({ provider }: { provider: ProviderConfig }) {
-  const { status } = useClaudeCodeStatus(provider.id);
-  return <p className="claude-source" title={claudeSourceLine(provider, status)}>{[claudeIdentityLine(status) || 'Through Claude Code', provider.claudeCode?.account].filter(Boolean).join(' · ')}</p>;
+function ClaudeSource({ provider, status }: { provider: ProviderConfig; status?: ClaudeCodeStatus | null }) {
+  return provider.kind === 'claude-code'
+    ? <p className="claude-source" title={claudeSourceLine(provider, status)}>{[claudeIdentityLine(status) || 'Through Claude Code', provider.claudeCode?.account].filter(Boolean).join(' · ')}</p>
+    : <p className="claude-source">{claudeSourceLine(provider)}</p>;
 }
 
 const LIMIT_STATUS_COLOR: Record<LimitWindow['status'], string> = {
@@ -285,7 +282,21 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
   );
 }
 
-function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onChanged: () => void }) {
+type ProviderCardProps = { provider: ProviderConfig; onChanged: () => void };
+
+function ProviderCard(props: ProviderCardProps) {
+  // Only enabled Claude Code cards probe the CLI. Source and chip share one read.
+  return props.provider.kind === 'claude-code' && props.provider.enabled !== false
+    ? <ClaudeCodeProviderCard key={props.provider.id} {...props} />
+    : <ProviderCardContent {...props} />;
+}
+
+function ClaudeCodeProviderCard(props: ProviderCardProps) {
+  const { status } = useClaudeCodeStatus(props.provider.id);
+  return <ProviderCardContent {...props} claudeStatus={status} />;
+}
+
+function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCardProps & { claudeStatus?: ClaudeCodeStatus | null }) {
   const settings = useStore((s) => s.settings);
   const refreshSettings = useStore((s) => s.refreshSettings);
   const pushToast = useStore((s) => s.pushToast);
@@ -526,22 +537,10 @@ function ProviderCard({ provider, onChanged }: { provider: ProviderConfig; onCha
               <Badge tone="danger" variant="solid" title={conn.message}>Offline</Badge>
             )}
             {enabled && conn.state === 'testing' && <span className="chip">checking…</span>}
-            {enabled && subscription && (
-              <Badge
-                tone={sub?.connected ? 'success' : 'warning'}
-                variant="soft"
-                title={
-                  provider.kind === 'openrouter'
-                    ? 'Signed in via OpenRouter — the key lives in the app, usage bills to your OpenRouter balance'
-                    : `Runs on your ${subName} subscription instead of a metered API key`
-                }
-              >
-                {provider.kind === 'openrouter' ? 'Signed in' : 'Subscription'}
-              </Badge>
-            )}
+            <ProviderBillingBadge provider={provider} claudeStatus={claudeStatus} />
             {provider.discovered && <span className="chip">discovered</span>}
           </div>
-          {isClaudeKind(provider.kind) && <ClaudeSource provider={provider} />}
+          {isClaudeKind(provider.kind) && <ClaudeSource provider={provider} status={claudeStatus} />}
           {(!local || !enabled) && !subscription && provider.baseUrl && <p className="mt-0.5 font-mono text-2xs text-ink-faint">{provider.baseUrl}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
