@@ -5,7 +5,7 @@ import { useStore } from '../../store.js';
 import { windowChrome } from '../../chrome.js';
 import { CheckIcon, CloudIcon, LaptopIcon, TerminalIcon, WarningIcon } from '../../icons.js';
 import { TerminalPane } from '../TerminalPane.js';
-import { claudeProfileConflict } from './claudeConnections.js';
+import { claudeProfileConflict } from './claudeProfiles.js';
 import { ClaudeWhyLink, useClaudeCodeStatus, useClaudePolicy } from './ClaudeAgent.js';
 
 /**

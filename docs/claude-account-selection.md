@@ -24,7 +24,7 @@ flowchart LR
   C[Add named Work profile] --> D[Claude Code browser sign-in]
   D --> E[Choose organization if offered]
   E --> F[Work provider]
-  B --> G[Claude connection, then model]
+  B --> G[Model picker: Account]
   F --> G
 ```
 
@@ -40,4 +40,4 @@ The two browser sign-ins may use the same email, but each must result in its int
 
 No real personal/team account was signed in, switched, or signed out during this work. The user's credentials and settings were not inspected. Synthetic renderer data and the existing identity tests do not prove a particular organization's browser account chooser or seat entitlement.
 
-To verify the real flow, the account owner should add a named Work profile, sign in through Claude Code, select the organization if offered, and confirm its reported organization/plan before connecting. Then confirm both entries in the model picker's Claude connection selector (desktop/shared web, #2334). If Anthropic's browser does not offer the expected organization, check team invitation, Claude Code entitlement, SSO and managed-login policy; do not bypass them. Automatic membership enumeration remains a possible future feature only if Anthropic publishes a supported interface.
+To verify the real flow, the account owner should add a named Work profile, sign in through Claude Code, select the organization if offered, and confirm its reported organization/plan before connecting. Then confirm both entries in the model picker's Account row. If Anthropic's browser does not offer the expected organization, check team invitation, Claude Code entitlement, SSO and managed-login policy; do not bypass them. Automatic membership enumeration remains a possible future feature only if Anthropic publishes a supported interface.
