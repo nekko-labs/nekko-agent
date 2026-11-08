@@ -30,7 +30,7 @@ log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 stats_disk() {
   local d
   for d in "$NEKKO_DEV_DIR"/disk[0-9]*; do
-    case "$d" in *s[0-9]*) continue ;; esac
+    case "${d##*/}" in *s[0-9]*) continue ;; esac
     if [ "$(dd if="$d" bs=512 count=1 2>/dev/null | head -c 11)" = NEKKOSTATS1 ]; then
       echo "$d"
       return
