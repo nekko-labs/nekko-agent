@@ -111,7 +111,7 @@ final class FirstRunTests: XCTestCase {
             XCTAssertTrue(allow.waitForExistence(timeout: 10), "step 3")
             XCTAssertTrue(app.staticTexts["Step 3 of 3"].exists)
             XCTAssertTrue(app.buttons["permissions.action.notifications"].exists)
-            XCTAssertTrue(app.buttons["permissions.action.network"].exists)
+            XCTAssertTrue(app.buttons["permissions.row.network"].exists)
             attach(app, "(theme)-firstrun-3")
             auditAccessibility(app, "(theme)-firstrun-3", covered: bar(app, above: allow))
             // Continuing without a row tap never prompts for optional access.
