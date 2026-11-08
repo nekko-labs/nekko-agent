@@ -1,23 +1,16 @@
-// A Photo chat after a video model made a clip (real MessageBubble; the clip is a drawn still here),
-// button) and the offer shown when a photo is attached but the chat's model,
-// Z-Image Turbo, cannot edit (real EditModelOffer). Stub bridge: an RTX 5090
-// whose only picture model is Z-Image. Never contacts a host.
+// A Photo chat after a video model made a clip (real MessageBubble). The
+// clip is a still drawn here, not a generated one. Never contacts a host.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/inter-tight';
 import '../src/renderer/styles.css';
 
 const GB = 1e9;
-const edit = { modelId: 'qwen-image-edit-2511', name: 'Qwen Image Edit 2511', owner: 'Qwen', repo: 'unsloth/Qwen-Image-Edit-2511-GGUF', license: 'Apache-2.0', capabilities: ['edit'], companionSet: 'qwen-image-edit', quant: 'Q4_K_M', downloadLabel: 'Q4_K_M', files: ['qwen-image-edit-2511-Q4_K_M.gguf'], weightsBytes: 12.84 * GB, companionBytes: 5.79 * GB, downloadBytes: 18.63 * GB, memoryBytes: 20.8 * GB, headroomBytes: 12.5 * GB, placement: 'gpu', offloadToCpu: false, fit: 'fits' };
-const klein = { ...edit, modelId: 'flux2-klein-4b', name: 'FLUX.2 klein 4B', owner: 'Black Forest Labs', repo: 'leejet/FLUX.2-klein-4B-GGUF', capabilities: ['create', 'edit'], companionSet: 'flux2-klein-4b', quant: 'Q8_0', downloadLabel: 'Q8_0', files: ['flux-2-klein-4b-Q8_0.gguf'], weightsBytes: 4.3 * GB, companionBytes: 2.83 * GB, downloadBytes: 7.13 * GB, memoryBytes: 9.3 * GB };
-const recs = { feedVersion: '2026-11-08.1', hardware: { device: 'NVIDIA GeForce RTX 5090', classId: 'nvidia-rtx-5090', bandwidthGBps: 1792, backend: 'cuda', memoryBytes: 32 * 2 ** 30 }, budget: { bytes: 31 * 2 ** 30, placement: 'gpu' }, tasks: [], nudges: [],
-  imageTasks: [{ task: 'imageEdit', label: 'Edit photos', capability: 'edit', pick: edit, options: [edit, klein] }] };
 const zImage = { id: 'image/leejet_Z-Image-Turbo-GGUF/z_image_turbo-Q4_K', name: 'z image turbo', path: '/models/image/leejet_Z-Image-Turbo-GGUF/z_image_turbo-Q4_K.gguf', sizeBytes: 3.86 * GB, addedAt: 0, modality: 'image' };
 const known: Record<string, (...a: unknown[]) => unknown> = {
   engineStatus: async () => ({ install: { available: [] }, diffusionInstall: { binPath: '/sd-server', available: [] }, running: true, resident: [], log: [], port: 11500, settings: {} }),
   engineModels: async () => [zImage],
   engineDownloads: async () => [],
-  machineRecommendations: async () => recs,
   engineImageCompanions: async () => ({ setId: 'z-image', label: 'Z-Image', files: [], ready: true, missingBytes: 0, defaults: { steps: 8, cfgScale: 1 }, capabilities: ['create'] }),
 };
 (window as any).nekko = new Proxy(known, { get: (t, k: string) => t[k] ?? (k.startsWith('on') ? () => () => {} : async () => null) });

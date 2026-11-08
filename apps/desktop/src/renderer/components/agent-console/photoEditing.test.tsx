@@ -109,3 +109,15 @@ describe('a clip from a video model', () => {
     expect(html).not.toContain('data-edit-image');
   });
 });
+
+describe('a clip with incomplete details', () => {
+  it('says clip without inventing numbers', () => {
+    const odd = {
+      id: 'c2', role: 'assistant' as const, content: '', createdAt: 1, images: ['data:image/webp;base64,UklGR'],
+      generated: { modelId: 'wan', width: 832, height: 480, steps: 20, cfgScale: 6, seed: 5, ms: 1000, video: { frames: null, fps: null } as unknown as { frames: number; fps: number } },
+    };
+    const html = renderToStaticMarkup(<MessageBubble message={odd} chronological />);
+    expect(html).toContain('· clip');
+    expect(html).not.toMatch(/null|NaN/);
+  });
+});

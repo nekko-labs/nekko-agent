@@ -263,7 +263,7 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu, 
       ))}
       {g && (
         <p className="text-2xs text-ink-faint">
-          {model} · {g.width}×{g.height}{g.video ? ` · ${g.video.frames} frames at ${g.video.fps} fps (${(g.video.frames / g.video.fps).toFixed(1)} s clip)` : ''} · {g.steps} steps · CFG {g.cfgScale} · seed {g.seed} · {(g.ms / 1000).toFixed(1)}s
+          {model} · {g.width}×{g.height}{g.video?.frames && g.video.fps ? ` · ${g.video.frames} frames at ${g.video.fps} fps (${(g.video.frames / g.video.fps).toFixed(1)} s clip)` : g.video ? ' · clip' : ''} · {g.steps} steps · CFG {g.cfgScale} · seed {g.seed} · {(g.ms / 1000).toFixed(1)}s
         </p>
       )}
     </div>

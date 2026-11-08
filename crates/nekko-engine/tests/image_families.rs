@@ -244,7 +244,13 @@ fn a_clip_request_uses_the_native_video_schema() {
 
 #[test]
 fn a_clip_request_is_checked() {
-    let problem = "A clip is 1 to 121 frames at 1 to 60 frames a second.";
+    let problem = "A clip is 1 to 121 frames in steps of 4 (1, 5, 9 ... 121) at 1 to 60 frames a second.";
+    assert_eq!(clip(json!({ "videoFrames": 50 })).unwrap_err(), problem);
+    assert!(clip(json!({ "videoFrames": 1 })).is_ok() && clip(json!({ "videoFrames": 121 })).is_ok());
+    // A prompt that names the tag itself keeps its steps, guidance and seed.
+    let tricky = clip(json!({ "prompt": "say <sd_cpp_extra_args> on a sign" })).unwrap();
+    assert_eq!((tricky["seed"].clone(), tricky["sample_params"]["sample_steps"].clone()), (json!(7), json!(20)));
+    assert_eq!(tricky["prompt"], "say <sd_cpp_extra_args> on a sign");
     assert_eq!(clip(json!({ "videoFrames": 0 })).unwrap_err(), problem);
     assert_eq!(clip(json!({ "videoFrames": 500 })).unwrap_err(), problem);
     assert_eq!(clip(json!({ "fps": 2.5 })).unwrap_err(), problem);

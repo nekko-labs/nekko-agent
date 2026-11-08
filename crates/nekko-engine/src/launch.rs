@@ -650,6 +650,8 @@ pub fn image_generation_body(request: &Value) -> Result<String, String> {
     Ok(nekko_js::stringify(&Value::Object(body)))
 }
 
+const CLIP_PROBLEM: &str = "A clip is 1 to 121 frames in steps of 4 (1, 5, 9 ... 121) at 1 to 60 frames a second.";
+
 /// A short clip's pixel count: about sd.cpp's documented 832x480 for Wan.
 const CLIP_AREA: f64 = 832.0 * 480.0;
 /// Frames and playback rate when the request names none: sd.cpp's Wan example (about 2 s).
@@ -675,8 +677,9 @@ pub fn video_generation_body(request: &Value) -> Result<String, String> {
     let checked: Value = serde_json::from_str(&image_generation_body(request)?).map_err(|e| e.to_string())?;
     let prompt = request.get("prompt").and_then(Value::as_str).unwrap_or_default();
     let p = checked["prompt"].as_str().unwrap_or_default();
+    // The last block is ours: a prompt may itself contain the tag.
     let native: Value = p
-        .find("<sd_cpp_extra_args>")
+        .rfind("<sd_cpp_extra_args>")
         .and_then(|i| serde_json::from_str(&p[i + "<sd_cpp_extra_args>".len()..p.rfind("</sd_cpp_extra_args>")?]).ok())
         .unwrap_or_else(|| json!({}));
     let count = |k: &str, d: u64, max: u64| -> Result<u64, String> {
@@ -685,8 +688,10 @@ pub fn video_generation_body(request: &Value) -> Result<String, String> {
             Some(v) => v
                 .as_f64()
                 .filter(|f| f.fract() == 0.0 && *f >= 1.0 && *f <= max as f64)
+                // Wan's video VAE packs 4 frames after the first: 1, 5, 9 ... 121.
+                .filter(|f| k != "videoFrames" || (*f as u64) % 4 == 1)
                 .map(|f| f as u64)
-                .ok_or_else(|| "A clip is 1 to 121 frames at 1 to 60 frames a second.".to_string()),
+                .ok_or_else(|| CLIP_PROBLEM.to_string()),
         }
     };
     let frames = count("videoFrames", CLIP_FRAMES, 121)?;

@@ -385,29 +385,59 @@ impl Server {
         };
         let deadline = std::time::Instant::now() + Duration::from_secs(4 * 60 * 60);
         let mut last_step = String::new();
+        // Reads in a row with no job state: a server that died or was unloaded stops answering.
+        let mut misses = 0u32;
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             if std::time::Instant::now() > deadline {
                 return Err("The clip took over four hours and was stopped.".into());
             }
-            let Ok(r) =
-                self.client.get(format!("{base}/sdcpp/v1/jobs/{job_id}")).timeout(Duration::from_secs(30)).send().await
-            else {
+            if self.engine.supervisor.get(&id).is_none_or(|c| c.port != child.port) {
+                return Err("The video model stopped while making the clip.".into());
+            }
+            let read = match self
+                .client
+                .get(format!("{base}/sdcpp/v1/jobs/{job_id}"))
+                .timeout(Duration::from_secs(30))
+                .send()
+                .await
+            {
+                Ok(r) => r.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            let Some(state) = read else {
+                misses += 1;
+                if misses >= MAX_JOB_MISSES {
+                    return Err("The video model stopped answering while making the clip.".into());
+                }
                 continue;
             };
-            let Ok(state) = r.json::<Value>().await else { continue };
             match state.get("status").and_then(Value::as_str).unwrap_or_default() {
                 "completed" => {
                     let mut cancel = cancel;
                     cancel.armed = false;
-                    return Ok(state.get("result").cloned().unwrap_or(Value::Null));
+                    let result = state.get("result").cloned().unwrap_or(Value::Null);
+                    if result.get("b64_json").and_then(Value::as_str).is_none_or(str::is_empty) {
+                        return Err("The video model finished without a clip.".into());
+                    }
+                    return Ok(result);
                 }
                 "failed" | "cancelled" => {
                     let mut cancel = cancel;
                     cancel.armed = false;
                     return Err(sd_error(&state).unwrap_or_else(|| "The clip could not be made.".into()));
                 }
+                // No such job (the server restarted), or an answer that is not a job.
+                "" => {
+                    misses += 1;
+                    if misses >= MAX_JOB_MISSES {
+                        return Err(
+                            sd_error(&state).unwrap_or_else(|| "The video model lost track of the clip.".into())
+                        );
+                    }
+                }
                 _ => {
+                    misses = 0;
                     let preview = state.get("preview").filter(|p| !p.is_null());
                     if let Some(p) = preview {
                         let step =
@@ -468,6 +498,9 @@ impl Server {
         })
     }
 }
+
+/// Status reads in a row with no job state before a clip is given up (about 30 s).
+const MAX_JOB_MISSES: u32 = 30;
 
 /// sd-server's own error message, when it gave one.
 fn sd_error(v: &Value) -> Option<String> {

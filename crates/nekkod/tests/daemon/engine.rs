@@ -1017,6 +1017,15 @@ async fn the_daemon_makes_a_clip_with_a_video_model() {
         "{stages:?}"
     );
 
+    // A job that completes with no clip is a failure the chat is told, not a broken picture.
+    let empty = json!({ "sessionId": "s_clip", "prompt": "empty sea", "params": params });
+    post(d.port, "chat:generateImage", json!([empty]), Some(TOKEN)).await;
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_clip.json")).unwrap()).unwrap();
+    let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(last["content"], "The image could not be generated: The video model finished without a clip.", "{last}");
+    assert_eq!(last.get("images"), None, "{last}");
+
     // Stopping a clip cancels its job on the server.
     let port2 = d.port;
     let slow = json!({ "sessionId": "s_clip", "prompt": "slow tide", "params": params });

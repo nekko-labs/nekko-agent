@@ -9,7 +9,8 @@
 //! Clips (`POST /sdcpp/v1/vid_gen`) are jobs: the first status read says
 //! `generating` with a step-1-of-2 preview, the next `completed`, with a
 //! "clip" that is the request as sent. A `slow` clip never finishes, and its
-//! cancel (`POST /sdcpp/v1/jobs/{id}/cancel`) writes `<model>.cancelled`.
+//! cancel (`POST /sdcpp/v1/jobs/{id}/cancel`) writes `<model>.cancelled`. An
+//! `empty` clip completes with no clip in its result.
 
 use axum::Json;
 use axum::extract::{Path, State};
@@ -56,6 +57,9 @@ async fn main() {
                 let slow = body["prompt"].as_str().unwrap_or_default().contains("slow");
                 if *reads < 2 || slow {
                     return Json(json!({ "id": id, "status": "generating", "preview": { "pass": 1, "step": 1, "total_steps": 2 } }));
+                }
+                if body["prompt"].as_str().unwrap_or_default().contains("empty") {
+                    return Json(json!({ "id": id, "status": "completed", "result": { "mime_type": "image/webp" } }));
                 }
                 let said = format!(
                     "{}|{}x{}|{}@{}|{}|{}",
