@@ -21,8 +21,8 @@ test('primary icon keeps the default and declares an iOS dark luminosity asset',
   for (let i = 0; i < png.data.length; i += 4) {
     assert.equal(png.data[i + 3], 255);
     // Native raster resizing may round a channel by one or two levels.
-    if ([167, 200, 172].every((v, c) => Math.abs(png.data[i + c] - v) <= 2)) brandPixels++;
+    if ([201, 155, 179].every((v, c) => Math.abs(png.data[i + c] - v) <= 2)) brandPixels++;
   }
-  assert.ok(brandPixels > 20_000, 'the Nekko mark uses brand sage');
+  assert.ok(brandPixels > 20_000, 'the Nekko mark uses brand light plum');
   assert.ok(png.data[0] < 40 && png.data[1] < 40 && png.data[2] < 40, 'dark ground');
 });

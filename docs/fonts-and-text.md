@@ -10,7 +10,7 @@ Change them in **Settings > Style**:
 
 Each list offers the default, **System** (your operating system's own font) and any fonts you have added.
 
-You can also change text size in **Settings > Accessibility**. Press **−** or **+** and a preview shows the new size, then press **Apply** to use it across the app, or **Cancel** to keep the size you have. It is the same setting as the one in Style.
+Under the font lists, a preview shows sample text in both fonts at your current text size. Any change applies straight away, and the preview follows it.
 
 From anywhere in the app, **Ctrl+Plus** and **Ctrl+Minus** (**Cmd** on macOS) make text one size bigger or smaller, and holding Ctrl (or Cmd) while you turn the scroll wheel does the same: up for bigger, down for smaller. **Ctrl+0** (**Cmd+0**) puts it back to 100%. These change the same setting straight away.
 

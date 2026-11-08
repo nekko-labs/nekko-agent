@@ -88,7 +88,7 @@ class ConnectionKeeper(
             combine(prefs.flow(KeepAlive.ENABLED), repo.state, lastEventAt, tick) { on, s, last, _ ->
                 val busy = s.activity.size
                 val wanted = KeepAlive.wanted(on, s.conn, busy, now() - last)
-                if (wanted) KeepAlive.status(busy, s.active?.name ?: "your computer") else null
+                if (wanted) KeepAlive.status(busy, s.active?.name ?: "your computer", s.conn == com.nekko.protocol.RelayState.ONLINE && s.savedListAt == null) else null
             }.distinctUntilChanged().collect { line ->
                 _status.value = line
                 // In the app nothing needs keeping alive; on leaving, onForeground starts it.

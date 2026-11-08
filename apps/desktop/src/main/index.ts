@@ -11,6 +11,7 @@ import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
 import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
+import { desktopVersion } from './appVersion.js';
 import { EngineProcess } from './engine-process.js';
 import { startAppLog } from './appLog.js';
 import { createDesktopTray } from './tray.js';
@@ -105,6 +106,7 @@ if (process.env.ELECTRON_RUN_AS_NODE) {
   process.exit(1);
 }
 
+const appVersion = desktopVersion({ isPackaged: app.isPackaged, version: app.getVersion(), appPath: app.getAppPath() });
 app.setName('Nekko Agent');
 registerDevLaunch(app);
 // Scripted demos (scripts/demo): the runner finds elements over this local
@@ -662,7 +664,7 @@ app.whenReady().then(async () => {
       isPackaged: app.isPackaged,
       appPath: app.getAppPath(),
       userData: app.getPath('userData'),
-      version: app.getVersion(),
+      version: appVersion,
       resourcesPath: app.isPackaged ? process.resourcesPath : undefined,
       exePath: process.execPath,
       pid: process.pid,
@@ -738,8 +740,8 @@ app.whenReady().then(async () => {
 
   // Under `npm run dev`, hand the launcher what it needs for its banner.
   void engine.call<ApiServerStatus>(IpcChannels.apiServerStatus)
-    .then((s) => reportDevReady({ version: app.getVersion(), api: s ? { url: s.clientUrl, enabled: s.settings.enabled } : null, dataDir }))
-    .catch(() => reportDevReady({ version: app.getVersion(), api: null, dataDir }));
+    .then((s) => reportDevReady({ version: appVersion, api: s ? { url: s.clientUrl, enabled: s.settings.enabled } : null, dataDir }))
+    .catch(() => reportDevReady({ version: appVersion, api: null, dataDir }));
 
   app.on('activate', () => {
     showWindow();

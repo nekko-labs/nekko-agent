@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { generateKeyPairSync, verify as cryptoVerify, createVerify } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { activityPayload, alertPayload, badgePayload, capBytes, cardForLevel, cardPayload, cardPriority, createPushSender, dismissPayload, makeApnsJwt, makeFcmAssertion } from './push.js';
 
 describe('alert and dismissal payloads', () => {
@@ -153,6 +154,51 @@ describe('the Live Activity card', () => {
     expect(Buffer.byteLength(JSON.stringify(cardPayload({ event: 'start', state: card, attributes }, 1e10)))).toBeLessThan(4096);
     expect(card.chats.length + (card.more as number)).toBe(12);
     expect(card.chats.some((c) => c.id === huge.focusId)).toBe(true);
+  });
+
+  it('preserves full-set totals at every level, including when details exceed either limit', () => {
+    const counts = { needsYou: 1, working: 12, watching: 2, done: 20, failed: 1 };
+    const huge = {
+      chats: Array.from({ length: 12 }, (_, i) => chat(`chat-${i}-${'i'.repeat(150)}`, { callId: 'c'.repeat(150) })),
+      counts,
+      more: 24,
+    };
+    for (const level of ['minimal', 'standard', 'detailed'] as const) {
+      const card = cardForLevel(huge, level)!;
+      expect(card.counts).toEqual(counts);
+      expect(card.chats.length).toBeLessThanOrEqual(8);
+      expect(card.chats.length + card.more!).toBe(36);
+      expect(Buffer.byteLength(JSON.stringify(card))).toBeLessThanOrEqual(3500);
+    }
+    expect(cardForLevel(huge, 'detailed')!.chats.length).toBeLessThan(8);
+    expect(cardForLevel(state, 'detailed')).not.toHaveProperty('counts');
+    expect(cardForLevel({ chats: [], counts: {} }, 'minimal')!.counts).toEqual({});
+  });
+
+  it('preserves the shared producer fixture totals at every privacy level', () => {
+    const fixture = JSON.parse(readFileSync(new URL('../../../packages/shared/fixtures/live-card.json', import.meta.url), 'utf8')) as {
+      build: { name: string; card: { chats: Record<string, unknown>[]; counts: Record<string, number> } | null }[];
+    };
+    for (const entry of fixture.build) {
+      if (!entry.card) continue;
+      for (const level of ['minimal', 'standard', 'detailed'] as const) {
+        expect(cardForLevel(entry.card, level)!.counts, `${entry.name}: ${level}`).toEqual(entry.card.counts);
+      }
+    }
+  });
+
+  it('drops invalid aggregate maps rather than claiming partially authoritative totals', () => {
+    for (const counts of [[], 'bad', null, { done: -1 }, { done: 1.5 }, { done: Infinity }, { done: '20' }, { done: 2147483648 }, { done: 20, unknown: 1 }]) {
+      expect(cardForLevel({ ...state, counts }, 'detailed')).not.toHaveProperty('counts');
+    }
+    expect(cardForLevel({ ...state, counts: { working: 0, done: 20 } }, 'minimal')!.counts).toEqual({ working: 0, done: 20 });
+  });
+
+  it('raises priority for count-only transitions but not map ordering', () => {
+    const previous = { ...state, counts: { working: 2, done: 20 } };
+    expect(cardPriority(previous, { event: 'update', state: { ...previous, counts: { working: 1, done: 21 } } })).toBe(10);
+    expect(cardPriority(previous, { event: 'update', state: { ...previous, counts: { done: 20, working: 2 } } })).toBe(5);
+    expect(cardPriority(state, { event: 'update', state: previous })).toBe(10);
   });
 
   it('builds start, update and end payloads', () => {

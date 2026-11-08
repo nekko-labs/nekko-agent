@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
 
 /*
@@ -83,6 +84,8 @@ data class LiveCardState(
     val listening: Boolean = false,
     /** What the mic heard so far (the iPhone's card mic; always empty on Android). */
     val heard: String = "",
+    /** Full eligible-set totals by raw state, before detail clipping; null on legacy pushes. */
+    val counts: Map<String, Int>? = null,
 ) {
     val focused: LiveChat? get() = chats.firstOrNull { it.id == focusId } ?: chats.firstOrNull()
 
@@ -91,6 +94,7 @@ data class LiveCardState(
             val o = e.obj() ?: JsonObject(emptyMap())
             return LiveCardState(
                 chats = o["chats"].arr().orEmpty().mapNotNull { LiveChat.from(it) },
+                counts = o["counts"].obj()?.mapValues { (_, v) -> (v as JsonPrimitive).int },
                 focusId = o.str("focusId"),
                 more = (o["more"] as? JsonPrimitive)?.intOrNull ?: 0,
                 listening = (o["listening"] as? JsonPrimitive)?.booleanOrNull ?: false,
@@ -125,6 +129,7 @@ object LiveCard {
                 .thenBy { it.index },
         ).map { it.value }
         if (sorted.isEmpty()) return null
+        val counts = sorted.groupingBy { it.state.wire }.eachCount()
         val kept = sorted.take(MAX_CHATS)
         val more = sorted.size - kept.size
 
@@ -139,7 +144,7 @@ object LiveCard {
             if (level != LiveLevel.DETAILED) x = x.copy(reply = "")
             x
         }
-        return LiveCardState(shown, focus ?: pinned ?: shown[0].id, more, previous?.listening ?: false, previous?.heard.orEmpty())
+        return LiveCardState(shown, focus ?: pinned ?: shown[0].id, more, previous?.listening ?: false, previous?.heard.orEmpty(), counts)
     }
 
     /** `Transcript.oneLine`: whitespace runs folded to one space, at most [max] characters ending in "…". */

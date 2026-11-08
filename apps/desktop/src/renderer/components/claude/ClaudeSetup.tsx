@@ -705,7 +705,7 @@ function AnotherAccount({
         Name for the other account
         <input className="input mt-1" value={typed} onChange={(e) => onType(e.target.value)} placeholder="Work" maxLength={40} autoFocus />
         <span className="mt-1 block text-2xs font-normal text-ink-faint">
-          {name ? <>Claude Code keeps this login in its own folder, <code>{claudeAccountFolder(name)}</code>.</> : 'A short name, like Work or Client A.'}
+          {name ? <>Claude Code keeps this login in its own folder, <code>{claudeAccountFolder(name)}</code>.</> : 'A short name, like Work or Client A. One email with a personal plan and an organization? Add each as its own account and pick the other one when Anthropic asks which to use.'}
         </span>
       </label>
       {name && !status && <p className="claude-detect mt-2"><span className="claude-spin" />Checking that folder's sign-in…</p>}

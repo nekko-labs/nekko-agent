@@ -25,7 +25,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, inSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -54,6 +54,7 @@ import type { PendingApproval } from './agent-console/index.js';
 import { replyIconState } from './agent-console/ReplyStatus.js';
 import { LiveTurn, producedTokens, useProducedTokens } from './agent-console/LiveTurn.js';
 import { liveTokenRate } from './agent-console/liveTokenRate.js';
+import { MediaAgentWelcome } from './MediaAgentIntro.js';
 import { ImageModeControls } from './agent-console/ImageModeControls.js';
 import { PhotoModelSetup } from './agent-console/PhotoModelSetup.js';
 import { EditModelOffer } from './agent-console/EditModelOffer.js';
@@ -2156,18 +2157,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // placeholder while the box is empty; ArrowRight types it in.
   const ghostSuggestion = !draft && !errorNotice && liveSuggestions?.next ? liveSuggestions.next : null;
 
-  // More work for a chat that has replied: run it here, or hand it to a subagent.
-  // A slash command isn't work to place, and Enter still means here.
-  const followUp = draft.trim() && !draft.trimStart().startsWith('/') ? draft : null;
-  // Placement chips need typed work to place, even under an agent question:
-  // with an empty box they would advertise an action with nothing to do.
-  // Generated suggestions have their own contextual buttons and location selector.
+  // Generated follow-ups own their destination selector; typed drafts use the composer.
   const canDelegateFollowUp = !imageMode && !remoteBlock && hasProvider && !!session
     && canOfferSubagent(session, delegationStrategy);
-  const offerSubagent = !!followUp && canDelegateFollowUp;
   const showFollowUpChoices = !readOnly && !session?.archivedAt && !draft.trim() && !streaming && !held && !errorNotice && !question && !approval
     && !imageMode && !remoteBlock && hasProvider && !!liveSuggestions?.options.length;
-  const runFollowUp = (wrap?: (text: string) => string) => void send(draft.trim() ? undefined : followUp ?? undefined, undefined, wrap);
 
   const onComposerKeyDown = (e: React.KeyboardEvent<MarkdownEditorElement>) => {
     if (e.nativeEvent.isComposing) return;
@@ -2576,7 +2570,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   const cleanStart = cleanStartWanted && surface === 'full' && !readOnly && welcomeState.welcome && hasProvider && !welcomeState.modelChoice && !imageMode && !!session && !question && !approval;
   // Someone's first ever new chat opens the "Send your first prompt" intro over it, once.
   const [firstPromptIntroClosed, setFirstPromptIntroClosed] = useState(false);
-  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions }));
+  const firstPromptIntro = useStore((s) => !firstPromptIntroClosed && shouldShowFirstPromptIntro({ cleanStart, settings: s.settings, sessions: s.sessions, setupOpen: s.onboardingOpen }));
   const closeFirstPromptIntro = useCallback(() => {
     setFirstPromptIntroClosed(true);
     // If saving fails it simply shows again next time.
@@ -2784,6 +2778,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             </button>}
         </ChatHeader>
         )}
+        {surface !== 'composer' && (session?.chatType === 'image' || session?.chatType === 'video') && <MediaAgentWelcome key={session.chatType} kind={session.chatType} />}
         {/* A sub-agent says so across the top, with a way back to the chat that spawned it. */}
         {surface !== 'composer' && !cleanStart && session?.parentSessionId && <SubagentBanner child={session} parentId={session.parentSessionId} onOpenParent={(id) => (commandCenter ? useStore.getState().focusChatOnWall(id, { keepLayout: true }) : useStore.getState().openChatPane(id))} />}
         {surface !== 'composer' && !cleanStart && showHardware && <ExpertMonitor />}
@@ -2808,7 +2803,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {setupNeeded ? <SetupIllustration /> : <div className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: 'var(--accent-soft)' }}><NekkoAvatar size={30} /></div>}
                 <div>
                   <h2 className="text-base font-semibold">
-                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : needsModel ? 'Pick a model to get started' : userName ? `What should we work on, ${userName}?` : 'What should Nekko Agent work on?'}
+                    {setupNeeded ? 'Bring your first agent to life' : imageMode ? 'What should Nekko Agent draw?' : session?.chatType === 'video' ? 'What story should we make?' : needsModel ? 'Pick a model to get started' : userName ? `What should we work on, ${userName}?` : 'What should Nekko Agent work on?'}
                   </h2>
                   <p className="mx-auto mt-1 max-w-sm text-sm text-ink-faint">
                     {setupNeeded
@@ -2860,14 +2855,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" />
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
-                {/* Where the typed follow-up runs, offered in the conversation like the other next steps. */}
-                {offerSubagent && (
-                  <div className="flex flex-wrap items-center gap-2 py-2 text-xs" role="group" aria-label="Where this work runs" data-work-place>
-                    <button type="button" className="btn btn-outline py-1 text-xs" title="Run it in this chat, with everything said so far. Uses more of this chat's context." onClick={() => runFollowUp()}>Do it here</button>
-                    <button type="button" className="btn btn-outline py-1 text-xs" title="A subagent does this separately and reports back, so this chat stays light." onClick={() => runFollowUp(inSubagent)}>In a subagent</button>
-                    <span className="text-2xs text-ink-faint">Here uses more context</span>
-                  </div>
-                )}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
@@ -2966,10 +2953,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         {readOnly ? (
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
-        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
+        <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : cleanStart ? 'px-4' : 'px-1'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
           {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} />}
           {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
-          <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
+          <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : cleanStart ? 'w-[min(90%,calc(100%-8px))]' : 'w-full'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
               <PlanSheet key={sessionId + '-plan'} sessionId={sessionId} session={session} streaming={streaming} prs={prs} basePath={artifactBasePath} onOpenChild={commandCenter ? (id) => useStore.getState().focusChatOnWall(id, { keepLayout: true }) : undefined} />
             )}

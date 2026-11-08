@@ -119,11 +119,14 @@ enum Kind {
     Resume,
     /// Output: subscribers only, but for the first of a turn or after a wait.
     Stream,
+    /// Accounting enriches an existing turn, never starts or resumes one.
+    Usage,
 }
 
 fn kind_of(event_type: &str) -> Kind {
     match event_type {
         "done" | "error" => Kind::End,
+        "usage" => Kind::Usage,
         "session_meta" | "compaction" | "claude_code_background" => Kind::Meta,
         "tool_approval_required" | "question" => Kind::Wait,
         "question_resolved" | "approval_resolved" | "steered" => Kind::Resume,
@@ -206,6 +209,7 @@ impl Hub {
         let seq = s.seq;
         let key: Arc<str> = s.turns.get_key_value(id).map_or_else(|| id.into(), |(k, _)| k.clone());
         let summary = match (kind, s.turns.get(id)) {
+            (Kind::Usage, _) => false,
             (Kind::Stream, Some(t)) => t.phase == Phase::Waiting || t.last.elapsed() >= QUIET,
             _ => true,
         };
@@ -214,6 +218,11 @@ impl Hub {
                 s.turns.remove(id);
             }
             Kind::Meta => {}
+            Kind::Usage => {
+                if let Some(turn) = s.turns.get_mut(id) {
+                    append(turn, event_type, payload);
+                }
+            }
             // A steer or an answer between turns starts nothing.
             Kind::Resume if !s.turns.contains_key(id) => {}
             Kind::Wait | Kind::Resume | Kind::Stream => {
@@ -359,6 +368,28 @@ mod tests {
         hub.publish_remote(event("@hostile1:s0".into()));
         hub.publish_remote(event("@gomi1234:s1".into()));
         assert_eq!(hub.lock().turns.len(), MAX_REMOTE_TURNS + 1);
+    }
+
+    #[test]
+    fn usage_cannot_start_or_resurrect_a_turn() {
+        for terminal in ["done", "error"] {
+            let hub = Hub::new();
+            let send = |kind| hub.publish("agent:event", json!({ "type": kind, "sessionId": "s1" }), false);
+            send("usage");
+            assert!(hub.replay(&["s1".into()]).is_empty(), "accounting is not a turn start");
+            send("text");
+            send("usage");
+            assert_eq!(hub.lock().turns.get("s1").unwrap().events.len(), 2, "active accounting still replays");
+            send("question");
+            send("usage");
+            assert!(hub.lock().turns.get("s1").unwrap().phase == Phase::Waiting, "accounting cannot resume a wait");
+            send(terminal);
+            send("usage");
+            assert!(hub.replay(&["s1".into()]).is_empty(), "late accounting cannot resurrect {terminal}");
+            assert!(hub.status(&|_| false).is_empty(), "no phantom running summary after {terminal}");
+            send("text");
+            assert_eq!(hub.lock().turns.get("s1").unwrap().events.len(), 1);
+        }
     }
 
     fn summaries(hub: &Hub, events: &[Value]) -> Vec<bool> {

@@ -12,6 +12,7 @@
 //! each phone asked for (`card:set`) and when a phone last sent to a chat.
 
 use serde_json::{Map, Value, json};
+use std::collections::BTreeMap;
 
 /// Unix time of 2001-01-01, where ActivityKit's dates count from.
 pub const REFERENCE_DATE: f64 = 978_307_200.0;
@@ -99,6 +100,9 @@ pub struct LiveChat {
     pub started_at: Option<f64>,
     pub call_id: Option<String>,
     pub severity: Option<String>,
+    /// The waiting call is an MCP tool, so the card offers "Always allow this
+    /// tool" (decision 0054). Left out of the state when false.
+    pub always_allow: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -106,6 +110,8 @@ pub struct LiveCardState {
     pub chats: Vec<LiveChat>,
     pub focus_id: Option<String>,
     pub more: usize,
+    /// Full eligible-set totals by raw state, before clipping; absent on legacy pushes.
+    pub counts: Option<BTreeMap<String, usize>>,
     pub listening: bool,
     pub heard: String,
 }
@@ -134,6 +140,7 @@ impl LiveChat {
             started_at: v.get("startedAt").and_then(Value::as_f64),
             call_id: v.get("callId").and_then(Value::as_str).map(str::to_string),
             severity: v.get("severity").and_then(Value::as_str).map(str::to_string),
+            always_allow: v.get("alwaysAllow").and_then(Value::as_bool).unwrap_or(false),
         })
     }
 
@@ -161,6 +168,9 @@ impl LiveChat {
         if let Some(s) = &self.severity {
             o.insert("severity".into(), json!(s));
         }
+        if self.always_allow {
+            o.insert("alwaysAllow".into(), json!(true));
+        }
         Value::Object(o)
     }
 }
@@ -174,6 +184,7 @@ impl LiveCardState {
                 .map(|a| a.iter().filter_map(LiveChat::from_value).collect())
                 .unwrap_or_default(),
             focus_id: v.get("focusId").and_then(Value::as_str).map(str::to_string),
+            counts: v.get("counts").filter(|v| !v.is_null()).and_then(|v| serde_json::from_value(v.clone()).ok()),
             more: v.get("more").and_then(Value::as_u64).unwrap_or(0) as usize,
             listening: v.get("listening").and_then(Value::as_bool).unwrap_or(false),
             heard: text(v, "heard"),
@@ -185,6 +196,9 @@ impl LiveCardState {
         o.insert("chats".into(), Value::Array(self.chats.iter().map(LiveChat::to_value).collect()));
         if let Some(f) = &self.focus_id {
             o.insert("focusId".into(), json!(f));
+        }
+        if let Some(counts) = &self.counts {
+            o.insert("counts".into(), json!(counts));
         }
         o.insert("more".into(), json!(self.more));
         o.insert("listening".into(), json!(self.listening));
@@ -232,6 +246,10 @@ pub fn build_card(
     if live.is_empty() {
         return None;
     }
+    let mut counts = BTreeMap::new();
+    for (_, chat) in &live {
+        *counts.entry(chat.state.as_str().to_string()).or_insert(0) += 1;
+    }
     let mut kept: Vec<LiveChat> = live.iter().take(MAX_CHATS).map(|(_, c)| (*c).clone()).collect();
     let more = live.len() - kept.len();
 
@@ -262,6 +280,7 @@ pub fn build_card(
     }
     let focus_id = focus.or(pinned).unwrap_or_else(|| kept[0].id.clone());
     let mut card = LiveCardState {
+        counts: Some(counts),
         chats: kept,
         focus_id: Some(focus_id),
         more,
@@ -362,6 +381,7 @@ struct Run {
     needs_you: bool,
     call_id: Option<String>,
     severity: Option<String>,
+    always_allow: bool,
     finished: Option<LiveChatState>,
     finished_at: Option<f64>,
 }
@@ -475,7 +495,9 @@ impl Cards {
             "tool_approval_required" => {
                 let sev = e.get("severity").and_then(Value::as_str).filter(|s| matches!(*s, "high" | "medium"));
                 let sev = sev.unwrap_or("low");
-                let call = e["call"]["id"].as_str().map(|id| (id.to_string(), sev.to_string()));
+                // Only MCP tools offer "Always allow this tool" (`offersAlwaysAllow` on the phone).
+                let mcp = e["call"]["name"].as_str().is_some_and(|n| n.starts_with("mcp__"));
+                let call = e["call"]["id"].as_str().map(|id| (id.to_string(), sev.to_string(), mcp));
                 // The verb only: what a gate asks about is what could carry data out.
                 self.running(&sid, now, tool_verb(&e["call"]), Some(call))
             }
@@ -507,8 +529,9 @@ impl Cards {
         self.update(now, false, start)
     }
 
-    /// `needs`: `Some(call)` when it waits on the phone (an approval's call id and severity, or a question).
-    fn running(&mut self, sid: &str, now: f64, step: String, needs: Option<Option<(String, String)>>) {
+    /// `needs`: `Some(call)` when it waits on the phone (an approval's call id, severity and
+    /// whether it is an MCP tool, or a question).
+    fn running(&mut self, sid: &str, now: f64, step: String, needs: Option<Option<(String, String, bool)>>) {
         let fresh = Run {
             started_at: now,
             last_event_at: now,
@@ -516,6 +539,7 @@ impl Cards {
             needs_you: false,
             call_id: None,
             severity: None,
+            always_allow: false,
             finished: None,
             finished_at: None,
         };
@@ -526,7 +550,8 @@ impl Cards {
         run.last_event_at = now;
         run.step = step;
         run.needs_you = needs.is_some();
-        (run.call_id, run.severity) = needs.flatten().map_or((None, None), |(c, s)| (Some(c), Some(s)));
+        (run.call_id, run.severity, run.always_allow) =
+            needs.flatten().map_or((None, None, false), |(c, s, mcp)| (Some(c), Some(s), mcp));
         self.dismissed.remove(sid);
     }
 
@@ -538,6 +563,7 @@ impl Cards {
             needs_you: false,
             call_id: None,
             severity: None,
+            always_allow: false,
             finished: None,
             finished_at: None,
         });
@@ -547,6 +573,7 @@ impl Cards {
         run.step = step.to_string();
         run.needs_you = false;
         run.call_id = None;
+        run.always_allow = false;
         // Its reply line changed.
         self.wants = true;
     }
@@ -652,6 +679,7 @@ impl Cards {
                     started_at: live.map(|r| r.started_at),
                     call_id: if needs { live.and_then(|r| r.call_id.clone()) } else { None },
                     severity: if needs { live.and_then(|r| r.severity.clone()) } else { None },
+                    always_allow: needs && live.is_some_and(|r| r.always_allow),
                 })
             })
             .collect()
@@ -693,8 +721,11 @@ impl Cards {
         let shape = |s: &LiveCardState| -> Vec<(String, LiveChatState, Option<String>)> {
             s.chats.iter().map(|c| (c.id.clone(), c.state, c.call_id.clone())).collect()
         };
-        let at_once =
-            urgent || start || resend || prev.is_none_or(|p| shape(p) != shape(&state) || p.focus_id != state.focus_id);
+        let at_once = urgent
+            || start
+            || resend
+            || prev
+                .is_none_or(|p| shape(p) != shape(&state) || p.focus_id != state.focus_id || p.counts != state.counts);
         if !at_once && now - self.sent_at < CARD_PUSH_GAP {
             self.pending = true;
             return Vec::new();
@@ -709,7 +740,14 @@ impl Cards {
 
 impl LiveCardState {
     pub fn empty() -> Self {
-        Self { chats: Vec::new(), focus_id: None, more: 0, listening: false, heard: String::new() }
+        Self {
+            chats: Vec::new(),
+            focus_id: None,
+            more: 0,
+            counts: Some(BTreeMap::new()),
+            listening: false,
+            heard: String::new(),
+        }
     }
 }
 
@@ -819,6 +857,9 @@ mod tests {
             let state = LiveCardState::from_value(&c["json"]);
             let states: Vec<&str> = state.chats.iter().map(|c| c.state.as_str()).collect();
             assert_eq!(json!(states), c["states"], "{}", c["name"]);
+            assert_eq!(json!(state.counts), c["counts"], "counts: {}", c["name"]);
+            assert_eq!(LiveCardState::from_value(&state.to_value()), state, "round trip: {}", c["name"]);
+            assert_eq!(state.to_value().get("counts").is_some(), state.counts.is_some());
             if let Some(at) = c.get("finishedAt") {
                 assert_eq!(state.chats[0].finished_at, at.as_f64());
                 // Written back as ActivityKit's default decoder reads a date: a plain number.
@@ -859,6 +900,33 @@ mod tests {
     fn only(frames: &[Value]) -> (String, LiveCardState) {
         assert_eq!(frames.len(), 1, "{frames:?}");
         (frames[0]["type"].as_str().unwrap().to_string(), LiveCardState::from_value(&frames[0]["state"]))
+    }
+
+    #[test]
+    fn a_count_only_transition_beyond_the_details_goes_at_once() {
+        let mut c = standard();
+        for i in 0..9 {
+            c.runs.insert(
+                format!("chat-{i}"),
+                Run {
+                    started_at: T0,
+                    last_event_at: T0,
+                    step: String::new(),
+                    needs_you: i < MAX_CHATS,
+                    call_id: None,
+                    severity: None,
+                    finished: (i == MAX_CHATS).then_some(LiveChatState::Done),
+                    finished_at: (i == MAX_CHATS).then_some(T0),
+                },
+            );
+        }
+        let (_, before) = only(&c.update(T0, false, false));
+        c.runs.get_mut("chat-8").unwrap().finished = Some(LiveChatState::Failed);
+        let (_, after) = only(&c.update(T0 + 1.0, false, false));
+        assert_eq!(before.chats, after.chats);
+        assert_eq!(before.more, after.more);
+        assert_eq!(before.to_value()["counts"], json!({ "needsYou": 8, "done": 1 }));
+        assert_eq!(after.to_value()["counts"], json!({ "needsYou": 8, "failed": 1 }));
     }
 
     #[test]
@@ -924,6 +992,29 @@ mod tests {
         assert_eq!(chat.step, "Run", "a waiting call shows its verb, never its arguments");
         let (_, card) = only(&c.on_event(&ev("tool_result", "s1", json!({})), T0 + 13.0));
         assert_eq!((card.chats[0].state, card.chats[0].call_id.as_deref()), (LiveChatState::Working, None));
+    }
+
+    #[test]
+    fn only_a_waiting_mcp_tool_offers_always_allow_on_the_card() {
+        let mut c = standard();
+        let approval = |id: &str, name: &str| {
+            ev(
+                "tool_approval_required",
+                "s1",
+                json!({ "call": { "id": id, "name": name, "input": {} }, "severity": "high" }),
+            )
+        };
+        let (_, card) = only(&c.on_event(&approval("c1", "bash"), T0));
+        assert!(!card.chats[0].always_allow, "a shell command is never always allowed");
+        assert!(!card.chats[0].to_value().as_object().unwrap().contains_key("alwaysAllow"), "left out when false");
+        let (_, card) = only(&c.on_event(&approval("c2", "mcp__slack__post_message"), T0 + 1.0));
+        assert!(card.chats[0].always_allow);
+        assert_eq!(card.chats[0].to_value()["alwaysAllow"], json!(true));
+        assert_eq!(LiveChat::from_value(&card.chats[0].to_value()), Some(card.chats[0].clone()), "round-trips");
+        let (_, card) = only(&c.on_event(&ev("tool_result", "s1", json!({})), T0 + 2.0));
+        assert!(!card.chats[0].always_allow, "gone once the call is answered");
+        let (_, card) = only(&c.on_event(&ev("done", "s1", json!({})), T0 + 3.0));
+        assert!(!card.chats[0].always_allow);
     }
 
     #[test]

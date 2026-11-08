@@ -195,6 +195,22 @@ final class LiveCardTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(LiveCardState.self, from: data), state)
     }
 
+    /// "Always allow" on the card: only when set, so other cards keep their size,
+    /// and a push without it decodes as off.
+    func testEncodesAlwaysAllowOnlyWhenSet() throws {
+        var c = chat("n", .needsYou)
+        c.callId = "call_7"
+        let off = try JSONSerialization.jsonObject(with: JSONEncoder().encode(c)) as? [String: Any]
+        XCTAssertNil(off?["alwaysAllow"])
+        c.alwaysAllow = true
+        let data = try JSONEncoder().encode(c)
+        let on = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(on?["alwaysAllow"] as? Bool, true)
+        XCTAssertEqual(try JSONDecoder().decode(LiveChat.self, from: data), c)
+        let pushed = try JSONDecoder().decode(LiveChat.self, from: Data(#"{"id":"n","state":"needsYou","callId":"c"}"#.utf8))
+        XCTAssertFalse(pushed.alwaysAllow)
+    }
+
     func testDuplicateIdsInPreviousDoNotTrap() {
         let previous = LiveCardState(chats: [chat("a", .working), chat("a", .needsYou)], focusId: "a", more: 0, listening: false, heard: "")
         let card = build([chat("a", .needsYou)], previous: previous)
@@ -245,6 +261,8 @@ final class LiveCardTests: XCTestCase {
             let name = c["name"] as? String ?? ""
             let state = try decode(LiveCardState.self, c["json"] ?? [:])
             XCTAssertEqual(state.chats.map(\.state.rawValue), c["states"] as? [String], name)
+            XCTAssertEqual(state.counts, c["counts"] as? [String: Int], "counts: \(name)")
+            XCTAssertEqual(try decode(LiveCardState.self, JSONSerialization.jsonObject(with: JSONEncoder().encode(state))), state, "round trip: \(name)")
             if let at = c["finishedAt"] as? Double { XCTAssertEqual(state.chats[0].finishedAt, Date(timeIntervalSinceReferenceDate: at), name) }
             if let at = c["startedAt"] as? Double { XCTAssertEqual(state.chats[0].startedAt, Date(timeIntervalSinceReferenceDate: at), name) }
         }

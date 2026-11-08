@@ -209,7 +209,10 @@ public final class Outbox {
     /// then `chat:queue` mid-run or `chat:send`), waiting up to `wait` seconds. True once
     /// delivered; false while still on its way (the outbox delivers it later). A refusal
     /// throws its reason, and the words are back in the chat's draft, saying why.
-    public func sendWaiting(chatId: String, text: String, wait: TimeInterval) async throws -> Bool {
+    public func sendWaiting(chatId: String, text: String, wait: TimeInterval,
+                            beforeEnqueue: () -> Bool = { true }) async throws -> Bool {
+        // Main actor, no await between the final scope/generation check and persistence.
+        guard beforeEnqueue() else { throw CancellationError() }
         let id = add(chatId: chatId, text: text).id
         awaited[id] = .some(nil)
         let wake = Wake()

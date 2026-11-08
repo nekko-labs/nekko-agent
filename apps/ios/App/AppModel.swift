@@ -38,7 +38,9 @@ final class AppModel {
     private let activities = RunActivities()
     /// The card's mic: its own microphone use, apart from any composer's (they share one microphone).
     private let cardDictation = Dictation()
-    private let talker = TalkRunner()
+    private let talker = NekkoVoiceRunner()
+    private let voiceDispatcher = NekkoVoiceDispatcher()
+    private var voiceComputerId: String?
     /// Made in `start()`, with its handlers.
     private var network: NetworkWatcher?
     private var started = false
@@ -51,6 +53,11 @@ final class AppModel {
     var openChat: String?
     /// `nekko-agent://chat/<id>?listen=1` (the card's mic on iOS 17): that chat's composer starts listening once.
     var listenIn: String?
+    /// `nekko-agent://chat/<id>?alwaysAllow=<call id>` (the notification's or the
+    /// Live Activity's "Always allow this tool"): that chat's approval card runs
+    /// its own "Always allow" once, for that call only.
+    var alwaysAllowIn: AlwaysAllowRequest?
+    struct AlwaysAllowRequest: Equatable { var chatId: String; var callId: String }
     /// The first message typed on New chat (and its photos), sent by that chat's screen once it opens.
     var firstMessages: [String: UnsentPrompt] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
@@ -190,6 +197,7 @@ final class AppModel {
         notifier.install()
         notifier.onApprove = { [weak self] sid, callId, allow in await self?.answerApproval(sid, callId, allow) }
         notifier.onOpen = { [weak self] sid in self?.openChat = sid }
+        notifier.onAlwaysAllow = { [weak self] sid, callId in self?.handle(url: LiveCardView.alwaysAllowURL(sid, callId: callId)) }
         IntentRouter.approve = { [weak self] sid, callId, allow in await self?.answerApproval(sid, callId, allow) }
         IntentRouter.stop = { [weak self] sid in await self?.stopChat(sid) }
         store.onComputerEvent = { [weak self] id, e in self?.onEvent(e, computerId: id) }
@@ -261,6 +269,8 @@ final class AppModel {
         foreground = false
         // A `?listen=1` not taken by now is stale: listening never starts later by itself.
         listenIn = nil
+        // Nor does an "Always allow" left untaken run later by itself.
+        alwaysAllowIn = nil
         lock.didEnterBackground(enabled: prefs.appLock)
         // What is typed is on disk before iOS may end the app.
         store.drafts.flush()
@@ -345,28 +355,88 @@ final class AppModel {
         await store.cardAction(focus: focus, dismiss: dismiss)
     }
 
-    /// The card's mic (`TalkToChatIntent`, after Face ID): the connection starts while it
-    /// listens, so the computer can transcribe. The words go through the outbox (one
-    /// `session:get`, then `chat:queue` mid-run or `chat:send`), waited on for up to 10 s:
-    /// a refusal throws ("Not sent: ...", the words back in the chat's draft); no answer
-    /// yet still reads "Sent", since the outbox delivers it later.
+    private func voiceScopeAllowed(_ id: String) -> Bool {
+        activities.card?.attributes.computerId == id &&
+        NekkoVoiceScope.permits(computerId: id, activeId: store.activeId, state: store.state(of: id))
+    }
+
+    /// Authenticated app-wide voice. Never routes plain speech to focusId and never
+    /// publishes the captured transcript. Delivery is distinct from completion.
     private func wireTalk() {
         talker.capture = { [weak self] in
-            guard let self else { return "" }
+            guard let self, let id = self.voiceComputerId,
+                  self.voiceScopeAllowed(id) else { throw CancellationError() }
             self.start(force: true)
             self.store.resume()
-            return try await self.cardDictation.captureOnce(store: self.store)
+            return try await self.cardDictation.captureOnce(store: self.store, computerId: id)
         }
         talker.finish = { [weak self] in self?.cardDictation.stopListening() }
         talker.discard = { [weak self] in self?.cardDictation.discard() }
-        talker.send = { [weak self] sid, text in
-            guard let self else { return }
-            // Offline after 10 s: leave it in the outbox rather than spend another 10 s of the intent.
-            let online = await self.waitOnline(seconds: 10)
-            _ = try await self.store.outbox.sendWaiting(chatId: sid, text: text, wait: online ? 10 : 0)
+        talker.onCancel = { [weak self] in self?.voiceDispatcher.cancel() }
+        talker.routeWithCommit = { [weak self] text, permit in
+            guard let self, let id = self.voiceComputerId, permit.isCurrent,
+                  self.voiceScopeAllowed(id),
+                  let card = self.activities.card, card.attributes.computerId == id else {
+                return "Not sent. Card scope changed. Open app."
+            }
+            let loaded = id == self.store.activeId ? self.store.summariesLoaded : self.store.peers[id]?.loaded == true
+            let context = NekkoVoiceDispatcher.Context(
+                computerId: id, computerName: card.attributes.computerName,
+                online: self.store.state(of: id) == .online, loaded: loaded,
+                card: card.state,
+                targets: self.store.chats(on: id).filter { !$0.archived }.map { .init(id: $0.id, name: $0.title) })
+            switch self.voiceDispatcher.dispatch(text, context: context) {
+            case .message(let reply): return reply
+            case .send(let computerId, let sid, let message):
+                // Outbox is active-computer scoped. Do not change the user's selection
+                // or accidentally enqueue to another computer during a suspension.
+                guard self.store.activeId == computerId else {
+                    return "Not sent. Open app on this computer to send."
+                }
+                let confirmedName = context.targets.first { $0.id == sid }?.name
+                let delivered = try await CardVoiceDelivery.send(
+                    outbox: self.store.outbox, sessionId: sid, text: message, permit: permit,
+                    waitOnline: { await self.waitOnline(seconds: 10) },
+                    allowed: {
+                        NekkoVoiceScope.permitsDelivery(
+                            computerId: computerId, activeId: self.store.activeId,
+                            cardComputerId: self.activities.card?.attributes.computerId,
+                            state: self.store.state(of: computerId),
+                            targets: self.store.chats(on: computerId).map {
+                                .init(id: $0.id, name: $0.title, archived: $0.archived)
+                            }, sessionId: sid, confirmedName: confirmedName)
+                    })
+                guard self.store.activeId == computerId else {
+                    return "Delivery not confirmed. Computer changed. Open app to review the original computer's outbox."
+                }
+                return delivered ? "Sent to the confirmed chat. Not completed. Open app for progress." : "Queued, not sent yet. Open app to review delivery."
+            }
         }
-        talker.show = { [weak self] listening, heard, to in self?.activities.talk(listening: listening, heard: heard, sentTo: to) }
-        IntentRouter.talk = { [weak self] sid in await self?.talker.talk(sid) }
+        talker.show = { [weak self] listening, reply in self?.activities.talk(listening: listening, heard: reply) }
+        IntentRouter.talkToNekko = { [weak self] computerId in
+            guard let self else { return }
+            // This path is invoked only by authenticated recording intents.
+            guard UIApplication.shared.isProtectedDataAvailable,
+                  self.activities.card?.attributes.computerId == computerId else {
+                self.voiceDispatcher.cancel()
+                self.activities.talk(listening: false, heard: "Not sent. Unlock iPhone and open app to try voice.")
+                return
+            }
+            // Do not mutate the scope of a capture already in flight.
+            if self.talker.busy {
+                if self.voiceComputerId == computerId { self.talker.finishListening() }
+                return
+            }
+            self.voiceComputerId = computerId
+            await self.talker.talk()
+            self.voiceComputerId = nil
+        }
+        // Compatibility with a card drawn before this update: ignore its chat id.
+        IntentRouter.talk = { [weak self] _ in
+            guard let id = self?.activities.card?.attributes.computerId else { return }
+            await IntentRouter.talkToNekko?(id)
+        }
+        IntentRouter.finishTalk = { [weak self] in self?.talker.finishListening() }
         IntentRouter.cancelTalk = { [weak self] in self?.talker.cancel() }
     }
 
@@ -379,6 +449,16 @@ final class AppModel {
             return false
         }
         listenIn = nil
+        return true
+    }
+
+    /// The approval card of `chatId` takes a waiting "Always allow" once, for the
+    /// call it was asked for only, and never behind the app lock. The card then
+    /// does what its own button does: the save asks for Face ID or the passcode,
+    /// and nothing is allowed unless the save went through.
+    func takeAlwaysAllow(_ chatId: String, callId: String) -> Bool {
+        guard let want = alwaysAllowIn, want.chatId == chatId, want.callId == callId, !(prefs.appLock && lock.locked) else { return false }
+        alwaysAllowIn = nil
         return true
     }
 
@@ -487,12 +567,16 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link), `nekko-agent://chat/<id>` (`?listen=1` starts listening), `nekko-agent://new` or `nekko-agent://chats`.
+    /// edition link), `nekko-agent://chat/<id>` (`?listen=1` starts listening, `?alwaysAllow=<call id>`
+    /// runs that call's "Always allow this tool"), `nekko-agent://new` or `nekko-agent://chats`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
-            let listen = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "listen" && $0.value == "1" } == true
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let listen = items.contains { $0.name == "listen" && $0.value == "1" }
             listenIn = listen ? openChat : nil
+            let always = items.first { $0.name == "alwaysAllow" }?.value.flatMap { $0.isEmpty ? nil : $0 }
+            alwaysAllowIn = openChat.flatMap { chat in always.map { AlwaysAllowRequest(chatId: chat, callId: $0) } }
             return
         }
         if url.scheme == "nekko-agent", url.host == "new" {
@@ -532,6 +616,17 @@ final class AppModel {
         showNotificationStep = false
         prefs.onboarded = true
         if allowNotifications, await notifier.requestPermission() { registerForPush() }
+        await permissionChecklistChanged()
+    }
+
+    /// Reconcile a deliberate checklist change, including first-pair APNs enrollment.
+    func permissionChecklistChanged() async {
+        guard !NativeFixtureRoute.isolated else { return }
+        await refreshNotificationPermission()
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if [.authorized, .provisional, .ephemeral].contains(status), !store.computers.isEmpty {
+            registerForPush()
+        }
     }
 
     /// Settings → Notifications: one kind on or off, and the relay asked for only the kinds on.
@@ -743,5 +838,17 @@ final class AppModel {
             return "Tailscale is on, but \(c.relayHost) doesn’t answer. Check that \(c.name) is awake, signed in to the same tailnet, and running its relay."
         }
         return nil
+    }
+}
+
+/// Injectable preparation for the app's real outbox path, without app lifecycle IO.
+@MainActor
+enum CardVoiceDelivery {
+    static func send(outbox: Outbox, sessionId: String, text: String, permit: NekkoVoiceCommit,
+                     waitOnline: () async -> Bool, allowed: @escaping () -> Bool) async throws -> Bool {
+        guard permit.isCurrent, allowed() else { throw CancellationError() }
+        let online = await waitOnline()
+        return try await outbox.sendWaiting(chatId: sessionId, text: text, wait: online ? 10 : 0,
+                                            beforeEnqueue: { permit.commit(if: allowed) })
     }
 }

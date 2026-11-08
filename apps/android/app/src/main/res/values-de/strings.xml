@@ -4,6 +4,9 @@
     <string name="widget_description">Wie viele Chats dich brauchen und wie viele arbeiten. Nur Zahlen, nie was sie sagen.</string>
     <string name="shortcut_new_chat">Neuer Chat</string>
     <string name="shortcut_new_chat_long">Neuer Chat auf deinem Computer</string>
+    <string name="dashboard_talk">Mit Nekko sprechen</string>
+    <string name="dashboard_open">App öffnen</string>
+    <string name="dashboard_voice_fallback">Die Spracheingabe öffnet die App. Entsperren und dann auf Zuhören tippen.</string>
     <string name="chats_showmodel">Modell</string>
     <string name="chats_card_details">Kartendetails</string>
     <string name="chats_showupdated">Aktualisierungszeit</string>

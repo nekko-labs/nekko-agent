@@ -1,7 +1,6 @@
 /**
  * Ctrl/⌘ + Plus or Minus, and Ctrl/⌘ + scroll wheel, step Settings' text size
- * (`textScale`) up or down, and Ctrl/⌘+0 puts it back to 100%. They move the same setting Style and Accessibility
- * show, so there is still only one scale.
+ * (`textScale`) up or down, and Ctrl/⌘+0 puts it back to 100%. They move the same setting Style shows, so there is still only one scale.
  */
 import { saveSettings } from './settingsIndex.js';
 import { SHORTCUTS } from './shortcuts.js';

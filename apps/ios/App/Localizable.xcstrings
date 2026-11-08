@@ -2120,6 +2120,46 @@
         }
       }
     },
+    "%lld watching": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld unter Beobachtung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld en seguimiento"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld en suivi"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件を監視中"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld em acompanhamento"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个正在监控"
+          }
+        }
+      }
+    },
     "%lld working": {
       "localizations": {
         "de": {
@@ -6535,6 +6575,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "拷贝链接"
+          }
+        }
+      }
+    },
+    "Building": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Arbeit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En curso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En cours"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業中"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em andamento"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进行中"
           }
         }
       }
@@ -12303,6 +12383,46 @@
         }
       }
     },
+    "Done in the last 2 hours": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In den letzten 2 Stunden fertig"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizados en las últimas 2 horas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminés ces 2 dernières heures"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "過去2時間に完了"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Concluídos nas últimas 2 horas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 2 小时内完成"
+          }
+        }
+      }
+    },
     "Double-tap to fold or unfold the group.": {
       "localizations": {
         "de": {
@@ -13625,6 +13745,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "正在寻找空闲的电脑…"
+          }
+        }
+      }
+    },
+    "Finish listening": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuhören beenden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar de escuchar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer l’écoute"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞き取りを終了"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar de ouvir"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束聆听"
+          }
+        }
+      }
+    },
+    "Finish speaking": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprechen beenden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar de hablar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer de parler"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "発話を終了"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminar de falar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束说话"
           }
         }
       }
@@ -19119,6 +19319,46 @@
         }
       }
     },
+    "Need input": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingabe nötig"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Necesitan respuesta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réponse requise"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "入力待ち"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Precisam de resposta"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要输入"
+          }
+        }
+      }
+    },
     "Needs you": {
       "localizations": {
         "de": {
@@ -23285,6 +23525,86 @@
         }
       }
     },
+    "Open app": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App öffnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir app"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir l’app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アプリを開く"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开应用"
+          }
+        }
+      }
+    },
+    "Open app for voice": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App für Sprache öffnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir app para hablar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir l’app pour parler"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声操作はアプリで"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir app para falar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开应用以使用语音"
+          }
+        }
+      }
+    },
     "Open at launch": {
       "localizations": {
         "de": {
@@ -24531,6 +24851,46 @@
         }
       }
     },
+    "Partial counts · open app": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unvollständige Zahlen · App öffnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recuentos parciales · abrir app"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Totaux partiels · ouvrir l’app"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一部の集計 · アプリを開く"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contagens parciais · abrir app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分计数 · 打开应用"
+          }
+        }
+      }
+    },
     "Paste": {
       "localizations": {
         "de": {
@@ -25333,6 +25693,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Privacy Shield"
+          }
+        }
+      }
+    },
+    "Processing…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird verarbeitet…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Procesando…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traitement…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "処理中…"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processando…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "处理中…"
           }
         }
       }
@@ -28497,6 +28897,46 @@
         }
       }
     },
+    "See agent counts without chat text. Talk to Nekko asks you to unlock first. Say status, or send to a named chat and confirm the exact message. iOS 17 opens the app for voice.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agentenzahlen ohne Chattext sehen. Mit Nekko sprechen erfordert zuerst das Entsperren. Sagen Sie status oder senden Sie an einen benannten Chat und bestätigen Sie die genaue Nachricht. iOS 17 öffnet die App für Sprache."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consulta los recuentos de agentes sin texto del chat. Hablar con Nekko pide desbloquear primero. Di status o envía a un chat por su nombre y confirma el mensaje exacto. iOS 17 abre la app para hablar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consultez le nombre d’agents sans texte de chat. Parler à Nekko demande d’abord de déverrouiller. Dites status, ou envoyez à un chat nommé et confirmez le message exact. iOS 17 ouvre l’app pour parler."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットのテキストなしでエージェント数を表示します。Nekkoに話しかけるには、まずロックを解除します。statusと話すか、名前を指定したチャットへの送信を指示し、同じメッセージを確認します。iOS 17では音声操作のためにアプリを開きます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Veja as contagens de agentes sem texto das conversas. Falar com Nekko pede para desbloquear primeiro. Diga status ou envie para uma conversa pelo nome e confirme a mensagem exata. O iOS 17 abre o app para falar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看代理数量，不显示聊天文本。与 Nekko 对话需要先解锁。说出 status，或指定聊天名称发送消息并确认完全相同的消息。iOS 17 会打开应用以使用语音。"
+          }
+        }
+      }
+    },
     "Selected": {
       "localizations": {
         "de": {
@@ -31623,6 +32063,46 @@
         }
       }
     },
+    "Status may be out of date": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status möglicherweise veraltet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estado puede estar desactualizado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’état peut ne plus être à jour"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状態が古い可能性があります"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O estado pode estar desatualizado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状态可能已过期"
+          }
+        }
+      }
+    },
     "Step %lld of 3": {
       "localizations": {
         "de": {
@@ -32503,6 +32983,46 @@
         }
       }
     },
+    "Talk to Nekko": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Nekko sprechen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hablar con Nekko"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parler à Nekko"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nekkoに話しかける"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falar com Nekko"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与 Nekko 对话"
+          }
+        }
+      }
+    },
     "Talk to this chat": {
       "localizations": {
         "de": {
@@ -33063,6 +33583,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "检查结果和日志（文本形式）：主机、状态和耗时，绝不包含密钥、代码或消息。"
+          }
+        }
+      }
+    },
+    "The dashboard shows counts, not chat messages. This level still allows chat details through the relay and Apple’s push service. Choose Minimal for counts only. Talk to Nekko asks you to unlock first; iOS 17 opens the app for voice.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Dashboard zeigt Zahlen, keine Chatnachrichten. Diese Stufe erlaubt weiterhin Chatdetails über das Relay und Apples Push-Dienst. Wählen Sie Minimal für reine Zahlen. Mit Nekko sprechen erfordert zuerst das Entsperren; iOS 17 öffnet die App für Sprache."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El panel muestra recuentos, no mensajes. Este nivel sigue permitiendo detalles del chat a través del relay y del servicio de notificaciones de Apple. Elige Mínimo para solo recuentos. Hablar con Nekko pide desbloquear primero; iOS 17 abre la app para hablar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le tableau de bord affiche des totaux, pas les messages. Ce niveau permet toujours aux détails des chats de passer par le relais et le service de notifications d’Apple. Choisissez Minimal pour les totaux seuls. Parler à Nekko demande d’abord de déverrouiller ; iOS 17 ouvre l’app pour parler."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダッシュボードにはメッセージではなく件数が表示されます。このレベルでは、チャットの詳細がリレーとAppleのプッシュサービスを引き続き経由します。件数のみにするには最小限を選択してください。Nekkoに話しかけるには、まずロックを解除します。iOS 17では音声操作のためにアプリを開きます。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O painel mostra contagens, não mensagens. Este nível ainda permite detalhes das conversas pelo relay e pelo serviço de notificações da Apple. Escolha Mínimo para apenas contagens. Falar com Nekko pede para desbloquear primeiro; o iOS 17 abre o app para falar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仪表盘显示计数，而非聊天消息。此级别仍允许聊天详情经过中继和 Apple 推送服务。选择“最简”以仅传输计数。与 Nekko 对话需要先解锁；iOS 17 会打开应用以使用语音。"
           }
         }
       }
@@ -38933,6 +39493,46 @@
         }
       }
     },
+    "%lld failed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld fehlgeschlagen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld fallidos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld en échec"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld件失敗"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld com falha"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个失败"
+          }
+        }
+      }
+    },
     "%lld files changed": {
       "localizations": {
         "de": {
@@ -39769,6 +40369,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "聊天运行的位置。选择另一台电脑会显示它的模型和文件夹；本地模型在那台电脑自己的硬件上运行。"
+          }
+        }
+      }
+    },
+    "Always allow": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Immer erlauben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir siempre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toujours autoriser"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常に許可"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sempre permitir"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终允许"
+          }
+        }
+      }
+    },
+    "Opens the chat to allow this call and stop asking for this tool in it": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet den Chat, um diesen Aufruf zu erlauben und dort nicht mehr nach diesem Tool zu fragen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el chat para permitir esta llamada y dejar de preguntar por esta herramienta en él"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre la discussion pour autoriser cet appel et ne plus demander pour cet outil"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "チャットを開いてこの呼び出しを許可し、そのチャットではこのツールについて確認しなくなります"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre o chat para permitir esta chamada e deixar de perguntar sobre esta ferramenta nele"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开聊天以允许此次调用，并在该聊天中不再询问此工具"
           }
         }
       }

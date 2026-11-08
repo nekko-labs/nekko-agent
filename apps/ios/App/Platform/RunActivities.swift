@@ -64,6 +64,8 @@ final class RunActivities {
         var step = ""
         var callId: String?
         var severity: String?
+        /// The waiting call is an MCP tool ("Always allow" on the card).
+        var alwaysAllow = false
         var finished: LiveChatState?
         var finishedAt: Date?
     }
@@ -112,12 +114,13 @@ final class RunActivities {
     func onEvent(_ e: AgentEvent) {
         let sid = e.sessionId
         let now = Date()
-        func running(_ step: String, callId: String? = nil, severity: String? = nil) {
+        func running(_ step: String, callId: String? = nil, severity: String? = nil, alwaysAllow: Bool = false) {
             var run = runs[sid].flatMap { $0.finished == nil ? $0 : nil } ?? Run(startedAt: now, lastEventAt: now)
             run.lastEventAt = now
             run.step = step
             run.callId = callId
             run.severity = severity
+            run.alwaysAllow = alwaysAllow
             runs[sid] = run
             dismissed.remove(sid)
         }
@@ -128,12 +131,14 @@ final class RunActivities {
             run.finishedAt = now
             run.step = step
             run.callId = nil
+            run.alwaysAllow = false
             runs[sid] = run
         }
         switch e {
         case .text, .reasoning: running(String(localized: "Writing…"))
         case .toolCall(_, let call): running(Transcript.toolLabel(call))
-        case .approvalRequired(_, let a): running(Transcript.toolVerb(a.call), callId: a.call.id, severity: a.severity.rawValue)
+        case .approvalRequired(_, let a): running(Transcript.toolVerb(a.call), callId: a.call.id, severity: a.severity.rawValue,
+                                                   alwaysAllow: ChatModel.offersAlwaysAllow(a.call))
         case .question(_, let q): running(q.questions.first?.question ?? String(localized: "A question for you"))
         case .toolResult, .questionResolved: running(String(localized: "Working…"))
         case .done: finish(.done, String(localized: "Finished"))
@@ -170,7 +175,8 @@ final class RunActivities {
         self.sentTo = sentTo.map { id in (id, state.chats.first { $0.id == id }?.reply ?? "") }
         noteAt = sentTo == nil && !heard.isEmpty && !listening ? now : nil
         card.update(state)
-        lastUpdate = Date()
+        lastUpdate = now
+        if !listening, state.chats.isEmpty { refresh(now: now, urgent: true) }
     }
 
     /// Starts, updates or ends the card to match the chats now.
@@ -187,12 +193,18 @@ final class RunActivities {
         reconcile()
         let level = level()
         let chats: [LiveChat], computerId: String, computerName: String
+        var cached: LiveCardState?
         if let src = source() {
             chats = liveChats(src, now: now)
             (computerId, computerName) = (src.computerId, src.computerName)
         } else if let card {
             // A tap on the card can launch the app before it has the list.
-            chats = card.state.chats.filter { !dismissed.contains($0.id) }
+            cached = card.state
+            chats = card.state.chats.filter {
+                guard !dismissed.contains($0.id) else { return false }
+                guard $0.state == .done || $0.state == .failed, let at = $0.finishedAt else { return true }
+                return now.timeIntervalSince(at) <= LiveCardRules.finishedTail
+            }
             (computerId, computerName) = (card.attributes.computerId, card.attributes.computerName)
         } else {
             return
@@ -201,9 +213,28 @@ final class RunActivities {
         // A card's level (and computer) is fixed for its life: a change starts a new one.
         if let card, card.attributes != attributes { end() }
         let previous = card?.state ?? swiped
-        guard var state = buildCard(chats: chats, previous: previous, pinnedFocus: pinnedFocus, level: level, now: now) else {
-            end()
-            return
+        guard level != .none else { end(); return }
+        var rebuilt = buildCard(chats: chats, previous: previous, pinnedFocus: pinnedFocus, level: level, now: now)
+        // The cache carries only a clipped subset. Hidden chats still count, and
+        // local capture/dispatch owns the card even after its last chat expires.
+        if rebuilt == nil, cached.map({ $0.more > 0 || $0.counts?.values.contains(where: { $0 > 0 }) == true }) == true || previous?.listening == true {
+            rebuilt = LiveCardState(chats: [], focusId: nil, more: 0,
+                                    listening: previous?.listening ?? false, heard: previous?.heard ?? "", counts: [:])
+        }
+        guard var state = rebuilt else { end(); return }
+        if let cached {
+            state.more += cached.more
+            state.counts = cached.counts
+            // Only known removals can change cached totals. Never infer totals
+            // from the surviving detail rows, including for legacy nil counts.
+            let kept = Set(chats.map(\.id))
+            for chat in cached.chats where !kept.contains(chat.id) {
+                if let count = state.counts?[chat.state.rawValue] {
+                    state.counts?[chat.state.rawValue] = max(0, count - 1)
+                }
+            }
+            if state.chats.isEmpty, state.more == 0, !state.listening,
+               state.counts?.values.contains(where: { $0 > 0 }) != true { end(); return }
         }
         if let sent = sentTo, state.focusId != sent.id || state.chats.first(where: { $0.id == sent.id })?.reply != sent.reply {
             state.heard = ""
@@ -214,7 +245,7 @@ final class RunActivities {
             noteAt = nil
         }
         if state.focusId != pinnedFocus { pinnedFocus = nil }
-        scheduleExpiry(state)
+        scheduleExpiry(state, now: now)
         guard let card else {
             if let gone = swiped {
                 swiped = state
@@ -232,6 +263,7 @@ final class RunActivities {
         guard state != previous else { return }
         func shape(_ s: LiveCardState?) -> [String] { s?.chats.map { "\($0.id) \($0.state) \($0.callId ?? "")" } ?? [] }
         let seenAtOnce = urgent || state.focusId != previous?.focusId || shape(state) != shape(previous)
+            || state.counts != previous?.counts || state.more != previous?.more
         if !seenAtOnce, let lastUpdate, now.timeIntervalSince(lastUpdate) < 2 {
             if trailing == nil {
                 let at = lastUpdate.addingTimeInterval(2)
@@ -336,15 +368,21 @@ final class RunActivities {
                             reply: replyLine(s.lastReplyText), closeWord: closeWord(for: s.id, failed: state == .failed),
                             finishedAt: finished ? run?.finishedAt : nil,
                             callId: state == .needsYou ? live?.callId : nil, severity: state == .needsYou ? live?.severity : nil,
-                            startedAt: live?.startedAt, title: title)
+                            startedAt: live?.startedAt, title: title,
+                            alwaysAllow: state == .needsYou && live?.alwaysAllow == true)
         }
     }
 
     /// Ends the card on time when its last finished chat's two hours are up (while the app runs).
-    private func scheduleExpiry(_ state: LiveCardState) {
+    private func scheduleExpiry(_ state: LiveCardState, now: Date) {
         expiry?.cancel()
-        guard let first = (runs.values.compactMap(\.finishedAt) + state.chats.compactMap(\.finishedAt)).min() else { return }
-        let at = first.addingTimeInterval(LiveCardRules.finishedTail + 1)
+        expiry = nil
+        // An expired chat retained by voice must not schedule a zero-delay
+        // refresh forever. Only future deadlines can wake the card again.
+        let deadlines = (runs.values.compactMap(\.finishedAt) + state.chats.compactMap(\.finishedAt))
+            .map { $0.addingTimeInterval(LiveCardRules.finishedTail + 1) }
+            .filter { $0 > now }
+        guard let at = deadlines.min() else { return }
         expiry = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(max(0, at.timeIntervalSinceNow) * 1_000_000_000))
             guard !Task.isCancelled else { return }

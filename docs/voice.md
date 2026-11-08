@@ -54,9 +54,24 @@ The message box on iPhone has one microphone, and it starts a [hands-free conver
 
 Without Whisper on your computer, speech is turned into text on the iPhone only, never on a server.
 
-### From the Lock Screen
+### From the status dashboard
 
-With **Settings > While a chat runs > Live Activities** set to **Detailed**, the card on the Lock Screen and in the Dynamic Island has a microphone on the chip of the chat it shows. Tap it and the iPhone asks for Face ID (or your passcode) first. Then say one message: the card shows "Listening…" and stops at your first pause (or after 30 seconds without one). What you said goes to the chat the card shows, as if you had typed it there; while the chat is working it waits in that chat's queue. The card then shows "Sent: " and your words until the chat's reply line takes their place. If your computer doesn't answer within 10 seconds (it's offline, say), the card still says "Sent": the message waits on the iPhone and goes when the computer is back. If your computer turns it down, the card says "Not sent" and why, and your words wait in that chat's message box. **Send to** on the card sends what you have said so far without waiting for the pause, and **Cancel** sends nothing. Speech is turned into text the same way as in a chat: Whisper on your computer, or on the iPhone only, never on a server. If it couldn't be turned into text, the card says "Not sent" and why, for about a minute. On iOS 17 the microphone opens the chat with listening already on instead, once you have unlocked the app (with **Hold to talk**, it just opens the chat).
+**Implemented in the current worktree; not yet native-verified or shipped.** The Lock Screen/expanded Dynamic Island card shows Building, Need input and Done counts for the named computer. Done covers the last two hours, not all time. Watching/Failed and stale/partial detail appear when relevant. The card no longer sends plain speech to a focused chat. All enabled Live Activity levels use this dashboard; choose Minimal to avoid chat-text push payloads. Standard/Detailed still allow chat details through the relay and Apple’s push service even though the dashboard draws counts.
+
+On iOS 18+, **Talk to Nekko** uses an authenticated recording intent: Face ID/passcode comes before capture. **Finish speaking** ends capture; **Cancel** discards current input. The background recording path still needs physical-iPhone verification. On iOS 17, **Open app for voice** opens the chat list without automatic listening. Secondary **Open app** leads to review, questions and approvals.
+
+Dashboard commands are separate from the composer commands above, with **English grammar initially**:
+
+| Say | Result |
+| --- | --- |
+| `status` | Reports the same computer’s counts, labeling offline/stale or partial information. |
+| `send to NAME saying MESSAGE` | Stages a message to a uniquely named chat; nothing sent yet. |
+| `confirm send to NAME saying MESSAGE` | Confirms the same exact name and message on the same computer within 60 seconds. |
+| `cancel` | Clears pending confirmation; does not recall queued or dispatched work. |
+
+Use the full chat name. Missing/ambiguous names, changed messages and expired confirmations are refused; open the app to review. This is not a free-form assistant and cannot approve tools, stop work or perform other actions. Queued is not sent; sent is not completed. Full captured transcripts are not copied into the Lock Screen payload.
+
+On Android, the notification’s **Talk to Nekko** opens a foreground voice sheet behind the app lock. Unlock, then tap **Listen** explicitly. Backgrounding cancels capture; there is no background microphone. It uses the same grammar and reports a confirmed command as queued, not confirmed delivered/completed. Android phone recognition may use its provider’s network service, unlike iOS’s on-device-only phone fallback. Native tests/evidence and physical microphone/authentication checks for this redesign remain pending on both platforms.
 
 ### Hands-free conversation on iPhone
 

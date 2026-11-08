@@ -35,9 +35,9 @@ object KeepAlive {
     fun chip(busyChats: Int): String = if (busyChats <= 1) "Running" else "$busyChats running"
 
     /** What the ongoing notification says while the service should run. */
-    data class Status(val line: String, val chip: String)
+    data class Status(val line: String, val chip: String, val fresh: Boolean = true)
 
-    fun status(busyChats: Int, computer: String): Status = Status(line(busyChats, computer), chip(busyChats))
+    fun status(busyChats: Int, computer: String, fresh: Boolean = true): Status = Status(line(busyChats, computer), chip(busyChats), fresh)
 
     /** Between the service starting and the first status (or the last one going away). */
     val FINISHING = Status("Finishing up", "Running")

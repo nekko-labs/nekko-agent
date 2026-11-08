@@ -1267,6 +1267,9 @@ video { filter: brightness(1.0001); }
 .contributor-avatar:hover .contributor-name, .contributor-avatar:focus-visible .contributor-name { visibility: visible; }
 .contributors-status { margin-top: 24px; }
 .contributors-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 28px; margin-top: 24px; }
+.contributors-links .card-link { margin-top: 0; }
+/* Nekko Labs team: listed first, ringed in the brand pinks with a soft glow. */
+.contributor-avatar.is-team { border: 2px solid transparent; background: linear-gradient(var(--bg-2), var(--bg-2)) padding-box, linear-gradient(135deg, #f3e8ee, #c99bb3 50%, #854f6c) border-box; box-shadow: 0 0 0 1px rgba(201, 155, 179, 0.35), 0 0 14px rgba(201, 155, 179, 0.85), 0 0 32px rgba(133, 79, 108, 0.6); }
 @media (max-width: 600px) {
   .contributor-wall { gap: 10px; max-width: 310px; }
   .contributor-avatar { width: 48px; height: 48px; }

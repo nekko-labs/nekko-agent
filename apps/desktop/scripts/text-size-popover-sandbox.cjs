@@ -92,8 +92,8 @@ app.whenReady().then(async () => {
         if (scale === 150) await capture(`${view}-150`);
       }
     }
-    await run(`document.getElementById('settings-accessibility')?.scrollIntoView({ block: 'start' })`);
-    await capture('accessibility-150-page-zoom');
+    await run(`document.getElementById('settings-style')?.scrollIntoView({ block: 'start' })`);
+    await capture('style-150-page-zoom');
   } catch (e) {
     report.errors.push(String(e && e.stack || e));
   }

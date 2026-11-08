@@ -140,6 +140,30 @@ describe('liveRuns', () => {
     expect(runningSessionIds()).toEqual([]);
   });
 
+  it.each(['done', 'error'] as const)('does not resurrect a %s turn from late usage accounting', (type) => {
+    applyEvent(text('a', 'partial reply'));
+    applyEvent(type === 'done'
+      ? { type, sessionId: 'a', messageId: 'reply' }
+      : { type, sessionId: 'a', message: 'Provider request failed.' });
+    // Claude Code can report its API error before result.usage; finish() does
+    // not repeat that error, so nothing would ever close a usage-only run.
+    applyEvent({ type: 'usage', sessionId: 'a', inputTokens: 1000, outputTokens: 300, outputMs: 9000 });
+    expect(getLiveRun('a')).toBeUndefined();
+    expect(runningSessionIds()).toEqual([]);
+    expect(takeFinishedRun('a')?.text).toBe('partial reply');
+    applyEvent(text('a', 'Trying again'));
+    expect(getLiveRun('a')?.text).toBe('Trying again');
+    expect(getLiveRun('a')?.outputTokens).toBe(0);
+  });
+
+  it('does not create or replay a run from usage alone', () => {
+    const usage: AgentEvent = { type: 'usage', sessionId: 'a', inputTokens: 1000, outputTokens: 300 };
+    applyEvent(usage);
+    expect(getLiveRun('a')).toBeUndefined();
+    applyReplay({ sessionId: 'a', events: [usage], at: [1000], truncated: false });
+    expect(runningSessionIds()).toEqual([]);
+  });
+
   it('accumulates a reply across events', () => {
     applyEvent(text('a', 'Hello'));
     applyEvent(text('a', ' world'));
@@ -192,6 +216,7 @@ describe('liveRuns', () => {
 
   it('sums usage across a turn\'s steps rather than replacing it', () => {
     // A multi-step turn reports usage per step; the rate is over the whole turn.
+    applyEvent(text('a', 'Working on the reply'));
     applyEvent({ type: 'usage', sessionId: 'a', inputTokens: 100, outputTokens: 10, outputMs: 500 });
     applyEvent({ type: 'usage', sessionId: 'a', inputTokens: 200, outputTokens: 30, outputMs: 1_000 });
 

@@ -11,7 +11,7 @@ area: product
 
 **Format.** Plain numbers without padding, because npm, App Store Connect, Google Play and macOS reject leading zeros: `0.9.42`, never `0.009.0042`. MINOR runs 0-999 and BUILD 0-9999; the version script refuses anything beyond and says to tag the next line.
 
-**MAJOR.MINOR.** The newest release tag, `vMAJOR.MINOR.PATCH` or the short `vMAJOR.MINOR` (a tag with a suffix such as `-rc.1` is a prerelease and does not start a line). A person pushes it, or creates a GitHub release with it. A short tag is expanded to `vMAJOR.MINOR.0` on the same commit, and that tag is released: installers, npm packages and Docker images at `MAJOR.MINOR.0`. Package versions in the repository are no longer bumped and no longer decide anything; a merge never releases.
+**MAJOR.MINOR.** The newest release tag, `vMAJOR.MINOR.PATCH` or the short `vMAJOR.MINOR` (a tag with a suffix such as `-rc.1` is a prerelease and does not start a line). A person pushes it, or creates a GitHub release with it. A short tag is expanded to `vMAJOR.MINOR.0` on the same commit, and that tag is released: installers, npm packages and Docker images at `MAJOR.MINOR.0`. Package versions in the repository are no longer bumped and do not decide release versions; a merge never releases.
 
 **BUILD.** Each platform counts its own nightly builds since the newest release tag, and the count starts again on the next one:
 
@@ -27,10 +27,16 @@ After a `v0.9` tag: desktop 0.9.0 is the release, and the nightlies are 0.9.1, 0
 - Desktop and Android give a commit that already has a version the same one again (a re-run, a night with no new commits). iOS never does, because App Store Connect refuses a repeated build number.
 - A PR build, or a run started by hand off `main`, keeps the checked-in version (desktop 0.8.2, iOS 0.2.0, Android 0.1.0) and counts nothing. An iOS upload started by hand from a branch does count, since it reaches TestFlight.
 
-**iOS nightlies are for internal testers only** (Philip, 2026-11-06). Every iOS nightly has its own marketing version, which would need Beta App Review per build for external testers, so none goes to them. Each upload is marked internal testing only (`testFlightInternalTestingOnly`), so App Store Connect refuses to add it to an external group, send it to Beta App Review or submit it to the App Store. After Apple's processing, the workflow adds it to every internal TestFlight group that does not already receive every build. Only an upload started by hand with `internal_only` off can go further.
+`[changed 2026-11-08]` **The scheduled iOS nightly can go to external testers; uploads started by hand are internal only** (Philip; from 2026-11-06 to 2026-11-08 every upload was internal only). The nightly can be added to an external TestFlight group by hand, and because each iOS nightly has its own marketing version, each needs Beta App Review before external testers can install it. An upload started by hand is marked internal testing only (`testFlightInternalTestingOnly`) unless `internal_only` is turned off, so App Store Connect refuses to add it to an external group, send it to Beta App Review or submit it to the App Store. After Apple's processing, the workflow adds every upload to every internal TestFlight group that does not already receive every build.
 
 **Store code.** `MAJOR*10000000 + MINOR*10000 + BUILD`: always increasing, under Google Play's 2100000000 cap up to MAJOR 209, and above every build uploaded before (TestFlight reached 179).
 
 **Where the counts live.** An annotated tag per build, `nightly/<platform>/vMAJOR.MINOR.BUILD`, on the commit built, pushed before the build starts (`scripts/nightly-version.mjs`). A lost race takes the next number; a failed build leaves a gap. `git tag -l 'nightly/ios/*'` lists every iOS build and its commit.
 
 **Not part of this.** Nightly desktop builds are not GitHub releases and are unsigned. No nightly npm packages. Nothing is uploaded to Google Play.
+
+## Desktop development identity
+
+**Implemented, pending release verification.** Unpackaged desktop builds (`npm run dev`, `npm run local`) report the highest numeric stable release tag reachable from their checkout, followed by `-dev.<commits-since-tag>+g<commit>`. Tracked local edits add `.dirty`. The same identity reaches About, Settings and the development-launch banner through the engine app-info bridge. Tags are read locally, with no network requests, uploads or counter reservations. Fetch release tags to refresh a stale clone. An archive, missing Git or missing tags falls back to the manifest version with an explicit development suffix, never an apparently released version. Packaged installers continue to use only their workflow-stamped version; development identity does not change update feeds or package manifests.
+
+**Acceptance:** numeric tag ordering, short tags, unrelated branches, dirty sources, missing Git/tags and unchanged packaged versions are regression-tested. Hidden desktop evidence verifies the About label independently of the user profile. macOS release signing/notarization is verified by the release workflow, not by this development fixture.
