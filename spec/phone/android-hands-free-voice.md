@@ -68,7 +68,7 @@ Permission grants never automatically start recording: the owner explicitly star
 powershell -NoProfile -ExecutionPolicy Bypass -File apps/android/scripts/voice-integration-check.ps1
 ```
 
-Result: **134 JVM tests passed**. The script reuses the existing image-check dependency/compiler setup and compiles exact protocol/controller/repository/security/voice-core sources with cached JVM dependencies. Android-backed storage is reduced to its existing JVM portions in temporary files, as in the image suite. It does **not** compile Compose/native Android adapters or claim to test Android storage.
+Result: **143 JVM tests passed**. The script reuses the existing image-check dependency/compiler setup and compiles exact protocol/controller/repository/security/voice-core sources with cached JVM dependencies. Android-backed storage is reduced to its existing JVM portions in temporary files, as in the image suite. It does **not** compile Compose/native Android adapters or claim to test Android storage.
 
 Coverage includes the existing voice command/runner/listening/conversation/hold/speech suites; new `VoiceTurnTest`, `VoiceChatControllerTest`, and `VoiceChangeCallsTest`; and shared image controller/repository/protocol, typed chat, outbox and ChangeCalls regressions. New cases cover repeated prompt text versus stale replies, awaiting the actual request, interruption/empty reasoning-only results, queues and draft preflight, no retry/outbox/abort, cancellation, authority loss during proof, connection replacement during proof, and cross-pane lease replacement/stale release.
 

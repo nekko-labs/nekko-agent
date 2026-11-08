@@ -11,16 +11,16 @@ Tracking: [#2162](https://github.com/nekko-labs/nekko-agent/issues/2162). Update
 
 The host Whisper cold-start budget is up to 105 seconds plus 120 seconds inference. Client cancellation stops local waiting; it does not claim to cancel host computation.
 
-## Platform matrix — what has actually been checked
+## Platform matrix - what has actually been checked
 
 | Platform/surface | Implemented | Verified evidence | Not yet established |
 |---|---|---|---|
-| Windows desktop | Existing image chats; hardened dictation/commands | 248 renderer tests, TypeScript check, merged safety CI | Real microphone, speakers, device routing, lock; real GPU image inference in this task |
+| Windows desktop | Existing image chats; hardened dictation/commands | 248 renderer tests, TypeScript check, merged safety CI; Windows production web/desktop build | Real microphone, speakers, device routing, lock; real GPU image inference in this task |
 | macOS desktop | Shared desktop changes | Shared code tests only | Native build/runtime and physical audio on this platform |
 | Linux desktop | Shared desktop changes | Shared code tests only | Native audio/runtime/permissions and physical audio |
-| Secure-context Local Web UI | Shared browser capture/command safety; existing image UI | Shared capture/action tests | Browser microphone permission/device matrix; real host image generation |
-| iOS | Existing conversation voice; safer host dictation; new image flows | 66 focused XCTest + 3 Swift Testing using disposable Linux compatibility shims; baseline simulator VoiceTests passed in safety CI | Final Xcode/SwiftUI build, new UI evidence, paired-host generation, physical microphone/TTS/Bluetooth/interruptions |
-| Android | Legacy dictation plus new conversation/commands/hold; new image flows | 134 SDK-free JVM tests including controller correlation, live authority and image regressions | Full Compose/API compilation, emulator interactions/evidence, real on-device STT/offline TTS, Bluetooth, lock/interruptions and foldable posture tests |
+| Secure-context Local Web UI | Shared browser capture/command safety; existing image UI | Shared capture/action tests; 9 isolated Windows Local Web UI/daemon integration checks including image generation using fake sd-server | Browser microphone permission/device matrix; real host image generation |
+| iOS | Existing conversation voice; safer host dictation; new image flows | Full Linux-shim package suite: 738 XCTest (5 expected skips) + 21 Swift Testing; macOS package and live relay checks passed on 35fb0a6e6 | Final Xcode/SwiftUI build, new UI evidence, paired-host generation, physical microphone/TTS/Bluetooth/interruptions |
+| Android | Legacy dictation plus new conversation/commands/hold; new image flows | 143 SDK-free JVM tests including controller correlation, live authority and image regressions | Compose app compiled on 35fb0a6e6; 486 app tests ran (only proven baseline translations fail). Final emulator interactions/evidence, real on-device STT/offline TTS, Bluetooth, lock/interruptions and foldable posture tests |
 | Rust host / phone boundary | Approved local image protocol and authorization | 114 TS phone tests; 129 focused Rust phone tests; 4 image API tests; 2 app-info tests; fake-runtime generation/cancel/photo | Live paired relay generation with a real installed diffusion model/GPU |
 
 Counts overlap: the separate 65 Android image tests and 51 initial voice core tests are included in the later integrated checks, not additional independent coverage.

@@ -128,7 +128,7 @@ class ImageChatEvidenceTest {
         compose.setContent {
             NekkoTheme(dark = false) {
                 CompositionLocalProvider(LocalSimple provides rememberSimpleView(prefs)) {
-                    ChatScreen(vm!!, onBack = {}, onSettings = {})
+                    ChatScreen(vm!!, onBack = {})
                 }
             }
         }
