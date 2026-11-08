@@ -362,6 +362,9 @@ jobs:
       - name: Small services through the daemon
         if: ${{ !cancelled() }}
         run: node scripts/itest-small-services.mjs
+      - name: File review recovery across daemon restart
+        if: ${{ !cancelled() }}
+        run: node scripts/itest-file-recovery.mjs
       # nekkod alone (no TS backend) as the MCP client, on the build above.
       - name: MCP streamable-HTTP transport through Hypergate
         if: ${{ !cancelled() }}

@@ -30,7 +30,7 @@ log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 stats_disk() {
   local d
   for d in "$NEKKO_DEV_DIR"/disk[0-9]*; do
-    case "$d" in *s[0-9]*) continue ;; esac
+    case "${d##*/}" in *s[0-9]*) continue ;; esac
     if [ "$(dd if="$d" bs=512 count=1 2>/dev/null | head -c 11)" = NEKKOSTATS1 ]; then
       echo "$d"
       return
@@ -101,12 +101,15 @@ trap finish EXIT
 # empty folder is not the seed yet.
 deadline=$((SECONDS + NEKKO_SEED_WAIT))
 until [ -n "$(ls -A "$NEKKO_SEED_DIR" 2>/dev/null)" ]; do
+  # Always try a mount, even if the first probe crossed the whole-second deadline.
+  # A volume mounted by that attempt must be checked before declaring no seed.
+  diskutil mount readOnly NEKKOSEED >/dev/null 2>&1
+  if [ -n "$(ls -A "$NEKKO_SEED_DIR" 2>/dev/null)" ]; then break; fi
   if [ "$SECONDS" -ge "$deadline" ]; then
     log "no seed: no runner, staying up"
     stay_up=1
     exit 0
   fi
-  diskutil mount readOnly NEKKOSEED >/dev/null 2>&1
   sleep "$NEKKO_POLL"
 done
 

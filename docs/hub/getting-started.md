@@ -21,6 +21,8 @@ We care about three things:
 - **Take it with you.** Pair your phone to drive the agent on your computer from anywhere, end-to-end encrypted.
 - **Plug it into your tools.** Use it from the terminal, or as an MCP server inside Claude Code, Codex, Cursor and other agents.
 
+**Find a feature by what you want to do:** the [feature guide](/docs/features) maps local models, file recovery, memory, approvals, automation and MCP to setup instructions and honest limits.
+
 ## Install the app
 
 The quickest way to start is the installer.
@@ -43,6 +45,12 @@ Opening an agent composer puts the caret after any restored draft once a usable 
 ## Returning to the latest message
 
 When you scroll up in a chat, a floating **↓ Scroll to latest** pill appears at the bottom of the conversation, above the message box. Click it to return to the newest message and follow new output again. It also works in completed chats, without waiting for another reply. The pill disappears when you reach the bottom.
+
+## Recovering file edits
+
+Use the chat's **Changes** view to compare native text-tool edits, keep them or revert them. New source builds can retain the saved chat's original text across restart and validate up to 100 ordered replacements before writing. Incognito originals remain memory-only; accepting a change discards its baseline.
+
+See [File recovery and batch edits](/docs/file-recovery) for availability, the exact tool-call example, privacy and storage limits. This is not whole-workspace backup, binary-perfect restoration or protection from concurrent external writers. Keep version control and backups for important work.
 
 ## Reviewing visual changes
 
@@ -198,6 +206,8 @@ The selected agent has a tinted background across its row, so you can spot the c
 By default the panel follows each working agent around its loop: **Draft** (nothing sent yet, shown only when there is one), **Exploring** (reading the code and the web), **Building** (editing files) and **Verifying** (tests, builds and checks, and committing, pushing and opening pull requests). An agent can move back: an edit after a failed test puts it in Building again. Reading only moves it back to Exploring when you send something new. An agent that has stopped goes to **Watching** while it has a watch armed or is watching something you asked it to, and to **Done** otherwise. The icon on each card shows what it is doing right now, including an orange **?** when it is waiting on you. A card whose agent opened a pull request shows it as a chip at its bottom right, with the PR icon in the colour of its state: green when open, gray for a draft, purple when merged, red when closed. With several PRs it shows the most current one and **+N**; hover the count to see them all, and click a PR to open it. Use the sliders button to group by project, date or computer instead.
 
 While agents are working, a group's heading shows a small Nekko animation and a green count at the far right. To hold Nekko still, turn off **Settings > Accessibility > Agent activity animation**. This setting decides on its own, whatever your system's reduce motion preference says.
+
+Each group initially shows up to **20 agent rows**. Choose **Show more (N)** below a group to show its full list in one click; other groups stay limited. Completed lists also start at 20 when opened. Hidden cards are not loaded into the panel until needed, while group counts and search still cover all your chats. Opening an agent outside the first 20 brings its row into the last visible slot. Changing the grouping resets these expanded lists.
 
 ### Delegated agents in the Agents panel
 

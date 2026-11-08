@@ -28,6 +28,7 @@ export const MessageBubble = memo(function MessageBubble({
   onRestart,
   onImageClick,
   onImageContextMenu,
+  onEditImage,
   chronological,
 }: {
   message: ChatMessage;
@@ -47,6 +48,8 @@ export const MessageBubble = memo(function MessageBubble({
   onRestart?: (id: string) => void;
   onImageClick?: (src: string) => void;
   onImageContextMenu?: (e: React.MouseEvent, src: string) => void;
+  /** Photo chats: an Edit button under each generated picture. */
+  onEditImage?: (src: string) => void;
   chronological?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -125,7 +128,7 @@ export const MessageBubble = memo(function MessageBubble({
     if (message.toolCalls?.length) {
       message.toolCalls.forEach((c) => parts.push(<ToolCard key={c.id} call={c} />));
     }
-    if (message.images?.length) parts.push(<GeneratedImages key="images" message={message} entering={entering} onImageClick={onImageClick} onImageContextMenu={onImageContextMenu} />);
+    if (message.images?.length) parts.push(<GeneratedImages key="images" message={message} entering={entering} onImageClick={onImageClick} onImageContextMenu={onImageContextMenu} onEditImage={onEditImage} />);
     return <>{parts}</>;
   }
 
@@ -228,11 +231,13 @@ export const MessageBubble = memo(function MessageBubble({
  * underneath: enough to reproduce it (model, size, steps, CFG and the seed
  * actually used) and to see what it cost in time.
  */
-function GeneratedImages({ message, entering, onImageClick, onImageContextMenu }: {
+function GeneratedImages({ message, entering, onImageClick, onImageContextMenu, onEditImage }: {
   message: ChatMessage;
   entering: boolean;
   onImageClick?: (src: string) => void;
   onImageContextMenu?: (e: React.MouseEvent, src: string) => void;
+  /** Photo chats: put this picture in the composer to change it. */
+  onEditImage?: (src: string) => void;
 }) {
   const g = message.generated;
   const model = g?.modelId.split('/').pop();
@@ -249,6 +254,12 @@ function GeneratedImages({ message, entering, onImageClick, onImageContextMenu }
           onContextMenu={(e) => onImageContextMenu?.(e, image)}
           title="Click to preview · right-click to copy or save"
         />
+      ))}
+      {onEditImage && g && message.images!.map((image, i) => (
+        <button key={`edit-${message.id}-${i}`} type="button" className="btn btn-ghost py-0.5 text-xs" onClick={() => onEditImage(image)} data-edit-image
+          title="Attach this picture to the composer, then describe what to change">
+          Edit{message.images!.length > 1 ? ` picture ${i + 1}` : ''}
+        </button>
       ))}
       {g && (
         <p className="text-2xs text-ink-faint">
