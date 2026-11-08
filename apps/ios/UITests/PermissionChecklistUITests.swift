@@ -86,7 +86,17 @@ final class PermissionChecklistUITests: XCTestCase {
         microphone.tap()
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         let toggle = settings.switches["Microphone"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        // A brand-new simulator's first Preferences launch can stop at its root.
+        // Once initialized, repeat the same public app-settings link once.
+        if !toggle.waitForExistence(timeout: 5) {
+            app.activate()
+            microphone.tap()
+        }
+        guard toggle.waitForExistence(timeout: 10) else {
+            attach(settings, "permissions-system-settings-unavailable")
+            XCTFail("The public app-settings link did not expose Microphone")
+            return
+        }
         XCTAssertEqual(toggle.value as? String, "0")
         toggle.tap()
         app.activate()
