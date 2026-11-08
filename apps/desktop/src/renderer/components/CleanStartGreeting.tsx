@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { GreetingNekko } from './GreetingNekko.js';
 
 export const GREETING_QUESTIONS = [
@@ -12,32 +12,45 @@ export const GREETING_QUESTIONS = [
   'What idea should we bring to life?',
   'Where should we start?',
   'What would you like a hand with?',
+  'What’s next?',
+  'It’s building time.',
+  'Hey there. What’s the plan?',
+  'Let’s make something good.',
+  'Ready when you are.',
+  'Got an idea?',
+  'Let’s try something new.',
+  'What are we dreaming up?',
+  'Small steps. Big ideas.',
+  'Let’s get into it.',
+  'Your next idea starts here.',
+  'What shall we untangle?',
+  'Let’s get that idea moving.',
+  'A fresh chat, a fresh start.',
+  'What are we curious about today?',
+  'Bring your what-ifs.',
+  'Let’s figure it out.',
+  'What’s on the drawing board?',
+  'Hello again. Let’s make progress.',
+  'A little help, a little momentum.',
 ] as const;
-export const GREETING_ROTATE_MS = 8000;
 
-/** Local copy only: no model call, persistence, or announcements on each rotation. */
-export function CleanStartGreeting({ paused = false }: { paused?: boolean }) {
-  const [index, setIndex] = useState(0);
-  useEffect(() => {
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const sync = () => {
-      clearInterval(timer);
-      if (!paused && !motion.matches && !document.hidden) {
-        timer = setInterval(() => setIndex(i => (i + 1) % GREETING_QUESTIONS.length), GREETING_ROTATE_MS);
-      }
-    };
-    sync();
-    motion.addEventListener('change', sync);
-    document.addEventListener('visibilitychange', sync);
-    return () => {
-      clearInterval(timer);
-      motion.removeEventListener('change', sync);
-      document.removeEventListener('visibilitychange', sync);
-    };
-  }, [paused]);
+/** Derive copy from saved chat identity, never elapsed time or render count. */
+export function greetingForChat(sessionId: string, createdAt?: number): string {
+  const hour = createdAt === undefined ? -1 : new Date(createdAt).getHours();
+  const phrases: readonly string[] = hour >= 4 && hour < 10
+    ? [...GREETING_QUESTIONS, 'Morning, early bird.', 'Good morning. What’s first?']
+    : hour >= 21 || (hour >= 0 && hour < 4)
+      ? [...GREETING_QUESTIONS, 'Hey there, night owl.', 'A quiet night for a bright idea.']
+      : GREETING_QUESTIONS;
+  let hash = 0;
+  for (const char of sessionId) hash = (Math.imul(hash, 31) + char.charCodeAt(0)) >>> 0;
+  return phrases[hash % phrases.length];
+}
+
+/** Bundled local copy: stable across remounts, with no timers or model calls. */
+export function CleanStartGreeting({ sessionId = '', createdAt }: { sessionId?: string; createdAt?: number }) {
   return <div className="clean-start-greeting fade-in" data-clean-start-greeting>
     <GreetingNekko />
-    <h2>{GREETING_QUESTIONS[index]}</h2>
+    <h2>{greetingForChat(sessionId, createdAt)}</h2>
   </div>;
 }
