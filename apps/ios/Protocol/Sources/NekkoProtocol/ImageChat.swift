@@ -39,8 +39,20 @@ public struct ImageChatParams: Equatable, Sendable, Codable {
     }
 
     public var sessionOptions: JSONValue { .object(["chatType": .string("image"), "imageParams": json]) }
-    public func generation(sessionId: String, prompt: String) -> JSONValue {
-        .object(["sessionId": .string(sessionId), "prompt": .string(prompt), "params": json])
+    /// The `chat:generateImage` argument, signed as a whole. With photos it is
+    /// an edit (decision 0069): `images` (at most `PhotoEdit.maxPhotos`) and
+    /// `size`, the first photo's shape at this chat's pixel count. Without
+    /// photos neither key is present.
+    public func generation(sessionId: String, prompt: String, images: [String] = []) -> JSONValue {
+        var o: [String: JSONValue] = ["sessionId": .string(sessionId), "prompt": .string(prompt), "params": json]
+        let photos = Array(images.prefix(PhotoEdit.maxPhotos))
+        if let first = photos.first {
+            let chosen = PixelSize(width: width, height: height)
+            let size = PhotoEdit.size(of: first).map { PhotoEdit.editSize(photo: $0, chosen: chosen) } ?? chosen
+            o["images"] = .array(photos.map { .string($0) })
+            o["size"] = .object(["width": .int(Int64(size.width)), "height": .int(Int64(size.height))])
+        }
+        return .object(o)
     }
 }
 

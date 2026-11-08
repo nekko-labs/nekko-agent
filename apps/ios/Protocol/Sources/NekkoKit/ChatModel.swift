@@ -475,8 +475,13 @@ public final class ChatModel {
     /// No image outbox: the host has no exactly-once image-turn contract. A lost
     /// answer is ambiguous, so re-read rather than automatically replaying as text.
     private func sendImage(_ text: String, skill: SkillSummary?, images: [String]) async throws -> String {
-        guard skill == nil, images.isEmpty else { throw RelayError("Image generation accepts a text prompt only. Remove attachments and skills first.") }
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw RelayError("Describe the image to generate.") }
+        guard skill == nil else { throw RelayError("Image generation accepts a text prompt only. Remove attachments and skills first.") }
+        // Photos make it an edit (decision 0069). Whether the chosen model can edit is the computer's call:
+        // it refuses with the reason, so the phone keeps no model capability list.
+        try Self.checkPhotosToEdit(images)
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw RelayError(images.isEmpty ? "Describe the image to generate." : "Describe the change to make.")
+        }
         guard store.conn == .online, store.imageGeneration else {
             throw RelayError("Reconnect to an image-capable computer to generate. Your draft stays here; it will not be sent as text.")
         }
@@ -494,7 +499,7 @@ public final class ChatModel {
                 try Task.checkCancellation()
                 guard models.contains(where: { $0.id == params.modelId }) else { throw RelayError("This image model is unavailable. Choose a local image model.") }
                 guard try store.remote() === r else { throw RelayError("The selected computer changed. Your prompt has not been sent.") }
-                _ = try await store.call(change: Channels.chatGenerateImage, [params.generation(sessionId: sessionId, prompt: text)], timeout: turnTimeout)
+                _ = try await store.call(change: Channels.chatGenerateImage, [params.generation(sessionId: sessionId, prompt: text, images: images)], timeout: turnTimeout)
                 try Task.checkCancellation()
                 await reload()
                 // Rust image turns can emit an error and still resolve the RPC with null.
@@ -514,6 +519,43 @@ public final class ChatModel {
         } onCancel: {
             task.cancel()
         }
+    }
+
+    /// Photos an image chat can send to edit: at most four PNG, JPEG or WebP
+    /// data URLs, the first with a readable size (the edit takes its shape).
+    nonisolated static func checkPhotosToEdit(_ images: [String]) throws {
+        guard images.count <= PhotoEdit.maxPhotos else { throw RelayError("A message takes four photos at most.") }
+        guard images.allSatisfy(PhotoEdit.accepts) else { throw RelayError("Only PNG, JPEG and WebP photos can be edited.") }
+        guard PhotoEdit.fitsTotal(images) else {
+            throw RelayError("These photos are too large to send together (6 MB at most). Remove one and try again.")
+        }
+        if let first = images.first, PhotoEdit.size(of: first) == nil { throw RelayError("That photo couldn’t be read. Try another one.") }
+    }
+
+    /// How a reply's picture was made; nil for anything that isn't a made picture.
+    public func generated(_ messageId: String) -> GeneratedPicture? {
+        let savedId = shownIds.first { $0.value == messageId }?.key ?? messageId
+        return session?.messages.first { $0.id == savedId && $0.role == "assistant" }?.generated
+    }
+
+    /// Edit sits under a made picture in a live image chat, as on the desktop:
+    /// a reply with pictures and `generated`, never a clip (`generated.video`),
+    /// never in a saved copy.
+    public func canEdit(_ messageId: String) -> Bool {
+        guard isImageChat, savedAt == nil, let g = generated(messageId), !g.isClip else { return false }
+        return !photos(messageId).isEmpty
+    }
+
+    /// A made picture to edit, as large as the computer sends it (`session:photo`),
+    /// else the small copy already here. The caller scales it (`PhotoEdit.maxEdge`)
+    /// and puts it in the message box (`attach`); it is never sent by itself.
+    public func pictureToEdit(_ messageId: String, _ index: Int) async throws -> String {
+        if let full = try? await fullPhoto(messageId, index), !full.isEmpty { return full }
+        let small = photos(messageId)
+        guard small.indices.contains(index), !small[index].isEmpty else {
+            throw RelayError("Your computer didn’t send that picture. Try again when it’s online.")
+        }
+        return small[index]
     }
 
     /// `channel` with the prompt's `clientMessageId`. A computer from before

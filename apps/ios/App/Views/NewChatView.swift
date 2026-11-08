@@ -475,7 +475,7 @@ struct NewChatView: View {
     /// Images on the clipboard, scaled like picked photos (at most four in the message).
     private func pasteImages() {
         guard !imageChat else { error = "Image generation accepts text only. Attachments are not supported."; return }
-        let added = (UIPasteboard.general.images ?? []).prefix(max(0, 4 - images.count)).compactMap(ImageAttachments.encode)
+        let added = (UIPasteboard.general.images ?? []).prefix(max(0, 4 - images.count)).compactMap { ImageAttachments.encode($0) }
         if added.isEmpty { error = String(localized: "There’s no image on the clipboard."); return }
         images += added
     }

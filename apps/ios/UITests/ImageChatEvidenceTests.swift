@@ -27,6 +27,36 @@ final class ImageChatEvidenceTests: XCTestCase {
         capture("ImageChat-existing-authorized-photo-viewer", app)
     }
 
+    /// Edit under a made picture puts it in the message box; Send makes the edit (images + size, signed).
+    @MainActor
+    func testEditAMadePicture() throws {
+        let app = launch()
+        let kind = app.segmentedControls["newChat.kind"]
+        XCTAssertTrue(kind.waitForExistence(timeout: 10))
+        kind.buttons["Image"].tap()
+        app.buttons["newChat.imageSettings"].tap()
+        let model = app.buttons["imageChat.model"]
+        XCTAssertTrue(model.waitForExistence(timeout: 5))
+        model.tap()
+        app.buttons["FLUX local"].tap()
+        app.buttons["Done"].tap()
+        app.buttons["newChat.start"].tap()
+        let edit = app.buttons["chat.editPicture"].firstMatch
+        XCTAssertTrue(edit.waitForExistence(timeout: 15), "A made picture offers Edit")
+        capture("ImageChat-made-picture-with-edit", app)
+        edit.tap()
+        let field = app.textViews.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("Make the sky orange")
+        capture("ImageChat-edit-attached-in-composer", app)
+        app.buttons["Send"].tap()
+        // The edit is a second made picture, with its own Edit.
+        let two = expectation(for: NSPredicate(format: "count == 2"), evaluatedWith: app.buttons.matching(identifier: "chat.editPicture"))
+        wait(for: [two], timeout: 15)
+        capture("ImageChat-edited-picture", app)
+    }
+
     @MainActor
     func testOlderHostExplicitlyDisallowsImageGeneration() throws {
         let app = launch(["-imageOldHost"])
