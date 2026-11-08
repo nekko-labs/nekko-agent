@@ -534,17 +534,37 @@ final class Dictation {
         return try await Self.transcribe(wav, computer: computer, online: { store.conn == .online }, phone: { [weak self] in try await self?.onPhone($0) })
     }
 
-    /// Whisper on the computer when it has it, tried twice: while the computer is still online its
-    /// failure is said, never handed to the phone (which may not transcribe on the device at all).
+    /// `nekkod/src/voice.rs`: startup can take 150 * (0.5 s health check + 0.2 s sleep),
+    /// then inference gets 120 s. Leave headroom for engine status and relay transport too.
+    static let computerTranscriptionTimeout: TimeInterval = 300
+
+    /// A timeout does not cancel the host's single-flight request: never retry it blindly.
+    /// While still online, report its failure. Only an offline computer permits fallback
+    /// to the phone's on-device recognizer, never a cloud speech service.
     static func transcribe(_ wav: Data, computer: ((Data) async throws -> String)?, online: () -> Bool,
                            phone: (Data) async throws -> String?) async throws -> String? {
+        try Task.checkCancellation()
         if let computer {
-            do { return try await computer(wav) } catch {
-                if let text = try? await computer(wav) { return text }
+            do {
+                let text = try await computer(wav)
+                try Task.checkCancellation()
+                return text
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                try Task.checkCancellation()
                 if online() { throw error }
             }
         }
-        return try await phone(wav)
+        try Task.checkCancellation()
+        do {
+            let text = try await phone(wav)
+            try Task.checkCancellation()
+            return text
+        } catch {
+            try Task.checkCancellation()
+            throw error
+        }
     }
 
     private func computerHasWhisper(_ store: ComputersStore) async -> Bool {
@@ -558,7 +578,17 @@ final class Dictation {
         let r = try store.remote()
         transcribingOn = store.active?.name ?? "your computer"
         defer { transcribingOn = nil }
-        let v = try await r.call(Channels.voiceTranscribe, [wavArg(wav)], timeout: 60)
+        return try await Self.transcribeOnComputer(wav) { channel, args, timeout in
+            try await r.call(channel, args, timeout: timeout)
+        }
+    }
+
+    /// The real request path with injectable transport so tests inspect the deadline without waiting.
+    static func transcribeOnComputer(_ wav: Data,
+                                    call: (String, [JSONValue], TimeInterval) async throws -> JSONValue) async throws -> String {
+        try Task.checkCancellation()
+        let v = try await call(Channels.voiceTranscribe, [wavArg(wav)], computerTranscriptionTimeout)
+        try Task.checkCancellation()
         return v.string ?? v.str("text") ?? ""
     }
 
