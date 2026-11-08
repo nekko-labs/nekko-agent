@@ -71,6 +71,13 @@ describe('simple mode catalogue', () => {
     expect(simpleShown('computers', true, { computers: 'hide' }, { computers: true })).toBe(false);
   });
 
+  it('shows CI runners in Simple once this computer is a runner, and always in Expert', () => {
+    expect(simpleShown('ci', false)).toBe(false);
+    expect(simpleShown('ci', false, {}, { runners: true })).toBe(true);
+    expect(simpleShown('ci', true)).toBe(true);
+    expect(simpleShown('ci', false, { ci: 'hide' }, { runners: true })).toBe(false);
+  });
+
   it('counts a local model on a connected computer', () => {
     const idle = { running: true, resident: [] };
     expect(localModelRunning(idle, [idle, null])).toBe(false);

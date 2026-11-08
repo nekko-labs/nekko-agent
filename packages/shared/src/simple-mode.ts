@@ -28,6 +28,8 @@ export interface SimpleContext {
   agents?: boolean;
   /** This desktop has a connected computer. */
   computers?: boolean;
+  /** This computer is set up as a CI runner. */
+  runners?: boolean;
 }
 
 export type SimpleCondition = keyof SimpleContext;
@@ -77,7 +79,7 @@ export const SIMPLE_ITEMS: readonly SimpleItem[] = [
   // The desktop's Monitors panel is not listed: the monitors checked in its
   // Configure menu are what it shows in both modes, and Simple and Detailed only
   // open or close the panel (mon-hw and mon-budget were here until 2026-11-06).
-  { id: 'ci', area: 'Workflows', label: 'CI runners', hint: 'Use this computer as a CI runner', platforms: D, default: 'expert' },
+  { id: 'ci', area: 'Workflows', label: 'CI runners', hint: 'Use this computer as a CI runner. In Simple, once it is one', platforms: D, default: 'expert', when: 'runners' },
   { id: 'engine', area: 'Models', label: 'Model server details', hint: 'Engine, load settings and advanced flags', platforms: D, default: 'expert' },
   { id: 'set-tools', area: 'Settings', label: 'Advanced settings', hint: 'Tools, agent loop, hooks, sandbox and developer pages', platforms: D, default: 'expert' },
   { id: 'ph-monitors', area: 'Phone · chats list', label: 'Monitors row', hint: 'Hardware and loaded models in Chats', platforms: P, default: 'auto', when: 'localModel' },

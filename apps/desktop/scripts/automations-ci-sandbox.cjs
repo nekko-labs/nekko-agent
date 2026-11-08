@@ -29,6 +29,8 @@ app.whenReady().then(async () => {
       await check(`no horizontal overflow at ${width}`, 'document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll("main section")].every(e=>e.scrollWidth<=e.clientWidth+1)');
     }
     await run('integration.full()'); await sleep(400);
+    // The runners are their own page in the Scheduled Tasks sub-navigation; a baseline without it shows them in the list.
+    await click('CI runners', '[data-workflows-subnav] button'); await sleep(300);
     for (const width of [1000, 390]) {
       win.setContentSize(width, 1100); await sleep(250);
       await run("document.querySelector('[data-ci-runners]').scrollIntoView({block:'start',behavior:'instant'})"); await sleep(800);
@@ -63,9 +65,20 @@ app.whenReady().then(async () => {
       await run('integration.show()'); await sleep(200);
       await run('integration.pushEmpty()'); await sleep(200);
       await check('push removes runner cards', "!document.querySelector('[data-runner-card]')");
+      win.setContentSize(1000, 1100);
+      await run("localStorage.setItem('nekko.chatMode','simple'); integration.show(); integration.full()"); await sleep(400);
+      await check('Simple keeps CI runners while this Mac is a runner', "!!document.querySelector('[data-workflows-subnav]') && document.body.innerText.includes('CI runners')");
+      await capture('simple-subnav-1000');
+      await run("integration.show('empty'); integration.full()"); await sleep(400);
+      await check('Simple leaves CI runners out with no runner', "!document.querySelector('[data-workflows-subnav]') && !document.querySelector('[data-ci-runners]')");
+      await run("localStorage.setItem('nekko.chatMode','expert')");
       for (const scene of ['empty', 'error', 'unsupported']) {
         await run(`integration.show(${js(scene)})`); await sleep(250);
         await check(scene, scene === 'empty' ? "document.body.innerText.includes('No CI runners connected')" : scene === 'error' ? "document.body.innerText.includes('Service disconnected')" : "!document.querySelector('[data-ci-runners]')");
+        if (scene === 'unsupported') {
+          await run('integration.full()'); await sleep(300);
+          await check('no runner channel leaves the sub-navigation out', "!document.querySelector('[data-workflows-subnav]')");
+        }
         await check(`${scene} subscriptions cleaned up`, 'integration.listenerCount()===1');
       }
     }

@@ -32,7 +32,9 @@ This is not the [Local CI runner](git-runner.md) workflow template. That one run
 directly on the machine and reports a commit status; this one picks up real `runs-on:` jobs from
 the GitHub Actions queue, each in its own VM.
 
-You find it in **Scheduled Tasks**, as the **CI runners** section below your tasks.
+You find it in **Scheduled Tasks > CI runners**, in the menu at the top left of the page. In Simple
+mode that entry appears once this Mac is a runner; before that, switch to Detailed or use **View
+CI runners** on the Automations panel.
 
 ## Why run jobs on your Mac
 
