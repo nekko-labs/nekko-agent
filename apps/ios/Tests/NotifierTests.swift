@@ -100,6 +100,30 @@ final class NotifierTests: XCTestCase {
         XCTAssertNil(delivery.requests.last?.content.sound)
     }
 
+    /// Only an MCP tool's approval offers "Always allow this tool", and that action
+    /// opens the app (its save is signed with Face ID or the passcode).
+    func testOnlyAnMcpApprovalOffersAlwaysAllow() async throws {
+        let delivery = Delivery()
+        let notifier = Notifier(delivery: delivery)
+        func approval(_ id: String, _ name: String) throws -> AgentEvent {
+            try XCTUnwrap(AgentEvent.from(["type": "tool_approval_required", "sessionId": .string("s_\(id)"),
+                                           "call": ["id": .string(id), "name": .string(name), "input": [:]], "reason": "r", "severity": "high"]))
+        }
+        notifier.post(try approval("c1", "mcp__slack__post_message"), chatTitle: "Chat", computer: "Mac", hideContent: false)
+        notifier.post(try approval("c2", "bash"), chatTitle: "Chat", computer: "Mac", hideContent: false)
+        await notifier.finishPosts()
+        XCTAssertEqual(delivery.requests.map(\.content.categoryIdentifier), [Notifier.mcpApprovalCategory, Notifier.approvalCategory])
+        XCTAssertEqual(delivery.requests.map { $0.content.userInfo["callId"] as? String }, ["c1", "c2"])
+        let categories = Notifier.categories()
+        let mcp = try XCTUnwrap(categories.first { $0.identifier == Notifier.mcpApprovalCategory })
+        XCTAssertEqual(mcp.actions.map(\.identifier), [Notifier.allowAction, Notifier.alwaysAllowAction, Notifier.denyAction])
+        let always = try XCTUnwrap(mcp.actions.first { $0.identifier == Notifier.alwaysAllowAction })
+        XCTAssertTrue(always.options.contains(.foreground), "opens the app, where Face ID can sign the save")
+        XCTAssertTrue(always.options.contains(.authenticationRequired))
+        let plain = try XCTUnwrap(categories.first { $0.identifier == Notifier.approvalCategory })
+        XCTAssertEqual(plain.actions.map(\.identifier), [Notifier.allowAction, Notifier.denyAction])
+    }
+
     func testFixtureUsesOnlyRecorderAndOpeningDoesNotResolvePending() async {
         let model = AttentionNotificationsFixtureModel()
         await model.seed()

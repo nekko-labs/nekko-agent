@@ -64,6 +64,8 @@ final class RunActivities {
         var step = ""
         var callId: String?
         var severity: String?
+        /// The waiting call is an MCP tool ("Always allow" on the card).
+        var alwaysAllow = false
         var finished: LiveChatState?
         var finishedAt: Date?
     }
@@ -112,12 +114,13 @@ final class RunActivities {
     func onEvent(_ e: AgentEvent) {
         let sid = e.sessionId
         let now = Date()
-        func running(_ step: String, callId: String? = nil, severity: String? = nil) {
+        func running(_ step: String, callId: String? = nil, severity: String? = nil, alwaysAllow: Bool = false) {
             var run = runs[sid].flatMap { $0.finished == nil ? $0 : nil } ?? Run(startedAt: now, lastEventAt: now)
             run.lastEventAt = now
             run.step = step
             run.callId = callId
             run.severity = severity
+            run.alwaysAllow = alwaysAllow
             runs[sid] = run
             dismissed.remove(sid)
         }
@@ -128,12 +131,14 @@ final class RunActivities {
             run.finishedAt = now
             run.step = step
             run.callId = nil
+            run.alwaysAllow = false
             runs[sid] = run
         }
         switch e {
         case .text, .reasoning: running(String(localized: "Writing…"))
         case .toolCall(_, let call): running(Transcript.toolLabel(call))
-        case .approvalRequired(_, let a): running(Transcript.toolVerb(a.call), callId: a.call.id, severity: a.severity.rawValue)
+        case .approvalRequired(_, let a): running(Transcript.toolVerb(a.call), callId: a.call.id, severity: a.severity.rawValue,
+                                                   alwaysAllow: ChatModel.offersAlwaysAllow(a.call))
         case .question(_, let q): running(q.questions.first?.question ?? String(localized: "A question for you"))
         case .toolResult, .questionResolved: running(String(localized: "Working…"))
         case .done: finish(.done, String(localized: "Finished"))
@@ -336,7 +341,8 @@ final class RunActivities {
                             reply: replyLine(s.lastReplyText), closeWord: closeWord(for: s.id, failed: state == .failed),
                             finishedAt: finished ? run?.finishedAt : nil,
                             callId: state == .needsYou ? live?.callId : nil, severity: state == .needsYou ? live?.severity : nil,
-                            startedAt: live?.startedAt, title: title)
+                            startedAt: live?.startedAt, title: title,
+                            alwaysAllow: state == .needsYou && live?.alwaysAllow == true)
         }
     }
 

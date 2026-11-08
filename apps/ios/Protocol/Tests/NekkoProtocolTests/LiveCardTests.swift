@@ -195,6 +195,22 @@ final class LiveCardTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(LiveCardState.self, from: data), state)
     }
 
+    /// "Always allow" on the card: only when set, so other cards keep their size,
+    /// and a push without it decodes as off.
+    func testEncodesAlwaysAllowOnlyWhenSet() throws {
+        var c = chat("n", .needsYou)
+        c.callId = "call_7"
+        let off = try JSONSerialization.jsonObject(with: JSONEncoder().encode(c)) as? [String: Any]
+        XCTAssertNil(off?["alwaysAllow"])
+        c.alwaysAllow = true
+        let data = try JSONEncoder().encode(c)
+        let on = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(on?["alwaysAllow"] as? Bool, true)
+        XCTAssertEqual(try JSONDecoder().decode(LiveChat.self, from: data), c)
+        let pushed = try JSONDecoder().decode(LiveChat.self, from: Data(#"{"id":"n","state":"needsYou","callId":"c"}"#.utf8))
+        XCTAssertFalse(pushed.alwaysAllow)
+    }
+
     func testDuplicateIdsInPreviousDoNotTrap() {
         let previous = LiveCardState(chats: [chat("a", .working), chat("a", .needsYou)], focusId: "a", more: 0, listening: false, heard: "")
         let card = build([chat("a", .needsYou)], previous: previous)

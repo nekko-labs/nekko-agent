@@ -1,4 +1,5 @@
 import Foundation
+import NekkoKit
 import NekkoProtocol
 import UIKit
 import UserNotifications
@@ -13,12 +14,17 @@ import UserNotifications
 @MainActor
 final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     nonisolated static let approvalCategory = "nekko.approval"
+    /// An MCP tool's approval: Allow, Always allow this tool, Deny (decision 0054).
+    nonisolated static let mcpApprovalCategory = "nekko.approval.mcp"
     nonisolated static let allowAction = "nekko.allow"
+    nonisolated static let alwaysAllowAction = "nekko.alwaysAllow"
     nonisolated static let denyAction = "nekko.deny"
     /// `userInfo` key on the note that says an answer did not reach the computer.
     nonisolated static let unsentKey = "unsent"
 
     var onApprove: ((_ sessionId: String, _ callId: String, _ allow: Bool) async -> Void)?
+    /// "Always allow this tool": opens the chat, whose card saves the tool and allows the call.
+    var onAlwaysAllow: ((_ sessionId: String, _ callId: String) -> Void)?
     var onOpen: ((_ sessionId: String) -> Void)?
     var onFocusComputer: ((String) -> Void)?
     var onOpenTag: ((String) -> Void)?
@@ -71,11 +77,21 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     func install() {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
+        center.setNotificationCategories(Self.categories())
+    }
+
+    /// Allow / Deny on an approval; an MCP tool's adds "Always allow this tool".
+    nonisolated static func categories() -> Set<UNNotificationCategory> {
         let allow = UNNotificationAction(identifier: Self.allowAction, title: "Allow", options: [.authenticationRequired])
         let deny = UNNotificationAction(identifier: Self.denyAction, title: "Deny", options: [.destructive])
-        center.setNotificationCategories([
+        // Opens the app: saving the tool for the chat is signed with Face ID or the
+        // passcode (a guarded option), which can't run behind a notification.
+        let always = UNNotificationAction(identifier: Self.alwaysAllowAction, title: String(localized: "Always allow this tool"),
+                                          options: [.foreground, .authenticationRequired])
+        return [
             UNNotificationCategory(identifier: Self.approvalCategory, actions: [allow, deny], intentIdentifiers: [], options: []),
-        ])
+            UNNotificationCategory(identifier: Self.mcpApprovalCategory, actions: [allow, always, deny], intentIdentifiers: [], options: []),
+        ]
     }
 
     /// Asked after the first pairing, never at launch.
@@ -92,7 +108,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         switch e {
         case .approvalRequired(_, let a):
             content.body = hideContent ? "A tool needs your approval." : "Approve? \(Transcript.toolLabel(a.call))"
-            content.categoryIdentifier = Self.approvalCategory
+            content.categoryIdentifier = ChatModel.offersAlwaysAllow(a.call) ? Self.mcpApprovalCategory : Self.approvalCategory
             content.userInfo["callId"] = a.call.id
             content.interruptionLevel = .timeSensitive
             content.sound = .default
@@ -195,7 +211,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         if let computerId = info.computerId { await focusComputer(computerId) }
         let callId = info.callId
         let action = response.actionIdentifier
-        if let callId, action == Self.allowAction || action == Self.denyAction {
+        if let callId, action == Self.alwaysAllowAction {
+            await alwaysAllow(sid, callId)
+        } else if let callId, action == Self.allowAction || action == Self.denyAction {
             // Awaited, not detached: returning tells iOS the action is handled, and
             // a backgrounded app may be suspended right after, mid-answer.
             await answer(sid, callId, allow: action == Self.allowAction)
@@ -213,6 +231,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private func open(_ sessionId: String) { onOpen?(sessionId) }
+    private func alwaysAllow(_ sessionId: String, _ callId: String) { onAlwaysAllow?(sessionId, callId) }
 }
 
 enum Haptics {

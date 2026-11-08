@@ -51,6 +51,11 @@ final class AppModel {
     var openChat: String?
     /// `nekko-agent://chat/<id>?listen=1` (the card's mic on iOS 17): that chat's composer starts listening once.
     var listenIn: String?
+    /// `nekko-agent://chat/<id>?alwaysAllow=<call id>` (the notification's or the
+    /// Live Activity's "Always allow this tool"): that chat's approval card runs
+    /// its own "Always allow" once, for that call only.
+    var alwaysAllowIn: AlwaysAllowRequest?
+    struct AlwaysAllowRequest: Equatable { var chatId: String; var callId: String }
     /// The first message typed on New chat (and its photos), sent by that chat's screen once it opens.
     var firstMessages: [String: UnsentPrompt] = [:]
     /// Text shared from another app (the share extension), waiting for New chat to take it.
@@ -190,6 +195,7 @@ final class AppModel {
         notifier.install()
         notifier.onApprove = { [weak self] sid, callId, allow in await self?.answerApproval(sid, callId, allow) }
         notifier.onOpen = { [weak self] sid in self?.openChat = sid }
+        notifier.onAlwaysAllow = { [weak self] sid, callId in self?.handle(url: LiveCardView.alwaysAllowURL(sid, callId: callId)) }
         IntentRouter.approve = { [weak self] sid, callId, allow in await self?.answerApproval(sid, callId, allow) }
         IntentRouter.stop = { [weak self] sid in await self?.stopChat(sid) }
         store.onComputerEvent = { [weak self] id, e in self?.onEvent(e, computerId: id) }
@@ -261,6 +267,8 @@ final class AppModel {
         foreground = false
         // A `?listen=1` not taken by now is stale: listening never starts later by itself.
         listenIn = nil
+        // Nor does an "Always allow" left untaken run later by itself.
+        alwaysAllowIn = nil
         lock.didEnterBackground(enabled: prefs.appLock)
         // What is typed is on disk before iOS may end the app.
         store.drafts.flush()
@@ -382,6 +390,16 @@ final class AppModel {
         return true
     }
 
+    /// The approval card of `chatId` takes a waiting "Always allow" once, for the
+    /// call it was asked for only, and never behind the app lock. The card then
+    /// does what its own button does: the save asks for Face ID or the passcode,
+    /// and nothing is allowed unless the save went through.
+    func takeAlwaysAllow(_ chatId: String, callId: String) -> Bool {
+        guard let want = alwaysAllowIn, want.chatId == chatId, want.callId == callId, !(prefs.appLock && lock.locked) else { return false }
+        alwaysAllowIn = nil
+        return true
+    }
+
     /// The card's push token. A card the relay started can wake the app in the
     /// background (locked, so `start` never ran): connect just to register the
     /// token, as `deliverInBackground` does, and let the connection close as that does.
@@ -487,12 +505,16 @@ final class AppModel {
     // MARK: Pairing, links, push
 
     /// `nekko-agent-pair:?relay=…` (QR / camera), `https://…/?relay=…` (web
-    /// edition link), `nekko-agent://chat/<id>` (`?listen=1` starts listening), `nekko-agent://new` or `nekko-agent://chats`.
+    /// edition link), `nekko-agent://chat/<id>` (`?listen=1` starts listening, `?alwaysAllow=<call id>`
+    /// runs that call's "Always allow this tool"), `nekko-agent://new` or `nekko-agent://chats`.
     func handle(url: URL) {
         if url.scheme == "nekko-agent", url.host == "chat" {
             openChat = url.pathComponents.dropFirst().first
-            let listen = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains { $0.name == "listen" && $0.value == "1" } == true
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            let listen = items.contains { $0.name == "listen" && $0.value == "1" }
             listenIn = listen ? openChat : nil
+            let always = items.first { $0.name == "alwaysAllow" }?.value.flatMap { $0.isEmpty ? nil : $0 }
+            alwaysAllowIn = openChat.flatMap { chat in always.map { AlwaysAllowRequest(chatId: chat, callId: $0) } }
             return
         }
         if url.scheme == "nekko-agent", url.host == "new" {
