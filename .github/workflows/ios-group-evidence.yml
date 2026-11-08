@@ -52,7 +52,8 @@ jobs:
         run: |
           set -euo pipefail
           xcodegen generate
-          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"].include?("iOS") }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          read -r RUNTIME TYPE < <(xcrun simctl list runtimes -j | ruby -rjson -e 'JSON.parse(STDIN.read)["runtimes"].select { |r| r["isAvailable"] && r["identifier"] == "com.apple.CoreSimulator.SimRuntime.iOS-27-0" }.reverse_each { |r| pro = r.fetch("supportedDeviceTypes").map { |d| d["identifier"] }.grep(/iPhone-\d+-Pro$/).max_by { |i| i[/\d+/].to_i }; next unless pro; puts "#{r.fetch("identifier")} #{pro}"; break }')
+          test -n "$RUNTIME" && test -n "$TYPE"
           DEVICE=$(xcrun simctl create Nekko-Group-Evidence "$TYPE" "$RUNTIME")
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           echo "device=$TYPE runtime=$RUNTIME" >> evidence/revisions.txt
@@ -65,9 +66,13 @@ jobs:
           xcrun simctl io "$DEVICE" recordVideo evidence/groups.mp4 &
           VIDEO=$!
           trap 'kill -INT "$VIDEO" || true; wait "$VIDEO" || true' EXIT
+          # Keep this nonempty: the hosted macOS Bash treats empty arrays as unset under -u.
+          FOCUSED=(-only-testing:NekkoNativeUITests/GroupEvidenceTests -only-testing:NekkoNativeUITests/PurposeGroupsTests)
+          if [ '${{ matrix.revision }}' = after ]; then
+            FOCUSED+=(-only-testing:NekkoNativeTests/ChatGroupPrefsTests)
+          fi
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/groups.xcresult test-without-building \
-            -only-testing:NekkoNativeUITests/GroupEvidenceTests \
-            -only-testing:NekkoNativeUITests/PurposeGroupsTests
+            "${FOCUSED[@]}"
       - name: Export and remove owned simulator
         if: always()
         working-directory: apps/ios

@@ -40,6 +40,7 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by re
 
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
+| Remember expanded/collapsed chat groups across launches | `rememberSaveable` only; durable phone preference pending | [#2133](https://github.com/nekko-labs/nekko-agent/issues/2133) |
 | Computer controls: persistent connection opt-out, Models disclosure and filters, Cloud fleet group, and service management | Not implemented on Android | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
 | Immediate draft photo saves | Verify photo add/remove durability and composer containment | [#2043](https://github.com/nekko-labs/nekko-agent/issues/2043) |
 | Watching and Done groups, PR status on rows, collapsible groups | Only a Needs you group | [#2107](https://github.com/nekko-labs/nekko-agent/issues/2107) |
