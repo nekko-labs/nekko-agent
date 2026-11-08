@@ -86,11 +86,24 @@ final class PermissionChecklistUITests: XCTestCase {
         microphone.tap()
         let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
         let toggle = settings.switches["Microphone"]
-        // A brand-new simulator's first Preferences launch can stop at its root.
-        // Once initialized, repeat the same public app-settings link once.
+        // iOS owns the deep-link destination. If it opens Settings home,
+        // exercise the same public Apps → Nekko Agent recovery path a user has.
         if !toggle.waitForExistence(timeout: 5) {
-            app.activate()
-            microphone.tap()
+            let apps = settings.buttons["Apps"]
+            for _ in 0..<12 {
+                if apps.exists && apps.isHittable { break }
+                settings.swipeUp()
+            }
+            XCTAssertTrue(apps.exists)
+            apps.tap()
+            let search = settings.searchFields.firstMatch
+            if search.waitForExistence(timeout: 5) {
+                search.tap()
+                search.typeText("Nekko Agent")
+            }
+            let nekko = settings.staticTexts["Nekko Agent"].firstMatch
+            XCTAssertTrue(nekko.waitForExistence(timeout: 10))
+            nekko.tap()
         }
         guard toggle.waitForExistence(timeout: 10) else {
             attach(settings, "permissions-system-settings-unavailable")
