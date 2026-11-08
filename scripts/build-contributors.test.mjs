@@ -68,3 +68,9 @@ test('unsupported image content, oversized avatars and image errors fall back wi
     } finally { rmSync(site, { recursive: true, force: true }); }
   }
 });
+
+test('Nekko Labs team is listed first and flagged; everyone else keeps GitHub order', async () => {
+  const people = await loadContributors(async () => json([person('alice'), person('TravisJPN'), person('bob'), person('ermish')]));
+  assert.deepEqual(people.map(p => p.login), ['TravisJPN', 'ermish', 'alice', 'bob']);
+  assert.deepEqual(people.map(p => p.team), [true, true, false, false]);
+});
