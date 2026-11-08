@@ -1179,6 +1179,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         case 'question_resolved':
           setQuestion((q) => (q?.callId === e.callId ? null : q));
           break;
+        case 'approval_resolved':
+          setApproval((current) => approvalAfterResult(current, e.callId));
+          break;
         case 'tool_result':
           // Parallel work can finish while another tool is still waiting on us.
           setApproval((current) => approvalAfterResult(current, e.result.toolCallId));
