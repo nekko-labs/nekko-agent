@@ -554,6 +554,17 @@ final class AppModel {
         showNotificationStep = false
         prefs.onboarded = true
         if allowNotifications, await notifier.requestPermission() { registerForPush() }
+        await permissionChecklistChanged()
+    }
+
+    /// Reconcile a deliberate checklist change, including first-pair APNs enrollment.
+    func permissionChecklistChanged() async {
+        guard !NativeFixtureRoute.isolated else { return }
+        await refreshNotificationPermission()
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if [.authorized, .provisional, .ephemeral].contains(status), !store.computers.isEmpty {
+            registerForPush()
+        }
     }
 
     /// Settings → Notifications: one kind on or off, and the relay asked for only the kinds on.
