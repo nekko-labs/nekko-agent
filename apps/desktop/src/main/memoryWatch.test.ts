@@ -10,7 +10,7 @@ vi.mock('electron', () => ({
     constructor(public options: unknown) { mock.windows.push(this); }
   },
 }));
-import { MEMORY_QUIET_MS, createMemoryWatch, decideMemory, leftLine, memoryPromptHtml, parseChoice, rememberChoice, type LocalModels, type MemoryState } from './memoryWatch.js';
+import { MEMORY_QUIET_MS, createMemoryWatch, decideMemory, leftLine, memoryPromptHtml, parseChoice, rememberChoice, sameRun, type LocalModels, type MemoryState } from './memoryWatch.js';
 
 const GB = 2 ** 30;
 const low: MemoryState = { level: 'low', totalBytes: 64 * GB, availableBytes: 20 * GB, commitLimitBytes: 63 * GB, commitAvailableBytes: 4 * GB, topApp: { name: 'PioneerGame', bytes: 14.3 * GB, processes: 1 }, nekkoBytes: 6 * GB };
@@ -32,6 +32,16 @@ describe('deciding what to do about low memory', () => {
     expect(decideMemory(low, {}, memo, MEMORY_QUIET_MS - 1)).toEqual({ kind: 'none' });
     expect(decideMemory({ ...low, level: 'critical' }, {}, memo, 1)).toEqual({ kind: 'ask' });
     expect(decideMemory(low, {}, memo, MEMORY_QUIET_MS)).toEqual({ kind: 'ask' });
+  });
+  it('never asks again about a waved-off run of an app, even critical, but does once it is relaunched', () => {
+    const game = { name: 'PioneerGame', bytes: 14.3 * GB, processes: 1, pids: [40] };
+    const waived = [{ name: 'pioneergame', pids: [40] }];
+    expect(sameRun(game, waived[0])).toBe(true);
+    expect(decideMemory({ ...low, topApp: game, level: 'critical' }, {}, null, 0, waived)).toEqual({ kind: 'none' });
+    expect(decideMemory({ ...low, topApp: { ...game, pids: [77] } }, {}, null, 0, waived)).toEqual({ kind: 'ask' });
+    expect(decideMemory({ ...low, topApp: { ...game, name: 'chrome' } }, {}, null, 0, waived)).toEqual({ kind: 'ask' });
+    // An older daemon sends no pids: the name has to do.
+    expect(sameRun({ ...game, pids: undefined }, waived[0])).toBe(true);
   });
   it('remembers a close as that app, and the others as the action', () => {
     expect(rememberChoice('close', 'PioneerGame', { lowMemoryCloseApps: ['chrome'] })).toEqual({ lowMemoryCloseApps: ['chrome', 'PioneerGame'] });
@@ -79,8 +89,9 @@ describe('the prompt', () => {
 
 describe('the watch', () => {
   afterEach(() => { mock.windows.length = 0; vi.useRealTimers(); });
-  const rig = (state: MemoryState, settings: object, quiet = false, models: LocalModels = loaded) => {
+  const rig = (initial: MemoryState, settings: object, quiet = false, models: LocalModels = loaded) => {
     const calls: unknown[][] = [];
+    let state = initial;
     const engine = { running: true, call: vi.fn(async (...a: unknown[]) => {
       calls.push(a);
       if (a[0] === 'memory:state') return state;
@@ -91,8 +102,32 @@ describe('the watch', () => {
       return {};
     }) };
     const tray = { getBounds: () => ({ x: 1800, y: 1040, width: 24, height: 24 }) };
-    return { calls, watch: createMemoryWatch({ tray: tray as any, engine: engine as any, quiet: async () => quiet, onError: vi.fn() }) };
+    return { calls, setState: (s: MemoryState) => { state = s; }, watch: createMemoryWatch({ tray: tray as any, engine: engine as any, quiet: async () => quiet, onError: vi.fn() }) };
   };
+  it('after × or Ignore, stays quiet about that app until it is relaunched', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const game = { name: 'PioneerGame', bytes: 14.3 * GB, processes: 2, pids: [40, 41] };
+    for (const url of ['https://nekko.invalid/dismiss', 'https://nekko.invalid/choose?choice=ignore&app=PioneerGame']) {
+      mock.windows.length = 0;
+      const { watch, setState } = rig({ ...low, topApp: game }, {});
+      await watch.check();
+      expect(mock.windows).toHaveLength(1);
+      mock.windows[0].handlers['will-navigate']({ preventDefault: vi.fn() }, url);
+      // Past the quiet time, critical, and with a process started and one ended: the same run.
+      vi.setSystemTime(Date.now() + MEMORY_QUIET_MS);
+      setState({ ...low, level: 'critical', topApp: { ...game, pids: [41, 42] } });
+      await watch.check();
+      expect(mock.windows).toHaveLength(1);
+      setState({ ...low, topApp: { ...game, pids: [42] } });
+      await watch.check();
+      expect(mock.windows).toHaveLength(1);
+      // Closed and launched again: all new processes.
+      setState({ ...low, topApp: { ...game, pids: [90] } });
+      await watch.check();
+      expect(mock.windows).toHaveLength(2);
+      watch.dispose();
+    }
+  });
   it('asks without taking focus, then acts on and remembers the choice', async () => {
     const { calls, watch } = rig(low, { lowMemoryCloseApps: [] });
     await watch.check();

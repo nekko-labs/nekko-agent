@@ -77,11 +77,23 @@ struct RootView: View {
                     panes.open(.chat(focused))
                 }
             }
-            // Closing a folding phone: one column, on the chat that was focused.
-            // Opening it again restores the panes as they were.
+            // Closing a folding phone (or turning a large iPhone back upright): one
+            // column, on the chat that was focused, with whatever that pane had
+            // pushed (Pair, Settings…) still open on top.
+            // Opening it again (or turning a large iPhone sideways) carries the
+            // phone's open screens into the panes, so a rotation never closes
+            // the screen in use, such as the Pair scanner mid-scan.
             .onChange(of: size) { old, new in
                 if old == .regular && new == .compact {
-                    path = panes.layout.focusedChatId.map { [Route.chat($0)] } ?? []
+                    let pushed = panes.paths[panes.layout.focusedId] ?? []
+                    path = (panes.layout.focusedChatId.map { [Route.chat($0)] } ?? []) + pushed
+                } else if old == .compact && new == .regular, !path.isEmpty {
+                    let carried = path
+                    path = []
+                    panes.sync(computer: store.activeId, prefs: app.prefs)
+                    for r in carried {
+                        if let c = PaneHost.content(r) { panes.open(c) } else { panes.push(r) }
+                    }
                 }
             }
             // Shared from another app: New chat opens with the text, nothing is sent.

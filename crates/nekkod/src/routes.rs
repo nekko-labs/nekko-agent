@@ -540,7 +540,12 @@ impl Table {
         );
         t.add(
             &["chat:generateImage"],
-            handler!(|ctx, channel, args| ctx.image_turns.generate(ctx, arg(&args, 0)).await),
+            handler!(|ctx, channel, args| {
+                if args.len() != 1 {
+                    return Err("Invalid image request: expected one request object".into());
+                }
+                ctx.image_turns.generate(ctx, arg(&args, 0)).await
+            }),
         );
         t.add(
             crate::worktrees::CHANNELS,
@@ -1244,17 +1249,15 @@ async fn session_op(
                 arg(&args, 1).as_str(),
                 arg(&args, 2).as_f64(),
             )),
-            // One photo a user attached, as stored: `(chatId, messageId, index)`.
-            "session:photo" => Ok(store
-                .get(id)
-                .as_ref()
-                .and_then(|s| {
-                    s.get("messages")?.as_array()?.iter().find(|m| {
-                        str_arg(&args, 1).is_some_and(|want| m.get("id").and_then(Value::as_str) == Some(want))
-                    })
-                })
-                .and_then(|m| m.get("images")?.get(arg(&args, 2).as_u64()? as usize)?.as_str().map(str::to_string))
-                .map_or(Value::Null, Value::String)),
+            // User photos and generated assistant images are stored inline in `images`.
+            // Only this exact message/index is readable. Never resolve an attachment path or URL.
+            "session:photo" => Ok(match (store.get(id), str_arg(&args, 1), arg(&args, 2).as_u64()) {
+                (Some(session), Some(message), Some(index)) => usize::try_from(index)
+                    .ok()
+                    .map(|index| nekko_remote::phone_image::photo(&session, message, index))
+                    .unwrap_or(Value::Null),
+                _ => Value::Null,
+            }),
             "session:images" => Ok(Value::Array(store.images(id, arg(&args, 1).as_f64().unwrap_or(1.0)))),
             "session:delete" => {
                 delete_log(id)?;

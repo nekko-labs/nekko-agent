@@ -1,6 +1,6 @@
 {
  "$comment": "The editorial half of the model recommendations feed. `node scripts/model-feed.mjs` reads this, asks Hugging Face for each file's real size and GGUF header, and writes src/model-feed.json, which the daemon ships. Ranks, tasks and speed targets are editorial choices; every number about a file comes from the file.",
- "version": "2026-11-08.1",
+ "version": "2026-11-08.2",
  "tasks": [
   {
    "id": "chat",
@@ -71,6 +71,15 @@
    "capability": "edit",
    "computeAllowanceBytes": 2147483648,
    "candidates": ["qwen-image-edit-2511", "flux2-klein-4b"]
+  },
+  {
+   "$comment": "Video decoding holds every frame: sd.cpp warns the Wan VAE needs a lot of memory. 4 GiB is an assumption for a short 480p clip (33 frames), not a measurement.",
+   "id": "videoCreate",
+   "label": "Create video clips",
+   "capability": "video",
+   "computeAllowanceBytes": 4294967296,
+   "gpuOnly": true,
+   "candidates": ["wan2.2-ti2v-5b"]
   }
  ],
  "imageModels": [
@@ -97,6 +106,14 @@
    "companions": [
     { "repo": "Comfy-Org/flux2-dev", "file": "split_files/vae/flux2-vae.safetensors" },
     { "repo": "unsloth/Qwen3-4B-GGUF", "file": "Qwen3-4B-Q4_K_M.gguf" }
+   ]
+  },
+  {
+   "id": "wan2.2-ti2v-5b", "repo": "QuantStack/Wan2.2-TI2V-5B-GGUF", "name": "Wan 2.2 TI2V 5B", "owner": "Wan-AI", "license": "Apache-2.0",
+   "capabilities": ["video"], "companionSet": "wan2.2-ti2v-5b", "quants": ["Q8_0", "Q4_K_M"],
+   "companions": [
+    { "repo": "Comfy-Org/Wan-2.2", "file": "split_files/vae/wan2.2_vae.safetensors" },
+    { "repo": "city96/umt5-xxl-encoder-gguf", "file": "umt5-xxl-encoder-Q8_0.gguf" }
    ]
   },
   {

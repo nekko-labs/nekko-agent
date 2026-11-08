@@ -644,6 +644,9 @@ impl Turns {
             "severity": severity,
         }));
         let answer = rx.await;
+        // Answered (or dropped): every client can stop showing it as waiting
+        // now, not only when the approved tool's result lands minutes later.
+        shared.emit(json!({ "type": "approval_resolved", "sessionId": shared.session_id, "callId": call_id }));
         let by = self.pending.take_answered_by(&call_id).unwrap_or(Value::Null);
         match answer {
             Ok(true) => note("approved", by),
@@ -739,6 +742,7 @@ impl Turns {
                     "severity": severity,
                 }));
                 let answer = rx.await;
+                shared.emit(json!({ "type": "approval_resolved", "sessionId": shared.session_id, "callId": id }));
                 let by = self.pending.take_answered_by(&id).unwrap_or(Value::Null);
                 match answer {
                     Ok(true) => note("approved", by),

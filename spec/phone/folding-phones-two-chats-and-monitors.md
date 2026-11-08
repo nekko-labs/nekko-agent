@@ -41,6 +41,8 @@ A pane's header shows its chat's title, status dot and the usual chat menu, plus
 
 **Keyboard and composer.** Only the focused pane's composer takes the keyboard; the other pane shrinks above it so its transcript stays visible (it does not scroll under the keyboard). In tabletop posture the keyboard sits on the lower half under that half's composer.
 
+**Which pane has focus** `[updated 2026-11-08]`: the focused pane wears a very subtle accent glow along its top and bottom edges, running into the status bar and home-indicator areas so it reaches the very top and bottom of the app. It replaced an accent border around the whole pane, which read as heavy. `[implemented on iOS; before/after captured on the iPad simulator in portrait (stacked); landscape and Android not checked, Android has no focus indicator]`
+
 **Approvals and questions.** A pending approval in the unfocused pane pulses its status dot and shows the card at the pane's bottom; the Live Activity and notifications are unchanged. Allowing from a pane follows today's rule (unlocked phone).
 
 **Drag between panes.** A message, a file from Files, or an image can be dragged from one pane into the other's composer (SwiftUI `draggable` / `dropDestination`; Compose `dragAndDropSource` / `dragAndDropTarget`). Text only lands as text in the composer; nothing is sent by a drop.

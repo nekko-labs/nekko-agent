@@ -494,7 +494,7 @@ impl Cards {
                     e.pointer("/request/questions/0/question").and_then(Value::as_str).unwrap_or("A question for you");
                 self.running(&sid, now, q.to_string(), Some(None))
             }
-            "tool_result" | "question_resolved" => self.running(&sid, now, "Working…".into(), None),
+            "tool_result" | "question_resolved" | "approval_resolved" => self.running(&sid, now, "Working…".into(), None),
             "done" => self.finish(&sid, now, LiveChatState::Done, "Finished"),
             "error" => {
                 let msg = e.get("message").and_then(Value::as_str).unwrap_or("").to_lowercase();
@@ -767,37 +767,6 @@ pub fn tool_label(call: &Value) -> String {
         Some(d) if !carries_private_value(d) => format!("{verb} {}", one_line(d, 80)),
         _ => verb,
     }
-}
-
-/// Whether `text`, or its percent-decoded form (a value in an address), holds
-/// a key, password, card, ID number, email address or phone number. Not the
-/// account name in a path (most file paths carry it) or an IP address (a
-/// host). The user's private terms live in the computer's settings, which the
-/// card builder does not read: a call carrying one asks (decision 0065), and
-/// so shows only its verb.
-fn carries_private_value(text: &str) -> bool {
-    let counts = |k: nekko_privacy::Kind| !matches!(k, nekko_privacy::Kind::User | nekko_privacy::Kind::Ip);
-    [text.to_string(), percent_decode(text)].iter().any(|t| !nekko_privacy::scan(t, &counts, &[], &[]).is_empty())
-}
-
-fn percent_decode(s: &str) -> String {
-    let b = s.as_bytes();
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        let hex = |c: u8| (c as char).to_digit(16);
-        match (b[i], b.get(i + 1).copied().and_then(hex), b.get(i + 2).copied().and_then(hex)) {
-            (b'%', Some(h), Some(l)) => {
-                out.push((h * 16 + l) as u8);
-                i += 3;
-            }
-            (c, _, _) => {
-                out.push(c);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// Whether `text`, or its percent-decoded form (a value in an address), holds

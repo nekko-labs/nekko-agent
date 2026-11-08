@@ -43,6 +43,8 @@ final class Prefs {
     var dictationHold: Bool { didSet { d.set(dictationHold, forKey: "dictationHold") } }
     /// The first-open video for always-on dictation was closed, any way (IO-28); the mic's first tap shows it until then.
     var voiceIntroSeen: Bool { didSet { d.set(voiceIntroSeen, forKey: "voiceIntroSeen") } }
+    /// "Send your first prompt" was closed, any way; it opens once over the first ever new chat until then.
+    var firstPromptIntroSeen: Bool { didSet { d.set(firstPromptIntroSeen, forKey: "firstPromptIntroSeen") } }
     /// The first run (IO-31) was finished or skipped; it never shows again.
     var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
     /// Keep each computer's chat list (titles, times, folders) on this iPhone to show
@@ -114,6 +116,8 @@ final class Prefs {
         dictationOnComputer = flag("dictationOnComputer", true)
         dictationHold = flag("dictationHold", false)
         voiceIntroSeen = flag("voiceIntroSeen", false)
+        // UI test runs start with it seen, so it never covers a test's new chat; a test opts in with `-firstPromptIntroSeen NO`.
+        firstPromptIntroSeen = flag("firstPromptIntroSeen", ProcessInfo.processInfo.arguments.contains("-uiTestReset"))
         onboarded = flag("onboarded", false)
         expertMode = flag("expertMode", false)
         simpleChoices = SimpleMode.parse(d.string(forKey: "simpleChoices"))

@@ -13,7 +13,7 @@ area: desktop
 
 - **Low:** under 2 GB left. **Critical:** under 1 GB. A fixed amount, not a share of the total (2026-11-05; it was under 10% and 5%, which on a 64 GB machine with a page file asked at 6 GB of 60 GB virtual memory left, well before anything was at risk). On Windows the worse of physical memory and the commit charge counts: an allocation fails at the commit limit however much memory sits on standby.
 - **When not `ok`** (or when `detail` asks), it also reads the process list and answers:
-  - `topApp`: the app holding the most, a process name summed over its processes (a browser is many). On Windows that is private commit; elsewhere resident memory. Nekko's processes (nekkod, everything under it, anything named Nekko), the system's (Explorer, `dwm`, WSL's `vmmem`, `WindowServer`, ...) and any app under 1 GiB are never named.
+  - `topApp`: the app holding the most, a process name summed over its processes (a browser is many), with their `pids`. On Windows that is private commit; elsewhere resident memory. Nekko's processes (nekkod, everything under it, anything named Nekko), the system's (Explorer, `dwm`, WSL's `vmmem`, `WindowServer`, ...) and any app under 1 GiB are never named.
   - `nekkoBytes`: what Nekko's own processes hold.
 
 ## The prompt `[implemented; unit-tested; not yet seen on macOS or Linux]`
@@ -27,6 +27,7 @@ The desktop main process (`memoryWatch.ts`) reads `memory:state` every 15 s whil
   - **Remember this choice.** Remembering Close adds that app to `lowMemoryCloseApps`; remembering Shut down or Ignore sets `lowMemoryAction`.
 - **Remembered choices:** an app in `lowMemoryCloseApps` that holds the most is asked to close without a question. Otherwise `lowMemoryAction` `release` shuts down Nekko's local models and `ignore` does nothing. A short note says what was done.
 - **Not nagging:** after it asks or acts, it stays quiet for 30 minutes unless low turns critical. An unanswered card goes away after 2 minutes. Back to `ok` resets this.
+- **Waved off (2026-11-08):** × or Ignore on the card means "not about this app": while that same run of the app holds the most, it is never asked about again, even when critical. A run is told by its process ids (`topApp.pids`): one with a process still in common is the same run (it may start and end helpers), one with all new ids was closed and relaunched, and is asked about again. Kept for as long as the desktop app runs. Another app holding the most is still asked about.
 - **Full-screen games:** while one is in front (`activity:fullscreen`, see [Stay out of the way of full-screen apps](stay-out-of-the-way-of-full-screen-apps.md)), nothing is shown over it. The question waits for the game to leave; a remembered choice still runs, without its note.
 - **Sized to fit:** the window measures the card's content after it loads and fits to it, so a long app name or note never clips.
 - **The card has no script:** a sandboxed `data:` page whose form submits to `https://nekko.invalid/choose`, read from the navigation by the main process.
