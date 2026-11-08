@@ -62,7 +62,7 @@ Displaying a screenshot does not mean it has been inspected or approved. The age
 
 ## Make it yours
 
-In **Settings → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
+In **Settings → Customize → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
 
 On desktop and the Local Web UI, light **Nekko** and **Indigo** use pale rose and indigo surfaces, tinted selections, and the same plum/violet/rose gradient colors as their dark counterparts. The selected chat keeps its color field from the greeting into the conversation; other panes stay quiet. Dark themes are unchanged, and reduced motion keeps a static field.
 
@@ -316,9 +316,13 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 
 Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
 
+### Customize your experience
+
+Open **Settings > Customize** for appearance, sidebar shortcuts, desktop behavior, mascot options, agent-wall layout, personal instructions, fonts, accessibility, and Simple mode visibility. Existing preferences are kept when controls move. Search in the settings rail finds controls across every section. Computer connections, phone pairing, safety policies, and service management stay in their own sections.
+
 ### Skills and Connectors shortcuts
 
-Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > Customize > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
 ### Download progress in Model Server
 
