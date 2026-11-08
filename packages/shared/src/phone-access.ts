@@ -148,6 +148,7 @@ export const PHONE_CHANNELS = [
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
+  'chat:generateImage',
   'chat:interruptQueued',
   'chat:pending',
   'chat:queue',
@@ -447,6 +448,9 @@ export const PHONE_AGENT_CHANNELS: readonly string[] = [
   'chat:abort',
   'chat:answer',
   'chat:editQueued',
+  // A Photo chat's turn on the computer's own picture model (decision 0069): like
+  // `chat:send`, it runs a model the person already set up, with what they typed.
+  'chat:generateImage',
   'chat:interruptQueued',
   'chat:queue',
   'chat:send',
@@ -789,6 +793,16 @@ export const PHONE_CHAT_SEND_KEYS = [
   'text',
   'videos',
 ] as const;
+
+/**
+ * `chat:generateImage` from a phone (decision 0069): the chat, the prompt, the
+ * picture settings the Photo composer saves, and photos to edit. No model
+ * paths, presets or anything else that reaches past the chat.
+ */
+export const PHONE_IMAGE_TURN_KEYS = ['images', 'params', 'prompt', 'sessionId', 'size'] as const;
+export const PHONE_IMAGE_PARAM_KEYS = ['cfgScale', 'height', 'modelId', 'seed', 'steps', 'width'] as const;
+/** Photos to edit a phone may send in one turn, as the engine allows (data URLs inside one relay frame). */
+export const PHONE_MAX_EDIT_IMAGES = 4;
 
 /**
  * What a phone receives of each runnable skill (`skills:runnable`): enough for
@@ -1141,6 +1155,10 @@ export function screenPhoneCall(
       phoneClientMessageId(opts);
       return own(opts, 'skill') ? { skill: phoneSkill(opts.skill) } : {};
     }
+    case 'chat:generateImage': {
+      phoneImageTurn(args[0]);
+      return {};
+    }
     case 'chat:queue': {
       const item = args[1];
       if (typeof item === 'string') return {};
@@ -1153,6 +1171,35 @@ export function screenPhoneCall(
     }
     default:
       return {};
+  }
+}
+
+/** A phone's Photo turn: only its known fields, photos as image data URLs, and numbers where numbers go. */
+function phoneImageTurn(opts: unknown): void {
+  if (!isObj(opts)) throw new PhoneAccessError('value-invalid', 'chat:generateImage options');
+  for (const key of Object.keys(opts)) {
+    if (!(PHONE_IMAGE_TURN_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+  }
+  if (typeof opts.sessionId !== 'string' || typeof opts.prompt !== 'string') throw new PhoneAccessError('value-invalid', 'chat:generateImage options');
+  if (own(opts, 'params')) {
+    if (!isObj(opts.params)) throw new PhoneAccessError('value-invalid', 'params');
+    for (const key of Object.keys(opts.params)) {
+      if (!(PHONE_IMAGE_PARAM_KEYS as readonly string[]).includes(key)) throw new PhoneAccessError('option-denied', key);
+      const v = opts.params[key];
+      if (key === 'modelId' ? typeof v !== 'string' : typeof v !== 'number' && v !== null) throw new PhoneAccessError('value-invalid', key);
+    }
+  }
+  if (own(opts, 'images')) {
+    const images = opts.images;
+    if (!Array.isArray(images) || images.length > PHONE_MAX_EDIT_IMAGES || !images.every((i) => typeof i === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(i))) {
+      throw new PhoneAccessError('value-invalid', 'images');
+    }
+  }
+  if (own(opts, 'size')) {
+    const size = opts.size;
+    if (!isObj(size) || Object.keys(size).some((k) => k !== 'width' && k !== 'height') || typeof size.width !== 'number' || typeof size.height !== 'number') {
+      throw new PhoneAccessError('value-invalid', 'size');
+    }
   }
 }
 
@@ -1498,6 +1545,9 @@ export function phoneAccessPolicy() {
     providerCloudKinds: [...PHONE_PROVIDER_CLOUD_KINDS],
     providerSaveKeys: [...PHONE_PROVIDER_SAVE_KEYS],
     providerLimits: { ...PHONE_PROVIDER_LIMITS },
+    imageTurnKeys: [...PHONE_IMAGE_TURN_KEYS],
+    imageParamKeys: [...PHONE_IMAGE_PARAM_KEYS],
+    maxEditImages: PHONE_MAX_EDIT_IMAGES,
     watchView: [...PHONE_WATCH_VIEW],
     machineView: [...PHONE_MACHINE_VIEW],
     machineResidentView: [...PHONE_MACHINE_RESIDENT_VIEW],

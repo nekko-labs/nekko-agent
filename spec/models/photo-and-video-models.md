@@ -184,7 +184,7 @@ Video keeps the planning and tool-based editing chat from #2149, and gains real 
 
 - Local models: prompts and attached photos stay on the computer.
 - Cloud models: a prompt, and especially an attached personal photo, is sent to the provider. That follows [decision 0065](../../docs/decisions/0065-outward-calls-that-carry-private-data-ask.md) (outward calls carrying private data ask). The cloud card names the provider before anything is sent.
-- Phones: image generation stays closed on the phone channel (`chat:generateImage` is denied today). Opening it is its own decision, not part of this plan.
+- Phones: `chat:generateImage` is open to a paired phone with Change access ([decision 0069](../../docs/decisions/0069-phones-run-photo-turns-on-the-computer.md)), as an agent-class channel with its own allowlist: the chat, the prompt, the composer's picture settings, at most four photos as PNG, JPEG or WebP data URLs, and an edit size; no paths, presets or other model settings. The daemon refuses photos to a model that cannot edit or animate them, whichever client sent them. Choosing a new picture model and downloading stay on the computer.
 - Downloads come only from the pinned repositories in the companion sets and the curated list.
 
 ## Plan
