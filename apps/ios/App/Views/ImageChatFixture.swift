@@ -14,8 +14,9 @@ struct ImageChatFixture: View {
 
     init() {
         let image = PhotoPreviewFixture.photos[0] // Original synthetic artwork, not a generated/provider image.
+        let edited = PhotoPreviewFixture.photos[1]
         _store = State(initialValue: ComputersStore(store: ImageFixtureSecrets(),
-            makeConnection: { _ in ImageFixtureConnection(image: image) },
+            makeConnection: { _ in ImageFixtureConnection(image: image, edited: edited) },
             deviceName: { "Image evidence iPhone" }, deriveKey: { _, _ in Data(repeating: 1, count: 32) }))
     }
 
@@ -52,10 +53,14 @@ private final class ImageFixtureSecrets: SecureStore, @unchecked Sendable {
 private final class ImageFixtureConnection: RemoteConnection, ProofCaller, @unchecked Sendable {
     private let lock = NSLock()
     private let image: String
+    private let edited: String
     private var status: (@Sendable (RelayStatus) -> Void)?
     private var params = ImageChatParams(modelId: "flux-local")
     private var messages: [JSONValue] = []
-    init(image: String) { self.image = image }
+    init(image: String, edited: String) {
+        self.image = image
+        self.edited = edited
+    }
     func setHandlers(onStatus: (@Sendable (RelayStatus) -> Void)?, onEvent: (@Sendable (String, JSONValue) -> Void)?, onWelcome: (@Sendable (WelcomedDevice) -> Void)?) {
         lock.withLock { status = onStatus }
     }
@@ -74,9 +79,17 @@ private final class ImageFixtureConnection: RemoteConnection, ProofCaller, @unch
         guard channel == Channels.chatGenerateImage else { return try await call(channel, args, timeout: timeout) }
         guard proof != nil else { throw RelayError("Change proof required.") }
         let prompt = args.first?.str("prompt") ?? ""
+        // With photos it is an edit (decision 0069): the reply is the second synthetic picture.
+        let photos = args.first?["images"]?.array ?? []
+        let size = args.first?["size"]
         lock.withLock {
-            messages = [["id": "prompt", "role": "user", "content": .string(prompt)],
-                        ["id": "generated", "role": "assistant", "content": "Generated local image (synthetic evidence fixture)", "images": [.string(image)]]]
+            let n = messages.count
+            let made: JSONValue = photos.isEmpty ? .string(image) : .string(edited)
+            let generated: JSONValue = ["modelId": .string(params.modelId ?? "flux-local"),
+                                        "width": size?["width"] ?? .int(Int64(params.width)),
+                                        "height": size?["height"] ?? .int(Int64(params.height))]
+            messages += [["id": .string("prompt-\(n)"), "role": "user", "content": .string(prompt), "images": .array(photos)],
+                         ["id": .string("generated-\(n)"), "role": "assistant", "content": .string(photos.isEmpty ? "Generated local image (synthetic evidence fixture)" : "Edited local image (synthetic evidence fixture)"), "images": [made], "generated": generated]]
         }
         return session
     }
@@ -90,7 +103,10 @@ private final class ImageFixtureConnection: RemoteConnection, ProofCaller, @unch
         case Channels.sessionSetOptions:
             if let p = ImageChatParams.from(args.last?["imageParams"]) { lock.withLock { params = p } }
             return session
-        case Channels.sessionPhoto: return .string(image)
+        case Channels.sessionPhoto:
+            // The full size of the asked-for message's picture.
+            let id = args.count > 1 ? args[1].string : nil
+            return lock.withLock { messages.first { $0.str("id") == id }?["images"]?.array?.first } ?? .string(image)
         case Channels.sessionsSummaries: return [session]
         case Channels.settingsGet: return [:]
         case Channels.chatPending: return [:]

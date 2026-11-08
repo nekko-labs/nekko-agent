@@ -108,8 +108,9 @@ final class ImageChatTests: XCTestCase {
         let chat = ChatModel(sessionId: "s", store: store)
         await chat.start()?.value
         defer { chat.stop() }
-        do { _ = try await chat.send("cat", images: ["data:image/png;base64,x"]); XCTFail("attachments refused") }
-        catch { XCTAssertTrue(error.localizedDescription.contains("text prompt only")) }
+        // Photos are an edit (decision 0069), but one the computer couldn't read never leaves.
+        do { _ = try await chat.send("cat", images: ["data:image/png;base64,x"]); XCTFail("unreadable photo refused") }
+        catch { XCTAssertTrue(error.localizedDescription.contains("couldn’t be read")) }
         c.replies[Channels.engineModels] = { _ in [["id": "vision", "modality": "vision"]] }
         do { _ = try await chat.send("cat"); XCTFail("vision is not a generator") } catch {}
         c.replies[Channels.appInfo] = { _ in ["version": "old"] }

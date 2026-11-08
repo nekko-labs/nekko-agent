@@ -47,6 +47,7 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by re
 | Connectors page | Missing | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
 | Voice conversations and always-on dictation | One recording per tap | [#2110](https://github.com/nekko-labs/nekko-agent/issues/2110) |
 | Full-screen photos, previews before and after sending | No photo viewer | [#2111](https://github.com/nekko-labs/nekko-agent/issues/2111) |
+| Edit photos in image chats: attach photos to a prompt, Edit under a made picture | Not implemented on Android | [#2230](https://github.com/nekko-labs/nekko-agent/issues/2230) |
 | Turn metrics and completion checkmark | Step count and duration only | [#2112](https://github.com/nekko-labs/nekko-agent/issues/2112) |
 | Usage by computer and by this phone | One computer's totals | [#2114](https://github.com/nekko-labs/nekko-agent/issues/2114) |
 | Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | [#2115](https://github.com/nekko-labs/nekko-agent/issues/2115) |
