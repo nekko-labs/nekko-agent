@@ -11,15 +11,17 @@ vi.mock('./ModelServerView.js', () => ({ ModelServerView: ({ embedded }: { embed
 import { guideFirstModel, ModelsWorkspace } from './ModelsWorkspace.js';
 
 describe('Models workspace', () => {
-  it('shows the local and cloud sections together from either destination', () => {
+  it('shows the cloud and local sections side by side from either destination', () => {
     for (const view of ['models', 'modelserver']) {
       state.view = view;
       const html = renderToStaticMarkup(<ModelsWorkspace />);
       expect(html).not.toContain('<nav');
+      expect(html).toContain('models-workspace-split');
       expect(html).toContain('id="models-local-title"');
       expect(html).toContain('id="models-cloud-title"');
       expect(html).toContain('data-providers="cloud"');
-      expect(html.indexOf('models-local-title')).toBeLessThan(html.indexOf('models-cloud-title'));
+      // Cloud on the left, Local on the right.
+      expect(html.indexOf('models-cloud-title')).toBeLessThan(html.indexOf('models-local-title'));
     }
   });
   it('waits for the engine before choosing between the guided screen and the full page', () => {

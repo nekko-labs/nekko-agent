@@ -373,6 +373,7 @@ async fn file_tools_leave_the_same_results_trees_and_changes() {
             if step.get("changes").is_some() {
                 let list: Vec<Value> = tracker
                     .list_changes(sid)
+                    .unwrap()
                     .iter()
                     .map(|c| {
                         json!({
@@ -384,10 +385,10 @@ async fn file_tools_leave_the_same_results_trees_and_changes() {
                     .collect();
                 results.push(json!({ "changes": list }));
             } else if let Some(rel) = step.get("accept").and_then(Value::as_str) {
-                tracker.accept_change(sid, &path::native::resolve(&[env.root, "ws", "app", rel]));
+                tracker.accept_change(sid, &path::native::resolve(&[env.root, "ws", "app", rel])).unwrap();
                 results.push(json!({ "accepted": rel }));
             } else if step.get("acceptAll").is_some() {
-                tracker.accept_all(sid);
+                tracker.accept_all(sid).unwrap();
                 results.push(json!({ "acceptedAll": true }));
             } else {
                 let approve = step.get("approve").and_then(Value::as_bool).unwrap_or(true);

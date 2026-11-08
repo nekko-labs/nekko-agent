@@ -59,7 +59,7 @@ export function hardwareText(recs: Recommendations): string {
 const base = (p: string) => p.split(/[\\/]/).pop()?.toLowerCase() ?? '';
 
 /** Already on this machine: its weights file is in the library. */
-export function isDownloaded(option: RecommendedOption, models: Pick<LocalModel, 'path'>[]): boolean {
+export function isDownloaded(option: Pick<RecommendedOption, 'files'>, models: Pick<LocalModel, 'path'>[]): boolean {
   const weights = base(option.files[0] ?? '');
   return !!weights && models.some(m => base(m.path) === weights);
 }

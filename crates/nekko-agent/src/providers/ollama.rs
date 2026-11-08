@@ -12,7 +12,7 @@ use crate::types::*;
 use serde_json::{Map, Value, json};
 use std::time::Duration;
 
-/// How long `/api/show` may take before a chat goes on without `think`. Every
+/// How long `/api/show` may take before its answer counts as unknown. Every
 /// request that wants thinking waits on it, so a stall must stay short.
 const SHOW_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -87,7 +87,19 @@ impl OllamaProvider {
         let mut res = sink.send(&*self.io.transport, &http).await?.map_err(|e| ProviderError::new(e.message))?;
         if !res.ok() {
             let body = sink.text(&mut res).await?;
-            return Err(ProviderError::http(res.status, chat_error(res.status, &body)).into());
+            let mut error = chat_error(res.status, &body);
+
+            // Asked only after a failure, so a healthy turn pays nothing.
+            let sent_tools = req.tools.as_ref().is_some_and(|tools| !tools.is_empty());
+            if sent_tools && self.capabilities(&req.model, &sink).await?.is_some_and(|c| !lists(&c, "tools")) {
+                error = format!(
+                    "{} can't use tools, and chats in Nekko Agent need them. \
+                     Pick a model whose Ollama capabilities include tools. ({error})",
+                    req.model
+                );
+            }
+
+            return Err(ProviderError::http(res.status, error).into());
         }
         // A fallback, used only if the server leaves out `eval_duration`.
         let mut decode = DecodeClock::new(self.io.clock.clone());
@@ -139,9 +151,16 @@ impl OllamaProvider {
 
     /// Whether `/api/show` lists `thinking` for the model. Unknown reads as no:
     /// a failed or slow answer leaves `think` to Ollama's default, so the chat
-    /// runs either way. Asked per chat, not cached: it takes Ollama about 20 ms
-    /// cold and 1 ms warm, and a re-pulled model may change its answer.
+    /// runs either way.
     async fn can_think(&self, model: &str, sink: &Sink) -> Result<bool, Stop> {
+        Ok(self.capabilities(model, sink).await?.is_some_and(|c| lists(&c, "thinking")))
+    }
+
+    /// The model's `capabilities` from `/api/show`, or `None` when the call
+    /// failed, took too long or the list is missing. Asked each time, not
+    /// cached: it takes Ollama about 20 ms cold and 1 ms warm, and a re-pulled
+    /// model may change its answer.
+    async fn capabilities(&self, model: &str, sink: &Sink) -> Result<Option<Vec<Value>>, Stop> {
         let show = HttpRequest::post(format!("{}/api/show", self.base()), Vec::new(), json!({ "model": model }));
 
         let fetch = async {
@@ -151,11 +170,10 @@ impl OllamaProvider {
             }
         };
 
-        let Ok(body) = tokio::time::timeout(SHOW_TIMEOUT, fetch).await else { return Ok(false) };
+        let Ok(body) = tokio::time::timeout(SHOW_TIMEOUT, fetch).await else { return Ok(None) };
 
-        let capabilities = js::safe_parse(&body?);
-        let capabilities = capabilities.get("capabilities").and_then(Value::as_array);
-        Ok(capabilities.is_some_and(|list| list.iter().any(|c| c.as_str() == Some("thinking"))))
+        let show = js::safe_parse(&body?);
+        Ok(show.get("capabilities").and_then(Value::as_array).cloned())
     }
 
     /// `test()`: whether `/api/tags` answers.
@@ -219,6 +237,10 @@ impl OllamaProvider {
         let Ok(mut res) = self.io.transport.send(req).await else { return json!({ "models": [] }) };
         serde_json::from_str(&res.text().await).unwrap_or_else(|_| json!({ "models": [] }))
     }
+}
+
+fn lists(capabilities: &[Value], name: &str) -> bool {
+    capabilities.iter().any(|c| c.as_str() == Some(name))
 }
 
 /// A non-OK chat: Ollama's own `{ "error": "..." }` when it sent one.

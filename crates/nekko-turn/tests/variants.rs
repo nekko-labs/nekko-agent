@@ -261,3 +261,36 @@ fn starting_a_queued_prompt_matches() {
         assert_eq!(text(&got), text(&c["output"]), "interrupt {i}");
     }
 }
+
+#[test]
+fn an_image_turn_with_pictures_edits_them_and_keeps_them_in_the_transcript() {
+    let photo = "data:image/jpeg;base64,/9j/4AAQ";
+    let mut session = json!({ "id": "s", "title": "New chat", "messages": [] });
+    let opts = json!({ "sessionId": "s", "prompt": "make the sky orange", "images": [photo], "params": { "modelId": "m", "width": 1024, "height": 768, "steps": 4, "cfgScale": 1 } });
+    let started = start_image_turn(&mut session, &opts, 1_000, 42).unwrap();
+    assert_eq!(started.request["refImages"], json!([photo]));
+    assert_eq!((started.request["width"].clone(), started.request["height"].clone()), (json!(1024), json!(768)));
+
+    // An edit's own size is the request's for this turn; the chat keeps its size.
+    let mut sized = json!({ "id": "s", "title": "New chat", "messages": [] });
+    let mut tall = opts.clone();
+    tall["size"] = json!({ "width": 768, "height": 1024 });
+    let started = start_image_turn(&mut sized, &tall, 1_000, 42).unwrap();
+    assert_eq!((started.request["width"].clone(), started.request["height"].clone()), (json!(768), json!(1024)));
+    assert_eq!(
+        (sized["imageParams"]["width"].clone(), sized["imageParams"]["height"].clone()),
+        (json!(1024), json!(768))
+    );
+    let user = &session["messages"][0];
+    assert_eq!(
+        (user["role"].clone(), user["content"].clone(), user["images"].clone()),
+        (json!("user"), json!("make the sky orange"), json!([photo]))
+    );
+
+    // Without pictures, nothing about the turn changes.
+    let mut plain = json!({ "id": "s", "title": "New chat", "messages": [] });
+    let started =
+        start_image_turn(&mut plain, &json!({ "prompt": "a cat", "params": { "modelId": "m" } }), 1_000, 42).unwrap();
+    assert_eq!(started.request.get("refImages"), None);
+    assert_eq!(plain["messages"][0].get("images"), None);
+}

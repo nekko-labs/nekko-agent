@@ -13,8 +13,10 @@
 pub mod client_ids;
 pub mod meta;
 mod phase;
+mod review;
 mod summary;
 mod write;
+pub use review::ReviewScope;
 
 pub use meta::Meta;
 
