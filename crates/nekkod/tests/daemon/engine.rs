@@ -934,3 +934,113 @@ async fn a_downloaded_picture_model_fetches_its_supporting_files_itself() {
     assert_eq!((status["setId"].clone(), status["ready"].clone()), (json!("z-image"), json!(true)), "{status}");
     std::fs::remove_dir_all(&root).ok();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_daemon_makes_a_clip_with_a_video_model() {
+    let root = std::env::temp_dir().join(format!("nekkod-clip-turn-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    std::fs::create_dir_all(data.join("sessions")).unwrap();
+    // A Wan 2.2 TI2V 5B quant, its VAE and text encoder in place, and the stand-in runtime.
+    let model = data.join("models/image/QuantStack_Wan2.2-TI2V-5B-GGUF/Wan2.2-TI2V-5B-Q4_K_M.gguf");
+    std::fs::create_dir_all(model.parent().unwrap()).unwrap();
+    std::fs::write(&model, tiny_gguf("wan2", "Wan2.2 TI2V 5B")).unwrap();
+    let shared = data.join("models/.companions/image");
+    std::fs::create_dir_all(&shared).unwrap();
+    for f in ["vae-wan2.2.safetensors", "t5xxl-umt5-xxl-q8_0.gguf"] {
+        std::fs::write(shared.join(f), "x").unwrap();
+    }
+    let sd_dir = data.join("engine/diffusion");
+    std::fs::create_dir_all(&sd_dir).unwrap();
+    std::fs::write(
+        sd_dir.join("engine.json"),
+        json!({ "buildId": "fake", "binPath": fake_sd(), "version": "fake" }).to_string(),
+    )
+    .unwrap();
+    let port = free_port();
+    std::fs::write(
+        data.join("settings.json"),
+        json!({ "engineBinPath": fake_llama(), "engine": { "port": port, "modelFolders": [] } }).to_string(),
+    )
+    .unwrap();
+    let session = json!({ "id": "s_clip", "title": "New chat", "messages": [], "createdAt": 1, "updatedAt": 1 });
+    std::fs::write(data.join("sessions/s_clip.json"), session.to_string()).unwrap();
+    let d = start_with_env(&data, json!({}), &[]);
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let id = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").expect("the video model")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut events = ws(d.port, &format!("/api/events?token={TOKEN}"), Some("null")).await.unwrap();
+
+    // The chat's 1344x768 becomes the clip's 832x480; a photo is the first frame.
+    let photo = "data:image/png;base64,AAAA";
+    let params = json!({ "modelId": id, "width": 1344, "height": 768, "steps": 20, "cfgScale": 6, "seed": 5 });
+    let opts = json!({ "sessionId": "s_clip", "prompt": "waves rolling in", "params": params, "images": [photo] });
+    let (status, body) = post(d.port, "chat:generateImage", json!([opts]), Some(TOKEN)).await;
+    assert_eq!((status, body.clone()), (200, Value::Null), "{body}");
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_clip.json")).unwrap()).unwrap();
+    let reply = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    let clip = reply["images"][0].as_str().unwrap_or_else(|| panic!("no clip in the reply: {reply}"));
+    let sent = clip.strip_prefix("data:image/webp;base64,").unwrap_or_else(|| panic!("not an animated WebP: {clip}"));
+    assert_eq!(sent, fake_base64(format!("waves rolling in|832x480|33@16|webp|{photo}").as_bytes()));
+    assert_eq!(reply["generated"]["video"], json!({ "frames": 33, "fps": 16 }));
+    assert_eq!((reply["generated"]["width"].clone(), reply["generated"]["height"].clone()), (json!(832), json!(480)));
+    // The chat keeps its own size for pictures.
+    assert_eq!(saved["imageParams"]["width"], 1344);
+
+    let mut stages = Vec::new();
+    while let Some(ev) = next_json(&mut events, Duration::from_secs(2)).await {
+        let p = &ev["payload"];
+        if ev["channel"] == "agent:event" && p["sessionId"] == "s_clip" {
+            stages.push(format!("{}:{}", p["type"].as_str().unwrap(), p["label"].as_str().unwrap_or("")));
+            if p["type"] == "done" {
+                break;
+            }
+        }
+    }
+    assert_eq!(
+        stages,
+        [
+            "image_status:Making a 832×480 clip",
+            "image_status:Loading the video model",
+            "image_status:Making a 832×480 clip",
+            "image_status:Making a 832×480 clip · step 1 of 2",
+            "done:",
+        ],
+        "{stages:?}"
+    );
+
+    // A job that completes with no clip is a failure the chat is told, not a broken picture.
+    let empty = json!({ "sessionId": "s_clip", "prompt": "empty sea", "params": params });
+    post(d.port, "chat:generateImage", json!([empty]), Some(TOKEN)).await;
+    let saved: Value =
+        serde_json::from_str(&std::fs::read_to_string(data.join("sessions/s_clip.json")).unwrap()).unwrap();
+    let last = saved["messages"].as_array().unwrap().last().unwrap().clone();
+    assert_eq!(last["content"], "The image could not be generated: The video model finished without a clip.", "{last}");
+    assert_eq!(last.get("images"), None, "{last}");
+
+    // Stopping a clip cancels its job on the server.
+    let port2 = d.port;
+    let slow = json!({ "sessionId": "s_clip", "prompt": "slow tide", "params": params });
+    let running = tokio::spawn(async move { post(port2, "chat:generateImage", json!([slow]), Some(TOKEN)).await });
+    let marker = std::path::PathBuf::from(format!("{}.cancelled", model.display()));
+    until("the clip to be generating", Duration::from_secs(20), || async {
+        let (_, running) = post(port2, "chat:running", json!([]), Some(TOKEN)).await;
+        running.as_array().is_some_and(|r| r.contains(&json!("s_clip"))).then_some(())
+    })
+    .await;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    post(d.port, "chat:abort", json!(["s_clip"]), Some(TOKEN)).await;
+    let (status, _) = running.await.unwrap();
+    assert_eq!(status, 200);
+    until("the job to be cancelled on the server", Duration::from_secs(10), || {
+        let marker = marker.clone();
+        async move { marker.is_file().then_some(()) }
+    })
+    .await;
+    post(d.port, "engine:stop", json!([]), Some(TOKEN)).await;
+    drop(d);
+    std::fs::remove_dir_all(root).ok();
+}

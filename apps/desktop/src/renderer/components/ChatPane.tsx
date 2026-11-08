@@ -1644,7 +1644,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
       return false;
     }
     // Photos in the composer mean edit (decision 0067); a typed prompt alone means create.
-    const images = fromDraft ? pendingImages : [];
+    let images = fromDraft ? pendingImages : [];
     let size: { width: number; height: number } | undefined;
     try {
       const [runtime, setup] = await Promise.all([
@@ -1658,14 +1658,20 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         return false;
       }
       // A model with no known set cannot be asked: offer one that surely edits rather than ignore the photo.
+      // A video model takes a photo as its first frame.
       const can = setup?.capabilities ?? [];
-      if (images.length && !can.includes('edit')) {
+      if (images.length && !can.includes('edit') && !can.includes('video')) {
         setEditOffer(true);
         return false;
       }
-      if (!images.length && setup && !can.includes('create')) {
+      if (!images.length && setup && !can.includes('create') && !can.includes('video')) {
         useStore.getState().pushToast('info', 'This model only changes photos. Add a photo to edit, or pick a model that makes new pictures. Your prompt is kept here.');
         return false;
+      }
+      // A video model animates the first photo: the clip takes its shape, and only it is sent.
+      if (images.length > 1 && can.includes('video')) {
+        useStore.getState().pushToast('info', 'A clip starts from one photo; the first is used.');
+        images = images.slice(0, 1);
       }
       if (images.length) size = editSize(await photoSize(images[0]), params);
     } catch {

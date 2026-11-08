@@ -322,6 +322,136 @@ impl Server {
         Ok(result)
     }
 
+    /// Whether the library's model makes clips (its companion set says `video`).
+    pub async fn makes_video(&self, id: &str) -> bool {
+        let Ok(Some(model)) = self.library.find(id).await else { return false };
+        acquire::image_companion_set_for(&model)
+            .and_then(|s| s.get("capabilities").cloned())
+            .is_some_and(|c| c.as_array().is_some_and(|a| a.iter().any(|x| x == "video")))
+    }
+
+    /// One clip from a video model: loaded like an image model, then a job on
+    /// its own sd-server (`/sdcpp/v1/vid_gen`), polled until it finishes.
+    /// The router is not in the way: a job's status reads carry no model name
+    /// for it to route by. `on_stage` hears `loading`, `generating`, and
+    /// `step:<n>/<total>` as sampling moves. Dropping the future (a stopped
+    /// turn) cancels the job on the server.
+    pub async fn generate_video_with(
+        &self,
+        request: &Value,
+        on_stage: &mut (dyn FnMut(&str) + Send),
+    ) -> Result<Value, String> {
+        let body = launch::video_generation_body(request)?;
+        let id = request.get("modelId").map(nekko_js::display).unwrap_or_default();
+        let model = self.library.find(&id).await?;
+        let Some(model) = model.filter(|m| m.get("modality").and_then(Value::as_str) == Some("image")) else {
+            return Err("Choose a video model.".into());
+        };
+        if !self.model.loaded_ids().contains(&id) {
+            on_stage("loading");
+        }
+        let preset = model.get("preset").filter(|p| !p.is_null()).cloned().unwrap_or(json!({}));
+        let started = self.load(&id, preset).await;
+        if started.get("ok") != Some(&Value::Bool(true)) {
+            return Err(started.get("message").map(nekko_js::display).unwrap_or_default());
+        }
+        let Some(child) = self.engine.supervisor.get(&id) else {
+            return Err("The video model stopped before it could start.".into());
+        };
+        // Busy while the job runs, so the idle timer does not unload it under the job.
+        let _busy = child.begin();
+        let base = format!("http://127.0.0.1:{}", child.port);
+        on_stage("generating");
+        let res = self
+            .client
+            .post(format!("{base}/sdcpp/v1/vid_gen"))
+            .header("content-type", "application/json")
+            .body(body)
+            .timeout(Duration::from_secs(60))
+            .send()
+            .await
+            .map_err(|_| "The video model did not take the request.".to_string())?;
+        let status = res.status();
+        let job: Value = res.json().await.map_err(|e| e.to_string())?;
+        let Some(job_id) = job.get("id").and_then(Value::as_str).filter(|_| status.is_success()) else {
+            return Err(
+                sd_error(&job).unwrap_or_else(|| format!("The clip could not be started (HTTP {}).", status.as_u16()))
+            );
+        };
+        let cancel = CancelJob {
+            client: self.client.clone(),
+            url: format!("{base}/sdcpp/v1/jobs/{job_id}/cancel"),
+            armed: true,
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(4 * 60 * 60);
+        let mut last_step = String::new();
+        // Reads in a row with no job state: a server that died or was unloaded stops answering.
+        let mut misses = 0u32;
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            if std::time::Instant::now() > deadline {
+                return Err("The clip took over four hours and was stopped.".into());
+            }
+            if self.engine.supervisor.get(&id).is_none_or(|c| c.port != child.port) {
+                return Err("The video model stopped while making the clip.".into());
+            }
+            let read = match self
+                .client
+                .get(format!("{base}/sdcpp/v1/jobs/{job_id}"))
+                .timeout(Duration::from_secs(30))
+                .send()
+                .await
+            {
+                Ok(r) => r.json::<Value>().await.ok(),
+                Err(_) => None,
+            };
+            let Some(state) = read else {
+                misses += 1;
+                if misses >= MAX_JOB_MISSES {
+                    return Err("The video model stopped answering while making the clip.".into());
+                }
+                continue;
+            };
+            match state.get("status").and_then(Value::as_str).unwrap_or_default() {
+                "completed" => {
+                    let mut cancel = cancel;
+                    cancel.armed = false;
+                    let result = state.get("result").cloned().unwrap_or(Value::Null);
+                    if result.get("b64_json").and_then(Value::as_str).is_none_or(str::is_empty) {
+                        return Err("The video model finished without a clip.".into());
+                    }
+                    return Ok(result);
+                }
+                "failed" | "cancelled" => {
+                    let mut cancel = cancel;
+                    cancel.armed = false;
+                    return Err(sd_error(&state).unwrap_or_else(|| "The clip could not be made.".into()));
+                }
+                // No such job (the server restarted), or an answer that is not a job.
+                "" => {
+                    misses += 1;
+                    if misses >= MAX_JOB_MISSES {
+                        return Err(
+                            sd_error(&state).unwrap_or_else(|| "The video model lost track of the clip.".into())
+                        );
+                    }
+                }
+                _ => {
+                    misses = 0;
+                    let preview = state.get("preview").filter(|p| !p.is_null());
+                    if let Some(p) = preview {
+                        let step =
+                            format!("step:{}/{}", nekko_js::display(&p["step"]), nekko_js::display(&p["total_steps"]));
+                        if step != last_step {
+                            on_stage(&step);
+                            last_step = step;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub async fn route(&self, channel: &str, args: &[Value]) -> Result<Value, String> {
         let arg = |i: usize| args.get(i).cloned().unwrap_or(Value::Null);
         let text = |i: usize| nekko_js::display(&arg(i));
@@ -366,5 +496,35 @@ impl Server {
             }
             other => return Err(format!("{other} is not a model-server channel")),
         })
+    }
+}
+
+/// Status reads in a row with no job state before a clip is given up (about 30 s).
+const MAX_JOB_MISSES: u32 = 30;
+
+/// sd-server's own error message, when it gave one.
+fn sd_error(v: &Value) -> Option<String> {
+    v.get("error").and_then(|e| e.get("message")).and_then(Value::as_str).map(str::to_string)
+}
+
+/// Cancels a clip's job on its server unless disarmed: a stopped turn drops
+/// the future that owns it, and the job should not keep the GPU busy for minutes.
+struct CancelJob {
+    client: reqwest::Client,
+    url: String,
+    armed: bool,
+}
+
+impl Drop for CancelJob {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let (client, url) = (self.client.clone(), std::mem::take(&mut self.url));
+        if let Ok(rt) = tokio::runtime::Handle::try_current() {
+            rt.spawn(async move {
+                let _ = client.post(url).timeout(Duration::from_secs(10)).send().await;
+            });
+        }
     }
 }
