@@ -5,7 +5,7 @@ area: phone
 
 # Android hands-free voice (#2110)
 
-Status: **native UI and controller integration implemented; SDK-free checks passed; native build/audio/visual verification outstanding.** Rust/TypeScript host authorization remains parent-owned. This shared-worktree change does not commit, open a PR, change branches, or replace the parallel image implementation.
+Status: **native UI and controller integration implemented; SDK-free checks passed; native build/audio/visual verification outstanding.** Rust/TypeScript host authorization remains parent-owned. Implementation is tracked in #2212; the shared host contract is #2211.
 
 ## User-visible implementation
 
@@ -75,14 +75,14 @@ Coverage includes the existing voice command/runner/listening/conversation/hold/
 
 ### Native fixture added, not executed here
 
-`apps/android/app/src/androidTest/java/com/nekko/android/VoiceIntegrationEvidenceTest.kt` renders the actual ChatScreen/composer using synthetic, memory-only repository data, no live relay and no microphone activation. It exercises the `+` entry, Ready sheet, retained typed draft, lock dismissal and voice-off removal. Optional `nekkoVoiceEvidence=true` captures real native-window PNGs under the test app’s external-files `evidence/` directory, tagged with `nekkoDevice`. This is a **new surface with no before voice dialog**. No screenshots were captured or inspected in this session.
+`apps/android/app/src/androidTest/java/com/nekko/android/VoiceIntegrationEvidenceTest.kt` renders the actual ChatScreen/composer using synthetic, memory-only repository data, no live relay and no microphone activation. It exercises the `+` entry, Ready sheet, retained typed draft, lock dismissal and voice-off removal. Optional `nekkoModeEvidence=true` captures real native-window PNGs under the test app’s external-files `evidence/` directory, tagged with `nekkoDevice`. This is a **new surface with no before voice dialog**. No screenshots were captured or inspected in this session.
 
 Example for an authorized isolated Android environment (not run here):
 
 ```powershell
 ./gradlew.bat :app:connectedDebugAndroidTest `
   -Pandroid.testInstrumentationRunnerArguments.class=com.nekko.android.VoiceIntegrationEvidenceTest `
-  -Pandroid.testInstrumentationRunnerArguments.nekkoVoiceEvidence=true `
+  -Pandroid.testInstrumentationRunnerArguments.nekkoModeEvidence=true `
   -Pandroid.testInstrumentationRunnerArguments.nekkoDevice=phone
 ```
 
@@ -92,5 +92,12 @@ Example for an authorized isolated Android environment (not run here):
 - **Native visual and interaction evidence is missing.** Capture and inspect the actual composer and Ready/Listening/Waiting/Speaking/Stopped/error/confirmation surfaces. For changed existing composer layout, capture a matching base screenshot; the voice dialog itself is new. Record video for hold/release and lifecycle timing. The fixture only covers Ready/no-audio behavior, not speech correctness.
 - **Real audio and host end-to-end behavior are unverified.** Exercise on-device recognizer availability/language, permission denial/grant/revocation, offline-only TTS/voices, phone-call/audio focus, headset disconnect, lock/cover, navigation and disconnect/reconnect during capture/wait/speech/proof. A sent prompt may still finish remotely after Stop. Verify parent-owned host authorization and Change/StepUp enforcement with the real host; no Rust/TS changes are included here.
 - **Foldable native matrix remains unrun:** folded/cover-screen single pane; unfolded side-by-side panes competing for audio; tabletop/book posture; fold/unfold and rotation while capturing/waiting/speaking. The JVM lease test proves ownership semantics only, not native posture/lifecycle behavior. Prospective named hardware is capability-based, not assumed hardware specifications.
-- New voice resource strings currently use default English fallbacks. Existing command grammar remains English/addressed “Nekko”; selecting an STT language does not translate the command grammar or core error/confirmation copy.
+- Voice UI resources now include German, Spanish, French, Portuguese, Japanese and Simplified Chinese translations; native rendering and linguistic review remain unverified. Existing command grammar remains English/addressed “Nekko”; selecting an STT language does not translate the command grammar or core error/confirmation copy.
 - Archive completion uses the existing completion bar; completion can dispose/revoke the originating voice controls before their success toast. Device verification should check the resulting Completed state rather than depend on that toast.
+
+## Native verification correction (2026-11-08)
+
+- Native Android run [42438407217](https://github.com/nekko-labs/nekko-agent/actions/runs/42438407217) passed unit/cross-language/integration tests and the light/dark live-relay emulator journey. Lint/build failed with 48 errors: 45 missing voice/image resource translations, two configuration-unaware resource reads, and the audio-device flag annotation. These are feature-owned failures, not waived baseline errors.
+- Added all 45 resource keys in each of six supported locales, used configuration-aware `LocalResources`, and expressed audio route enumeration as INPUTS | OUTPUTS (same input/output coverage). No lint suppression or permission change.
+- Matched keyboard run 42438428592 failed both Android jobs at the after-only control-removal assertion. The fixture read `nekkoModeRevision` while the runner supplied `nekkoRevision`; corrected the fixture and revision-tagged motion filenames. The fixture now matches production edge-to-edge and adjustResize window setup, which is needed for Compose IME insets. Whether this corrects the after failure still requires native execution; no timeout or assertion is weakened.
+- Local source-contract/translation checks do not prove keyboard behavior, native rendering, audio or translation quality. Current corrected-head matched evidence and lint/build remain required before landing.

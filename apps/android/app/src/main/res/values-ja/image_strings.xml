@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="image_kind_text">チャット</string>
+    <string name="image_kind_image">画像</string>
+    <string name="image_model">ローカル画像モデル</string>
+    <string name="image_models_loading">コンピューターから画像モデルを読み込み中…</string>
+    <string name="image_no_models">利用可能な画像モデルがありません。コンピューターに画像モデルを追加してから、ここで再試行してください。</string>
+    <string name="image_retry_models">モデルを再読み込み</string>
+    <string name="image_model_missing">保存されたモデル %1$s は利用できません。このコンピューターの画像モデルを選んでください。</string>
+    <string name="image_width">幅（256〜2048、64の倍数）</string>
+    <string name="image_height">高さ（256〜2048、64の倍数）</string>
+    <string name="image_steps">ステップ数（1〜100）</string>
+    <string name="image_cfg">CFG（整数、0〜30）</string>
+    <string name="image_seed">シード（-1はランダム、最大2147483647）</string>
+    <string name="image_integer_settings">この設定には署名できません。整数を明示的に選んでください。保存された小数値が自動で丸められることはありません。</string>
+    <string name="image_working">処理中…</string>
+    <string name="image_settings">画像設定</string>
+    <string name="image_save_settings">画像設定を保存</string>
+    <string name="image_create">画像チャットを開始</string>
+    <string name="image_offline">画像チャットを作成または送信するには再接続してください。画像の生成指示がテキストとして送信待ちになることはありません。</string>
+    <string name="image_unsupported">このコンピューターは画像生成への対応を通知していません。コンピューターの Nekko Agent を更新してください。</string>
+    <string name="image_prompt_only">画像をテキストだけで説明してください。添付ファイルとスキルには対応していません。生成には既存の署名付き Change 認可を使用します。</string>
+    <string name="image_reply_n">生成された画像 %1$d</string>
+    <string name="image_open">画像を開く</string>
+    <string name="image_close">閉じる</string>
+    <string name="image_unavailable">この画像を読み込めませんでした。再接続して、もう一度お試しください。</string>
+</resources>

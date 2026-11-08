@@ -459,7 +459,7 @@ class ChatController(
         check(env().conn == RelayState.ONLINE) { "Reconnect to generate an image. Image prompts are never queued as text." }
         check(env().imageGeneration) { "This computer does not advertise image generation. Update Nekko Agent on the computer." }
         check(imageSend == null && !_state.value.turn.running && !session.running) { "Wait for this image to finish or stop it first." }
-        val params = session.imageParams ?: com.nekko.protocol.ImageChatParams(cfgScale = 4.5)
+        val params = session.imageParams ?: throw RelayException("Choose and save image settings before generating.")
         val request = params.generation(sessionId, text)
         val generate = generateImage ?: throw RelayException("This phone cannot authorize image generation.")
         // Await authorization and the turn so a refusal/cancel keeps the composer's words.

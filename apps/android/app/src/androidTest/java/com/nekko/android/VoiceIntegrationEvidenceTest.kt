@@ -2,6 +2,8 @@ package com.nekko.android
 
 import android.graphics.Bitmap
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
+import android.view.WindowManager
 import androidx.compose.runtime.*
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -43,6 +45,11 @@ class VoiceIntegrationEvidenceTest {
     private lateinit var vm: ChatViewModel
 
     @Before fun setup() {
+        // Match MainActivity and its manifest: Compose must receive IME insets.
+        compose.runOnUiThread {
+            compose.activity.enableEdgeToEdge()
+            compose.activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
         prefs.set(Dictation.ENABLED, true)
         repo = ComputersRepository(VoiceEvidenceStore(), RemoteFactory { _, _ -> remote }, scope, { "Voice fixture phone" },
             deriveKey = { _, _ -> ByteArray(32) }, changeSigner = SoftwareChangeSigner.generate())
@@ -89,7 +96,7 @@ class VoiceIntegrationEvidenceTest {
             androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
                 ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
         }
-        val before = InstrumentationRegistry.getArguments().getString("nekkoModeRevision") == "before"
+        val before = InstrumentationRegistry.getArguments().getString("nekkoRevision") == "before"
         if (before) compose.onNodeWithTag("voice.hold").assertExists()
         else {
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("voice.hold").fetchSemanticsNodes().isEmpty() }
@@ -123,7 +130,7 @@ class VoiceIntegrationEvidenceTest {
         val device = InstrumentationRegistry.getArguments().getString("nekkoDevice", "phone")
         val dir = File(inst.targetContext.getExternalFilesDir(null), "evidence").apply { mkdirs() }
         val screenshot = inst.uiAutomation.takeScreenshot() ?: error("No native-window screenshot")
-        val revision = InstrumentationRegistry.getArguments().getString("nekkoModeRevision", "after")
+        val revision = InstrumentationRegistry.getArguments().getString("nekkoRevision", "after")
         File(dir, "$revision-$device-$name.png").outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
         screenshot.recycle()
     }

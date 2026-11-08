@@ -417,7 +417,7 @@ private fun ChatScreenContent(
 
     if (showImageSettings) {
         com.nekko.android.ui.chat.ImageChatSettingsSheet(
-            chat.imageParams ?: com.nekko.protocol.ImageChatParams(cfgScale = 4.5),
+            chat.imageParams ?: com.nekko.protocol.ImageChatParams(),
             enabled = online && !chat.running && computers.imageGeneration,
             loadModels = vm::imageModels, onSave = vm::setImageParams,
             onDismiss = { showImageSettings = false },

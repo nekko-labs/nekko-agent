@@ -5,7 +5,7 @@ Tracking: [#2162](https://github.com/nekko-labs/nekko-agent/issues/2162). Update
 ## Delivery
 
 - Desktop/browser voice safety [#2188](https://github.com/nekko-labs/nekko-agent/pull/2188) merged as `4cc3b1317`. Abort/lock/voice-off fence stale transcription and commands; partial capture initialization and Settings microphone ownership clean up correctly. Ordinary Stop flushes its tail. Already invoked actions cannot be undone.
-- Native dictation safety [#2190](https://github.com/nekko-labs/nekko-agent/pull/2190): synchronous Android startup ownership, stale/cancelled callback fencing, lock/background cancellation; both phones allow one 300-second host request. iOS does not silently change recognizers after an online host failure. Pending landing and full native checks.
+- Native dictation safety [#2190](https://github.com/nekko-labs/nekko-agent/pull/2190): synchronous Android startup ownership, stale/cancelled callback fencing, lock/background cancellation; both phones allow one 300-second host request. iOS does not silently change recognizers after an online host failure. Merged as `64df66cde`; full feature-layer acceptance remains outstanding.
 - Approved image host boundary [#2211](https://github.com/nekko-labs/nekko-agent/pull/2211): image-only safe model listing, support capability, exact bounded payloads, signed Change proof, existing image session/model preflight and transcript-scoped generated-photo retrieval. No installation/removal, arbitrary file/image access or new cloud-upload authority. See [image-chats](../spec/phone/image-chats.md).
 - Native feature layer [#2212](https://github.com/nekko-labs/nekko-agent/pull/2212): Android hands-free, hold-to-talk and addressed commands; Android/iOS image kind/model/parameter selection, signed generation, badges, attachment-only replies and photo viewing. Offline image requests never enter the text outbox. See [Android voice](../spec/phone/android-hands-free-voice.md).
 
@@ -28,7 +28,7 @@ Counts overlap: the separate 65 Android image tests and 51 initial voice core te
 ## Explicit constraints
 
 - Android's new modes require Android 12/API 31+ installed on-device recognition and offline TTS. No hidden online recognizer fallback. Older devices retain existing one-shot dictation; equal voice functionality on all supported Android versions is not claimed.
-- Android voice commands and new fallback copy are English. Speech recognition language selection does not translate command grammar.
+- Android command grammar and core fallback/error copy remain English; voice/image UI resource strings now cover all six additional supported locales. Speech recognition language selection does not translate command grammar. Native localized layout and linguistic review remain unverified.
 - Existing Change v1 signs integer numbers only. Phones default CFG to **4**, reject fractional saved CFG without rounding, and require explicit settings correction. Desktop fractional CFG (including 4.5) remains supported.
 - Image capability means supported, not installed/healthy/ready. Model/runtime installation stays out of phone scope. Local GGUF diffusion only; no cloud upload or image-to-image input added.
 - Image creation uses `session:create` followed by validated `session:setOptions`; a failed second call can leave an empty session, never a silently substituted text-generation request.
@@ -85,3 +85,15 @@ Feature head `47b213eb6db2536571fded23e945db261d236423`, host head `9c41189cb`.
 3. Exercise actual paired-host signed image generation and photo retrieval with an installed model; record runtime/GPU versions.
 4. Complete remaining supported-platform voice gaps and exercise actual audio permission, input/output, lock, interruption and reconnect cases on each platform.
 5. Record precise tested OS/device/runtime versions, unsupported combinations and residual limitations; only then assess #2162 closure.
+
+## Latest native lint and fixture checkpoint (2026-11-08)
+
+- On `39c7d9a8b`, Android 42438407217 unit/integration checks and light/dark live-relay emulator journey passed; lint/build failed with 48 feature-owned errors. Downloaded full lint report: 45 missing localized keys, two Compose resource lookups and one audio device flag annotation. Corrections are implemented, awaiting native rerun.
+- Added 270 translations (45 keys × six locales), with exact key/format argument checks and XML parse validation. Native localized layout and linguistic review are not certified.
+- Matched keyboard 42438428592 ran three tests per Android revision, one failure each at line95. Revision-argument mismatch sent the baseline through after-only assertions. Corrected the argument and motion filenames and matched the fixture activity to production edge-to-edge/adjustResize. After-side behavior still requires execution.
+- Merged latest #2211/main as `623803f3d`; resolved ChatController projection conflict by retaining both upstream QuestionReplies projection and positive image-running status.
+- Removed artificial CFG4.5 fallback for missing Android image settings: sending now explicitly refuses until settings are saved; opening settings starts with protocol default CFG4. Existing saved fractional values remain untouched and rejected, never rounded. Added a controller regression.
+- #2211 reconciled head `504aa315d` now fails one desktop Settings Customize test (About you unexpectedly also in General); 4406 tests passed. Matching-base reproduction on main cf9779145 confirmed the identical failure (1 passed/1 failed); tracked as #2218. No test weakened and no gate bypassed. Host integration/performance passed. #2212 stays draft and #2162 stays open.
+- iOS native/evidence jobs remain queued on xcode-27. Existing screenshots/videos remain captured but not pixel/motion-inspected.
+
+- Corrected local batch: **144 SDK-free JVM tests passed**, **16 harness/resource checks passed**, 12 translated XML files parsed; spec-index and whitespace checks passed. These do not replace native lint, UI, motion or audio verification.

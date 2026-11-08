@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_conversation">音声会話</string>
+    <string name="voice_explanation">「開始」をタップしてから話してください。発話ごとにこのテキストチャットへ送信されます。電話は新しく完了した返信を読み上げ、その後再び聞き取ります。停止、画面の移動、ロック、切断で音声は終了しますが、エージェントの作業は終了しません。音声の指示は送信待ちにならず、再送もされません。メッセージ欄は空にしてください。</string>
+    <string name="voice_start">開始</string>
+    <string name="voice_stop">音声を停止</string>
+    <string name="voice_close">閉じる</string>
+    <string name="voice_cancel">キャンセル</string>
+    <string name="voice_settings">マイク設定を開く</string>
+    <string name="voice_permission_granted">マイクが許可されました。「開始」をタップするか、もう一度長押しして開始してください。</string>
+    <string name="voice_permission_denied">設定 → アプリ → Nekko Agent → 権限でマイクへのアクセスを許可してから、もう一度開始してください。</string>
+    <string name="voice_unavailable">この電話には端末内の音声認識機能のインストールが必要です（Android 12以降）。代わりにクラウド音声認識を使うことはありません。</string>
+    <string name="voice_ready">準備完了</string>
+    <string name="voice_listening">聞き取り中</string>
+    <string name="voice_waiting">考え中</string>
+    <string name="voice_speaking">読み上げ中</string>
+    <string name="voice_stopped">停止済み</string>
+    <string name="voice_heard">発話内容</string>
+    <string name="voice_reply">返信</string>
+    <string name="voice_hold">長押しして話す</string>
+    <string name="voice_hold_accessibility">長押し音声入力を開始または終了</string>
+    <string name="voice_commands">「Nekko」コマンドを聞き取る</string>
+    <string name="voice_finish">聞き取りを終了</string>
+</resources>

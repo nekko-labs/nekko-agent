@@ -49,7 +49,7 @@ class VoiceSafety(
         audio.registerAudioDeviceCallback(route, Handler(Looper.getMainLooper()))
     }
     val foreground: Boolean get() = started && !closed && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-    private fun devices() = audio.getDevices(AudioManager.GET_DEVICES_ALL).map { it.id }.toSet()
+    private fun devices() = audio.getDevices(AudioManager.GET_DEVICES_INPUTS or AudioManager.GET_DEVICES_OUTPUTS).map { it.id }.toSet()
     private fun changed() {
         if (closed) return
         val current = devices()

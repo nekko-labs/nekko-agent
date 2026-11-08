@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -50,6 +51,7 @@ fun ChatVoiceControls(
     onSettings: (() -> Unit)?,
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val view = LocalView.current
     val owner = LocalLifecycleOwner.current
     val appLock = LocalAppLock.current
@@ -97,7 +99,7 @@ fun ChatVoiceControls(
                 set(value) { val old = currentComposer.read().text; currentComposer.replace(old, value) }
             override fun allowed() = voiceAllowed()
             override fun toast(text: String) = announce(text)
-            override fun tap() { view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM) }
+            override fun tap() { view.performHapticFeedback(if (android.os.Build.VERSION.SDK_INT >= 30) android.view.HapticFeedbackConstants.CONFIRM else android.view.HapticFeedbackConstants.VIRTUAL_KEY) }
             override fun title() = vm.ui.value.title
             override fun status(): String = when {
                 vm.ui.value.approval != null -> "Waiting for your approval"
@@ -182,7 +184,7 @@ fun ChatVoiceControls(
     val pending by runner.pending.collectAsState()
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionVersion++
-        notice = context.getString(if (granted) R.string.voice_permission_granted else R.string.voice_permission_denied)
+        notice = resources.getString(if (granted) R.string.voice_permission_granted else R.string.voice_permission_denied)
     }
     DisposableEffect(vm, owner, appLock) {
         present = true
@@ -202,7 +204,7 @@ fun ChatVoiceControls(
 
     fun begin(held: Boolean = false, preservePending: Boolean = true) {
         check(baseAllowed()) { "Unlock and reconnect before starting voice." }
-        check(audio.available()) { context.getString(R.string.voice_unavailable) }
+        check(audio.available()) { resources.getString(R.string.voice_unavailable) }
         // A confirmation offered by the previous held utterance survives into the next hold.
         if (!preservePending || !voiceAllowed() || listening.state.value.active) {
             val pressed = hold.holding

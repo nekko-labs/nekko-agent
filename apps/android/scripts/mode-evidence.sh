@@ -8,6 +8,8 @@ pkg=com.nekko.native.android
 cls="${NEKKO_EVIDENCE_CLASS:-com.nekko.android.ChatModesTest}"
 expect="${NEKKO_EVIDENCE_EXPECT:-settings-simple-mode}"
 [[ "$cls" =~ ^[A-Za-z0-9_.]+$ && "$expect" =~ ^[A-Za-z0-9_-]+$ ]]
+revision="${NEKKO_EVIDENCE_REVISION:-after}"
+[[ "$revision" == "before" || "$revision" == "after" ]]
 out=apps/android/evidence
 mkdir -p "$out/shots"
 # Keep screenshots and any motion recording on assertion failure too.
@@ -17,7 +19,7 @@ finish() {
     # This script owns the disposable emulator and its only screen recorder.
     adb shell 'kill -2 $(pidof screenrecord)' >/dev/null 2>&1 || true
     wait "$recording" || true
-    adb pull /sdcard/nekko-voice-motion.mp4 "$out/after-phone-voice-motion.mp4" || true
+    adb pull /sdcard/nekko-voice-motion.mp4 "$out/$revision-phone-voice-motion.mp4" || true
   fi
   adb pull "/sdcard/Android/data/$pkg/files/evidence/." "$out/shots/" || true
 }
@@ -38,7 +40,7 @@ if [[ "$cls" == "com.nekko.android.VoiceIntegrationEvidenceTest" ]]; then
   adb shell screenrecord --time-limit 180 /sdcard/nekko-voice-motion.mp4 > "$out/recording.log" 2>&1 &
   recording=$!
 fi
-adb shell am instrument -w -e class "$cls" -e nekkoModeEvidence true -e nekkoDevice phone -e nekkoRevision "${NEKKO_EVIDENCE_REVISION:-unspecified}" "$pkg.test/androidx.test.runner.AndroidJUnitRunner" > "$out/instrumentation.txt" 2>&1
+adb shell am instrument -w -e class "$cls" -e nekkoModeEvidence true -e nekkoDevice phone -e nekkoRevision "$revision" "$pkg.test/androidx.test.runner.AndroidJUnitRunner" > "$out/instrumentation.txt" 2>&1
 cat "$out/instrumentation.txt"
 adb pull "/sdcard/Android/data/$pkg/files/evidence/." "$out/shots/"
 # adb can exit zero even when JUnit fails or the process crashes.

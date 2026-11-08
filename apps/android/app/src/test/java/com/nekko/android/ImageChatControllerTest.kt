@@ -35,6 +35,20 @@ class ImageChatControllerTest {
         assertFalse(chat.state.value.turn.running)
     }
 
+    @Test fun `missing saved image settings refuse explicitly without inventing fractional defaults`() = runTest {
+        val missing = buildJsonObject { put("id", "s"); put("chatType", "image") }
+        val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) missing else JsonNull }
+        var generated = 0
+        val chat = ChatController("s", caller, backgroundScope, { online }, generateImage = { generated++; JsonNull })
+        chat.reload()
+        assertEquals("Choose and save image settings before generating.", runCatching { chat.send("Keep this prompt") }.exceptionOrNull()?.message)
+        assertEquals(0, generated)
+        assertFalse(chat.state.value.turn.running)
+        assertNull(ChatController.project(chat.state.value, online).imageParams)
+        assertFalse(caller.channels().any { it in listOf(Channels.CHAT_SEND, Channels.CHAT_QUEUE, Channels.CHAT_GENERATE_IMAGE) })
+        assertEquals(4.0, ImageChatParams().cfgScale, 0.0)
+    }
+
     @Test fun `offline image send refuses without creating a text outbox item`() = runTest {
         var env = online
         val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) session() else JsonNull }
