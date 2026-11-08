@@ -7,6 +7,7 @@
 //! test (`tests/golden.rs`) compares this against summaries the TS function
 //! wrote. Each helper below names the TS function it follows.
 
+use crate::pr::collect_session_pr_urls as pr_urls;
 use nekko_js as js;
 use serde_json::{Map, Value, json};
 
@@ -59,95 +60,6 @@ fn transcript_tokens(all: &[Value]) -> u64 {
     }
     let units: usize = messages.iter().map(|m| js::len16(&history_text(m))).sum::<usize>() + messages.len() - 1;
     (units.div_ceil(4)).max(1) as u64
-}
-
-/// `extractPrUrls` (pr.ts): `https?://github.com/<owner>/<repo>/pull/<n>`, each once.
-fn pr_urls_in(text: &str, out: &mut Vec<String>) {
-    let b = text.as_bytes();
-    let seg = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'.' || c == b'-';
-    let mut i = 0;
-    while i < b.len() {
-        let rest = &b[i..];
-        let scheme = if rest.starts_with(b"https://github.com/") {
-            19
-        } else if rest.starts_with(b"http://github.com/") {
-            18
-        } else {
-            i += 1;
-            continue;
-        };
-        let mut j = i + scheme;
-        let owner = j;
-        while j < b.len() && seg(b[j]) {
-            j += 1;
-        }
-        let ok_owner = j > owner && j < b.len() && b[j] == b'/';
-        let mut matched = None;
-        if ok_owner {
-            j += 1;
-            let repo = j;
-            while j < b.len() && seg(b[j]) {
-                j += 1;
-            }
-            if j > repo && b[j..].starts_with(b"/pull/") {
-                j += 6;
-                let digits = j;
-                while j < b.len() && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-                if j > digits {
-                    matched = Some(j);
-                }
-            }
-        }
-        match matched {
-            Some(end) => {
-                let url = &text[i..end];
-                if !out.iter().any(|u| u == url) {
-                    out.push(url.to_string());
-                }
-                i = end;
-            }
-            None => i += 1,
-        }
-    }
-}
-
-/// `collectSessionPrUrls` (pr.ts).
-fn pr_urls(messages: &[Value]) -> Vec<String> {
-    let mut out = Vec::new();
-    for m in messages {
-        let Some(result) = m.get("toolResult") else { continue };
-        if js::truthy(result.get("isError")) {
-            continue;
-        }
-        let id = str_field(result, "toolCallId");
-        let call = messages
-            .iter()
-            .flat_map(|m| m.get("toolCalls").and_then(Value::as_array).into_iter().flatten())
-            .find(|c| str_field(c, "id") == id && str_field(c, "name") == "bash");
-        let Some(call) = call else { continue };
-        let command = call.get("input").map(|i| str_field(i, "command")).unwrap_or("").trim();
-        if !command.starts_with("gh ") || command.contains(['\r', '\n', ';', '&', '|', '`']) {
-            continue;
-        }
-        let words: Vec<_> = command.split_whitespace().collect();
-        let cli = words.get(..3) == Some(&["gh", "pr", "create"][..]);
-        let api = words
-            .get(..3)
-            .is_some_and(|w| w[0] == "gh" && w[1] == "api" && w[2].starts_with("repos/") && w[2].ends_with("/pulls"))
-            && words.windows(2).any(|w| (w[0] == "-X" || w[0] == "--method") && w[1] == "POST");
-        if !cli && !api {
-            continue;
-        }
-        let line = str_field(result, "output").trim();
-        let mut urls = Vec::new();
-        pr_urls_in(line, &mut urls);
-        if urls.len() == 1 && urls[0] == line && !out.contains(&urls[0]) {
-            out.push(urls.remove(0));
-        }
-    }
-    out
 }
 
 /// A JavaScript template-literal rendering of a JSON number (`${n}`).
@@ -271,15 +183,6 @@ pub fn summarize(session: &Value) -> Option<Value> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn finds_pr_urls_once_and_stops_at_the_number() {
-        let mut out = Vec::new();
-        pr_urls_in(
-            "see (https://github.com/o/r/pull/7). and http://github.com/a.b/c-d/pull/12x https://github.com/o/r/pull/7 https://github.com/o/pull/3",
-            &mut out,
-        );
-        assert_eq!(out, vec!["https://github.com/o/r/pull/7", "http://github.com/a.b/c-d/pull/12"]);
-    }
     #[test]
     fn only_created_prs_attach() {
         let url = "https://github.com/o/r/pull/1";

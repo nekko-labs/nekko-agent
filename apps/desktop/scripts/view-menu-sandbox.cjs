@@ -66,10 +66,12 @@ app.whenReady().then(async () => {
       await run("document.querySelector('[data-view-mode=focus]').click()"); await sleep(100);
       await check('single-agent disables but retains snap', "document.querySelector('[data-view-snap]').disabled && document.querySelector('[data-view-snap]').checked");
       await check('screens embedded', "!!document.querySelector('[data-wall-view-menu] [aria-label=\"Screens to use\"]') && !document.querySelector('[data-screens-button]')");
+      await run("document.querySelector('.screens-enable input').click()"); await sleep(300);
+      await run("document.querySelector('[aria-label=\"Screen 2, on\"]').click()"); await sleep(100);
       await run("document.querySelector('[aria-label=\"Screen 2, off\"]').click()"); await sleep(100);
       await check('screen toggle calls bridge and reflects state', "viewCalls.some(c=>c[0]==='toggle' && c[1]==='2' && c[2]===true) && document.querySelector('[aria-label=\"Screen 2, on\"]').getAttribute('aria-checked')==='true'");
-      await run("document.querySelectorAll('[name=screens-placement]')[1].click()");
-      await check('placement calls bridge and reflects state', "viewCalls.some(c=>c[0]==='placement' && c[1]==='main-first') && document.querySelectorAll('[name=screens-placement]')[1].checked");
+      await run("document.querySelectorAll('[name=screens-placement]')[0].click()");
+      await check('placement calls bridge and reflects state', "viewCalls.some(c=>c[0]==='placement' && c[1]==='main-first') && document.querySelectorAll('[name=screens-placement]')[0].checked");
       await run("document.querySelector('[data-wall-view-menu]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
       await check('Escape restores trigger focus', "document.activeElement.matches('[data-wall-view-toggle]') && !document.querySelector('[data-wall-view-menu]')");
       await run("document.querySelector('[data-wall-view-toggle]').click()"); await sleep(100);

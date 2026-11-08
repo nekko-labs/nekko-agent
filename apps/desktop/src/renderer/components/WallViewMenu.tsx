@@ -2,6 +2,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CommandWallState } from '../commandWall.js';
 import { ScreensControl } from './ScreensControl.js';
+import { useExpertMode } from '../simpleMode.js';
+import { openSettingsGroup } from '../settingsIndex.js';
 
 export const LAYOUT_LABEL = { focus: 'Single agent', grid: 'Multi-agent' } as const;
 type Props = {
@@ -9,6 +11,7 @@ type Props = {
   setWall: (update: (s: CommandWallState) => CommandWallState) => void;
   /** Multi-agent was clicked (even when already on): the board's cue for the zones tour. */
   onPickMultiAgent?: () => void;
+  onCustomize?: () => void;
 };
 
 /** Original layout glyph, shared by the trigger and the illustrated choices. */
@@ -23,7 +26,8 @@ export function AgentLayoutIcon({ mode, preview = false }: { mode: 'focus' | 'gr
   </svg>;
 }
 
-export function WallViewOptions({ wall, setWall, onPickMultiAgent }: Props) {
+export function WallViewOptions({ wall, setWall, onPickMultiAgent, onCustomize }: Props) {
+  const [expert, setExpert] = useExpertMode();
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const snapAvailable = wall.layout.mode === 'grid' && !wall.layout.fixedGrid;
   return <>
@@ -48,6 +52,13 @@ export function WallViewOptions({ wall, setWall, onPickMultiAgent }: Props) {
         onChange={() => setWall(w => ({ ...w, snap: !w.snap }))} />
     </label>
     <ScreensControl mode={wall.layout.mode} embedded />
+    <fieldset className="view-experience"><legend>Interface detail</legend>
+      {[false, true].map(on => <label className="screens-option" key={String(on)}>
+        <input type="radio" name="view-interface-detail" checked={expert === on} onChange={() => setExpert(on)} />
+        <span><strong>{on ? 'Detailed' : 'Simple'}</strong><span>{on ? 'Show every available control.' : 'Keep everyday controls in focus.'}</span></span>
+      </label>)}
+    </fieldset>
+    <button type="button" className="view-customize" onClick={() => { onCustomize?.(); openSettingsGroup('customize'); }}>Customize <span aria-hidden="true">↗</span></button>
   </>;
 }
 
@@ -86,7 +97,7 @@ export function WallViewMenu(props: Props) {
     </button>
     {open && createPortal(<div ref={pop} role="dialog" aria-label="View" data-wall-view-menu className="wall-view-menu" style={pos}
       onBlur={e => { if (e.relatedTarget && !e.currentTarget.contains(e.relatedTarget) && !anchor.current?.contains(e.relatedTarget)) setOpen(false); }}>
-      <WallViewOptions {...props} onPickMultiAgent={props.onPickMultiAgent && (() => {
+      <WallViewOptions {...props} onCustomize={() => setOpen(false)} onPickMultiAgent={props.onPickMultiAgent && (() => {
         // The zones tour is about to open in the board: get the menu out of its way.
         if (props.wall.zones && !props.wall.zonesIntro) setOpen(false);
         props.onPickMultiAgent?.();

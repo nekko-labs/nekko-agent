@@ -16,7 +16,7 @@ const bridge: any = {
 (window as any).nekko = new Proxy(bridge, { get(t, k: string) { return t[k] ?? (k.startsWith('on') ? () => () => {} : () => Promise.resolve(null)); } });
 useStore.setState({ settingsLoaded: true, sessions: [], settings: { providers, favoriteModels: ['fixture::star'], workspaces: [], connectors: [], guardrails: [] } as any });
 function Fixture() {
-  const [wall, setWall] = React.useState({ ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, show: true, side: 'right' as const, monitors: { automations: true, budget: true, utilization: false, insights: false, hardware: false, localModels: false }, minimized: {} } });
+  const [wall, setWall] = React.useState({ ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, show: true, side: 'right' as const, monitors: { automations: true, budget: true, utilization: false, hardware: false, localModels: false }, minimized: {} } });
   return <main style={{ display: 'flex', gap: 40, padding: 32, height: '100vh', background: 'var(--paper)' }}>
     <div style={{ width: 380, height: 580 }}><ModelPicker expanded open providers={providers} models={models} providerId="fixture" modelId="regular" onOpenChange={() => {}} onProvider={() => {}} onModel={(_p, m) => { (window as any).picked = m; }} /></div>
     <MonitorsDock state={wall as any} setState={setWall as any} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] } as any} onOpenChat={() => {}} onOpenModels={() => {}} />

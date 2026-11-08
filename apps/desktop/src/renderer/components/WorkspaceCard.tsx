@@ -16,7 +16,7 @@ import { useCompactionStore } from '../compactionStatus.js';
 import { fillTone } from './contextTone.js';
 import { SessionPrChip } from './SessionPrChip.js';
 import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
-import { wakeSourcesOf } from '../views/agentPanelView.js';
+import { statusGroupOf, wakeSourcesOf } from '../views/agentPanelView.js';
 
 /**
  * One workspace, as a card in the left sidebar.
@@ -286,9 +286,12 @@ function WorkspaceCardImpl({
       ? terminal.shell.split(/[\\/]/).pop() || terminal.shell
       : 'Shell';
 
+  // Done is contextual, not just an archived flag: a finished reply with no
+  // armed watch has no remaining context pressure. Drafts and parked work keep it.
+  const contextShown = showContext && isChat && !session.archivedAt && statusGroupOf(session, status) !== 'status:done';
   const computerShown = showComputer && computersShown && isChat;
   const providerKind = showModel && provider && session?.chatType !== 'image' ? providerMarkKind(provider) : undefined;
-  const modelLine = computerShown || showModel ||(showContext && isChat && (ctxUsed > 0 || compacting)) || (showPullRequests && !!terminal && !!terminalPrUrl(terminal));
+  const modelLine = computerShown || showModel ||(contextShown && (ctxUsed > 0 || compacting)) || (showPullRequests && !!terminal && !!terminalPrUrl(terminal));
   const spawnLine = (showSubagents && subAgentCount > 0) || (showWindows && windows > 1);
   // The PR chip rides the end of the card's last line: its bottom right.
   const prLine: 'title' | 'model' | 'git' | 'spawn' = !showMetadata
@@ -381,7 +384,7 @@ function WorkspaceCardImpl({
           {model}
         </Fact>}
         {showPullRequests && terminal && terminalPrUrl(terminal) && <Fact title="PR link observed in terminal output; open the terminal to check its status">PR #{terminalPrUrl(terminal)!.split('/').pop()}</Fact>}
-        {showContext && compacting && (
+        {contextShown && compacting && (
           <span
             className="status-compacting inline-grid shrink-0 place-items-center"
             style={{ color: 'var(--info)' }}
@@ -392,7 +395,7 @@ function WorkspaceCardImpl({
             <CompactIcon className="h-2.5 w-2.5" />
           </span>
         )}
-        {showContext && isChat && ctxUsed > 0 && (
+        {contextShown && ctxUsed > 0 && (
           <Fact
             tone={fillTone(ctxPct)}
             title={`Context window: about ${ctxUsed.toLocaleString()} of ${ctxWindow.toLocaleString()} tokens (${ctxPct < 1 ? '<1' : Math.round(ctxPct)}%)`}

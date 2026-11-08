@@ -123,6 +123,9 @@ describe('Agent group hierarchy', () => {
     expect(cssRule(layout, '.agent-panel-group-label')).toMatchObject({ 'font-size': 'var(--text-sm)', color: 'var(--accent)' });
     expect(cssRule(layout, '.agent-panel-group + .agent-panel-group')['margin-top']).toBe('20px');
     expect(cssRule(layout, '.agent-panel-group-heading')['margin-bottom']).toBe('4px');
+    expect(cssRule(layout, '.agent-panel-list .agent-panel-group-heading')).toMatchObject({ position: 'sticky', top: '0', 'z-index': '1', background: 'var(--paper)' });
+    expect(cssRule(layout, '.agent-panel-list .agent-panel-group-heading:hover').background).toBe('var(--surface-2)');
+    expect(cssRule(layout, '.agent-panel-row .agent-panel-group-heading').position).toBeUndefined();
     expect(cssRule(layout, '.agent-panel-group + .agent-panel-group::before')).toMatchObject({ content: '""', top: '-10px', height: '1px', 'pointer-events': 'none', background: 'color-mix(in srgb,var(--line)65%,transparent)' });
     expect(cssRule(layout, '.agent-panel-row')['column-gap']).toBe('24px');
     expect(cssRule(layout, '.agent-panel-row > .agent-panel-group + .agent-panel-group::before')).toMatchObject({ 'inset-inline-start': '-12px', width: '1px', height: 'auto' });
