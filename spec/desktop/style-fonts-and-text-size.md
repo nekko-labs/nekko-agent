@@ -30,6 +30,16 @@ Text size is also the first row of **Accessibility**, above Agent activity anima
 - The preview is scaled by picked size over applied size, since the page is already zoomed to the applied one.
 - Settings' section list and search land in the right place at every size, under CSS `zoom` too: there, element rects are in zoomed pixels and `scrollTop` is not, so a distance from one is divided by the zoom before it scrolls the other.
 
+## Keyboard and wheel
+
+User intent: make text bigger or smaller from anywhere in the app with the usual zoom keys, without opening Settings.
+
+- **Ctrl/⌘ + Plus** (or `=`, or the number pad's `+`) and **Ctrl/⌘ + Minus** step the same `textScale` one size up or down, through the same steps and limits as Settings. They apply at once, with no preview or Apply, and are saved once the steps stop (about 300 ms).
+- **Ctrl/⌘ + scroll wheel** does the same: up is bigger, one step per mouse notch. A trackpad pinch adds up its small movements, so it steps too, but only after a deliberate move.
+- Something that zooms itself, like the full-window diagram view, keeps the wheel; Chromium's own Ctrl+wheel zoom is stopped so it can't zoom outside the setting.
+- On macOS the View menu no longer has the stock zoom items, which would take ⌘+, ⌘− and ⌘0 before the page did.
+- **Ctrl/⌘ + 0** puts the text size back to 100%, the same way.
+
 ## Your own fonts
 
 - The fonts folder is `fonts` in the data directory (`~/.nekko-agent/fonts`). The daemon creates it on first look (`fonts:list`).
@@ -45,4 +55,5 @@ Text size is also the first row of **Accessibility**, above Agent activity anima
 
 - Implemented 2026-10-24: bundled fonts, Style section, text size, fonts folder. Checked in the hidden layout harness (`apps/desktop/scripts/style-sandbox.cjs`); not yet checked in a packaged build.
 - Implemented 2026-11-06: text size in Settings > Accessibility with a preview and Apply, and page zoom on the desktop. Checked in the hidden layout harness (`text-size-sandbox.cjs`, `text-size-nav-sandbox.cjs`, `text-size-popover-sandbox.cjs`) and by hand in a dev build; not yet checked in a packaged build.
+- Implemented 2026-11-08: Ctrl/⌘ + Plus/Minus and Ctrl/⌘ + scroll wheel step the text size, and Ctrl/⌘ + 0 resets it. Unit-tested; not yet checked by hand in a dev or packaged build.
 - Planned: the phone apps following the desktop's font choice.

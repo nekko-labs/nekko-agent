@@ -62,6 +62,7 @@ struct MarkdownLab: View {
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(.bar)
             }
+            .floatingKeyboardDismiss()
             .navigationTitle("Markdown")
             .navigationBarTitleDisplayMode(.inline)
         }

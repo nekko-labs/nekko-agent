@@ -46,6 +46,9 @@ pub struct App {
     pub name: String,
     pub bytes: u64,
     pub processes: usize,
+    /// Its process ids, ascending: which run of the app this is, so a person
+    /// who waved it off is asked again only once it is closed and relaunched.
+    pub pids: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -189,11 +192,14 @@ pub fn top_app(procs: &[Proc], own: &HashSet<u32>) -> Option<App> {
         if name.is_empty() || system(&name) {
             continue;
         }
-        let app = apps.entry(name.to_ascii_lowercase()).or_insert_with(|| App { name, bytes: 0, processes: 0 });
+        let app = apps.entry(name.to_ascii_lowercase()).or_insert_with(|| App { name, bytes: 0, processes: 0, pids: Vec::new() });
         app.bytes += p.bytes;
         app.processes += 1;
+        app.pids.push(p.pid);
     }
-    apps.into_values().filter(|a| a.bytes >= MIN_APP_BYTES).max_by_key(|a| a.bytes)
+    let mut top = apps.into_values().filter(|a| a.bytes >= MIN_APP_BYTES).max_by_key(|a| a.bytes)?;
+    top.pids.sort_unstable();
+    Some(top)
 }
 
 /// What each process holds. On Windows that is its private commit (what

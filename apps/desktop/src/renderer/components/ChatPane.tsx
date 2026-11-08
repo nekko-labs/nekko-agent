@@ -77,7 +77,7 @@ import { cutPrompt, messageCuts, type MessageCuts } from './agent-console/messag
 import { estimateRowHeight, toTranscriptRows, transcriptBeforeLiveTurn, transcriptRowStamp, type TranscriptRow } from './agent-console/transcript.js';
 import { ContextGauge, EffortSlider, formatContextTokens } from './ChatMetrics.js';
 import { AsksFirstMenu } from './AsksFirstMenu.js';
-import { ExpertMonitor, ModeSwitch, useExpertMode, useShown } from './ModeViews.js';
+import { ExpertMonitor, useExpertMode, useShown } from './ModeViews.js';
 import { hasAppChrome } from '../chrome.js';
 import { AgentMonitorButton, PlanRail } from './PlanRail.js';
 import { PlanSheet } from './PlanSheet.js';
@@ -2740,7 +2740,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
             title strip, which already shows the chat's name; standalone, the
             chat still needs a header of its own. */}
         {surface !== 'composer' && !cleanStart && (
-        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter} lead={hasAppChrome ? undefined : <ModeSwitch />} metadata={
+        <ChatHeader title={session?.title || 'New chat'} subAgent={Boolean(session?.parentSessionId)} inWall={commandCenter}  metadata={
             git && showWorktree && (
               <span className="flex min-w-0 shrink items-center gap-1 text-2xs">
                 {session && <WorktreeChip session={session} git={git} disabled={hasLive} onChange={setSession} />}

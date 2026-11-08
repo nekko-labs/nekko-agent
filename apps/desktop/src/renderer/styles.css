@@ -2499,7 +2499,8 @@
 .settings-group { scroll-margin-top: 16px; padding-top: 24px; }
 .settings-group:first-child { padding-top: 4px; }
 .settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
-.settings-group-title { font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
+/* Matches the selected .settings-nav-item, so a section's heading reads like its rail entry. */
+.settings-group-title { font-size: var(--text-base); font-weight: 500; color: var(--ink); }
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 4px 8px 4px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: var(--text-sm); color: var(--ink); }
 .settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }

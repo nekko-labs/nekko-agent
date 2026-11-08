@@ -6,7 +6,7 @@
  * Electron is the rasterizer (it is already a devDependency, and it is the same
  * renderer that will draw the app), so there is no new native/image toolchain to
  * install. Each size is drawn at its own size rather than downscaled from one
- * big render: below 48px the art drops the stars and thickens the strokes, which
+ * big render: below 64px the art thickens the strokes, which
  * is the difference between a readable taskbar icon and a smudge.
  *
  * Writes build/icon.svg (512 reference), build/icon.png (512, what
@@ -14,10 +14,13 @@
  * and build/icon.ico (Windows, PNG-encoded entries at every size Explorer asks
  * for).
  */
-const { app, BrowserWindow, nativeImage } = require('electron');
-const { writeFileSync } = require('fs');
+const { app, BrowserWindow } = require('electron');
+const { writeFileSync, mkdtempSync, rmSync } = require('fs');
+const { tmpdir } = require('os');
 const { join } = require('path');
-const { iconSvg, bannerSvg } = require('./icon-art.cjs');
+const { iconSvg, bannerSvg, bareMarkSvg, TILE, ICON_INK, INK } = require('./icon-art.cjs');
+const profile = mkdtempSync(join(tmpdir(), 'nekko-brand-assets-'));
+app.setPath('userData', profile);
 
 const BUILD = join(__dirname, '..', 'build');
 const PUBLIC = join(__dirname, '..', 'src', 'renderer', 'public');
@@ -43,15 +46,34 @@ svg{display:block}</style>${svgFor(rw, rh)}`;
   await win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
   // One frame after load, so gradients are painted before the capture.
   await new Promise((r) => setTimeout(r, 120));
-  const shot = await win.capturePage({ x: 0, y: 0, width: rw, height: rh });
+  const shot = await win.capturePage({ x: 0, y: 0, width: rw, height: rh }, { stayHidden: true });
   return shot.getSize().width === w && shot.getSize().height === h
     ? shot
     : shot.resize({ width: w, height: h, quality: 'best' });
 }
 
+function pngFrom(image, opaque = false) {
+  // macOS nativeImage.toPNG() can encode display-profile values. Read sRGB
+  // BGRA pixels, as the BMP writer does, and encode them without host ICC data.
+  const { PNG } = require('pngjs');
+  const { width, height } = image.getSize();
+  const png = new PNG({ width, height });
+  const bgra = image.toBitmap();
+  for (let i = 0; i < bgra.length; i += 4) {
+    const alpha = bgra[i + 3];
+    // nativeImage bitmaps are premultiplied; PNG channels are straight alpha.
+    const channel = (value) => alpha ? Math.min(255, Math.round(value * 255 / alpha)) : 0;
+    png.data[i] = channel(bgra[i + 2]);
+    png.data[i + 1] = channel(bgra[i + 1]);
+    png.data[i + 2] = channel(bgra[i]);
+    png.data[i + 3] = opaque ? 255 : alpha;
+  }
+  return PNG.sync.write(png, { colorType: opaque ? 2 : 6 });
+}
+
 async function render(win, size) {
   // The art is chosen for the final size; only the raster is supersampled.
-  return (await shoot(win, (rw) => iconSvg(size, rw), size, size)).toPNG();
+  return pngFrom(await shoot(win, (rw) => iconSvg(size, rw), size, size));
 }
 
 /** Encode a nativeImage as an uncompressed 24-bit BMP, which is all NSIS reads. */
@@ -109,12 +131,15 @@ function buildIco(entries) {
   return Buffer.concat([header, dir, ...entries.map((e) => e.png)]);
 }
 
+// Raster output must not inherit the host display's ICC profile.
+app.commandLine.appendSwitch('force-color-profile', 'srgb');
 app.disableHardwareAcceleration();
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
     width: 512,
     height: 512,
     show: false,
+    focusable: false,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -124,7 +149,8 @@ app.whenReady().then(async () => {
   writeFileSync(join(BUILD, 'icon.svg'), iconSvg(512));
 
   win.setBounds({ x: 0, y: 0, width: 512, height: 512 });
-  writeFileSync(join(BUILD, 'icon.png'), await render(win, 512));
+  const icon512 = await render(win, 512);
+  writeFileSync(join(BUILD, 'icon.png'), icon512);
 
   const entries = [];
   for (const size of SIZES) {
@@ -134,8 +160,22 @@ app.whenReady().then(async () => {
   writeFileSync(join(BUILD, 'icon.ico'), buildIco(entries));
 
   // The web/PWA edition's icon (also the apple-touch-icon) is the same art.
-  writeFileSync(join(PUBLIC, 'icon-512.png'), await render(win, 512));
+  writeFileSync(join(PUBLIC, 'icon-512.png'), icon512);
   writeFileSync(join(PUBLIC, 'icon.svg'), iconSvg(512, 64));
+
+  // iOS applies its own corner mask; both native assets must be opaque RGB.
+  const ios = join(__dirname, '../../ios/App/Assets.xcassets/AppIcon.appiconset');
+  for (const [svgName, pngName, color, background] of [
+    ['icon.svg', 'AppIcon-1024.png', ICON_INK, 'gradient'],
+    ['icon-dark.svg', 'AppIcon-Dark-1024.png', INK, TILE],
+  ]) {
+    const options = { color, background, inset: 0.687 };
+    writeFileSync(join(ios, svgName), bareMarkSvg(1024, options));
+    const image = await shoot(win, (px) => bareMarkSvg(px, options), 1024, 1024);
+    const png = pngFrom(image, true);
+    writeFileSync(join(ios, pngName), png);
+    if (svgName === 'icon.svg') writeFileSync(join(__dirname, '../../ios/Watch/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png'), png);
+  }
 
   // NSIS art. Sizes are fixed by the installer: 150x57 header, 164x314 sidebar.
   const header = await shoot(
@@ -161,8 +201,9 @@ app.whenReady().then(async () => {
   writeFileSync(join(BUILD, 'installerSidebar.bmp'), toBmp24(sidebar));
 
   console.log(
-    `wrote icon.svg, icon.png (512), icon.ico (${SIZES.join(', ')}), renderer icon.svg + icon-512.png, the two installer BMPs`,
+    `wrote icon.svg, icon.png (512), icon.ico (${SIZES.join(', ')}), renderer icon.svg + icon-512.png, iOS light/dark + Watch icons, the two installer BMPs`,
   );
   win.destroy();
   app.quit();
-});
+}).catch((error) => { console.error(error); app.exit(1); });
+app.on('will-quit', () => rmSync(profile, { recursive: true, force: true }));

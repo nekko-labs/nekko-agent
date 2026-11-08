@@ -14,7 +14,7 @@ const now = Date.now();
 const provider = { id: 'fixture', kind: 'openai', enabled: true, label: 'ChatGPT (subscription)', auth: 'subscription', tokenKey: 'fixture' };
 const session = (id: string, title: string, workspaceId?: string) => ({ id, title, createdAt: now, updatedAt: now - 3600e3, providerId: 'fixture', modelId: 'gpt-fixture', mode: 'agent', chatType: 'multimodal', workspaceId, messages: [], attachments: [], queuedPrompts: [] });
 const records = [session('a', 'Persist quota history'), session('b', 'Diagnose failed build'), session('c', 'Audit sandbox policy'), session('d', 'New chat')];
-const settings = { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', experimental: {}, agent: {}, ui: { onboarded: true }, onboarded: true };
+const settings = { providers: [provider], workspaceFolders: [], workspaces: [], theme: 'dark', experimental: {}, agent: {}, ui: { onboarded: true }, onboarded: true, firstPromptIntroSeen: true, showTips: false, commandWall: { zonesIntro: true } };
 const agentListeners = new Set<(event: any) => void>();
 const emitAgent = (event: any) => { for (const listener of agentListeners) listener(event); };
 const bridge: any = {
@@ -27,7 +27,9 @@ const bridge: any = {
   listRunners: async (): Promise<import('@nekko-agent/shared').RunnerView[]> => [],
   getSession: async (id: string) => records.find(s => s.id === id), listModels: async () => [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }],
   createSession: async () => { const s = session('n' + records.length, 'New chat'); records.push(s); return s; },
-  listTerminals: async () => [],
+  listTerminals: async () => [], listRunners: async () => [],
+  listSkillSources: async () => [], skillTargets: async () => [],
+  listConnectors: async () => [], getMessagingStatus: async () => ({}),
   // A sandbox can seed agent states (localStorage 'fixture.pending' / 'fixture.running') before a reload.
   pendingInput: async () => JSON.parse(localStorage.getItem('fixture.pending') ?? '{}'), runningSessions: async () => JSON.parse(localStorage.getItem('fixture.running') ?? '[]'), listTasks: async () => [],
   listInstalledSkills: async () => [], listExternalSkills: async () => [], listTools: async () => [], getMcpStatus: async () => [], listSkills: async () => [], listShells: async () => [], listChanges: async () => [], listFiles: async () => [], getUsageSummary: async () => null,
