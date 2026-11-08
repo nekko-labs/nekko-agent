@@ -8,7 +8,9 @@ pub const CHANNELS: &[&str] = &["support:starStatus", "support:star"];
 const STAR_PATH: &str = "/user/starred/nekko-labs/nekko-agent";
 
 fn token(settings: &Value) -> Option<&str> {
-    settings["connectors"].as_array()?.iter()
+    settings["connectors"]
+        .as_array()?
+        .iter()
         .filter(|c| c["kind"] == "github" && c["connected"] == true)
         .find_map(|c| c["token"].as_str().filter(|t| !t.trim().is_empty()))
 }
@@ -20,7 +22,9 @@ fn unavailable(reason: &str) -> Value {
 pub async fn route(ctx: &Ctx, channel: &str) -> Result<Value, String> {
     let settings = crate::settings::current(ctx).await;
     let Some(token) = token(&settings) else {
-        return Ok(unavailable("Connect your GitHub account in Connectors to check or add a star here. You can also star on GitHub."));
+        return Ok(unavailable(
+            "Connect your GitHub account in Connectors to check or add a star here. You can also star on GitHub.",
+        ));
     };
     // The browser cannot choose a repository, endpoint or credential.
     Ok(star("https://api.github.com", token, channel == "support:star").await)
@@ -30,21 +34,26 @@ async fn request(base: &str, token: &str, method: reqwest::Method, path: &str) -
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(12))
         .redirect(reqwest::redirect::Policy::none())
-        .build().map_err(|_| "Couldn't prepare the GitHub connection.".to_string())?;
-    let req = client.request(method, format!("{base}{path}"))
+        .build()
+        .map_err(|_| "Couldn't prepare the GitHub connection.".to_string())?;
+    let req = client
+        .request(method, format!("{base}{path}"))
         .bearer_auth(token)
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", "nekko-agent")
         .header("X-GitHub-Api-Version", "2022-11-28")
         .header("Content-Length", "0");
-    nekko_net::send("github", req).await
+    nekko_net::send("github", req)
+        .await
         .map_err(|_| "Couldn't reach GitHub. Check your connection or network settings, then try again.".to_string())
 }
 
 fn refused(status: u16) -> &'static str {
     match status {
         401 => "GitHub couldn't verify your account. Reconnect GitHub in Connectors or open GitHub directly.",
-        403 => "GitHub didn't allow this request. Check your token's starring permissions or rate limit, or star on GitHub.",
+        403 => {
+            "GitHub didn't allow this request. Check your token's starring permissions or rate limit, or star on GitHub."
+        }
         429 => "GitHub's rate limit was reached. Try again later or open GitHub.",
         _ => "GitHub couldn't confirm your star. Try again later or open GitHub.",
     }
@@ -53,9 +62,13 @@ fn refused(status: u16) -> &'static str {
 async fn star(base: &str, token: &str, write: bool) -> Value {
     let result = async {
         let user = request(base, token, reqwest::Method::GET, "/user").await?;
-        if user.status().as_u16() != 200 { return Err(refused(user.status().as_u16()).to_string()); }
+        if user.status().as_u16() != 200 {
+            return Err(refused(user.status().as_u16()).to_string());
+        }
         let user: Value = user.json().await.map_err(|_| "GitHub returned an unreadable account.".to_string())?;
-        let login = user["login"].as_str().filter(|s| !s.is_empty() && s.len() <= 100)
+        let login = user["login"]
+            .as_str()
+            .filter(|s| !s.is_empty() && s.len() <= 100)
             .ok_or_else(|| "GitHub couldn't identify your account.".to_string())?;
         let state = request(base, token, reqwest::Method::GET, STAR_PATH).await?;
         match state.status().as_u16() {
@@ -63,12 +76,15 @@ async fn star(base: &str, token: &str, write: bool) -> Value {
             404 if !write => Ok(json!({"state":"not-starred", "login":login})),
             404 => {
                 let added = request(base, token, reqwest::Method::PUT, STAR_PATH).await?;
-                if added.status().as_u16() != 204 { return Err(refused(added.status().as_u16()).to_string()); }
+                if added.status().as_u16() != 204 {
+                    return Err(refused(added.status().as_u16()).to_string());
+                }
                 Ok(json!({"state":"starred", "login":login, "newlyStarred":true}))
             }
             status => Err(refused(status).to_string()),
         }
-    }.await;
+    }
+    .await;
     result.unwrap_or_else(|reason| unavailable(&reason))
 }
 
@@ -95,7 +111,10 @@ mod tests {
                 let mut buf = vec![0; 4096];
                 let n = stream.read(&mut buf).await.unwrap();
                 requests.push(String::from_utf8_lossy(&buf[..n]).to_string());
-                let reply = format!("HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                let reply = format!(
+                    "HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
                 stream.write_all(reply.as_bytes()).await.unwrap();
             }
             requests
