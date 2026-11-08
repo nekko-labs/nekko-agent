@@ -9,17 +9,17 @@ import type { AppSettings, SessionSummary } from '@nekko-agent/shared';
  * itself is in it once it has), and no chat may have an exchange yet: people
  * who already chatted before the intro existed never see it.
  *
- * It also waits for the zones intro, which opens on the first visit to the
- * Agents board, so a new user never gets two intros stacked: it comes after
- * that one is closed (unless the board is not in zones).
+ * It also waits for first-run setup to close, so a new user never gets the
+ * intro stacked on the wizard. (The zones tour opens only when someone picks
+ * Multi-agent, so there is nothing else to wait for.)
  */
-export function shouldShowFirstPromptIntro({ cleanStart, settings, sessions }: {
+export function shouldShowFirstPromptIntro({ cleanStart, settings, sessions, setupOpen = false }: {
   cleanStart: boolean;
-  settings: (Pick<AppSettings, 'firstPromptIntroSeen' | 'showTips'> & { commandWall?: Pick<NonNullable<AppSettings['commandWall']>, 'zones' | 'zonesIntro'> }) | null | undefined;
+  settings: Pick<AppSettings, 'firstPromptIntroSeen' | 'showTips'> | null | undefined;
   sessions: Pick<SessionSummary, 'exchangeCount'>[];
+  setupOpen?: boolean;
 }): boolean {
-  if (!cleanStart || !settings || settings.firstPromptIntroSeen) return false;
+  if (!cleanStart || !settings || settings.firstPromptIntroSeen || setupOpen) return false;
   if (settings.showTips === false) return false;
-  if (settings.commandWall?.zones !== false && !settings.commandWall?.zonesIntro) return false;
   return sessions.length > 0 && sessions.every((s) => !s.exchangeCount);
 }
