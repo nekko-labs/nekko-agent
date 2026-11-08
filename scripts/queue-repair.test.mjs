@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { BASELINE_WINDOW_MS, CODEX_BUDGET, CODEX_WAIT_MS, RETRY_BUDGET, baselineJobs, codexPrompt, decide, marker, mergeMain, onlyBaseline, readMarkers, ruleFor } from './queue-repair.mjs';
+import { BASELINE_WINDOW_MS, CODEX_BUDGET, CODEX_WAIT_MS, RETRY_BUDGET, baselineJobs, codexPrompt, decide, latestCiRuns, marker, mergeMain, onlyBaseline, readMarkers, retryBaseline, ruleFor } from './queue-repair.mjs';
 
 const HEAD = 'a'.repeat(40);
 const OLD = 'b'.repeat(40);
@@ -209,9 +209,9 @@ test("a job failing in other PRs' CI runs is main's, not this PR's", () => {
 });
 
 test('a PR waiting on main is not handed to Codex, and is retried a bounded number of times', () => {
-  const waiting = decide(pr({ gate: 'FAILURE', markers: [mark('baseline-ci')] }));
+  const waiting = decide(pr({ gate: 'FAILURE', gateAttempt: 2, markers: [mark('baseline-ci')] }));
   assert.deepEqual(waiting, { action: 'baseline', kind: 'ci', retries: 0 });
-  const retried = decide(pr({ markers: [mark('baseline-ci'), ...Array.from({ length: RETRY_BUDGET }, () => mark('retried'))] }));
+  const retried = decide(pr({ gate: 'FAILURE', gateAttempt: 2, markers: [mark('baseline-ci'), ...Array.from({ length: RETRY_BUDGET }, () => mark('retried'))] }));
   assert.equal(retried.retries, RETRY_BUDGET);
   assert.equal(decide(pr({ markers: [mark('baseline-ci', OLD)] })).action, 'skip', 'a marker at an old head does not hold a new push');
   assert.equal(decide(pr({ mergeable: 'CONFLICTING', markers: [mark('baseline-ci')] })).action, 'merge', 'a conflict is still merged');
@@ -221,4 +221,150 @@ test("the spec index is rebuilt with main's code, never by running the branch's 
   const src = fs.readFileSync(new URL('./queue-repair.mjs', import.meta.url), 'utf8');
   assert.match(src, /import \{ writeIndex \} from '\.\/spec-index\.mjs'/);
   assert.doesNotMatch(src, /'scripts\/spec-index\.mjs'/, 'no path to the branch copy of the script is executed');
+});
+
+test('a baseline marker never retries a green, pending or stale-head gate', () => {
+  for (const over of [{ gate: 'SUCCESS', gateAttempt: 2 }, { gate: '', gateAttempt: 0 }, { gate: 'FAILURE', gateAttempt: 0 }]) {
+    assert.equal(decide(pr({ ...over, markers: [mark('baseline-ci')] })).action, 'skip', JSON.stringify(over));
+  }
+});
+
+test('newer successful runs clear old same-PR failures regardless of API ordering', () => {
+  const now = Date.now();
+  const runs = [
+    { pr: 1, at: now - 3000, failed: ['build'] },
+    { pr: 2, at: now - 2000, failed: ['build'] },
+    { pr: 1, at: now - 1000, failed: [] },
+  ];
+  for (const list of [runs, runs.toReversed()]) assert.deepEqual([...baselineJobs(list, 9, now)], []);
+  assert.deepEqual([...baselineJobs([...runs, { pr: 1, at: now, failed: ['build'] }], 9, now)], ['build']);
+});
+
+test('latest CI evidence includes success but ignores pending, cancellation and other workflows', () => {
+  const now = Date.now();
+  const run = (id, pr, ago, over = {}) => ({ id, name: 'CI', status: 'completed', conclusion: 'failure', created_at: new Date(now - ago).toISOString(), pull_requests: [{ number: pr }], ...over });
+  const runs = [
+    run(1, 1, 9000), run(2, 1, 8000, { conclusion: 'success' }),
+    run(3, 1, 7000, { status: 'in_progress', conclusion: null }),
+    run(4, 2, 6000), run(5, 2, 5000, { conclusion: 'cancelled' }),
+    run(6, 2, 4000, { name: 'Native iOS', conclusion: 'success' }),
+    run(7, 3, BASELINE_WINDOW_MS + 1), run(8, 4, 1000, { pull_requests: [] }),
+  ];
+  for (const list of [runs, runs.toReversed()]) assert.deepEqual(latestCiRuns(list, now).map(r => r.id).sort(), [2, 4]);
+});
+
+function retryFixture(status, over = {}) {
+  const calls = [];
+  const request = (args, options) => {
+    calls.push({ args, options });
+    if (args.includes('PUT') && over.error) throw new Error(over.error);
+    return calls.length === 1 ? status : '{}';
+  };
+  const result = () => retryBaseline({ number: 2224, head: HEAD, gateRun: 123, retries: 0, ...over.pr }, {
+    stillFailing: false, dryRun: false, pushToken: 'synthetic-app-token', request, ...over.options,
+  });
+  return { calls, result };
+}
+
+test('newer main is merged with the exact expected head and App token, never a stale rerun', () => {
+  for (const status of ['ahead', 'diverged']) {
+    // Refresh even before other PRs recover: their historical failures do not
+    // prove a new main fix is absent. The new snapshot must pass CI normally.
+    const { calls, result } = retryFixture(status, { options: { stillFailing: true } });
+    assert.equal(result(), 'refresh');
+    assert.match(calls[0].args[1], new RegExp(`/compare/${HEAD}\\.\\.\\.main$`));
+    assert.deepEqual(calls[1], {
+      args: ['api', '--method', 'PUT', 'repos/nekko-labs/nekko-agent/pulls/2224/update-branch', '-f', `expected_head_sha=${HEAD}`],
+      options: { token: 'synthetic-app-token' },
+    });
+    assert.equal(calls.length, 2);
+    assert.ok(!calls.some(c => c.args.includes('rerun')));
+  }
+});
+
+test('dry run compares ancestry but never updates a branch or reruns CI', () => {
+  for (const status of ['ahead', 'diverged', 'behind', 'identical']) {
+    const { calls, result } = retryFixture(status, { options: { dryRun: true } });
+    assert.equal(result(), ['ahead', 'diverged'].includes(status) ? 'refresh' : 'rerun');
+    assert.equal(calls.length, 1);
+  }
+});
+
+test('an up-to-date branch waits while the shared failure signal persists', () => {
+  for (const status of ['behind', 'identical']) {
+    const { calls, result } = retryFixture(status, { options: { stillFailing: true } });
+    assert.equal(result(), 'wait');
+    assert.equal(calls.length, 1);
+  }
+});
+
+test('a cleared signal retries only an up-to-date branch, within the budget', () => {
+  for (const status of ['behind', 'identical']) {
+    const { calls, result } = retryFixture(status);
+    assert.equal(result(), 'rerun');
+    assert.deepEqual(calls[1].args, ['run', 'rerun', '123', '--failed']);
+    const exhausted = retryFixture(status, { pr: { retries: RETRY_BUDGET } });
+    assert.equal(exhausted.result(), 'exhausted');
+    assert.equal(exhausted.calls.length, 1);
+  }
+});
+
+test('conflicts, racing heads and denied updates never fall back to the stale run', () => {
+  for (const error of ['merge conflict (422)', 'expected head changed (422)', 'workflow permission denied (403)']) {
+    const { calls, result } = retryFixture('diverged', { error });
+    assert.throws(result, { message: error });
+    assert.equal(calls.length, 2);
+    assert.ok(!calls.some(c => c.args.includes('rerun')));
+  }
+});
+
+test('missing App credentials and unknown ancestry fail closed', () => {
+  const missing = retryFixture('ahead', { options: { pushToken: '' } });
+  assert.throws(missing.result, /PUSH_TOKEN is required/);
+  assert.equal(missing.calls.length, 1);
+  const unknown = retryFixture('unexpected');
+  assert.throws(unknown.result, /Unexpected main comparison/);
+  assert.equal(unknown.calls.length, 1);
+});
+
+test('recovery incorporates a real main fix without losing the feature commit', () => {
+  let head;
+  const { dir, git } = repoWith(({ git, write, commit }) => {
+    write('app.js', 'broken baseline\n'); commit('base');
+    git('checkout', '-q', '-b', 'feature');
+    write('feature.js', 'keep approval fix\n'); head = commit('feature');
+    git('checkout', '-q', 'main'); write('app.js', 'fixed baseline\n'); commit('fix main');
+    git('checkout', '-q', 'feature');
+  });
+  const request = args => {
+    if (args.includes('--jq')) {
+      const base = git('merge-base', head, 'main');
+      return base === git('rev-parse', 'main') ? 'behind' : base === head ? 'ahead' : 'diverged';
+    }
+    assert.ok(args.includes(`expected_head_sha=${git('rev-parse', 'HEAD')}`));
+    assert.ok(args.includes('PUT'));
+    git('merge', '--no-ff', '--no-edit', 'main');
+    return '{}';
+  };
+  try {
+    assert.equal(retryBaseline({ number: 2224, head }, { stillFailing: true, request, pushToken: 'synthetic' }), 'refresh');
+    assert.equal(fs.readFileSync(path.join(dir, 'app.js'), 'utf8'), 'fixed baseline\n');
+    assert.equal(fs.readFileSync(path.join(dir, 'feature.js'), 'utf8'), 'keep approval fix\n');
+    assert.equal(git('merge-base', head, 'HEAD'), head, 'history is not rewritten');
+    assert.equal(git('rev-list', '--parents', '-n', '1', 'HEAD').split(' ').length, 3);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('merged PRs with empty PR metadata retain newer green evidence under branch identity', () => {
+  const now = Date.now();
+  const old = { id: 1, name: 'CI', head_branch: 'feature', head_repository: { full_name: 'nekko-labs/nekko-agent' }, status: 'completed', conclusion: 'failure', created_at: new Date(now - 2000).toISOString(), pull_requests: [{ number: 1 }] };
+  const green = { ...old, id: 2, conclusion: 'success', created_at: new Date(now - 1000).toISOString(), pull_requests: [] };
+  const fork = { ...old, id: 3, head_repository: { full_name: 'someone/fork' } };
+  for (const list of [[old, green, fork], [fork, green, old]]) {
+    assert.deepEqual(latestCiRuns(list, now).map(r => r.id).sort(), [2, 3]);
+  }
+  const failures = [{ pr: 'repo:feature', branch: 'feature', at: now, failed: ['build'] }, { pr: 2, branch: 'other', at: now, failed: ['build'] }];
+  assert.deepEqual([...baselineJobs(failures, 1, now, 'feature')], [], 'own branch never supplies independent baseline evidence');
 });

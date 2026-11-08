@@ -51,6 +51,7 @@ export function foldSubagentActivity(event: AgentEvent, now = Date.now()): void 
     case 'tool_approval_required': next = { status: 'waiting', detail: 'Waiting for approval.', toolId: event.call.id }; break;
     case 'question': next = { status: 'waiting', detail: 'Waiting for your answer.' }; break;
     case 'question_resolved': next = { status: 'working', detail: 'Continuing after your answer.' }; break;
+    case 'approval_resolved': next = { status: 'working', detail: 'Continuing after your answer.' }; break;
     case 'text': {
       const text = `${prev?.text ?? ''}${event.delta}`.slice(-2000);
       next = { status: 'working', detail: compactSentence(text) || 'Writing a reply.', text };

@@ -15,3 +15,28 @@ split-from: SPEC.md (2026-10-22)
 - **Big features as stacks:** work larger than one reviewable change is split into a stack of PRs with `gh stack` (GitHub's stacked-PR CLI), each layer built on the one below, so the next layer can start before the first merges. Each layer gets the fast tier; `gh stack merge` lands the stack together.
 - **One required check:** `gate` (in `ci.yml`) passes when every job the run needed passed, so protection does not change as jobs are added or path-gated.
 - **Tasks are GitHub issues; nothing every PR edits is committed.** `[implemented 2026-11-04]` Every change has an issue, and the issue is the task: its plan notes and checklist live there, and how it was built goes in the PR description. `TASKS.md` holds only the technical plan; the task log it carried until 2026-11-04 is frozen in `docs/history/tasks-archive.md`. The spec index is generated on demand (`node scripts/spec-index.mjs`) instead of committed. Both used to change in most PRs (the index in 111 and the task log in 62 of the 231 merges from 2026-10-28 to 2026-11-04) and made parallel PRs conflict with each other. Floop mirrors the issues; two-way sync is `[planned]`. See [decision 0049](../../docs/decisions/0049-keep-the-spec-index-and-task-log-out-of-prs.md).
+
+## Shared build-failure recovery (#2232)
+
+Implemented in the repair script; local decision/request tests and a real-Git
+merge fixture verified. Hosted build outcomes and live App-backed recovery
+verification are recorded in PR #2233. The current no-queue,
+non-strict merge policy is retained: independently green PRs are not guaranteed
+to have been tested together against the latest main. Semantic merge races remain
+possible; this is recovery, not a new merge-prevention guarantee.
+
+Queue repair treats matching failed job names across other PRs as a suspected
+shared baseline failure, not proof of the same root cause. It uses each branch's
+latest completed success/failure CI run (repository-qualified branch identity
+also retains merged runs with empty PR metadata); pending/cancelled runs do not
+erase confirmed failures. A recovered green gate or an in-flight/stale-head gate
+is never retried merely because an old baseline comment remains.
+
+For a baseline-marked completed red gate, newer main is merged using the existing
+App token and an expected-head check, without rewriting history or automatically
+resolving code conflicts. This triggers new-head CI rather than replaying an old
+Actions merge snapshot. If main is already included, repair waits for the shared
+signal to clear before retrying failed jobs, at most twice per head. Conflicts,
+concurrent pushes and denied updates require human resolution; no token scopes,
+required checks, performance budgets or ruleset settings are weakened. See the
+[failing-checks runbook](../../docs/runbooks/failing-checks.md).

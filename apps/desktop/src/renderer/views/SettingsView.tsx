@@ -210,7 +210,6 @@ export function SettingsView() {
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
             <SettingsGroup id="general">
-              <AboutYouSection settings={settings} update={update} />
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
@@ -226,6 +225,8 @@ export function SettingsView() {
               <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
             </SettingsGroup>}
             <SettingsGroup id="customize">
+              {/* Personal: how Nekko addresses you belongs with the rest of personalization (#2102). */}
+              <AboutYouSection settings={settings} update={update} />
               <section className="card mt-5 p-5">
                 <h2 className="font-semibold">View settings</h2>
                 <p className="mt-1 text-xs text-ink-faint">Optional sidebar shortcuts. Skills and Connectors are always available at the top of Settings.</p>

@@ -485,6 +485,8 @@ export type AgentEvent =
   | { type: 'question'; sessionId: string; request: import('./ask.js').AskRequest }
   /** The question was answered or dropped, so anything showing it can stop. */
   | { type: 'question_resolved'; sessionId: string; callId: string }
+  /** The approval was answered or dropped; the approved tool may still run for a while. */
+  | { type: 'approval_resolved'; sessionId: string; callId: string }
   | {
       type: 'usage';
       sessionId: string;
