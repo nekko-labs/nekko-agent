@@ -349,3 +349,5 @@ Starred models stay listed under their provider as well as in the model picker s
 Selecting text in the desktop or Local Web UI message editor opens a compact, single-row Markdown formatting toolbar beside the selection. Its pointer identifies the text being edited. The toolbar can extend over a neighboring agent pane, but stays inside the app viewport. Right-click still offers the formatting controls and clipboard actions.
 
 On iOS, tap the keyboard-down button at the right of the message box’s formatting row to hide the keyboard without sending or clearing your draft. It stays available when **Aa** collapses the formatting controls. Tap the message box to continue typing.
+
+Development builds show the latest reachable release tag plus a `dev` suffix, commit distance and source hash, rather than the checked-in package version. Installed apps show their stamped release version. Restart development mode after pulling a version-identity fix or fetching new release tags.
