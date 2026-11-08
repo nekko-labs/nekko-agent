@@ -38,12 +38,12 @@ describe('agent chat visual continuity', () => {
     expect(cssRule(css, '.agent-chip-chat[data-agent-active]').background).toBe('var(--accent-soft)');
     expect(cssRule(css, '.agent-chip-chat:focus-visible').outline).toContain('var(--accent)');
   });
-  it.each([false, true])('puts suggestions beside the microphone in the action row, clean start: %s', (cleanStart) => {
+  it.each([false, true])('puts suggestions on the next line below the action row, clean start: %s', (cleanStart) => {
     const html = renderChatPane(chatSession({ messages: cleanStart ? [] : chatSession().messages }), { commandCenter: true, cleanStart });
     const box = composerBox(html);
     expect(box).toContain('data-composer-suggestions');
     expect(box.indexOf('data-composer-suggestions')).toBeGreaterThan(box.indexOf('composer-bar'));
-    expect(box.indexOf('data-composer-suggestions')).toBeLessThan(box.indexOf('data-composer-action'));
+    expect(box.indexOf('data-composer-suggestions')).toBeGreaterThan(box.indexOf('data-composer-action'));
     const effort = box.match(/<button[^>]*class="([^"]*)"[^>]*aria-label="Reasoning effort:/)?.[1];
     expect(effort).toBeDefined();
     expect(effort).not.toMatch(/\bborder\b/);

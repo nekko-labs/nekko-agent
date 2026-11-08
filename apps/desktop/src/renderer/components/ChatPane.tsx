@@ -2694,8 +2694,8 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     </div>
   );
 
-  // Prompt suggestions sit beside the microphone, in the action bar.
-  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className="composer-suggestions empty:hidden" data-composer-suggestions>
+  // Prompt suggestions have their own row below the composer actions.
+  const promptSuggestions = !imageMode && expertMode && showSuggest && <div className="composer-suggestions composer-suggestions-row empty:hidden border-t border-line px-2 py-1" data-composer-suggestions>
     <PromptAnalyzer
       variant="chip"
       text={deferredDraft}
@@ -3302,6 +3302,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <ComposerFocus target={composerRef} sessionId={sessionId} ready={canCompose} />
                 </div>
                 <div className="composer-bar flex items-center gap-2 px-2 pb-2 pt-1">
+                  {!imageMode && <div className="composer-folders min-w-0">
+                    <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
+                  </div>}
                   {imageMode && (<>
                     <button
                       type="button"
@@ -3499,9 +3502,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                       }}
                     />
                   </div>
-                  {!expertMode && <div className="composer-folders min-w-0">
-                    <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} selectedSummary />
-                  </div>}
                   {!expertMode && asksFirst}
                   </>)}
                   {(header || wallWindow) && (
@@ -3513,7 +3513,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </div>
                   )}
                   <div className="flex-1" />
-                  {promptSuggestions}
                   <DictationButton key={sessionId} sessionId={sessionId}
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
@@ -3529,6 +3528,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     </button>
                 </div>
               </div>
+                {promptSuggestions}
                 {wallWindow && !imageMode && showMode && <div className="composer-foot-row flex min-w-0 border-t border-line px-2 py-1" data-composer-mode-row>
                   <ChatControls session={session} isCloudModel={isCloudModel} modelId={modelId ?? undefined} onChange={setSession} toolsInWindow only="mode" />
                 </div>}
@@ -3540,7 +3540,6 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
                     {!wallWindow && <>
                       <div className="flex min-w-0 flex-wrap items-center gap-2" data-composer-primary-row>
-                        {detailsShown && expertMode && <FolderPicker sessionId={sessionId} session={session} disabled={hasLive} onChange={setSession} />}
                         <div className="min-w-0 max-w-full shrink-0">{modelControls}</div>
                         {detailsShown && expertMode && asksFirst}
                         <div className="ml-auto flex shrink-0 items-center gap-1">

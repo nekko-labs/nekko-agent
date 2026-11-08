@@ -94,6 +94,25 @@ import('@nekko-agent/shared').then(async ({ summarizeSession }) => {
     const noop = () => {};
     const content = surface === 'onboarding' ? React.createElement(ProvidersStep, {key: performance.now()}) : surface === 'choices' ? React.createElement(ProviderChoices, {onPick:noop, current:'gemini', cloudOnly:true}) : React.createElement(AddProvider, {onDone:noop, fixedKind:'chatgpt'});
     root.render(React.createElement('main', {style: {padding:24, height:'100vh', overflow:'auto', background:'var(--paper)'}}, content));
+  }, showFolderComposer: async (cleanStart = false, expert = true, surface: 'full' | 'window' | 'composer' = 'window') => {
+    const { ChatPane } = await import('../src/renderer/components/ChatPane');
+    localStorage.setItem('nekko.chatMode', expert ? 'expert' : 'simple');
+    const { saveDraft } = await import('../src/renderer/composerDrafts');
+    const record = { ...records[0], id: `folders-${cleanStart}-${expert}-${surface}` } as any;
+    records[0] = record;
+    saveDraft(record.id, { text: 'Please help improve the project layout and check the changes.', images: [] });
+    record.mode = 'ask';
+    record.workspaceId = 'code';
+    record.supportingWorkspaceIds = [];
+    record.messages = cleanStart ? [] : [{ id: 'u', role: 'user', content: 'Check the project layout.', createdAt: now }, { id: 'r', role: 'assistant', content: 'Ready to work in the selected folder.', createdAt: now }];
+    const folders = [{ id: 'code', name: 'code', path: 'C:/fixture/code' }, { id: 'docs', name: 'docs', path: 'C:/fixture/docs' }];
+    Object.assign(settings, { workspaces: folders, themePreset: 'x-plum-dark' });
+    bridge.setSessionWorkspace = async (_id: string, workspaceId: string) => { record.workspaceId = workspaceId; return { ...record }; };
+    bridge.setSessionSupportingWorkspaces = async (_id: string, ids: string[]) => { record.supportingWorkspaceIds = ids; return { ...record }; };
+    bridge.setSessionOptions = async (_id: string, patch: any) => { Object.assign(record, patch); return { ...record }; };
+    putCachedSession(record);
+    useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], sessions: records.map(summarizeSession), settings: { ...settings }, activeSessionId: record.id, running: new Set() } as any);
+    root.render(React.createElement('div', { className: surface === 'window' ? 'wall-composer' : undefined, style: { height: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 16 } }, React.createElement(ChatPane, { key: `folders-${cleanStart}-${expert}-${surface}`, sessionId: record.id, cleanStart, surface: surface === 'composer' ? 'composer' : 'full', commandCenter: surface === 'window', header: surface === 'composer' ? React.createElement('span', null, 'Active chat') : undefined })));
   }, showComposer: async (surface: 'full' | 'composer' | 'window' = 'composer', cleanStart = false) => {
     const { ChatPane } = await import('../src/renderer/components/ChatPane');
     useStore.setState({ providers: [provider], models: [{ id: 'gpt-fixture', providerId: 'fixture', name: 'GPT fixture', contextWindow: 500000 }], settings, activeSessionId: 'a', running: new Set(['a']) } as any);
