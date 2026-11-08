@@ -372,9 +372,8 @@
       <section id="beta" class="chapter band band-lavender" aria-labelledby="beta-title">
         <div class="beta">
           <div class="beta-intro reveal">
-            <p class="eyebrow">MEET NEKKO · FREE BETA</p>
-            <h2 id="beta-title">See it in a minute. Try it first.</h2>
-            <p class="chapter-lede">Nekko the cat walks you through the ideas behind the app in about a minute. Like what you see? Join the beta and try new things before anyone else.</p>
+            <h2 id="beta-title">More is coming.</h2>
+            <p class="chapter-lede">Want to get exclusive early features? Join our beta testers list.</p>
           </div>
           <!-- The tour: one video, its file picked by look (dark files for Dark,
                light for White). Nothing loads until it is near the screen. -->
@@ -435,13 +434,23 @@
                 <!-- Bots fill every field; people never see this one. The API fakes success when it is filled. -->
                 <input class="beta-hp" type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />
               </div>
+              <!-- Step two: the email is already saved, so leaving here loses nothing -->
+              <div class="beta-ask" data-beta-name hidden>
+                <h3>You're on the list!</h3>
+                <label for="beta-name">WHAT'S YOUR NAME?</label>
+                <div class="beta-field">
+                  <input id="beta-name" name="name" type="text" autocomplete="name" maxlength="200" placeholder="Your name" />
+                  <button class="btn btn-primary" type="submit">Save</button>
+                </div>
+                <button class="beta-skip" type="button" data-beta-skip>Skip</button>
+              </div>
               <div class="beta-done" role="status" hidden>
                 <p class="beta-badge">BETA TESTER</p>
                 <h3>Welcome to the beta!</h3>
                 <p>You're in. Nekko will be in touch when new builds are ready to try.</p>
               </div>
             </form>
-            <p class="beta-privacy micro">We'll only use your email to send beta invites, and product updates only if you tick the box. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>. <a href="/privacy">Privacy policy</a>.</p>
+            <p class="beta-privacy micro">We'll only use your email (and name, if you give it) to send beta invites, and product updates only if you tick the box. No spam, and we never share it. To be removed, email <a href="mailto:hello@nekkoagent.com">hello@nekkoagent.com</a>. <a href="/privacy">Privacy policy</a>.</p>
           </div>
         </div>
       </section>
