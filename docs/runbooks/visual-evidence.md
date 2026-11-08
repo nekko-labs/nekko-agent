@@ -71,6 +71,28 @@ and `NEKKO_LAYOUT_SANDBOX=<name>-sandbox.cjs` picks the capture script (default
   arrays: compare the report's `errors` against a run on `main`, then repair a
   broken fixture contract separately from the feature under test (#2012).
 
+### Empty-agent wave journey
+
+Use `NEKKO_EXPECT_WAVE_NEW=1` and `NEKKO_LAYOUT_SANDBOX=empty-agent-wave-sandbox.cjs`
+with the shared layout launcher to enforce assertions. The journey dismisses the
+zones introduction through its Close control and rejects any remaining dialog.
+It checks the shipped per-chat mascot's `data-chat-mascot` state before the first
+token and after completion, and the separate background chat's wall indicator
+while working and waiting. A real, nonempty synthetic question and matching
+`pendingInput` response keep the visible question and host state consistent.
+The removed global `.pixel-mascot` and Dynamic toolbar button are not queried.
+Single/Multi-agent transitions use the shared View-menu helper and verify layout
+selection and Escape dismissal (#1684).
+
+The window stays hidden/nonfocusable and uses Electron offscreen rendering, so
+Windows delivers frames for transitions without showing or focusing a window.
+Wave clocks, reduced motion, setting disablement, stationary working artwork,
+no working beams, and before-token wave removal remain enforced. The existing
+300ms send wait and other state deadlines are unchanged. `NEKKO_WAVE_SKIP_CPU=1`
+skips CPU sampling only; such a run is interaction evidence, not a performance
+result. Saved PNGs/frames are not visually inspected evidence until reviewed.
+Node regressions exercise failure propagation/isolation, not actual rendering.
+
 ### Wall-composer journey
 
 Run the shared layout launcher with `NEKKO_LAYOUT_SANDBOX=wall-composers-sandbox.cjs`.
@@ -85,6 +107,24 @@ alongside assertions. Existing ResizeObserver scheduling warnings are tracked in
 #360, not filtered out or claimed fixed by this harness repair. Baseline capture
 mode (`NEKKO_TEST_SOURCE`) intentionally records assertions without enforcing them;
 use the normal mode to validate a change.
+
+### Grid model and mode-menu journey
+
+`npm run test:grid-bugs -w @nekko-agent/desktop` exercises model selection and
+mode menus in the wall at desktop/narrow widths and light/dark themes. Switching
+to a single agent opens the shipped View menu, selects its focus radio, checks
+both the radio and wall layout, then dismisses the menu with Escape (#2152).
+Missing controls or an unapplied selection fail the journey, not a silent no-op.
+The legacy Focused toolbar button is not part of this path.
+
+For a strict comparison against an unchanged current renderer, set
+`NEKKO_TEST_REVISION=<base-commit>` and `NEKKO_GRID_ASSERT_FIXED=1`. This uses the
+same harness with archived renderer sources, including the fixture's StoreSidebar
+imports, and keeps all grid-bugs behavior assertions enabled. Without that explicit override, historical revision captures
+retain their existing capture-only checks. Inspect `status.json`, including
+`errors` and `background`; generated PNGs are not automatically visually reviewed.
+This harness repair does not change the separate performance setup or establish
+the cause of its newest-message failures.
 
 ## Running the Local Web UI for verification
 

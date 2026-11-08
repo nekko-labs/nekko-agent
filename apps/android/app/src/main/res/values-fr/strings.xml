@@ -4,4 +4,9 @@
     <string name="widget_description">Combien de discussions ont besoin de vous et combien travaillent. Seulement des nombres, jamais ce qu’elles disent.</string>
     <string name="shortcut_new_chat">Nouvelle discussion</string>
     <string name="shortcut_new_chat_long">Nouvelle discussion sur votre ordinateur</string>
+    <string name="chats_showmodel">Modèle</string>
+    <string name="chats_card_details">Détails de la carte</string>
+    <string name="chats_showupdated">Heure de mise à jour</string>
+    <string name="chats_showcontext">Fenêtre de contexte</string>
+    <string name="chats_showpullrequests">Pull requests</string>
 </resources>

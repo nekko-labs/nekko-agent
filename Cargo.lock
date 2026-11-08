@@ -2104,6 +2104,7 @@ dependencies = [
  "libc",
  "memchr",
  "nekko-js",
+ "nekko-store",
  "regress",
  "serde",
  "serde_json",

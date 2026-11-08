@@ -420,22 +420,30 @@ impl Table {
             &["changes:list"],
             handler!(|ctx, channel, args| {
                 let (changes, id) = (ctx.changes.clone(), str_arg(&args, 0).unwrap_or_default().to_string());
-                let list =
-                    tokio::task::spawn_blocking(move || changes.list_changes(&id)).await.map_err(|e| e.to_string())?;
+                let list = tokio::task::spawn_blocking(move || changes.list_changes(&id))
+                    .await
+                    .map_err(|e| e.to_string())??;
                 Ok(serde_json::to_value(list).unwrap_or(json!([])))
             }),
         );
         t.add(
             &["changes:accept"],
             handler!(|ctx, channel, args| {
-                ctx.changes.accept_change(str_arg(&args, 0).unwrap_or_default(), str_arg(&args, 1).unwrap_or_default());
+                let changes = ctx.changes.clone();
+                let id = str_arg(&args, 0).unwrap_or_default().to_string();
+                let path = str_arg(&args, 1).unwrap_or_default().to_string();
+                tokio::task::spawn_blocking(move || changes.accept_change(&id, &path))
+                    .await
+                    .map_err(|e| e.to_string())??;
                 Ok(Value::Null)
             }),
         );
         t.add(
             &["changes:acceptAll"],
             handler!(|ctx, channel, args| {
-                ctx.changes.accept_all(str_arg(&args, 0).unwrap_or_default());
+                let changes = ctx.changes.clone();
+                let id = str_arg(&args, 0).unwrap_or_default().to_string();
+                tokio::task::spawn_blocking(move || changes.accept_all(&id)).await.map_err(|e| e.to_string())??;
                 Ok(Value::Null)
             }),
         );
@@ -450,7 +458,7 @@ impl Table {
                 );
                 tokio::task::spawn_blocking(move || changes.record_original(&id, &path))
                     .await
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| e.to_string())??;
                 Ok(Value::Null)
             }),
         );

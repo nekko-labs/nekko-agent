@@ -55,15 +55,16 @@ pub fn builtin_tools() -> Vec<ToolSpec> {
         ),
         spec(
             "edit_file",
-            "Replace an exact string in a file with a new string.",
+            "Replace exact text in one file. Use old_string/new_string for one replacement, or edits for 1-100 ordered literal replacements validated together before writing. Never mix the two forms. Every search must be non-empty and unique at its step. A batch is limited to 8 MiB of input, replacements and result; validation failure writes nothing. This is not multi-file rollback or protection from concurrent writers.",
             json!({
                 "type": "object",
                 "properties": {
                     "path": { "type": "string" },
                     "old_string": { "type": "string", "description": "Exact text to replace (must be unique)." },
                     "new_string": { "type": "string" },
+                    "edits": {"type":"array","minItems":1,"maxItems":100,"description":"Ordered literal replacements; all must succeed before the file is written.","items":{"type":"object","properties":{"old_string":{"type":"string","minLength":1},"new_string":{"type":"string"}},"required":["old_string","new_string"]}},
                 },
-                "required": ["path", "old_string", "new_string"],
+                "required": ["path"],
             }),
         ),
         spec(
