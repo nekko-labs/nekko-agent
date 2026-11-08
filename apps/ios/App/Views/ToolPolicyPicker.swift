@@ -16,16 +16,22 @@ struct ToolPolicyPicker: View {
 
     static func icon(_ mode: PcSettings.ChatMode) -> String {
         switch mode {
-        case .ask: "hand.raised"
-        case .guardrails: "shield.lefthalf.filled"
-        case .yolo: "bolt"
+        case .ask: "permission-hand"
+        case .guardrails: "permission-shield-check"
+        case .yolo: "permission-running"
         }
+    }
+
+    /// Gentleface 0.3.0 line icons, MIT. See App/PermissionIcons-LICENSE.txt.
+    static func image(_ mode: PcSettings.ChatMode) -> some View {
+        Image(icon(mode)).renderingMode(.template).resizable().scaledToFit()
+            .frame(width: 16, height: 16).accessibilityHidden(true)
     }
 
     var body: some View {
         Button { open = true } label: {
             HStack(spacing: 4) {
-                Image(systemName: Self.icon(selection)).foregroundStyle(palette.inkSoft)
+                Self.image(selection).foregroundStyle(palette.inkSoft)
                 Text(SimpleMode.asksName(selection)).lineLimit(1).truncationMode(.tail)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2)
             }
@@ -47,7 +53,7 @@ struct ToolPolicyPicker: View {
                         open = false
                     } label: {
                         HStack(spacing: 10) {
-                            Image(systemName: Self.icon(mode)).frame(width: 22).foregroundStyle(palette.accent)
+                            Self.image(mode).frame(width: 22).foregroundStyle(palette.accent)
                             Text(SimpleMode.asksName(mode)).lineLimit(1).minimumScaleFactor(0.75)
                             Spacer(minLength: 4)
                             Image(systemName: "checkmark").opacity(selection == mode ? 1 : 0)

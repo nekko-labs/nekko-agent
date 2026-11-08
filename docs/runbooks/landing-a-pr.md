@@ -23,7 +23,9 @@ A worktree without its own `node_modules` resolves the workspace packages
 (`@nekko-agent/shared` and the rest) through the primary checkout's, so builds and
 tests there can run against the primary checkout's code. Run `npm ci` in the worktree
 before building or testing it. The desktop typecheck reads `shared` from source either
-way (`customConditions: ["source"]`, #1153).
+way (`customConditions: ["source"]`, #1153). The [isolated typecheck recipe](worktree-typecheck.md)
+covers a scripts-disabled install, local declaration builds, and resolution checks
+for workspace links and nested plugins (#1704); it is not a runtime bootstrap.
 
 ## Start from an issue
 

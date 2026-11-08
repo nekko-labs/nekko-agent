@@ -199,7 +199,7 @@ export function SecuritySettingsView(p: {
       <p className="mt-1 text-xs text-ink-faint">
         Ask for a security key, a passkey or a one-time code before anyone at this computer, or on a paired phone, turns on
         remote access, pairs a phone, signs phones out, changes what a phone may do, touches a provider key, or raises a
-        chat to Guardrails or YOLO from a phone. This computer checks every answer itself; nothing goes to Nekko Cloud.
+        chat to Ask when it matters or No restrictions from a phone. This computer checks every answer itself; nothing goes to Nekko Cloud.
       </p>
 
       {s?.damaged && (

@@ -13,7 +13,7 @@ extension Prefs {
     /// Moving a chat (or new chats) from `current` to `next`: runs `proceed` now
     /// and returns nil, or, when that turns YOLO on and the user wasn't told not
     /// to warn again, returns the warning to show (`yoloWarning(_:)`), which runs
-    /// `proceed` only on "Turn on YOLO" (decision 0054).
+    /// `proceed` only on "Turn on No restrictions" (decision 0054).
     func gateYolo(from current: PcSettings.ChatMode?, to next: PcSettings.ChatMode,
                   _ proceed: @escaping @MainActor () -> Void) -> YoloAsk? {
         guard YoloWarning.needed(from: current, to: next, skipped: skipYoloWarning) else {
@@ -38,7 +38,7 @@ extension View {
     }
 }
 
-/// "Turn on YOLO?": what YOLO means for data, with "Keep asking" as the safe choice.
+/// "Turn on No restrictions?": what YOLO means for data, with "Keep asking" as the safe choice.
 /// The desktop's `YoloWarning.tsx`, word for word.
 struct YoloWarningSheet: View {
     let proceed: @MainActor () -> Void
@@ -52,13 +52,13 @@ struct YoloWarningSheet: View {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: "exclamationmark.triangle.fill").font(.title).foregroundStyle(palette.warning)
                     .accessibilityHidden(true)
-                Text("Turn on YOLO?").font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
+                Text("Turn on No restrictions?").font(.title3.weight(.semibold)).foregroundStyle(palette.ink)
                     .accessibilityAddTraits(.isHeader)
                     .accessibilityIdentifier("yoloWarning.title")
-                Text("The agent will run commands, edit files, fetch addresses and call tools without asking you first. A web page, search result or tool output it reads can carry instructions, and in YOLO nothing stops them from sending your files or data out of this computer. Your deny rules still block.")
+                Text("The agent will run commands, edit files, fetch addresses and call tools without asking you first. A web page, search result or tool output it reads can carry instructions, and with No restrictions nothing stops them from sending your files or data out of this computer. Your deny rules still block.")
                     .font(.subheadline).foregroundStyle(palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Guardrails asks only when it matters, and is the recommended mode.")
+                Text("Ask when it matters is the recommended mode.")
                     .font(.footnote).foregroundStyle(palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                 VStack(alignment: .leading, spacing: 4) {
@@ -85,7 +85,7 @@ struct YoloWarningSheet: View {
                         if dontWarn { prefs.skipYoloWarning = true }
                         proceed()
                     } label: {
-                        Text("Turn on YOLO").font(.body.weight(.semibold)).multilineTextAlignment(.center)
+                        Text("Turn on No restrictions").font(.body.weight(.semibold)).multilineTextAlignment(.center)
                             .fixedSize(horizontal: false, vertical: true)
                             .foregroundStyle(palette.danger)
                             .padding(.vertical, 10).frame(maxWidth: .infinity, minHeight: 50)

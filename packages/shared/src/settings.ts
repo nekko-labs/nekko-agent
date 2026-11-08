@@ -320,7 +320,7 @@ export interface AppSettings {
    */
   notices?: AppNotice[];
   skipDeleteConfirmation?: boolean;
-  /** Turning YOLO on skips its warning (Settings > General, "Warn before YOLO"). */
+  /** Turning No restrictions on skips its warning (Settings > General, "Warn before No restrictions"). */
   skipYoloWarning?: boolean;
   /**
    * Let paired phones see a read-only diff of the files the agent changed in a

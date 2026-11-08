@@ -241,7 +241,7 @@ struct SecuritySettingsView: View {
                     Text("Connect to \(computer) to see how it’s protected.").foregroundStyle(palette.inkSoft)
                 }
             } header: { SectionHeader("On \(computer)") } footer: {
-                Text("With this on, raising a chat to Guardrails or YOLO from this iPhone asks for Face ID and then your security key or a code. One confirmation covers five minutes. Which keys are registered stays on \(computer): this iPhone only learns their kinds.")
+                Text("With this on, raising a chat to Ask when it matters or No restrictions from this iPhone asks for Face ID and then your security key or a code. One confirmation covers five minutes. Which keys are registered stays on \(computer): this iPhone only learns their kinds.")
                     .foregroundStyle(palette.inkSoft)
             }
             Section {
