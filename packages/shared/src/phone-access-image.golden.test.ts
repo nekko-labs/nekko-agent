@@ -11,6 +11,25 @@ it('records image boundary decisions for Rust parity', () => {
     { ...base, params: { ...base.params, modelId: '\ufeffimage/sd' } },
     { ...base, params: { ...base.params, modelId: 'image/sd\u0085' } },
     { ...base, params: { ...base.params, vae: '/secret' } }];
+  // Photos to edit and the edit's size (decision 0069, #2222).
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
+  const jpeg = 'data:image/jpeg;base64,/9j/4AAQ';
+  const webp = 'data:image/webp;base64,UklGRg==';
+  const edit = { ...base, images: [png], size: { width: 768, height: 1024 } };
+  requests.push(edit, { ...base, images: [png, jpeg, webp, png] }, { ...edit, images: [png, jpeg, webp, png] },
+    { ...edit, images: [png, png, png, png, png] }, { ...edit, images: [] }, { ...edit, images: png },
+    { ...edit, images: ['data:image/svg+xml;base64,PHN2Zz4='] }, { ...edit, images: ['data:image/gif;base64,R0lGOD=='] },
+    { ...edit, images: ['/Users/me/photo.png'] }, { ...edit, images: ['file:///Users/me/photo.png'] },
+    { ...edit, images: ['https://example.com/photo.png'] }, { ...edit, images: ['data:image/png,rawbytes'] },
+    { ...edit, images: ['data:image/png;base64,'] }, { ...edit, images: ['data:image/png;base64,AA AA'] },
+    { ...edit, images: ['data:image/png;base64,AA==AA'] }, { ...edit, images: ['DATA:image/png;base64,AAAA'] },
+    { ...edit, images: [{ path: '/private' }] }, { ...edit, images: [null] },
+    { ...edit, size: { width: 768, height: 1024, depth: 1 } }, { ...edit, size: { width: 768 } },
+    { ...edit, size: { width: 770, height: 1024 } }, { ...edit, size: { width: 768, height: 192 } },
+    { ...edit, size: { width: 768, height: 2112 } }, { ...edit, size: { width: 768.5, height: 1024 } },
+    { ...edit, size: { width: '768', height: 1024 } }, { ...edit, size: [768, 1024] }, { ...edit, size: null },
+    { ...base, size: { width: 768, height: 1024 } },
+    { ...edit, params: { ...base.params, cfgScale: 4.5 } });
   for (const [key, values] of Object.entries({ width: [256, 2048, 255, 257, 2112], height: [256, 2048, 257],
     steps: [1, 100, 0, 101, 1.5], cfgScale: [0, 30, -1, 31, 4.5], seed: [-1, 0, 2147483647, -2, 2147483648] })) {
     for (const value of [...values, null, true, '4']) requests.push({ ...base, params: { ...base.params, [key]: value } });

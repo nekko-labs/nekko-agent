@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkPhoneAccess, phoneChannelAllowed, phoneChannelClass, redactPhoneResult, screenPhoneCall } from './phone-access.js';
-import { phoneImageModels, phoneImageParamsProblem, phoneImageRequestProblem } from './phone-access-image.js';
+import { phoneImageModels, phoneImageParamsProblem, phoneImagePhoto, phoneImageRequestProblem } from './phone-access-image.js';
 
 const params = { modelId: 'image/acme_sd/tiny-sd', width: 1024, height: 1024, steps: 28, cfgScale: 4, seed: -1 };
 const request = { sessionId: 's_img', prompt: 'a calico cat', params };
@@ -31,6 +31,25 @@ describe('approved phone image boundary #2162', () => {
     }
     for (const prompt of ['', '  ', 'x'.repeat(8001)]) expect(phoneImageRequestProblem({ ...request, prompt })).toBe('prompt');
     for (const sessionId of ['', '../s', 's'.repeat(129)]) expect(phoneImageRequestProblem({ ...request, sessionId })).toBe('sessionId');
+  });
+
+  it('carries up to four raster photos and an edit size, inside one relay frame (decision 0069, #2222)', () => {
+    const png = 'data:image/png;base64,iVBORw0KGgo=';
+    const edit = { ...request, images: [png], size: { width: 768, height: 1024 } };
+    expect(() => screenPhoneCall('chat:generateImage', [edit])).not.toThrow();
+    expect(phoneImageRequestProblem({ ...request, images: [png, png, png, png] })).toBeNull();
+    expect(phoneImageRequestProblem({ ...edit, images: [png, png, png, png, png] })).toBe('images');
+    for (const photo of ['data:image/svg+xml;base64,PHN2Zz4=', '/Users/me/a.png', 'https://example.com/a.png', 'file:///a.png']) {
+      expect(() => screenPhoneCall('chat:generateImage', [{ ...edit, images: [photo] }])).toThrow('images');
+    }
+    expect(phoneImagePhoto('data:image/webp;base64,UklGRg==')).toBe(true);
+    expect(phoneImagePhoto('data:image/jpeg;base64,/9j/4AAQ')).toBe(true);
+    const big = `data:image/png;base64,${'A'.repeat(2 * 1024 * 1024)}`;
+    expect(phoneImageRequestProblem({ ...edit, images: [big, big] })).toBeNull();
+    expect(phoneImageRequestProblem({ ...edit, images: [big, big, big, big] })).toBe('images');
+    expect(phoneImageRequestProblem({ ...request, size: edit.size })).toBe('size');
+    expect(phoneImageRequestProblem({ ...edit, size: { ...edit.size, depth: 1 } })).toBe('size');
+    expect(phoneImageRequestProblem({ ...edit, size: { width: 770, height: 1024 } })).toBe('size');
   });
 
   it('bounds whole-number parameters, including CFG, without rounding saved fractional values', () => {
