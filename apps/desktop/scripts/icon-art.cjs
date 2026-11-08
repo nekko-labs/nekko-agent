@@ -1,8 +1,8 @@
 /**
  * The Nekko Agent mark, as vector art: an outline cat head (two ears, a soft
  * curve of forehead between them, a round jaw, nothing inside) in one thin
- * stroke with sharp corners, cream on the green gradient tile for the app icon
- * and green in the installer banners. Pure string-building with no renderer
+ * stroke with sharp corners, white on the plum gradient tile for the app icon
+ * and light plum in the installer banners. Pure string-building with no renderer
  * behind it, so anything that needs the mark
  * -- the desktop icon pipeline, the phone app's icons, the marketing site's
  * favicon -- draws from this one source instead of keeping its own copy of the
@@ -13,19 +13,19 @@
 /* ── the mark ─────────────────────────────────────────────────────────────── */
 
 const VIEWBOX = 512;
-const INK = '#A7C8AC';
+const INK = '#C99BB3';
 /**
- * The brand gradient, left to right: deep green to a lighter green (the Nekko
+ * The brand gradient, left to right: deep plum to a lighter plum (the Nekko
  * themes' accents). The tile behind
  * the mark is painted in it. `TILE` is its deep end, for anything that needs a
  * single flat colour (the phone splash, Android's adaptive-icon background
  * colour); `RIM` is its light end, used for the installer banner's edge stripe.
  */
-const TILE = '#101714';
-const TILE_END = '#263D2D';
+const TILE = '#190019';
+const TILE_END = '#3A1438';
 const RIM = INK;
-/** The app icon's mark: cream on the green tile. */
-const ICON_INK = '#F2F1E9';
+/** The app icon's mark: white on the plum tile. */
+const ICON_INK = '#FFFFFF';
 /** A horizontal linear gradient across whatever it fills, as an SVG <defs> entry. */
 const tileGradient = (id) =>
   `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${TILE}"/><stop offset="1" stop-color="${TILE_END}"/></linearGradient>`;
@@ -76,8 +76,8 @@ function markGroup(size, box, span, color = INK) {
  * gradient. The tile is bright enough to hold its own edge on a dark taskbar,
  * so it needs no rim light. Everything is expressed in a 512 viewBox and
  * scaled by the renderer, so the only size-dependent decisions are how much
- * detail survives. `color` lets installer banners retain the green brand ink
- * without inheriting the app icon's cream default.
+ * detail survives. `color` lets installer banners retain the light plum brand ink
+ * without inheriting the app icon's white default.
  */
 function iconSvg(size, px = size, color = ICON_INK) {
   const corner = 114; // 22.3% of 512, the platform squircle radius
@@ -133,7 +133,7 @@ function logoSvg() {
   const pad = 0.6;
   const vb = [ART.x - pad, ART.y - pad, ART.w + pad * 2, ART.h + pad * 2].map((n) => +n.toFixed(3));
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb.join(' ')}">
-  <defs><linearGradient id="mark" gradientUnits="userSpaceOnUse" x1="${ART.x}" y1="0" x2="${(ART.x + ART.w).toFixed(3)}" y2="0"><stop offset="0" stop-color="${TILE}"/><stop offset="1" stop-color="${TILE_END}"/></linearGradient></defs>
+  <defs><linearGradient id="mark" gradientUnits="userSpaceOnUse" x1="${ART.x}" y1="0" x2="${(ART.x + ART.w).toFixed(3)}" y2="0"><stop offset="0" stop-color="#5A2352"/><stop offset="1" stop-color="#C084B5"/></linearGradient></defs>
   <path d="${HEAD}" fill="url(#mark)" fill-rule="evenodd" stroke="url(#mark)" stroke-width="0.5" stroke-linejoin="miter" stroke-miterlimit="8"/>
 </svg>
 `;
@@ -143,7 +143,7 @@ function logoSvg() {
 
 /**
  * The Windows installer's header strip and sidebar panel. Same gradient, same
- * green mark, and the product's actual name in green.
+ * light plum mark, and the product's actual name in light plum.
  */
 function bannerSvg(w, h, opts, pw = w, ph = h) {
   const { markSize, markX, markY, title, titleSize, layout } = opts;

@@ -248,13 +248,13 @@ function layout({ page, rendered, sections, prev, next }) {
     <link rel="alternate" type="text/plain" href="/llms.txt" />
     <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1" />
     <meta name="theme-color" content="#fbf6f8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=green-cream-1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=plum-white-2" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="Nekko Agent" />
     <meta property="og:url" content="${canonical}" />
     <meta property="og:title" content="${escapeHtml(fullTitle)}" />
     <meta property="og:description" content="${escapeHtml(page.description)}" />
-    <meta property="og:image" content="https://nekkoagent.com/og.png?v=green-cream-1" />
+    <meta property="og:image" content="https://nekkoagent.com/og.png?v=plum-white-2" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="stylesheet" href="/docs.css?v=${ASSET_VERSION}" />
     <link rel="stylesheet" href="/fonts.css?v=1" />
@@ -266,7 +266,7 @@ function layout({ page, rendered, sections, prev, next }) {
       <button class="menu" type="button" aria-label="Open the docs menu" aria-controls="sidebar" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M2 4.5h14M2 9h14M2 13.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </button>
-      <a class="brand" href="/"><img src="/logo.svg?v=green-cream-1" alt="" width="26" height="20" /> NEKKO AGENT</a>
+      <a class="brand" href="/"><img src="/logo.svg?v=plum-white-2" alt="" width="26" height="20" /> NEKKO AGENT</a>
       <a class="docs-home" href="/docs">Docs</a>
       <button class="search" type="button" aria-label="Search the docs" aria-haspopup="dialog">
         <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m11 11 3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
