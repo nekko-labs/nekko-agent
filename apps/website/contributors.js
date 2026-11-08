@@ -15,7 +15,8 @@
       const link = document.createElement('a');
       link.className = 'contributor-avatar';
       link.href = `https://github.com/${person.login}`;
-      link.setAttribute('aria-label', `${person.login} on GitHub`);
+      if (person.team === true) link.classList.add('is-team');
+      link.setAttribute('aria-label', `${person.login}${person.team === true ? ', Nekko Labs team,' : ''} on GitHub`);
       const initials = document.createElement('span');
       initials.className = 'contributor-initials';
       initials.setAttribute('aria-hidden', 'true');

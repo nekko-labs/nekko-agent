@@ -5,6 +5,8 @@ import { createHash } from 'node:crypto';
 
 const API = 'https://api.github.com/repos/nekko-labs/nekko-agent/contributors';
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
+// shortcut: hand-kept list of nekko-labs org members, update it when the team changes.
+const TEAM = new Set(['ermish', 'ghezz9', 'matthewkurtti', 'travisjpn']);
 
 export async function loadContributors(fetcher = fetch, token = process.env.GITHUB_TOKEN) {
   const people = new Map();
@@ -18,9 +20,10 @@ export async function loadContributors(fetcher = fetch, token = process.env.GITH
     for (const row of rows) {
       if (row.type !== 'User' || !LOGIN.test(row.login || '')) continue;
       // Derive profile links ourselves; API strings never become arbitrary links.
-      people.set(row.login.toLowerCase(), { login: row.login, url: `https://github.com/${row.login}`, avatar: row.avatar_url });
+      people.set(row.login.toLowerCase(), { login: row.login, url: `https://github.com/${row.login}`, avatar: row.avatar_url, team: TEAM.has(row.login.toLowerCase()) });
     }
-    if (rows.length < 100) return [...people.values()];
+    // Team first, everyone else keeps GitHub's order (sort is stable).
+    if (rows.length < 100) return [...people.values()].sort((a, b) => b.team - a.team);
   }
   throw new Error('GitHub contributor pagination exceeded 100 pages');
 }
@@ -40,8 +43,8 @@ export async function writeContributors(site, { fetcher = fetch, token = process
   // Bound concurrent image requests. Never send the API token to the image host.
   const contributors = [];
   for (let start = 0; start < people.length; start += 6) {
-    contributors.push(...await Promise.all(people.slice(start, start + 6).map(async ({ login, url, avatar }) => {
-      const person = { login, url };
+    contributors.push(...await Promise.all(people.slice(start, start + 6).map(async ({ login, url, avatar, team }) => {
+      const person = { login, url, team };
       try {
         const remote = new URL(avatar);
         if (remote.origin !== 'https://avatars.githubusercontent.com') throw new Error('Unexpected avatar host');
