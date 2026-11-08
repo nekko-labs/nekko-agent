@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { posixFixture } from '../posix-fixture.mjs';
 
 const dir = 'scripts/runner-image';
 const boot = join(dir, 'nekko-runner-boot.sh');
@@ -28,7 +29,7 @@ function stubs() {
   stub('id', 'echo 501');
   stub('stat', 'echo "${FAKE_CONSOLE:-runner}"');
   stub('launchctl', 'shift 2; exec "$@"');
-  stub('top', 'sleep 0.1; echo "CPU usage: 10.0% user, 15.0% sys, 75.00% idle"');
+  stub('top', 'sleep "${FAKE_TOP_SLEEP:-0.1}"; [ -n "${FAKE_NO_SAMPLE:-}" ] || echo "CPU usage: 10.0% user, 15.0% sys, 75.00% idle"');
   stub(
     'vm_stat',
     `cat <<'EOF'
@@ -53,10 +54,15 @@ EOF`,
 echo "run.sh $*" >> '${log}'
 sleep "\${FAKE_SLEEP:-0}"
 # FAKE_STATS_DISK (a name under dev/): the job lasts until a usage sample lands past that disk's
-# header block (at most 20 s), so a slow CI machine cannot end it before the sampler's first write.
+# header block. Bound this by elapsed time, not 200 subprocess-heavy polling iterations:
+# the five-second deadline leaves teardown time inside run()'s unchanged ten-second timeout.
 if [ -n "\${FAKE_STATS_DISK:-}" ]; then
-  for _ in $(seq 200); do
-    [ -n "$(tail -c +513 '${root}/dev/'"$FAKE_STATS_DISK" | tr -d '\\0')" ] && break
+  deadline=$((SECONDS + 5))
+  until [ -n "$(tail -c +513 '${root}/dev/'"$FAKE_STATS_DISK" | tr -d '\\0')" ]; do
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo 'fake runner: no usage sample before deadline' >&2
+      exit 86
+    fi
     sleep 0.1
   done
 fi
@@ -105,6 +111,8 @@ function run({ seed: files, env = {}, prepare, late } = {}) {
       ...env,
     },
   });
+  assert.ifError(r.error); // Report a harness timeout directly, never as a missing shutdown.
+  assert.equal(r.signal, null, 'boot script must exit normally');
   const log = join(root, 'calls.log');
   const calls = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
   return { status: r.status, calls, out: `${r.stdout}${r.stderr}` };
@@ -132,7 +140,7 @@ function startsRunSh(calls) {
   assert.equal(calls.at(-1), 'shutdown -h now');
 }
 
-test('github_seed_starts_run_sh_as_runner_then_shuts_down', () => {
+test('github_seed_starts_run_sh_as_runner_then_shuts_down', posixFixture, () => {
   const { calls, out } = run({ seed: { 'jit-config': 'QUJD' } });
   startsRunSh(calls);
   assert.ok(!calls.includes('run.sh saw jit-config'), 'the copy is gone before the job starts');
@@ -140,42 +148,79 @@ test('github_seed_starts_run_sh_as_runner_then_shuts_down', () => {
   assert.match(out, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ /m);
 });
 
-test('step_pages_are_followed_as_the_runner_user_never_through_a_symlink', () => {
+test('step_pages_are_followed_as_the_runner_user_never_through_a_symlink', posixFixture, () => {
   const { calls } = run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_PAGES: '1' } });
   const tails = calls.filter((c) => c.includes(' tail -n +1 -f '));
   assert.deepEqual(tails, [`sudo -u runner -H -- tail -n +1 -f ${home}/actions-runner/_diag/pages/step_1.log`]);
 });
 
-test('usage_is_sampled_onto_the_stats_disk_only', () => {
+function runWithStats(env = {}, partitionLikeParent = false) {
+  const fixtureEnv = { FAKE_STATS_DISK: 'disk9', ...env };
   const header = Buffer.alloc(512);
   header.write('NEKKOSTATS1\n');
   const disk = (name, head) => writeFileSync(join(root, 'dev', name), Buffer.concat([head, Buffer.alloc(4096)]));
-  const { calls } = run({
+  return run({
     seed: { 'jit-config': 'QUJD' },
-    env: { FAKE_STATS_DISK: 'disk9' },
+    env: fixtureEnv,
     prepare: () => {
+      if (partitionLikeParent) {
+        const parent = join(root, 'parent-s1');
+        mkdirSync(parent);
+        symlinkSync(join(root, 'dev'), join(parent, 'dev'));
+        fixtureEnv.NEKKO_DEV_DIR = join(parent, 'dev');
+      }
       disk('disk1', Buffer.alloc(512)); // the guest's own disk: no header
       disk('disk1s1', header); // a partition is never the stats disk
       disk('disk9', header);
     },
   });
-  startsRunSh(calls);
-  const body = (name) => readFileSync(join(root, 'dev', name)).subarray(512).toString().replace(/\0+$/, '');
-  const lines = body('disk9').trim().split('\n');
-  assert.ok(lines.length >= 1, 'at least one sample');
+}
+
+const statsBody = (name) => readFileSync(join(root, 'dev', name)).subarray(512).toString().replace(/\0+$/, '');
+function assertStatsSample() {
+  const lines = statsBody('disk9').trim().split('\n');
+  assert.ok(lines.some((line) => line.length > 0), 'at least one sample');
   // 16 KiB pages: (65536 wired + 131072 app + 6400 compressed) pages is 3172 MB, 64 swapouts 1 MB.
   for (const l of lines) assert.match(l, /^\d{10} 75\.00 3172 100 1$/);
-  assert.equal(body('disk1'), '');
-  assert.equal(body('disk1s1'), '');
+  assert.equal(statsBody('disk1'), '');
+  assert.equal(statsBody('disk1s1'), '');
+}
+
+for (const [name, env, partitionLikeParent] of [
+  ['usage_is_sampled_onto_the_stats_disk_only', {}],
+  ['delayed_usage_sample_still_finishes_before_the_harness_timeout', { FAKE_TOP_SLEEP: '0.7' }],
+  ['stats_disk_parent_name_is_not_mistaken_for_a_partition', {}, true],
+]) {
+  test(name, posixFixture, () => {
+    const { status, calls, out } = runWithStats(env, partitionLikeParent);
+    assert.equal(status, 0);
+    startsRunSh(calls);
+    assert.match(out, /runner exited with 0/);
+    assert.doesNotMatch(out, /no usage sample before deadline/);
+    assertStatsSample();
+  });
+}
+
+test('missing_usage_sample_fails_explicitly_after_orderly_shutdown', posixFixture, () => {
+  const { status, calls, out } = runWithStats({ FAKE_NO_SAMPLE: '1' });
+  assert.equal(status, 0); // The boot script logs job failure but still exits after shutdown.
+  startsRunSh(calls);
+  assert.match(out, /fake runner: no usage sample before deadline/);
+  assert.match(out, /runner exited with 86/);
+  assert.ok(calls.some((c) => c.startsWith('top ')), 'sampler ran but produced no sample');
+  assert.equal(statsBody('disk9'), '');
+  assert.equal(statsBody('disk1'), '');
+  assert.equal(statsBody('disk1s1'), '');
+  assert.throws(assertStatsSample, /at least one sample/, 'missing telemetry must still fail validation');
 });
 
-test('no_stats_disk_samples_nothing', () => {
+test('no_stats_disk_samples_nothing', posixFixture, () => {
   const { calls } = run({ seed: { 'jit-config': 'QUJD' } });
   startsRunSh(calls);
   assert.ok(!calls.some((c) => c.startsWith('top')), calls.join('\n'));
 });
 
-test('jobs_get_homebrew_on_their_path', () => {
+test('jobs_get_homebrew_on_their_path', posixFixture, () => {
   // sudo's secure_path drops /opt/homebrew/bin, and `brew install` then fails with 127 (first real ios-native job, 2026-11-03).
   const path = 'PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
   for (const files of [{ 'jit-config': 'QUJD' }, { 'gitlab-runner.toml': 'concurrent = 1\n' }]) {
@@ -184,16 +229,16 @@ test('jobs_get_homebrew_on_their_path', () => {
   }
 });
 
-test('cleanup_never_follows_a_job_controlled_path', () => {
+test('cleanup_never_follows_a_job_controlled_path', posixFixture, () => {
   run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_HOSTILE: '1' } });
   assert.equal(readFileSync(join(root, 'victim/jit-config'), 'utf8'), 'keep\n');
 });
 
-test('seed_name_is_matched_case_insensitively', () => {
+test('seed_name_is_matched_case_insensitively', posixFixture, () => {
   startsRunSh(run({ seed: { 'JIT-CONFIG': 'QUJD' } }).calls);
 });
 
-test('gitlab_seed_runs_single_build_then_shuts_down', () => {
+test('gitlab_seed_runs_single_build_then_shuts_down', posixFixture, () => {
   const { calls } = run({ seed: { 'gitlab-runner.toml': 'concurrent = 1\n' } });
   assert.ok(calls.some((c) => c.endsWith(`/usr/local/bin/gitlab-runner run-single -c ${home}/.nekko/gitlab-runner.toml -r nekko --max-builds 1`)), calls.join('\n'));
   assert.equal(readFileSync(join(home, '.nekko/gitlab-runner.toml'), 'utf8'), 'concurrent = 1\n');
@@ -203,14 +248,14 @@ test('gitlab_seed_runs_single_build_then_shuts_down', () => {
   assert.equal(calls.at(-1), 'shutdown -h now');
 });
 
-test('runner_failure_still_shuts_down', () => {
+test('runner_failure_still_shuts_down', posixFixture, () => {
   const { calls, out } = run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_EXIT: '3' } });
   assert.ok(calls.includes('run.sh --jitconfig QUJD'));
   assert.match(out, /runner exited with 3/);
   assert.equal(calls.at(-1), 'shutdown -h now');
 });
 
-test('unexpected_seed_contents_shut_down_without_running', () => {
+test('unexpected_seed_contents_shut_down_without_running', posixFixture, () => {
   const cases = [
     { 'jit-config': 'a', 'gitlab-runner.toml': 'b' },
     { other: 'a' },
@@ -234,12 +279,12 @@ test('unexpected_seed_contents_shut_down_without_running', () => {
   ]) check(run({ seed: {}, prepare: make }));
 });
 
-test('the 64 KiB limit is inclusive', () => {
+test('the 64 KiB limit is inclusive', posixFixture, () => {
   const { calls } = run({ seed: { 'jit-config': 'x'.repeat(65536) } });
   assert.ok(calls.some((c) => c.startsWith('launchctl asuser 501')));
 });
 
-test('no_seed_stays_up_and_runs_nothing', () => {
+test('no_seed_stays_up_and_runs_nothing', posixFixture, () => {
   const { status, calls, out } = run();
   assert.equal(status, 0);
   assert.ok(calls.includes('diskutil mount readOnly NEKKOSEED'));
@@ -247,17 +292,54 @@ test('no_seed_stays_up_and_runs_nothing', () => {
   assert.match(out, /no seed: no runner, staying up/);
 });
 
-test('an_empty_mount_point_is_not_a_seed_yet', () => {
+// Force the first directory probe to cross the unchanged one-second fixture deadline.
+// This exercises the clock-boundary ordering deterministically, not by retrying a flake.
+function delayFirstSeedProbe() {
+  writeFileSync(join(root, 'bin', 'ls'), `#!/bin/bash
+if [ ! -e '${root}/probed' ]; then
+  touch '${root}/probed'
+  sleep 1.1
+fi
+exec /bin/ls "$@"
+`, { mode: 0o755 });
+}
+
+test('expired_first_probe_still_mounts_then_stays_up_without_a_seed', posixFixture, () => {
+  const { status, calls, out } = run({ prepare: delayFirstSeedProbe });
+  assert.equal(status, 0);
+  assert.equal(calls.filter((c) => c === 'diskutil mount readOnly NEKKOSEED').length, 1);
+  assert.ok(!calls.some((c) => c.startsWith('launchctl') || c.startsWith('shutdown')));
+  assert.match(out, /no seed: no runner, staying up/);
+});
+
+test('expired_first_probe_accepts_a_seed_from_its_initial_mount', posixFixture, () => {
+  const { status, calls } = run({ seed: {}, late: true, prepare: delayFirstSeedProbe });
+  assert.equal(status, 0);
+  startsRunSh(calls);
+  assert.equal(calls.filter((c) => c === 'diskutil mount readOnly NEKKOSEED').length, 1);
+});
+
+test('zero_seed_wait_attempts_one_mount_without_a_poll_sleep', posixFixture, () => {
+  const { status, calls, out } = run({
+    env: { NEKKO_SEED_WAIT: '0' },
+    prepare: () => writeFileSync(join(root, 'bin', 'sleep'), `#!/bin/bash\necho 'unexpected poll sleep' >> '${root}/calls.log'\n`, { mode: 0o755 }),
+  });
+  assert.equal(status, 0);
+  assert.deepEqual(calls, ['diskutil mount readOnly NEKKOSEED']);
+  assert.match(out, /no seed: no runner, staying up/);
+});
+
+test('an_empty_mount_point_is_not_a_seed_yet', posixFixture, () => {
   startsRunSh(run({ seed: {}, late: true }).calls);
 });
 
-test('a_seed_that_stays_empty_is_no_seed', () => {
+test('a_seed_that_stays_empty_is_no_seed', posixFixture, () => {
   const { calls, out } = run({ seed: {} });
   assert.ok(!calls.some((c) => c.startsWith('launchctl') || c.startsWith('shutdown')));
   assert.match(out, /no seed: no runner, staying up/);
 });
 
-test('no_login_shuts_down_without_running', () => {
+test('no_login_shuts_down_without_running', posixFixture, () => {
   const { calls, out } = run({ seed: { 'jit-config': 'QUJD' }, env: { FAKE_CONSOLE: 'root' } });
   assert.ok(!calls.some((c) => c.startsWith('launchctl')));
   assert.match(out, /runner user never logged in/);
@@ -403,7 +485,7 @@ test('provision_replaces_the_runner_home_link', () => {
 
 // The T214 VM boot check found sysadminctl -autologin writes nothing on macOS 15, so the script
 // writes /etc/kcpassword itself. "admin" checked against the kcpassword in Cirrus's base image.
-test('provision_writes_kcpassword_in_apples_format', () => {
+test('provision_writes_kcpassword_in_apples_format', posixFixture, () => {
   const fn = provision().match(/^kcpassword\(\) \{[\s\S]*?^\}$/m)?.[0];
   assert.ok(fn, 'kcpassword function');
   const kc = (pw) => execFileSync('/bin/bash', ['-c', `${fn}\nkcpassword "$1"`, '_', pw]).toString('hex');

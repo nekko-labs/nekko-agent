@@ -1,6 +1,7 @@
 const { app, BrowserWindow, session, screen } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { selectWallView } = require('./wall-view-navigation.cjs');
 const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Launch through command-center-integration.cjs');
 const runDir = path.join(out, new Date().toISOString().replace(/[:.]/g, '-'));
@@ -469,7 +470,8 @@ app.whenReady().then(async () => {
         await run("(()=>{const e=document.querySelector('.composer [contenteditable]');if(e){e.textContent='';e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'deleteContentBackward'}))}})()");
         await sleep(100);
       };
-      const assertFixed = !process.env.NEKKO_TEST_REVISION;
+      // Revalidate an unchanged current baseline strictly, not in capture-only mode.
+      const assertFixed = !process.env.NEKKO_TEST_REVISION || process.env.NEKKO_GRID_ASSERT_FIXED === '1';
       const hit = async target => {
         const commands = {
           grid: ["integration.pointerTarget('grid',true)","integration.pointerTarget('grid',false)"],
@@ -520,7 +522,9 @@ app.whenReady().then(async () => {
           await check('mode saves owning session',"integration.calls.some(c=>c.method==='options'&&c.id==='existing'&&c.options.mode==='ask')");
           if(assertFixed) await check('mode selection keeps focus in the panel',"!!document.activeElement?.closest('[data-mode-panel]')");
         }
-        await run("sessionStorage.removeItem('fixture-record')"); await clearEditor(); await reset(); if(width<720)win.setContentSize(width,1400); await click('Focused');
+        await run("sessionStorage.removeItem('fixture-record')"); await clearEditor(); await reset(); if(width<720)win.setContentSize(width,1400);
+        await selectWallView(run, 'focus', () => sleep(180));
+        report.checks.push('View menu selects Focus layout and dismisses '+theme+' '+label);
         await run("document.querySelector('.composer-summary-chip')?.click()");
         if(width<720) {
           await run("document.querySelector('[data-chat-mode-button]').focus()");

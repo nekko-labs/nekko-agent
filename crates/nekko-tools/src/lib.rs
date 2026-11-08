@@ -20,6 +20,7 @@ mod allowlist;
 mod bash;
 mod changes;
 mod context;
+mod edit_batch;
 mod exec;
 pub mod gitguard;
 mod guardrails;

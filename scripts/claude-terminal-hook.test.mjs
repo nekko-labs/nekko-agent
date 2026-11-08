@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { terminalHookSequence } from './claude-terminal-hook.mjs';
 test('hooks emit explicit states without prompt, tool arguments or notification messages', () => {
   for (const [name, state] of [['UserPromptSubmit','working'], ['PreToolUse','working'], ['PermissionRequest','attention'], ['Stop','idle'], ['SessionEnd','idle']]) {
@@ -13,7 +14,7 @@ test('hooks emit explicit states without prompt, tool arguments or notification 
 });
 test('non-Nekko and malformed invocations do not block or write to stdout', () => {
   for (const input of ['{}', 'not json']) {
-    const result = spawnSync(process.execPath, [new URL('./claude-terminal-hook.mjs', import.meta.url).pathname], {input, encoding:'utf8', env:{...process.env,NEKKO_TERMINAL_ID:''},timeout:2000});
+    const result = spawnSync(process.execPath, [fileURLToPath(new URL('./claude-terminal-hook.mjs', import.meta.url))], {input, encoding:'utf8', env:{...process.env,NEKKO_TERMINAL_ID:''},timeout:2000});
     assert.equal(result.status,0); assert.equal(result.stdout,''); assert.equal(result.stderr,'');
   }
 });

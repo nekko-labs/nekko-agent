@@ -16,7 +16,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run test:node && vitest run",
-    "test:node": "node --test scripts/icon-art.node-test.cjs scripts/layout-evidence-fixture.node-test.cjs scripts/check-sandbox-syntax.node-test.cjs scripts/lifecycle-renderer-source.node-test.cjs scripts/notification-integration-safety.node-test.cjs scripts/notification-native-ci.node-test.cjs scripts/notification-native-ci-setup.node-test.cjs scripts/notification-native-local.node-test.cjs scripts/sign-mac.node-test.cjs",
+    "test:node": "node --test scripts/icon-art.node-test.cjs scripts/layout-evidence-fixture.node-test.cjs scripts/wall-composers-sandbox.node-test.cjs scripts/empty-agent-wave-sandbox.node-test.cjs scripts/wall-view-navigation.node-test.cjs scripts/check-sandbox-syntax.node-test.cjs scripts/lifecycle-renderer-source.node-test.cjs scripts/notification-integration-safety.node-test.cjs scripts/notification-native-ci.node-test.cjs scripts/notification-native-ci-setup.node-test.cjs scripts/notification-native-local.node-test.cjs scripts/sign-mac.node-test.cjs",
     "test:subagents": "node scripts/subagent-integration.cjs",
     "test:wall-controls": "node scripts/wall-controls-integration.cjs",
     "test:grid-bugs": "node scripts/wall-controls-integration.cjs --grid-bugs",

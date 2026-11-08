@@ -15,6 +15,16 @@ split-from: SPEC.md (2026-10-22)
 - Dragging cards into order works only when grouped by project in manual order, the one arrangement where that order is what the panel shows; projects can be dragged only when grouped by project. Group header **+** and terminal buttons appear only in project grouping.
 - The choice is a per-window preference in `localStorage` (`nekko.agentPanelView`), like the panel width; invalid saved values fall back field by field. No host calls, storage schema, permissions or network use change.
 
+## Bounded agent groups
+
+Implemented for the shared desktop and Local Web UI renderer: every active group initially mounts up to **20 top-level rows**, after filtering and sorting. This includes Project, Activity, Date, Computer, None, Terminals and Photos and videos. **Show more (N)** mounts all remaining rows in that group in one click, not another page. Completed lists separately start at 20 when opened and expand fully in the same way. Expansion is local to the mounted panel, independent per list, and resets when the grouping changes.
+
+Hidden rows are not mounted and do not initiate PR-detail prefetches. Lightweight session summaries remain available for correct ordering, group counts, activity indicators and search; this is renderer partial mounting, not backend pagination or transcript loading. Subagent rows remain nested beneath a mounted parent. No storage, permissions or network access are added.
+
+Opening a hidden agent (including a terminal or a child of a hidden parent) keeps its top-level row in the twentieth slot without mounting the intervening rows. Completed selection follows the same rule, and with no completed chat open, the chat the completion tip points at is the one kept in reach. Shift-selection ranges include only displayed rows.
+
+Acceptance: boundary tests for 0, 19, 20, 21 and larger lists; independent one-click full expansion; selected hidden rows remain reachable; no full-transcript reads or hidden-card PR prefetches; matching wide/narrow and horizontal renderer captures. Native phone lists and backend summary pagination are outside this change. Visual verification status is recorded in the PR evidence.
+
 ## Group header hierarchy
 
 Implemented: project, status, date and Completed group labels use the theme's primary accent color and 14px medium sentence-case text (no caps or letter spacing since the 2026-11 design pass), with accent disclosure chevrons. Vertical groups have 20px of separation and a faint inset 1px divider centred in each gap (2026-11 panel polish), with 4px between each heading and its contents. Horizontal groups use a 24px gap and a vertical divider instead, retaining their column alignment and compact card density. Dividers appear only between groups, never before the first, and do not intercept input or replace the project drag/drop padding. Collapsing, project actions, drag/drop, and ungrouped lists are unchanged. No new storage, network access or permissions.

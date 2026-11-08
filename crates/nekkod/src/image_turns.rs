@@ -118,7 +118,13 @@ impl ImageTurns {
                 .map_err(|e| e.to_string())?;
             session = saved?;
         }
-        let params = opts.get("params").cloned().unwrap_or(json!({}));
+        // What the reply says it was made at: an edit's own size, else the chat's.
+        let mut params = opts.get("params").cloned().unwrap_or(json!({}));
+        for k in ["width", "height"] {
+            if let (Some(v), Some(p)) = (started.request.get(k), params.as_object_mut()) {
+                p.insert(k.into(), v.clone());
+            }
+        }
         let size = v::image_size(&params);
         say(
             json!({ "type": "image_status", "sessionId": session_id, "stage": "generating", "label": v::image_stage_label("generating", &size) }),
