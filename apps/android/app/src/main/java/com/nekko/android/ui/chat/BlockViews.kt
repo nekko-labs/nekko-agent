@@ -100,7 +100,7 @@ fun BlockView(block: Block, fork: ForkAction? = null, voice: Voice? = null, reas
     when (block) {
         // A watch's wake-up is a step of the run, not something the user typed.
         is Block.User -> AgentRows.parseWake(block.text)?.takeIf { block.thumbs.isEmpty() }?.let { WatchWakeRow(it, block.text, block.at) }
-            ?: UserBubble(block, fork)
+            ?: UserBubble(block, fork.takeUnless { block.id.startsWith("ask-answer:") })
         is Block.Assistant -> Reply(block, fork, voice, reasoning)
         // The agent's work, drawn as the desktop draws it: no fill, no stroke, one line each.
         is Block.Tool -> AgentToolRow(block)
@@ -123,8 +123,9 @@ private fun UserBubble(b: Block.User, fork: ForkAction?) {
             }
             if (b.text.isNotEmpty()) {
                 LongPressMenu(b.text, fork) { press ->
-                    // The user's own Markdown renders too, in the bubble's ink (as the desktop does, T101).
-                    MarkdownText(
+                    // Clarification selections are literal, just like the shared desktop row.
+                    if (b.id.startsWith("ask-answer:")) Text(b.text, color = p.userInk, modifier = Modifier.then(press))
+                    else MarkdownText(
                         b.text,
                         color = p.userInk,
                         bubble = true,

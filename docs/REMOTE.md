@@ -12,7 +12,7 @@ The primary Home Screen icon follows iOS icon appearance: the light version keep
 
 ## Groups on iPhone
 
-Chat-list groups start folded. Tap a heading to reveal its chats; its activity icon stays visible while folded, showing attention, working, watching or done. Search reveals matching chats without changing which groups you opened. General and ungrouped chats stay visible, as does the separate Needs you section.
+New chat-list groups start folded. Tap a heading to reveal its chats or fold it again. Your last choice for each group is remembered on this iPhone or iPad, including after leaving the list or restarting the app; it does not sync to your computer. Its activity icon stays visible while folded, showing attention, working, watching or done. Search temporarily reveals matching chats without changing your saved group choices. General and ungrouped chats stay visible, as does the separate Needs you section.
 
 Inside a conversation, related tool calls fold under a purpose heading with an icon for reading, searching, editing, checking, running commands or other work. Running dots and failure text remain visible beside that purpose. Failed groups start open so errors are not hidden; you can fold them yourself.
 
@@ -160,7 +160,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
 > servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
 > filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
-> Local tab says to start the chat on a computer for local models.
+> Local tab says to start the chat on a computer for local models. On Android the computer's
+> model list (New chat, and a chat's Model and effort sheet) has the same **All**, **Cloud** and
+> **Local** buttons above it, opening on All.
 >
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one
@@ -458,9 +460,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
 > **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
-> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails you
-> can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
-> them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
+> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails
+> inside the message box that you can remove. Adding or removing a photo saves the draft at once, so
+> reopening the app brings back its text and photos. They are scaled to 1600 px and sent end-to-end
+> encrypted to the computer, which hands them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
 > The photos stay in the message's bubble on the phone too, as small previews the computer makes
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
@@ -721,7 +724,9 @@ Connection metadata (IPs, timing, frame sizes), the room code, and, if you enabl
 tokens plus the content-free fact "a run finished". If you turn on the iPhone's Live Activity, the
 short status it shows (chat titles, the current step and, at Detailed, reply lines, at the level you
 choose) is the exception: ActivityKit draws only what the push holds, so that text goes through the
-relay and Apple's push service (APNs) as plain text. Lock Screen notifications on both phones also
+relay and Apple's push service (APNs) as plain text. A step never shows what a call waiting on your approval
+would send (only what it does: "fetch url", "Run"), and a step whose detail holds a key, card, ID
+number, email address or phone number shows only what it does. Lock Screen notifications on both phones also
 pass through Apple's and Google's push services, with generic text. The relay keeps all of this in
 memory only. Everything else (chats, commands, files, model output) is end-to-end encrypted, which is
 why relayed local-model use is zero-data-retention for content.

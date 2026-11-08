@@ -78,6 +78,19 @@ Decision 0067, as built:
 - **A model that cannot edit is never sent a photo.** Before sending, the chat reads the model's capabilities. Without `edit` (or with no known set) the photo and prompt stay in the composer and an offer opens above it: a picture model already on this computer that edits (**Use FLUX.2 klein 4B**, its supporting files fetched first when missing), else the **Edit photos** picks for this machine (Qwen Image Edit 2511, FLUX.2 klein 4B) with the same one-press download as the first picture model. Once the chat has an edit model, sending again is all that is left. **Not now** closes it.
 - **The other way round:** a prompt with no photo to a model that only edits says so instead of making a picture it is not built for.
 
+## Simple photo controls and complete-package readiness `[implemented; isolated UI verification, pixel review pending]`
+
+Follow-up to [#2170](https://github.com/nekko-labs/nekko-agent/issues/2170), reconciled with the landed #2177 stack rather than replacing it with a second setup or editing system:
+
+- The composer leads with model and **Shape** (Square, Landscape, Portrait, Wide, Tall). Existing dimensions not in that list remain selected as Custom. New presets are multiples of 64, and Wide/Tall use exact 16:9/9:16 dimensions.
+- **Advanced** contains Steps, **Prompt guidance (CFG)** and Seed with plain-language explanations. **Restore model defaults** restores family Steps/CFG and random seed without changing model or shape. Technical values remain available and saved per chat. Failed preference saves are visible rather than ignored; integer-only settings do not accept decimals.
+- A downloaded model's detail uses one **Finish photo setup** action for its missing engine and supporting files, a three-part checklist, retryable errors and optional package details. It reuses the existing engine/download APIs and jobs, including cancellation under Downloads. No new runtime, model source, encoder set, cloud service or upload path is introduced.
+- The first-download flow also refuses to finish while the image engine is absent or the recommended model's companion set could not be verified. Unrelated chat-engine downloads no longer appear as photo-engine progress.
+- **Ready** requires both an installed image engine and a known, ready companion set. Edit-only models say ready to edit, not create. Unknown sets stay explicitly unverified and keep the existing advanced custom paths. Supporting-file sizes are explicitly not the engine's download size.
+- **Open Photo** opens the existing photo chat; the landed capability check, attachment processing, edit-model offer, model recommendations and CPU-offload behavior are preserved.
+
+Acceptance: focused component tests and desktop typecheck/build pass; actual isolated Electron tests cover default/Advanced views, failure and retry, missing-runtime readiness, opening Photo and 1100/744/390/320 widths in dark/light. Captured pixels still require inspection: the browser screenshot tool timed out and native screenshot inspection returned `UnknownVizError`. No claim of real downloads, inference quality, native-phone parity or physical-foldable verification is made by these fixture checks. The earlier live sd-server verification gap in #2177 remains separate.
+
 ## What the pinned engine can already do `[checked against the sd.cpp README and docs at 37bc88b, 2026-11-08; not run]`
 
 - **Images:** SD 1.x/2.x/XL, SD 3/3.5, FLUX.1, FLUX.2 dev/klein, Z-Image, Qwen Image and 2.1, HiDream-O1, Chroma and more.

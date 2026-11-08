@@ -567,8 +567,8 @@ class ChatController(
 
     suspend fun answer(answers: List<AskAnswer>) {
         val q = _state.value.turn.question ?: return
-        _state.update { it.copy(turn = it.turn.copy(question = null)) }
         caller.call(Channels.CHAT_ANSWER, JsonPrimitive(sessionId), JsonPrimitive(q.callId), JsonArray(answers.map { it.toJson() }))
+        _state.update { if (it.turn.question?.callId == q.callId) it.copy(turn = it.turn.copy(question = null)) else it }
     }
 
     // ---- the queue and forks (AN-29, the iPhone's IO-22 / IO-23) ----
@@ -713,7 +713,7 @@ class ChatController(
                 ready = state.session != null || state.loadError != null || notSaved != null,
                 title = plainText(state.session?.title ?: "").ifEmpty { "Chat" },
                 subtitle = listOfNotNull(modelId, env.computerName).joinToString(" · "),
-                blocks = Transcript.mergeLive(saved, turn.blocks),
+                blocks = com.nekko.protocol.QuestionReplies.project(Transcript.mergeLive(saved, turn.blocks)),
                 running = turn.running || (image && state.session.running),
                 approval = turn.approval,
                 question = turn.question,

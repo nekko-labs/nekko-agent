@@ -497,7 +497,9 @@ export function CommandCenterView() {
   }, [wall.root, selected, typeInto, setWall]);
   const chatFinderOpen = useStore((s) => s.chatFinderOpen);
   const onAgentsView = useStore((s) => s.view) === 'command';
-  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro;
+  // Waits for first-run setup to close: it would otherwise open on top of the wizard.
+  const setupOpen = useStore((s) => s.onboardingOpen);
+  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro && !setupOpen;
   useEffect(() => {
     if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
   }, [chatFinderOpen, setWall]);

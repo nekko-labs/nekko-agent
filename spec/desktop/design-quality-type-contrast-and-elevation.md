@@ -22,6 +22,10 @@ User intent: the app is read for hours a day, so its small print has to be legib
 - **Neutral menus and nav.** Context-menu and creation-menu rows, catalog rows and the nav rail use a neutral wash for hover and the active item (no accent fill, no gradient notch). The accent is kept for the primary action, focus rings and data.
 - **Calm navigation.** Rail icons change opacity only: no spring scale or rotate on hover, no squish on press, no pop when a view becomes active. The command palette (Ctrl/Cmd+K) opens without a fade, and fits a phone (`max-width: calc(100vw - 16px)`).
 
+## Action targets (#2079)
+
+Shared CTA buttons and composer/question actions reserve at least 44 × 44 CSS pixels in layout, keeping existing glyph sizes. Compact padding overrides do not shrink targets. The OS caption strip is an explicit compact-chrome exception. See [question pages and action targets](../chat/question-pages-and-action-targets.md) for coverage and pending visual/native verification.
+
 ## Status
 
 - Implemented: everything above.

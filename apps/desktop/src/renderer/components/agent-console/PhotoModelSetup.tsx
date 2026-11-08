@@ -64,6 +64,7 @@ export function photoSetupPhase(input: {
   options: ImageRecommendedOption[];
   companions: ImageCompanionStatus | null | undefined;
   chatModelId?: string;
+  runtimeReady: boolean;
   /** Show the choice even to someone with picture models of their own (none of which can do the job). */
   force?: boolean;
 }): PhotoSetupPhase {
@@ -74,7 +75,7 @@ export function photoSetupPhase(input: {
     g.id.startsWith('image-companions:') || g.jobs.some((j) => j.kind === 'model' && files.has(base(j.dest ?? j.file ?? '')));
   const active = (pick: (g: DownloadGroup) => boolean) => groups.find((g) => isActive(g.state) && pick(g));
 
-  const engine = active((g) => g.jobs.some((j) => j.kind === 'engine'));
+  const engine = active((g) => g.jobs.some((j) => j.kind === 'engine' && j.id.startsWith('engine:diffusion:')));
   if (engine) return { kind: 'working', step: 'engine', group: engine };
   const weights = active((g) => ours(g) && !g.id.startsWith('image-companions:'));
   if (weights) return { kind: 'working', step: 'model', group: weights };
@@ -85,7 +86,9 @@ export function photoSetupPhase(input: {
   const landed = pictures.find((m) => files.has(base(m.path)));
   if (landed) {
     const option = options.find((o) => base(o.files[0] ?? '') === base(landed.path))!;
+    if (!input.runtimeReady) return { kind: 'failed', message: 'The image engine is not installed yet. Retry setup to finish it.' };
     if (companions === undefined) return { kind: 'working', step: 'files' };
+    if (companions === null) return { kind: 'failed', message: 'Could not verify the supporting files for this model. Check its setup in Models.' };
     if (companions && !companions.ready) {
       const failed = groups.find((g) => g.id === `image-companions:${landed.id}` && g.state === 'failed');
       return failed ? { kind: 'failed', message: failed.message ?? 'A supporting file stopped downloading.' } : { kind: 'needsFiles', model: landed, option };
@@ -179,7 +182,7 @@ export function PhotoModelSetup({
 
   const phase: PhotoSetupPhase =
     models && task
-      ? photoSetupPhase({ jobs, models, options, companions: landed ? companions : null, chatModelId: session.imageParams?.modelId, force })
+      ? photoSetupPhase({ jobs, models, options, companions: landed ? companions : null, chatModelId: session.imageParams?.modelId, force, runtimeReady: !!status?.diffusionInstall?.binPath })
       : { kind: 'hidden' };
 
   // The weights landed: fetch the rest without asking again.

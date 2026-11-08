@@ -60,11 +60,14 @@ describe('QuestionCard', () => {
     const out = html();
     expect(out).toContain('>How should people sign in?<');
     expect(out).toContain('Magic link');
-    // The second question is not laid out at all: its options are nowhere on
-    // the card, and it exists only as a progress dot you could jump back to.
+    // The second page is not mounted, including its option controls.
     expect(out).not.toContain('>Which tests should it come with?<');
     expect(out).not.toContain('End to end');
-    expect(out).toContain('Question 2: Which tests should it come with?');
+    expect(out).not.toContain('Question 2: Which tests should it come with?');
+    expect(out).toContain('data-question-back');
+    expect(out).toContain('data-question-skip');
+    expect(out.indexOf('data-question-back')).toBeLessThan(out.indexOf('data-question-skip'));
+    expect(out.indexOf('data-question-skip')).toBeLessThan(out.indexOf('>How should people sign in?<'));
   });
 
   it('counts the steps so the card never feels open-ended', () => {
@@ -81,7 +84,8 @@ describe('QuestionCard', () => {
     const out = html({ ...request, questions: [request.questions[0]!] });
     expect(out).toContain('Send answer');
     expect(out).not.toContain('>Back<');
-    expect(out).toContain('1 question');
+    expect(out).toContain('1 of 1');
+    expect(out).toMatch(/data-question-back[^>]*disabled=""/);
   });
 
   it('keeps descriptions on the card instead of hiding them in a tooltip', () => {

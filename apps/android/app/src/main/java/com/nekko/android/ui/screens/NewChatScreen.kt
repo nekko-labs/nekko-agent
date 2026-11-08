@@ -41,6 +41,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -60,6 +63,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,6 +75,7 @@ import com.nekko.protocol.DraftStore
 import com.nekko.android.data.ModelChoice
 import com.nekko.android.data.ModelGroup
 import com.nekko.android.data.ModelPick
+import com.nekko.android.data.ModelScope
 import com.nekko.android.data.modelGroups
 import com.nekko.android.ui.chat.effortLabel
 import com.nekko.android.ui.simple.LocalSimple
@@ -501,6 +507,9 @@ internal fun ModelList(
         )
         return
     }
+    // Opens on All every time, as on the desktop and the iPhone.
+    var scope by rememberSaveable { mutableStateOf(ModelScope.ALL) }
+    ModelScopeTabs(scope) { scope = it }
     val total = groups.sumOf { it.models?.size ?: 0 }
     if (total > 8 || query.isNotEmpty()) {
         OutlinedTextField(
@@ -512,9 +521,18 @@ internal fun ModelList(
             modifier = Modifier.fillMaxWidth(),
         )
     }
-    val shown = ModelChoice.filter(groups, query)
-    val starred = if (query.isBlank()) ModelChoice.starred(groups, favorites) else emptyList()
+    val inScope = scope.groups(groups)
+    val shown = ModelChoice.filter(inScope, query)
+    val starred = if (query.isBlank()) ModelChoice.starred(inScope, favorites) else emptyList()
     Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+        if (inScope.isEmpty()) {
+            Text(
+                stringResource(if (scope == ModelScope.LOCAL) R.string.chats_scope_no_local else R.string.chats_scope_no_cloud),
+                style = MaterialTheme.typography.bodyMedium,
+                color = p.inkFaint,
+                modifier = Modifier.padding(vertical = 8.dp).testTag("modelPicker.emptyScope"),
+            )
+        }
         if (starred.isNotEmpty()) {
             GroupTitle(stringResource(R.string.chats_starred))
             starred.forEach { (pr, m) ->
@@ -558,8 +576,39 @@ internal fun ModelList(
                 }
             }
         }
-        if (shown.isEmpty()) {
+        if (shown.isEmpty() && inScope.isNotEmpty()) {
             Text(stringResource(R.string.chats_no_models_match, query.trim()), style = MaterialTheme.typography.bodyMedium, color = p.inkFaint)
+        }
+    }
+}
+
+/**
+ * All, Cloud and Local over the model list, after the desktop picker's Model source
+ * group. Every tab stays on offer; an empty one says so in the list.
+ */
+@Composable
+private fun ModelScopeTabs(scope: ModelScope, onScope: (ModelScope) -> Unit) {
+    val source = stringResource(R.string.chats_model_source)
+    val tabs = ModelScope.entries
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().semantics { contentDescription = source }.testTag("modelPicker.scope")) {
+        tabs.forEachIndexed { i, s ->
+            SegmentedButton(
+                selected = s == scope,
+                onClick = { onScope(s) },
+                shape = SegmentedButtonDefaults.itemShape(i, tabs.size),
+                modifier = Modifier.testTag("modelPicker.scope.${s.name.lowercase()}"),
+            ) {
+                Text(
+                    stringResource(
+                        when (s) {
+                            ModelScope.ALL -> R.string.chats_scope_all
+                            ModelScope.CLOUD -> R.string.chats_scope_cloud
+                            ModelScope.LOCAL -> R.string.chats_scope_local
+                        },
+                    ),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

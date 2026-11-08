@@ -27,9 +27,9 @@ describe('Screens dropdown', () => {
 
   it('has a divider, then the two placement options', () => {
     const html = renderToStaticMarkup(<ScreensMenu state={state} open onToggle={() => {}} onPlacement={() => {}} />);
-    expect(html.indexOf('screens-picker__divider')).toBeLessThan(html.indexOf('Prioritize empty windows'));
-    expect(html).toContain('Prioritize the main window');
-    expect(html).toMatch(/checked=""[^>]*\/><span><strong>Prioritize empty windows/);
+    expect(html.indexOf('screens-picker__divider')).toBeLessThan(html.indexOf('Spread across screens'));
+    expect(html).toContain('Prefer main screen');
+    expect(html).toMatch(/checked=""[^>]*\/><span><strong>Spread across screens/);
   });
 
   it('closed, it is just the button', () => {
@@ -43,7 +43,20 @@ describe('Screens dropdown', () => {
     expect(html).not.toContain('data-screens-button');
     expect(html).not.toContain('role="dialog"');
     expect(html).toContain('aria-label="Screens to use"');
-    expect(html).toContain('Prioritize empty windows');
+    expect(html).toContain('Spread across screens');
+  });
+  it('explains a single connected screen without a redundant locked toggle', () => {
+    const html = renderToStaticMarkup(<ScreensMenu state={{ ...state, displays: [state.displays[0]] }} embedded open onToggle={() => {}} onPlacement={() => {}} />);
+    expect(html).toContain('Main screen · always on');
+    expect(html).toContain('Connected');
+    expect(html).toContain('For when you connect more screens.');
+    expect(html).toContain('Spread across screens');
+    expect(html).not.toContain('role="switch"');
+  });
+  it('explains how to toggle additional screens', () => {
+    const html = renderToStaticMarkup(<ScreensMenu state={state} embedded open onToggle={() => {}} onPlacement={() => {}} />);
+    expect(html).toContain('Select a screen to open or close its Nekko window.');
+    expect(html).not.toContain('screens-single');
   });
   it('keeps the dropdown out of the title bar drag region, so hover and clicks reach it', () => {
     // The toolbar is portaled into the draggable title bar; without no-drag the OS

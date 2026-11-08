@@ -417,7 +417,7 @@ struct ChatView: View {
         if let text = b.copyText, !text.isEmpty {
             Button { UIPasteboard.general.string = text } label: { Label("Copy", systemImage: "doc.on.doc") }
         }
-        if chat.savedAt == nil, chat.forkPoint(b) != nil {
+        if chat.savedAt == nil, !b.id.hasPrefix("ask-answer:"), chat.forkPoint(b) != nil {
             Button {
                 act {
                     let id = try await chat.fork(from: b)
@@ -712,7 +712,11 @@ struct BlockView: View {
                     VStack(alignment: .trailing, spacing: 4) {
                         // Markdown, as on the desktop (T101). No text selection here: touch and
                         // hold opens the menu (Copy, Edit in a new chat); a table keeps its own menu.
-                        MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
+                        if block.id.hasPrefix("ask-answer:") {
+                            Text(text).foregroundStyle(palette.userInk)
+                        } else {
+                            MarkdownText(text: text, bubble: true, selectable: false).foregroundStyle(palette.userInk)
+                        }
                         if photos.contains(where: { !$0.isEmpty }) {
                             PhotoStrip(photos: photos, open: openPhoto)
                         } else if images > 0 {
@@ -898,6 +902,7 @@ struct QuestionCard: View {
     let request: AskRequest
     var submit: ([AskAnswer]) async throws -> Void
     @Environment(\.palette) private var palette
+    @State private var step = 0
     @State private var picked: [String: Set<String>] = [:]
     @State private var notes: [String: String] = [:]
     @State private var busy = false
@@ -905,7 +910,23 @@ struct QuestionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ForEach(request.questions) { q in
+            HStack {
+                Button { step = max(0, step - 1); failed = nil } label: {
+                    Image(systemName: "chevron.left").font(.footnote)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel("Previous question").disabled(step == 0 || busy)
+                Spacer()
+                Text("\(step + 1) of \(request.questions.count)").font(.caption).foregroundStyle(palette.inkSoft)
+                Spacer()
+                Button {
+                    guard let q = current else { return }
+                    picked[q.id] = nil; notes[q.id] = nil
+                    advance()
+                } label: {
+                    Text("Skip").font(.footnote).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).disabled(busy)
+            }
+            if let q = current {
                 VStack(alignment: .leading, spacing: 6) {
                     if !q.header.isEmpty { Text(q.header).font(.caption.weight(.semibold)).foregroundStyle(palette.accent) }
                     Text(q.question).font(.subheadline).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -921,13 +942,13 @@ struct QuestionCard: View {
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .background(palette.surface2, in: RoundedRectangle(cornerRadius: 8))
                     }
-                }
+                }.disabled(busy)
             }
             if let failed {
                 Label(failed, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
             }
-            Button(action: send) {
-                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text("Answer").font(.footnote.weight(.semibold)) } }
+            Button(action: advance) {
+                Group { if busy { ProgressView().tint(palette.onAccent) } else { Text(step == request.questions.count - 1 ? "Send answers" : "Next").font(.footnote.weight(.semibold)) } }
                     .foregroundStyle(ready ? palette.onAccent : palette.inkFaint)
                     .frame(maxWidth: .infinity, minHeight: 36)
                     .background(ready ? palette.accent : palette.surface2, in: RoundedRectangle(cornerRadius: 8))
@@ -942,10 +963,22 @@ struct QuestionCard: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line))
     }
 
-    private var ready: Bool { !request.questions.contains { (picked[$0.id] ?? []).isEmpty } }
-
+    private var current: AskQuestion? { request.questions.indices.contains(step) ? request.questions[step] : nil }
+    private var ready: Bool {
+        guard let q = current else { return false }
+        return !(picked[q.id] ?? []).subtracting([askOtherLabel]).isEmpty || !(notes[q.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+    private func advance() {
+        guard !busy else { return }
+        if step < request.questions.count - 1 { step += 1; failed = nil } else { send() }
+    }
     private func send() {
-        let answers = request.questions.map { q in AskAnswer(questionId: q.id, labels: Array(picked[q.id] ?? []), note: notes[q.id]) }
+        guard !busy else { return }
+        let answers = request.questions.compactMap { q -> AskAnswer? in
+            let labels = q.options.map(\.label).filter { (picked[q.id] ?? []).contains($0) }
+            let note = (notes[q.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            return labels.isEmpty && note.isEmpty ? nil : AskAnswer(questionId: q.id, labels: labels, note: note.isEmpty ? nil : note)
+        }
         busy = true
         failed = nil
         Task {

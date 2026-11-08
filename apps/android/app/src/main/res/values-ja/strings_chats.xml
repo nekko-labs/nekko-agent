@@ -199,6 +199,12 @@
     <string name="chats_no_providers">コンピュータの Nekko Agent でオンになっているモデルプロバイダがありません。モデル設定で追加するか有効にしてください。</string>
     <string name="chats_search_models">モデルを検索</string>
     <string name="chats_starred">スター付き</string>
+    <string name="chats_model_source">モデルの提供元</string>
+    <string name="chats_scope_all">すべて</string>
+    <string name="chats_scope_cloud">クラウド</string>
+    <string name="chats_scope_local">ローカル</string>
+    <string name="chats_scope_no_local">このコンピュータにはローカルのモデルサーバーがありません。</string>
+    <string name="chats_scope_no_cloud">このコンピュータにはクラウドのプロバイダがありません。</string>
     <string name="chats_list_models_failed">モデルを一覧表示できませんでした。%1$s</string>
     <string name="chats_retry">再試行</string>
     <string name="chats_asking">コンピュータに問い合わせ中…</string>

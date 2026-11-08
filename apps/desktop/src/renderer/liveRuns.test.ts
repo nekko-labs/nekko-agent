@@ -79,6 +79,40 @@ describe('liveRuns', () => {
     expect(getLiveRun('a')!.blocks.filter((block) => block.kind === 'pr')).toHaveLength(1);
   });
 
+  it('keeps literal question answers visible while streaming, replaying, retrying, and settling', () => {
+    const call = { id: 'ask', name: 'ask_user', input: { questions: [{ header: 'Scope', question: 'Which scope?', options: ['Module', 'App'] }] } };
+    const output = 'The user answered:\n\nQ: Which scope?\nA: Module — Keep **this**\nexact note\n\nWork to these answers. Do not ask again about anything settled here.';
+    const events: AgentEvent[] = [
+      { type: 'tool_call', sessionId: 'a', call },
+      { type: 'tool_result', sessionId: 'a', result: { toolCallId: 'ask', output } },
+      text('a', 'Continuing.'),
+    ];
+    events.forEach((e, i) => applyEvent(e, 1000 + i));
+    const blocks = getLiveRun('a')!.blocks;
+    expect(blocks.map(b => b.kind)).toEqual(['activity', 'ask-reply', 'text']);
+    expect(blocks[1]).toMatchObject({ kind: 'ask-reply', message: { role: 'user', content: 'Q: Which scope?\nA: Module — Keep **this**\nexact note' } });
+    expect(getLiveRun('a')!.text).toBe('Continuing.');
+    applyReplay({ sessionId: 'a', events: events.map(({ sessionId: _id, ...e }) => e), at: [1000, 1001, 1002] } as any);
+    expect(getLiveRun('a')!.blocks).toEqual(blocks);
+    applyEvent(events[1]);
+    expect(getLiveRun('a')!.blocks.filter(b => b.kind === 'ask-reply')).toHaveLength(1);
+    applyEvent({ type: 'retry', sessionId: 'a', attempt: 1, maxAttempts: 3, delayMs: 0, reason: 'temporary' });
+    expect(getLiveRun('a')!.blocks.filter(b => b.kind === 'ask-reply')).toHaveLength(1);
+    applyEvent({ type: 'done', sessionId: 'a', messageId: 'reply' });
+    expect(takeFinishedRun('a')!.blocks.filter(b => b.kind === 'ask-reply')).toHaveLength(1);
+  });
+
+  it('does not invent live answers from failed, malformed, unrelated or orphaned results', () => {
+    const input = { questions: [{ question: 'Scope?', options: ['App', 'Module'] }] };
+    const output = 'The user answered:\n\nQ: Scope?\nA: App\n\nWork to these answers. Do not ask again about anything settled here.';
+    for (const [id, name, body, isError] of [['failed', 'ask_user', output, true], ['bad', 'ask_user', 'broken', false], ['other', 'bash', output, false]] as const) {
+      applyEvent({ type: 'tool_call', sessionId: 'a', call: { id, name, input } });
+      applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: id, output: body, isError } });
+    }
+    applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'orphan', output } });
+    expect(getLiveRun('a')!.blocks.filter(b => b.kind === 'ask-reply')).toEqual([]);
+  });
+
   it('times each tool call from its call to its result', () => {
     applyEvent(call('a', 'bash'), 1_000);
     applyEvent({ type: 'tool_result', sessionId: 'a', result: { toolCallId: 'c_bash', output: 'ok' } }, 3_500);

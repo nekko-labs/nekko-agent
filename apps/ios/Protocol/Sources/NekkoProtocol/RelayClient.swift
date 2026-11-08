@@ -630,10 +630,15 @@ public final class RelayClient: @unchecked Sendable {
     /// None that verifies within `challengeWait`: the socket is dropped and
     /// dialed again, so the relay announces a fresh connection to the computer.
     private func awaitChallenge(_ c: WsConnection) {
-        let gen: Int = locked {
+        let gen: Int? = locked {
+            // Receive and delegate callbacks can race: a verified challenge (or
+            // even its welcome) may beat onOpen. Never replace that handshake's
+            // welcome deadline with a fresh, shorter challenge deadline.
+            guard conn === c, !stopped, !helloSent, !welcomed else { return nil }
             handshakeGeneration += 1
             return handshakeGeneration
         }
+        guard let gen else { return }
         giveUp(on: c, gen: gen, after: config.challengeWait, reason: "no challenge", what: "sent no handshake")
     }
 

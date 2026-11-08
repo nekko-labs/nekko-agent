@@ -6,7 +6,7 @@ import { speaksToUser } from '../../replyTopics.js';
 /** Display-only projection of the persisted tool reply, never model history.
  * Keep the Q/A body literal: labels and notes cannot be reconstructed from the
  * formatter's comma-separated text without losing what the person selected. */
-function askReply(call: ToolCall, message: ChatMessage): ChatMessage | undefined {
+export function askReply(call: ToolCall, message: ChatMessage): ChatMessage | undefined {
   const result = message.toolResult;
   if (call.name !== 'ask_user' || !result || result.isError) return;
   const parsed = parseAskRequest(call.id, call.input, message.createdAt);
