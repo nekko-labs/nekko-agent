@@ -192,6 +192,11 @@ try {
   const imageRow = models.find((m) => m.modality === 'image');
   check('the library lists the image model', !!imageRow);
   writeSession({ id: 's_img', title: 'New chat', messages: [], createdAt: 1, updatedAt: 1 });
+  const params = { modelId: imageRow.id, width: 512, height: 512, steps: 4, cfgScale: 1, seed: 7 };
+  const refused = await api('chat:generateImage', { sessionId: 's_img', prompt: 'a calico cat', params })
+    .then(() => '', (error) => error.message);
+  check('image generation refuses an ordinary chat without mutation', /Choose an image chat/.test(refused) && session('s_img').messages.length === 0 && session('s_img').chatType !== 'image', refused);
+  await api('session:setOptions', 's_img', { chatType: 'image', imageParams: params });
   const events = [];
   const ws = new WebSocket(`ws://127.0.0.1:${SERVER_PORT}/api/events?token=${TOKEN}`);
   ws.onmessage = (m) => { try { const e = JSON.parse(m.data); if (e.channel === 'agent:event' && e.payload.sessionId === 's_img') events.push(e.payload); } catch { /* not ours */ } };
