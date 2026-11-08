@@ -107,16 +107,30 @@ final class ImageChatLifecycleTests: XCTestCase {
         XCTAssertEqual(models.map(\.format), ["gguf", "gguf"])
         let requests = try XCTUnwrap(golden["requests"]?.array).filter { $0["problem"] == .null }
         XCTAssertFalse(requests.isEmpty)
+        var shapes = Set<String>()
         for request in requests {
             let input = try XCTUnwrap(request["input"])
             let params = try XCTUnwrap(ImageChatParams.from(input["params"]))
             XCTAssertTrue(params.valid)
-            let actual = params.generation(sessionId: try XCTUnwrap(input.str("sessionId")), prompt: try XCTUnwrap(input.str("prompt")))
+            var fields = try XCTUnwrap(params.generation(sessionId: try XCTUnwrap(input.str("sessionId")), prompt: try XCTUnwrap(input.str("prompt"))).object)
+            // The host also accepts edit wire shapes, including size omission.
+            // Its header-only fixtures cannot drive the photo-sizing UI builder;
+            // reconstruct their typed optional fields without dropping any vector.
+            if let images = input["images"] {
+                fields["images"] = .array(try XCTUnwrap(images.array).map { .string(try XCTUnwrap($0.string)) })
+            }
+            if let size = input["size"] {
+                fields["size"] = .object(["width": .int(try XCTUnwrap(size.long("width"))),
+                                          "height": .int(try XCTUnwrap(size.long("height")))])
+            }
+            shapes.insert(input["images"] == nil ? "text" : input["size"] == nil ? "images" : "images-size")
+            let actual = JSONValue.object(fields)
             // Both the signed canonical bytes and the serialized wire bytes must agree with the host's input.
             let expected = try ChangeProof.canonicalJSON(.array([input]))
             XCTAssertEqual(try ChangeProof.canonicalJSON(.array([actual])), expected)
             XCTAssertEqual(try ChangeProof.canonicalJSON(JSONValue.parse(JSONValue.array([actual]).serialized())), expected)
         }
+        XCTAssertEqual(shapes, ["text", "images", "images-size"], "Keep every accepted host wire shape covered")
         var fractional = params
         fractional.cfgScale = 4.5
         XCTAssertFalse(fractional.valid)

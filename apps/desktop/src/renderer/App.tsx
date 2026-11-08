@@ -21,6 +21,7 @@ import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
+import { startTextZoom } from './textZoom.js';
 import { NekkoAvatar } from './components/Mascot.js';
 import { ResourceHud } from './components/ResourceMonitor.js';
 import { Toasts } from './components/Toasts.js';
@@ -33,6 +34,7 @@ import { RelayPairing } from './components/RelayPairing.js';
 import { DeepLinkListener } from './components/DeepLink.js';
 import { DesignBoardView } from './views/DesignBoardView.js';
 import { ArtifactsView } from './views/ArtifactsView.js';
+import { CustomizeExperience } from './components/CustomizeExperience.js';
 import { SkillsView } from './views/SkillsView.js';
 import { TrainingView } from './views/TrainingView.js';
 import { WorkflowsView } from './views/WorkflowsView.js';
@@ -138,6 +140,8 @@ export function App() {
   useEffect(() => syncAppActivity(), []);
   // Step the looping decorations on a clock of their own, not every frame.
   useEffect(() => startDecorClock(), []);
+  // Ctrl/⌘ + Plus/Minus and Ctrl/⌘ + wheel step the text size; Ctrl/⌘+0 resets it.
+  useEffect(() => startTextZoom(), []);
 
   // Agents idle past Settings → Complete idle agents after (a month unless
   // changed) are completed: the same reversible archive the window's X does.
@@ -395,6 +399,7 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
+      <ErrorBoundary label="Customize"><CustomizeExperience /></ErrorBoundary>
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>
       <ErrorBoundary label="Pairing"><RelayPairing /></ErrorBoundary>

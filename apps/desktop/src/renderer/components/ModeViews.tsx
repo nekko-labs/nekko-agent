@@ -27,10 +27,10 @@ export function Shown({ id, children }: { id: string; children: React.ReactNode 
  * changes the whole app, so it sits in the title bar (in a chat's header where
  * there is no title bar, as in the browser builds).
  */
-export function ModeSwitch() {
+export function ModeSwitch({ labels = false }: { labels?: boolean }) {
   const [expert, setExpert] = useExpertMode();
   return (
-    <div className="mode-seg" role="radiogroup" aria-label="Mode" data-chat-mode={expert ? 'expert' : 'simple'}>
+    <div className={`mode-seg ${labels ? 'mode-seg-labels' : ''}`} role="radiogroup" aria-label="Mode" data-chat-mode={expert ? 'expert' : 'simple'}>
       {([false, true] as const).map((on) => (
         <button
           key={String(on)}
@@ -43,6 +43,7 @@ export function ModeSwitch() {
           onClick={() => setExpert(on)}
         >
           {on ? <CodeIcon className="h-3.5 w-3.5" /> : <ChatIcon className="h-3.5 w-3.5" />}
+          {labels && <span>{on ? 'Detailed' : 'Simple'}</span>}
         </button>
       ))}
     </div>

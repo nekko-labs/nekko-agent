@@ -93,6 +93,11 @@ final class FirstRunTests: XCTestCase {
             attach(app, "(theme)-firstrun-1")
             auditAccessibility(app, "(theme)-firstrun-1", covered: bar(app, above: next))
             next.tap()
+            let experience = app.buttons["experience.continue"]
+            XCTAssertTrue(experience.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.segmentedControls["mode.switch"].exists)
+            attach(app, "\(theme)-experience")
+            experience.tap()
             let pair = app.buttons["Pair with your computer"]
             XCTAssertTrue(pair.waitForExistence(timeout: 5))
             XCTAssertTrue(app.staticTexts["Step 2 of 3"].exists)

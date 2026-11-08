@@ -6,10 +6,10 @@ import SwiftUI
 /// then zooms towards the viewer while the inside of the cat opens as a window
 /// onto the app, until the app fills the screen. Drawn from elapsed time in one
 /// Canvas, from the same generated layers (SplashCells.swift). Reduce Motion fades
-/// a solid ground instead. The launch screen is the same plum, so nothing flashes.
+/// a solid ground instead. The launch screen is the same green, so nothing flashes.
 ///
 /// Coming back to the app plays only the end of it (`.resume`): the cat on the
-/// plum dissolves and the app fades in, in under half a second.
+/// green dissolves and the app fades in, in under half a second.
 struct SplashView: View {
     enum Kind { case launch, resume }
     var kind: Kind = .launch
@@ -22,9 +22,9 @@ struct SplashView: View {
     @State private var held = false
     @State private var faded = false
 
-    /// The brand plum, the app icon's tile (spec/brand/colour-palette.md).
-    static let ground = Color(red: 0x19 / 255, green: 0x00 / 255, blue: 0x19 / 255)
-    private static let ink = Color.white
+    /// The brand green, the app icon's tile (spec/brand/colour-palette.md).
+    static let ground = Color(red: 0x10 / 255, green: 0x17 / 255, blue: 0x14 / 255)
+    private static let ink = Color(red: 0xF2 / 255, green: 0xF1 / 255, blue: 0xE9 / 255)
     /// One beat, in seconds: the desktop's beats, quicker, so build and zoom take about a second.
     private static let B = 0.28
     static let zoomAt = 2.5 * B

@@ -1,3 +1,5 @@
+import { ModeSwitch } from './ModeViews.js';
+import { openCustomize } from './CustomizeExperience.js';
 import { useStore } from '../store.js';
 import { useShown } from '../simpleMode.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -124,6 +126,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
         }}
       >
+        <div className="mb-2"><ModeSwitch labels /></div>
+        <button role="menuitem" className="btn btn-ghost mb-2 w-full justify-start" onClick={() => { onClose(); openCustomize(); }}>Customize…</button>
         {topRow('group', 'Group by', GROUP_BY_LABELS[view.groupBy])}
         {topRow('sort', 'Sort by', SORT_BY_LABELS[view.sortBy])}
         {topRow('show', 'Show')}

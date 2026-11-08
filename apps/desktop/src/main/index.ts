@@ -170,8 +170,8 @@ function deliverLink(url: string): void {
 /**
  * macOS keeps the system menu bar. Electron's default app menu is kept for
  * everything else, but its "Nekko Agent" menu gains Settings… (⌘,), its
- * About item opens the in-app About page instead of the stock panel, and
- * Help holds Send Feedback….
+ * About item opens the in-app About page instead of the stock panel, View
+ * has no zoom items, and Help holds Send Feedback….
  */
 function installMacAppMenu(): void {
   const send = (url: string) => () => deliverLink(url);
@@ -193,7 +193,9 @@ function installMacAppMenu(): void {
       ],
     },
     { role: 'editMenu' },
-    { role: 'viewMenu' },
+    // The stock View menu's zoom items would catch ⌘+ and ⌘− before the page
+    // and zoom past Settings' text size; the page steps that setting itself.
+    { label: 'View', submenu: [{ role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
     { role: 'help', submenu: [{ label: 'Send Feedback…', click: send('nekko-agent://feedback') }] },
   ]));
