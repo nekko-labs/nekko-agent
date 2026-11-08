@@ -37,9 +37,25 @@ elif op in ('write','append'):
  result={'written':p}
 elif op=='read': result={'base64':base64.b64encode(read(q['path'])).decode()}
 elif op=='edit':
- p=q['path']; text=read(p).decode(); old=q['old_string']
- if not old or text.count(old)!=1: raise Exception('edit requires one exact match')
- b=text.replace(old,q['new_string']).encode()
+ p=q['path']; text=read(p).decode()
+ if 'edits' in q:
+  if 'old_string' in q or 'new_string' in q: raise Exception('Use either edits or old_string/new_string, not both.')
+  edits=q['edits']; max_bytes=8*1024*1024; used=0
+  if not isinstance(edits,list) or not 1<=len(edits)<=100: raise Exception('edits must be an array of 1 to 100 replacements.')
+  if len(text.encode())>max_bytes: raise Exception('Batch edit exceeds the 8 MiB text limit.')
+  for i,e in enumerate(edits,1):
+   if not isinstance(e,dict) or not isinstance(e.get('old_string'),str) or not e['old_string']: raise Exception(f'Edit {i}: old_string must be a non-empty string.')
+   if not isinstance(e.get('new_string'),str): raise Exception(f'Edit {i}: new_string must be a string.')
+   old=e['old_string']; new=e['new_string']; used+=len(old.encode())+len(new.encode())
+   if used>max_bytes: raise Exception('Batch edit exceeds the 8 MiB replacement limit.')
+   if text.count(old)!=1: raise Exception(f'Edit {i}: requires one exact match; no edits applied.')
+   if len(text.encode())-len(old.encode())+len(new.encode())>max_bytes: raise Exception('Batch edit exceeds the 8 MiB result limit.')
+   text=text.replace(old,new,1)
+ else:
+  old=q['old_string']
+  if not old or text.count(old)!=1: raise Exception('edit requires one exact match')
+  text=text.replace(old,q['new_string'])
+ b=text.encode()
  if len(b)>limit['bytes']: raise Exception('file too large')
  f=os.open(safe(p),os.O_WRONLY|os.O_TRUNC|os.O_NOFOLLOW)
  try: os.write(f,b)

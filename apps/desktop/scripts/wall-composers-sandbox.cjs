@@ -97,12 +97,20 @@ app.whenReady().then(async () => {
     await run(`document.querySelector('[data-grid-cell="chat:b"] [aria-label="Stop listening"]').click()`);
     await sleep(400);
     await check('header: window number, then Nekko (the agent icon) with its badge, no robot', `(() => { const icon = document.querySelector('[data-grid-cell="chat:a"] [data-pane-title-strip]'); const n = icon?.querySelector('.wall-number'), m = icon?.querySelector('[data-wall-mascot="working"] .wall-mascot-badge'); return !!n && n.textContent === '1' && !!m && !!(n.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING) && !icon.querySelector('.numbered-agent-icon'); })()`);
-    await check('plan folds to the working step with its kind and pass', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet][data-folded]'); return !!s && s.textContent.includes('Build') && s.textContent.includes('Pass 2') && s.textContent.includes('2 of 4'); })()`);
-    await check('folded sub-agents read 1 running, 2 done', `document.querySelector('[data-grid-cell="chat:a"] [data-plan-chip="subagents"]')?.getAttribute('title') === 'Sub-agents: 1 running, 2 done'`);
+    await check('the plan starts expanded with its four published steps', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet]'); return !!s && !s.hasAttribute('data-folded') && s.querySelectorAll('[data-plan-step-id]').length === 4 && s.querySelector('.plan-sheet-toggle')?.getAttribute('aria-expanded') === 'true'; })()`);
+    await run(`document.querySelector('[data-grid-cell="chat:a"] .plan-sheet-toggle').click()`);
+    await sleep(400);
+    await check('folding shows the working step, pass and position', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet][data-folded]'); return !!s && s.textContent.includes('Move session checks into one middleware') && s.textContent.includes('Pass 2') && s.textContent.includes('2 of 4') && s.querySelector('.plan-sheet-fold')?.getAttribute('aria-expanded') === 'false'; })()`);
+    await check('folded sub-agent cards show one working and two done', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-subagents]'); return !!s && s.querySelectorAll('[data-subagent-card]').length === 3 && s.querySelector('[data-subagent-card="k2"]')?.getAttribute('data-status') === 'working' && ['k1','k3'].every(id => s.querySelector('[data-subagent-card="' + id + '"]')?.getAttribute('data-status') === 'done'); })()`);
+    await shot('wall-plan-folded');
     await check('the Linear task rides the folded sheet', `[...document.querySelectorAll('[data-grid-cell="chat:a"] [data-plan-chip="project"]')].some(e => e.textContent.includes('NEK-412'))`);
     await check('sheet is tucked behind the composer', `(() => { const w = document.querySelector('[data-grid-cell="chat:a"]'); const p = w?.querySelector('.plan-sheet-dock'), c = w?.querySelector('.composer'); if (!p || !c) return false; const a = p.getBoundingClientRect(), b = c.getBoundingClientRect(); return a.bottom > b.top && a.bottom <= b.top + 12 && a.width < b.width; })()`);
     await run(`document.querySelector('[data-grid-cell="chat:a"] .plan-sheet-fold, [data-grid-cell="chat:a"] .plan-sheet-toggle')?.click()`);
     await sleep(400);
+    await check('reopened plan keeps finished details closed and working details open', `(() => { const s = document.querySelector('[data-grid-cell="chat:a"] [data-plan-sheet]'); return !!s && !s.hasAttribute('data-folded') && s.querySelector('[data-plan-step-id="step_1"] .plan-sheet-step-toggle')?.getAttribute('aria-expanded') === 'false' && s.querySelector('[data-plan-step-id="step_2"] .plan-sheet-step-toggle')?.getAttribute('aria-expanded') === 'true'; })()`);
+    await run(`document.querySelector('[data-grid-cell="chat:a"] [data-plan-step-id="step_1"] .plan-sheet-step-toggle').click()`);
+    await sleep(400);
+    await check('the completed step opens its own details on click', `document.querySelector('[data-grid-cell="chat:a"] [data-plan-step-id="step_1"] .plan-sheet-step-toggle')?.getAttribute('aria-expanded') === 'true'`);
     await shot('wall-plan-open');
     await check('open plan puts each sub-agent under its step', `document.querySelectorAll('[data-plan-step-id="step_1"] [data-plan-chip="subagent"]').length === 1 && document.querySelectorAll('[data-plan-step-id="step_2"] [data-plan-chip="subagent"]').length === 2`);
     await check('open plan puts the task on the first step', `!!document.querySelector('[data-plan-step-id="step_1"] [data-plan-chip="project"]')`);
@@ -119,6 +127,8 @@ app.whenReady().then(async () => {
     process.exitCode = 1;
   } finally {
     fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
-    app.quit();
+    // Electron does not preserve Node's process.exitCode through app.quit().
+    // Return the journey's assertion failure; console diagnostics stay in report.errors.
+    app.exit(process.exitCode || 0);
   }
 });

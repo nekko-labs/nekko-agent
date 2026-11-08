@@ -4,4 +4,9 @@
     <string name="widget_description">Quantos chats precisam de você e quantos estão trabalhando. Só números, nunca o que dizem.</string>
     <string name="shortcut_new_chat">Novo chat</string>
     <string name="shortcut_new_chat_long">Novo chat no seu computador</string>
+    <string name="chats_showmodel">Modelo</string>
+    <string name="chats_card_details">Detalhes do cartão</string>
+    <string name="chats_showupdated">Hora da atualização</string>
+    <string name="chats_showcontext">Janela de contexto</string>
+    <string name="chats_showpullrequests">Pull requests</string>
 </resources>
