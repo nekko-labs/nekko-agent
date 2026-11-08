@@ -113,10 +113,9 @@ final class PermissionChecklistUITests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, "0")
         toggle.tap()
         app.activate()
-        let granted = app.staticTexts["Allowed"]
-        XCTAssertTrue(granted.firstMatch.waitForExistence(timeout: 10))
-        let row = app.descendants(matching: .any)["permissions.row.microphone"].firstMatch
-        XCTAssertTrue(row.staticTexts["Allowed"].exists)
+        let microphoneStatus = app.descendants(matching: .any)["permissions.status.microphone"].firstMatch
+        let restored = expectation(for: NSPredicate(format: "label == %@", "Allowed"), evaluatedWith: microphoneStatus)
+        wait(for: [restored], timeout: 10)
         attach(app, "permissions-microphone-restored")
     }
 

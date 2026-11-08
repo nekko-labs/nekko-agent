@@ -105,8 +105,8 @@ struct PermissionChecklistView: View {
                 }
             }
             ViewThatFits(in: .horizontal) {
-                HStack { status(state); Spacer(minLength: 12); action(item, state: state) }
-                VStack(alignment: .leading, spacing: 8) { status(state); action(item, state: state) }
+                HStack { status(state, item: item); Spacer(minLength: 12); action(item, state: state) }
+                VStack(alignment: .leading, spacing: 8) { status(state, item: item); action(item, state: state) }
             }
         }
         .padding(16)
@@ -117,8 +117,11 @@ struct PermissionChecklistView: View {
         .accessibilityIdentifier("permissions.row.\(item.rawValue)")
     }
 
-    private func status(_ state: PermissionChecklist.Access) -> some View {
+    private func status(_ state: PermissionChecklist.Access, item: PermissionChecklist.Item) -> some View {
         Label(state.label, systemImage: state.checked ? "checkmark.circle.fill" : "circle.dashed")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(state.label)
+            .accessibilityIdentifier("permissions.status.\(item.rawValue)")
             .font(.caption.weight(.semibold))
             .foregroundStyle(state.checked ? palette.success : palette.inkSoft)
     }
