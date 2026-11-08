@@ -2,6 +2,8 @@ package com.nekko.android
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -41,6 +43,7 @@ class ComposerPhotosTest {
         val tray = PhotoTray<ImageBitmap>()
         tray.seed(listOf(0xFF854F6C.toInt(), 0xFF3A7CA5.toInt()).mapIndexed { i, c -> "data:image/jpeg;base64,$i" to solid(c) })
         compose.setContent {
+            val photos by tray.state.collectAsState()
             NekkoTheme(dark = theme == "dark") {
                 Composer(
                     running = false,
@@ -50,7 +53,7 @@ class ComposerPhotosTest {
                     onStop = {},
                     initialText = "What is in these?",
                     attach = AttachUi(
-                        state = tray.state.value,
+                        state = photos,
                         onPickFiles = {},
                         onTakePhoto = null,
                         onRemove = {},

@@ -97,3 +97,11 @@ Feature head `47b213eb6db2536571fded23e945db261d236423`, host head `9c41189cb`.
 - iOS native/evidence jobs remain queued on xcode-27. Existing screenshots/videos remain captured but not pixel/motion-inspected.
 
 - Corrected local batch: **144 SDK-free JVM tests passed**, **16 harness/resource checks passed**, 12 translated XML files parsed; spec-index and whitespace checks passed. These do not replace native lint, UI, motion or audio verification.
+
+## Verified interaction checkpoint at 8a3c51b15
+
+- Matched voice/keyboard run42439886975: 3 Android tests passed on each revision; app base ac4d56d18, after/harness 8a3c51b15. After-side IME hiding, draft/reply visibility and keyboard dismissal assertions now pass.
+- Matched image run42439942876: 4 Android tests passed on each revision; app base defd60015, after/harness 8a3c51b15. Downloaded revision manifests and instrumentation logs inspected.
+- Native Android42439884618: live-relay emulator and live-update jobs passed. All 48 previously diagnosed lint errors cleared; lint now reports one error in upstream ComposerPhotosTest (StateFlow.value inside composition). The fixture now collects its state; no production surface changes. Native rerun is still required.
+- Published 18 new native stills/recordings to PR2212 via pr-media-6; uploader checked downloaded SHA256 and public URL bytes, then PR readback. Browser screenshot again timed out and native capture returned UnknownVizError; media is captured/published but NOT pixel/motion-inspected. Isolated read-only viewer/browser stopped.
+- PR2212 CI42439865845 fails exactly the Settings Customize baseline assertion tracked by #2218 (462 other files passed; integration job passed). No assertion disabled, no blind rerun or gate bypass. iOS build42439944654/new image surfaces42439964686 remain queued; repository runner inventory returned zero self-hosted runners, which does not establish availability of organization/hosted capacity.
