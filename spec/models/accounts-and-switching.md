@@ -32,3 +32,7 @@ area: models
 ## Same-email personal and organization subscriptions (#2094, 2026-11-07)
 
 The existing named-profile path is the supported implementation: the same email with a different organization remains a distinct account. Connected-card identity now includes the organization name when Claude Code reports it. The documented `auth status` describes only the current profile; no documented membership-list command was found. Nekko therefore does not list unconnected organizations from one saved login, reuse credentials, or silently choose a billing organization. The user signs in separately through unmodified Claude Code for each named profile, selecting the intended subscription in Anthropic's browser flow where offered. Real same-email multi-organization sign-in remains unverified; [sources, limitations, and manual verification](../../docs/claude-account-selection.md).
+
+## Planned: bring provider history and personalization
+
+[Provider-data import](provider-data-import.md) adds an account-connected-first migration of past prompts/conversations, compatible settings, saved memory and profile, with export-file import as the secondary option. It is **not implemented**. Existing sign-in grants must not be mistaken for consumer-history access; authorization and available categories are checked per account. Imported data is reviewed before activation. See [#2259](https://github.com/nekko-labs/nekko-agent/issues/2259) for access dependencies and implementation work.
