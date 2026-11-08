@@ -133,6 +133,40 @@ final class PanesTests: XCTestCase {
         attach(app, "panes-9-monitors")
     }
 
+    /// Tapping a chat in the list opens it in the other pane.
+    func testTappingAChatRowOpensIt() throws {
+        let app = try launch(extra: [])
+        XCUIDevice.shared.orientation = .landscapeLeft
+        pairAndWait(app)
+        startChat(app, "a long run please")
+        XCTAssertTrue(app.staticTexts.matching(contains("word1")).firstMatch.waitForExistence(timeout: 45), "the first chat streams")
+        startChat(app, "Say hello")
+        XCTAssertTrue(app.staticTexts["Hello from your computer."].waitForExistence(timeout: 30), "the second chat replaced the first")
+        XCTAssertTrue(waitFor(10) { !app.staticTexts.matching(self.contains("word1")).firstMatch.exists }, "the first chat left the pane")
+        attach(app, "panes-10-before-tap")
+
+        // Unfold every group, so both rows show.
+        let folded = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'chats.group.' AND value == 'Collapsed'"))
+        while folded.count > 0 {
+            let before = folded.count
+            folded.firstMatch.tap()
+            XCTAssertTrue(waitFor(5) { folded.count < before }, "a tapped group heading unfolds")
+        }
+        let rows = app.descendants(matching: .any).matching(identifier: "chats.row")
+        XCTAssertTrue(waitFor(10) { rows.count >= 2 }, "both chats are listed")
+        let first = rows.matching(contains("long run")).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 10), "the first chat's row")
+        first.tap()
+        XCTAssertTrue(app.staticTexts.matching(contains("word1")).firstMatch.waitForExistence(timeout: 10), "the tapped chat opened")
+        attach(app, "panes-11-after-tap")
+
+        // Touching a pane still gives it the focus (the accent outline moves to it).
+        app.navigationBars["Chats"].staticTexts["Chats"].firstMatch.tap()
+        attach(app, "panes-12-list-pane-focused")
+        app.staticTexts.matching(contains("word1")).firstMatch.tap()
+        attach(app, "panes-13-chat-pane-focused")
+    }
+
     // MARK: Helpers
 
     private func launch(extra: [String]) throws -> XCUIApplication {

@@ -144,6 +144,8 @@ private struct NativeAppContent: View {
             TurnDetailsFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestModelTabs") {
             ModelTabsFixture()
+        } else if ProcessInfo.processInfo.arguments.contains("-uiTestFirstPromptIntro") {
+            FirstPromptIntroFixture()
         } else if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") {
             SecurityEvidenceFixture()
         } else { RootView() }
