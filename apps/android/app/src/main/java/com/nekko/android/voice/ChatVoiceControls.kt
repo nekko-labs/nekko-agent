@@ -8,6 +8,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
@@ -33,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 
 /** Real composer integration. Every callback is bound to this computer/chat, including after proof prompts. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChatVoiceControls(
     vm: ChatViewModel,
@@ -241,7 +245,12 @@ fun ChatVoiceControls(
         beforeStart = { vm.voicePreflight(baseAllowed(), currentComposer.read()); begin(preservePending = false) },
     )
     if (!enabled || !focused) return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // Idle alternatives must not crowd the transcript off a small phone while typing.
+    // Keep this composable (and its safety collectors) alive, and never hide an active
+    // capture's Stop/Finish controls, a confirmation, or an error behind the keyboard.
+    val showInlineControls = !WindowInsets.isImeVisible || listeningState.active || pending != null ||
+        listeningState.error != null || notice != null
+    if (showInlineControls) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (listeningState.active) TextButton(onClick = { abort() }, modifier = Modifier.testTag("voice.stop")) { Text(stringResource(R.string.voice_stop)) }
         run {
             HoldToTalkButton(hold,

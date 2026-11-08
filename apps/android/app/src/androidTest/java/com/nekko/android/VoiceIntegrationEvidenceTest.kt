@@ -83,6 +83,32 @@ class VoiceIntegrationEvidenceTest {
         assertTrue(repo.outbox.state.value.items.isEmpty())
         assertFalse(remote.calls.any { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE })
     }
+    @Test fun idleVoiceControlsYieldToKeyboardAndReturnWithoutLosingDraft() {
+        compose.onAllNodes(hasSetTextAction()).onFirst().performClick().performTextInput("Keep this keyboard draft")
+        compose.waitUntil(5_000) {
+            androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        }
+        val before = InstrumentationRegistry.getArguments().getString("nekkoModeRevision") == "before"
+        if (before) compose.onNodeWithTag("voice.hold").assertExists()
+        else {
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("voice.hold").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithTag("voice.commands").assertDoesNotExist()
+            compose.onNodeWithText("A previous reply. Never read this as the next voice answer.").assertIsDisplayed()
+        }
+        shot("voice-keyboard-open")
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.waitUntil(5_000) {
+            androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+                ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == false &&
+                compose.onAllNodesWithTag("voice.hold").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("voice.hold").assertIsDisplayed()
+        compose.onNodeWithTag("voice.commands").assertIsDisplayed()
+        compose.onAllNodes(hasSetTextAction()).onFirst().assertTextContains("Keep this keyboard draft")
+        shot("voice-keyboard-closed")
+        assertFalse(remote.calls.any { it == Channels.CHAT_SEND || it == Channels.CHAT_QUEUE })
+    }
     @Test fun voiceOffRemovesNativeControlsAndOpenConversation() {
         compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithTag("composer.voiceConversation").performClick()
@@ -97,7 +123,8 @@ class VoiceIntegrationEvidenceTest {
         val device = InstrumentationRegistry.getArguments().getString("nekkoDevice", "phone")
         val dir = File(inst.targetContext.getExternalFilesDir(null), "evidence").apply { mkdirs() }
         val screenshot = inst.uiAutomation.takeScreenshot() ?: error("No native-window screenshot")
-        File(dir, "after-$device-$name.png").outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val revision = InstrumentationRegistry.getArguments().getString("nekkoModeRevision", "after")
+        File(dir, "$revision-$device-$name.png").outputStream().use { screenshot.compress(Bitmap.CompressFormat.PNG, 100, it) }
         screenshot.recycle()
     }
 }

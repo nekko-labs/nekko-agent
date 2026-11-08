@@ -65,6 +65,13 @@ Feature head `47b213eb6db2536571fded23e945db261d236423`, host head `9c41189cb`.
 - Visual inspection remains blocked: a fresh local evidence viewer loaded the captured PNG, but the browser screenshot timed out again. Viewer/browser stopped. Required matched composer, foldable layouts, motion inspection and iOS evidence remain unfinished.
 - #2211 current-head build, itests, perf, CodeQL and gate passed. It still depends on unmerged #2190; do not merge the feature layer around that dependency.
 
+### Keyboard regression and upstream reconciliation
+
+- Native run `42436986175` live-relay failures are at `LiveRelayTest.kt:108` (hello reply) and `:118` (subagent prompt), **not** the prior `hideKeyboard` failure. The captured semantics tree gives the transcript only 13 pixels of height at 320×640 with the IME open; persistent idle voice controls consume the composer space. Treat this as a feature regression, not #2209.
+- Idle voice controls now collapse with the software keyboard; active capture controls, pending confirmations/notices and safety collectors remain. New instrumentation explicitly waits for native IME visibility, checks controls disappear and the existing reply remains displayed, dismisses the IME, then checks controls return and draft remains. Before-mode assertions retain the old controls for matched evidence; screenshot names now correctly use the recorded revision rather than always `after`.
+- Upstream #2130 and #2210 merged while verification continued. Merged `origin/main` at `67f49140d` into this feature branch without conflicts; primary checkout untouched. Downloaded current translation report has exactly the 30 old missing card-detail keys fixed by #2130. Final current-head native tests are still required.
+- Corrected image fixture/initial-scroll run [42437960313](https://github.com/nekko-labs/nekko-agent/actions/runs/42437960313) tests `ac4d56d18` against `defd60015`; **both Android jobs passed all four instrumented tests**, confirmed from downloaded reports/manifests. The missing-ready and initial-layout failures no longer reproduce in this matched run; captures await pixel inspection. iOS remains queued. This predates the keyboard layout correction; do not call it final-head evidence.
+
 ## Existing native baseline failures
 
 - Android translations: same 30 missing entries on exact base and safety head; #2125, fix #2130.
