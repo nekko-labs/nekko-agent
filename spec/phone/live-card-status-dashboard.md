@@ -18,6 +18,11 @@ Extra visual/device verification is skipped for this repair at the user's reques
 that is not a waiver of required CI or evidence checks, nor a claim that the
 hardware and accessibility limitations below have been verified.
 
+The main-merge repair also keeps the Swift phone channel registry in parity with
+the host allow-list, including main's `chat:generateImage` and `engine:models`.
+This is protocol metadata synchronization, not image generation through the
+dashboard voice grammar; exact allow-list equality tests remain unchanged.
+
 ## The three goals
 
 1. **See what is happening.** The card is a status dashboard of agents, not a miniature chat list. Lead with counts such as **3 Building**, **2 Need input**, and **20 Done**. Make attention distinguishable without relying on color alone.

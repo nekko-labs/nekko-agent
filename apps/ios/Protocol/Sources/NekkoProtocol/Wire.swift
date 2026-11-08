@@ -151,6 +151,8 @@ public enum Channels {
         artifactRead, previewFetch,
         // Allowed for clients that aren't this app: a connected computer's plan changes and model settings.
         "chat:steer", chatInterruptQueued, "engine:settings", "engine:saveModelPreset", "engine:unloadAll", "model:load",
+        // Phone-scoped local image generation (#2211); not a dashboard voice command.
+        "chat:generateImage", "engine:models",
         // IO-33 FA-3, FA-6 (Terminal.swift).
         TerminalChannels.list, TerminalChannels.tail, TerminalChannels.sshHosts, TerminalChannels.create, TerminalChannels.sshOpen,
         TerminalChannels.write, TerminalChannels.resize, TerminalChannels.signal, TerminalChannels.close,
