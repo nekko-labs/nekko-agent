@@ -3682,10 +3682,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
 
-/* Prompt suggestions as one chip among the composer's actions. In a crowded
-   bar it gives up its words before the model and Mode give up theirs, down to
-   the grade badge. */
-.composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
+/* Suggestions never compete with folders, the model or send for action-row space. */
+.composer-suggestions-row { display: flex; min-width: 0; }
+.composer-suggestions { display: flex; min-width: 0; max-width: 100%; }
+.composer-suggestions:empty { display: none; }
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Rows stay flat at rest; pointer/focus feedback is a wash and soft light,
    not a raised card. The inset glow survives the group's overflow clipping. */
@@ -4554,6 +4554,7 @@ html[data-library-transition="list"]::view-transition-new(library-list) { animat
 @container (max-width: 520px) {
   /* Let the folder summary truncate before pushing the 44px actions outside. */
   .composer-bar > .composer-folders { min-width: 44px; }
+  .composer-bar > .composer-folders .folder-summary-label { display: none; }
   .composer-bar:has(> .composer-folders) .composer-foot-controls { min-width: 80px; }
 }
 
