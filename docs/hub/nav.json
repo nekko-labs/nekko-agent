@@ -100,6 +100,12 @@
           "description": "Run models with the built-in engine or a server you already have (Ollama, LM Studio, vLLM)."
         },
         {
+          "slug": "pictures-and-videos",
+          "title": "Pictures and video clips",
+          "source": "docs/pictures-and-videos.md",
+          "description": "Make pictures, edit photos and make short video clips with models on your own computer: picking a model, Photo chats, editing, clips and privacy."
+        },
+        {
           "slug": "subscriptions",
           "title": "Subscription sign-in",
           "source": "docs/SUBSCRIPTIONS.md",
