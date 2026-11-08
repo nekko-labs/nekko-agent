@@ -61,7 +61,8 @@ describe('approved phone image boundary #2162', () => {
       for (const value of [null, true, NaN, Infinity]) expect(phoneImageParamsProblem({ ...params, [key]: value }, true)).toBe(key);
     }
     expect(() => screenPhoneCall('session:setOptions', ['s_img', { chatType: 'image', imageParams: params }])).not.toThrow();
-    expect(() => screenPhoneCall('session:setOptions', ['s_img', { chatType: 'video' }])).toThrow();
+    expect(() => screenPhoneCall('session:setOptions', ['s_img', { chatType: 'video' }])).not.toThrow();
+    expect(() => screenPhoneCall('session:setOptions', ['s_img', { chatType: 'movie-generator' }])).toThrow('value-invalid');
     expect(() => screenPhoneCall('session:setOptions', ['s_img', { imageParams: { cfgScale: 4.5 } }])).toThrow();
     expect(() => screenPhoneCall('session:setOptions', ['s_img', { imageParams: { outputPath: '/secret' } }])).toThrow();
     expect(() => screenPhoneCall('session:setOptions', ['s_img', { arbitrary: true }])).toThrow();

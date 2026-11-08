@@ -15,7 +15,7 @@ import { shownNow } from '../simpleMode.js';
 export type AgentWindowSelection = {
   kind: 'chat' | 'terminal';
   refId?: string;
-  chatType?: 'multimodal' | 'image';
+  chatType?: 'multimodal' | 'image' | 'video';
   providerId?: string;
   modelId?: string;
   /** Folders for a new chat: the first is its primary working folder, the rest supporting. */
@@ -285,7 +285,7 @@ export function AgentWindowPicker({ onAdd, onClose, terminal = true }: AgentWind
             <summary><span className="agent-window-picker__step-num">3</span>Open an existing chat instead <span className="agent-window-picker__optional">Optional</span></summary>
             <div className="agent-window-picker__list">
               {availableSessions.length === 0 && <p>No existing chats.</p>}
-              {availableSessions.map((session) => <button type="button" key={session.id} disabled={pending} onClick={() => void add({ kind: 'chat', refId: session.id, chatType: session.chatType ?? 'multimodal' })}><strong>{session.title || 'Untitled chat'}</strong><span>{session.chatType === 'image' ? 'Image session' : 'Chat'}</span></button>)}
+              {availableSessions.map((session) => <button type="button" key={session.id} disabled={pending} onClick={() => void add({ kind: 'chat', refId: session.id, chatType: session.chatType ?? 'multimodal' })}><strong>{session.title || 'Untitled chat'}</strong><span>{session.chatType === 'image' ? 'Photo' : session.chatType === 'video' ? 'Video' : 'Chat'}</span></button>)}
             </div>
           </details>
           <button type="button" className="agent-window-picker__primary" disabled={pending || !model} onClick={start}>Start</button>
@@ -293,8 +293,8 @@ export function AgentWindowPicker({ onAdd, onClose, terminal = true }: AgentWind
       )}
       {category === 'media' && (
         <div className="agent-window-picker__options">
-          <button type="button" className="agent-window-picker__option" disabled={pending} onClick={() => void add({ kind: 'chat', chatType: 'image' })}><CatIcon kind="media" /><strong>Create image session</strong><span>Generate images in a new conversation.</span></button>
-          <button type="button" className="agent-window-picker__option" disabled><CatIcon kind="media" /><strong>Video · Planned</strong><span>Unavailable — video creation is not implemented.</span></button>
+          <button type="button" className="agent-window-picker__option" disabled={pending} onClick={() => void add({ kind: 'chat', chatType: 'image' })}><CatIcon kind="media" /><strong>Photo</strong><span>Generate images with a local image model.</span></button>
+          <button type="button" className="agent-window-picker__option" disabled={pending} onClick={() => void add({ kind: 'chat', chatType: 'video' })}><CatIcon kind="media" /><strong>Video</strong><span>Plan stories and edit footage with approved tools. Direct video generation is not connected.</span></button>
         </div>
       )}
       {category === 'terminal' && (

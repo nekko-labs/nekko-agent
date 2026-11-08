@@ -82,7 +82,7 @@ Decision 0067, as built:
 
 Follow-up to [#2170](https://github.com/nekko-labs/nekko-agent/issues/2170), reconciled with the landed #2177 stack rather than replacing it with a second setup or editing system:
 
-- The composer leads with model and **Shape** (Square, Landscape, Portrait, Wide, Tall). Existing dimensions not in that list remain selected as Custom. New presets are multiples of 64, and Wide/Tall use exact 16:9/9:16 dimensions.
+- The composer leads with model and **Shape** (Square, Landscape, Portrait, Wide, Tall). Each shape shows its exact aspect ratio alongside its dimensions. Existing dimensions not in that list remain selected as Custom. New presets are multiples of 64, and Wide/Tall use exact 16:9/9:16 dimensions.
 - **Advanced** contains Steps, **Prompt guidance (CFG)** and Seed with plain-language explanations. **Restore model defaults** restores family Steps/CFG and random seed without changing model or shape. Technical values remain available and saved per chat. Failed preference saves are visible rather than ignored; integer-only settings do not accept decimals.
 - A downloaded model's detail uses one **Finish photo setup** action for its missing engine and supporting files, a three-part checklist, retryable errors and optional package details. It reuses the existing engine/download APIs and jobs, including cancellation under Downloads. No new runtime, model source, encoder set, cloud service or upload path is introduced.
 - The first-download flow also refuses to finish while the image engine is absent or the recommended model's companion set could not be verified. Unrelated chat-engine downloads no longer appear as photo-engine progress.
