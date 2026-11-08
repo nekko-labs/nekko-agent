@@ -4393,6 +4393,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .provider-mark { display: inline-grid; place-items: center; flex-shrink: 0; color: white; }
 .provider-mark img { width: 22px; height: 22px; filter: brightness(0) invert(1); }
 .provider-mark-tile { width: 32px; height: 32px; border-radius: 9px; }
+.provider-mark-inline { display: inline-block; flex-shrink: 0; width: 10px; height: 10px; background: currentColor; mask: var(--mark) center / contain no-repeat; -webkit-mask: var(--mark) center / contain no-repeat; }
 .provider-choice .provider-mark-tile { width: 46px; height: 46px; border-radius: 14px; }
 .models-add-revealed { animation: provider-reveal 160ms ease-out both; }
 @keyframes provider-reveal { from { opacity: 0; transform: scale(.7); width: 0; } to { opacity: 1; transform: scale(1); } }
