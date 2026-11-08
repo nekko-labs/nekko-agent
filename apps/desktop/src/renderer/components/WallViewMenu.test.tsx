@@ -20,8 +20,16 @@ describe('View options', () => {
     expect(html).toContain('One chat at a time');
     expect(html).toContain('Chats side by side');
     expect(html.match(/class="wall-view-preview"/g)).toHaveLength(2);
-    expect(html.match(/type="radio"/g)).toHaveLength(2);
+    expect(html.match(/type="radio"/g)).toHaveLength(4);
     expect(html).toContain('role="switch"');
+  });
+  it('offers native Simple/Detailed radios and a settings customization button', () => {
+    const html = renderToStaticMarkup(<WallViewOptions wall={DEFAULT_WALL_STATE} setWall={() => {}} />);
+    expect(html.match(/name="view-interface-detail"/g)).toHaveLength(2);
+    expect(html).toContain('Simple');
+    expect(html).toContain('Detailed');
+    expect(html).toContain('view-customize');
+    expect(html).not.toContain('mode-seg');
   });
   it.each(['focus', 'grid', 'fixed'] as const)('keeps layout and snap semantics in %s', mode => {
     const wall = { ...DEFAULT_WALL_STATE, snap: true, layout: { ...DEFAULT_WALL_STATE.layout, mode: mode === 'fixed' ? 'grid' as const : mode, fixedGrid: mode === 'fixed' } };
