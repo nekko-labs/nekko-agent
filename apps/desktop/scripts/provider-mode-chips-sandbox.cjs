@@ -32,16 +32,18 @@ app.whenReady().then(async () => {
           const expected = group === 'subscriptions' ? 'Subscription' : group === 'local' ? null : 'API';
           await check(`Correct ${group} chiplets at ${width}`, `Array.from(document.querySelectorAll('[id^="provider-"]')).every(card => {const badges = Array.from(card.querySelectorAll('[data-provider-billing]')); return ${js(expected)} === null ? badges.length === 0 : badges.length === 1 && badges[0].textContent === ${js(expected)};})`);
         }
+        const file = path.join(out, `${group}-${width}.png`);
+        fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
+        report.captures.push(file);
         if (group === 'subscriptions' && process.env.NEKKO_EXPECT_MODE_CHIPS === '1') {
           await run("modeChipsFixture.changeClaudeAuth('api_key')"); await sleep(150);
           await check('Claude mode updates to API on focus ' + width, "document.querySelector('#provider-claude-plan [data-provider-billing]')?.textContent === 'API'");
           await run("modeChipsFixture.changeClaudeAuth('signed_out')"); await sleep(150);
           await check('Signed out Claude does not claim a plan ' + width, "!document.querySelector('#provider-claude-plan [data-provider-billing]')");
-          await run("modeChipsFixture.changeClaudeAuth('subscription')"); await sleep(150);
+          await run("modeChipsFixture.changeClaudeAuth('subscription')"); await sleep(500);
+          await check('Claude plan restores after focus ' + width, "document.querySelector('#provider-claude-plan [data-provider-billing]')?.textContent === 'Subscription'");
         }
-        const file = path.join(out, `${group}-${width}.png`);
-        fs.writeFileSync(file, (await win.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
-        report.captures.push(file);
+
         report.background.push({ visible: win.isVisible(), focusable: win.isFocusable(), bounds: win.getBounds() });
       }
     }

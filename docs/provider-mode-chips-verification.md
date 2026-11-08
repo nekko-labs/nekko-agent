@@ -11,9 +11,9 @@ ChatGPT retains Subscription, including older cards without an auth flag. API co
 - Desktop typecheck after building shared/profile: passed.
 - Built desktop suite: **3,463 tests across 372 files passed**. The first pre-build run failed seven bundle tests because their expected build outputs did not exist; building the desktop resolved those setup failures.
 - 45 focused renderer tests across billing badges, provider setup, Claude setup/status and Models workspace: passed (21 new billing-mode cases).
-- Actual hidden Electron renderer fixture: 1100, 360 (folded/narrow), 768 (unfolded/tablet) CSS-pixel widths, dark theme, identical synthetic data and routes before/after. 24 baseline and 42 after DOM/geometry/interaction assertions passed; zero renderer errors. Mode refresh switches Subscription → API → no chip when signed out. Native capturePage frames use stayHidden/stayAwake, an isolated profile, an off-screen non-focusable window and blocked external requests. The user's running app was not touched.
+- Actual hidden Electron renderer fixture: 1100, 360 (folded/narrow), 768 (unfolded/tablet) CSS-pixel widths, dark theme, identical synthetic data and routes before/after. 24 baseline and 45 after DOM/geometry/interaction assertions passed; zero renderer errors. Mode refresh switches Subscription → API → no chip when signed out. Native capturePage frames use stayHidden/stayAwake, an isolated profile, an off-screen non-focusable window and blocked external requests. The user's running app was not touched.
 - Captures: `.shots/layout-evidence/{before,after}/{subscriptions,api,code,local}-{1100,360,768}.png`; reports live beside captures. Media is published to the shared `pr-media` pre-release by the repository uploader, never committed to the product branch.
-- Pixel inspection status and published links are recorded in the PR description. Capture success alone is not visual approval.
+- Representative desktop, folded/narrow and unfolded pixels were inspected: subscription, direct API and Claude Code API/cloud pairs. Captures now precede auth-mutation interactions; v2 media replaces a stale narrow sign-out frame caught in review. Published links are recorded in PR #2357; capture success alone is not visual approval.
 
 ### Reproduction (Windows cmd)
 
