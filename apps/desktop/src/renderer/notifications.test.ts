@@ -49,9 +49,13 @@ describe('notification transport', () => {
     const browser = vi.fn();
     vi.stubGlobal('Notification', browser);
     const reportNotificationVisibility = vi.fn();
-    vi.stubGlobal('window', { nekkoChrome: { platform: 'win32', reportNotificationVisibility }, nekko: { onDeepLink: subscribe, onAgentEvent: vi.fn() } });
+    const deepLinksReady = vi.fn();
+    vi.stubGlobal('window', { nekkoChrome: { platform: 'win32', reportNotificationVisibility, deepLinksReady }, nekko: { onDeepLink: subscribe, onAgentEvent: vi.fn() } });
     const dispose = startDesktopNotifications();
     expect(reportNotificationVisibility).toHaveBeenCalledExactlyOnceWith({ view: 'command', activeSessionId: 'a' });
+    // Main holds a launching link until the listener is attached.
+    expect(deepLinksReady).toHaveBeenCalledOnce();
+    expect(subscribe.mock.invocationCallOrder[0]).toBeLessThan(deepLinksReady.mock.invocationCallOrder[0]);
     const storeListener = storeSubscription.subscribe.mock.calls.at(-1)?.[0] as unknown as (next: unknown, previous: unknown) => void;
     storeListener({ view: 'wall', activeSessionId: 'a' }, { view: 'command', activeSessionId: 'a' });
     expect(reportNotificationVisibility).toHaveBeenCalledTimes(2);
