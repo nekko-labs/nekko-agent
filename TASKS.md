@@ -6,6 +6,10 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Sidebar PR attribution follow-up (#2337)
+
+Use one creation-only transcript collector in `nekko-store::pr` for session summaries and `nekko-workspace` live reads, aligned with the shared TypeScript collector. Hydrate all mounted sidebar cards through a shared eight-read queue rather than a one-shot first-eight slice. Context visibility follows the existing activity Done classification rather than the archived flag alone; PR counts retain the existing #PR +N presentation. Verification is documented in `spec/agents/agent-card-pr-chip.md`.
+
 > **The plan only.** This file is the technical plan: how we build what [spec/](spec/README.md) describes (stack, architecture, data model, conventions, design system, constraints). Update it when the technical approach changes.
 >
 > **Tasks live in GitHub issues** (since 2026-11-04). Every change already has an issue ([AGENTS.md](AGENTS.md), "Landing work"): plan notes and the checklist for a change go in its issue, and how it was built goes in the PR description. [Floop](https://floop-nekko.fly.dev) mirrors the issues (two-way sync is planned). Do not add task groups here.
