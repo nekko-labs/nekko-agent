@@ -65,7 +65,9 @@ jobs:
         with:
           ref: ${{ github.sha }}
           path: .release-tools
-          sparse-checkout: scripts/release-electron.mjs
+          sparse-checkout: |
+            scripts/release-electron.mjs
+            scripts/release-builder-tools.mjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
 
@@ -220,6 +222,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node .release-tools/scripts/release-electron.mjs
+      - name: Download and verify packaging tools
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .release-tools/scripts/release-builder-tools.mjs
       - run: npm run build
 
       # Build installers (Windows: NSIS, macOS: dmg/zip, Linux:
