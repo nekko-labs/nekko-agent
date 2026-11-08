@@ -96,13 +96,9 @@ final class PermissionChecklist {
         }
         access[.camera] = Self.capture(AVCaptureDevice.authorizationStatus(for: .video))
         if AVCaptureDevice.default(for: .video) == nil { access[.camera] = .unavailable }
-        switch AVAudioApplication.shared.recordPermission {
-        case .granted: access[.microphone] = .allowed
-        case .denied: access[.microphone] = .denied
-        case .undetermined: access[.microphone] = .unknown
-        @unknown default: access[.microphone] = .unknown
-        }
-        if AVCaptureDevice.authorizationStatus(for: .audio) == .restricted { access[.microphone] = .restricted }
+        // Read the capture authorization on every foreground transition.
+        // This also represents restricted access rather than treating it as denial.
+        access[.microphone] = Self.capture(AVCaptureDevice.authorizationStatus(for: .audio))
         switch SFSpeechRecognizer.authorizationStatus() {
         case .authorized: access[.speech] = .allowed
         case .denied: access[.speech] = .denied
