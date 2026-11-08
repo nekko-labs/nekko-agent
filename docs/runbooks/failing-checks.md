@@ -104,3 +104,39 @@ missing authorization, credentials, a user decision, or required human evidence.
 - Save traces and profiles for the failing metric, together with actual app revisions and commands. Confirm artifacts exist before calling diagnostics complete. CPU profiles alone cannot explain browser layout/paint work.
 - Keep unrelated baseline performance remediation separate when possible. Do not turn a verified small UI fix into speculative optimization work. Present a baseline-repair dependency or explicit policy decision if it blocks landing.
 - State waiting versus blocked accurately. Give a total elapsed scope and a concrete next action, not another unchanged progress message. Never register a watch when no background work can produce new evidence.
+
+## A baseline fix landed, but the PR still shows the old failure
+
+An Actions **Re-run failed jobs** keeps the original event and PR merge snapshot.
+It does not incorporate a fix that landed on `main` afterward. For example,
+#2142 and #2102 passed separately, then merged 56 seconds apart and put the
+About you card under General while the grouping test required Customize. #2218
+tracked the shared failure; #2220 repaired main. Re-running #2224's original run
+would still test the old snapshot.
+
+1. Match the exact failing assertion on the PR and baseline; a shared job name
+   such as `build` is only a signal, not proof that two failures have one cause.
+2. If the fix is on newer main, merge current main into the same-repository PR
+   (GitHub **Update branch**, or its API with `expected_head_sha`). Do not force
+   push or copy an unrelated baseline workaround into the feature.
+3. Inspect the **new head's** CI run. Only re-run the old run for a transient
+   failure when the branch already includes main. Never weaken the gate.
+4. Resolve conflicts explicitly. An expected-head mismatch means another author
+   pushed; refresh the PR state instead of overwriting it. The repair App cannot
+   update every branch that brings in workflow changes; a person with the needed
+   permission must update those, not broaden the App token.
+
+Queue repair now reads the latest completed success/failure run per PR branch,
+including merged runs whose `pull_requests` metadata is empty. Pending/cancelled
+runs do not clear earlier failure evidence. A baseline-marked **red, completed**
+gate first gets newer main merged in through the App token, so synchronize starts
+fresh checks. If main is already included, it waits while the shared failure
+signal persists, then allows at most two failed-job retries per head. Green,
+running and stale-head gates are left alone. The update API rejects a changed
+head or an unresolved conflict; denied updates go to `needs-human`, without a
+fallback to obsolete CI.
+
+This improves recovery, not prevention. The no-queue, non-strict merge policy is
+unchanged: two independently green PRs can still have a semantic conflict when
+combined. Keep that limitation explicit; do not claim a fresh recovery check
+eliminates all future stale-base races.
