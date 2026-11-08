@@ -943,7 +943,10 @@ export const useStore = create<UiState>((set, get) => ({
     // the theme with everything else.
     syncTitleBarOverlay();
     // The next launch's splash shows before settings load, so it reads these.
-    if (get().settingsLoaded) rememberSplashColours([accent ?? preset?.accent, ...(preset?.swatch ?? [])]);
+    if (get().settingsLoaded) {
+      const splashPreset = accent && preset && accent.toLowerCase() !== preset.accent.toLowerCase() ? 'custom' : presetId;
+      rememberSplashColours([accent ?? preset?.accent, ...(preset?.swatch ?? [])], splashPreset);
+    }
   },
 
   customFonts: null,

@@ -6,7 +6,7 @@
  *
  * Writes apps/website/favicon.svg (the browser-tab icon: the app icon's tile,
  * drawn for small sizes) and apps/website/logo.svg (the nav/footer brand mark:
- * the sage cat with no tile, so the page itself is its background).
+ * the plum cat with no tile, so the page itself is its background).
  */
 const { writeFileSync } = require('fs');
 const { join } = require('path');
