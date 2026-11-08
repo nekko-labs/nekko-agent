@@ -17,6 +17,14 @@ To edit, attach, paste or drop a photo and describe the change, or press **Edit*
 
 Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
 
+### Short video clips (experimental)
+
+Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Models**, **Best for this machine** lists it under **Create video clips** when your computer can run it: it needs a graphics card or Apple Silicon with enough memory, and is never suggested for running on the processor alone, where a clip would take hours. Download it like any other model; its supporting files come with it.
+
+Choose it as the model in a Photo chat and describe the clip. Attach a photo to use it as the first frame. A clip is about two seconds (33 frames at 16 frames a second) in your chat's shape, or the photo's, at about 832×480. It appears in the chat as an animated picture, with its length beside it. The progress line shows the sampling steps, and **Stop** cancels the clip on the engine.
+
+This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) can be listed under **Models → Video** but are not supported yet.
+
 ## Your first local model
 
 If you have never run a model here, Models > Local model server starts with one question:
