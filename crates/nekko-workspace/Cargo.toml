@@ -8,7 +8,6 @@ repository.workspace = true
 publish.workspace = true
 
 [dev-dependencies]
-nekko-store = { path = "../nekko-store" }
 tempfile = "3"
 
 [dependencies]
@@ -17,6 +16,7 @@ getrandom.workspace = true
 memchr.workspace = true
 nekko-context = { path = "../nekko-context" }
 nekko-js = { path = "../nekko-js" }
+nekko-store = { path = "../nekko-store" }
 nekko-net = { path = "../nekko-net" }
 nekko-tools = { path = "../nekko-tools" }
 regress.workspace = true

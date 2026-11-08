@@ -4,11 +4,10 @@ import { createPortal } from 'react-dom';
 import { CHAT_MODE_LABEL } from '@nekko-agent/shared';
 import type { ChatMode, EffortLevel, ExecutionMode, ModelScope, GuidanceLevel, ChatMemory, SavedMode, SavedModeIcon, Session, ToolApproach, WorkModeId } from '@nekko-agent/shared';
 import {
-  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getSessionWorkspaceIds, getWorkMode, matchSavedMode, newSavedModeId,
+  CONNECTOR_CATALOG, WORK_MODES, chatModelScope, defaultSavedMode, getExecutionMode, getWorkMode, matchSavedMode, newSavedModeId,
   modePatchSkips, savedModeSummary, savedModes, sessionModeOptions, sessionPatchForMode,
 } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
-import { addFolderToChat, applyFolderSelection, withExcluded } from '../sessionFolders.js';
 import { ToolsList, toolCounts, useChatTools } from './ChatControls.js';
 import {
   BoltIcon, CapIcon, CheckIcon, CodeIcon, ChevronIcon, CloseIcon, CloudIcon, CompassIcon, CubeIcon, DialIcon, DocTextIcon,
@@ -271,8 +270,6 @@ export function ModePanel({
 
   const { enabled: toolsOn, usable: toolsUsable } = toolCounts(session, tools);
   const mcpServers = settings?.mcpServers ?? [];
-  const workspaces = settings?.workspaces ?? [];
-  const folders = getSessionWorkspaceIds(session).map((id) => ({ id, folder: workspaces.find((w) => w.id === id) }));
   const mcpOff = new Set(session.disabledMcpServers ?? []);
   const mcpOn = mcpServers.filter((s) => s.enabled && !mcpOff.has(s.id)).length;
   const connected = (settings?.connectors ?? []).filter((c) => c.connected);
@@ -428,19 +425,6 @@ export function ModePanel({
               <span className="mode-ic">{session.offline ? <GlobeOffIcon /> : <GlobeIcon />}</span>
               <span className="min-w-0 flex-1">{title('Internet access', session.offline ? 'Blocked: online tools, connectors and MCP are off. Shell commands are not network-sandboxed.' : isCloudModel ? 'On. A cloud model needs the internet; pick a local model to block it.' : 'Web tools, connectors and MCP can reach the internet.')}</span>
               {sw(!session.offline, () => void actions.toggle('offline'), 'Internet access', isCloudModel && !session.offline)}
-            </div>
-            <div className="mode-row">
-              <span className="mode-ic"><FolderIcon /></span>
-              <span className="min-w-0 flex-1">{title('Folders', 'What the agent can read and write. The first is where it works.')}
-                <span className="mode-folders">
-                  {folders.map(({ id, folder }) => (
-                    <span key={id} className="mode-chip" title={folder?.path}><span>{folder?.name ?? id}</span>
-                      <button aria-label={`Remove ${folder?.name ?? id}`} onClick={() => void applyFolderSelection(session.id, withExcluded(session, id)).then(onChange).catch(toastError)}><CloseIcon className="h-2.5 w-2.5" /></button>
-                    </span>
-                  ))}
-                  <button className="mode-chip is-add" onClick={() => void addFolderToChat(session.id, session, 'include').then((s) => s && onChange(s)).catch(toastError)}><PlusIcon className="h-3 w-3" /> Add folder</button>
-                </span>
-              </span>
             </div>
             <div className="mode-row is-stacked">
               <span className="mode-ic" data-icon-hover><ShieldQuestionIcon /></span>

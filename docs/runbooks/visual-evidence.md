@@ -141,3 +141,14 @@ Check the startup log's `data dir:` line before touching the UI. To get
 provider cards without real settings, seed that folder with a `settings.json`
 holding a `providers` array. `.claude/launch.json` is tracked: keep temporary
 preview entries out of it, or out of your commit.
+
+### Composer folders and suggestions journey
+
+Set `NEKKO_LAYOUT_SANDBOX=composer-folders-sandbox.cjs` for new/active text
+composers at 1000px and 390px in Simple/Detailed. It checks one folder picker
+immediately after +, Suggestions at the far right of the Mode row, removal from Mode, folder
+selection and per-chat removal without revoking saved access, and Escape focus
+restoration. Synthetic bridge folders and drafts never touch real app data.
+Capture the unchanged renderer with `NEKKO_TEST_SOURCE=<base-worktree>` and
+`NEKKO_FOLDERS_BASELINE=1`; omit both for strict post-change assertions. Inspect
+the report and PNGs separately; generated captures are not visual approval.
