@@ -56,6 +56,15 @@ Feature head `47b213eb6db2536571fded23e945db261d236423`, host head `9c41189cb`.
 - Initial native fixture compilation failures were fixed, not skipped. Latest matched image/new-chat evidence [run42436236581](https://github.com/nekko-labs/nekko-agent/actions/runs/42436236581); final iOS native [run42435898482](https://github.com/nekko-labs/nekko-agent/actions/runs/42435898482). Mac runner queue is not a passing build.
 - The permission approval and checkpoint are recorded in project memory, obsurdian commit `436b40f`.
 
+## Current evidence diagnosis (2026-11-08)
+
+- At `2cbb486ba`, Android app and instrumentation compiled. [Native run 42436986175](https://github.com/nekko-labs/nekko-agent/actions/runs/42436986175) executed **494 app tests, one failure** (`TranslationsTest:48`); this is not a passing native suite.
+- [Matched image run 42437031397](https://github.com/nekko-labs/nekko-agent/actions/runs/42437031397) failed `imageSummaryBadge` on both revisions. Its exported semantics tree has the header and mode pill but no `chats.list`. The fixture paired without `repo.load()`, leaving the screen's `ready` guard false. Adding a recent timestamp alone did not fix this. The fixture now follows app startup and waits for readiness; row visibility/clickability and after-only badge assertions are retained.
+- The same run's after-side `imageReplyAndSignedSend` crashed at `ChatScreen.kt:344`: `scrollToItem` forced measurement from the first item-layout snapshot notification. Initial positioning now uses `requestScrollToItem`, scheduling the jump for the next measure. The generated-image tile assertion now requires visibility. Native execution of these corrections is pending; no baseline classification or crash-fix verification is claimed yet.
+- [Voice run 42437033586](https://github.com/nekko-labs/nekko-agent/actions/runs/42437033586) passed both Android interaction tests on both jobs. Both revision manifests identify `2cbb486ba`, so they are repeated new-surface checks, **not** a baseline comparison. Downloaded after motion is H.264, 1080x1920, 37.407944 seconds (ffprobe). This verifies media structure, not appearance or audio.
+- Visual inspection remains blocked: a fresh local evidence viewer loaded the captured PNG, but the browser screenshot timed out again. Viewer/browser stopped. Required matched composer, foldable layouts, motion inspection and iOS evidence remain unfinished.
+- #2211 current-head build, itests, perf, CodeQL and gate passed. It still depends on unmerged #2190; do not merge the feature layer around that dependency.
+
 ## Existing native baseline failures
 
 - Android translations: same 30 missing entries on exact base and safety head; #2125, fix #2130.

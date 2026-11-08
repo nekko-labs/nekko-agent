@@ -45,11 +45,13 @@ class ImageChatEvidenceTest {
         repo = ComputersRepository(ImageEvidenceStore(), RemoteFactory { _, _ -> host }, scope, { "Test phone" },
             deriveKey = { _, _ -> ByteArray(32) }, changeSigner = SoftwareChangeSigner.generate())
         runBlocking {
+            // Match app startup: pairing alone does not release the chat list's ready guard.
+            repo.load()
             repo.pair(PairingLink("wss://relay.example.dev", "a1b2c3d4e5f60718", "00112233445566778899aabbccddeeff", pair = "ABC123",
                 hostKey = "BJ7go4GGB9flqEQfjn77eO+WT5J+xi8WJkMUlZycp+JNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE="))
             host.online()
         }
-        compose.waitUntil(10_000) { repo.state.value.conn == RelayState.ONLINE && !repo.state.value.summariesLoading }
+        compose.waitUntil(10_000) { repo.state.value.ready && repo.state.value.conn == RelayState.ONLINE && !repo.state.value.summariesLoading }
     }
 
     @After fun close() { viewModels.clear(); scope.cancel() }
@@ -79,7 +81,7 @@ class ImageChatEvidenceTest {
         showChat()
         shot("image-reply")
         if (!before) {
-            compose.onAllNodesWithTag("image.reply.0").onFirst().assertExists()
+            compose.onAllNodesWithTag("image.reply.0").onFirst().assertIsDisplayed()
             compose.onNodeWithText("Generated image 1").performClick()
             compose.waitUntil(10_000) { host.calls.any { it.first == "session:photo" } }
             compose.waitUntil(10_000) { compose.onAllNodesWithTag("image.full").fetchSemanticsNodes().isNotEmpty() }
@@ -116,7 +118,7 @@ class ImageChatEvidenceTest {
             runCatching {
                 val state = repo.state.value
                 evidenceFile("image-summary-failure", "txt").writeText(
-                    "conn=${state.conn} loading=${state.summariesLoading} error=${state.lastError}\n" +
+                    "ready=${state.ready} conn=${state.conn} loading=${state.summariesLoading} error=${state.lastError}\n" +
                         "summaries=${state.summaries}\nactivity=${state.activity}\nchannels=${host.calls.map { it.first }}\n" +
                         compose.onRoot(useUnmergedTree = true).printToString(),
                 )

@@ -339,9 +339,11 @@ private fun ChatScreenContent(
     LaunchedEffect(rows.size, keyed.size, streamTick, chat.error, chat.ready) {
         if (!chat.ready || keyed.isEmpty()) return@LaunchedEffect
         if (!openedAtBottom) {
-            // The list replaces the spinner in this frame: wait until it has items, then jump without animating.
+            // The list replaces the spinner in this frame. Its first layout can notify snapshotFlow
+            // while measurement is still running: request the jump for the next measure instead of
+            // forcing a reentrant measure through scrollToItem.
             snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
-            list.scrollToItem(lastIndex)
+            list.requestScrollToItem(lastIndex)
             openedAtBottom = true
             return@LaunchedEffect
         }
