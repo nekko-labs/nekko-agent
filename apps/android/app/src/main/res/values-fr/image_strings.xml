@@ -19,9 +19,14 @@
     <string name="image_create">Démarrer une discussion d’images</string>
     <string name="image_offline">Reconnectez-vous pour créer ou envoyer une discussion d’images. Les demandes d’images ne sont jamais mises en attente comme du texte.</string>
     <string name="image_unsupported">Cet ordinateur ne signale pas de prise en charge de la génération d’images. Mettez à jour Nekko Agent sur l’ordinateur.</string>
-    <string name="image_prompt_only">Décrivez une image uniquement avec du texte. Les pièces jointes et les compétences ne sont pas prises en charge. La génération utilise l’autorisation Change signée existante.</string>
+    <string name="image_prompt_only">Décrivez une image avec des mots. Dans la discussion, ajoutez jusqu’à 4 photos pour les modifier. Les compétences ne sont pas prises en charge. La génération utilise l’autorisation Change signée existante.</string>
     <string name="image_reply_n">Image générée %1$d</string>
     <string name="image_open">Ouvrir l’image</string>
     <string name="image_close">Fermer</string>
     <string name="image_unavailable">Cette image n’a pas pu être chargée. Reconnectez-vous et réessayez.</string>
+    <string name="image_describe_picture">Décrivez une image</string>
+    <string name="image_describe_change">Décrivez la modification</string>
+    <string name="image_photos_to_edit">Photos à modifier</string>
+    <string name="image_edit">Modifier</string>
+    <string name="image_edit_hint">Ajoute cette image à votre message pour la modifier</string>
 </resources>

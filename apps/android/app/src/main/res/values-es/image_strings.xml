@@ -19,9 +19,14 @@
     <string name="image_create">Iniciar chat de imágenes</string>
     <string name="image_offline">Vuelve a conectarte para crear o enviar un chat de imágenes. Las solicitudes de imágenes nunca se ponen en cola como texto.</string>
     <string name="image_unsupported">Este ordenador no indica que admita la generación de imágenes. Actualiza Nekko Agent en el ordenador.</string>
-    <string name="image_prompt_only">Describe una imagen solo con texto. No se admiten archivos adjuntos ni habilidades. La generación usa la autorización Change firmada existente.</string>
+    <string name="image_prompt_only">Describe una imagen con palabras. En el chat puedes añadir hasta 4 fotos para editarlas. No se admiten habilidades. La generación usa la autorización Change firmada existente.</string>
     <string name="image_reply_n">Imagen generada %1$d</string>
     <string name="image_open">Abrir imagen</string>
     <string name="image_close">Cerrar</string>
     <string name="image_unavailable">No se pudo cargar esta imagen. Vuelve a conectarte e inténtalo de nuevo.</string>
+    <string name="image_describe_picture">Describe una imagen</string>
+    <string name="image_describe_change">Describe el cambio</string>
+    <string name="image_photos_to_edit">Fotos para editar</string>
+    <string name="image_edit">Editar</string>
+    <string name="image_edit_hint">Añade esta imagen a tu mensaje para cambiarla</string>
 </resources>

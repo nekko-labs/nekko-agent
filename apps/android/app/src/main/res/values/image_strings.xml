@@ -19,9 +19,14 @@
     <string name="image_create">Start image chat</string>
     <string name="image_offline">Reconnect to create or send an image chat. Image prompts are never queued as text.</string>
     <string name="image_unsupported">This computer does not advertise image generation. Update Nekko Agent on the computer.</string>
-    <string name="image_prompt_only">Describe an image using text only. Attachments and skills are not supported. Generation uses the existing signed Change authorization.</string>
+    <string name="image_prompt_only">Describe an image in words. In the chat, add up to 4 photos to edit them. Skills are not supported. Generation uses the existing signed Change authorization.</string>
     <string name="image_reply_n">Generated image %1$d</string>
     <string name="image_open">Open image</string>
     <string name="image_close">Close</string>
     <string name="image_unavailable">This image could not be loaded. Reconnect and try again.</string>
+    <string name="image_describe_picture">Describe a picture</string>
+    <string name="image_describe_change">Describe the change</string>
+    <string name="image_photos_to_edit">Photos to edit</string>
+    <string name="image_edit">Edit</string>
+    <string name="image_edit_hint">Adds this picture to your message to change it</string>
 </resources>

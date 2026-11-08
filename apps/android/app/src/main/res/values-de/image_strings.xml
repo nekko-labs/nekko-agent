@@ -19,9 +19,14 @@
     <string name="image_create">Bildchat starten</string>
     <string name="image_offline">Verbinde dich erneut, um einen Bildchat zu erstellen oder eine Bildanfrage zu senden. Bildanfragen werden niemals als Text in die Warteschlange gestellt.</string>
     <string name="image_unsupported">Dieser Computer meldet keine Unterstützung für Bilderzeugung. Aktualisiere Nekko Agent auf dem Computer.</string>
-    <string name="image_prompt_only">Beschreibe ein Bild nur mit Text. Anhänge und Skills werden nicht unterstützt. Die Erzeugung nutzt die bestehende signierte Change-Autorisierung.</string>
+    <string name="image_prompt_only">Beschreibe ein Bild in Worten. Im Chat kannst du bis zu 4 Fotos zum Bearbeiten hinzufügen. Skills werden nicht unterstützt. Die Erzeugung nutzt die bestehende signierte Change-Autorisierung.</string>
     <string name="image_reply_n">Erzeugtes Bild %1$d</string>
     <string name="image_open">Bild öffnen</string>
     <string name="image_close">Schließen</string>
     <string name="image_unavailable">Dieses Bild konnte nicht geladen werden. Verbinde dich erneut und versuche es noch einmal.</string>
+    <string name="image_describe_picture">Beschreibe ein Bild</string>
+    <string name="image_describe_change">Beschreibe die Änderung</string>
+    <string name="image_photos_to_edit">Fotos zum Bearbeiten</string>
+    <string name="image_edit">Bearbeiten</string>
+    <string name="image_edit_hint">Fügt dieses Bild deiner Nachricht hinzu, um es zu ändern</string>
 </resources>

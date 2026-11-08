@@ -78,6 +78,6 @@ class PhotoTray<T> {
          * All photos of one message together, in data-URL characters: well under
          * the 9 MB a phone frame may carry (`PHONE_MAX_FRAME_BYTES`) once sealed.
          */
-        const val MAX_TOTAL_CHARS = 6 * 1024 * 1024
+        const val MAX_TOTAL_CHARS = com.nekko.protocol.PhotoEdit.MAX_TOTAL_CHARS
     }
 }

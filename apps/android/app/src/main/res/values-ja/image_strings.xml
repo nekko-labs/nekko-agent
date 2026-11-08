@@ -19,9 +19,14 @@
     <string name="image_create">画像チャットを開始</string>
     <string name="image_offline">画像チャットを作成または送信するには再接続してください。画像の生成指示がテキストとして送信待ちになることはありません。</string>
     <string name="image_unsupported">このコンピューターは画像生成への対応を通知していません。コンピューターの Nekko Agent を更新してください。</string>
-    <string name="image_prompt_only">画像をテキストだけで説明してください。添付ファイルとスキルには対応していません。生成には既存の署名付き Change 認可を使用します。</string>
+    <string name="image_prompt_only">画像を言葉で説明してください。チャットでは編集する写真を 4 枚まで追加できます。スキルには対応していません。生成には既存の署名付き Change 認可を使用します。</string>
     <string name="image_reply_n">生成された画像 %1$d</string>
     <string name="image_open">画像を開く</string>
     <string name="image_close">閉じる</string>
     <string name="image_unavailable">この画像を読み込めませんでした。再接続して、もう一度お試しください。</string>
+    <string name="image_describe_picture">作りたい画像を説明</string>
+    <string name="image_describe_change">変更内容を説明</string>
+    <string name="image_photos_to_edit">編集する写真</string>
+    <string name="image_edit">編集</string>
+    <string name="image_edit_hint">この画像をメッセージに追加して変更します</string>
 </resources>

@@ -5,11 +5,22 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
+import com.nekko.protocol.Block
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,16 +41,34 @@ import kotlinx.coroutines.CancellationException
 /** The existing authorized session:photo read. No path, external URL or file API fallback. */
 val LocalSessionPhoto = staticCompositionLocalOf<(suspend (messageId: String, index: Int) -> String?)?> { null }
 
+/** **Edit** under a reply's pictures: for a block, what puts picture `i` in the message box; null offers no Edit. */
+val LocalEditPicture = staticCompositionLocalOf<(Block) -> ((Int) -> Unit)?> { { null } }
+
 @Composable
-fun ReplyPhotos(messageId: String, thumbs: List<String>) {
+fun ReplyPhotos(block: Block.Assistant) {
+    val messageId = block.id
+    val thumbs = block.thumbs
     val read = LocalSessionPhoto.current
+    val edit = LocalEditPicture.current(block)
     var opened by remember(messageId) { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         thumbs.forEachIndexed { index, thumb ->
             Box(Modifier.testTag("image.reply.$index").clickable(enabled = read != null) { opened = index }) {
                 PromptPhotos(listOf(thumb), Nekko.palette.inkSoft, Nekko.palette.surface2)
             }
-            TextButton(onClick = { opened = index }, enabled = read != null) { Text(stringResource(R.string.image_reply_n, index + 1)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { opened = index }, enabled = read != null) { Text(stringResource(R.string.image_reply_n, index + 1)) }
+                if (edit != null) {
+                    val hint = stringResource(R.string.image_edit_hint)
+                    OutlinedButton(
+                        onClick = { edit(index) },
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("image.edit.$index").semantics { onClick(label = hint) { edit(index); true } },
+                    ) {
+                        Icon(Icons.Filled.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Text(stringResource(R.string.image_edit), modifier = Modifier.padding(start = 6.dp))
+                    }
+                }
+            }
         }
     }
     val index = opened

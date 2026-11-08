@@ -149,6 +149,8 @@ fun Composer(
     footer: (@Composable () -> Unit)? = null,
     onVoiceConversation: (() -> Unit)? = null,
     voiceControls: (@Composable (com.nekko.android.voice.VoiceComposer) -> Unit)? = null,
+    /** An image chat: the prompt describes a picture, photos are ones to edit, and nothing is queued. */
+    photoChat: Boolean = false,
 ) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
@@ -169,7 +171,8 @@ fun Composer(
     val hasContent = text.isNotBlank() || skill != null || prompt != null || photos.isNotEmpty()
     // Send waits for photos still being read, so none are left behind.
     val canSend = hasContent && blocked == null && !sending && !addingPhotos
-    val showStop = running && !hasContent && !addingPhotos
+    // An image chat queues nothing: Stop for as long as the picture is being made.
+    val showStop = running && (!hasContent || photoChat) && !addingPhotos
     var plusOpen by remember { mutableStateOf(false) }
     // The Markdown editing (MD-6): the selection the toolbar acts on, and the formatting toolbar's switch (*Aa*).
     val context = LocalContext.current
@@ -323,8 +326,9 @@ fun Composer(
                         if (text.isEmpty()) {
                             Text(
                                 when {
+                                    photoChat -> stringResource(if (photos.isEmpty()) R.string.image_describe_picture else R.string.image_describe_change)
                                     skill != null -> stringResource(R.string.chat_add_details_for, skill.name)
-                                    running -> stringResource(R.string.chat_queue_follow_up)
+                                    running ->stringResource(R.string.chat_queue_follow_up)
                                     skills.isNotEmpty() -> stringResource(R.string.chat_message_slash_skills)
                                     else -> stringResource(R.string.chat_message_your_computer)
                                 },
@@ -355,7 +359,8 @@ fun Composer(
                                 onVoiceConversation = onVoiceConversation?.let { go -> { plusOpen = false; go() } },
                                 onDictate = mic?.let { m -> { plusOpen = false; m.onTap(dictated) } },
                                 attach = attach,
-                                onPicked = { plusOpen = false; attach?.clearError?.invoke() },
+                                filesLabel = stringResource(if (photoChat) R.string.image_photos_to_edit else R.string.chat_image_from_files),
+                                onPicked ={ plusOpen = false; attach?.clearError?.invoke() },
                                 prompts = prompts,
                                 onPrompt = { picked ->
                                     plusOpen = false
@@ -610,6 +615,7 @@ private fun PlusMenu(
     onDictate: (() -> Unit)?,
     onVoiceConversation: (() -> Unit)? = null,
     attach: AttachUi?,
+    filesLabel: String,
     onPicked: () -> Unit,
     prompts: List<SavedPrompt> = emptyList(),
     onPrompt: (SavedPrompt) -> Unit = {},
@@ -657,7 +663,7 @@ private fun PlusMenu(
                 { Text(stringResource(R.string.chat_photos_max, PhotoTray.MAX_PHOTOS), style = MaterialTheme.typography.labelSmall, color = p.inkFaint) }
             } else null
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.chat_image_from_files), color = if (full) p.inkFaint else p.ink) },
+                text = { Text(filesLabel, color = if (full) p.inkFaint else p.ink) },
                 leadingIcon = { Icon(Icons.Filled.AttachFile, contentDescription = null, tint = if (full) p.inkFaint else p.inkSoft) },
                 trailingIcon = hint,
                 enabled = !full,

@@ -30,6 +30,8 @@ sealed interface Block {
         /** When the computer saved it (ms); null while live. Simple's folded steps time the turn from it. */
         val at: Long? = null,
         val thumbs: List<String> = emptyList(),
+        /** A made picture (not a clip): Edit sits under each of [thumbs]. */
+        val editable: Boolean = false,
     ) : Block
     data class Tool(
         override val id: String,
@@ -68,7 +70,8 @@ object Transcript {
                 )
                 "assistant" -> {
                     if (m.content.isNotBlank() || !m.reasoning.isNullOrBlank() || m.images.isNotEmpty()) {
-                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted, at = m.createdAt, thumbs = m.images)
+                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted, at = m.createdAt, thumbs = m.images,
+                            editable = m.generated?.video == false && m.images.isNotEmpty())
                     }
                     for (call in m.toolCalls) {
                         toolIndex[call.id] = out.size

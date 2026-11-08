@@ -454,20 +454,25 @@ class ChatController(
 
     private suspend fun sendImage(text: String, skill: SkillSummary?, images: List<String>) {
         val session = _state.value.session ?: throw RelayException("Wait for this chat to load.")
-        require(skill == null && images.isEmpty()) { "Image generation accepts a text prompt only. Remove attachments and skills first." }
+        require(skill == null) { "Image generation takes a prompt and photos to edit, not skills. Remove the skill first." }
+        // Photos mean edit (decision 0069): at most 4 PNG, JPEG or WebP data URLs, signed with the prompt.
+        require(images.size <= com.nekko.protocol.PhotoEdit.MAX_PHOTOS) { com.nekko.protocol.PhotoEdit.TOO_MANY }
+        require(images.all(com.nekko.protocol.PhotoEdit::accepts)) { com.nekko.protocol.PhotoEdit.WRONG_TYPE }
+        // Checked here, after scaling, so the person reads why instead of the computer refusing it.
+        require(com.nekko.protocol.PhotoEdit.fits(images)) { com.nekko.protocol.PhotoEdit.TOO_LARGE }
         require(text.isNotBlank()) { "Describe the image to generate." }
         check(env().conn == RelayState.ONLINE) { "Reconnect to generate an image. Image prompts are never queued as text." }
         check(env().imageGeneration) { "This computer does not advertise image generation. Update Nekko Agent on the computer." }
         check(imageSend == null && !_state.value.turn.running && !session.running) { "Wait for this image to finish or stop it first." }
         val params = session.imageParams ?: throw RelayException("Choose and save image settings before generating.")
-        val request = params.generation(sessionId, text)
+        val request = params.generation(sessionId, text, images)
         val generate = generateImage ?: throw RelayException("This phone cannot authorize image generation.")
         // Await authorization and the turn so a refusal/cancel keeps the composer's words.
         // There is no image idempotency token: never retry an ambiguous lost response automatically.
         val attempt = ImageSend()
         imageSend = attempt
         imageRevision++
-        _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now())))) }
+        _state.update { it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-image-${now()}", text, now(), images)))) }
         try {
             coroutineScope {
                 // Stop cancels this child, including pending Change signing, not the composer's scope.
@@ -493,6 +498,25 @@ class ChatController(
                 _state.update { it.copy(turn = it.turn.copy(running = false)) }
             }
         }
+    }
+
+    /**
+     * A made picture to edit: as large as the computer sends it ([readFull], `session:photo`),
+     * else the small copy already in the transcript. The caller scales it and puts it in the
+     * message box; nothing is sent by itself.
+     */
+    suspend fun pictureToEdit(messageId: String, index: Int, readFull: suspend () -> String?): String {
+        val full = try {
+            readFull()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        if (!full.isNullOrEmpty()) return full
+        val thumb = _state.value.session?.messages?.firstOrNull { it.id == messageId }?.images?.getOrNull(index)
+        if (thumb.isNullOrEmpty()) throw RelayException(PICTURE_NOT_SENT)
+        return thumb
     }
 
     suspend fun setImageParams(params: com.nekko.protocol.ImageChatParams) {
@@ -654,6 +678,15 @@ class ChatController(
     companion object {
         /** Editing the computer's queue needs the computer. */
         const val RECONNECT_TO_EDIT_QUEUE = "Reconnect to change the queue. The computer may start the prompt meanwhile."
+
+        const val PICTURE_NOT_SENT = "Your computer didn’t send that picture. Try again when it’s online."
+
+        /**
+         * **Edit** under a reply's pictures: only a picture an image chat made (`generated`,
+         * not a clip), and only on the live chat, never the phone's read-only saved copy.
+         */
+        fun canEdit(block: Block, ui: ChatUi): Boolean =
+            ui.chatType == "image" && ui.savedAt == null && block is Block.Assistant && block.editable
 
         /** Only MCP tools offer **Always allow this tool**: their server alone says what they do (`offersToolScope` on the desktop). */
         fun offersToolScope(toolName: String): Boolean = toolName.startsWith("mcp__")

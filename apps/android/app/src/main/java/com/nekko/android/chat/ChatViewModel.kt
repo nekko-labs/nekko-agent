@@ -493,10 +493,12 @@ class ChatViewModel(
         if (uris.isEmpty()) return
         val n = photos.begin(uris.size)
         uris.drop(n).forEach(afterEach)
+        // In an image chat a photo is one to edit: scaled as the desktop does (photoEdit.ts).
+        val forEdit = ui.value.chatType == "image"
         uris.take(n).forEach { uri ->
             viewModelScope.launch {
                 try {
-                    val (url, preview) = ImageAttachments.encode(resolver, uri)
+                    val (url, preview) = ImageAttachments.encode(resolver, uri, forEdit)
                     photos.added(url, preview)
                 } catch (e: CancellationException) {
                     throw e
@@ -508,6 +510,30 @@ class ChatViewModel(
             }
         }
     }
+
+    /**
+     * **Edit** under a made picture: it goes into the message box as a photo to edit,
+     * at full size (`session:photo`) or else the thumbnail, scaled as the desktop does.
+     * Never sent by itself.
+     */
+    fun editPicture(messageId: String, index: Int) {
+        if (photos.begin(1) == 0) return
+        viewModelScope.launch {
+            try {
+                val picture = controller.pictureToEdit(messageId, index) { photo(messageId, index) }
+                val (url, preview) = ImageAttachments.forEdit(picture)
+                photos.added(url, preview)
+            } catch (e: CancellationException) {
+                photos.failed("That picture couldn’t be read.")
+                throw e
+            } catch (e: com.nekko.protocol.RelayException) {
+                photos.failed(e.message ?: ChatController.PICTURE_NOT_SENT)
+            } catch (_: Exception) {
+                photos.failed("That picture couldn’t be read.")
+            }
+        }
+    }
+
     fun stop() = controller.stop()
     suspend fun approve(ok: Boolean) = controller.approve(ok)
     suspend fun alwaysAllowTool(stepUp: StepUpProof? = null) = controller.alwaysAllowTool(stepUp)

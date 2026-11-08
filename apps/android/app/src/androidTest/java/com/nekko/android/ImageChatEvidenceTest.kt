@@ -98,6 +98,35 @@ class ImageChatEvidenceTest {
         } else assertTrue(compose.onAllNodesWithTag("image.reply.0").fetchSemanticsNodes().isEmpty())
     }
 
+    /** #2230: Edit under a made picture puts it in the message box; the signed request carries `images` and `size`. */
+    @Test fun editMadePicture() {
+        showChat()
+        if (before) {
+            assertTrue(compose.onAllNodesWithTag("image.edit.0").fetchSemanticsNodes().isEmpty())
+            shot("image-edit")
+            return
+        }
+        compose.onNodeWithTag("image.edit.0").assertIsDisplayed()
+        shot("image-edit")
+        compose.onNodeWithTag("image.edit.0").performClick()
+        compose.waitUntil(10_000) { vm!!.photos.state.value.photos.size == 1 }
+        // The full-size picture, read by message identity only.
+        assertEquals(listOf(JsonPrimitive("image-session"), JsonPrimitive("reply"), JsonPrimitive(0)), host.calls.first { it.first == "session:photo" }.second)
+        compose.onAllNodes(hasSetTextAction()).onFirst().performTextInput("Make it night")
+        shot("image-edit-attached")
+        compose.onNodeWithContentDescription("Send").performClick()
+        compose.waitUntil(10_000) { host.signed.any { it.first == "chat:generateImage" } }
+        assertFalse(host.calls.any { it.first == "chat:send" || it.first == "chat:queue" })
+        val request = host.signed.single { it.first == "chat:generateImage" }.second.single().jsonObject
+        assertEquals(setOf("sessionId", "prompt", "params", "images", "size"), request.keys)
+        assertEquals(1, request["images"]!!.jsonArray.size)
+        assertTrue(request["images"]!!.jsonArray[0].jsonPrimitive.content.startsWith("data:image/png;base64,"))
+        // A square picture in a 1024×1024 chat.
+        assertEquals(json("""{"width":1024,"height":1024}"""), request["size"])
+    }
+
+    private fun json(s: String) = WireJson.parseToJsonElement(s)
+
     @Test fun imageSummaryBadge() {
         compose.setContent {
             NekkoTheme(dark = false) {
@@ -215,7 +244,7 @@ private class ImageEvidenceRemote : Remote {
             "engine:models" -> json("""[{"id":"flux","kind":"image","name":"Flux","format":"gguf","state":"ready"}]""")
             "sessions:summaries" -> json("""[{"id":"image-session","title":"Paper boat","updatedAt":$updatedAt,"chatType":"image"}]""")
             "session:create" -> json("""{"id":"image-session"}""")
-            "session:get" -> json("""{"id":"image-session","title":"Paper boat","chatType":"image","imageParams":{"modelId":"flux","cfgScale":4},"messages":[{"id":"reply","role":"assistant","content":"","reasoning":"Rendering","images":["$image"]}]}""")
+            "session:get" -> json("""{"id":"image-session","title":"Paper boat","chatType":"image","imageParams":{"modelId":"flux","cfgScale":4},"messages":[{"id":"reply","role":"assistant","content":"","reasoning":"Rendering","images":["$image"],"generated":{"modelId":"flux","width":64,"height":64,"steps":4,"cfgScale":1,"seed":7,"ms":900}}]}""")
             "session:photo" -> JsonPrimitive(image)
             "workspace:list", "skills:list", "skills:all", "skills:runnable", "prompts:list" -> JsonArray(emptyList())
             "chat:pending" -> JsonObject(emptyMap())

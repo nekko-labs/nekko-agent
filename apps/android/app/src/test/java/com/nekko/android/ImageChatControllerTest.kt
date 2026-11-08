@@ -68,7 +68,11 @@ class ImageChatControllerTest {
         var generated = 0
         val chat = ChatController("s", caller, backgroundScope, { env }, generateImage = { generated++; JsonNull })
         chat.reload()
-        assertTrue(runCatching { chat.send("cat", images = listOf("data:image/png;base64,AA==")) }.isFailure)
+        // Photos to edit: PNG, JPEG or WebP data URLs only, at most 4.
+        assertTrue(runCatching { chat.send("cat", images = listOf("data:image/gif;base64,R0lG")) }.isFailure)
+        assertTrue(runCatching { chat.send("cat", images = List(5) { "data:image/png;base64,AA==" }) }.isFailure)
+        val big = "data:image/jpeg;base64," + "A".repeat(PhotoEdit.MAX_TOTAL_CHARS / 2)
+        assertEquals(PhotoEdit.TOO_LARGE, runCatching { chat.send("cat", images = listOf(big, big)) }.exceptionOrNull()?.message)
         assertTrue(runCatching { chat.send("cat", skill = SkillSummary("skill", "", "", "builtin")) }.isFailure)
         assertTrue(runCatching { chat.send(" ") }.isFailure)
         env = online.copy(imageGeneration = false)
@@ -291,5 +295,83 @@ class ImageChatControllerTest {
         val params = ImageChatParams("flux", width = 768.0)
         chat.setImageParams(params)
         assertEquals(listOf(JsonPrimitive("s"), params.sessionOptions()), caller.calls.single { it.channel == Channels.SESSION_SET_OPTIONS }.args)
+    }
+
+    // ---- photo editing (#2230, decision 0069) ----
+
+    /** A 1920×1080 PNG header: enough for the edit size. */
+    private val landscape = "data:image/png;base64," + java.util.Base64.getEncoder().encodeToString(byteArrayOf(
+        0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+        0, 0, 0x07, 0x80.toByte(), 0, 0, 0x04, 0x38, 8, 2, 0, 0, 0))
+
+    @Test fun `photos go inside the one signed generate request with the edit size and never through text send`() = runTest {
+        val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) session() else JsonNull }
+        val requests = mutableListOf<JsonElement>()
+        val chat = ChatController("s", caller, backgroundScope, { online }, generateImage = { requests += it; JsonNull })
+        chat.reload()
+        chat.send("Make it night", images = listOf(landscape, "data:image/jpeg;base64,/9j/"))
+        val request = requests.single().jsonObject
+        assertEquals(ImageChatParams("flux").generation("s", "Make it night", listOf(landscape, "data:image/jpeg;base64,/9j/")), request)
+        assertEquals(2, request["images"]!!.jsonArray.size)
+        assertEquals(buildJsonObject { put("width", 1344); put("height", 768) }, request["size"])
+        assertFalse(caller.channels().any { it in listOf(Channels.CHAT_SEND, Channels.CHAT_QUEUE) })
+        // Without photos neither key goes.
+        chat.send("A new one")
+        assertEquals(setOf("sessionId", "prompt", "params"), requests.last().jsonObject.keys)
+    }
+
+    @Test fun `photos to edit are signed by the Change proof with the request`() = runTest {
+        val signer = SoftwareChangeSigner.generate()
+        val remote = FakeRemote(RelayConfig("wss://relay.example.dev", "room", "key", ByteArray(32), TEST_HOST_KEY, "phone-1", "Pixel Test")) { JsonNull }
+        val changes = com.nekko.android.security.ChangeCalls(remote, signer, "phone-1", "Studio")
+        val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) session() else JsonNull }
+        val chat = ChatController("s", caller, backgroundScope, { online }, generateImage = {
+            changes.call(Channels.CHAT_GENERATE_IMAGE, listOf(it), timeoutMs = TURN_TIMEOUT_MS)
+        })
+        chat.reload()
+        chat.send("Make it night", images = listOf(landscape))
+        val sent = remote.calls.single { it.channel == Channels.CHAT_GENERATE_IMAGE }
+        assertEquals(listOf(landscape), sent.args.single().jsonObject["images"]!!.jsonArray.map { it.jsonPrimitive.content })
+        val proof = sent.proof!!
+        val payload = ChangeProof.payload("phone-1", Channels.CHAT_GENERATE_IMAGE, JsonArray(sent.args), proof["ts"]!!.jsonPrimitive.long)
+        assertTrue(ChangeProof.verify(signer.publicKey(), payload, java.util.Base64.getDecoder().decode(proof["sig"]!!.jsonPrimitive.content)))
+    }
+
+    private fun madeSession(generated: String) = WireJson.parseToJsonElement(
+        """{"id":"s","chatType":"image","imageParams":{"modelId":"flux","cfgScale":4},"messages":[
+           {"id":"u","role":"user","content":"cat","images":["data:image/jpeg;base64,/9j/"]},
+           {"id":"a","role":"assistant","content":"","images":["data:image/png;base64,THUMB"],"generated":$generated}]}""",
+    )
+
+    @Test fun `Edit shows only under a made picture of a live image chat`() = runTest {
+        var s = madeSession("""{"modelId":"flux","width":1024,"height":1024,"seed":7,"ms":900}""")
+        val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) s else JsonNull }
+        val chat = ChatController("s", caller, backgroundScope, { online })
+        chat.reload()
+        val ui = ChatController.project(chat.state.value, online)
+        val (prompt, reply) = ui.blocks
+        assertTrue(ChatController.canEdit(reply, ui))
+        assertFalse(ChatController.canEdit(prompt, ui))
+        // The phone's read-only saved copy offers no Edit.
+        assertFalse(ChatController.canEdit(reply, ui.copy(savedAt = 1L)))
+        // An ordinary chat never does, even for a reply that says it was generated.
+        assertFalse(ChatController.canEdit(reply, ui.copy(chatType = null)))
+        // A clip from a video model is not offered for editing.
+        s = madeSession("""{"modelId":"wan","video":{"frames":33,"fps":16}}""")
+        chat.reload()
+        val clip = ChatController.project(chat.state.value, online)
+        assertFalse(ChatController.canEdit(clip.blocks.last(), clip))
+    }
+
+    @Test fun `Edit takes the full-size picture and falls back to the thumbnail`() = runTest {
+        val caller = FakeCaller { if (it.channel == Channels.SESSION_GET) madeSession("""{"modelId":"flux"}""") else JsonNull }
+        val chat = ChatController("s", caller, backgroundScope, { online })
+        chat.reload()
+        assertEquals("data:image/png;base64,FULL", chat.pictureToEdit("a", 0) { "data:image/png;base64,FULL" })
+        assertEquals("data:image/png;base64,THUMB", chat.pictureToEdit("a", 0) { null })
+        assertEquals("data:image/png;base64,THUMB", chat.pictureToEdit("a", 0) { throw RelayException("offline") })
+        assertEquals(ChatController.PICTURE_NOT_SENT, runCatching { chat.pictureToEdit("a", 3) { null } }.exceptionOrNull()?.message)
+        // Edit only fills the message box: nothing is generated or sent.
+        assertFalse(caller.channels().any { it in listOf(Channels.CHAT_SEND, Channels.CHAT_QUEUE, Channels.CHAT_GENERATE_IMAGE) })
     }
 }

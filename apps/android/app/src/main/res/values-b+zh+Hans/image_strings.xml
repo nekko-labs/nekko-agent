@@ -19,9 +19,14 @@
     <string name="image_create">开始图像聊天</string>
     <string name="image_offline">请重新连接以创建或发送图像聊天。图像生成指令绝不会作为文本排队发送。</string>
     <string name="image_unsupported">此电脑未声明支持图像生成。请更新电脑上的 Nekko Agent。</string>
-    <string name="image_prompt_only">请仅用文本描述图像。不支持附件和技能。生成使用现有的已签名 Change 授权。</string>
+    <string name="image_prompt_only">请用文字描述图像。在聊天中最多可添加 4 张照片进行编辑。不支持技能。生成使用现有的已签名 Change 授权。</string>
     <string name="image_reply_n">生成的图像 %1$d</string>
     <string name="image_open">打开图像</string>
     <string name="image_close">关闭</string>
     <string name="image_unavailable">无法加载此图像。请重新连接并重试。</string>
+    <string name="image_describe_picture">描述一张图片</string>
+    <string name="image_describe_change">描述要做的修改</string>
+    <string name="image_photos_to_edit">要编辑的照片</string>
+    <string name="image_edit">编辑</string>
+    <string name="image_edit_hint">将此图片添加到你的消息中以进行修改</string>
 </resources>

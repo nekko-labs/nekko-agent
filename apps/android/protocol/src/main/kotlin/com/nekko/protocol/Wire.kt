@@ -239,6 +239,8 @@ data class ChatMessage(
     val toolCalls: List<ToolCall> = emptyList(),
     val toolResult: ToolResult? = null,
     val interrupted: Boolean = false,
+    /** A Photo chat reply: how its picture (or clip) was made. */
+    val generated: GeneratedImage? = null,
 ) {
     val imageCount: Int get() = images.size
 
@@ -259,6 +261,7 @@ data class ChatMessage(
                 toolCalls = o["toolCalls"].arr()?.mapNotNull { ToolCall.from(it) } ?: emptyList(),
                 toolResult = ToolResult.from(o["toolResult"]),
                 interrupted = o.bool("interrupted"),
+                generated = if (o.str("role") == "assistant") GeneratedImage.from(o["generated"]) else null,
             )
         }
     }

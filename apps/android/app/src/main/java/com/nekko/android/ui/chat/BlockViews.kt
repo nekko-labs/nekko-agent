@@ -184,7 +184,7 @@ private fun Reply(b: Block.Assistant, fork: ForkAction?, voice: Voice?, showReas
                 }
             }
         }
-        if (b.thumbs.isNotEmpty()) ReplyPhotos(b.id, b.thumbs)
+        if (b.thumbs.isNotEmpty()) ReplyPhotos(b)
         if (b.text.isNotEmpty()) {
             Voiced(voice) {
                 LongPressMenu(b.text, fork) { press ->

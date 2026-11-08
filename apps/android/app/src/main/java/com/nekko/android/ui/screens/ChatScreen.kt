@@ -281,6 +281,10 @@ private fun ChatScreenContent(
             vm.repo.state.value.conn == com.nekko.protocol.RelayState.ONLINE && vm.completedAt.value == null && vm.repo.overlays.value[vm.sessionId] == null
     }
     val attach = rememberAttach(vm)
+    // Edit under a made picture puts it in the message box as a photo to edit; never sent by itself.
+    val editPicture: (Block) -> ((Int) -> Unit)? = remember(vm) {
+        { block -> if (com.nekko.android.chat.ChatController.canEdit(block, chat)) ({ i: Int -> vm.editPicture(block.id, i) }) else null }
+    }
     val prompts by vm.prompts.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val res = LocalResources.current
@@ -593,7 +597,8 @@ private fun ChatScreenContent(
                             itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
                                 val run = (row as? TranscriptRow.Run)?.run
                                 // Watch chips and subagent rows read the chat's watches and child chats.
-                                CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo) {
+                                CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo,
+                                    com.nekko.android.ui.chat.LocalEditPicture provides editPicture) {
                                     when {
                                         row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
                                             openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
@@ -715,8 +720,9 @@ private fun ChatScreenContent(
                         skills = if (chat.chatType == "image") emptyList() else chat.skills,
                         insert = insert,
                         onInserted = vm::inserted,
-                        // Keep a restored tray removable, but never offer new image attachments.
-                        attach = if (chat.chatType == "image" && attach.state.photos.isEmpty()) null else attach,
+                        // In an image chat the photos are ones to edit (decision 0069).
+                        attach = attach,
+                        photoChat = chat.chatType == "image",
                         prompts = if (chat.chatType == "image") emptyList() else prompts,
                         queuedPrompts = chat.queuedPrompts,
                         onEditQueued = vm::editQueued,
