@@ -78,9 +78,9 @@ extension StepUp {
                                   chatTitle: (String) -> String? = { _ in nil }) -> String {
         func mode(_ raw: String?) -> String? {
             switch raw.flatMap(PcSettings.ChatMode.init(rawValue:)) {
-            case .ask?: return "Ask"
-            case .guardrails?: return "Guardrails"
-            case .yolo?: return "YOLO"
+            case .ask?: return "Always ask"
+            case .guardrails?: return "Ask when it matters"
+            case .yolo?: return "No restrictions"
             case nil: return nil
             }
         }

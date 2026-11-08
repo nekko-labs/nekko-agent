@@ -1,11 +1,9 @@
 name: iPhone computer settings evidence
 # Evidence only. The required Native iOS full suite retains its existing cadence.
+# Run by hand (or from another workflow) with the two commits to compare. It does
+# not run on pull requests: its "before" checks expect the computer settings from
+# before #2057, so on any PR based on a later main the baseline job always fails.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - 'apps/ios/**'
-      - '.github/workflows/ios-computer-settings-evidence.yml'
   workflow_call:
     inputs:
       baseline_ref:

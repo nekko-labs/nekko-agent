@@ -2844,6 +2844,28 @@
 .chat-mascot .peek-paws-slot { transform: translateY(5px); opacity: 0; transition: transform 160ms var(--ease-out), opacity 120ms var(--ease-out); }
 .chat-mascot .peek-paws-slot[data-shown] { transform: none; opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .chat-mascot .peek-paws-slot { transition: none; } }
+/* While an approval waits he looks alarmed, hops, then ducks down behind the
+   composer's edge, where the face window cuts him off, so nothing of him sits
+   over the approval bar's buttons. 34 units takes the "!" above his ear below
+   the edge too. Once it is answered he pops back up, quickly, smiling. With
+   reduced motion he simply goes and comes back. */
+.chat-mascot[data-chat-mascot-pose="ducking"] [data-part="peek-head"],
+.chat-mascot[data-chat-mascot-pose="away"] [data-part="peek-head"] { transform: translateY(34px); }
+@media (prefers-reduced-motion: no-preference) {
+  .chat-mascot[data-chat-mascot-pose="ducking"] [data-part="peek-head"] { animation: chat-mascot-duck 760ms both; }
+  .chat-mascot[data-chat-mascot-pose="popping"] [data-part="peek-head"] { animation: chat-mascot-pop 260ms both; }
+}
+@keyframes chat-mascot-duck {
+  0% { transform: none; animation-timing-function: ease-out; }
+  10% { transform: translateY(-3px); animation-timing-function: ease-in; }
+  22%, 52% { transform: none; animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.5); }
+  100% { transform: translateY(34px); }
+}
+@keyframes chat-mascot-pop {
+  0% { transform: translateY(34px); animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1); }
+  70% { transform: translateY(-3px); animation-timing-function: ease-in-out; }
+  100% { transform: none; }
+}
 .composer-column:has(> .composer > .chat-mascot) .plan-sheet-dock { width: auto; margin-left: max(8%, 92px); margin-right: 8%; }
 /* The note sits right above the box, where the cat peeks: it starts clear of him. */
 .composer-column:has(> .composer > .chat-mascot) .chat-long-note { margin-left: 92px; }
@@ -3973,6 +3995,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 }
 .mode-tiles button[aria-checked="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: var(--shadow-sm); }
 .mode-tiles button[aria-checked="true"] svg { color: var(--accent); }
+/* Approval names must remain readable in the narrow Mode panel columns. */
+.mode-approval-tiles { flex-direction: column; min-width: 0; }
+.mode-approval-tiles button { flex-direction: row; gap: 8px; padding: 6px 8px; text-align: left; }
+.mode-approval-tiles button span { white-space: normal; overflow-wrap: anywhere; }
 
 .mode-folders { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .mode-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; height: 24px; padding: 0 4px 0 8px; border-radius: 7px; background: var(--surface-2); font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--ink-soft); }
@@ -4067,11 +4093,18 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; max-width: 1800px; }
 .models-provider-grid > div { min-width: 0; scroll-margin-top: 20px; }
 .models-local-connections { margin-top: 36px; }
-.models-section { scroll-margin-top: 12px; }
-/* Tall enough to scroll to the top even with one provider, so the `models` destination lands on it. */
-.models-section-cloud { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); min-height: 100%; }
+.models-section { scroll-margin-top: 12px; min-width: 0; }
+/* Cloud (left) and Local (right) share the page in two columns on a wide
+   window, and stack with Cloud first on anything narrower than a laptop. */
+.models-workspace-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; max-width: 1800px; margin-inline: auto; }
+.models-workspace-split .models-section { max-width: none; margin-inline: 0; }
+@media (max-width: 1199px) {
+  .models-workspace-split { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+  .models-workspace-split .models-section:not(.models-section-cloud) { padding-top: 24px; border-top: 1px solid var(--line); }
+}
 @media (max-width: 767px) {
   .models-workspace { padding: 16px 16px 48px; }
+  .models-workspace-split { gap: 28px; }
   .models-provider-bar { gap: 12px; }
   .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
 }

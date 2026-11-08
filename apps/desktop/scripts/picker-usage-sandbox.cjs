@@ -42,7 +42,7 @@ app.whenReady().then(async () => {
       assert.equal(await run(`!!document.querySelector('[role=listbox]')`), false);
       await run(`document.querySelector('[data-asks-first]').click()`);
       await sleep(200); await shot('permissions-' + width);
-      await run(`Array.from(document.querySelectorAll('[role=menuitemradio]')).find(e => e.textContent.includes('Asks first')).click()`);
+      await run(`Array.from(document.querySelectorAll('[role=menuitemradio]')).find(e => e.textContent.includes('Always ask')).click()`);
       await sleep(100);
       assert.equal(await run(`document.querySelector('[data-asks-first]').dataset.asksFirst`), 'ask');
       await run(`document.querySelector('[aria-haspopup=listbox]').click()`);

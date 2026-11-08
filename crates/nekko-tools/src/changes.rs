@@ -1,127 +1,245 @@
-//! Pending changes, ported from `packages/host/src/changes.ts`.
-//!
-//! The first time a chat's agent writes or edits a file, the file's content
-//! is snapshotted; the review panel diffs what is on disk now against that
-//! snapshot. Writes still land immediately (the agent loop is never held up),
-//! accepting a file just stops tracking it, and reverting is the renderer
-//! writing the snapshot back. In memory only, like the TS store.
+//! Pending native file-tool originals, not whole-workspace checkpoints.
+//! Saved chats use private local sidecars, under the session lifecycle lock.
+//! Incognito originals stay in memory and are discarded on privacy transitions.
 
+use nekko_store::{ReviewScope, SessionStore};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-/// `FileChange` from `@nekko-agent/shared`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileChange {
     pub path: String,
-    /// Content before the agent's first edit this session ('' if it was new).
     pub original: String,
-    /// Content on disk now.
     pub current: String,
 }
-
+#[derive(Clone, Serialize, Deserialize)]
 struct Record {
     path: String,
     original: String,
 }
-
+#[derive(Serialize, Deserialize)]
+struct Saved {
+    version: u32,
+    records: Vec<Record>,
+}
+struct Tracked {
+    persistent: bool,
+    records: Vec<Record>,
+}
 type Notifier = Arc<dyn Fn(&str) + Send + Sync>;
+const MAX_SNAPSHOT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_FILES: usize = 512;
 
-/// Every session's snapshots. One per engine; cheap to share behind an `Arc`.
 #[derive(Default)]
 pub struct ChangeTracker {
-    /// Per session, in first-touch order (a JS `Map`'s order), which decides
-    /// ties in the sorted listing.
-    sessions: Mutex<HashMap<String, Vec<Record>>>,
+    sessions: Mutex<HashMap<String, Arc<Mutex<Option<Tracked>>>>>,
     notify: Mutex<Option<Notifier>>,
-}
-
-/// `readFileSync(path, 'utf8')`, or '' if that throws.
-fn safe_read(path: &str) -> String {
-    crate::nodefs::read_utf8(path).unwrap_or_default()
+    store: Option<Arc<SessionStore>>,
 }
 
 fn current(path: &str) -> String {
-    if crate::nodefs::exists(path) { safe_read(path) } else { String::new() }
+    crate::nodefs::read_utf8(path).unwrap_or_default()
+}
+fn remove(file: &Path) -> Result<(), String> {
+    match std::fs::remove_file(file) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("Could not remove review snapshot: {e}")),
+        _ => Ok(()),
+    }
+}
+fn save(file: Option<&Path>, records: &[Record]) -> Result<(), String> {
+    let Some(file) = file else { return Ok(()) };
+    if records.is_empty() {
+        return remove(file);
+    }
+    if records.len() > MAX_FILES {
+        return Err("Review snapshot limit reached (512 files); review and accept changes before editing more.".into());
+    }
+    #[derive(Serialize)]
+    struct Borrowed<'a> {
+        version: u32,
+        records: &'a [Record],
+    }
+    let bytes = serde_json::to_vec(&Borrowed { version: 1, records }).map_err(|e| e.to_string())?;
+    if bytes.len() as u64 > MAX_SNAPSHOT_BYTES {
+        return Err("Review snapshot limit reached (64 MiB); review and accept changes before editing more.".into());
+    }
+    nekko_js::fs::atomic_write(file, &bytes, nekko_js::fs::AtomicWrite::PRIVATE)
+        .map_err(|e| format!("Could not save review snapshot; file was not edited: {e}"))
 }
 
 impl ChangeTracker {
     pub fn new() -> Self {
         Self::default()
     }
+    pub fn persistent(store: Arc<SessionStore>) -> Self {
+        Self { store: Some(store), ..Self::default() }
+    }
 
-    /// Called with the session id whenever a session's set changes
-    /// (`setChangeNotifier`).
+    fn with_scope<R>(
+        &self,
+        id: &str,
+        f: impl FnOnce(ReviewScope, &mut Option<Tracked>) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let run = |scope| {
+            let slot =
+                self.sessions.lock().unwrap_or_else(|e| e.into_inner()).entry(id.to_string()).or_default().clone();
+            let mut session = slot.lock().unwrap_or_else(|e| e.into_inner());
+            f(scope, &mut session)
+        };
+        match &self.store {
+            Some(store) => store.with_review(id, run),
+            None => run(ReviewScope::Incognito), // compatibility: memory-only tracker
+        }
+    }
+
+    fn load<'a>(
+        _id: &str,
+        file: Option<&Path>,
+        sessions: &'a mut Option<Tracked>,
+    ) -> Result<&'a mut Vec<Record>, String> {
+        let persistent = file.is_some();
+        // Deletion/privacy changes remove the sidecar under this same lifecycle
+        // lock. Never resurrect a discarded original from our memory cache.
+        let discarded =
+            file.is_some_and(|p| std::fs::metadata(p).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound));
+        if discarded || sessions.as_ref().is_some_and(|s| s.persistent != persistent) {
+            *sessions = None;
+        }
+        if sessions.is_none() {
+            let records = if let Some(file) = file {
+                match std::fs::metadata(file) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+                    Err(e) => return Err(format!("Could not read review snapshot: {e}")),
+                    Ok(meta) => {
+                        if meta.len() > MAX_SNAPSHOT_BYTES {
+                            return Err("Review snapshot exceeds the 64 MiB limit.".into());
+                        }
+                        let bytes = std::fs::read(file).map_err(|e| format!("Could not read review snapshot: {e}"))?;
+                        let saved: Saved = serde_json::from_slice(&bytes)
+                            .map_err(|e| format!("Could not read review snapshot; original preserved on disk: {e}"))?;
+                        if saved.version != 1 || saved.records.len() > MAX_FILES {
+                            return Err("Unsupported review snapshot format or file count.".into());
+                        }
+                        saved.records
+                    }
+                }
+            } else {
+                Vec::new()
+            };
+            *sessions = Some(Tracked { persistent, records });
+        }
+        Ok(&mut sessions.as_mut().expect("loaded").records)
+    }
+
     pub fn set_notifier(&self, f: impl Fn(&str) + Send + Sync + 'static) {
         *self.notify.lock().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(f));
     }
-
-    fn notify(&self, session_id: &str) {
+    fn notify(&self, id: &str) {
         let f = self.notify.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some(f) = f {
-            f(session_id);
+            f(id);
         }
     }
 
-    /// Snapshot `path` the first time this session touches it (`recordOriginal`).
-    pub fn record_original(&self, session_id: &str, path: &str) {
-        {
-            let mut sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-            let records = sessions.entry(session_id.to_string()).or_default();
+    pub fn record_original(&self, id: &str, path: &str) -> Result<(), String> {
+        self.with_scope(id, |scope, sessions| {
+            let file = match &scope {
+                ReviewScope::Saved(p) => Some(p.as_path()),
+                ReviewScope::Incognito => None,
+                ReviewScope::Missing => {
+                    *sessions = None;
+                    return Err("Chat was deleted; file was not edited.".into());
+                }
+            };
+            let records = Self::load(id, file, sessions)?;
             if records.iter().any(|r| r.path == path) {
-                return;
+                return Ok(());
             }
-            records.push(Record { path: path.to_string(), original: current(path) });
-        }
-        self.notify(session_id);
-    }
-
-    /// Files that differ from their snapshot, sorted by path (`listChanges`).
-    pub fn list_changes(&self, session_id: &str) -> Vec<FileChange> {
-        let tracked: Vec<(String, String)> = {
-            let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-            let Some(records) = sessions.get(session_id) else { return Vec::new() };
-            records.iter().map(|r| (r.path.clone(), r.original.clone())).collect()
-        };
-        let mut out: Vec<FileChange> = tracked
-            .into_iter()
-            .filter_map(|(path, original)| {
-                let current = current(&path);
-                (current != original).then_some(FileChange { path, original, current })
-            })
-            .collect();
-        // Stable, as Array.prototype.sort is.
-        out.sort_by(|a, b| nekko_js::locale_compare(&a.path, &b.path));
-        out
-    }
-
-    /// Keep a file's changes and stop tracking it (`acceptChange`).
-    pub fn accept_change(&self, session_id: &str, path: &str) {
-        {
-            let mut sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(records) = sessions.get_mut(session_id) {
-                records.retain(|r| r.path != path);
+            let original = if file.is_some() {
+                if std::fs::metadata(path).is_ok_and(|m| m.len() > MAX_SNAPSHOT_BYTES) {
+                    return Err("Original exceeds the 64 MiB review snapshot limit; file was not edited.".into());
+                }
+                match std::fs::read(path) {
+                    Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+                    Err(e) => return Err(format!("Could not capture original; file was not edited: {e}")),
+                }
+            } else {
+                current(path)
+            };
+            records.push(Record { path: path.to_string(), original });
+            if let Err(e) = save(file, records) {
+                records.pop();
+                return Err(e);
             }
-        }
-        self.notify(session_id);
+            Ok(())
+        })?;
+        self.notify(id);
+        Ok(())
     }
 
-    /// Keep all of a session's changes (`acceptAllChanges`).
-    pub fn accept_all(&self, session_id: &str) {
-        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).remove(session_id);
-        self.notify(session_id);
+    pub fn list_changes(&self, id: &str) -> Result<Vec<FileChange>, String> {
+        self.with_scope(id, |scope, sessions| {
+            let file = match &scope {
+                ReviewScope::Saved(p) => Some(p.as_path()),
+                ReviewScope::Incognito => None,
+                ReviewScope::Missing => {
+                    *sessions = None;
+                    return Ok(Vec::new());
+                }
+            };
+            let records = Self::load(id, file, sessions)?;
+            let mut out: Vec<FileChange> = records
+                .iter()
+                .filter_map(|r| {
+                    let current = current(&r.path);
+                    (current != r.original).then(|| FileChange {
+                        path: r.path.clone(),
+                        original: r.original.clone(),
+                        current,
+                    })
+                })
+                .collect();
+            out.sort_by(|a, b| nekko_js::locale_compare(&a.path, &b.path));
+            Ok(out)
+        })
     }
-}
 
-#[cfg(test)]
-mod tests {
+    pub fn accept_change(&self, id: &str, path: &str) -> Result<(), String> {
+        self.with_scope(id, |scope, sessions| {
+            let file = match &scope {
+                ReviewScope::Saved(p) => Some(p.as_path()),
+                ReviewScope::Incognito => None,
+                ReviewScope::Missing => {
+                    *sessions = None;
+                    return Ok(());
+                }
+            };
+            let records = Self::load(id, file, sessions)?;
+            let next: Vec<Record> = records.iter().filter(|r| r.path != path).cloned().collect();
+            save(file, &next)?;
+            *records = next;
+            Ok(())
+        })?;
+        self.notify(id);
+        Ok(())
+    }
 
-    #[test]
-    fn sorts_like_locale_compare() {
-        // ICU root order: case is a tertiary difference, punctuation sorts
-        // before letters, and "_" before "-" (byte order would say otherwise).
-        let mut v = vec!["b.txt", "B.txt", "a_b", "a-b", "a.b", "ab", "é", "e", "f"];
-        v.sort_by(|a, b| nekko_js::locale_compare(a, b));
-        assert_eq!(v, vec!["a_b", "a-b", "a.b", "ab", "b.txt", "B.txt", "e", "é", "f"]);
+    pub fn accept_all(&self, id: &str) -> Result<(), String> {
+        self.with_scope(id, |scope, sessions| {
+            if let ReviewScope::Saved(p) = scope {
+                remove(&p)?;
+            }
+            *sessions = None;
+            Ok(())
+        })?;
+        self.notify(id);
+        Ok(())
+    }
+
+    pub fn clear_memory(&self) {
+        self.sessions.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }

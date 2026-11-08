@@ -12,7 +12,7 @@ Thank you to everyone who built and maintains these.
 | React | The app's interface | see package-lock.json | MIT | - | [react.dev](https://react.dev) |
 | Mermaid | Diagrams in chat, and bundled in the iPhone app | 12.2.0 | MIT | vendor/mermaid/LICENSE | [mermaid-js/mermaid](https://github.com/mermaid-js/mermaid) |
 | agent-browser | The agent's native browser control, built with a small patch | 0.39.1 | Apache-2.0 | vendor/agent-browser/LICENSE | [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) |
-| Remotion | The animated intros for Voice and Dynamic zones. Not open source: it has its own license, so check that before reusing this code. | see package-lock.json | Remotion License | - | [remotion.dev](https://www.remotion.dev) |
+| Remotion | The animated intros for Voice and Dynamic zones, and the website hero intro (video/hero-intro). Not open source: it has its own license, so check that before reusing this code. | see package-lock.json | Remotion License | - | [remotion.dev](https://www.remotion.dev) |
 | Inter Tight | Interface font | see package-lock.json | OFL-1.1 | - | [Fontsource](https://fontsource.org/fonts/inter-tight) |
 | JetBrains Mono | Code font | see package-lock.json | OFL-1.1 | - | [Fontsource](https://fontsource.org/fonts/jetbrains-mono) |
 | Inter Tight, website copy | nekkoagent.com's text font, self-hosted (latin subset) | Fontsource 5.3.0 | OFL-1.1 | apps/website/fonts/OFL-inter-tight.txt | [Fontsource](https://fontsource.org/fonts/inter-tight) |
@@ -33,3 +33,7 @@ Thank you to everyone who built and maintains these.
 ## GitHub contributor profile avatars
 
 The marketing homepage uses public GitHub profile avatars solely to credit the repository's contributors, with a link to each profile. Philip approved this use for the contributor section. These are user-owned profile images, not MIT-licensed project assets; no blanket reuse license is claimed. They are fetched at website build time, served first-party, regenerated on each deploy, and never committed. An unavailable image falls back to initials. Source: the [GitHub contributors API](https://docs.github.com/en/rest/repos/repos#list-repository-contributors) and each linked profile. Applicable [GitHub terms, sections D and H](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service). Removal or correction requests: hello@nekkoagent.com.
+
+## Approval-choice icons (#2095)
+
+Gentleface 0.3.0 `hand`, `shield-check`, and `running` (line-round/solid-round, 16px), by andaja, MIT. Source: <https://gentleface.com/icons.json> and `https://gentleface.com/svg/{line-round,solid-round}/16/{hand,shield-check,running}.svg`. Vendored in `apps/desktop/src/renderer/gentleface-icons.tsx`; the line paths are identical in `apps/ios/App/Assets.xcassets/PermissionIcons/` and Android `res/drawable/permission_*.xml`. Native adaptation changes only the container and template tint, not the artwork. Copyright/permission notices ship in the desktop Gentleface LICENSE, iOS `PermissionIcons-LICENSE.txt`, and Android `res/raw/license_gentleface_mit.txt` (listed in Licenses). No network fetch at runtime.
