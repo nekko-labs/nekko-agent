@@ -2777,7 +2777,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </ChatHeader>
         )}
         {/* A sub-agent says so across the top, with a way back to the chat that spawned it. */}
-        {surface !== 'composer' && !cleanStart && session?.parentSessionId && <SubagentBanner parentId={session.parentSessionId} onOpenParent={(id) => (commandCenter ? useStore.getState().focusChatOnWall(id, { keepLayout: true }) : useStore.getState().openChatPane(id))} />}
+        {surface !== 'composer' && !cleanStart && session?.parentSessionId && <SubagentBanner child={session} parentId={session.parentSessionId} onOpenParent={(id) => (commandCenter ? useStore.getState().focusChatOnWall(id, { keepLayout: true }) : useStore.getState().openChatPane(id))} />}
         {surface !== 'composer' && !cleanStart && showHardware && <ExpertMonitor />}
 
         {surface !== 'composer' && !cleanStart && (

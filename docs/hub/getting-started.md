@@ -177,6 +177,8 @@ When a tool needs permission, its approval card appears in that agent's own wind
 
 For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent cards along the bottom of the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
 
+The sub-agent cards, Agent Monitor and child-chat banner show the child's provider and model when available. The banner's parent-chat name opens the chat that delegated the work; for nested agents this is the immediate parent. Transcript model chips also include the provider when known. Hover the route label to read the full model ID. Missing provider configurations fall back to their saved ID rather than hiding the source.
+
 ### Model and effort controls
 
 Changing the model or effort in an existing chat shows **Tokens on your next turn**: an estimate of the input tokens needed to resend the chat’s context. Nothing is sent just by changing your selection. To save tokens, start a new chat and include only what it needs instead of carrying over the old history. Actual usage and cost depend on context trimming and provider caching and billing.
