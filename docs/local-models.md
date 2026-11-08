@@ -5,25 +5,9 @@ installed, or by driving a server you already run (Ollama, LM Studio, vLLM). Eit
 it loads a model with the settings you choose and tells you honestly whether it will fit
 before you wait through the load. This is what the Models page shows you and why.
 
-## Create and edit photos
+## Pictures and video clips
 
-Open **Photo** to make pictures from a prompt. If you do not have a picture model yet, choose one of the models picked for your computer and press **Download and set up**. Nekko handles the model and its supporting files; they are not separate models you need to choose yourself. The image engine is also installed when needed. Downloads are shared with **Models → Downloads**, where you can check progress or cancel.
-
-You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
-
-In a Photo chat, pick a model and a **Shape**: Square, Landscape, Portrait, Wide or Tall. Existing custom sizes stay unchanged. **Advanced** contains Steps, Prompt guidance (CFG) and Seed, with a short explanation and **Restore model defaults**. You do not need to adjust these to begin.
-
-To edit, attach, paste or drop a photo and describe the change, or press **Edit** under a picture in the chat. Nekko offers an edit-capable model if the current model cannot edit. The source stays on the user message; the reply is a new image, not an overwrite. Model output may change details, so review it before relying on precise edits. Masks and selective retouching are not offered.
-
-Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
-
-### Short video clips (experimental)
-
-Nekko can make short clips on your computer with **Wan 2.2 TI2V 5B**. In **Models**, **Best for this machine** lists it under **Create video clips** when your computer can run it: it needs a graphics card or Apple Silicon with enough memory, and is never suggested for running on the processor alone, where a clip would take hours. Download it like any other model; its supporting files come with it.
-
-Choose it as the model in a Photo chat and describe the clip. Attach a photo to use it as the first frame. A clip is about two seconds (33 frames at 16 frames a second) in your chat's shape, or the photo's, at about 832×480. It appears in the chat as an animated picture, with its length beside it. The progress line shows the sampling steps, and **Stop** cancels the clip on the engine.
-
-This is experimental: clips take minutes, memory use is estimated, and there is no control for length yet. Other video models (Wan 2.1, Wan 2.2 A14B, LTX, HunyuanVideo) can be listed under **Models → Video** but are not supported yet.
+Picture, photo-editing and video models run on the same engine. How to get one, edit a photo and make a clip is on its own page: [Pictures and video clips](pictures-and-videos.md).
 
 ## Your first local model
 
