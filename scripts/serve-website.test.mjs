@@ -28,14 +28,14 @@ test('marketing preview serves only static website files and read requests', asy
   const replay = page.body.slice(page.body.indexOf('<figure class="hero-replay'), page.body.indexOf('</figure>', page.body.indexOf('<figure class="hero-replay')));
   assert.ok(page.body.indexOf('class="tagline') < page.body.indexOf('<figure class="hero-replay'));
   assert.match(replay, /<video[^>]*\bautoplay muted loop playsinline\b/);
-  assert.match(replay, /data-src-dark="media\/nekko-vs-ollama-dark\.mp4"/);
-  assert.match(replay, /data-src-light="media\/nekko-vs-ollama-light\.mp4"/);
-  assert.match(replay, /data-poster-dark="media\/nekko-vs-ollama-dark-poster\.webp"/);
-  assert.match(replay, /aria-label="Local code edits\. 5× faster than Ollama\. 2\.5 s vs 13\.9 s, whole-file rename benchmark\."/);
+  assert.match(replay, /data-src-dark="media\/hero-v2\.mp4"/);
+  assert.match(replay, /data-src-light="media\/hero-v2-light\.mp4"/);
+  assert.match(replay, /data-poster-dark="media\/hero-v2-poster\.webp"/);
+  assert.match(replay, /aria-label="Meet Nekko\. Built in Rust\. It’s fast\. Like, really fast\. Local code edits\. 5× faster than Ollama\. 2\.5 s vs 13\.9 s, whole-file rename benchmark\."/);
   assert.match(replay, /<figcaption[^>]*><strong>Local code edits\. 5× faster than Ollama\.<\/strong> 2\.5 s vs 13\.9 s, whole-file rename benchmark\./);
   assert.match(replay, /href="\/docs\/benchmarks"/);
   assert.doesNotMatch(page.body, /class="hero-proof/);
-  for (const f of ['nekko-vs-ollama-dark.mp4', 'nekko-vs-ollama-light.mp4', 'nekko-vs-ollama-dark-poster.webp', 'nekko-vs-ollama-light-poster.webp']) assert.equal((await get(`/media/${f}`)).status, 200, f);
+  for (const f of ['hero-v2.mp4', 'hero-v2-light.mp4', 'hero-v2-poster.webp', 'hero-v2-light-poster.webp']) assert.equal((await get(`/media/${f}`)).status, 200, f);
   assert.doesNotMatch(page.body, /Time to complete reply/); // shown once, as the graphic under the fast copy
   assert.match(page.body, /Whole-file rename benchmark/);
   assert.match(page.body, /Ollama 0\.40\.11/);

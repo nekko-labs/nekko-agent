@@ -879,3 +879,63 @@ async fn downloads_a_decision_model_from_its_release_through_the_queue_and_check
     drop(d);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_downloaded_picture_model_fetches_its_supporting_files_itself() {
+    use axum::extract::Path;
+    use axum::routing::get;
+    let root = std::env::temp_dir().join(format!("nekkod-image-companions-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let data = root.join("data");
+    let home = root.join("home");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("settings.json"), r#"{"engine":{"modelFolders":[]}}"#).unwrap();
+
+    // A Z-Image Turbo quant, and every other repo's files as a few bytes.
+    let gguf = tiny_gguf("z-image", "Z-Image Turbo");
+    let size = gguf.len();
+    let app = axum::Router::new()
+        .route("/api/models/acme/z-image-turbo-GGUF", get(|| async { axum::Json(json!({ "tags": ["gguf"] })) }))
+        .route(
+            "/api/models/acme/z-image-turbo-GGUF/tree/main",
+            get(move || async move {
+                axum::Json(json!([{ "type": "file", "oid": "x", "size": size, "path": "z_image_turbo-Q4_K.gguf" }]))
+            }),
+        )
+        .route("/acme/z-image-turbo-GGUF/resolve/main/{file}", get(move || async move { gguf.clone() }))
+        .route(
+            "/{owner}/{repo}/resolve/main/{*file}",
+            get(|Path((_o, _r, file)): Path<(String, String, String)>| async move { format!("weights of {file}") }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let hf = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        let _ = axum::serve(listener, app).await;
+    });
+    let h = home.to_string_lossy().to_string();
+    let d = start_with_env(
+        &data,
+        json!({ "huggingFaceUrl": format!("http://127.0.0.1:{hf}") }),
+        &[("HOME", Some(&h)), ("USERPROFILE", Some(&h)), ("OLLAMA_MODELS", None), ("HF_HOME", None)],
+    );
+
+    let (_, started) =
+        post(d.port, "engine:downloadModel", json!(["acme/z-image-turbo-GGUF", "Q4_K"]), Some(TOKEN)).await;
+    assert_eq!(started["ok"], true, "{started}");
+    let id = started["jobId"].as_str().unwrap().to_string();
+    let done =
+        job_until(d.port, &id, |j| !matches!(j["state"].as_str(), Some("queued" | "downloading" | "verifying"))).await;
+    assert_eq!(done["state"], "done", "{done}");
+
+    // Nobody asked for them: the finished download queued the VAE and the text encoder.
+    for file in ["vae-z-image.safetensors", "llm-qwen3-4b-instruct-2507-q4_k_m.gguf"] {
+        let job = job_until(d.port, &format!("image-companions:{file}"), |j| j["state"] == "done").await;
+        assert_eq!(job["group"].as_str().map(|g| g.starts_with("image-companions:")), Some(true), "{job}");
+        assert!(data.join("models/.companions/image").join(file).exists(), "{file}");
+    }
+    let (_, models) = post(d.port, "engine:models", json!([]), Some(TOKEN)).await;
+    let row = models.as_array().unwrap().iter().find(|m| m["modality"] == "image").cloned().unwrap();
+    let (_, status) = post(d.port, "engine:imageCompanions", json!([row["id"]]), Some(TOKEN)).await;
+    assert_eq!((status["setId"].clone(), status["ready"].clone()), (json!("z-image"), json!(true)), "{status}");
+    std::fs::remove_dir_all(&root).ok();
+}

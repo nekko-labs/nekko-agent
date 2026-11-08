@@ -15,6 +15,8 @@ npm run dev          # build the Rust daemon and the app, then launch the deskto
 
 To stop a dev run, press **Enter** or **q** (or Ctrl+C) in its terminal. The app quits the normal way, stopping the engine and any model servers it started; press again to force it, which ends the whole process tree. A run that hasn't exited after 10 seconds is forced too.
 
+For a separate task worktree, follow the [isolated typecheck bootstrap](docs/runbooks/worktree-typecheck.md). It installs that worktree's dependencies and builds its declarations without borrowing another running checkout's packages. The typecheck-only install does not prepare Electron or native binaries for runtime tests.
+
 ## Project layout
 
 | Path | What |
@@ -55,6 +57,16 @@ npm run typecheck   # every TypeScript workspace
 `vitest run` whose projects (root `vitest.config.ts`) are the six workspaces. Narrow it
 with `npx vitest run --project apps/desktop`, or run one package as before with
 `npm test -w @nekko-agent/desktop`. The engine's tests are `cargo test --workspace`.
+
+On native Windows Node, the macOS entitlement and Linux/macOS runner-image **execution
+fixtures** report explicit POSIX-only skips. They require Bash plus POSIX paths,
+permissions and symlinks; a Windows `bash.exe` or WSL launcher is not sufficient.
+Portable runner-image source/security assertions and CLI tests still run on Windows.
+All execution fixtures remain enabled on Linux/macOS, including the required Linux
+CI `npm test` stage. Missing Bash there is a failure, not an automatic skip. To run
+these cases locally from Windows, use a separate Linux checkout with Linux Node
+inside a configured WSL distribution; do not mix Windows Node with Linux fixtures.
+ShellCheck remains an optional local check and runs when installed.
 
 - Add tests in `crates/` for new engine behavior (providers, guardrails, agent loop, context); real-binary tests of the daemon go in `crates/nekkod/tests/daemon`.
 - Desktop UI flows: add a step to a journey in `apps/desktop/e2e/` (`npm run test:e2e -w @nekko-agent/desktop`, hidden windows only; see its README) rather than a new one-off script.
