@@ -55,7 +55,7 @@ const KEEP_AWAKE_EVERY: Duration = Duration::from_secs(15);
 /// *Keep this computer awake while agents run*: hold off idle sleep while the
 /// setting is on and any turn runs here. Off, nothing is spawned.
 fn keep_awake(ctx: &Ctx) {
-    use crate::runner::awake::{Awake, Hold};
+    use crate::awake::{Awake, Hold};
     let ctx = ctx.clone();
     tokio::spawn(async move {
         let hold = Hold::default();

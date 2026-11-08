@@ -57,6 +57,20 @@ hostname).
   revisions and never holds a key that opens them. Writes need `users.plan` in
   `pro`/`team` (402 otherwise); reading, revoking and `DELETE /v1/sync` work on
   any plan.
+- `/v1/fleet`: experimental **user-owned computer discovery**, not hosted
+  machines or remote execution. Routes exist only with `NEKKO_FLEET_ENABLED=1`
+  (also in `dev:local`). All discovery/publish/heartbeat calls require a live
+  sync device with a wrap and proof for the current encrypted-account epoch;
+  account sign-in alone is insufficient. `GET` lists this account's encrypted
+  descriptors and 90-second presence leases; `PUT /self` publishes only the
+  caller's computer with `{keyId, revision, descriptor}`; `POST /self/heartbeat`
+  renews its lease; `DELETE /self` withdraws it. Publishing/heartbeats need
+  Pro/Team; reads and withdrawal remain available after downgrade. Descriptors
+  are capped at 16 KiB, with at most 100 retained advertisements per account.
+  Sign-out, expiry, revocation and key rotation invalidate discovery. Desktop
+  enrollment, descriptor crypto, phone connections and local-model execution
+  are **not implemented by these routes**. Keep disabled until those are
+  verified. See [account fleet spec](../../spec/phone/account-synced-computer-fleet.md).
 - `GET /v1/auth/config`, `POST /v1/auth/session`, `GET /v1/auth/me`,
   `DELETE /v1/auth/session`: sign-in.
 - `DELETE /v1/account` (Bearer `nk_` token): deletes the account for good
@@ -145,6 +159,11 @@ fly secrets set ALERT_EMAIL='<who gets alerts>'
   size, state, the hosting provider's machine id, the relay room, the hashes of
   the pairing key and of the relay access token, the scope, hours used.
 - `machine_usage`: machine seconds per account per month (migration `0007`).
+- `fleet_computers`: opt-in encrypted user-owned computer advertisements, their
+  publishing device/token, epoch, revision and presence timestamp (migration
+  `0014`). No model names, connection coordinates or secrets in plaintext.
+  Revocation, sync deletion and account deletion remove the corresponding rows;
+  withdrawal retains a hidden revision guard.
 - `signups.marketing_opt_in`, `signups.policy_version` (migration `0011`):
   marketing consent apart from the beta, and the policy version agreed to.
 - `pending_auth_deletions` (migration `0012`): Supabase users still to delete

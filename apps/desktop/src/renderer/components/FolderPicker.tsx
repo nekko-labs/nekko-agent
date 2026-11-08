@@ -73,8 +73,9 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
  * another folder keeps the old primary as supporting, as the Context
  * Inspector's Folders section does.
  */
-export function FolderPicker({ sessionId, session, disabled, onChange }: {
+export function FolderPicker({ sessionId, session, disabled, onChange, selectedSummary = false }: {
   sessionId: string;
+  selectedSummary?: boolean;
   session: Session | null;
   disabled?: boolean;
   onChange: (session: Session) => void;
@@ -87,6 +88,8 @@ export function FolderPicker({ sessionId, session, disabled, onChange }: {
   const summary = useStore((s) => s.sessions.find((x) => x.id === sessionId));
   const chat: ChatFolders | null = summary ?? session;
   const primary = folders.find((f) => f.id === chat?.workspaceId);
+  const selected = [primary, ...folders.filter((f) => f.id !== primary?.id && chat?.supportingWorkspaceIds?.includes(f.id))].filter((f): f is WorkspaceFolder => !!f);
+  const names = selected.map((f) => f.name).join(', ');
 
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<React.CSSProperties>({});
@@ -161,11 +164,11 @@ export function FolderPicker({ sessionId, session, disabled, onChange }: {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Primary folder: ${primary?.name ?? 'none'}`}
-        title={disabled ? 'Folder can change once the reply finishes' : primary?.path ?? 'Choose the folder this agent works in'}
+        aria-label={selectedSummary ? `Selected folders: ${names || 'none'}` : `Primary folder: ${primary?.name ?? 'none'}`}
+        title={selectedSummary && selected.length ? `${selected.map((f) => f.path).join('\n')}${disabled ? '\nFolder can change once the reply finishes' : ''}` : disabled ? 'Folder can change once the reply finishes' : primary?.path ?? 'Choose the folder this agent works in'}
       >
         <FolderIcon className="h-3.5 w-3.5 shrink-0" />
-        <span className="truncate">{primary?.name ?? 'No folder'}</span>
+        <span className="truncate">{selectedSummary ? names || 'No folder' : primary?.name ?? 'No folder'}</span>
         <span className="ctl-caret">▾</span>
       </button>
       {open && createPortal(
