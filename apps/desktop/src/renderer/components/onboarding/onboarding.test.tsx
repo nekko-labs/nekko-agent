@@ -72,6 +72,8 @@ function shell(index: number, extra: { nextLabel?: string; showSkipStep?: boolea
   );
 }
 
+const at = (id: string) => ONBOARDING_STEPS.findIndex((s) => s.id === id);
+
 const baseSettings = { providers: [] } as unknown as AppSettings;
 
 describe('shouldAutoOpenOnboarding', () => {
@@ -134,10 +136,11 @@ describe('WizardShell', () => {
 });
 
 describe('onboarding step content', () => {
-  it('greets with the mascot and the Nekko Agent name', () => {
+  it('greets as Nekko, with the mascot drawn but hidden from screen readers', () => {
     const html = renderToStaticMarkup(<WelcomeStep />);
-    expect(html).toContain('Welcome to Nekko Agent');
-    expect(html).toContain('aria-label="Nekko"');
+    expect(html).toContain('Hi, I&#x27;m Nekko.');
+    expect(html).toContain('class="setup-nekko');
+    expect(html).not.toContain('#a7c8ac');
   });
 
   it('offers the online options, a local scan, and the Nekko Agent deep link', () => {
@@ -271,8 +274,8 @@ describe('onboarding state machine', () => {
   });
 
   it('marks intermediate steps skipped when jumping forward via dots', () => {
-    const { state } = wizardTransition(initial, { type: 'goTo', to: 3 });
-    expect(state.index).toBe(3);
+    const { state } = wizardTransition(initial, { type: 'goTo', to: at('integrations') });
+    expect(state.index).toBe(at('integrations'));
     expect(state.steps['welcome']).toBe('skipped');
     expect(state.steps['theme']).toBe('skipped');
     expect(state.steps['providers']).toBe('skipped');
@@ -280,11 +283,9 @@ describe('onboarding state machine', () => {
   });
 
   it('does not override done outcomes when jumping forward', () => {
-    const atProviders = wizardTransition(
-      wizardTransition(initial, { type: 'next' }).state,
-      { type: 'next' },
-    ).state;
-    const jumped = wizardTransition(atProviders, { type: 'goTo', to: 3 }).state;
+    let atProviders = initial;
+    while (atProviders.index < at('providers')) atProviders = wizardTransition(atProviders, { type: 'next' }).state;
+    const jumped = wizardTransition(atProviders, { type: 'goTo', to: at('integrations') }).state;
     expect(jumped.steps['welcome']).toBe('done');
     expect(jumped.steps['theme']).toBe('done');
     expect(jumped.steps['providers']).toBe('skipped');
@@ -297,7 +298,7 @@ describe('onboarding state machine', () => {
   });
 
   it('completes with skipped on skip-all', () => {
-    const { state, complete } = wizardTransition({ index: 2, steps: { theme: 'done' } } as WizardState, { type: 'skipAll' });
+    const { state, complete } = wizardTransition({ index: at('providers'), steps: { theme: 'done' } } as WizardState, { type: 'skipAll' });
     expect(complete).toBe(true);
     expect(state.steps['providers']).toBe('skipped');
   });

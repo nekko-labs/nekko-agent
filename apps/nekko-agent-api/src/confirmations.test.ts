@@ -56,6 +56,15 @@ describe("signup confirmation", () => {
     expect(rows[0].confirm_token_hash).not.toContain(token);
   });
 
+  it("words the confirmation for the app's setup list", async () => {
+    const res = await server().inject({ method: "POST", url: "/v1/signups", payload: { email: "ada@example.com", list: "app", source: "/app/setup", marketing: true } });
+    expect(res.statusCode).toBe(202);
+    expect(sent[0].subject).toBe("Confirm your email for Nekko Agent updates");
+    expect(sent[0].text).toContain("Nekko Agent updates");
+    expect(sent[0].text).not.toContain("beta");
+    expect(sent[0].html).toContain("Confirm my email");
+  });
+
   it("confirms once, then the link is spent", async () => {
     const app = server();
     await signup(app, "ada@example.com");
