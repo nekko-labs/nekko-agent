@@ -48,7 +48,7 @@ Two separate code-inspection findings remain outside this focused fix:
   accounting for completed as well as still-running turns.
 
 These are hypotheses for other stuck states, not proven causes of the screenshot.
-Tracking: #2253.
+Tracking: rejected-send recovery #2268; missed-event recovery #2269; original report #2253.
 
 ## Verification
 
