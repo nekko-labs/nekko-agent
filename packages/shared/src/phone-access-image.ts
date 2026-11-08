@@ -1,6 +1,9 @@
-/** Narrow local image-generation boundary (#2162). No paths, URLs or runtime overrides. */
+/**
+ * Narrow local image-generation boundary (#2162). No paths, URLs or runtime overrides.
+ * Photos to edit (`images`) and the edit's size (`size`) are optional (decision 0069, #2222).
+ */
 export const PHONE_IMAGE_POLICY = {
-  requestKeys: ['sessionId', 'prompt', 'params'],
+  requestKeys: ['sessionId', 'prompt', 'params', 'images', 'size'],
   paramKeys: ['modelId', 'width', 'height', 'steps', 'cfgScale', 'seed'],
   promptChars: 8000,
   idChars: 512,
@@ -11,6 +14,17 @@ export const PHONE_IMAGE_POLICY = {
   steps: [1, 100],
   cfgScale: [0, 30],
   seed: [-1, 2147483647],
+  /** Photos to edit in one request: 1 to this many, as the engine allows. */
+  editImages: 4,
+  /** Raster data URLs only (`data:image/<type>;base64,`): no SVG, GIF, paths or URLs. */
+  editImageTypes: ['png', 'jpeg', 'webp'],
+  /**
+   * All photos together, in characters, from a phone: one sealed relay frame
+   * (10 MB, base64 adds a third) still holds them with the rest of the call.
+   * The local host API has no relay frame and no such cap.
+   */
+  editImageChars: 6 * 1024 * 1024,
+  sizeKeys: ['width', 'height'],
 } as const;
 
 type Obj = Record<string, unknown>;
@@ -41,12 +55,42 @@ export function phoneImageParamsProblem(value: unknown, requireModel: boolean): 
   return null;
 }
 
+/** A PNG, JPEG or WebP base64 data URL: the only photo a request may carry. */
+export function phoneImagePhoto(v: unknown): v is string {
+  if (typeof v !== 'string') return false;
+  const type = PHONE_IMAGE_POLICY.editImageTypes.find((t) => v.startsWith(`data:image/${t};base64,`));
+  return !!type && /^[A-Za-z0-9+/]+={0,2}$/.test(v.slice(`data:image/${type};base64,`.length));
+}
+
+/**
+ * Photos to edit and the edit's size. `size` without `images` is refused: it
+ * only ever shapes an edit, so on its own it is a malformed request.
+ */
+function phoneImageEditProblem(value: Obj): string | null {
+  const p = PHONE_IMAGE_POLICY;
+  if ('images' in value) {
+    const images = value.images;
+    if (!Array.isArray(images) || images.length < 1 || images.length > p.editImages || !images.every(phoneImagePhoto) ||
+      (images as string[]).reduce((n, i) => n + i.length, 0) > p.editImageChars) return 'images';
+  }
+  if ('size' in value) {
+    const size = value.size;
+    if (!('images' in value) || !object(size) || Object.keys(size).length !== p.sizeKeys.length) return 'size';
+    for (const key of p.sizeKeys) {
+      const n = size[key];
+      const [min, max] = p[key];
+      if (typeof n !== 'number' || !Number.isInteger(n) || n < min || n > max || n % p.sizeMultiple !== 0) return 'size';
+    }
+  }
+  return null;
+}
+
 export function phoneImageRequestProblem(value: unknown): string | null {
   if (!object(value)) return 'image request';
   for (const key of Object.keys(value)) if (!(PHONE_IMAGE_POLICY.requestKeys as readonly string[]).includes(key)) return key;
   if (typeof value.sessionId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.sessionId)) return 'sessionId';
   if (typeof value.prompt !== 'string' || !value.prompt.trim() || value.prompt.length > PHONE_IMAGE_POLICY.promptChars) return 'prompt';
-  return phoneImageParamsProblem(value.params, true);
+  return phoneImageParamsProblem(value.params, true) ?? phoneImageEditProblem(value);
 }
 
 /** Actual engine library rows use modality and loaded, not the phone's kind/state fields. */

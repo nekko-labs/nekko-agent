@@ -322,12 +322,15 @@ impl Server {
         Ok(result)
     }
 
-    /// Whether the library's model makes clips (its companion set says `video`).
-    pub async fn makes_video(&self, id: &str) -> bool {
-        let Ok(Some(model)) = self.library.find(id).await else { return false };
+    /// What the library's model can do, from its companion set (`create`,
+    /// `edit`, `video`), as the desktop reads `engine:imageCompanions`; empty
+    /// for a model with no known set.
+    pub async fn capabilities(&self, id: &str) -> Vec<String> {
+        let Ok(Some(model)) = self.library.find(id).await else { return Vec::new() };
         acquire::image_companion_set_for(&model)
-            .and_then(|s| s.get("capabilities").cloned())
-            .is_some_and(|c| c.as_array().is_some_and(|a| a.iter().any(|x| x == "video")))
+            .and_then(|s| s.get("capabilities").and_then(Value::as_array).cloned())
+            .map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default()
     }
 
     /// One clip from a video model: loaded like an image model, then a job on
