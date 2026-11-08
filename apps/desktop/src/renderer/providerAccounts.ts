@@ -32,7 +32,7 @@ export function familyOf(provider: ProviderConfig): { id: string; name: string }
     if (mark === 'gemini') return { id: 'gemini', name: 'Gemini' };
     if (mark === 'ollama-cloud') return { id: 'ollama-cloud', name: 'Ollama Cloud' };
   }
-  return { id: `provider:${provider.id}`, name: provider.label };
+  return { id: `provider:${provider.id}`, name: provider.label ?? provider.id };
 }
 
 /** Providers grouped by family, in the order each family first appears. */
@@ -88,9 +88,11 @@ export function accountIdentity(
   known: { claude?: ClaudeCodeStatus | null; email?: string } = {},
 ): AccountIdentity {
   const family = familyOf(provider).name;
+  // An older or partial config can lack a label.
+  const label = provider.label ?? '';
   if (provider.kind === 'claude-code') {
     // "Claude subscription · Work": the part after the dot is the name the user typed.
-    const typed = provider.label.includes(' · ') ? provider.label.split(' · ').slice(1).join(' · ').trim() : ownName(provider.label, family);
+    const typed = label.includes(' · ') ? label.split(' · ').slice(1).join(' · ').trim() : ownName(label, family);
     const named = typed || undefined;
     const s = known.claude;
     if (s?.installed && s.loggedIn) {
@@ -108,8 +110,8 @@ export function accountIdentity(
     return { name: named ?? 'Subscription' };
   }
   const hint = KIND_HINT[provider.kind];
-  const own = ownName(provider.label, family);
-  const name = !own || (hint && own.toLowerCase() === hint.toLowerCase()) ? (KIND_NAME[provider.kind] ?? provider.label) : own;
+  const own = ownName(label, family);
+  const name = !own || (hint && own.toLowerCase() === hint.toLowerCase()) ? (KIND_NAME[provider.kind] ?? (label || provider.id)) : own;
   return { name, hint: name === hint ? undefined : hint, email: known.email };
 }
 
@@ -126,10 +128,15 @@ export function disambiguate(identities: Record<string, AccountIdentity>, ids: s
   return out;
 }
 
-/** One email behind every account of a family, or undefined when they differ or are unknown. */
+/**
+ * The one login email behind a family's accounts: every account that reports
+ * an email reports the same one. An API key has none and does not disagree.
+ * Undefined when two emails differ or none is known.
+ */
 export function sharedEmail(identities: AccountIdentity[]): string | undefined {
-  const emails = new Set(identities.map((i) => i.email?.toLowerCase()).filter(Boolean));
-  return emails.size === 1 && identities.every((i) => i.email) ? identities[0].email : undefined;
+  const withEmail = identities.filter((i) => i.email);
+  const emails = new Set(withEmail.map((i) => i.email!.toLowerCase()));
+  return emails.size === 1 ? withEmail[0].email : undefined;
 }
 
 // `claude auth status` spawns a process; the picker opens often, so answers are

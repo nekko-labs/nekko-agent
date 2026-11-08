@@ -66,9 +66,10 @@ describe('account identity', () => {
     }, ['a', 'b', 'c']);
     expect([out.a.name, out.b.name, out.c.name]).toEqual(['me@home.example', 'me@work.example', 'Production']);
   });
-  it('shares an email only when every account reports the same one', () => {
+  it('shares an email when every account that reports one agrees; a keyed account does not disagree', () => {
     expect(sharedEmail([{ name: 'a', email: 'X@e.test' }, { name: 'b', email: 'x@e.test' }])).toBe('X@e.test');
-    expect(sharedEmail([{ name: 'a', email: 'x@e.test' }, { name: 'b' }])).toBeUndefined();
+    expect(sharedEmail([{ name: 'a', email: 'x@e.test' }, { name: 'Production', hint: 'API' }])).toBe('x@e.test');
     expect(sharedEmail([{ name: 'a', email: 'x@e.test' }, { name: 'b', email: 'y@e.test' }])).toBeUndefined();
+    expect(sharedEmail([{ name: 'a' }, { name: 'b' }])).toBeUndefined();
   });
 });

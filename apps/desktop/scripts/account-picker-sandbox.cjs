@@ -19,7 +19,7 @@ app.whenReady().then(async () => {
   win.webContents.on('console-message', (e) => { if (e.level === 'error') report.errors.push(e.message); });
   const run = (code) => win.webContents.executeJavaScript(code, true);
   const check = (name, passed) => { report.checks.push({ name, passed: !!passed }); if (!passed) throw Error(name); };
-  const shot = async (name) => fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG());
+  const shot = async (name) => { win.webContents.invalidate(); await sleep(150); fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); };
   try {
     await win.loadFile(path.join(out, 'index.html'));
     await sleep(900);
@@ -32,7 +32,9 @@ app.whenReady().then(async () => {
         await shot(`picker-${theme}-${label}`);
       }
     }
-    await run('document.documentElement.dataset.theme = "dark"');
+    // A hidden window never finishes the theme-change colour transitions, so the interactive pass starts from a fresh load (dark by default).
+    await win.loadFile(path.join(out, 'index.html'));
+    await sleep(1200);
     win.setContentSize(900, 760);
     await sleep(300);
     if (!before) {
