@@ -27,6 +27,8 @@ describe('agent status from events', () => {
     expect(statusFromEvent('text', 'input')).toBeUndefined();
     expect(statusFromEvent('step', 'input')).toBeUndefined();
     expect(statusFromEvent('question_resolved', 'input')).toBe('working');
+    // An approved tool can run for minutes before its result: the answer itself moves the card on.
+    expect(statusFromEvent('approval_resolved', 'input')).toBe('working');
     expect(statusFromEvent('tool_result', 'input')).toBe('working');
     expect(statusFromEvent('text')).toBe('working');
     expect(statusFromEvent('done', 'input')).toBeNull();
