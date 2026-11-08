@@ -556,7 +556,7 @@ function WorkflowRow({
   const tone = live ? STATUS_TONE.running : wf.lastStatus ? STATUS_TONE[wf.lastStatus] : undefined;
 
   return (
-    <div className="card overflow-hidden" data-workflow-row={wf.id}>
+    <div className="overflow-hidden rounded-xl" data-workflow-row={wf.id}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2">
         <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={onExpand} aria-expanded={expanded}>
           <span className="w-3 shrink-0 text-2xs text-ink-faint">{expanded ? '▾' : '▸'}</span>
