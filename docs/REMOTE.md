@@ -12,7 +12,7 @@ After pairing your first computer, the permissions checklist explains what Nekko
 - **Local Network** finds nearby computers and reaches local connections. Looking does not pair. iOS does not expose a simple authorization status, so no discovery result means access is not verified, not necessarily denied. Check system Settings and your computer's network visibility.
 - **Optional tools:** Live Activities, camera for QR pairing, microphone and on-device speech recognition for dictation, device authentication, and add-only access to save images to Photos. Checking authentication does not change App lock. Live Activities has a separate system setting and app content controls.
 
-Denied access can be restored in system Settings. Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
+Denied access can be restored in system Settings. If Settings opens its home page, find Nekko Agent there (under **Apps** on newer iOS versions). Device restrictions or missing hardware may prevent a feature. Photo and file pickers need no blanket library or storage permission. Allowing microphone or speech access here does not start recording. You can revisit the checklist at any time.
 
 ## Draft photos and appearance on iPhone
 

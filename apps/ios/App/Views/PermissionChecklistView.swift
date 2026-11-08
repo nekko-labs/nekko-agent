@@ -26,6 +26,8 @@ struct PermissionChecklistView: View {
                         .frame(minHeight: 44)
                         .disabled(permissions.busy != nil)
                         .accessibilityIdentifier("permissions.systemSettings")
+                    Text("If system Settings opens its home page, find Nekko Agent there (under Apps on newer versions of iOS).")
+                        .font(.footnote).foregroundStyle(palette.inkSoft)
                 }
                 .padding(18)
                 .background(palette.surface2, in: RoundedRectangle(cornerRadius: 20))
