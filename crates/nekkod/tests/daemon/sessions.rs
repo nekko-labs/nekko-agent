@@ -9,7 +9,7 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     std::fs::create_dir_all(&sessions).unwrap();
     let chat = json!({ "id": "s_one", "title": "One", "updatedAt": 5, "messages": [
         { "id": "u", "role": "user", "content": "hello", "createdAt": 1 },
-        { "id": "a", "role": "assistant", "content": "", "images": ["data:x"], "generated": { "width": 8, "height": 8, "seed": 3 }, "createdAt": 2 },
+        { "id": "a", "role": "assistant", "content": "", "images": ["data:image/png;base64,iVBORw0KGgo="], "generated": { "width": 8, "height": 8, "seed": 3 }, "createdAt": 2 },
     ] });
     std::fs::write(sessions.join("s_one.json"), serde_json::to_vec_pretty(&chat).unwrap()).unwrap();
     let d = start_with(&data);
@@ -24,10 +24,10 @@ async fn serves_session_reads_from_disk_when_it_knows_the_data_dir() {
     let (_, missing) = post(d.port, "session:get", json!(["../escape"]), Some(TOKEN)).await;
     assert_eq!(missing, Value::Null);
     let (_, images) = post(d.port, "session:images", json!(["s_one", 4]), Some(TOKEN)).await;
-    assert_eq!(images, json!([{ "messageId": "a", "src": "data:x" }]));
+    assert_eq!(images, json!([{ "messageId": "a", "src": "data:image/png;base64,iVBORw0KGgo=" }]));
     // One photo as stored, for a phone opening it full size; anything else is null.
     let (_, photo) = post(d.port, "session:photo", json!(["s_one", "a", 0]), Some(TOKEN)).await;
-    assert_eq!(photo, json!("data:x"));
+    assert_eq!(photo, json!("data:image/png;base64,iVBORw0KGgo="));
     for args in [json!(["s_one", "a", 1]), json!(["s_one", "u", 0]), json!(["s_one", "nope", 0]), json!(["s_one"])] {
         let (_, none) = post(d.port, "session:photo", args.clone(), Some(TOKEN)).await;
         assert_eq!(none, Value::Null, "{args}");
