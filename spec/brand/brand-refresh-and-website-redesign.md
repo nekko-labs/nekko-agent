@@ -22,7 +22,7 @@ split-from: SPEC.md (2026-10-22)
 
 ## Trust-first homepage: slogan and five demo panels (2026-10-22)
 
-`[implemented; before/after screenshots in the PR; demo videos not yet produced]` The homepage leads with the slogan **"The personal, local agent you can trust."** (changed from "Your" on 2026-10-22, see below) and a lede about control: the user chooses the models, chooses what data is used, and sees what is happening. The eight-card "What you can do" grid is replaced by **five promise panels** (`#why-nekko`), modelled on Orca's feature panels: each is one wide card with a copy column (number, headline, paragraph, three points, a link) beside a 16:10 demo slot, sides alternating down the page and stacking media-first on phones.
+`[implemented; before/after screenshots in the PR; demo videos not yet produced]` The homepage leads with the slogan **"The personal, local agent you can trust."** (changed from "Your" on 2026-10-22, see below) and a lede about trust (2026-11-08): cloud models are great, but would you trust them with your data and your wallet? Nekko is built around security and a high quality experience without compromising your data. (Earlier lede: the user chooses the models, chooses what data is used, and sees what is happening.) The eight-card "What you can do" grid is replaced by **five promise panels** (`#why-nekko`), modelled on Orca's feature panels: each is one wide card with a copy column (number, headline, paragraph, three points, a link) beside a 16:10 demo slot, sides alternating down the page and stacking media-first on phones.
 
 1. **In control**: model choice per chat, Context Inspector, command approvals and line-by-line review.
 2. **No compromise**: terminal power with the polish of a finished app; CLI and MCP for people who prefer the shell.
@@ -76,3 +76,12 @@ The demo slots are the existing `.media` lightbox placeholders with a `data-demo
 ## The wave runs down the whole page (2026-11-02)
 
 - Scrolling past the hero no longer stops the dot wave: it keeps animating at every scroll position, pausing only while the tab is hidden and holding still under reduced motion. Holding the last frame past the hero looked like the background had frozen. The solid panels keep the redraw cheap (Firefox, Dark: lowest sample 153 rAF/s with the wave running, against 167 paused; see `docs/perf-history.md`). Verified in headless Firefox; a real-GPU Firefox was not measured.
+
+## Nekko Labs credit, nav and download copy (2026-11-08)
+
+`[implemented in source; not yet verified on production]` Make it plain that Nekko Agent comes from Nekko Labs.
+
+- **Nav:** Why Nekko, Make a local model server (`#local`), What's next, About us (the contributor section, `#contributors`), Docs, GitHub. The Beta and Download text links are gone: the Download button already sits in the header, and the beta section is still reachable from the page. The privacy page nav carries About us in place of Beta.
+- **Footer** (homepage and privacy page): "MIT · Made with ❤️ by the Nekko Labs team", with "Nekko Labs team" linking to nekkolabs.com/#team. The heart is an emoji at Philip's request.
+- **Download section lede:** "Free, open-source software. Built by an investor-free team, independent from any external influences."
+- **Below the download button:** the build-from-source commands and the macOS "damaged" quarantine note are gone; one "Read the install guidance" link (the README's How to run section, which covers both) replaces them. The Windows SmartScreen note stays.
