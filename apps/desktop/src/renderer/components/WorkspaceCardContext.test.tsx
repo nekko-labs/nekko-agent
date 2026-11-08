@@ -10,6 +10,8 @@ const state: Record<string, unknown> = {
   models: [{ id: 'm', contextLength: 1_000_000 }],
   prsBySession: {},
   sessionCtxEstimate: {} as Record<string, number>,
+  computers: [] as unknown[],
+  computerCatalogs: {},
 };
 vi.mock('../store.js', () => ({ useStore: (pick: (s: typeof state) => unknown) => pick(state) }));
 const gitStatus: { current: unknown } = { current: null };
@@ -101,14 +103,33 @@ describe('workspace card model line and attention', () => {
       isActive={false} now={0} projects={[]} onOpen={() => {}} onClose={() => {}} {...props} />,
   );
 
-  it('names the model alone, with its provider only in the tooltip', () => {
+  it('leads the model with its provider logo, the provider name only in the tooltip', () => {
     state.providers = [{ id: 'p', label: 'Claude', kind: 'anthropic' }];
     const html = render();
-    expect(html).toContain('Opus 5.5');
     expect(html).toContain('<span class="min-w-0 truncate">Opus 5.5</span>');
+    expect(html.indexOf('data-provider-mark="anthropic"')).toBeGreaterThan(-1);
+    expect(html.indexOf('data-provider-mark="anthropic"')).toBeLessThan(html.indexOf('Opus 5.5'));
     expect(html).toContain('title="Claude / claude-opus-5-5"');
     expect(html).not.toMatch(/>Claude</);
+    // A custom endpoint has no logo: nothing stands in for one.
+    state.providers = [{ id: 'p', label: 'Mine', kind: 'openai-compat', baseUrl: 'https://llm.example.test/v1' }];
+    expect(render()).not.toContain('data-provider-mark');
     state.providers = [];
+  });
+
+  it('names the computer in front of the model only once a second computer is connected', () => {
+    expect(render()).not.toContain('data-computer-chip');
+    state.computers = [{ id: 'ab12cd34', name: 'gomi', color: 0, state: 'online' }];
+    try {
+      const local = render();
+      expect(local).toMatch(/data-computer-chip="here"[^>]*>This (Mac|PC|computer)</);
+      expect(local.indexOf('data-computer-chip')).toBeLessThan(local.indexOf('Opus 5.5'));
+      const remote = render({ session: { ...session, id: '@ab12cd34:s1', modelId: 'claude-opus-5-5' } as SessionSummary });
+      expect(remote).toMatch(/data-computer-chip="ab12cd34"[^>]*>gomi</);
+      expect(render({ showComputer: false })).not.toContain('data-computer-chip');
+    } finally {
+      state.computers = [];
+    }
   });
 
   it('marks only the selected chat for its background, independently of status', () => {

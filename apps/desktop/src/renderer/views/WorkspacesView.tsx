@@ -7,7 +7,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import type { AgentEvent, ComputerStatus, SessionSummary, TerminalInfo, WorkspaceFolder } from '@nekko-agent/shared';
 import { AUTO_MODEL_ID, computerIdOf } from '@nekko-agent/shared';
-import { ComputerGlyph } from '../components/ComputerChip.js';
+import { ComputerGlyph, thisComputerName } from '../components/ComputerChip.js';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore, type Workspace } from '../store.js';
 import { runningSessionIds } from '../liveRuns.js';
@@ -57,10 +57,6 @@ function sortable(e: Entry): SortableCard {
 /** Beside a computer's group heading, which already names it. */
 const COMPUTER_STATE_WORD: Record<ComputerStatus['state'], string> = { online: '', connecting: 'connecting', offline: 'offline', denied: 'removed', stale: 'needs pairing again', update: 'needs an update' };
 
-/** The group heading for agents on this computer. */
-function thisComputerName(): string {
-  return navigator.platform.startsWith('Mac') ? 'This Mac' : navigator.platform.startsWith('Win') ? 'This PC' : 'This computer';
-}
 
 type PanelGroup = {
   key: string;
@@ -876,7 +872,7 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
                           showSubagents={view.showSubagents}
                           showWindows={view.showWindows}
                           showUpdated={view.showUpdated}
-                          showComputer={view.showComputer}
+                          showComputer={view.showComputer && view.groupBy !== 'computer'}
                           showComputerIcons={view.showComputerIcons}
                           zoneTint={zoneTints?.get(s?.id ?? entry.t?.id ?? '')}
                           onOpen={() => {
