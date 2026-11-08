@@ -11,7 +11,7 @@ area: product
 
 **Format.** Plain numbers without padding, because npm, App Store Connect, Google Play and macOS reject leading zeros: `0.9.42`, never `0.009.0042`. MINOR runs 0-999 and BUILD 0-9999; the version script refuses anything beyond and says to tag the next line.
 
-**MAJOR.MINOR.** The newest release tag, `vMAJOR.MINOR.PATCH` or the short `vMAJOR.MINOR` (a tag with a suffix such as `-rc.1` is a prerelease and does not start a line). A person pushes it, or creates a GitHub release with it. A short tag is expanded to `vMAJOR.MINOR.0` on the same commit, and that tag is released: installers, npm packages and Docker images at `MAJOR.MINOR.0`. Package versions in the repository are no longer bumped and no longer decide anything; a merge never releases.
+**MAJOR.MINOR.** The newest release tag, `vMAJOR.MINOR.PATCH` or the short `vMAJOR.MINOR` (a tag with a suffix such as `-rc.1` is a prerelease and does not start a line). A person pushes it, or creates a GitHub release with it. A short tag is expanded to `vMAJOR.MINOR.0` on the same commit, and that tag is released: installers, npm packages and Docker images at `MAJOR.MINOR.0`. Package versions in the repository are no longer bumped and do not decide release versions; a merge never releases.
 
 **BUILD.** Each platform counts its own nightly builds since the newest release tag, and the count starts again on the next one:
 
@@ -34,3 +34,9 @@ After a `v0.9` tag: desktop 0.9.0 is the release, and the nightlies are 0.9.1, 0
 **Where the counts live.** An annotated tag per build, `nightly/<platform>/vMAJOR.MINOR.BUILD`, on the commit built, pushed before the build starts (`scripts/nightly-version.mjs`). A lost race takes the next number; a failed build leaves a gap. `git tag -l 'nightly/ios/*'` lists every iOS build and its commit.
 
 **Not part of this.** Nightly desktop builds are not GitHub releases and are unsigned. No nightly npm packages. Nothing is uploaded to Google Play.
+
+## Desktop development identity
+
+**Implemented, pending release verification.** Unpackaged desktop builds (`npm run dev`, `npm run local`) report the highest numeric stable release tag reachable from their checkout, followed by `-dev.<commits-since-tag>+g<commit>`. Tracked local edits add `.dirty`. The same identity reaches About, Settings and the development-launch banner through the engine app-info bridge. Tags are read locally, with no network requests, uploads or counter reservations. Fetch release tags to refresh a stale clone. An archive, missing Git or missing tags falls back to the manifest version with an explicit development suffix, never an apparently released version. Packaged installers continue to use only their workflow-stamped version; development identity does not change update feeds or package manifests.
+
+**Acceptance:** numeric tag ordering, short tags, unrelated branches, dirty sources, missing Git/tags and unchanged packaged versions are regression-tested. Hidden desktop evidence verifies the About label independently of the user profile. macOS release signing/notarization is verified by the release workflow, not by this development fixture.
