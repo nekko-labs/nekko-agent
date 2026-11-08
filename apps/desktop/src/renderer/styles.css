@@ -2501,7 +2501,8 @@
 .settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
 /* Matches the selected .settings-nav-item, so a section's heading reads like its rail entry. */
 .settings-group-title { font-size: var(--text-base); font-weight: 500; color: var(--ink); }
-.settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 4px 8px 4px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); }
+/* Pinned over the rail's "Search settings" row: its left edge and width come from the row, so it never spills out of the rail. */
+.settings-search-pop { position: fixed; z-index: 60; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; box-sizing: border-box; padding: 4px 4px 4px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: var(--text-sm); color: var(--ink); }
 .settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
 ::highlight(nekko-settings-search) { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; }

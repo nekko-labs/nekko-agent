@@ -192,7 +192,7 @@ export function SettingsView() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2 px-3 py-2 text-sm text-ink-soft"><span>Search settings</span><SettingsSearch root={pageRef} /></div>
+        <SettingsSearch root={pageRef} />
         <nav aria-label="Settings sections" className="settings-nav">
           {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
             <button
