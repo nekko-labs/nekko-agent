@@ -4,18 +4,19 @@ import { NekkoAvatar } from './Mascot.js';
 import { LayoutIcon, PhotoIcon, PlusIcon, TerminalIcon } from '../icons.js';
 import { SHORTCUTS } from '../shortcuts.js';
 
-export type CreateKind = 'chat' | 'image' | 'terminal';
-/** The three things the plus creates; the plus menu and an empty zone both offer them. */
+export type CreateKind = 'chat' | 'image' | 'video' | 'terminal';
+/** Shared by the plus menu and empty zones. The existing media shortcut opens Photo. */
 export const CREATE_OPTIONS = [
   ['chat', 'Agent', <NekkoAvatar size={16} stationary eyes={false} />, SHORTCUTS.newAgent],
-  ['image', 'Create or Edit Photos and Videos', <PhotoIcon className="h-4 w-4" />, SHORTCUTS.newMedia],
+  ['image', 'Photo', <PhotoIcon className="h-4 w-4" />, SHORTCUTS.newMedia],
+  ['video', 'Video', <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="18" height="14" rx="4" /><path d="m10 9 5 3-5 3Z" /></svg>, null],
   ['terminal', 'Terminal', <TerminalIcon className="h-4 w-4" />, SHORTCUTS.newTerminal],
 ] as const;
 export function CreateMenuRows({ onCreate }: { onCreate: (kind: CreateKind) => void }) {
-  return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" aria-label={label} title={`${label} (${shortcut.label})`} onClick={() => onCreate(kind)}>
+  return <>{CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className="create-row flex w-full items-center gap-2 rounded-md px-2 py-1 text-left" aria-label={label} data-create-kind={kind} title={shortcut ? `${label} (${shortcut.label})` : label} onClick={() => onCreate(kind)}>
     <span className="create-tile">{icon}</span>
     <span className="min-w-0 flex-1 text-sm font-medium leading-snug">{label}</span>
-    <kbd className="kbd shrink-0">{shortcut.label}</kbd>
+    {shortcut && <kbd className="kbd shrink-0">{shortcut.label}</kbd>}
   </button>)}</>;
 }
 

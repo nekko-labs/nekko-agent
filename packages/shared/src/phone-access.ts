@@ -752,7 +752,7 @@ export const PHONE_GUARDED_OPTION_KEYS = ['allowedMcpTools', 'cloudOnly', 'disab
 /** The values a closed chat option may take (the store checks the rest). */
 export const PHONE_OPTION_VALUES = {
   autoQuality: ['cheap', 'normal', 'quality'],
-  chatType: ['image', 'multimodal'],
+  chatType: ['image', 'multimodal', 'video'],
   executionMode: ['sandbox', 'unified', 'worktree'],
   guidance: ['off', 'root', 'rules'],
   memory: ['all', 'off', 'project'],

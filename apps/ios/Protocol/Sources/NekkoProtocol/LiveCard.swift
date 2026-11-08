@@ -48,9 +48,13 @@ public struct LiveChat: Codable, Hashable, Sendable {
     public var callId: String?
     /// low / medium / high (the computer's guardrail rating).
     public var severity: String?
+    /// The waiting call is an MCP tool, so the card offers "Always allow this
+    /// tool" (decision 0054). Left out of the state when false.
+    public var alwaysAllow: Bool
 
     public init(id: String, short: String, state: LiveChatState, step: String, reply: String, closeWord: String,
-                finishedAt: Date?, callId: String?, severity: String?, startedAt: Date? = nil, title: String = "") {
+                finishedAt: Date?, callId: String?, severity: String?, startedAt: Date? = nil, title: String = "",
+                alwaysAllow: Bool = false) {
         self.id = id
         self.short = short
         self.title = title
@@ -62,10 +66,11 @@ public struct LiveChat: Codable, Hashable, Sendable {
         self.callId = callId
         self.severity = severity
         self.startedAt = startedAt
+        self.alwaysAllow = alwaysAllow
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, short, title, state, step, reply, closeWord, finishedAt, startedAt, callId, severity
+        case id, short, title, state, step, reply, closeWord, finishedAt, startedAt, callId, severity, alwaysAllow
     }
 
     /// Pushes may omit anything but the id and state.
@@ -82,6 +87,7 @@ public struct LiveChat: Codable, Hashable, Sendable {
         callId = try c.decodeIfPresent(String.self, forKey: .callId)
         severity = try c.decodeIfPresent(String.self, forKey: .severity)
         startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        alwaysAllow = try c.decodeIfPresent(Bool.self, forKey: .alwaysAllow) ?? false
     }
 
     /// Written as the synthesized encoder would, except an empty title is left
@@ -100,6 +106,7 @@ public struct LiveChat: Codable, Hashable, Sendable {
         try c.encodeIfPresent(startedAt, forKey: .startedAt)
         try c.encodeIfPresent(callId, forKey: .callId)
         try c.encodeIfPresent(severity, forKey: .severity)
+        if alwaysAllow { try c.encode(true, forKey: .alwaysAllow) }
     }
 }
 

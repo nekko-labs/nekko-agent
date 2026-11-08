@@ -65,6 +65,11 @@ const SETTINGS = {
 };
 
 describe('phone channel allowlist', () => {
+  it('accepts the Video label while preserving image request validation and refusing unknown modes', () => {
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { chatType: 'video' }]))).toBe('ok');
+    expect(code(() => screenPhoneCall('session:setOptions', ['s1', { chatType: 'movie-generator' }]))).toBe('value-invalid');
+    expect(code(() => screenPhoneCall('chat:generateImage', [{ sessionId: 's1', text: 'a landscape' }]))).toBe('value-invalid');
+  });
   it('names only real channels, and none the always-denied list forces off', () => {
     const all = new Set<string>(Object.values(IpcChannels));
     for (const c of PHONE_CHANNELS) {

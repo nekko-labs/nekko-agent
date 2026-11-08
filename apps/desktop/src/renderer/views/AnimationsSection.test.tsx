@@ -4,18 +4,20 @@ import type { AppSettings } from '@nekko-agent/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { matchSettingsPages } from '../settingsIndex.js';
 import { stepTextScale, TEXT_SCALES } from '../textScale.js';
-import { AccessibilitySection } from './DesktopBehaviorSections.js';
+import { AnimationsSection } from './DesktopBehaviorSections.js';
+import { StyleSection } from './StyleSection.js';
 import { SETTINGS_GROUPS } from './SettingsView.js';
 
 vi.mock('../chrome.js', () => ({ hasAppChrome: false }));
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({}) }), textScaleOf: (v?: number) => v ?? 100 }));
 
-const render = (settings: Partial<AppSettings>) => renderToStaticMarkup(<AccessibilitySection settings={settings as AppSettings} update={() => {}} />);
-const stepper = (html: string, label: string) => html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? '';
+const render = (settings: Partial<AppSettings>) => renderToStaticMarkup(<AnimationsSection settings={settings as AppSettings} update={() => {}} />);
+const renderStyle = (settings: Partial<AppSettings>) => renderToStaticMarkup(<StyleSection settings={settings as AppSettings} update={() => {}} />);
 
-describe('Settings > Customize > Accessibility', () => {
-  it('lives under Customize and remains discoverable by accessibility and font size', () => {
+describe('Settings > Customize > Animations', () => {
+  it('lives under Customize and remains discoverable by animations, accessibility and font size', () => {
     expect(SETTINGS_GROUPS.map((g) => g.id)).toContain('customize');
+    expect(matchSettingsPages('animations').map((p) => p.group)).toEqual(['customize']);
     expect(matchSettingsPages('accessibility').map((p) => p.group)).toEqual(['customize']);
     expect(matchSettingsPages('font size').map((p) => p.group)).toEqual(['customize']);
   });
@@ -26,18 +28,21 @@ describe('Settings > Customize > Accessibility', () => {
     expect(render({ agentActivityAnimation: false })).toMatch(/aria-checked="false"/);
   });
 
-  it('puts text size before the animation toggle', () => {
-    const html = render({});
-    expect(html.indexOf('Text size')).toBeGreaterThan(-1);
-    expect(html.indexOf('Text size')).toBeLessThan(html.indexOf('Agent activity animation'));
+  it('has no text size of its own', () => {
+    const html = render({ textScale: 125 });
+    expect(html).toContain('>Animations<');
+    expect(html).not.toContain('Text size');
+    expect(html).not.toContain('data-text-size-preview');
   });
+});
 
-  it('stops the stepper at each limit and offers nothing to apply at rest', () => {
-    expect(stepper(render({ textScale: 80 }), 'Decrease text size')).toMatch(/disabled/);
-    expect(stepper(render({ textScale: 80 }), 'Increase text size')).not.toMatch(/disabled/);
-    expect(stepper(render({ textScale: 150 }), 'Increase text size')).toMatch(/disabled/);
-    expect(stepper(render({ textScale: 150 }), 'Decrease text size')).not.toMatch(/disabled/);
-    expect(render({ textScale: 125 })).not.toMatch(/Apply \d/);
+describe('Settings > Style text preview', () => {
+  it('sits right after the code font and shows the current size, with nothing to apply', () => {
+    const html = renderStyle({ textScale: 125 });
+    expect(html.indexOf('Code font')).toBeLessThan(html.indexOf('data-text-size-preview'));
+    expect(html.indexOf('data-text-size-preview')).toBeLessThan(html.indexOf('Add your own fonts'));
+    expect(html).toContain('Preview at 125%');
+    expect(html).not.toMatch(/Apply \d/);
   });
 });
 

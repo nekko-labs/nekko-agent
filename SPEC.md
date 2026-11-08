@@ -953,6 +953,8 @@ On the desktop, Nekko Agent runs as two processes `[updated 2026-10-19]`:
 
 ## Completion and interruption reconciliation
 
+Implemented (#2253): late provider usage accounting cannot create or resurrect a live reply after completion/error, or resume a wait. The daemon only appends it to an existing replay and the desktop only folds it into an existing run. Focused regressions and a hidden synthetic renderer journey cover the empty “Working” failure; exact reported-chat and multi-device reproduction remain unverified. See [the reconciliation spec](spec/chat/completion-and-interruption-reconciliation.md#late-provider-accounting-cannot-restart-a-reply).
+
 Implemented and verified with 1,124 desktop tests, typecheck, and 80 isolated renderer assertions plus matched completion screenshots: an explicit successful terminal record (`turnStats.stop: complete`) takes precedence over unmatched historical tool bookkeeping when inferring a persisted interruption. An explicit interrupted marker still wins, and unresolved tool calls without successful terminal evidence remain recoverable. A transient inferred interruption banner clears when the completed transcript arrives; provider errors and user-requested stops are not silently cleared. No transcript or private app data is rewritten. Acceptance: completed and genuinely interrupted fixture cases, delayed transcript reconciliation, and isolated light/dark wide/narrow evidence. The exact triggering transcript in the reported screenshot was not accessible in the workspace sandbox.
 
 ## Nav wings and wall action clarity

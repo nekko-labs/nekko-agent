@@ -19,15 +19,8 @@ A **Style** group sits third in Settings, after Phone pairing, with one card, **
 - **Text size**: 80%, 90%, 100% (default), 110%, 125%, 150%. It scales the whole interface, since most sizes in the app are fixed pixels. The desktop app uses page zoom, the same as a browser's own zoom, so measured positions, clicks, the window size and scrolling all stay in one coordinate space, and a window at a large size lays out as a narrower one would. The Local Web UI cannot set page zoom and uses CSS `zoom` on the root, where menus placed from a measured position can land away from their button at sizes other than 100%. See [decision 0060](../../docs/decisions/0060-text-size-is-page-zoom-on-the-desktop.md). Saved as `textScale`; anything out of range reads as the nearest bound, anything not a number as 100.
 - **Interface font** and **Code font**: the default (Inter Tight / JetBrains Mono), **System**, and every font in the fonts folder. Saved as `fontSans` / `fontMono`; an empty string means the default. A chosen font always falls back to the bundled one, so a missing file never leaves the app unstyled, and the list shows it as "(missing)".
 - Each font row previews its font.
-
-## Settings > Accessibility
-
-Text size is also the first row of **Accessibility**, above Agent activity animation, for people who look for it there.
-
-- It is the same setting as Style's **Text size** (`textScale`), with the same steps and the same limits, 80% and 150%. Changing either one moves the other. There is no second scale: `zoom` multiplies, so two would compound.
-- **−** and **+** step through the sizes, and each is disabled at its limit.
-- A preview under the row shows sample text at the picked size, live. The app itself does not change until **Apply**. **Cancel**, leaving the page, or a change of size from Style or the command palette drops the unapplied size.
-- The preview is scaled by picked size over applied size, since the page is already zoomed to the applied one.
+- Right after **Code font**, a preview shows sample text (a title, a line, a faint line and code) in both fonts at the current size. A size or font change applies at once and the preview follows it; there is no Apply step.
+- Text size lives only here. The card that held a second text size stepper is now **Animations**, with just Agent activity animation.
 - Settings' section list and search land in the right place at every size, under CSS `zoom` too: there, element rects are in zoomed pixels and `scrollTop` is not, so a distance from one is divided by the zoom before it scrolls the other.
 
 ## Keyboard and wheel
@@ -56,4 +49,5 @@ User intent: make text bigger or smaller from anywhere in the app with the usual
 - Implemented 2026-10-24: bundled fonts, Style section, text size, fonts folder. Checked in the hidden layout harness (`apps/desktop/scripts/style-sandbox.cjs`); not yet checked in a packaged build.
 - Implemented 2026-11-06: text size in Settings > Accessibility with a preview and Apply, and page zoom on the desktop. Checked in the hidden layout harness (`text-size-sandbox.cjs`, `text-size-nav-sandbox.cjs`, `text-size-popover-sandbox.cjs`) and by hand in a dev build; not yet checked in a packaged build.
 - Implemented 2026-11-08: Ctrl/⌘ + Plus/Minus and Ctrl/⌘ + scroll wheel step the text size, and Ctrl/⌘ + 0 resets it. Unit-tested; not yet checked by hand in a dev or packaged build.
+- Changed 2026-11-08: the text preview moved under Code font in Style and applies at once; the Accessibility stepper and its Apply were removed, and the card was renamed **Animations**. Unit-tested; `text-size-sandbox.cjs` updated but not rerun.
 - Planned: the phone apps following the desktop's font choice.

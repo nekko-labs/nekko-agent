@@ -592,9 +592,9 @@ export function CommandWall({
    * comes back; the panels point at themselves and exist once at most, so
    * asking for one that is already up moves it rather than doubling it.
    */
-  const addWindow = async (kind: PaneKind, at?: { paneId: string; dir: Direction }, zoneId?: string, image = false) => {
+  const addWindow = async (kind: PaneKind, at?: { paneId: string; dir: Direction }, zoneId?: string, media?: 'image' | 'video') => {
     let refId: string = kind;
-    if (kind === 'chat') refId = await onNewChat(image ? { kind: 'chat', chatType: 'image' } : undefined);
+    if (kind === 'chat') refId = await onNewChat(media ? { kind: 'chat', chatType: media } : undefined);
     else if (kind === 'terminal') refId = await onNewTerminal();
     // A side pointed at makes a new zone there; otherwise the window fills a zone.
     setState((s) => at && allPanes(s.root).some((p) => p.id === at.paneId) && canSplit(s.root, at.paneId, at.dir)
@@ -909,8 +909,8 @@ export function CommandWall({
           <p className="wall-zone-empty-title">Empty zone</p>
           <p>Drag in an agent chat or start a new one below.</p>
           <div className="wall-zone-create">
-            {CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={`${label} (${shortcut.label})`}
-              onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image'); }}><PlusIcon className="wall-zone-plus h-3.5 w-3.5" />{icon}<span className="wall-zone-label">{label}</span><kbd className="kbd wall-zone-kbd">{shortcut.label}</kbd></button>)}
+            {CREATE_OPTIONS.map(([kind, label, icon, shortcut]) => <button key={kind} type="button" className={`btn btn-ghost wall-zone-option${kind === 'chat' ? ' text-accent' : ''}`} data-zone-create={kind} aria-label={label} title={shortcut ? `${label} (${shortcut.label})` : label}
+              onClick={() => { void live.current.addWindow(kind === 'terminal' ? 'terminal' : 'chat', undefined, pane.id, kind === 'image' || kind === 'video' ? kind : undefined); }}><PlusIcon className="wall-zone-plus h-3.5 w-3.5" />{icon}<span className="wall-zone-label">{label}</span>{shortcut && <kbd className="kbd wall-zone-kbd">{shortcut.label}</kbd>}</button>)}
           </div>
         </div> : <>
         {/* The composer's beam, quieter: a working agent window says so at a glance. */}

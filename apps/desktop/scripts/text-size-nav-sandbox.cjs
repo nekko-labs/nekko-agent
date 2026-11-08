@@ -1,5 +1,5 @@
 // Synthetic Settings section nav check at each text size: clicking a section
-// must land on it, whatever root zoom Settings > Accessibility has applied.
+// must land on it, whatever root zoom the text size has applied.
 // Launch: NEKKO_LAYOUT_SANDBOX=text-size-nav-sandbox.cjs node layout-evidence-integration.cjs
 // Stub bridge only. Hidden, non-focusable window; clicks are DOM events, no OS input.
 const { app, BrowserWindow, session, screen } = require('electron');

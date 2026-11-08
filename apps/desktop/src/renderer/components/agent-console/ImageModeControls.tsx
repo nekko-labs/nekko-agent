@@ -9,6 +9,14 @@ import {
 import { useStore } from '../../store.js';
 import { ensureRecommendedOffload } from './imageOffload.js';
 
+export const IMAGE_SIZES = ['512x512', '768x768', '1024x1024', '576x1024', '768x1024', '1024x768', '1024x576', '1344x768', '768x1344'];
+export function imageSizeLabel(size: string): string {
+  const [w, h] = size.split('x').map(Number);
+  if (!(w > 0 && h > 0)) return size;
+  const gcd = (a: number, b: number): number => b ? gcd(b, a % b) : a;
+  const d = gcd(w, h);
+  return `${w / d}:${h / d} · ${w}×${h}`;
+}
 export const PHOTO_SHAPES = [
   { size: '1024x1024', label: 'Square' },
   { size: '1024x768', label: 'Landscape' },
@@ -124,7 +132,7 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
           onChange={(e) => { const [width, height] = e.target.value.split('x').map(Number); void save({ width, height }); }}
         >
           {!PHOTO_SHAPES.some(s => s.size === size) && <option value={size}>Custom · {size.replace('x', '×')}</option>}
-          {PHOTO_SHAPES.map(s => <option key={s.size} value={s.size}>{s.label} · {s.size.replace('x', '×')}</option>)}
+          {PHOTO_SHAPES.map(s => <option key={s.size} value={s.size}>{s.label} · {s.size.replace('x', '×')} ({imageSizeLabel(s.size).split(' · ')[0]})</option>)}
         </select>
       </label>
       <button className="ctl-toggle" aria-expanded={advanced} disabled={busy} onClick={() => setAdvanced(v => !v)}>Advanced</button>
