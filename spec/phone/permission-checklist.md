@@ -9,7 +9,15 @@ Tracks [#2249](https://github.com/nekko-labs/nekko-agent/issues/2249).
 
 ## Intent and scope
 
-The last new-user onboarding step, after pairing, explains each system permission in a themed checklist. The same page is available from **Settings → Device access → Permissions**, without interrupting existing users after an upgrade. The user chose a checklist only, no video. A happy Nekko appears beside the introduction; her expression is not proof that access has been granted.
+The last new-user onboarding step, after pairing, walks through each system permission in a guided, themed checklist. The same page is available from **Settings → Device access → Permissions**, without interrupting existing users after an upgrade. The user chose a checklist only, no video. Nekko sits beside the title and reacts: she blinks while waiting, cheers when a row is allowed and looks startled at a denial. Her expression is decoration, never proof that access has been granted.
+
+## Guided flow
+
+- One row is open at a time, showing a one-line reason, the action, and **Not now**. Every other row is a single compact line: a status shape (empty circle, check, warning, dash) plus its title and, once settled, a short status word.
+- Allowing a row animates its check, nudges the progress count (“2 of 8”) and opens the next unfinished row below it, wrapping to the top. **Not now** marks the row Skipped and moves on the same way. A denial keeps the row open with **Settings** and **Not now**, so recovery is one tap.
+- Tapping any compact row opens it; rows already allowed show **Settings**. Rows fade in one after another on first appearance. With Reduce Motion on, rows and the mascot change state without movement.
+- When every row is allowed, skipped or unavailable, the title becomes “All set”, Nekko stays happy and Continue reads Done. Skipping is remembered only for this visit.
+- Copy is one short line per row. The footer says nothing is required, that picking photos and files needs no library access, and where to find Nekko Agent if Settings opens its home page.
 
 Connection and alerts come first: notifications (approvals, questions, replies and failures) and local-network discovery. Optional tools follow: Live Activities, camera pairing, microphone, speech recognition, device authentication and add-only Photos saving. Picking photos and files needs no blanket library or storage permission. Needs-you alerts use notification authorization; they are not another system permission. There is no request for Bluetooth, tracking, location, contacts, full photo-library access or an invented background-running permission.
 
