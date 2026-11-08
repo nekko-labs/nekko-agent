@@ -25,7 +25,11 @@ area: agents
 - **Visible-card hydration:** every mounted card with summary PR URLs gets fetched, not just the first eight. At most eight reads run concurrently across overlapping effects; cached and in-flight cards are skipped, and unmount/filter changes stop queued reads. This includes the activity **Done** group without opening each chat. Hidden groups and rows behind Show more remain lazy.
 - **Done context:** a chat in the activity Done state (finished reply, no armed watch) hides context token usage and compaction activity. This is independent of grouping and keeps model, PRs, subagents and windows. Working, needs-input, interrupted, watch-armed and draft chats retain the existing context behavior; archived Completed rows remain their existing compact presentation.
 
-`[Implemented 2026-11-09; focused TS and Rust store/workspace suites and desktop typecheck pass. Isolated Electron matched baseline/fixed capture and interaction checks cover 1440/420 widths, dark/light, #PR +N and independent links; final pixel inspection and published evidence verification pending. Packaged app and native phone UI are not claimed.]`
+**Implemented and verified (2026-11-09):** 3,425 desktop tests plus 69 script tests, 115 shared PR tests, desktop production build/typecheck, Rust store/workspace tests and Clippy pass on Windows. Matched real-Electron base/fixed captures and interaction checks cover desktop/narrow widths (1440/420), dark/light, #PR +N and independent links. The screenshot harness disables only the unchanged popover fade and checks actual pixel luminance after theme changes. Captured pixels were inspected through a native offscreen image viewer; all ten published v2 images were anonymously fetched and SHA256-compared to local captures. Evidence: [PR #2346](https://github.com/nekko-labs/nekko-agent/pull/2346). Packaged desktop and native phone UI remain unverified; no motion change is claimed.
+
+### Reproduce the isolated sidebar checks
+
+Use the worktree bootstrap in [the typecheck runbook](../../docs/runbooks/worktree-typecheck.md), then run the shared launcher with `NEKKO_LAYOUT_FIXTURE=chat-pr-chiplets-fixture.tsx`, `NEKKO_LAYOUT_SANDBOX=chat-pr-chiplets-sandbox.cjs` and `NEKKO_TEST_LABEL=after`. For a baseline, use `NEKKO_TEST_LABEL=before` and `NEKKO_TEST_SOURCE` pointing at an unchanged base worktree. Output and the assertion report are under `.shots/layout-evidence/<label>/`. Profiles are disposable, provider/GitHub calls are stubbed and HTTP requests are blocked.
 
 ## Boundaries
 
