@@ -185,6 +185,21 @@ jobs:
       # it (apps/desktop/scripts/stage-daemon.mjs) and fails without cargo.
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Electron and the tools electron-builder fetches from GitHub (NSIS,
+      # signing helpers), kept in the Actions cache. The nightly on main saves
+      # it and a tag build restores it, so a GitHub download outage cannot
+      # fail a release (v0.9.5's first run died on a 504 for Electron).
+      - name: Point Electron's downloads at a cached folder
+        id: electron-cache
+        shell: bash
+        run: |
+          echo "electron_config_cache=${{ runner.temp }}/electron-cache/electron" >> "$GITHUB_ENV"
+          echo "ELECTRON_BUILDER_CACHE=${{ runner.temp }}/electron-cache/electron-builder" >> "$GITHUB_ENV"
+          echo "versions=$(node -p "const p=require('./package-lock.json').packages; p['node_modules/electron'].version+'-'+p['node_modules/electron-builder'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v5
+        with:
+          path: ${{ runner.temp }}/electron-cache
+          key: electron-${{ runner.os }}-${{ steps.electron-cache.outputs.versions }}
       - run: npm ci
       # The tag is the version (docs/decisions/0055): package.json versions are
       # no longer bumped in PRs, so the installers take theirs from here. After
