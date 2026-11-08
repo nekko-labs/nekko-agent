@@ -4085,7 +4085,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 
 /* One Models workspace, quiet navigation and compact provider actions. */
 .models-add-provider:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.models-workspace { height: 100%; overflow-y: auto; padding: 12px 16px 64px; }
+.models-workspace { flex: 1; min-width: 0; height: 100%; overflow-y: auto; padding: 12px 16px 64px; }
 /* The biggest heading in its section: titles nested below step down a size. */
 .models-section-heading { display: flex; align-items: center; gap: 8px; font-size: var(--text-2xl); font-weight: 600; margin-bottom: 16px; }
 .models-section h1:not(.view-title) { font-size: var(--text-xl); }
@@ -4102,18 +4102,16 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .models-provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 16px; align-items: start; max-width: 1800px; }
 .models-provider-grid > div { min-width: 0; scroll-margin-top: 20px; }
 .models-local-connections { margin-top: 36px; }
-.models-section { scroll-margin-top: 12px; min-width: 0; }
-/* Cloud (left) and Local (right) share the page in two columns on a wide
-   window, and stack with Cloud first on anything narrower than a laptop. */
-.models-workspace-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; max-width: 1800px; margin-inline: auto; }
-.models-workspace-split .models-section { max-width: none; margin-inline: 0; }
-@media (max-width: 1199px) {
-  .models-workspace-split { grid-template-columns: minmax(0, 1fr); gap: 40px; }
-  .models-workspace-split .models-section:not(.models-section-cloud) { padding-top: 24px; border-top: 1px solid var(--line); }
-}
+.models-section { min-width: 0; }
+/* Cloud on top, Local below, on one page; the side menu jumps to each and to Local's own sections. */
+[data-models-section] { scroll-margin-top: 12px; }
+.models-section-local { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
+.models-nav-sub { padding-left: 32px; font-size: var(--text-sm); color: var(--ink-soft); }
+.models-nav-sub[aria-current] { color: var(--ink); }
 @media (max-width: 767px) {
   .models-workspace { padding: 16px 16px 48px; }
-  .models-workspace-split { gap: 28px; }
+  .models-section-local { margin-top: 28px; }
+  .models-nav-sub { padding-left: 8px; }
   .models-provider-bar { gap: 12px; }
   .models-add-provider { width: 36px; height: 36px; border-radius: 10px; }
 }
