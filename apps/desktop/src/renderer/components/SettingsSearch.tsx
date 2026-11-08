@@ -4,7 +4,7 @@ import { ChevronDownIcon, ChevronUpIcon, CloseIcon, SearchIcon } from '../icons.
 import { zoomOf } from '../textScale.js';
 
 /**
- * Search within Settings. The search icon in the Appearance header turns into
+ * Search within Settings. The search icon in the Settings rail turns into
  * a floating search box in the same spot. It stays put on screen while the page
  * scrolls under it. One second after the user stops typing (or at once on
  * Enter), the page scrolls to the first match and highlights it. The up/down

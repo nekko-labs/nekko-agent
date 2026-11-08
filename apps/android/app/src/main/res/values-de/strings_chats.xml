@@ -199,6 +199,12 @@
     <string name="chats_no_providers">In Nekko Agent auf deinem Computer ist kein Modellanbieter eingeschaltet. Füge einen in den Modell-Einstellungen hinzu oder aktiviere ihn.</string>
     <string name="chats_search_models">Modelle suchen</string>
     <string name="chats_starred">Markiert</string>
+    <string name="chats_model_source">Modellquelle</string>
+    <string name="chats_scope_all">Alle</string>
+    <string name="chats_scope_cloud">Cloud</string>
+    <string name="chats_scope_local">Lokal</string>
+    <string name="chats_scope_no_local">Keine lokalen Modellserver auf diesem Computer.</string>
+    <string name="chats_scope_no_cloud">Keine Cloud-Anbieter auf diesem Computer.</string>
     <string name="chats_list_models_failed">Die Modelle konnten nicht aufgelistet werden. %1$s</string>
     <string name="chats_retry">Erneut versuchen</string>
     <string name="chats_asking">Frage deinen Computer …</string>

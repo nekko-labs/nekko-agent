@@ -17,8 +17,8 @@ struct ChatsView: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var query = ""
-    /// Explicitly opened groups; headed groups start folded.
-    @State private var opened: Set<String> = []
+    /// Read the shared preference directly so recreated lists and iPad panes agree.
+    private var opened: Set<String> { prefs.openedChatGroups }
     /// Groups showing every chat, past the first few recent ones.
     @State private var expanded: Set<String> = []
     @State private var reorderingGroups = false
@@ -212,7 +212,9 @@ struct ChatsView: View {
         let open = g.isOpen(opened: opened, searching: !query.isEmpty)
         let live = g.key == "status:watching" ? g.watchingCount > 0 : ["status:building", "status:verifying"].contains(g.key) && g.headerActivity(listActivity) == .running
         let heading = Button {
-            withAnimation { flip(&opened, g.key) }
+            // Search reveals matching rows temporarily, without changing the saved choice.
+            guard query.isEmpty else { return }
+            withAnimation { flip(&prefs.openedChatGroups, g.key) }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(palette.accent)

@@ -34,6 +34,8 @@ The quickest way to start is the installer.
 2. Run it. On macOS, drag Nekko Agent into Applications.
 3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab (the violet brain-and-gear icon in the left navigation). Click a model's name there to make it the default for new chats.
 
+The first time it opens, Nekko says hi and asks a few quick questions, all of them skippable: what to call you, an optional email for update news, what you mostly do, and how much detail you like in replies (**Minimal**, **Regular** or **Detailed**, with a sample chat that shows each one and a switch for the **Monitors** panel). Then you pick a look and connect a model. Setup opens in Dark; switch to Light in the look step. Change any answer later in **Settings → General → About you**, or reopen the whole thing with **Replay setup**. An email you give joins the update list once and gets one confirmation email; nothing is sent if you leave it blank or choose **No thanks**.
+
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
 ## Typing in a new agent window
@@ -60,7 +62,7 @@ Displaying a screenshot does not mean it has been inspected or approved. The age
 
 ## Make it yours
 
-In **Settings → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
+In **Settings → Customize → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
 
 On desktop and the Local Web UI, light **Nekko** and **Indigo** use pale rose and indigo surfaces, tinted selections, and the same plum/violet/rose gradient colors as their dark counterparts. The selected chat keeps its color field from the greeting into the conversation; other panes stay quiet. Dark themes are unchanged, and reduced motion keeps a static field.
 
@@ -196,8 +198,8 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
-The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
-(it offers no Auto, so no Fusion).
+The iPhone and Android apps' model lists have **All**, **Cloud** and **Local** at
+the top too (they offer no Auto, so no Fusion).
 
 ### How the Agents panel groups your agents
 
@@ -314,9 +316,13 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 
 Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
 
+### Customize your experience
+
+Open **Settings > Customize** for appearance, sidebar shortcuts, desktop behavior, mascot options, agent-wall layout, personal instructions, fonts, accessibility, and Simple mode visibility. Existing preferences are kept when controls move. Search in the settings rail finds controls across every section. Computer connections, phone pairing, safety policies, and service management stay in their own sections.
+
 ### Skills and Connectors shortcuts
 
-Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > Customize > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
 ### Download progress in Model Server
 

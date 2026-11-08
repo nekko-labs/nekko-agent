@@ -13,11 +13,11 @@ vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: 
 const render = (settings: Partial<AppSettings>) => renderToStaticMarkup(<AccessibilitySection settings={settings as AppSettings} update={() => {}} />);
 const stepper = (html: string, label: string) => html.match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0] ?? '';
 
-describe('Settings > Accessibility', () => {
-  it('has its own group, found by searching for it', () => {
-    expect(SETTINGS_GROUPS.map((g) => g.id)).toContain('accessibility');
-    expect(matchSettingsPages('accessibility').map((p) => p.group)).toEqual(['accessibility']);
-    expect(matchSettingsPages('font size').map((p) => p.group)).toContain('accessibility');
+describe('Settings > Customize > Accessibility', () => {
+  it('lives under Customize and remains discoverable by accessibility and font size', () => {
+    expect(SETTINGS_GROUPS.map((g) => g.id)).toContain('customize');
+    expect(matchSettingsPages('accessibility').map((p) => p.group)).toEqual(['customize']);
+    expect(matchSettingsPages('font size').map((p) => p.group)).toEqual(['customize']);
   });
 
   it('leaves the animation on until it is turned off', () => {

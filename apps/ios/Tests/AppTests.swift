@@ -1441,25 +1441,153 @@ final class VoiceTests: XCTestCase {
         XCTAssertNil(Dictation.phoneRefusal(authorized: true, recognizer: StubRecognizer(onDevice: true)))
     }
 
-    func testAComputerHiccupIsRetriedAndNeverFallsToThePhoneWhileOnline() async throws {
+    func testComputerDeadlineIncludesColdStartInferenceAndTransport() async throws {
+        // The daemon loops 150 times, each with a 500 ms health timeout and 200 ms sleep.
+        let startup = 150.0 * (0.5 + 0.2)
+        XCTAssertGreaterThan(Dictation.computerTranscriptionTimeout, startup + 120 + 10)
+        XCTAssertEqual(Dictation.computerTranscriptionTimeout, 300)
+        let wav = Dictation.wav([0, 0.5])
+        let responses: [JSONValue] = [.string("computer"), ["text": "computer"]]
+        for response in responses {
+            var calls = 0
+            let text = try await Dictation.transcribeOnComputer(wav) { channel, args, timeout in
+                calls += 1
+                XCTAssertEqual(channel, Channels.voiceTranscribe)
+                XCTAssertEqual(args, [wavArg(wav)])
+                XCTAssertEqual(timeout, Dictation.computerTranscriptionTimeout)
+                return response
+            }
+            XCTAssertEqual(text, "computer")
+            XCTAssertEqual(calls, 1)
+        }
+    }
+
+    func testAComputerTimeoutIsNotRetriedOrSentToThePhoneWhileOnline() async throws {
         var calls = 0
         var phoned = 0
         let phone: (Data) async throws -> String? = { _ in phoned += 1; return "phone" }
-        let flaky: (Data) async throws -> String = { _ in calls += 1; if calls == 1 { throw RelayError("Timed out") }; return "computer" }
-        let once = try await Dictation.transcribe(Data(), computer: flaky, online: { true }, phone: phone)
-        XCTAssertEqual(once, "computer")
-        let down: (Data) async throws -> String = { _ in throw RelayError("Timed out") }
+        let down: (Data) async throws -> String = { _ in calls += 1; throw RelayError("Timed out") }
         do {
             _ = try await Dictation.transcribe(Data(), computer: down, online: { true }, phone: phone)
             XCTFail("the computer's failure is said")
         } catch {
             XCTAssertEqual(error.localizedDescription, "Timed out")
         }
+        XCTAssertEqual(calls, 1, "a timed-out request may still be running on the computer")
         XCTAssertEqual(phoned, 0)
         let offline = try await Dictation.transcribe(Data(), computer: down, online: { false }, phone: phone)
         XCTAssertEqual(offline, "phone")
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(phoned, 1)
         let noWhisper = try await Dictation.transcribe(Data(), computer: nil, online: { true }, phone: phone)
         XCTAssertEqual(noWhisper, "phone")
+        XCTAssertEqual(calls, 2)
+        XCTAssertEqual(phoned, 2)
+    }
+
+    func testComputerCancellationNeverRetriesOrFallsBackEvenWhenOffline() async {
+        for online in [true, false] {
+            var calls = 0
+            var phoned = 0
+            do {
+                _ = try await Dictation.transcribe(Data(), computer: { _ in
+                    calls += 1
+                    throw CancellationError()
+                }, online: { online }, phone: { _ in phoned += 1; return "phone" })
+                XCTFail("cancellation must propagate")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(calls, 1)
+            XCTAssertEqual(phoned, 0)
+        }
+    }
+
+    func testAlreadyCancelledTranscriptionNeverStartsEitherEngine() async {
+        for hasComputer in [true, false] {
+            var calls = 0
+            var phoned = 0
+            let task = Task { () throws -> String? in
+                withUnsafeCurrentTask { $0?.cancel() }
+                let computer: ((Data) async throws -> String)? = hasComputer ? { _ in
+                    calls += 1
+                    return "computer"
+                } : nil
+                return try await Dictation.transcribe(Data(), computer: computer, online: { false }, phone: { _ in
+                    phoned += 1
+                    return "phone"
+                })
+            }
+            do {
+                _ = try await task.value
+                XCTFail("cancellation must propagate before either engine starts")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(calls, 0)
+            XCTAssertEqual(phoned, 0)
+        }
+    }
+
+    func testCancellationDuringComputerRequestRejectsLateSuccessAndFailure() async {
+        for fails in [false, true] {
+            var calls = 0
+            var phoned = 0
+            let task = Task { () throws -> String? in
+                try await Dictation.transcribe(Data(), computer: { _ in
+                    calls += 1
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    if fails { throw RelayError("Connection lost") }
+                    return "late computer words"
+                }, online: { false }, phone: { _ in phoned += 1; return "phone" })
+            }
+            do {
+                _ = try await task.value
+                XCTFail("cancellation must win over a late result or transport error")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(calls, 1)
+            XCTAssertEqual(phoned, 0)
+        }
+    }
+
+    func testCancellationDuringPhoneRequestRejectsLateSuccessAndFailure() async {
+        for fails in [false, true] {
+            var phoned = 0
+            let task = Task { () throws -> String? in
+                try await Dictation.transcribe(Data(), computer: nil, online: { false }, phone: { _ in
+                    phoned += 1
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    if fails { throw RelayError("Recognizer stopped") }
+                    return "late phone words"
+                })
+            }
+            do {
+                _ = try await task.value
+                XCTFail("phone cancellation must propagate")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("unexpected error: \(error)")
+            }
+            XCTAssertEqual(phoned, 1)
+        }
+    }
+
+    func testSuccessfulComputerTranscriptionUsesOneRequest() async throws {
+        var calls = 0
+        let text = try await Dictation.transcribe(Data(), computer: { _ in
+            calls += 1
+            return "computer"
+        }, online: { true }, phone: { _ in
+            XCTFail("no fallback after success")
+            return "phone"
+        })
+        XCTAssertEqual(text, "computer")
+        XCTAssertEqual(calls, 1)
     }
 
     func testWordsAfterTheComposerIsGoneGoToTheChatsDraft() async {

@@ -347,7 +347,8 @@ export function App() {
               <span className="font-medium">Get started:</span> connect your first model in Models →
             </button>
           )}
-          <ErrorBoundary key={view === 'modelserver' ? 'models' : view} label={t(`nav.${view}`)}>
+          {/* Keyed on the wizard too: setup writes wall prefs (the Monitors panel) the open view loaded before it. */}
+          <ErrorBoundary key={`${view === 'modelserver' ? 'models' : view}${onboardingOpen ? ':setup' : ''}`} label={t(`nav.${view}`)}>
           {view === 'command' && <CommandCenterView />}
           {view === 'artifacts' && <ArtifactsView />}
           {view === 'skills' && <SettingsDestination><SkillsView /></SettingsDestination>}

@@ -12,7 +12,7 @@ The primary Home Screen icon follows iOS icon appearance: the light version keep
 
 ## Groups on iPhone
 
-Chat-list groups start folded. Tap a heading to reveal its chats; its activity icon stays visible while folded, showing attention, working, watching or done. Search reveals matching chats without changing which groups you opened. General and ungrouped chats stay visible, as does the separate Needs you section.
+New chat-list groups start folded. Tap a heading to reveal its chats or fold it again. Your last choice for each group is remembered on this iPhone or iPad, including after leaving the list or restarting the app; it does not sync to your computer. Its activity icon stays visible while folded, showing attention, working, watching or done. Search temporarily reveals matching chats without changing your saved group choices. General and ungrouped chats stay visible, as does the separate Needs you section.
 
 Inside a conversation, related tool calls fold under a purpose heading with an icon for reading, searching, editing, checking, running commands or other work. Running dots and failure text remain visible beside that purpose. Failed groups start open so errors are not hidden; you can fold them yourself.
 
@@ -160,7 +160,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > top, as on the desktop: Cloud lists the computer's cloud providers, Local its local model
 > servers (llama.cpp, Ollama, LM Studio, vLLM), starred models included. Switching tabs only
 > filters the list; it picks nothing. A chat on this iPhone uses cloud providers only, so its
-> Local tab says to start the chat on a computer for local models.
+> Local tab says to start the chat on a computer for local models. On Android the computer's
+> model list (New chat, and a chat's Model and effort sheet) has the same **All**, **Cloud** and
+> **Local** buttons above it, opening on All.
 >
 > **Every computer at once** (iPhone): the chat list shows the chats of every paired computer
 > together, each row naming its computer, and the pill above the list filters it to one
