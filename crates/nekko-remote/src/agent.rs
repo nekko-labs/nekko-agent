@@ -616,7 +616,7 @@ impl AgentCore {
         channel == "agent:event"
             && matches!(
                 e.get("type").and_then(Value::as_str),
-                Some("tool_approval_required" | "question" | "tool_result" | "question_resolved" | "done" | "error")
+                Some("tool_approval_required" | "question" | "tool_result" | "question_resolved" | "approval_resolved" | "done" | "error")
             )
     }
 
@@ -627,7 +627,7 @@ impl AgentCore {
         let sid = e.get("sessionId").and_then(Value::as_str).map(str::to_string);
         let prev = sid.as_ref().and_then(|s| self.phases.get(s).copied());
         let mut out = Vec::new();
-        if matches!(e.get("type").and_then(Value::as_str), Some("tool_result" | "question_resolved" | "done" | "error"))
+        if matches!(e.get("type").and_then(Value::as_str), Some("tool_result" | "question_resolved" | "approval_resolved" | "done" | "error"))
         {
             out.push(json!({ "type": "attention-unknown" }));
         }
@@ -677,7 +677,7 @@ impl AgentCore {
                 "approval"
             }
             "question" => "question",
-            "tool_result" | "question_resolved" => {
+            "tool_result" | "question_resolved" | "approval_resolved" => {
                 if prev != Some("approval") && prev != Some("question") {
                     return None;
                 }

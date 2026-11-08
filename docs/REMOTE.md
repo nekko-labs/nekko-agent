@@ -460,9 +460,10 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 >
 > **Photos and dictation** (Android): the **+** on the left of a chat's message box opens **Dictate**,
 > **Image from files** (the phone's photo picker; Nekko only sees the photos you pick) and **Take
-> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails you
-> can remove; they are scaled to 1600 px and sent end-to-end encrypted to the computer, which hands
-> them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
+> photo** (the phone's camera app). Up to 4 photos go with the next message, shown as thumbnails
+> inside the message box that you can remove. Adding or removing a photo saves the draft at once, so
+> reopening the app brings back its text and photos. They are scaled to 1600 px and sent end-to-end
+> encrypted to the computer, which hands them to the chat's model like a photo pasted on the desktop. A text-only model doesn't see them.
 > The photos stay in the message's bubble on the phone too, as small previews the computer makes
 > (the newest 40 photos in a chat, including ones attached on the computer); an older photo shows as
 > a plain tile, and the full-size original stays on the computer.
@@ -723,7 +724,9 @@ Connection metadata (IPs, timing, frame sizes), the room code, and, if you enabl
 tokens plus the content-free fact "a run finished". If you turn on the iPhone's Live Activity, the
 short status it shows (chat titles, the current step and, at Detailed, reply lines, at the level you
 choose) is the exception: ActivityKit draws only what the push holds, so that text goes through the
-relay and Apple's push service (APNs) as plain text. Lock Screen notifications on both phones also
+relay and Apple's push service (APNs) as plain text. A step never shows what a call waiting on your approval
+would send (only what it does: "fetch url", "Run"), and a step whose detail holds a key, card, ID
+number, email address or phone number shows only what it does. Lock Screen notifications on both phones also
 pass through Apple's and Google's push services, with generic text. The relay keeps all of this in
 memory only. Everything else (chats, commands, files, model output) is end-to-end encrypted, which is
 why relayed local-model use is zero-data-retention for content.

@@ -247,8 +247,16 @@
   }
 }
 
+/* The target grows, not the glyph. Real layout space avoids overlapping
+   invisible hit areas; compact padding/height overrides cannot shrink it. */
+@utility action-target {
+  min-width: 44px;
+  min-height: 44px;
+  flex-shrink: 0;
+}
+
 @utility btn {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
+  @apply action-target inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium;
   transition:
     transform 160ms var(--ease-out),
     background 0.12s ease,
@@ -826,7 +834,8 @@
 #command-titlebar-slot > .wall-toolbar-titlebar { flex: 1; min-width: 0; flex-wrap: nowrap; }
 #command-titlebar-slot .screens-picker { z-index: 60; }
 #command-titlebar-slot > .wall-toolbar-titlebar > div { flex-wrap: nowrap; }
-#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { padding-top: 2px; padding-bottom: 2px; }
+/* Desktop chrome is constrained by the native caption strip, not a CTA row. */
+#command-titlebar-slot .btn, #command-titlebar-slot .wall-layout-segments button { min-height: 28px; padding-top: 2px; padding-bottom: 2px; }
 
 .titlebar-updater {
   position: relative;
@@ -3576,7 +3585,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Listening grows out of the microphone to the left, inside the bar's own flow, so it can never
    cover the words being dictated. Black in every theme, like the island it is named for. It gives
    way to the bar's controls when the composer is narrow, and only suggestions give way before it. */
-.voice-island { position: relative; display: flex; align-items: center; flex: 0 0 2.25rem; min-width: 0; border-radius: 9999px; transition: flex-basis 240ms cubic-bezier(0.2, 0.9, 0.3, 1.05), background-color 160ms ease; }
+.voice-island { position: relative; display: flex; align-items: center; flex: 0 0 44px; min-width: 0; border-radius: 9999px; transition: flex-basis 240ms cubic-bezier(0.2, 0.9, 0.3, 1.05), background-color 160ms ease; }
 .voice-island.is-open { flex: 0 9999 22rem; min-width: 7.5rem; background: #000; }
 .voice-island.is-open > button { border-radius: 9999px; }
 .voice-island.is-open > button:hover { background: rgb(255 255 255 / 0.14); }
@@ -4324,12 +4333,58 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 }
 
 /* The Agents View popover is portaled out of the draggable title bar. */
-.wall-view-menu { position: fixed; z-index: 1000; width: 340px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--win); box-shadow: var(--shadow-float); -webkit-app-region: no-drag; }
+.wall-view-trigger { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: var(--text-xs); font-weight: 500; -webkit-app-region: no-drag; }
+.wall-view-trigger:hover, .wall-view-trigger[aria-expanded='true'] { background: var(--surface-2); color: var(--ink); }
+.wall-view-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wall-view-icon { width: 20px; height: 16px; stroke-width: 2.5; }
+.wall-view-chevron { width: 12px; height: 12px; color: var(--ink-faint); }
+.wall-view-menu { position: fixed; z-index: 1000; width: 360px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow: auto; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--win); box-shadow: var(--shadow-float); -webkit-app-region: no-drag; }
+.wall-view-heading { margin-bottom: 14px; }
+.wall-view-heading h2 { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--ink); }
+.wall-view-heading p { margin: 4px 0 0; font-size: var(--text-xs); color: var(--ink-soft); }
 .wall-view-layout { border: 0; padding: 0; margin: 0; min-width: 0; }
-.wall-view-menu .screens-option[aria-disabled='true'] { opacity: .55; cursor: default; }
-.screens-embedded { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 12px; }
-.screens-embedded .screens-row { overflow-x: auto; padding-bottom: 4px; }
+.wall-view-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.wall-view-choice { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); cursor: pointer; }
+.wall-view-choice:hover { background: var(--surface-2); }
+.wall-view-choice:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 65%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--win)); }
+.wall-view-choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wall-view-choice input { position: absolute; top: 12px; right: 12px; width: 13px; height: 13px; margin: 0; accent-color: var(--accent); }
+.wall-view-preview { width: 64px; height: 45px; margin: 0 0 7px; color: var(--ink-faint); }
+.wall-view-preview__frame { stroke: var(--ink-faint); }
+.wall-view-preview__pane { fill: color-mix(in srgb, currentColor 12%, transparent); }
+.wall-view-choice:has(input:checked) .wall-view-preview { color: var(--accent); }
+.wall-view-choice strong { font-size: var(--text-xs); font-weight: 600; color: var(--ink); }
+.wall-view-choice__hint { font-size: var(--text-2xs); color: var(--ink-soft); }
+.wall-view-choice kbd { margin-top: 5px; font-family: inherit; font-size: var(--text-2xs); color: var(--ink-faint); }
+.wall-view-snap { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0 2px; cursor: pointer; }
+.wall-view-snap > span { display: grid; gap: 3px; }
+.wall-view-snap strong { font-size: var(--text-xs); font-weight: 500; color: var(--ink); }
+.wall-view-snap > span > span { font-size: var(--text-2xs); color: var(--ink-soft); }
+.wall-view-snap[aria-disabled='true'] { cursor: default; }
+.wall-view-snap[aria-disabled='true'] strong { color: var(--ink-soft); }
+.wall-view-snap input { appearance: none; position: relative; flex-shrink: 0; width: 28px; height: 16px; margin: 0; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-2); cursor: inherit; }
+.wall-view-snap input::before { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--ink-soft); }
+.wall-view-snap input:checked { background: var(--accent-soft); border-color: var(--accent); }
+.wall-view-snap input:checked::before { left: 14px; background: var(--accent); }
+.wall-view-snap input:disabled { opacity: .45; }
+.wall-view-snap input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.screens-embedded { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+.screens-embedded .screens-picker__title { color: var(--ink); font-weight: 600; }
+.screens-embedded .screens-picker__note { color: var(--ink-soft); line-height: 1.45; margin-top: 8px; }
+.screens-embedded .screens-picker__divider { margin: 14px 0; }
+.screens-embedded .screens-row { overflow-x: auto; padding: 2px 2px 6px; }
 .screens-embedded .screens-tile { flex-shrink: 0; }
+.screens-embedded .screens-options { gap: 4px; }
+.screens-embedded .screens-option { border: 1px solid transparent; padding: 9px; }
+.screens-embedded .screens-option:has(input:checked) { background: var(--surface-2); border-color: var(--line); }
+.screens-embedded .screens-option > span > span { color: var(--ink-soft); line-height: 1.45; }
+.screens-embedded .screens-placement-note { margin: -3px 0 8px; }
+.screens-single { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: var(--surface-2); }
+.screens-single > svg { width: 26px; height: 26px; color: var(--ink-soft); flex-shrink: 0; }
+.screens-single > span:not(.screens-single__status) { display: grid; gap: 2px; }
+.screens-single strong { font-size: var(--text-xs); font-weight: 500; }
+.screens-single span span { font-size: var(--text-2xs); color: var(--ink-soft); }
+.screens-single__status { margin-left: auto; font-size: var(--text-2xs); color: var(--ink-soft); }
 
 /* Provider identities stay the same in setup and connected cards. */
 .provider-mark { display: inline-grid; place-items: center; flex-shrink: 0; color: white; }
@@ -4346,6 +4401,8 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .composer-permissions { flex-shrink: 0; justify-content: center; width: 28px; height: 28px; padding: 0; border-color: transparent; background: transparent; }
 
 @container (max-width: 520px) {
+  /* Let the folder summary truncate before pushing the 44px actions outside. */
+  .composer-bar > .composer-folders { min-width: 44px; }
   .composer-bar:has(> .composer-folders) .composer-foot-controls { min-width: 80px; }
 }
 

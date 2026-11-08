@@ -77,7 +77,7 @@ public enum Transcript {
                 guard let r = m.toolResult, let i = toolIndex[r.toolCallId],
                       case .tool(let id, let name, let label, _, _, let input) = out[i] else { continue }
                 out[i] = .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok,
-                               output: clip(r.output, full: r.outputChars, images: r.omittedImages), input: input)
+                               output: QuestionReplies.body(name: name, output: r.output) != nil ? r.output : clip(r.output, full: r.outputChars, images: r.omittedImages), input: input)
             default:
                 continue
             }
@@ -104,7 +104,7 @@ public enum Transcript {
             if t.approval?.call.id == r.toolCallId { t.approval = nil }
             t.blocks = t.blocks.map { b in
                 if case .tool(let id, let name, let label, _, _, let input) = b, id == r.toolCallId {
-                    return .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok, output: clip(r.output), input: input)
+                    return .tool(id: id, name: name, label: label, status: r.isError ? .error : .ok, output: QuestionReplies.body(name: name, output: r.output) != nil ? r.output : clip(r.output), input: input)
                 }
                 return b
             }
@@ -256,9 +256,18 @@ public enum Transcript {
     public static func toolLabel(_ call: ToolCall) -> String {
         let keys = ["command", "path", "file_path", "pattern", "query", "url", "name", "prompt", "task"]
         let detail = keys.lazy.compactMap { call.input[$0]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
-        let verb = toolVerbs[call.name] ?? call.name.replacingOccurrences(of: "_", with: " ")
+        let verb = toolVerb(call)
         if let detail { return "\(verb) \(oneLine(detail, 80))" }
         return verb
+    }
+
+    /// What a tool call does, without what it acts on: the Live Activity's step
+    /// for a call waiting on an approval, as the computer's card has it
+    /// (`tool_verb` in crates/nekko-remote/src/card.rs). The card can travel
+    /// through Apple's push service as plain text, and what a gate asks about
+    /// is what could carry data out.
+    public static func toolVerb(_ call: ToolCall) -> String {
+        toolVerbs[call.name] ?? call.name.replacingOccurrences(of: "_", with: " ")
     }
 
     static let toolVerbs = [

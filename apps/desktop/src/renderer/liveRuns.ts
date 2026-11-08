@@ -30,11 +30,12 @@ import { rememberConnectivityNotice } from './components/ConnectivityNotices.js'
 
 import { useCallback, useSyncExternalStore } from 'react';
 import type { AgentEvent, AgentReplay, ChatMessage, ToolCall } from '@nekko-agent/shared';
-import type { Activity } from './components/agent-console/transcript.js';
+import { askReply, type Activity } from './components/agent-console/transcript.js';
 import { accumulateDecodeMs, describeLiveActivity, emptyLiveActivity, isPrInteractionCall, reduceLiveActivity, type LiveActivity } from '@nekko-agent/shared';
 import { reportAgentWorking } from './workingAgents.js';
 
-export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; items: Activity[] } | { kind: 'pr'; toolCallId: string };
+export type LiveBlock = { kind: 'text'; text: string } | { kind: 'activity'; items: Activity[] } | { kind: 'pr'; toolCallId: string }
+  | { kind: 'ask-reply'; toolCallId: string; message: ChatMessage };
 
 /** One session's in-flight turn, as much of it as a pane needs to redraw. */
 export interface LiveRun {
@@ -294,6 +295,13 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
         && !prev.prMessages.some((m) => m.toolResult?.toolCallId === event.result.toolCallId)) {
         next.prMessages = [...prev.prMessages, { role: 'tool', toolResult: event.result }];
         next.blocks = [...next.blocks, { kind: 'pr', toolCallId: event.result.toolCallId }];
+      }
+      // Saved history is hidden under this live turn until it settles. Project
+      // answers here too, using the exact same parser and no model-history write.
+      if (!prev.blocks.some((b) => b.kind === 'ask-reply' && b.toolCallId === event.result.toolCallId)) {
+        const call = prev.tools.find((c) => c.id === event.result.toolCallId);
+        const reply = call && askReply(call, { id: `live_ask_${call.id}`, role: 'tool', content: '', createdAt: now, toolResult: event.result });
+        if (reply) next.blocks = [...next.blocks, { kind: 'ask-reply', toolCallId: call!.id, message: reply }];
       }
       // A step boundary: the next model call starts from here.
       next.stepMark = { blocks: next.blocks, text: next.text, reasoning: next.reasoning };

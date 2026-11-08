@@ -41,5 +41,5 @@ app.whenReady().then(async () => {
   } catch (e) { report.errors.push(String(e)); process.exitCode = 1; }
   fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 1));
-  win.destroy(); app.exit(process.exitCode || 0);
+  win.destroy(); app.exit(report.errors.length ? 1 : (process.exitCode || 0));
 });

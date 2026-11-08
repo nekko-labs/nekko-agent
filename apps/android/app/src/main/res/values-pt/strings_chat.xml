@@ -237,6 +237,9 @@
     <string name="chat_always_allow_tool">Sempre permitir esta ferramenta</string>
     <string name="chat_always_allowing_tool">Permitindo…</string>
     <string name="chat_always_allow_tool_detail">Permite esta chamada e para de perguntar por esta ferramenta neste chat. As outras ferramentas continuam perguntando.</string>
+    <string name="chat_previous_question">Pergunta anterior</string>
+    <string name="chat_next_question">Próxima</string>
+    <string name="chat_question_page">%1$d de %2$d</string>
     <string name="chat_audit_trail">Registro de auditoria</string>
     <string name="chat_audit_intro">O que o agente fez neste chat e quem permitiu. Nunca guarda o que o agente leu ou enviou, e é apagado com o chat.</string>
     <string name="chat_audit_everything">Tudo</string>

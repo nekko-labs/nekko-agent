@@ -9,7 +9,13 @@ import {
 import { useStore } from '../../store.js';
 import { ensureRecommendedOffload } from './imageOffload.js';
 
-const SIZES = ['512x512', '768x768', '1024x1024', '1024x768', '768x1024', '1344x768', '768x1344'];
+export const PHOTO_SHAPES = [
+  { size: '1024x1024', label: 'Square' },
+  { size: '1024x768', label: 'Landscape' },
+  { size: '768x1024', label: 'Portrait' },
+  { size: '1024x576', label: 'Wide' },
+  { size: '576x1024', label: 'Tall' },
+];
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
 
 /**
@@ -26,9 +32,13 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
   const [runtime, setRuntime] = useState(true);
   const [companions, setCompanions] = useState<ImageCompanionStatus | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
 
   const save = (patch: Partial<ImageChatParams>) =>
-    window.nekko.setSessionOptions(session.id, { imageParams: { ...params, ...patch } }).then((s) => { if (s) onChange(s); }).catch(() => {});
+    window.nekko.setSessionOptions(session.id, { imageParams: { ...params, ...patch } }).then((s) => {
+      if (!s) throw new Error('This photo chat could not be saved.');
+      onChange(s);
+    }).catch((e: Error) => pushToast('error', e.message));
 
   const choose = async (modelId: string) => {
     // A model that only fits with CPU offload gets it before its first load.
@@ -105,7 +115,7 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
         </select>
       </label>
       <label className="ctl-menu shrink-0" title="Image size">
-        <span className="ctl-menu-label">Size</span>
+        <span className="ctl-menu-label">Shape</span>
         <select
           aria-label="Image size"
           className="bg-transparent text-ink outline-hidden"
@@ -113,20 +123,22 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
           disabled={busy}
           onChange={(e) => { const [width, height] = e.target.value.split('x').map(Number); void save({ width, height }); }}
         >
-          {(SIZES.includes(size) ? SIZES : [size, ...SIZES]).map((s) => <option key={s} value={s}>{s.replace('x', '×')}</option>)}
+          {!PHOTO_SHAPES.some(s => s.size === size) && <option value={size}>Custom · {size.replace('x', '×')}</option>}
+          {PHOTO_SHAPES.map(s => <option key={s.size} value={s.size}>{s.label} · {s.size.replace('x', '×')}</option>)}
         </select>
       </label>
-      {num('Steps', params.steps, (steps) => ({ steps }), { min: 1, max: 100, width: 'w-9' })}
-      {num('CFG', params.cfgScale, (cfgScale) => ({ cfgScale }), { min: 0, max: 30, step: 0.5, width: 'w-10' })}
-      {num('Seed', params.seed, (seed) => ({ seed }), { min: -1, max: 2 ** 31 - 1, width: 'w-20' })}
-      {params.seed >= 0 && (
-        <button className="ctl-toggle shrink-0" disabled={busy} onClick={() => void save({ seed: -1 })} title="Use a new random seed for each image">
-          Random
-        </button>
-      )}
+      <button className="ctl-toggle" aria-expanded={advanced} disabled={busy} onClick={() => setAdvanced(v => !v)}>Advanced</button>
+      {advanced && <div className="flex w-full flex-wrap gap-2 rounded-lg bg-surface-2 p-3">
+        <p className="w-full text-xs text-ink-soft">Start with the model’s defaults. More steps take longer; prompt guidance controls how closely it follows your words. Seed −1 gives a fresh variation.</p>
+        {num('Steps', params.steps, (steps) => ({ steps }), { min: 1, max: 100, width: 'w-12' })}
+        {num('Prompt guidance (CFG)', params.cfgScale, (cfgScale) => ({ cfgScale }), { min: 0, max: 30, step: 0.5, width: 'w-12' })}
+        {num('Seed', params.seed, (seed) => ({ seed }), { min: -1, max: 2 ** 31 - 1, width: 'w-24' })}
+        {params.seed >= 0 && <button className="ctl-toggle" disabled={busy} onClick={() => void save({ seed: -1 })}>New variation each time</button>}
+        {companions && <button className="ctl-toggle" disabled={busy} onClick={() => void save({ ...companions.defaults, seed: -1 })}>Restore model defaults</button>}
+      </div>}
       {!runtime ? (
         <button className="ctl-toggle ml-auto shrink-0 whitespace-nowrap text-[var(--warning,#d1a054)]" onClick={() => setView('modelserver')} title="Image models run in stable-diffusion.cpp">
-          Install the image generation runtime
+          Finish photo setup in Models
         </button>
       ) : companions && !companions.ready ? (
         <button
@@ -146,7 +158,7 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
 function NumField({ label, value, min, max, step = 1, width, disabled, onCommit }: { label: string; value: number; min: number; max: number; step?: number; width: string; disabled: boolean; onCommit: (n: number) => void }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
-  const valid = (t: string) => { const n = Number(t); return t.trim() !== '' && Number.isFinite(n) && n >= min && n <= max ? n : null; };
+  const valid = (t: string) => { const n = Number(t); return t.trim() !== '' && Number.isFinite(n) && n >= min && n <= max && (step !== 1 || Number.isInteger(n)) ? n : null; };
   return (
     <label className="ctl-menu shrink-0" title={label}>
       <span className="ctl-menu-label">{label}</span>

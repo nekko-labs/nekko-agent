@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { AskAnswer, AskQuestion, AskRequest } from '@nekko-agent/shared';
-import { PixelQuestionIcon } from './PixelQuestionIcon.js';
+import { ChevronIcon } from '../icons.js';
 import { ASK_OTHER_LABEL, isAskComplete } from '@nekko-agent/shared';
 
 /**
@@ -9,7 +9,7 @@ import { ASK_OTHER_LABEL, isAskComplete } from '@nekko-agent/shared';
  * Four questions on one card is a form, and people read forms by skimming them
  * and answering the first one properly. So this walks: one question fills the
  * card, you pick, you hit Next, the next one takes its place. The step you are
- * on is the only thing to think about, and the dots above say how much is left
+ * on is the only thing to think about, and the page count says how much is left
  * so it never feels open-ended.
  *
  * Options are a vertical list, full width, never wrapping into a second column.
@@ -18,9 +18,8 @@ import { ASK_OTHER_LABEL, isAskComplete } from '@nekko-agent/shared';
  * one-line description that makes the choice meaningful, and answers to arrow
  * keys and number keys the way a list should.
  *
- * "You decide" is a real answer, not a dismissal. It resolves the call with
- * nothing, which tells the agent to choose for itself and say so — an agent
- * left waiting on a question the user closed is a run that never finishes.
+ * Skip clears only the current page, preserving every other answer. The last
+ * page submits all choices (or resolves with no answers if every page was skipped).
  */
 export function QuestionCard({
   request,
@@ -30,8 +29,8 @@ export function QuestionCard({
   tone = 'attention',
 }: {
   request: AskRequest;
-  onAnswer: (answers: AskAnswer[]) => void;
-  onSkip: () => void;
+  onAnswer: (answers: AskAnswer[]) => void | Promise<void>;
+  onSkip: () => void | Promise<void>;
   /** Board cards are narrower and sit among other cards, so they sit tighter. */
   compact?: boolean;
   /**
@@ -42,6 +41,9 @@ export function QuestionCard({
 }) {
   const hue = tone === 'attention' ? 'var(--warning)' : 'var(--accent)';
   const [step, setStep] = useState(0);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const submitted = useRef(false);
   const [picked, setPicked] = useState<Record<string, string[]>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [otherOpen, setOtherOpen] = useState<Record<string, boolean>>({});
@@ -64,12 +66,6 @@ export function QuestionCard({
     [request.questions, picked, notes],
   );
   const complete = isAskComplete(request, answers);
-  const answered = useMemo(() => {
-    const done = new Set<string>();
-    for (const a of answers) done.add(a.questionId);
-    return done;
-  }, [answers]);
-
   const chosen = picked[q.id] ?? [];
   const note = notes[q.id] ?? '';
   const otherShown = !!otherOpen[q.id] || !!note;
@@ -84,6 +80,7 @@ export function QuestionCard({
     const root = rootRef.current;
     if (root?.contains(document.activeElement)) root.focus({ preventScroll: true });
     setCursor(0);
+    setError('');
     setStep(next);
   }, []);
 
@@ -120,10 +117,28 @@ export function QuestionCard({
       showStep(index + 1);
       return;
     }
-    onAnswer(toAnswers(request.questions, pickedRef.current, notesRef.current));
-  }, [index, last, onAnswer, request.questions, showStep]);
+    if (submitted.current) return;
+    submitted.current = true;
+    setSending(true);
+    setError('');
+    const reply = toAnswers(request.questions, pickedRef.current, notesRef.current);
+    Promise.resolve().then(() => reply.length ? onAnswer(reply) : onSkip()).catch((e) => {
+      submitted.current = false;
+      setError('Could not send your answers. Try again. ' + String(e));
+    }).finally(() => setSending(false));
+  }, [index, last, onAnswer, onSkip, request.questions, showStep]);
+
+  const skipCurrent = () => {
+    pickedRef.current = { ...pickedRef.current, [q.id]: [] };
+    notesRef.current = { ...notesRef.current, [q.id]: '' };
+    setPicked(pickedRef.current);
+    setNotes(notesRef.current);
+    setOtherOpen((p) => ({ ...p, [q.id]: false }));
+    goNext();
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (submitted.current) return;
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
       // Typing an answer: Enter commits it, everything else is text.
@@ -178,7 +193,8 @@ export function QuestionCard({
   return (
     <div
       ref={rootRef}
-      className="rounded-xl border p-3 outline-hidden"
+      className="question-card rounded-xl border p-3 outline-hidden"
+      aria-busy={sending || undefined}
       data-question-tone={tone}
       style={{
         ...(tone === 'attention' ? { '--accent': 'var(--warning)', '--on-accent': '#201609' } : {}),
@@ -192,43 +208,14 @@ export function QuestionCard({
       tabIndex={0}
       onKeyDown={onKeyDown}
     >
-      <div className="mb-2 flex items-center gap-2">
-        <PixelQuestionIcon className="h-4 w-4 shrink-0" />
-        <span className="text-xs font-medium" style={{ color: hue }}>
-          Before I start
-        </span>
-        {total > 1 && (
-          <>
-            <span className="ml-auto flex items-center gap-1">
-              {request.questions.map((item, i) => {
-                const done = answered.has(item.id);
-                const here = i === index;
-                return (
-                  <button
-                    key={item.id}
-                    className="h-1.5 rounded-full transition-[width,background-color] duration-150"
-                    style={{
-                      width: here ? 14 : 6,
-                      background: here
-                        ? 'var(--accent)'
-                        : done
-                          ? 'color-mix(in srgb, var(--accent) 55%, transparent)'
-                          : 'var(--line)',
-                    }}
-                    title={item.header}
-                    aria-label={`Question ${i + 1}: ${item.question}`}
-                    aria-current={here ? 'step' : undefined}
-                    onClick={() => showStep(i)}
-                  />
-                );
-              })}
-            </span>
-            <span className="text-2xs text-ink-soft">
-              {index + 1} of {total}
-            </span>
-          </>
-        )}
-        {total === 1 && <span className="ml-auto text-2xs text-ink-soft">1 question</span>}
+      <div className="mb-2 flex items-center justify-between gap-2" data-question-navigation>
+        <button type="button" data-question-back className="action-target grid place-items-center rounded-lg text-ink-soft hover:bg-surface-2 disabled:opacity-30"
+          disabled={index === 0 || sending} onClick={() => showStep(index - 1)} aria-label="Previous question" title="Previous question">
+          <ChevronIcon className="h-4 w-4 rotate-180" />
+        </button>
+        <span className="text-xs font-medium text-ink-soft" role="status" aria-live="polite">{index + 1} of {total}</span>
+        <button type="button" data-question-skip className="btn btn-ghost px-2 py-1 text-xs" disabled={sending} onClick={skipCurrent}
+          title="Skip this question; keep your other answers">Skip</button>
       </div>
 
       {/* Keyed on the question so each step animates in as its own thing rather
@@ -251,7 +238,8 @@ export function QuestionCard({
             return (
               <button
                 key={o.label}
-                className="flex w-full items-start gap-2 rounded-lg border px-3 py-1 text-left transition-colors"
+                className="action-target flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left transition-colors"
+                disabled={sending}
                 style={{
                   borderColor: on ? 'var(--accent)' : here ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
                   background: on
@@ -287,7 +275,8 @@ export function QuestionCard({
 
           {!otherShown ? (
             <button
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-1 text-left text-xs text-ink-soft transition-colors hover:text-ink"
+              className="action-target flex w-full items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-left text-xs text-ink-soft transition-colors hover:text-ink"
+              disabled={sending}
               style={{
                 borderColor: cursor >= q.options.length ? 'color-mix(in srgb, var(--accent) 40%, var(--line))' : 'var(--line)',
                 background: cursor >= q.options.length ? 'color-mix(in srgb, white 8%, var(--surface-2))' : 'color-mix(in srgb, white 4%, var(--surface-2))',
@@ -300,7 +289,8 @@ export function QuestionCard({
             </button>
           ) : (
             <input
-              className="input mt-0.5 py-1 text-xs"
+              className="input action-target mt-0.5 py-1 text-xs"
+              disabled={sending}
               autoFocus
               placeholder={`${ASK_OTHER_LABEL} — type it here`}
               aria-label={ASK_OTHER_LABEL}
@@ -311,32 +301,13 @@ export function QuestionCard({
         </div>
       </div>
 
-      <div className="mt-2 flex items-center gap-2">
-        {index > 0 && (
-          <button className="btn btn-ghost px-2 py-1 text-xs" onClick={() => showStep(index - 1)}>
-            Back
-          </button>
-        )}
-        <button
-          className={`btn px-3 py-1 text-xs ${hasAnswer ? 'btn-primary' : 'btn-outline'}`}
-          onClick={goNext}
-          title={
-            last && !complete ? 'Anything left blank goes back as unanswered' : undefined
-          }
-        >
-          {last ? `Send answer${total > 1 || !complete ? 's' : ''}` : hasAnswer ? 'Next' : 'Skip'}
-        </button>
-        {!compact && (
-          <span className="ml-1 truncate text-2xs text-ink-soft">
-            ↑↓ or 1–{q.options.length} to pick, ↵ for {last ? 'send' : 'next'}
-          </span>
-        )}
-        <button
-          className="btn btn-ghost ml-auto shrink-0 px-2 py-1 text-xs"
-          onClick={onSkip}
-          title="Let the agent choose and say which it chose"
-        >
-          You decide
+      {error && <p className="mt-2 text-xs text-danger" role="alert">{error}</p>}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" data-question-next
+          className="btn btn-primary ml-auto px-3 py-1 text-xs disabled:opacity-40"
+          disabled={!hasAnswer || sending} onClick={goNext}
+          title={last && !complete ? 'Skipped questions are sent as unanswered' : undefined}>
+          {sending ? 'Sending…' : last ? 'Send answers' : 'Next'}
         </button>
       </div>
     </div>

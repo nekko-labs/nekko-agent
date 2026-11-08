@@ -1179,6 +1179,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         case 'question_resolved':
           setQuestion((q) => (q?.callId === e.callId ? null : q));
           break;
+        case 'approval_resolved':
+          setApproval((current) => approvalAfterResult(current, e.callId));
+          break;
         case 'tool_result':
           // Parallel work can finish while another tool is still waiting on us.
           setApproval((current) => approvalAfterResult(current, e.result.toolCallId));
@@ -1955,13 +1958,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     setApproval(null);
   };
 
-  /** Unblock the turn. Clearing first keeps the card from lingering over the
-   *  reply that the answer immediately produces. */
+  /** Keep the answers available if the host rejects the request. The card
+   *  owns busy/error state; a failed send must not silently discard it. */
   const answerQuestion = async (answers: AskAnswer[]) => {
     const pending = question;
     if (!pending) return;
-    setQuestion(null);
     await window.nekko.answerQuestion(sessionId, pending.callId, answers);
+    setQuestion((current) => current?.callId === pending.callId ? null : current);
   };
 
 
@@ -2777,7 +2780,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
         </ChatHeader>
         )}
         {/* A sub-agent says so across the top, with a way back to the chat that spawned it. */}
-        {surface !== 'composer' && !cleanStart && session?.parentSessionId && <SubagentBanner parentId={session.parentSessionId} onOpenParent={(id) => (commandCenter ? useStore.getState().focusChatOnWall(id, { keepLayout: true }) : useStore.getState().openChatPane(id))} />}
+        {surface !== 'composer' && !cleanStart && session?.parentSessionId && <SubagentBanner child={session} parentId={session.parentSessionId} onOpenParent={(id) => (commandCenter ? useStore.getState().focusChatOnWall(id, { keepLayout: true }) : useStore.getState().openChatPane(id))} />}
         {surface !== 'composer' && !cleanStart && showHardware && <ExpertMonitor />}
 
         {surface !== 'composer' && !cleanStart && (
@@ -2849,7 +2852,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>
-                  <QuestionCard key={question.callId} request={question} onAnswer={(answers) => { void answerQuestion(answers); }} onSkip={() => { void answerQuestion([]); }} tone="attention" />
+                  <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" />
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {/* Where the next piece of work runs, offered in the conversation like the other next steps.
@@ -2962,7 +2965,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           surface === 'transcript' ? null : <ArchivedChatBar sessionId={sessionId} contentWidth={contentWidth} archivedAt={session?.archivedAt ?? null} />
         ) : surface === 'transcript' ? null : (
         <div ref={composerSectionRef} className={`composer-section relative ${commandCenter ? '' : 'px-4'} pb-1 pt-1`} data-wall-composer={wallWindow || undefined}>
-          {cleanStart && <CleanStartGreeting key={sessionId} paused={!!draft || pendingImages.length > 0 || pendingVideos.length > 0} />}
+          {cleanStart && <CleanStartGreeting sessionId={sessionId} createdAt={session?.createdAt} />}
           {firstPromptIntro && <Suspense fallback={null}><FirstPromptIntro onClose={closeFirstPromptIntro} /></Suspense>}
           <div className={`composer-column mx-auto ${commandCenter ? 'w-[min(98%,calc(100%-8px))]' : 'w-[min(90%,calc(100%-8px))]'}`} style={cleanStart ? undefined : commandCenter ? { width: 'min(98%, calc(100% - 8px))' } : undefined}>
             {!cleanStart && !question && (
@@ -3348,7 +3351,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   >
                     <button
                       ref={attachButtonRef}
-                      className="grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
+                      className="action-target grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-surface-2 hover:text-ink"
                       onClick={() => (attachMenuOpen ? closeAttachMenu() : setAttachMenuOpen(true))}
                       title="Add a photo, video, file, folder, or skill"
                       aria-label="Add a photo, video, file, folder, or skill"
@@ -3526,7 +3529,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                     onText={(text, sentence) => { voice.onText(text, sentence); composerRef.current?.focus(); }} onErase={voice.onErase} onClear={voice.onClear} onSend={voice.onSend} />
                     <button
                       data-composer-action={composerStops ? 'stop' : 'send'}
-                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} composer-action grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[color,opacity,transform] duration-150 disabled:opacity-40`}
+                      className={`${wallWindow ? 'wall-send' : 'send-avatar'} composer-action action-target grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-[color,opacity,transform] duration-150 disabled:opacity-40`}
                       onClick={() => composerStops ? void window.nekko.abortChat(sessionId) : void send()}
                       disabled={!composerStops && (imageMode ? streaming || !draft.trim() : !hasComposerPayload || !hasProvider)}
                       title={composerStops ? 'Stop' : streaming ? 'Add to the queue' : 'Send'}

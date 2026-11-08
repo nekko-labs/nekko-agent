@@ -5,6 +5,18 @@ installed, or by driving a server you already run (Ollama, LM Studio, vLLM). Eit
 it loads a model with the settings you choose and tells you honestly whether it will fit
 before you wait through the load. This is what the Models page shows you and why.
 
+## Create and edit photos
+
+Open **Photo** to make pictures from a prompt. If you do not have a picture model yet, choose one of the models picked for your computer and press **Download and set up**. Nekko handles the model and its supporting files; they are not separate models you need to choose yourself. The image engine is also installed when needed. Downloads are shared with **Models → Downloads**, where you can check progress or cancel.
+
+You can also find **Create pictures** and **Edit photos** recommendations in Models, or filter the model library to **Pictures**. Open a downloaded model to see its setup checklist: model, supporting files and image engine. **Finish photo setup** installs missing parts. “Ready” requires both supporting files and the engine; a custom model without a known file set remains an advanced, unverified setup. A model that only edits is labeled accordingly.
+
+In a Photo chat, pick a model and a **Shape**: Square, Landscape, Portrait, Wide or Tall. Existing custom sizes stay unchanged. **Advanced** contains Steps, Prompt guidance (CFG) and Seed, with a short explanation and **Restore model defaults**. You do not need to adjust these to begin.
+
+To edit, attach, paste or drop a photo and describe the change, or press **Edit** under a picture in the chat. Nekko offers an edit-capable model if the current model cannot edit. The source stays on the user message; the reply is a new image, not an overwrite. Model output may change details, so review it before relying on precise edits. Masks and selective retouching are not offered.
+
+Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
+
 ## Your first local model
 
 If you have never run a model here, Models > Local model server starts with one question:
