@@ -1,0 +1,912 @@
+{
+ "requests": [
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": null,
+   "problem": "image request"
+  },
+  {
+   "input": {},
+   "problem": "sessionId"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "extra": true
+   },
+   "problem": "extra"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    },
+    "providerId": "cloud"
+   },
+   "problem": "providerId"
+  },
+  {
+   "input": {
+    "sessionId": "../secret",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "sessionId"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "﻿ \n",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "prompt"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈🐈",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "prompt"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {}
+   },
+   "problem": "modelId"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "/secret/model",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "modelId"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "﻿image/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "modelId"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1,
+     "vae": "/secret"
+    }
+   },
+   "problem": "vae"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 256,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 2048,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 255,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "width"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 257,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "width"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 2112,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "width"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": null,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "width"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": true,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "width"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": "4",
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "width"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 256,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 2048,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 257,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "height"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": null,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "height"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": true,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "height"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": "4",
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "height"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 1,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 100,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 0,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "steps"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 101,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "steps"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 1.5,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "steps"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": null,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "steps"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": true,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "steps"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": "4",
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "steps"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 0,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 30,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": -1,
+     "seed": -1
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 31,
+     "seed": -1
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4.5,
+     "seed": -1
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": null,
+     "seed": -1
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": true,
+     "seed": -1
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": "4",
+     "seed": -1
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": 0
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": 2147483647
+    }
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -2
+    }
+   },
+   "problem": "seed"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": 2147483648
+    }
+   },
+   "problem": "seed"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": null
+    }
+   },
+   "problem": "seed"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": true
+    }
+   },
+   "problem": "seed"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": "4"
+    }
+   },
+   "problem": "seed"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "width"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "steps": 28,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "height"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "cfgScale": 4,
+     "seed": -1
+    }
+   },
+   "problem": "steps"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "seed": -1
+    }
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": {
+    "sessionId": "s_img",
+    "prompt": "cat",
+    "params": {
+     "modelId": "image/acme/sd",
+     "width": 512,
+     "height": 768,
+     "steps": 28,
+     "cfgScale": 4
+    }
+   },
+   "problem": "seed"
+  }
+ ],
+ "params": [
+  {
+   "input": {},
+   "problem": null
+  },
+  {
+   "input": {
+    "cfgScale": 4
+   },
+   "problem": null
+  },
+  {
+   "input": {
+    "cfgScale": 4.5
+   },
+   "problem": "cfgScale"
+  },
+  {
+   "input": null,
+   "problem": "imageParams"
+  },
+  {
+   "input": [],
+   "problem": "imageParams"
+  },
+  {
+   "input": {
+    "modelId": null
+   },
+   "problem": "modelId"
+  },
+  {
+   "input": {
+    "modelId": "C:\\models\\sd"
+   },
+   "problem": "modelId"
+  },
+  {
+   "input": {
+    "modelId": "../sd"
+   },
+   "problem": "modelId"
+  },
+  {
+   "input": {
+    "outputPath": "/secret"
+   },
+   "problem": "outputPath"
+  }
+ ],
+ "models": {
+  "input": [
+   {
+    "id": "image/sd",
+    "name": "SD",
+    "modality": "image",
+    "loaded": true,
+    "path": "/secret",
+    "preset": {
+     "vae": "/secret"
+    }
+   },
+   {
+    "id": "image/error",
+    "name": "checkpoint at /private/name",
+    "modality": "image",
+    "lastLoadError": "/secret error"
+   },
+   {
+    "id": "vision",
+    "modality": "vision"
+   },
+   {
+    "id": "mlx/sd",
+    "modality": "image",
+    "format": "mlx"
+   },
+   {
+    "id": "/private/sd",
+    "modality": "image"
+   }
+  ],
+  "output": [
+   {
+    "id": "image/sd",
+    "name": "SD",
+    "kind": "image",
+    "format": "gguf",
+    "state": "loaded"
+   },
+   {
+    "id": "image/error",
+    "name": "image/error",
+    "kind": "image",
+    "format": "gguf",
+    "state": "error"
+   }
+  ]
+ }
+}

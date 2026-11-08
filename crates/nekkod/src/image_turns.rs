@@ -65,6 +65,9 @@ impl ImageTurns {
 
     /// `generateImageTurn(opts)`.
     pub async fn generate(&self, ctx: &Ctx, opts: &Value) -> Result<Value, String> {
+        if let Some(problem) = nekko_remote::phone_image::host_request_problem(opts) {
+            return Err(format!("Invalid image request: {problem}"));
+        }
         let session_id = opts.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string();
         let say = |event: Value| ctx.hub.publish("agent:event", event, false);
         let fail = |message: &str| say(json!({ "type": "error", "sessionId": session_id, "message": message }));
@@ -75,6 +78,14 @@ impl ImageTurns {
             fail("That chat no longer exists.");
             return Ok(Value::Null);
         };
+        if session.get("chatType").and_then(Value::as_str) != Some("image") {
+            return Err("Choose an image chat before generating an image.".into());
+        }
+        let model_id = opts["params"]["modelId"].as_str().unwrap_or_default();
+        let model = ctx.library.find(model_id).await?;
+        if !model.as_ref().is_some_and(nekko_remote::phone_image::eligible) {
+            return Err("Choose an installed local image-generation model.".into());
+        }
         // `assertHostExecution(sessionId, 'Image generation')`.
         if crate::worktrees::execution_mode(&session) == "sandbox" {
             return Err("Image generation is unsupported in sandbox sessions. Use scoped container file and bash tools. No host fallback.".into());
