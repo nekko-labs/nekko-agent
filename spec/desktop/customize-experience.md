@@ -5,7 +5,7 @@ area: desktop
 
 # Customize experience — #2052
 
-Status: implementation in progress; not released or visually verified.
+Status: ready checkpoint for PR #2055; not yet released. Remaining visual/full-suite verification is explicitly deferred by Philip, not claimed complete.
 
 ## Requested experience
 
@@ -31,7 +31,14 @@ A destination shared by desktop and iPhone, inspired by the supplied tabbed refe
 - The iOS video rendered successfully (240 frames, 30fps, 640×380, about 32 KB). Remotion reported an existing Zod version mismatch warning; output exists but has not been visually inspected.
 - **Unfinished:** phone tone editing is not wired: the existing phone settings protocol does not expose computer standing-instruction edits. UI says where to manage them, rather than pretending a save works. Phone-local tone presets now persist in the existing offline store and append to the existing phone identity on the next request; native persistence/request tests passed in run `42344561935` (separate from the failed app build).
 - **Unfinished:** Android Customize/onboarding parity. Existing Android mode behavior is untouched; a matching native evidence run can establish baseline but does not prove new Android support.
-- **Unfinished:** screenshots/reference-image publication and linked documentation PR; all release evidence must be inspected and linked before ready/merge.
+- **Unfinished:** remaining screenshot/motion inspection, reference-image publication and linked documentation PR. Existing published desktop media is preserved. The checkpoint landing decision below defers additional evidence work; it does not establish visual acceptance.
+
+## Current main reconciliation (2026-11-08)
+
+- Merge current main into the existing checkpoint without restoring the duplicate desktop Experience onboarding step. Main's Detail step remains the only desktop detail-selection step; Customize and the iPhone intro composition remain intact.
+- Preserve main's first-prompt introduction in iOS New chat alongside Customize's floating keyboard dismiss control. The introduction's eligibility, presentation and seen-state persistence remain unchanged.
+- Isolated worktree checks: shared/profile declaration builds, desktop typecheck, all 30 focused tone/onboarding/About you tests, Swift parsing and specification index pass. These checks are not visual or native full-suite acceptance.
+- Philip requests landing this checkpoint promptly and skipping additional visual/motion/full-suite checks. Existing published evidence stays intact. Android Customize/onboarding parity, phone tone editing and the previously recorded evidence limitations remain follow-up scope in #2052, not completed capabilities. Required GitHub checks and review-thread rules still apply; labels, tests and gate policy are not weakened.
 
 ## Reproduce
 

@@ -6,6 +6,10 @@ split-from: SPEC.md (2026-10-22)
 
 # Brand refresh and website redesign (2026-10-18)
 
+## Current shipped asset cleanup
+
+`[implemented in source; verification coverage in PR]` The old plum favicon/logo, desktop/PWA/native icon assets and installer banners are replaced with green/cream/sage artwork, preserving the existing outline cat geometry. The social preview no longer says “Agent Nekko” or uses the secret-agent mascot; it reuses the current first-party brand banner. Cache keys cover homepage, privacy, generated docs and Local Web UI favicon/touch/manifest paths. Shared generation and palette regression tests prevent checked-in assets drifting back to the old colors. See [Colour palette](colour-palette.md#app-icon) for the current asset palette, coverage and deliberately retained themes/history. Older color descriptions below are implementation history, not the current asset palette.
+
 `[implemented; icons and docs regenerated with repo tooling; no before/after screenshots yet; beta form not live]` The brand moves from a dark tile to a **gradient**: deep indigo `#453A92` to lavender `#9D8CE6`, left to right. This supersedes the dark-tile and "dark-only" wording under *App icon*, *Marketing website* and *Documentation hub* below.
 
 - **App icon and installers.** The same outline cat mark, now white on a gradient squircle tile with no rim light. `apps/desktop/scripts/icon-art.cjs` is still the one source: `make-icons.cjs` repaints the desktop icons, the NSIS installer bitmaps (gradient panel, white product name) and the phone icons; Android's adaptive-icon background is the gradient and the Expo splash/adaptive colour is `#453A92`. The in-app `BrandMark` is unchanged.

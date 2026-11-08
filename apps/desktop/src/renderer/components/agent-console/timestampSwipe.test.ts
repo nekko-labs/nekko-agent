@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { attachTimestampSwipe, WHEEL_RELEASE_MS } from './timestampSwipe.js';
+import { attachTimestampSwipe, TIMESTAMP_REVEAL_PX, WHEEL_RELEASE_MS } from './timestampSwipe.js';
 
 /** A line of text 100-300 wide at y 90-110, as the caret lookup would find it. */
 function textAt(x: number, y: number) {
@@ -47,11 +47,45 @@ describe('timestamp swipe', () => {
     f.send('pointerup'); expect(f.shift()).toBe('0px');
     vi.advanceTimersByTime(250); expect(f.shift()).toBe(''); f.cleanup();
   });
-  it('allows wheel pauses longer than the old 120ms and settles after wheel inactivity', () => {
-    const f = fixture(); f.send('wheel', { deltaX: 112, deltaY: 0 });
-    vi.advanceTimersByTime(300); expect(f.shift()).toBe('112px');
-    f.send('wheel', { deltaX: 10, deltaY: 0 });
-    vi.advanceTimersByTime(WHEEL_RELEASE_MS); expect(f.shift()).toBe('0px'); f.cleanup();
+  it('only reveals for leftward wheel input and lets rightward input close it', () => {
+    const f = fixture();
+    expect(f.send('wheel', { deltaX: -112, deltaY: 0 })).toBe(true);
+    expect(f.shift()).toBe('');
+    expect(f.classes.has('vt-stamps-on')).toBe(false);
+    expect(f.send('wheel', { deltaX: 80, deltaY: 0 })).toBe(false);
+    expect(f.shift()).toBe('80px');
+    f.send('wheel', { deltaX: -20, deltaY: 0 }); expect(f.shift()).toBe('60px');
+    f.send('wheel', { deltaX: -100, deltaY: 0 }); expect(f.shift()).toBe('');
+    expect(f.classes.has('vt-stamps-on')).toBe(false); f.cleanup();
+  });
+  it('caps wheel travel and reverses without consuming overshoot', () => {
+    const f = fixture(); f.send('wheel', { deltaX: 500, deltaY: 0 });
+    expect(f.shift()).toBe(`${TIMESTAMP_REVEAL_PX}px`);
+    f.send('wheel', { deltaX: 500, deltaY: 0 });
+    f.send('wheel', { deltaX: -20, deltaY: 0 }); expect(f.shift()).toBe('92px'); f.cleanup();
+  });
+  it('starts returning promptly after wheel input stops, resetting only for new input', () => {
+    const f = fixture(); f.send('wheel', { deltaX: 80, deltaY: 0 });
+    vi.advanceTimersByTime(WHEEL_RELEASE_MS - 1); expect(f.shift()).toBe('80px');
+    f.send('wheel', { deltaX: 32, deltaY: 0 });
+    vi.advanceTimersByTime(WHEEL_RELEASE_MS - 1); expect(f.shift()).toBe('112px');
+    vi.advanceTimersByTime(1); expect(f.shift()).toBe('0px');
+    expect(f.classes.has('vt-swiping')).toBe(false);
+    expect(f.classes.has('vt-stamps-on')).toBe(false);
+    expect(WHEEL_RELEASE_MS).toBeLessThanOrEqual(80);
+    vi.advanceTimersByTime(250); expect(f.shift()).toBe(''); f.cleanup();
+  });
+  it('caps a pointer pull and follows reversal immediately without overshoot', () => {
+    const f = fixture(); f.send('pointerdown');
+    f.send('pointermove', { clientX: 100 }); expect(f.shift()).toBe('112px');
+    f.send('pointermove', { clientX: 50 }); expect(f.shift()).toBe('112px');
+    f.send('pointermove', { clientX: 70 }); expect(f.shift()).toBe('92px');
+    f.send('pointermove', { clientX: 200 }); expect(f.shift()).toBe('');
+    f.send('pointerup'); expect(f.classes.has('vt-swiping')).toBe(false); f.cleanup();
+  });
+  it('does not reveal on a rightward pointer drag', () => {
+    const f = fixture(); f.send('pointerdown'); f.send('pointermove', { clientX: 550 });
+    expect(f.shift()).toBe(''); expect(f.el.setPointerCapture).not.toHaveBeenCalled(); f.cleanup();
   });
   it('ignores vertical movement and ctrl-wheel zoom', () => {
     const f = fixture(); f.send('wheel', { deltaX: 1, deltaY: 20 });

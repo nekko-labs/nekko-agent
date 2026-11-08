@@ -31,7 +31,7 @@ describe('what a model family makes', () => {
 
   it('offers All, Chat, Pictures and Video, and says what Video cannot do yet', () => {
     expect(KIND_FILTERS.map(k => k.label)).toEqual(['All', 'Chat', 'Pictures', 'Video']);
-    expect(kindNote('video', '', 3)).toContain("can't make videos");
+    expect(kindNote('video', '', 3)).toContain('Wan 2.2 TI2V 5B makes short clips');
     expect(kindNote('image', '', 0)).toContain('Download one of the picks above');
     expect(kindNote('image', 'flux', 0)).toBeNull();
     expect(kindNote('chat', '', 0)).toBeNull();

@@ -82,21 +82,22 @@ Reproduce with `NEKKO_CONTROLS_SANDBOX=light-theme-sandbox.cjs node apps/desktop
 
 ## App icon
 
-Plum in every theme (there is no indigo icon).
+`[implemented in source; supersedes the previous plum-icon palette]` Shipped brand assets use green and cream independently of the user's chosen app theme. The existing outline cat geometry is unchanged.
 
-- **Tile:** left-to-right gradient `#190019` to `#5A2352`, rounded square.
-- **Mark (the cat):** white `#FFFFFF` (implemented in #1943); geometry and the plum tile gradient are unchanged.
-- **Installer banners:** keep the original plum `#854F6C` cat, text and edge stripe, not the white app-icon mark. The generator selects installer ink explicitly (#2003). Non-icon brand marks keep their existing plum treatments.
-- **Implemented and tested (#2003):** regression tests cover white app-icon output at nine sizes, explicit ink for fill and small-size strokes, and exact header/sidebar SVG equality with the pre-#1943 generator, including supersampled dimensions. No visual change to current UI or installers: committed icon and installer assets are not regenerated or changed. This restores future banner regeneration to the original plum art, not a new design. Cross-platform raster reproducibility and native launcher/installer appearance are not verified by this source-only follow-up.
-- Source of truth: `apps/desktop/scripts/icon-art.cjs`; regenerate with `npx electron apps/desktop/scripts/make-icons.cjs`.
+- **Tile:** left-to-right gradient `#101714` to `#263D2D`, rounded square on desktop/web and full bleed on iOS/Watch. Android keeps the same gradient in its adaptive background.
+- **Mark:** cream `#F2F1E9`; iOS dark appearance and Windows installer ink use sage `#A7C8AC` on dark green. Android resource colors are opaque AARRGGBB (`#FF101714`, `#FFF2F1E9`).
+- **Shared generation:** `npx electron apps/desktop/scripts/make-icons.cjs` writes desktop PNG/SVG/ICO, web/PWA assets, installer BMPs, iOS light/dark SVG/opaque RGB PNGs and the matching Watch PNG. It uses a throwaway profile and hidden non-focusable window. Raster encoding avoids host ICC metadata; transparent pixels are unpremultiplied before PNG encoding.
+- **Site and docs:** `node scripts/make-site-icon.cjs` writes the favicon and logo from the shared artwork and renders `og.png` from `docs/brand/nekko-banner-1280x640.png`, replacing the pre-rename name and secret-agent mascot. Website, privacy, generated docs, renderer favicon and touch/manifest references use a new cache key. The renderer now declares its favicon explicitly.
+- **Checks:** focused tests inspect current generator output, committed vectors, PNG palettes/dimensions/opacity, every embedded ICO PNG, installer pixels, Android ARGB values and cache keys. Native catalog/resource compilation and visual evidence are recorded in the linked PR. Full Windows installer, Android launcher, selected iOS dark appearance and Watch launcher are not established by these tests.
+- **Preserved deliberately:** existing cat-mark geometry, seasonal Spooky artwork, user-selected plum/indigo themes, third-party provider logos, historical screenshots/evidence and immutable release files. This asset cleanup is not a whole-site/theme recolor or a mascot redesign.
 
 ## Base looks and other brand surfaces
 
 `[updated 2026-11-05]` The last places that still drew the old lilac and violet now use the palette above.
 
 - **System, Light and Dark** (the base looks, and the default accent a fresh profile saves): Light `#5A2352` / `#8A4A7F`, Dark `#C084B5` / `#C99BB3`, on the desktop, the iPhone and Android. A saved `#6D5EFC` (the old default) migrates to `#5A2352` on load, and the old base accents (`#6D5EFC`, `#06B6D4`, `#8B7DFF`, `#22D3EE`) read as the new ones, so nobody who never picked a colour keeps the violet. A phone paired to a computer that still sends the old violet keeps plum.
-- **Startup splash, first launch** (desktop) and the **iPhone launch screen, opening animation and lock cover**: `#190019` with the white cat.
-- **iPhone brand mark** (first run, pairing): the cat in `#854F6C`, as on Android.
+- **Startup splash, first launch** (desktop) and the **iPhone launch screen, opening animation and lock cover**: `#101714` with the cream cat (`#F2F1E9`). Saved desktop theme splash colors continue to win.
+- **iPhone brand mark** (first run, pairing): the cat in sage `#A7C8AC`. Android uses the cream launcher/splash mark.
 - **Tray companion and memory warning popups** (desktop): `#16161C` panel, `#C99BB3` outlines, `#190019` main button with a `#854F6C` outline.
 - **Nekko Cloud beta emails and the confirm/unsubscribe pages**: `#FBF6F8` page, `#5A2352` wordmark and links (`#C99BB3` in dark), `#190019` to `#3A1438` button, `#5A2352` to `#C084B5` headline.
 
@@ -104,7 +105,7 @@ Not changed: themes a user picks by name (Nebula, and the older Lilac, Lavender 
 
 ## Website
 
-The site is plum only. Dark and White are its two main looks; Colourful follows the same palette.
+The site theme remains plum; the favicon, logo and social card use the current green brand assets above. The tables below describe site UI colors, not the superseded icon colors. The site theme is plum only. Dark and White are its two main looks; Colourful follows the same palette.
 
 | Element | Value |
 |---|---|
@@ -117,7 +118,7 @@ The site is plum only. Dark and White are its two main looks; Colourful follows 
 | Download button | gradient `#190019` to `#3A1438`, text `#FFFFFF` |
 | Pale tints (bands, hovers, White page) | `#E6D0DC`, `#F3E8EE`, `#FBF6F8` |
 | Logo (nav, footer) | gradient `#5A2352` to `#C084B5` |
-| Favicon | same as the app icon |
+| Favicon | current green/cream app icon (see above) |
 | Browser bar colour | Dark `#0C0C11`, White `#FBF6F8`, Colourful `#854F6C` |
 | Speed chart | Nekko `#5A2352`, Ollama `#177A89` (kept teal so it stays distinct), LM Studio `#A0601E` |
 | Hero screenshot frames | Dark `#241F23`, Light `#C9A9C4` |
