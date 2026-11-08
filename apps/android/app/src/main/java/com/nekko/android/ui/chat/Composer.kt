@@ -270,7 +270,6 @@ fun Composer(
             }
             skill?.let { SkillChip("/${it.name}", Icons.Filled.Extension, stringResource(R.string.chat_remove_skill, it.name)) { skillName = null } }
             prompt?.let { SkillChip("/${it.name}", Icons.Filled.Bookmark, stringResource(R.string.chat_remove_saved_prompt, it.name)) { promptId = null } }
-            if (attach != null && (photos.isNotEmpty() || addingPhotos)) PhotoStrip(photos, attach.state.adding, attach.onRemove)
             val note = blocked ?: error ?: mic?.error ?: attach?.state?.error
             if (note != null) {
                 Text(
@@ -289,8 +288,13 @@ fun Composer(
                     .clip(RoundedCornerShape(16.dp))
                     .background(p.surface)
                     .border(1.dp, p.line, RoundedCornerShape(16.dp))
-                    .padding(6.dp),
+                    .padding(6.dp)
+                    .testTag("composer.card"),
             ) {
+                // Photos going with the message sit in the box with its text, as on the iPhone (#2043).
+                if (attach != null && (photos.isNotEmpty() || addingPhotos)) {
+                    Box(Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp)) { PhotoStrip(photos, attach.state.adding, attach.onRemove) }
+                }
                 // The toolbar sits inside the card, above the text, while the box is in use.
                 if (focused && toolbarOn) MarkdownToolbar(draft, text, setText)
                 PastedChip(draft, text, setText)

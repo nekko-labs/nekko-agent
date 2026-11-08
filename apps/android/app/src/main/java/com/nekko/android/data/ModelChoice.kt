@@ -1,6 +1,7 @@
 package com.nekko.android.data
 
 import com.nekko.protocol.AUTO_MODEL_ID
+import com.nekko.protocol.LocalProviders
 import com.nekko.protocol.ModelInfo
 import com.nekko.protocol.PublicProvider
 import com.nekko.protocol.RemoteDefaults
@@ -14,6 +15,29 @@ data class ModelGroup(
     /** The provider could not list its models (server off, request timed out). */
     val error: String? = null,
 )
+
+/**
+ * The tabs across the top of the model picker, after the desktop's "Model source"
+ * group (ModelPicker.tsx) and the iPhone's (NekkoKit `ModelScope`): every model, the
+ * cloud APIs only, or the model servers on the computer only ([LocalProviders]). The
+ * desktop's Fusion tab is Auto routing, which the phone does not offer. The picker
+ * opens on [ALL]; switching only filters the list, it never picks a model.
+ */
+enum class ModelScope {
+    ALL, CLOUD, LOCAL;
+
+    fun includes(provider: PublicProvider): Boolean = when (this) {
+        ALL -> true
+        CLOUD -> !LocalProviders.isLocal(provider.kind)
+        LOCAL -> LocalProviders.isLocal(provider.kind)
+    }
+
+    /**
+     * The provider groups this tab lists, in their order. Starred rows follow, since
+     * [ModelChoice.starred] only finds models in the groups it is given.
+     */
+    fun groups(groups: List<ModelGroup>): List<ModelGroup> = groups.filter { includes(it.provider) }
+}
 
 /** A concrete provider + model pair: what `session:setOptions` needs. */
 data class ModelPick(val providerId: String, val modelId: String)

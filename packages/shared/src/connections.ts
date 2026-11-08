@@ -51,6 +51,7 @@ export const CONNECTIONS: ConnectionInfo[] = [
   { id: 'web-tools', label: 'Web tools', group: 'onDemand', where: 'Any public website', desc: 'An agent’s fetch and browser tools, and photos shown in replies.' },
   { id: 'mcp', label: 'MCP servers', group: 'onDemand', where: 'The MCP servers you add', desc: 'Remote (HTTP) MCP servers, when a chat uses their tools.' },
   { id: 'browser-pane', label: 'In-app browser', group: 'onDemand', where: 'Any website', desc: 'Pages you open in the browser pane.' },
+  { id: 'updates-email', label: 'Update emails', group: 'onDemand', where: 'nekko-agent-api.fly.dev', desc: 'Once, if you give an email in setup: the address and your name join the update list.' },
   { id: 'feedback', label: 'Send feedback', group: 'onDemand', where: 'nekko-agent-api.fly.dev', desc: 'Only when you press Send in the feedback sheet.' },
   { id: 'resource-queue', label: 'Resource queue', group: 'onDemand', where: 'The coordinator you set', desc: 'Experimental: claiming jobs, with a heartbeat every minute while one runs.' },
   { id: 'api-server', label: 'API server', group: 'listener', where: 'This computer, or your network if set to LAN', desc: 'Lets the CLI and MCP clients drive Nekko Agent.' },

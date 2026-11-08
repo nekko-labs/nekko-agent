@@ -34,11 +34,13 @@ The quickest way to start is the installer.
 2. Run it. On macOS, drag Nekko Agent into Applications.
 3. Open Nekko Agent, add a project folder and choose a model on the **Models** tab (the violet brain-and-gear icon in the left navigation). Click a model's name there to make it the default for new chats.
 
+The first time it opens, Nekko says hi and asks a few quick questions, all of them skippable: what to call you, an optional email for update news, what you mostly do, and how much detail you like in replies (**Minimal**, **Regular** or **Detailed**, with a sample chat that shows each one and a switch for the **Monitors** panel). Then you pick a look and connect a model. Setup opens in Dark; switch to Light in the look step. Change any answer later in **Settings → General → About you**, or reopen the whole thing with **Replay setup**. An email you give joins the update list once and gets one confirmation email; nothing is sent if you leave it blank or choose **No thanks**.
+
 macOS builds are signed and notarized, so they open normally. If Windows shows an "unknown publisher" prompt for an unsigned build, choose **More info**, then **Run anyway**.
 
 ## Typing in a new agent window
 
-A new chat greets you with “What should we work on?” and a small pixel Nekko peeking beside it, looking toward the heading. Type your request in the composer below. The very first time, a short **Send your first prompt** intro opens over it: three looping demos (start with a question, add your files, send). **Skip**, the ✕, Escape or a click outside closes it, and it does not open again. It stays closed for anyone who turned off contextual tips. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. In Nekko and Indigo, the selected window instead keeps a soft plum gradient into the full conversation, with a gentle violet/rose color crossfade; in Dynamic View only the active agent has that gradient, even while other agents are working. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Agent chat rows in the left panel stay flat, without a tile background or border; the title, status and keyboard focus outline identify the relevant chat. The composer's effort gauge is borderless, and **Suggestions** appears on its own row below the model/action controls when there are suggestions to show. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
+A new chat greets you with a welcome phrase, such as “What’s next?” or “It’s building time.”, and a small pixel Nekko peeking beside it, looking toward the heading. Each chat keeps its own greeting rather than rotating while you work. Morning and late-night chats can also get a time-appropriate hello. Type your request in the composer below. The very first time, a short **Send your first prompt** intro opens over it: three looping demos (start with a question, add your files, send). **Skip**, the ✕, Escape or a click outside closes it, and it does not open again. It stays closed for anyone who turned off contextual tips. The new-chat surface slowly fades through teal/gold, violet/rose, blue/mint and rose/amber palettes over two minutes. In Nekko and Indigo, the selected window instead keeps a soft plum gradient into the full conversation, with a gentle violet/rose color crossfade; in Dynamic View only the active agent has that gradient, even while other agents are working. Reduced motion holds the colors still. Themes with moving dots show them only here, not behind existing conversations. Agent chat rows in the left panel stay flat, without a tile background or border; the title, status and keyboard focus outline identify the relevant chat. The composer's effort gauge is borderless, and **Suggestions** appears on its own row below the model/action controls when there are suggestions to show. Context menus use a neutral light or dark background with accent-colored highlighted rows. Switching to a chat also highlights and reveals its row in the Agents panel. To rename a chat, right-click its card and choose **Rename**, or hover the card and click the pencil beside the X; type the new name and press Enter (Escape cancels). A name you type stays: Nekko no longer replaces it with an automatic title.
 
 Opening an agent composer puts the caret after any restored draft once a usable model provider is available. If you are already typing in another visible text field, that field keeps focus. Normal background agent and provider updates do not pull you back into the composer.
 
@@ -60,7 +62,7 @@ Displaying a screenshot does not mean it has been inspected or approved. The age
 
 ## Make it yours
 
-In **Settings → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
+In **Settings → Customize → Appearance**, choose a palette from the colored circles, then use the small sun/moon switch for light or dark mode. Every offered palette has both modes, including seasonal Spooky. Switching mode keeps the palette and any custom colors; choosing another palette applies its own colors without changing the mode. Choose **Nekko** to return to the default palette.
 
 On desktop and the Local Web UI, light **Nekko** and **Indigo** use pale rose and indigo surfaces, tinted selections, and the same plum/violet/rose gradient colors as their dark counterparts. The selected chat keeps its color field from the greeting into the conversation; other panes stay quiet. Dark themes are unchanged, and reduced motion keeps a static field.
 
@@ -175,6 +177,8 @@ When a tool needs permission, its approval card appears in that agent's own wind
 
 For an identified subagent, **Open ↗** beside its activity row opens the child chat using the existing workspace navigation. The chevron still expands task details separately. If the app cannot safely associate a delegation with one child (including older activity after a restart), use the sub-agent cards along the bottom of the plan sheet above the composer (or the Agent Monitor in the Agent tab) instead; the row does not guess which chat to open.
 
+The sub-agent cards, Agent Monitor and child-chat banner show the child's provider and model when available. The banner's parent-chat name opens the chat that delegated the work; for nested agents this is the immediate parent. Transcript model chips also include the provider when known. Hover the route label to read the full model ID. Missing provider configurations fall back to their saved ID rather than hiding the source.
+
 ### Model and effort controls
 
 Changing the model or effort in an existing chat shows **Tokens on your next turn**: an estimate of the input tokens needed to resend the chat’s context. Nothing is sent just by changing your selection. To save tokens, start a new chat and include only what it needs instead of carrying over the old history. Actual usage and cost depend on context trimming and provider caching and billing.
@@ -196,8 +200,8 @@ All shows every available model and Auto; Fusion shows Auto routing; Cloud and
 Local narrow the list to those providers, including favorites and your default.
 Filtering does not select a model or change the chat's mode. Fusion is unavailable
 where Auto routing is not supported, such as a fixed-model workflow step.
-The iPhone app's model list has **All**, **Cloud** and **Local** at the top too
-(it offers no Auto, so no Fusion).
+The iPhone and Android apps' model lists have **All**, **Cloud** and **Local** at
+the top too (they offer no Auto, so no Fusion).
 
 ### How the Agents panel groups your agents
 
@@ -239,7 +243,7 @@ Click the plus button in the Agents panel to open a new agent window. Hover over
 
 The Agent Board header also has a single **+**: hover or click it for the same three choices. Both menus use a neutral light/dark background and highlight the hovered or keyboard-focused row in your primary color. The shortcut appears beside every choice:
 
-Immediately to its right, **View** brings together **Single agent** (one focused chat), **Multi-agent** (tiled chats), **Snap to grid**, and desktop screen/desktop controls. Cmd/Ctrl+Shift+1 and +2 still switch the two views. Snap to grid is available in free-form Multi-agent view; it keeps windows evenly spaced and attracts dividers only when they are within 3% of a grid boundary. The menu scrolls on smaller windows. Desktop screen selection and new-agent placement keep their existing behavior; these controls are not shown in the Local Web UI.
+Immediately to its right, **View** brings together **Single agent** (one focused chat), **Multi-agent** (tiled chats), **Snap to grid**, and desktop screen/desktop controls. Cmd/Ctrl+Shift+1 and +2 still switch the two views. Snap to grid is available in free-form Multi-agent view; it keeps windows evenly spaced and attracts dividers only when they are within 3% of a grid boundary. The menu scrolls on smaller windows. The two illustrated layout cards preview one chat or chats side by side; the toolbar icon reflects your selection. Under **Screens**, select an additional display to open or close its Nekko window. A single display shows its connected status instead. **Open new agents** lets you **Spread across screens** (empty screens first, then the one with the fewest agents) or **Prefer main screen**. With only one screen, that preference applies when you connect more displays. These desktop-only controls are not shown in the Local Web UI.
 
 
 | Action | macOS | Windows/Linux |
@@ -314,9 +318,13 @@ and wake-up details wrap the same way on desktop and the Local Web UI.
 
 Hover the edge between the agent list and chat wall, or the edge beside Monitors, to reveal a bright vertical resize line. Drag it to change the panel width, or focus the separator and use the left/right arrow keys. The line disappears when you leave the edge; there is no permanent divider beside the agent list. Monitors starts at 276px wide, with all six Budget time ranges on one row. Resize near that width to snap back, or double-click its separator (Home on the keyboard) to reset. In Focus, untouched new chats use a quiet, borderless frosted surface; reduced-transparency preferences restore a solid background.
 
+### Customize your experience
+
+Open **Settings > Customize** for appearance, sidebar shortcuts, desktop behavior, mascot options, agent-wall layout, personal instructions, fonts, accessibility, and Simple mode visibility. Existing preferences are kept when controls move. Search in the settings rail finds controls across every section. Computer connections, phone pairing, safety policies, and service management stay in their own sections.
+
 ### Skills and Connectors shortcuts
 
-Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > General > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
+Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > Customize > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
 ### Download progress in Model Server
 

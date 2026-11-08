@@ -78,7 +78,7 @@ public final class ChatModel {
     public private(set) var blocksRevision = 0
 
     private func merge() {
-        let merged = Transcript.mergeLive(saved: savedBlocks, live: turn.blocks)
+        let merged = QuestionReplies.project(Transcript.mergeLive(saved: savedBlocks, live: turn.blocks))
         blocks = shownIds.isEmpty ? merged : merged.map { b in shownIds[b.id].map { b.withId($0) } ?? b }
         blocksLayout += 1
         blocksRevision += 1
@@ -521,12 +521,12 @@ public final class ChatModel {
     public func answer(_ answers: [AskAnswer]) async throws {
         guard let q = turn.question else { return }
         guard store.conn == .online else { throw RelayError(Self.reconnectToAnswer) }
-        turn.question = nil
-        cardChanges += 1
         do {
             _ = try await store.remote().call(Channels.chatAnswer, [.string(sessionId), .string(q.callId), .array(answers.map(\.json))])
+            if turn.question?.callId == q.callId { turn.question = nil }
+            cardChanges += 1
         } catch {
-            if turn.question == nil { turn.question = q }
+            // Keep the mounted card, including all previous page choices, for retry.
             throw store.readable(error)
         }
     }

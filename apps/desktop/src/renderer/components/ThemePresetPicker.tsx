@@ -79,13 +79,14 @@ export function ThemePresetPicker({
       </div>
 
       <div className="mt-4 space-y-4">
-        {([
-          { key: 'themes', title: 'Themes', entries: THEMES },
-          { key: 'seasonal', title: 'Seasonal', entries: SEASONAL },
-        ] as const).map((section) => (
+        {/* Setup shows every palette in one row; Settings keeps the seasonal group apart. */}
+        {(large
+          ? [{ key: 'themes', title: 'Themes', entries: [...THEMES, ...SEASONAL] }]
+          : [{ key: 'themes', title: 'Themes', entries: THEMES }, { key: 'seasonal', title: 'Seasonal', entries: SEASONAL }]
+        ).map((section) => (
           <div key={section.key}>
-            <span className="text-xs font-medium text-ink-soft">{section.title}</span>
-            <div className="theme-swatch-list" role="radiogroup" aria-label={section.title}>
+            {!large && <span className="text-xs font-medium text-ink-soft">{section.title}</span>}
+            <div className={`theme-swatch-list${large ? ' theme-swatch-row' : ''}`} role="radiogroup" aria-label={section.title}>
               {section.entries.map((entry) => {
                 const palette = themePaletteDefaults(findThemePreset(entry.id)!, mode);
                 const active = activeId === palette.id;

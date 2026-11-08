@@ -3,7 +3,7 @@ import type { AskAnswer, AskRequest } from '@nekko-agent/shared';
 import { QuestionCard } from './QuestionCard.js';
 
 /** Retain the last question for the exit transition without keeping it interactive. */
-export function ComposerQuestion({ request, onAnswer }: { request: AskRequest | null; onAnswer: (answers: AskAnswer[]) => void }) {
+export function ComposerQuestion({ request, onAnswer }: { request: AskRequest | null; onAnswer: (answers: AskAnswer[]) => void | Promise<void> }) {
   const [shown, setShown] = useState(request);
   useEffect(() => {
     if (request) { setShown(request); return; }

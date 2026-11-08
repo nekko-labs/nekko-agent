@@ -17,7 +17,7 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run("!!document.querySelector('[data-wall-toolbar]')"); i++) await sleep(100);
-    await run('localStorage.clear()');
+    await run("localStorage.clear(); localStorage.setItem('fixture.platform', 'win32')");
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run("!!document.querySelector('[data-wall-toolbar]')"); i++) await sleep(100);
     await sleep(1000);
@@ -27,7 +27,7 @@ app.whenReady().then(async () => {
     }
     await check('intro dialogs dismissed', "!document.querySelector('[aria-modal=true]')");
     const changed = await run("!!document.querySelector('[data-wall-view-toggle]')");
-    for (const width of [1440, 460]) {
+    for (const width of [1440, 460, 320, 768]) {
       win.setContentSize(width, 900); await sleep(500);
       await shot(`toolbar-${width}`);
       await run(changed ? "document.querySelector('[data-wall-view-toggle]').click()" : "document.querySelector('[data-screens-button]').click()");
@@ -35,11 +35,18 @@ app.whenReady().then(async () => {
       await shot(`view-${width}`);
       if (changed) {
         await check(`menu fits ${width}`, "(()=>{const r=document.querySelector('[data-wall-view-menu]').getBoundingClientRect();return r.left>=0 && r.right<=innerWidth && r.bottom<=innerHeight})()");
+        await check(`no horizontal overflow ${width}`, "(()=>{const p=document.querySelector('[data-wall-view-menu]');return p.scrollWidth<=p.clientWidth})()");
         await run("document.querySelector('[data-wall-view-menu]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
         await check(`Escape closes ${width}`, "!document.querySelector('[data-wall-view-menu]')");
       } else await run("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))");
     }
     if (changed) {
+      win.setContentSize(460, 900);
+      await run("window.savedScreens = screensFixture.state; screensFixture.state = { ...screensFixture.state, displays: [screensFixture.state.displays[0]] }; screensFixture.emit(screensFixture.state)");
+      await run("document.querySelector('[data-wall-view-toggle]').click()");
+      await sleep(300);
+      await shot('view-one-screen');
+      await run("document.querySelector('[data-wall-view-menu]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})); screensFixture.state = savedScreens; screensFixture.emit(savedScreens)");
       await run(`(() => {
         const bridge = window.nekkoChrome.displays;
         window.viewCalls = [];
@@ -50,6 +57,10 @@ app.whenReady().then(async () => {
       await check('keyboard opens and focuses selected mode', "document.activeElement.matches('[data-view-mode=focus]')");
       await run("document.querySelector('[data-view-mode=grid]').click()"); await sleep(200);
       await check('multi-agent selected', "document.querySelector('[data-view-mode=grid]').checked");
+      if (await run("!!document.querySelector('.wall-view-choices')")) {
+        await check('trigger describes selected layout', "document.querySelector('[data-wall-view-toggle]').title === 'View: Multi-agent'");
+        await check('snap uses switch semantics', "document.querySelector('[data-view-snap]').getAttribute('role') === 'switch'");
+      }
       await run("document.querySelector('[data-view-snap]').click()"); await sleep(100);
       await check('snap enabled', "document.querySelector('[data-view-snap]').checked");
       await run("document.querySelector('[data-view-mode=focus]').click()"); await sleep(100);
