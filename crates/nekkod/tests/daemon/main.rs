@@ -17,6 +17,7 @@ mod computers;
 mod desktop;
 mod engine;
 mod git;
+mod image_boundary;
 mod injection;
 mod lifecycle;
 mod native;

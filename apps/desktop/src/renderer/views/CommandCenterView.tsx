@@ -231,7 +231,7 @@ export function CommandCenterView() {
           setPending(inputs);
         }).catch(() => {}); // An unavailable input state must not hide a window.
       }
-      if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'tool_result') refreshPending();
+      if (e.type === 'question' || e.type === 'tool_approval_required' || e.type === 'question_resolved' || e.type === 'approval_resolved' || e.type === 'tool_result') refreshPending();
       if (e.type === 'done' || e.type === 'error') {
         setRunning((r) => { const n = new Set(r); n.delete(e.sessionId); return n; });
         window.nekko.getUsageSummary().then(setUsage);
@@ -497,7 +497,9 @@ export function CommandCenterView() {
   }, [wall.root, selected, typeInto, setWall]);
   const chatFinderOpen = useStore((s) => s.chatFinderOpen);
   const onAgentsView = useStore((s) => s.view) === 'command';
-  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro;
+  // Waits for first-run setup to close: it would otherwise open on top of the wizard.
+  const setupOpen = useStore((s) => s.onboardingOpen);
+  const showZonesIntro = listsReady && onAgentsView && !isScreenWindow && !!wall.zones && !wall.zonesIntro && !setupOpen;
   useEffect(() => {
     if (chatFinderOpen) setWall((w) => ({ ...w, agentPanel: { ...readAgentPanel(w.agentPanel), show: true } }));
   }, [chatFinderOpen, setWall]);

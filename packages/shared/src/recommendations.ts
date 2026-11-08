@@ -151,7 +151,7 @@ export interface ImageRecommendedOption {
 }
 
 export interface ImageTaskRecommendation {
-  task: 'imageCreate' | 'imageEdit';
+  task: 'imageCreate' | 'imageEdit' | 'videoCreate';
   label: string;
   capability: import('./engine.js').ImageCapability;
   /** The first candidate that fits, best first (from system RAM, the smallest that fits); `null` when none does. */

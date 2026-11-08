@@ -213,6 +213,12 @@
     <string name="chats_no_providers">No model providers are switched on in Nekko Agent on your computer. Add or enable one in its Models settings.</string>
     <string name="chats_search_models">Search models</string>
     <string name="chats_starred">Starred</string>
+    <string name="chats_model_source">Model source</string>
+    <string name="chats_scope_all">All</string>
+    <string name="chats_scope_cloud">Cloud</string>
+    <string name="chats_scope_local">Local</string>
+    <string name="chats_scope_no_local">No local model servers on this computer.</string>
+    <string name="chats_scope_no_cloud">No cloud providers on this computer.</string>
     <string name="chats_list_models_failed">Couldn’t list its models. %1$s</string>
     <string name="chats_retry">Retry</string>
     <string name="chats_asking">Asking your computer…</string>

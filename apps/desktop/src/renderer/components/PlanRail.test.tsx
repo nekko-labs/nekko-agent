@@ -47,7 +47,7 @@ describe('plan sheet, folded and open (#1317)', () => {
   });
   it('shows the sub-agents as live cards when folded, and puts each under its step when open', () => {
     store.sessions = [
-      { id: 'k1', parentSessionId: 's', title: 'Map checks', createdAt: 0 },
+      { id: 'k1', parentSessionId: 's', title: 'Map checks', createdAt: 0, providerId: 'ollama-local', modelId: 'qwen3:8b' },
       { id: 'k2', parentSessionId: 's', title: 'Update routes', createdAt: 0, activeRun: { startedAt: 1 } },
       { id: 'other', parentSessionId: 'x', title: 'Not mine', createdAt: 0 },
     ];
@@ -55,6 +55,8 @@ describe('plan sheet, folded and open (#1317)', () => {
       const folded = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen={false} />);
       expect(folded).toMatch(/data-subagent-card="k2" data-status="working"[^]*?data-subagent-card="k1" data-status="done"/);
       expect(folded).not.toContain('Not mine');
+      expect(folded).toContain('ollama-local · qwen3:8b');
+      expect(renderToStaticMarkup(<PlanRail sessionId="s" session={loop} />)).toContain('ollama-local · qwen3:8b');
       const open = renderToStaticMarkup(<PlanSheet sessionId="s" session={loop} streaming prs={[]} initiallyOpen />);
       expect(open).toContain('1 of 4 done');
       // Legacy kinds remain saved metadata, never labels or groups in the list.

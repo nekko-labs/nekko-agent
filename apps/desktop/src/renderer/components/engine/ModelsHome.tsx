@@ -32,7 +32,7 @@ export const KIND_FILTERS: { id: 'all' | FamilyKind; label: string }[] = [
 
 /** One line under the filter when it needs saying: what the list can and cannot do for that kind. */
 export function kindNote(kind: 'all' | FamilyKind, query: string, shown: number): string | null {
-  if (kind === 'video') return "Nekko can't make videos with these models yet; video generation is planned.";
+  if (kind === 'video') return 'Wan 2.2 TI2V 5B makes short clips in a Photo chat (experimental, needs a graphics card). Other video models are listed but not supported yet.';
   if (kind === 'image' && !query.trim() && !shown) return 'No picture models here yet. Download one of the picks above, or search Hugging Face.';
   return null;
 }

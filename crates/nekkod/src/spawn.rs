@@ -67,6 +67,25 @@ fn exact(v: &Value) -> bool {
     v.as_str().is_some_and(|t| !js::trim(t).is_empty() && js::trim(t) == t)
 }
 
+/// Check the route before discovery or admission. Auto is the existing Nekko
+/// router opt-in; Fusion also enables autoProviderSwitch. Neither overrides
+/// cloudOnly. An unknown source fails closed for local targets.
+fn check_delegation_route(parent: &Value, source: Option<&Value>, target: &Value) -> Result<(), String> {
+    if crate::admission::cloud_provider_allowed(target) {
+        return Ok(());
+    }
+    if js::truthy(parent.get("cloudOnly")) {
+        return Err(
+            "This chat runs on cloud models only, so a sub-agent cannot use a local model. No child was started."
+                .into(),
+        );
+    }
+    if !js::truthy(parent.get("autoModel")) && source.is_none_or(crate::admission::cloud_provider_allowed) {
+        return Err("Cloud chats cannot delegate to local models unless Fusion mode or the Nekko router is enabled. Enable one in this chat, or choose a cloud provider. No child was started and no fallback was used.".into());
+    }
+    Ok(())
+}
+
 /// `prepareSubAgent(parent, providerId, modelId, input)`: refused with
 /// nothing created, or the child chat made.
 async fn prepare_sub_agent(
@@ -144,12 +163,11 @@ async fn prepare_sub_agent(
     if crate::admission::provider_endpoint(&provider).is_none() {
         return Err("Target provider requires a valid HTTP(S) endpoint.".into());
     }
-    if js::truthy(parent.get("cloudOnly")) && !crate::admission::cloud_provider_allowed(&provider) {
-        return Err(
-            "This chat runs on cloud models only, so a sub-agent cannot use a local model. No child was created."
-                .into(),
-        );
-    }
+    let source = settings
+        .get("providers")
+        .and_then(Value::as_array)
+        .and_then(|ps| ps.iter().find(|p| p.get("id") == Some(provider_id)));
+    check_delegation_route(parent, source, &provider)?;
     if explicit_model || default_route.is_some() {
         let pid = target_provider.as_str().unwrap_or_default();
         let listed = crate::providers::list_models_status(ctx, pid).await;
@@ -182,6 +200,10 @@ async fn prepare_sub_agent(
     if let Some(call) = call_id {
         fields.push(("spawnCallId", json!(call)));
     }
+    // Override global creation defaults, including when the parent has no flags.
+    for key in ["autoModel", "autoProviderSwitch"] {
+        fields.push((key, json!(js::truthy(parent.get(key)))));
+    }
     for key in [
         "mode",
         "disabledTools",
@@ -209,7 +231,14 @@ async fn prepare_sub_agent(
 /// `{ error }` when the call is refused, `{ childId, failure }` when the
 /// child's turn could not start, else `{ childId, spec }` for the parent to drive.
 pub async fn prepare(ctx: &Ctx, req: &Value) -> Value {
-    let parent = req.get("parent").cloned().unwrap_or(Value::Null);
+    // The turn snapshot may predate a user changing the routing/privacy mode.
+    let snapshot = req.get("parent").cloned().unwrap_or(Value::Null);
+    let Some(parent) = s(&snapshot, "id").and_then(|id| ctx.sessions.get(id)) else {
+        return json!({ "error": "Unknown parent session." });
+    };
+    if js::truthy(parent.get("incognito")) || js::truthy(parent.get("offline")) {
+        return json!({ "error": "Offline or incognito chats cannot start or resume sub-agents." });
+    }
     let (provider_id, model_id) =
         (req.get("providerId").cloned().unwrap_or(Value::Null), req.get("modelId").cloned().unwrap_or(Value::Null));
     let attempt = req.get("attempt").and_then(Value::as_u64).unwrap_or(0);
@@ -228,9 +257,28 @@ pub async fn prepare(ctx: &Ctx, req: &Value) -> Value {
                 return json!({ "error": "Unknown child session." });
             };
             let or = |k: &str, d: &Value| saved.get(k).filter(|v| !v.is_null()).cloned().unwrap_or_else(|| d.clone());
+            let target_id = or("providerId", &provider_id);
+            let settings = crate::settings::current(ctx).await;
+            let providers = settings.get("providers").and_then(Value::as_array);
+            let find = |id: &Value| providers.and_then(|ps| ps.iter().find(|p| p.get("id") == Some(id)));
+            let Some(target) = find(&target_id).filter(|p| js::truthy(p.get("enabled"))) else {
+                return json!({ "error": "Target provider is unknown or disabled." });
+            };
+            if let Err(error) = check_delegation_route(&parent, find(&provider_id), target) {
+                return json!({ "error": error });
+            }
+            // Revoke stale router permission, but never relax a child's privacy boundary.
+            let fields = [
+                ("autoModel", json!(js::truthy(parent.get("autoModel")))),
+                ("autoProviderSwitch", json!(js::truthy(parent.get("autoProviderSwitch")))),
+                ("cloudOnly", json!(js::truthy(parent.get("cloudOnly")) || js::truthy(saved.get("cloudOnly")))),
+            ];
+            if let Err(error) = ctx.sessions.assign(child_id, &fields) {
+                return json!({ "error": error });
+            }
             Child {
                 id: child_id.to_string(),
-                provider_id: or("providerId", &provider_id),
+                provider_id: target_id,
                 model_id: or("modelId", &model_id),
                 task: String::new(),
             }
@@ -258,5 +306,43 @@ pub async fn prepare(ctx: &Ctx, req: &Value) -> Value {
             json!({ "childId": child.id, "failure": failure.unwrap_or_else(|| "The sub-agent could not start.".into()) })
         }
         (Err(e), _) => json!({ "childId": child.id, "failure": e }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn delegation_guard_router_and_fusion_require_opt_in_and_cloud_only_wins() {
+        let cloud = json!({"kind": "anthropic", "baseUrl": "https://api.anthropic.com"});
+        let local = json!({"kind": "llamacpp", "baseUrl": "http://127.0.0.1:8080"});
+        for auto in [false, true] {
+            for switch in [false, true] {
+                for cloud_only in [false, true] {
+                    let parent = json!({"autoModel": auto, "autoProviderSwitch": switch, "cloudOnly": cloud_only});
+                    assert_eq!(check_delegation_route(&parent, Some(&cloud), &local).is_ok(), auto && !cloud_only);
+                    assert!(check_delegation_route(&parent, Some(&cloud), &cloud).is_ok());
+                    assert_eq!(check_delegation_route(&parent, Some(&local), &local).is_ok(), !cloud_only);
+                }
+            }
+        }
+        assert!(check_delegation_route(&json!({}), Some(&cloud), &local).is_err());
+        assert!(check_delegation_route(&json!({}), None, &local).is_err());
+    }
+
+    #[test]
+    fn delegation_guard_uses_provider_classification_not_ids() {
+        let cloud = json!({"id": "nekko-engine", "kind": "openai", "baseUrl": "https://api.example.com"});
+        for local in [
+            json!({"id": "anything", "kind": "ollama", "baseUrl": "http://10.0.0.2:11434"}),
+            json!({"kind": "openai-compat", "baseUrl": "http://localhost:1234/v1"}),
+            json!({"kind": "openai-compat", "baseUrl": "http://[::1]:1234/v1"}),
+        ] {
+            assert!(check_delegation_route(&json!({}), Some(&cloud), &local).is_err());
+            assert!(check_delegation_route(&json!({}), Some(&local), &local).is_ok());
+        }
+        let connected = json!({"kind": "openai-compat", "baseUrl": "http://127.0.0.1:5000/v1", "computerId": "remote"});
+        assert!(check_delegation_route(&json!({"cloudOnly": true}), Some(&cloud), &connected).is_ok());
     }
 }

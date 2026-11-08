@@ -89,8 +89,10 @@ app.whenReady().then(async () => {
       check('Keyboard choice advances and keeps focus in the question card', await run(`document.activeElement === document.querySelector('${card}') && document.querySelector('${card}').textContent.includes('Which checks should I run?')`));
       await key('1'); await key('2'); await key('Enter');
       check('Keyboard answers preserve single and multiple selections', await run('inputFocusFixture.answers[0]'), [{ questionId: 'scope', labels: ['Whole app'], note: undefined }, { questionId: 'tests', labels: ['Unit tests', 'Interaction tests'], note: undefined }]);
-      await click('Back');
-      check('Back navigation returns to the first question', await run(`document.querySelector('${card}').textContent.includes('Which part should I update?')`));
+      // A resolved call cannot be submitted twice; mount a fresh request for
+      // the separate free-text/back-navigation checks.
+      await show('question', false, 'free-text-question');
+      check('Fresh question starts on its first page', await run(`document.querySelector('${card}').textContent.includes('Which part should I update?')`));
       await click('Something else');
       check('Explicit free-text action focuses its field', await run('document.activeElement.getAttribute("aria-label")'), 'Something else');
       await win.webContents.insertText('Only the composer'); await key('Enter');

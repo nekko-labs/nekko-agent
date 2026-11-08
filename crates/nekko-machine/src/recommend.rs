@@ -88,6 +88,9 @@ pub struct ImageTask {
     /// Room for sd.cpp's working buffers on top of every file resident (an
     /// editorial assumption until peak memory is measured per family).
     pub compute_allowance_bytes: f64,
+    /// Never picked from system RAM: on a CPU it would take hours (video).
+    #[serde(default)]
+    pub gpu_only: bool,
     pub candidates: Vec<String>,
 }
 
@@ -784,9 +787,9 @@ pub fn recommend(profile: &HardwareProfile, feed: &Feed, local: &LocalSpeeds) ->
         .iter()
         .map(|task| {
             let mut options = image_options(feed, task, main, cpu.budget);
-            let mut pick = image_pick(&options);
+            let mut pick = image_pick(&options).filter(|p| !(task.gpu_only && p.placement == Placement::Cpu));
             // A discrete GPU too small for every candidate, even offloading: what runs from system RAM instead.
-            if pick.is_none() && main.placement == Placement::Gpu {
+            if pick.is_none() && main.placement == Placement::Gpu && !task.gpu_only {
                 options = image_options(feed, task, &cpu, cpu.budget);
                 pick = image_pick(&options);
             }

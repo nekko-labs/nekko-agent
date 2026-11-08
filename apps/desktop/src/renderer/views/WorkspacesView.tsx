@@ -137,6 +137,7 @@ export function statusFromEvent(type: AgentEvent['type'], prev?: AgentStatus): A
     case 'tool_approval_required':
     case 'question': return 'input';
     case 'question_resolved':
+    case 'approval_resolved':
     case 'tool_result': return 'working';
     case 'error': return 'error';
     case 'done': return null;

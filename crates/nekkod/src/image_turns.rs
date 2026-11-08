@@ -30,6 +30,10 @@ fn random_seed() -> u64 {
     (u32::from_le_bytes(b) % 0x7fff_ffff) as u64
 }
 
+/// The reply when photos reach a model that can neither edit nor animate them.
+const CANNOT_EDIT: &str =
+    "This model can't change photos. Choose a model that edits photos, or send the prompt without a photo.";
+
 #[derive(Default)]
 pub struct ImageTurns {
     running: Mutex<HashMap<String, Cancel>>,
@@ -65,6 +69,9 @@ impl ImageTurns {
 
     /// `generateImageTurn(opts)`.
     pub async fn generate(&self, ctx: &Ctx, opts: &Value) -> Result<Value, String> {
+        if let Some(problem) = nekko_remote::phone_image::host_request_problem(opts) {
+            return Err(format!("Invalid image request: {problem}"));
+        }
         let session_id = opts.get("sessionId").and_then(Value::as_str).unwrap_or_default().to_string();
         let say = |event: Value| ctx.hub.publish("agent:event", event, false);
         let fail = |message: &str| say(json!({ "type": "error", "sessionId": session_id, "message": message }));
@@ -75,6 +82,14 @@ impl ImageTurns {
             fail("That chat no longer exists.");
             return Ok(Value::Null);
         };
+        if session.get("chatType").and_then(Value::as_str) != Some("image") {
+            return Err("Choose an image chat before generating an image.".into());
+        }
+        let model_id = opts["params"]["modelId"].as_str().unwrap_or_default();
+        let model = ctx.library.find(model_id).await?;
+        if !model.as_ref().is_some_and(nekko_remote::phone_image::eligible) {
+            return Err("Choose an installed local image-generation model.".into());
+        }
         // `assertHostExecution(sessionId, 'Image generation')`.
         if crate::worktrees::execution_mode(&session) == "sandbox" {
             return Err("Image generation is unsupported in sandbox sessions. Use scoped container file and bash tools. No host fallback.".into());
@@ -114,32 +129,64 @@ impl ImageTurns {
                 p.insert(k.into(), v.clone());
             }
         }
+        // A video model makes a clip at its own size (the chat's shape at about 832x480).
+        let model_id = started.request.get("modelId").map(nekko_js::display).unwrap_or_default();
+        let can = server.capabilities(&model_id).await;
+        let video = can.iter().any(|c| c == "video");
+        // Photos go only to a model that edits them or animates the first (decisions 0067
+        // and 0069): the desktop asks first, but a phone reaches this turn directly.
+        if started.request.get("refImages").is_some() && !can.iter().any(|c| c == "edit" || c == "video") {
+            let message = CANNOT_EDIT;
+            if let Some(Value::Array(list)) = session.get_mut("messages") {
+                list.push(v::image_failure(false, message, nekko_js::now_ms()));
+            }
+            if !incognito {
+                let (st, mut s) = (store.clone(), session);
+                if let Ok(Err(e)) = tokio::task::spawn_blocking(move || st.save_turn(&mut s, None)).await {
+                    eprintln!("nekkod: could not save an image turn: {e}");
+                }
+            }
+            fail(message);
+            return Ok(Value::Null);
+        }
+        if video {
+            let num = |k: &str| params.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+            let (w, h) = nekko_engine::launch::clip_size(num("width"), num("height"));
+            if let Some(p) = params.as_object_mut() {
+                p.insert("width".into(), json!(w));
+                p.insert("height".into(), json!(h));
+            }
+        }
         let size = v::image_size(&params);
+        let label =
+            |stage: &str| if video { v::clip_stage_label(stage, &size) } else { v::image_stage_label(stage, &size) };
         say(
-            json!({ "type": "image_status", "sessionId": session_id, "stage": "generating", "label": v::image_stage_label("generating", &size) }),
+            json!({ "type": "image_status", "sessionId": session_id, "stage": "generating", "label": label("generating") }),
         );
         let clock = std::time::Instant::now();
         let generated = {
             let mut on_stage = |stage: &str| {
-                say(
-                    json!({ "type": "image_status", "sessionId": session_id, "stage": stage, "label": v::image_stage_label(stage, &size) }),
-                );
+                let kind = if stage.starts_with("step:") { "generating" } else { stage };
+                say(json!({ "type": "image_status", "sessionId": session_id, "stage": kind, "label": label(stage) }));
             };
-            tokio::select! {
-                r = server.generate_image_with(&started.request, &mut on_stage) => Some(r),
-                _ = cancel.cancelled() => None,
+            if video {
+                tokio::select! {
+                    r = server.generate_video_with(&started.request, &mut on_stage) => Some(r),
+                    _ = cancel.cancelled() => None,
+                }
+            } else {
+                tokio::select! {
+                    r = server.generate_image_with(&started.request, &mut on_stage) => Some(r),
+                    _ = cancel.cancelled() => None,
+                }
             }
         };
         let stopped = generated.is_none() || cancel.is_cancelled();
         let (reply, ending) = match generated {
             Some(Ok(result)) if !stopped => {
-                let reply = v::image_reply(
-                    &result,
-                    &params,
-                    &started.seed,
-                    clock.elapsed().as_millis() as u64,
-                    nekko_js::now_ms(),
-                );
+                let make = if video { v::video_reply } else { v::image_reply };
+                let reply =
+                    make(&result, &params, &started.seed, clock.elapsed().as_millis() as u64, nekko_js::now_ms());
                 let id = reply["id"].clone();
                 (reply, json!({ "type": "done", "sessionId": session_id, "messageId": id }))
             }

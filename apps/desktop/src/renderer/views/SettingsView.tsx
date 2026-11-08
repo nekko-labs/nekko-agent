@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AboutYouSection } from './AboutYouSettings.js';
 import { allowModeChange } from '../components/YoloWarning.js';
 import { CHAT_MODE_ICON } from '../gentleface-icons.js';
 import { CHAT_MODE_LABEL, AUTO_COMPLETE_CHOICES, AUTO_COMPLETE_DEFAULT_DAYS, autoCompleteDays, DEFAULT_GUARDRAILS, keepSecrets, promptCachingEnabled, RUN_POLICY_OPTIONS, withoutSecrets } from '@nekko-agent/shared';
@@ -11,7 +12,7 @@ import { hasNotices, OpenSourceLicenses } from '../components/OpenSourceLicenses
 import { ThemePresetPicker } from '../components/ThemePresetPicker.js';
 import { pixelWaveFor } from '../components/PixelWaveBackground.js';
 import { DEFAULT_SPEC_METHODOLOGY, SPEC_METHODOLOGIES, ORCHESTRATION_STRATEGIES, DEFAULT_ORCHESTRATION, MAX_OUTPUT_TOKENS_DEFAULT, MAX_OUTPUT_TOKENS_RANGE, clampMaxOutputTokens, ONBOARDING_VERSION, updateChecks, DEFAULT_TURN_WRAPPER } from '@nekko-agent/shared';
-import { ChatIcon, ComputerIcon, GearIcon, GlobeIcon, HandIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
+import { ComputerIcon, GearIcon, GlobeIcon, PhoneIcon, ShieldIcon, SlidersIcon, SunIcon, TrashIcon, RobotIcon, WandIcon, WrenchIcon } from '../icons.js';
 import { VoiceSettings } from '../components/VoiceSettings.js';
 import { RemoteAccess } from '../components/RemoteAccess.js';
 import { ComputersSection } from '../components/ComputersSection.js';
@@ -59,9 +60,7 @@ export const SETTINGS_GROUPS = [
   { id: 'general', label: 'General', icon: SunIcon },
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'computers', label: 'Computers', icon: ComputerIcon },
-  { id: 'style', label: 'Style', icon: SlidersIcon },
-  { id: 'accessibility', label: 'Accessibility', icon: HandIcon },
-  { id: 'simple', label: 'Simple mode', icon: ChatIcon },
+  { id: 'customize', label: 'Customize', icon: SlidersIcon },
   { id: 'agents', label: 'Agents', icon: RobotIcon },
   { id: 'safety', label: 'Safety', icon: ShieldIcon },
   { id: 'connections', label: 'Connections', icon: GlobeIcon },
@@ -82,7 +81,7 @@ function SettingsGroup({ id, children }: { id: SettingsGroupId; children: React.
 
 /**
  * Developer settings in Simple mode: folded behind one row rather than gone,
- * so they stay one click away (Settings > Simple mode, Advanced settings).
+ * so they stay one click away (Settings > Customize > Simple mode, Advanced settings).
  */
 function AdvancedFold({ children }: { children: React.ReactNode }) {
   const shown = useShown('set-tools');
@@ -191,6 +190,7 @@ export function SettingsView() {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-2 px-3 py-2 text-sm text-ink-soft"><span>Search settings</span><SettingsSearch root={pageRef} /></div>
         <nav aria-label="Settings sections" className="settings-nav">
           {SETTINGS_GROUPS.filter((g) => g.id !== 'computers' || computersPage).map((g) => (
             <button
@@ -211,6 +211,22 @@ export function SettingsView() {
           <div className="min-w-0">
             <SettingsGroup id="general">
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
+              <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
+              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
+            </SettingsGroup>
+            <SettingsGroup id="phone">
+              {/* Remote access (relay) */}
+              <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
+              {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
+              <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
+            </SettingsGroup>
+            {computersPage && <SettingsGroup id="computers">
+              <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
+            </SettingsGroup>}
+            <SettingsGroup id="customize">
+              {/* Personal: how Nekko addresses you belongs with the rest of personalization (#2102). */}
+              <AboutYouSection settings={settings} update={update} />
               <section className="card mt-5 p-5">
                 <h2 className="font-semibold">View settings</h2>
                 <p className="mt-1 text-xs text-ink-faint">Optional sidebar shortcuts. Skills and Connectors are always available at the top of Settings.</p>
@@ -223,7 +239,7 @@ export function SettingsView() {
               </section>
               {/* Appearance */}
               <section className="card mt-6 p-5">
-                <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2><SettingsSearch root={pageRef} /></div>
+                <div className="flex items-center gap-2"><SunIcon className="h-4 w-4" /><h2 className="font-semibold">{tr('settings.appearance')}</h2></div>
                 <ErrorBoundary label="Appearance"><ThemePresetPicker settings={settings} update={update} /></ErrorBoundary>
 
                 <div className="mt-3 flex min-h-[40px] items-center justify-between gap-3">
@@ -308,7 +324,7 @@ export function SettingsView() {
                 <div className="mt-2 flex min-h-[40px] items-center justify-between gap-3 border-t border-line pt-3">
                   <div className="min-w-0">
                     <span className="text-sm">Setup wizard</span>
-                    <p className="text-2xs text-ink-faint">Reopen the first-run walkthrough (theme, providers, integrations).</p>
+                    <p className="text-2xs text-ink-faint">Reopen the first-run walkthrough (you, detail, look, providers, integrations).</p>
                   </div>
                   <button className="btn btn-outline shrink-0 py-1 text-xs" onClick={() => void replaySetup()}>
                     Replay setup
@@ -330,27 +346,16 @@ export function SettingsView() {
                 <p className="mt-1 text-xs text-ink-faint">Add newly created top-level agents to the wall automatically.</p>
               </section>
               <ErrorBoundary label="Customization"><CustomizationSection settings={settings} update={update} /></ErrorBoundary>
-              <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
-              <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
-              <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>
-            </SettingsGroup>
-            <SettingsGroup id="phone">
-              {/* Remote access (relay) */}
-              <ErrorBoundary label="Remote access"><RemoteAccess /></ErrorBoundary>
-              {/* Nekko Cloud sign-in and end-to-end encrypted sync */}
-              <ErrorBoundary label="Sync"><SyncSettings /></ErrorBoundary>
-            </SettingsGroup>
-            {computersPage && <SettingsGroup id="computers">
-              <ErrorBoundary label="Computers"><ComputersSection /></ErrorBoundary>
-            </SettingsGroup>}
-            <SettingsGroup id="style">
-              <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
-            </SettingsGroup>
-            <SettingsGroup id="accessibility">
-              <AccessibilitySection settings={settings} update={update} />
-            </SettingsGroup>
-            <SettingsGroup id="simple">
-              <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
+              {/* Keep existing subsection anchors while the rail groups them under Customize. */}
+              <div id="settings-style">
+                <ErrorBoundary label="Style"><StyleSection settings={settings} update={update} /></ErrorBoundary>
+              </div>
+              <div id="settings-accessibility">
+                <AccessibilitySection settings={settings} update={update} />
+              </div>
+              <div id="settings-simple">
+                <ErrorBoundary label="Simple mode"><SimpleModeSettings /></ErrorBoundary>
+              </div>
             </SettingsGroup>
             <SettingsGroup id="agents">
               {/* Chat modes */}

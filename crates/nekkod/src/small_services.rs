@@ -151,7 +151,9 @@ pub fn app_info(facts: &AppFacts) -> Value {
         facts.version.clone().or_else(|| std::env::var("NEKKO_VERSION").ok()).unwrap_or_else(|| "0.0.0".into());
     let edition = facts.edition.clone().unwrap_or_else(|| "web".into());
     let hostname = gethostname::gethostname().to_string_lossy().trim_end_matches(".local").to_string();
-    json!({ "version": version, "platform": crate::admission::platform(), "edition": edition, "hostname": hostname })
+    // Support, not readiness: an installed model and a working local runtime are still required.
+    json!({ "version": version, "platform": crate::admission::platform(), "edition": edition, "hostname": hostname,
+        "capabilities": { "imageGeneration": true } })
 }
 
 /// Names are display-only, never a computer's identity or a trust decision.
@@ -791,6 +793,7 @@ mod tests {
                 "platform": crate::admission::platform(),
                 "edition": "desktop",
                 "hostname": desktop["hostname"],
+                "capabilities": { "imageGeneration": true },
             })
         );
         assert_eq!(app_info(&AppFacts::default())["edition"], "web");

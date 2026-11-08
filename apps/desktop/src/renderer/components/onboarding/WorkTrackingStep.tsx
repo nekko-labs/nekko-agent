@@ -14,7 +14,7 @@ export function WorkTrackingStep({
   commitRef,
 }: {
   /** Set to the step's commit action; the wizard runs it on Next. */
-  commitRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  commitRef?: React.MutableRefObject<(() => Promise<void | boolean>) | null>;
 } = {}) {
   const settings = useStore((s) => s.settings);
   const [pm, setPm] = useState<NonNullable<AppSettings['projectManagement']>>(() => ({

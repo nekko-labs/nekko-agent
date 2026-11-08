@@ -40,15 +40,14 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by re
 
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
+| Remember expanded/collapsed chat groups across launches | `rememberSaveable` only; durable phone preference pending | [#2133](https://github.com/nekko-labs/nekko-agent/issues/2133) |
 | Computer controls: persistent connection opt-out, Models disclosure and filters, Cloud fleet group, and service management | Not implemented on Android | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
-| Immediate draft photo saves | Verify photo add/remove durability and composer containment | [#2043](https://github.com/nekko-labs/nekko-agent/issues/2043) |
 | Watching and Done groups, PR status on rows, collapsible groups | Only a Needs you group | [#2107](https://github.com/nekko-labs/nekko-agent/issues/2107) |
 | One chat list across every computer, group by computer | One computer's list at a time | [#2108](https://github.com/nekko-labs/nekko-agent/issues/2108) |
 | Connectors page | Missing | [#2109](https://github.com/nekko-labs/nekko-agent/issues/2109) |
 | Voice conversations and always-on dictation | One recording per tap | [#2110](https://github.com/nekko-labs/nekko-agent/issues/2110) |
 | Full-screen photos, previews before and after sending | No photo viewer | [#2111](https://github.com/nekko-labs/nekko-agent/issues/2111) |
 | Turn metrics and completion checkmark | Step count and duration only | [#2112](https://github.com/nekko-labs/nekko-agent/issues/2112) |
-| All, Cloud and Local tabs in the model picker | No tabs | [#2113](https://github.com/nekko-labs/nekko-agent/issues/2113) |
 | Usage by computer and by this phone | One computer's totals | [#2114](https://github.com/nekko-labs/nekko-agent/issues/2114) |
 | Plan sheet on the composer | Missing (the iPhone's `PlanSheet.swift`) | [#2115](https://github.com/nekko-labs/nekko-agent/issues/2115) |
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
@@ -61,6 +60,7 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by re
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
+| "Send your first prompt" intro | Not built; the iPhone's shows on the first new chat | [#2234](https://github.com/nekko-labs/nekko-agent/issues/2234) |
 
 Android features the iPhone lacks have not been audited yet.
 

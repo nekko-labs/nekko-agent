@@ -66,8 +66,8 @@ describe('offering a model that edits', () => {
   it('offers the Edit photos picks even to someone with picture models that cannot edit', () => {
     const options = [option({})];
     const own = [model('z_image_turbo-Q4_K')];
-    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null }).kind).toBe('hidden');
-    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null, force: true }).kind).toBe('choose');
+    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null, runtimeReady: true }).kind).toBe('hidden');
+    expect(photoSetupPhase({ jobs: [], models: own, options, companions: null, force: true, runtimeReady: true }).kind).toBe('choose');
     const recs = { hardware: { device: 'NVIDIA GeForce RTX 5090' } } as unknown as Recommendations;
     const html = renderToStaticMarkup(
       <PhotoSetupSteps recs={recs} cards={options} choice={options[0]} phase={{ kind: 'choose' }} engineReady canInstallEngine capability="edit"
@@ -94,5 +94,30 @@ describe('Edit on a generated picture', () => {
     expect(renderToStaticMarkup(<MessageBubble message={generated} chronological />)).not.toContain('data-edit-image');
     const sent = { id: 'u', role: 'user' as const, content: 'make it orange', createdAt: 1, images: ['data:image/png;base64,AAAA'] };
     expect(renderToStaticMarkup(<MessageBubble message={sent} chronological onEditImage={vi.fn()} />)).not.toContain('data-edit-image');
+  });
+});
+
+describe('a clip from a video model', () => {
+  const clip = {
+    id: 'c', role: 'assistant' as const, content: '', createdAt: 1, images: ['data:image/webp;base64,UklGR'],
+    generated: { modelId: 'image/QuantStack_Wan2.2-TI2V-5B-GGUF/Wan2.2-TI2V-5B-Q4_K_M', width: 832, height: 480, steps: 20, cfgScale: 6, seed: 5, ms: 61000, video: { frames: 33, fps: 16 } },
+  };
+  it('plays as an animated picture, says how long it is, and offers no Edit', () => {
+    const html = renderToStaticMarkup(<MessageBubble message={clip} chronological onEditImage={vi.fn()} />);
+    expect(html).toContain('Generated clip, 832×480');
+    expect(html).toContain('33 frames at 16 fps (2.1 s clip)');
+    expect(html).not.toContain('data-edit-image');
+  });
+});
+
+describe('a clip with incomplete details', () => {
+  it('says clip without inventing numbers', () => {
+    const odd = {
+      id: 'c2', role: 'assistant' as const, content: '', createdAt: 1, images: ['data:image/webp;base64,UklGR'],
+      generated: { modelId: 'wan', width: 832, height: 480, steps: 20, cfgScale: 6, seed: 5, ms: 1000, video: { frames: null, fps: null } as unknown as { frames: number; fps: number } },
+    };
+    const html = renderToStaticMarkup(<MessageBubble message={odd} chronological />);
+    expect(html).toContain('· clip');
+    expect(html).not.toMatch(/null|NaN/);
   });
 });

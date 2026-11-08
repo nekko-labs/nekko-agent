@@ -110,8 +110,8 @@ export interface ImageGenerationRequest {
 /** The companion files a diffusion model needs: text encoders, a VAE, an LLM encoder. */
 export type ImageCompanionRole = 'clip_l' | 'clip_g' | 't5xxl' | 'vae' | 'llm' | 'llm_vision' | 'taesd';
 
-/** What an image model family can do: make a picture from text, change a picture it is given, or both. */
-export type ImageCapability = 'create' | 'edit';
+/** What a diffusion model family can do: make a picture from text, change a picture it is given, or make a short video clip. */
+export type ImageCapability = 'create' | 'edit' | 'video';
 
 /** What an image model's companion set has on disk, and what fetching the rest costs. */
 export interface ImageCompanionStatus {
