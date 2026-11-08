@@ -4,7 +4,6 @@ import { DeveloperServerControls } from './DeveloperServerControls.js';
 import { BrandMark } from './BrandMark.js';
 import { useStore } from '../store.js';
 import { useT } from '../i18n.js';
-import { ModeSwitch } from './ModeViews.js';
 
 /**
  * The window's title bar, drawn by the app.
@@ -28,7 +27,7 @@ export function TitleBar() {
     <div className={`titlebar ${isMacChrome ? 'titlebar-mac' : ''}`}>
       <span className="titlebar-mark"><BrandMark size={28} title="Nekko Agent" /></span>
       <h1 className="titlebar-heading">{t(`nav.${view === 'modelserver' ? 'models' : view}`)}</h1>
-      <ModeSwitch />
+
       <UpdateControl />
       {/* Layout controls follow the heading and version in the same row. */}
       <div id="command-titlebar-slot" className="ml-4 flex min-w-0 flex-1 items-center gap-3" />

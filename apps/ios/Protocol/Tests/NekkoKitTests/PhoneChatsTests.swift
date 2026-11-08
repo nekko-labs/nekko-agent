@@ -53,6 +53,33 @@ final class PhoneChatsTests: XCTestCase {
         return PhoneChats(secrets: secrets, files: files, http: http, now: { t += 1; return t }, newId: { n += 1; return "m\(n)" })
     }
 
+    func testTonePersistsAndKeepsThePhoneSystemIdentity() async throws {
+        let s = make()
+        XCTAssertEqual(s.tone, .standard)
+        XCTAssertEqual(PhoneTone.standard.systemPrompt, PhoneProviders.system)
+        s.setTone(.concise)
+        XCTAssertEqual(make().tone, .concise)
+        let p = try s.add(kind: "anthropic", label: "Claude", baseUrl: nil, key: "test-key")
+        let id = s.create(providerId: p.id, modelId: "test-model", first: "Hello")
+        await s.settled(id)
+        let prompt = try XCTUnwrap(http.requests.last?.body?.str("system"))
+        XCTAssertTrue(prompt.hasPrefix(PhoneProviders.system))
+        XCTAssertTrue(prompt.contains(PhoneTone.concise.instructions))
+        XCTAssertEqual(s.chat(id)?.messages.first?.text, "Hello")
+        s.forgetAll()
+        XCTAssertEqual(s.tone, .standard)
+        XCTAssertEqual(make().tone, .standard)
+    }
+
+    func testToneUsesTheExistingProviderSystemFields() {
+        for tone in PhoneTone.allCases {
+            let p = PhoneProvider(id: "openai", kind: "openai", label: "OpenAI", baseUrl: "https://api.openai.com/v1")
+            let request = PhoneProviders.chatRequest(p, key: "test-key", model: "test-model", messages: [], system: tone.systemPrompt)
+            XCTAssertEqual(request.body?["messages"]?.array?.first?.str("role"), "system")
+            XCTAssertEqual(request.body?["messages"]?.array?.first?.str("content"), tone.systemPrompt)
+        }
+    }
+
     // MARK: Providers
 
     func testTheKeyGoesToTheKeychainNeverIntoTheSavedProviders() async throws {

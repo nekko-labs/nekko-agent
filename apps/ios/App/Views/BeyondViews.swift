@@ -299,7 +299,7 @@ private struct Subheading: View {
     }
 }
 
-private struct LimitBar: View {
+struct LimitBar: View {
     let window: ProviderLimits.Window
     @Environment(\.palette) private var palette
 

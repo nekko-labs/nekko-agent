@@ -1,3 +1,4 @@
+import AVKit
 import NekkoKit
 import NekkoProtocol
 import SwiftUI
@@ -10,8 +11,12 @@ struct FirstRunIntroView: View {
     var next: () -> Void
     @Environment(AppModel.self) private var app
     @Environment(\.palette) private var palette
+    @State private var customizing = false
 
     var body: some View {
+        if customizing {
+            FirstRunExperienceView(next: next)
+        } else {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 StepLabel(step: 1)
@@ -29,7 +34,7 @@ struct FirstRunIntroView: View {
             .padding(20)
         }
         .safeAreaInset(edge: .bottom) {
-            Button(action: next) {
+            Button { customizing = true } label: {
                 Text("Continue").frame(maxWidth: .infinity).padding(.vertical, 6).foregroundStyle(palette.onAccent)
             }
             .buttonStyle(.borderedProminent)
@@ -44,6 +49,7 @@ struct FirstRunIntroView: View {
             }
         }
         .background(palette.paper)
+        }
     }
 
     private func point(_ icon: String, _ title: String, _ text: String) -> some View {
@@ -59,7 +65,50 @@ struct FirstRunIntroView: View {
     }
 }
 
-/// "Step 2 of 3" over each first-run screen.
+/// Customize the presentation before pairing; the demo is a shared Remotion render.
+private struct FirstRunExperienceView: View {
+    var next: () -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("Customize your experience").font(.largeTitle.weight(.bold))
+                Text("A focused summary or the working details—you choose. Both modes have the same capabilities.")
+                    .foregroundStyle(palette.inkSoft)
+                if let player {
+                    VideoPlayer(player: player)
+                        .aspectRatio(640.0 / 380.0, contentMode: .fit)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .accessibilityLabel("Simple and Detailed output example")
+                        .accessibilityHint("An illustrative keyboard-button fix. Simple folds the three working steps. Detailed shows reading, editing code and a passing test. Both end with the same result.")
+                        .accessibilityIdentifier("experience.video")
+                }
+                ExperienceModePicker()
+                Text("You can change this any time in View options → Customize. Find visual preferences, monitors, connectors and skills there. This choice stays on this iPhone and does not change tool permissions.")
+                    .font(.subheadline).foregroundStyle(palette.inkSoft)
+            }
+            .padding(20)
+        }
+        .safeAreaInset(edge: .bottom) {
+            Button(action: next) { Text("Continue").frame(maxWidth: .infinity).padding(.vertical, 6) }
+                .buttonStyle(.borderedProminent).padding(20)
+                .accessibilityIdentifier("experience.continue")
+        }
+        .background(palette.paper)
+        .onAppear {
+            guard player == nil, let url = Bundle.main.url(forResource: "experience-intro", withExtension: "mp4") else { return }
+            let video = AVPlayer(url: url)
+            player = video
+            if !reduceMotion { video.play() }
+        }
+        .onDisappear { player?.pause() }
+    }
+}
+
+/// The pairing and notification milestones; customization is part of the introduction.
 struct StepLabel: View {
     let step: Int
     @Environment(\.palette) private var palette

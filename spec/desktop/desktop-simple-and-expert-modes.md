@@ -5,6 +5,8 @@ area: desktop
 
 # Desktop: Simple and Detailed modes (2026-10-25)
 
+**In progress (#2052):** [Customize experience](customize-experience.md) moves the labeled mode selector to the top of View options and introduces Experience / Connectors / Skills plus onboarding examples. The branch implementation is not yet released or visually verified; its limitation list supersedes no shipped capability claim below.
+
 **Design principle: contextual relevance (Philip, 2026-11-03).** Simple is "when you want a cleaner, more focused view, not just non-dev mode", primarily for non-developers and for developers too. "Having details only show when relevant is key here. Contextual relevance is important to me." So a control that means nothing right now is not on screen, in either mode where that makes sense, and capability never goes away, only what sits on screen. Every new control answers two questions before it lands: when does this mean something, and what does Simple do the rest of the time.
 
 **User intent:** Philip asked (2026-10-25) that the iPhone's new chat design ([iPhone: Simple and Detailed modes](../phone/iphone-simple-and-expert-modes.md)) also apply to the Electron desktop app, the most important surface for it, and that wide phones (open folding phones) get similar controls.
