@@ -17,6 +17,7 @@ mod artifacts;
 mod audit;
 mod auto_continue;
 mod automation;
+mod awake;
 mod background;
 
 mod boot;
@@ -188,7 +189,7 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
     let data_dir = std::path::PathBuf::from(&cfg.data_dir);
     let sessions = Arc::new(nekko_store::SessionStore::new(&cfg.data_dir));
     let mcp: Arc<mcp::Mcp> = Arc::default();
-    let changes = Arc::new(nekko_tools::ChangeTracker::new());
+    let changes = Arc::new(nekko_tools::ChangeTracker::persistent(sessions.clone()));
     {
         // The UI (and a paired phone, through the relay agent here) hears that a chat's changes moved.
         let hub = hub.clone();

@@ -124,8 +124,8 @@ describe('saved modes', () => {
   });
 
   it('summarizes and names modes', () => {
-    expect(STARTER_MODES.map((m) => savedModeSummary(m.options))).toEqual(['worktree · cloud models', 'worktree · local + cloud', 'worktree · local models · code mode', 'sandbox · ask · no network']);
-    expect(savedModeSummary({ ...starter('cloud').options, models: undefined, mode: 'yolo', offline: true, effort: 'high' })).toBe('worktree · yolo · offline · high');
+    expect(STARTER_MODES.map((m) => savedModeSummary(m.options))).toEqual(['worktree · cloud models', 'worktree · local + cloud', 'worktree · local models · code mode', 'sandbox · always ask · no network']);
+    expect(savedModeSummary({ ...starter('cloud').options, models: undefined, mode: 'yolo', offline: true, effort: 'high' })).toBe('worktree · no restrictions · offline · high');
     expect(newSavedModeId('Fusion', STARTER_MODES)).toBe('fusion-2');
     expect(newSavedModeId('  !!  ', [])).toBe('mode');
   });

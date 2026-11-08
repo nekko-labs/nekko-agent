@@ -1791,8 +1791,8 @@
         },
         {
           "result": {
-            "output": "Edited <ROOT>/ws/app/a.md",
-            "isError": false
+            "output": "new_string is required for a single replacement.",
+            "isError": true
           },
           "approvals": []
         },
@@ -1854,11 +1854,6 @@
         },
         {
           "changes": [
-            {
-              "path": "<ROOT>/ws/app/a.md",
-              "original": "a\n",
-              "current": "undefined\n"
-            },
             {
               "path": "<ROOT>/ws/app/binary.png",
               "original": "�PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR\u0000\u0000\u0000\u0000\u0000�\u0000�main\u0000\u0000",
@@ -1924,9 +1919,6 @@
       ],
       "tree": {
         "changed": {
-          "ws/app/a.md": {
-            "text": "undefined\n"
-          },
           "ws/app/binary.png": {
             "text": "�PNG\r\n\u001a\n\u0000\u0000\u0000\rIHDR\u0000\u0000\u0000\u0000\u0000�\u0000�MAIN\u0000\u0000"
           },

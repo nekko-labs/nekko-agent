@@ -72,7 +72,7 @@ enum SimpleMode {
                    hint: String(localized: "Switch between Claude, ChatGPT or a local model"), fallback: .show),
         SimpleItem(id: "effort", area: String(localized: "Chat · message box"), label: String(localized: "Effort"),
                    hint: String(localized: "How hard the model thinks before it answers. Inside the model menu in Simple"), fallback: .show),
-        SimpleItem(id: "asks", area: String(localized: "Chat · message box"), label: String(localized: "Asks first"),
+        SimpleItem(id: "asks", area: String(localized: "Chat · message box"), label: String(localized: "Always ask"),
                    hint: String(localized: "When the agent stops to ask you, in plain words"), fallback: .show),
         SimpleItem(id: "context", area: String(localized: "Chat · message box"), label: String(localized: "Context ring and token count"),
                    hint: String(localized: "How full this chat is, in tokens"), fallback: .show),
@@ -128,9 +128,9 @@ enum SimpleMode {
     /// The tool policy in plain words, as Simple shows it. Same values as the computer's own.
     static func asksName(_ mode: PcSettings.ChatMode) -> String {
         switch mode {
-        case .ask: return String(localized: "Asks first")
-        case .guardrails: return String(localized: "Asks when it matters")
-        case .yolo: return String(localized: "Works on its own")
+        case .ask: return String(localized: "Always ask")
+        case .guardrails: return String(localized: "Ask when it matters")
+        case .yolo: return String(localized: "No restrictions")
         }
     }
 
