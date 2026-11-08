@@ -12,6 +12,8 @@ Each list offers the default, **System** (your operating system's own font) and 
 
 You can also change text size in **Settings > Accessibility**. Press **−** or **+** and a preview shows the new size, then press **Apply** to use it across the app, or **Cancel** to keep the size you have. It is the same setting as the one in Style.
 
+From anywhere in the app, **Ctrl+Plus** and **Ctrl+Minus** (**Cmd** on macOS) make text one size bigger or smaller, and holding Ctrl (or Cmd) while you turn the scroll wheel does the same: up for bigger, down for smaller. **Ctrl+0** (**Cmd+0**) puts it back to 100%. These change the same setting straight away.
+
 ## Add your own fonts
 
 1. Open **Settings > Style** and press **Open fonts folder**. It is `fonts` inside your Nekko data folder (`~/.nekko-agent/fonts` unless you set `NEKKO_DATA_DIR`).

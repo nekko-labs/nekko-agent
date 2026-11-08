@@ -2499,7 +2499,8 @@
 .settings-group { scroll-margin-top: 16px; padding-top: 24px; }
 .settings-group:first-child { padding-top: 4px; }
 .settings-group + .settings-group { margin-top: 40px; border-top: 1px solid var(--line); }
-.settings-group-title { font-size: var(--text-xs); font-weight: 500; color: var(--ink-soft); }
+/* Matches the selected .settings-nav-item, so a section's heading reads like its rail entry. */
+.settings-group-title { font-size: var(--text-base); font-weight: 500; color: var(--ink); }
 .settings-search-pop { position: fixed; z-index: 60; transform: translateY(-4px); display: flex; align-items: center; gap: 8px; width: 320px; padding: 4px 8px 4px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-float); }
 .settings-search-input { flex: 1; min-width: 0; background: transparent; font-size: var(--text-sm); color: var(--ink); }
 .settings-search-input, .settings-search-input:focus, .settings-search-input:focus-visible { outline: none; box-shadow: none; }
@@ -3611,7 +3612,6 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 /* Prompt suggestions as one chip among the composer's actions. In a crowded
    bar it gives up its words before the model and Mode give up theirs, down to
    the grade badge. */
-.composer-suggestions-row { display: flex; justify-content: flex-end; padding: 4px 8px 8px; }
 .composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Rows stay flat at rest; pointer/focus feedback is a wash and soft light,

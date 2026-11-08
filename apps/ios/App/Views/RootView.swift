@@ -25,6 +25,7 @@ enum Route: Hashable {
     /// Settings → Live Activities: the card's level, with a preview.
     case liveActivities
     /// Settings → Simple mode: what Simple and Expert show, with a preview.
+    case customize
     case simpleMode
     /// Settings → Models on this iPhone: the providers chats here run on (decision 0050).
     case phoneModels
@@ -222,6 +223,7 @@ struct RouteView: View {
         case .monitors: MonitorsView(open: { id in path.append(.chat(id)) })
         case .security: SecuritySettingsView()
         case .liveActivities: LiveActivitySettingsView()
+        case .customize: CustomizeView()
         case .simpleMode: SimpleModeSettingsView()
         case .phoneModels: PhoneModelsView()
         case .connectors: ConnectorsView()
@@ -400,11 +402,11 @@ struct CatMark: View {
     }
 }
 
-/// The brand mark on its own: the head in the brand plum secondary, with no tile
+/// The brand mark on its own: the head in the brand sage secondary, with no tile
 /// behind it, as the desktop, Android and the opening animation show it. The
 /// tiled square is only the Home Screen icon.
 struct BrandMark: View {
-    static let ink = Color(red: 0x85 / 255, green: 0x4f / 255, blue: 0x6c / 255)
+    static let ink = Color(red: 0xA7 / 255, green: 0xC8 / 255, blue: 0xAC / 255)
 
     var body: some View {
         CatMark().foregroundStyle(Self.ink).accessibilityHidden(true)

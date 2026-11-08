@@ -39,7 +39,7 @@ struct MarkdownComposerField: View {
                 }
             }
             if focused {
-                MarkdownToolbar(editor: editor, text: text, shown: $toolbarShown, dismissKeyboard: { focused = false })
+                MarkdownToolbar(editor: editor, text: text, shown: $toolbarShown)
             }
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
@@ -103,7 +103,6 @@ struct MarkdownToolbar: View {
     let editor: MarkdownEditorState
     let text: String
     @Binding var shown: Bool
-    var dismissKeyboard: () -> Void
     @Environment(\.palette) private var palette
 
     private static let symbols: [MarkdownAction: String] = [
@@ -137,16 +136,7 @@ struct MarkdownToolbar: View {
                 }
             }
             Spacer(minLength: 0)
-            // Fixed outside the scroller and the Aa toggle: always reachable while editing.
-            Button(action: dismissKeyboard) {
-                Image(systemName: "keyboard.chevron.compact.down")
-                    .font(.system(size: 20))
-                    .foregroundStyle(palette.inkSoft)
-                    .frame(width: 44, height: 44).contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Hide keyboard")
-            .accessibilityIdentifier("composer.hideKeyboard")
+
         }
         .frame(minHeight: 44)
     }

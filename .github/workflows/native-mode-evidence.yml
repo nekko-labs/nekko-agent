@@ -154,6 +154,9 @@ jobs:
           p.write_text(s)
           PYFIX
           fi
+      - name: Test native protocol and phone request payloads
+        working-directory: apps/ios/Protocol
+        run: swift test
       - run: brew install xcodegen
       - name: Generate project and create simulator (optionally pinned for matched evidence)
         working-directory: apps/ios

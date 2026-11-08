@@ -58,6 +58,34 @@ final class ThemeLanguageTests: XCTestCase {
         attach(app, "mode-label-full-preview")
     }
 
+    /// The same harness runs on baseline and head. Customize is new, so has no before state.
+    func testCustomizeEvidence() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-appLock", "NO", "-onboarded", "YES", "-uiTestReset", "YES", "-splash", "NO",
+                               "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-theme", "dark", "-expertMode", "NO"]
+        app.launch()
+        pair(app, pairButton: "Pair with your computer", pair: "Pair", notNow: "Not now")
+        let view = app.buttons["chats.view"]
+        XCTAssertTrue(view.waitForExistence(timeout: 10))
+        view.tap()
+        attach(app, "customize-view-options")
+        let mode = app.segmentedControls["mode.switch"]
+        if mode.exists {
+            mode.buttons.element(boundBy: 1).tap()
+            XCTAssertTrue(mode.buttons.element(boundBy: 1).isSelected)
+            attach(app, "customize-view-options-detailed")
+            app.buttons["Customize…"].tap()
+            XCTAssertTrue(app.buttons["customize.Experience"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["settings.theme"].waitForExistence(timeout: 5), "Customize reuses the existing theme picker")
+            attach(app, "customize-experience")
+            app.buttons["customize.Connectors"].tap()
+            attach(app, "customize-connectors")
+            app.buttons["customize.Skills"].tap()
+            attach(app, "customize-skills")
+        }
+        app.terminate()
+    }
+
     /// Same real chat fixture on both app revisions, with no paired computer or network.
     func testLightPaletteEvidence() {
         for preset in ["x-plum-white", "x-indigo-white", "x-plum-dark", "x-indigo-dark"] {

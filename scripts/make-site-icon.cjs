@@ -6,7 +6,7 @@
  *
  * Writes apps/website/favicon.svg (the browser-tab icon: the app icon's tile,
  * drawn for small sizes) and apps/website/logo.svg (the nav/footer brand mark:
- * the gradient cat with no tile, so the page itself is its background).
+ * the sage cat with no tile, so the page itself is its background).
  */
 const { writeFileSync } = require('fs');
 const { join } = require('path');
@@ -19,3 +19,14 @@ const SITE = join(__dirname, '..', 'apps', 'website');
 writeFileSync(join(SITE, 'favicon.svg'), iconSvg(32).replace(/ width="\d+" height="\d+"/, ''));
 writeFileSync(join(SITE, 'logo.svg'), logoSvg());
 console.log('wrote apps/website/favicon.svg and apps/website/logo.svg');
+
+// Reuse the current first-party brand banner for social previews, rather than
+// retaining the pre-rename Agent Nekko card and secret-agent mascot.
+const { Jimp } = require('jimp');
+(async () => {
+  const banner = await Jimp.read(join(__dirname, '../docs/brand/nekko-banner-1280x640.png'));
+  const card = new Jimp({ width: 1200, height: 630, color: 0x101714ff });
+  card.composite(banner.resize({ w: 1200 }), 0, 15);
+  await card.write(join(SITE, 'og.png'));
+  console.log('wrote apps/website/og.png from the current brand banner');
+})().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -13,7 +13,7 @@ For PR #2047, the user explicitly chose this dashboard over main's tappable
 Live Activity chat chips (#1912). Main's chip helpers/protocol tests and single-card
 lifecycle safeguards remain compatible, but the rendered card and its Settings
 preview stay counts-first with Talk to Nekko and Open app. See
-[decision 0069](../../docs/decisions/0069-live-activity-dashboard-replaces-chat-chips.md).
+[decision 0070](../../docs/decisions/0070-live-activity-dashboard-replaces-chat-chips.md).
 Extra visual/device verification is skipped for this repair at the user's request;
 that is not a waiver of required CI or evidence checks, nor a claim that the
 hardware and accessibility limitations below have been verified.

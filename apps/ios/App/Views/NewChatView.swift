@@ -114,7 +114,7 @@ struct NewChatView: View {
         .background { NewChatBackdrop() }
         .navigationTitle("New chat")
         .navigationBarTitleDisplayMode(.inline)
-        .keyboardDoneButton()
+        .floatingKeyboardDismiss()
         .sheet(isPresented: $firstPromptIntro, onDismiss: { app.prefs.firstPromptIntroSeen = true }) { FirstPromptIntroView() }
         .task(id: "\(onPhone) \(store.summariesLoaded)") { checkFirstPromptIntro() }
         .sheet(isPresented: $pickingPhoneModel) {
@@ -799,6 +799,8 @@ struct ModelPicker: View {
     @Environment(\.palette) private var palette
     @State private var query = ""
     @State private var scope = ModelScope.all
+    @State private var limits: [String: ProviderLimits] = [:]
+    @State private var limitsLoading = false
 
     var body: some View {
         NavigationStack {
@@ -821,6 +823,14 @@ struct ModelPicker: View {
                 }
                 ForEach(groups) { g in
                     Section(g.provider.label) {
+                        if let plan = limits[g.provider.id] {
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let type = plan.planType { Text(type.capitalized).font(.caption).foregroundStyle(palette.inkSoft) }
+                                ForEach(plan.windows) { window in LimitBar(window: window) }
+                                if plan.windows.isEmpty { Text("No limits reported.").font(.caption).foregroundStyle(palette.inkSoft) }
+                            }
+                            .accessibilityIdentifier("modelPicker.limits.\(g.provider.id)")
+                        }
                         if let e = g.error {
                             Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning)
                         } else if let models = g.models {
@@ -835,12 +845,36 @@ struct ModelPicker: View {
             }
             .safeAreaInset(edge: .top, spacing: 0) { ModelScopeTabs(scope: $scope) }
             .searchable(text: $query)
-            .pawRefreshable { await store.loadAllModels(force: true) }
+            .pawRefreshable { await store.loadAllModels(force: true); await loadLimits() }
             .navigationTitle("Model")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
-            .task { await store.loadAllModels() }
+            .task(id: store.activeId) {
+                limits = [:]
+                await store.loadAllModels()
+                while !Task.isCancelled {
+                    await loadLimits()
+                    do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                }
+            }
         }
+    }
+
+    @MainActor private func loadLimits() async {
+        guard !limitsLoading else { return }
+        limitsLoading = true
+        defer { limitsLoading = false }
+        let computer = store.activeId
+        guard let remote = try? store.remote() else { limits = [:]; return }
+        var found: [String: ProviderLimits] = [:]
+        await withTaskGroup(of: (String, ProviderLimits?).self) { group in
+            for provider in store.providers where provider.enabled {
+                group.addTask { (provider.id, ProviderLimits.from(try? await remote.call(Channels.limitsGet, [.string(provider.id)]))) }
+            }
+            for await (id, value) in group { if let value { found[id] = value } }
+        }
+        guard !Task.isCancelled, store.activeId == computer else { return }
+        limits = found
     }
 
     private var favorites: [String] { scope.favorites(store.defaults.favoriteModels, providers: store.providers) }

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-08
 ---
 
-# 0069. The Live Activity dashboard replaces chat chips
+# 0070. The Live Activity dashboard replaces chat chips
 
 ## Context
 
