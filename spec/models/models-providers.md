@@ -6,6 +6,14 @@ split-from: SPEC.md (2026-10-22)
 
 # Models & providers
 
+## Cloud providers as families with their accounts (2026-11-09)
+
+`[implemented; renderer tests + hidden-window fixture]` The cloud half of the Models page lists **families** instead of a grid of provider cards, following the [quiet surfaces design system](../../docs/design-system.md): no cards, families separated by space and one hairline.
+- Each family (Claude, OpenAI, OpenRouter, Gemini, Ollama Cloud; a custom endpoint is its own) has a heading with its mark, "N accounts" and the login email once when its accounts share it, and **+ Add account**, which opens the setup that adds another account there (Claude opens the Claude setup, where a second subscription profile or an API key is added).
+- **Accounts**: one row per account, named as in the model picker (**Personal · Max**, **Acme Inc · Team**, **Production · API**), with a status dot and word (Connected, Checking…, Offline, Signed out, Off), the busiest usage window ("5 hours 62%", in the warning or danger colour near a limit) and its on/off switch. Clicking a row opens that account's own controls under it: its source line (Claude Code version, profile, plan), sign-in state, Sign in again / Sign out, Reconnect, Test connection, usage, and **Remove account**.
+- **Models**: every model the family's accounts offer, once, each naming the accounts that have it ("Personal · Acme Inc") and its price. One star pins the model on every account that offers it; right-click sets it as the default on a chosen account.
+- Local model servers keep their cards for now.
+
 ## Compact provider settings (#2094, 2026-11-07)
 
 Implemented in the desktop/shared web renderer:
