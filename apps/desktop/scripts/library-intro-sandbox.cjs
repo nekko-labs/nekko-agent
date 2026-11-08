@@ -58,11 +58,11 @@ app.whenReady().then(async () => {
     await run(`(() => { const f = layoutFixture, s = f.records[0]; s.messages = [{id:'request', role:'user', content:'Create a report', createdAt:Date.now()-1000}, {id:'doc', role:'assistant', content:'[Quarterly report](/reports/quarterly.md)', createdAt:Date.now()}]; f.putCachedSession(s); f.bridge.listComments = async () => []; f.bridge.readFile = async () => ({content:'# Quarterly report\\n\\nSynthetic report for Library verification.', truncated:false, binary:false}); f.bridge.openPath = async p => { f.lastOpenPath = p; }; f.store.getState().refreshSessions(); })()`);
     await sleep(300);
     if (!baseline) {
-      await check(`!!document.querySelector('[data-artifact-kind] button')`, 'file-index-populated');
+      await check(`!!document.querySelector('[data-artifact-row]')`, 'file-index-populated');
       await run(`(() => { const input = document.querySelector('[aria-label="Filter Library"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'no-match'); input.dispatchEvent(new Event('input', {bubbles:true})); })()`); await sleep(100);
       await check(`!document.querySelector('[data-artifact-kind]') && document.body.innerText.includes('Nothing matches.')`, 'filter-hides-nonmatches');
       await run(`(() => { const input = document.querySelector('[aria-label="Filter Library"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ''); input.dispatchEvent(new Event('input', {bubbles:true})); })()`); await sleep(100);
-      await check(`!!document.querySelector('[data-artifact-kind] button')`, 'clear-filter-restores-file');
+      await check(`!!document.querySelector('[data-artifact-row]')`, 'clear-filter-restores-file');
     }
     for (const theme of ['dark', 'light']) {
       await run(`layoutFixture.store.setState({settings:{...layoutFixture.store.getState().settings,theme:'${theme}'}}); layoutFixture.store.getState().applyTheme()`);
@@ -71,14 +71,14 @@ app.whenReady().then(async () => {
       }
     }
     if (!baseline) {
-      await run(`document.querySelector('[data-artifact-kind] button').click()`); await sleep(350);
+      await run(`document.querySelector('[data-artifact-row]').click()`); await sleep(350);
       await check(`document.body.innerText.includes('Quarterly report') && [...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Back to Library')`, 'narrow-preview-back-control');
       await shot('narrow-preview');
       await click('Open file');
       await check(`layoutFixture.lastOpenPath === '/reports/quarterly.md'`, 'open-file-exact-path');
       await click('Back to Library'); await sleep(100);
       await check(`!!document.querySelector('[data-artifact-kind]') && ![...document.querySelectorAll('button')].some(b => b.textContent.trim() === 'Open file')`, 'back-restores-list');
-      await run(`document.querySelector('[data-artifact-kind] button').click()`); await sleep(100);
+      await run(`document.querySelector('[data-artifact-row]').click()`); await sleep(100);
       await click('Open chat'); await sleep(200);
       await check(`layoutFixture.store.getState().view === 'command' && layoutFixture.store.getState().activeSessionId === 'a'`, 'source-chat-opens');
     }
