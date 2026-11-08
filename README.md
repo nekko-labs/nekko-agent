@@ -1,122 +1,96 @@
-<div align="center">
-
 # Nekko Agent
 
-**Local code edits. 5× faster than Ollama.**
+**The personal, local agent you can trust.**
 
-Run local models and get real work done in one app. Bring in ChatGPT or Claude
-when you want them, with visible context and changes you can review.
+An open-source AI agent and model server for coding and everyday work. Run models
+on your own computer, bring in supported online providers when you want them, and
+choose the folders, context and tools each task can use. Chat, cowork and code in
+one app, or use the same engine from the Local Web UI, CLI or MCP.
 
-**2.5 seconds vs 13.9 seconds** in our whole-file rename benchmark.
-M5 Max · Qwen3-8B · Ollama 0.40.11 · October 2026.
-One task, not every coding workflow. [Results, limitations and raw runs](docs/benchmarks.md).
+[Download Nekko Agent](https://github.com/nekko-labs/nekko-agent/releases/latest) ·
+[Website](https://nekkoagent.com) ·
+[Documentation](https://nekkoagent.com/docs) ·
+[Features and limitations](https://nekkoagent.com/docs/features)
 
-<a href="docs/benchmarks.md"><img src="docs/media/nekko-vs-ollama.gif" width="960" alt="Replay of published median reply times: Nekko Agent 2.5 s vs Ollama 13.9 s on a whole-file rename, M5 Max, Qwen3-8B"></a>
+Free and open source · MIT licensed · No account needed for local AI · Local work can run offline after setup
 
-[Download Nekko Agent](https://nekkoagent.com/#download) · [See the benchmark](docs/benchmarks.md)
+## What you can do
 
-Free and open source · MIT licensed · A fast local model server and AI agent in one app
+- **Run local models in one place.** Search and download models from Hugging Face,
+  check GPU fit estimates, and load, unload or keep models ready with the built-in
+  Local Model Server. Connect existing Ollama, LM Studio or vLLM servers too.
+- **Choose local or online AI per chat.** Use ChatGPT subscription sign-in,
+  Anthropic/OpenAI API keys, OpenRouter or compatible endpoints. Claude
+  subscriptions run through your installed Claude Code, not a Claude sign-in
+  inside Nekko. Features and terms differ by provider; see
+  [accounts](docs/accounts.md) and [subscription sign-in](docs/SUBSCRIPTIONS.md).
+- **Work with files and review the result.** Read, search and edit across the
+  project folders you select. Inspect changes line by line and keep or undo
+  native text-tool edits. [File recovery](docs/file-recovery.md) explains
+  saved originals, batch edits and what shell or external-editor changes do not cover.
+- **See what goes into a request.** The Context Inspector shows files,
+  instructions, saved notes and token counts. Use project guidelines and memory
+  without including every file in every prompt.
+- **Automate repeat work.** Run scheduled tasks manually first, then add a
+  schedule or supported event trigger. Review run history and output. The host
+  and app must stay running; online services need connectivity, and unattended
+  work needs an explicit permission policy. See [automations](docs/automations.md).
+- **Delegate and follow progress.** Split independent jobs into sub-agents and
+  follow plans, tool activity, verification evidence and PR progress. Reuse skills
+  or connect services such as GitHub, Linear, Slack, Discord, Gmail and Drive.
+- **Create more than code.** Produce reports, Mermaid diagrams and editable HTML
+  prototypes, then find output files again in Library. See the
+  [walkthrough](docs/WALKTHROUGH.md) for the workbench and artifact tools.
+- **Dictate and monitor.** Use local speech transcription, track online-model
+  costs and estimated local savings, and inspect hardware and loaded-model usage.
+- **Connect other tools.** Use the CLI and MCP server from Claude Code, Codex,
+  Cursor or another compatible client. See [CLI and MCP](docs/CLI.md).
+- **Continue from your phone (beta).** Pair the native iOS or Android app to
+  follow chats, answer questions and approve commands on your computer. Small
+  on-phone models support local chat too. Check the
+  [remote-access guide](docs/REMOTE.md) for connection options and availability.
 
-</div>
+Nekko, the app's cat mascot, keeps you company while your agents work.
 
----
+## Privacy and control, with clear boundaries
 
-## Overview
+You choose the project folders and command-approval policy. Risky commands can
+require approval; the Changes panel lets you inspect native text-tool edits.
+**A workspace file jail does not confine shell processes.** Docker provides an
+additional isolation option. Context toggles are not operating-system access controls.
 
-Nekko Agent is a seriously fast local model server and an AI agent, together
-in one app. Run models on your own computer, bring in ChatGPT or Claude when you
-want them, and decide exactly what Nekko gets to touch. A **model** is the AI
-that does the thinking; **local** means it runs on your computer instead of
-someone else's.
+[Privacy Shield](docs/privacy-shield.md) can replace supported sensitive values
+with placeholders before sending text to cloud models. It uses local pattern
+matching, not guaranteed anonymization: images are not redacted, ordinary names
+need custom terms, and Claude Code chats bypass the shield. Incognito avoids
+saving the chat transcript; it does not make an online provider local.
 
-1. **Less waiting for local code edits.** In our M5 Max/Qwen3-8B benchmark,
-   Nekko returned a 156-line file with a function renamed in **2.5 seconds**,
-   versus **13.9 seconds in Ollama**. Nekko enables llama.cpp’s n-gram
-   speculative decoding by default. The gains depend on the workload;
-   [see the method, raw runs and where it is not ahead](docs/benchmarks.md).
-2. **Run models and build with them in one place.** Search and download models
-   from Hugging Face, see which fit your graphics card, and load them, all inside
-   Nekko. Already using Ollama, LM Studio or vLLM? Nekko finds them and puts them
-   to work too.
-3. **Your favourite models, side by side.** Sign in with your ChatGPT plan, add
-   Claude with an API key, or reach hundreds of models (Gemini included) through
-   OpenRouter. Mix them with local models per chat or workflow, and hand smaller
-   jobs to the cheaper one.
-4. **See what you spend, and what you save.** Track what online models cost and
-   what local models saved you against cloud prices. Live monitors show your CPU,
-   memory, GPU and loaded models while your agents run.
-5. **Agents that clock in on their own.** Run an agent on a schedule (check a
-   price every morning) or wake it on a trigger (review every new GitHub pull
-   request), with a visible history of every run.
-6. **Talk instead of type.** Local dictation with Whisper turns your voice into
-   text on your own computer, from the desktop or the phone app.
-7. **Skip the window, keep the power.** Use the CLI and MCP server from your
-   terminal or another agent. Claude Code, Codex and Cursor can hand work to your
-   local models through Nekko.
-8. **Your agents, in your pocket (beta).** Native iOS and Android apps let you
-   start chats, approve risky commands and follow long runs, end-to-end
-   encrypted, with everything still running on your computer.
+With downloaded local models and local tools, work can continue offline.
+Online models, web tools, downloads, connectors and remote access need a network.
+Terminal commands can make their own network requests; Offline mode is not an
+OS firewall. See [context, memory and safety](docs/context-memory-safety.md).
 
-**Share only what you choose.** Letting an AI read a prompt is one thing;
-handing it your files, terminal, microphone and network is another. File tools
-stay inside the folders you pick, terminal commands follow the approval rules
-you set, the microphone is only used when you start dictating, and connectors
-are opt-in. The Context Inspector shows what each request sends, and every file
-change can be reviewed line by line. Local-only work keeps going offline once
-your models are downloaded.
-
-**Nekko**, our pixel-art cat, sits in the corner of the app, blinks, hops and
-naps while your agents work, and wakes up when you come back.
-
-Built by [Nekko Labs](https://nekkolabs.com), MIT-licensed, and developed in the
-open. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
-
-### Coming soon
-
-- **Model routers.** Let a router pick the model for each request: our upcoming
-  open-source Nekko Router, another open-source router, or a paid one with your
-  own key.
-- **Sharing with friends and teammates.** Share agents, workflows and progress
-  with the people you build with.
-- **Hands-free computer control by voice** (planned): local intent and speech
-  models, scoped app access, confirmations and a stop control. See the
-  [planned experience](spec/automation/one-click-setup-for-safe-offline-pc-control.md).
-- **Local task runner** (exploring): an alternative to hosted CI for repeat jobs
-  such as tests. This is not a claim of GitHub Actions workflow compatibility.
-
-> **Verified working** end-to-end against a live LM Studio server (`google/gemma-4-31b-qat`):
-> connect, model listing, streaming, **reasoning models**, and the full tool-calling
-> agent loop (single- and multi-step). Run `node scripts/itest-local.mjs <baseUrl> <model>`
-> to check your own server.
-
-![Nekko Agent, unified chat with the Context Inspector](docs/screenshots/chat.png)
-
-<a href="https://nekkoagent.com/#experience"><img src="docs/media/side-by-side.png" width="960" alt="Two chats side by side: a local Qwen3.5-4B model writing taglines while Claude Opus adds a section to a web page. Opens the demo video."></a>
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/models.png" alt="Models, local + cloud providers with usage analytics" /></td>
-    <td width="50%"><img src="docs/screenshots/guardrails.png" alt="Settings, sandbox modes and guardrail rules" /></td>
-  </tr>
-</table>
-
-> A full picture-by-picture tour is in the **[walkthrough guide](docs/WALKTHROUGH.md)**. Find a capability and its limits in **[Features by task](https://nekkoagent.com/docs/features)**, including [file recovery and batch edits](https://nekkoagent.com/docs/file-recovery), [context, memory and safety](https://nekkoagent.com/docs/context-memory-safety), and [docs for AI agents](https://nekkoagent.com/docs/for-agents).
+Paired-device chat and command traffic is end-to-end encrypted through the relay.
+Optional short Lock Screen status notifications pass through Apple/Google push
+services as plain text. Managed relay availability is separate from phone-app
+availability; use the current [connection guidance](docs/REMOTE.md), rather than
+assuming a hosted relay is running.
 
 ## Benchmarks
 
 ### Apple Silicon: local code edits (October 2026)
 
-On an M5 Max with Qwen3-8B, Nekko returned a 156-line file with a function
-renamed in **2.5 seconds**, versus **13.9 seconds in Ollama 0.40.11**. This is
-one task, not every coding workflow; the [full results, limitations and raw
-runs](docs/benchmarks.md) show where Nekko is and is not ahead.
+On an M5 Max with Qwen3-8B Q4_K_M, Nekko returned a 156-line file with a function
+renamed in **2.5 seconds**, versus **13.9 seconds in Ollama 0.40.11**, using the
+same GGUF weights. These published medians measure inference replies for one
+whole-file rename, **not a complete agent workflow or every coding task**.
+
+Nekko enables llama.cpp's n-gram speculative decoding by default, which helps
+when output repeats much of the input. Results vary by workload and hardware;
+MLX is faster at plain decode, and speculation adds first-token overhead.
+[Method, limitations and raw runs](docs/benchmarks.md).
 
 ### Earlier results: NVIDIA RTX 5090 (September 2026)
-
-These earlier results, measured against the Ollama and LM Studio versions
-current at the time, compare decode, code edits and parallel requests on the same
-model file and machine. These are throughput measurements, separate from the M5 Max
-reply timings above.
 
 | Measure | Nekko Agent engine | Ollama 0.23.0 | LM Studio 2.46.0 |
 | --- | --- | --- | --- |
@@ -126,184 +100,68 @@ reply timings above.
 | Return to a paused chat, first token ↓ | **790 ms** | 1,290 ms | 1,600 ms |
 
 Gemma 4 12B Q4_K_M · NVIDIA RTX 5090 · Windows 11 · median of 3 runs ·
-30 September 2026. Higher tokens/s and lower first-token time are better.
+30 September 2026. Throughput results are separate from the M5 Max reply timings.
 Not ahead everywhere: Ollama starts a fresh long chat faster (1.3 s versus 1.7 s).
-[Full comparison, methodology and limitations](docs/benchmarks.md#nvidia-rtx-5090-windows-2026-09-30).
+[Full comparison and limitations](docs/benchmarks.md#nvidia-rtx-5090-windows-2026-09-30).
 
 ## How to run Nekko Agent
 
-**1. Download the installer.** Grab it for your OS from the
-[latest GitHub release](https://github.com/nekko-labs/nekko-agent/releases/latest)
-or [nekkoagent.com](https://nekkoagent.com): Windows NSIS `.exe`, macOS `.dmg`,
-or Linux `.AppImage`/`.deb`.
+### The installer
 
-**2. Run it locally from source.** Easiest and fastest, and the way to see your
-changes while working on it:
+Download for Windows, Apple-silicon macOS or Linux from the
+[latest GitHub release](https://github.com/nekko-labs/nekko-agent/releases/latest).
+Check that release's notes and assets for the available builds. Source features
+can arrive before an installer includes them.
+
+macOS builds are signed and notarized when release signing is configured;
+unsigned fallback builds are possible. Windows builds are currently unsigned,
+with SignPath signing in progress according to the website. See
+[signing and verification](docs/signing.md) before trusting a downloaded build.
+
+### From source
+
+Use **Node.js 22.12.0 or newer** and the build prerequisites in
+[CONTRIBUTING.md](CONTRIBUTING.md). Building the engine requires Rust/Cargo.
+From a source checkout:
 
 ```bash
 npm install
-npm run local        # builds everything, then launches the desktop app
-npm run dev          # npm install (never rewrites the lockfile), incremental build (including nekkod), then launches with hot reload
+npm run local        # build the desktop app and release daemon, then launch
+# Or, for development:
+npm run dev          # incremental dev daemon and desktop hot reload
 ```
-
-**3. Run it in Docker.** Safest option: the app, its file tools, and your
-workspaces stay inside the container.
-
-```bash
-docker compose up    # build + run, then open http://localhost:1440
-```
-
-**4. Run the Local Web UI.** The backup approach when you don't plan to use the
-desktop app: the same engine and same UI in your browser, fully offline.
-
-```bash
-npm run web          # builds everything, serves http://localhost:1440
-```
-
-Details for each are below: [signing and the installer](#the-installer),
-[Docker](#run-with-docker), and the [Local Web UI](#run-the-web-edition).
-
-### The installer
-
-Release macOS builds are signed with a Nekko Labs Developer ID certificate and
-notarized by Apple when the macOS signing secrets are configured, so the `.dmg`
-opens and installs normally with no Gatekeeper workaround. If those secrets are
-absent, the workflow publishes an unsigned fallback build; clear its quarantine
-flag once with `xattr -cr "/Applications/Nekko Agent.app"`. Verify a signed build
-yourself if you like:
-
-```bash
-spctl --assess --type execute --verbose=4 "/Applications/Nekko Agent.app"
-```
-
-That should report `accepted` with `source=Notarized Developer ID`. How this is set up: [docs/signing.md](docs/signing.md).
-
-Windows installers are signed when the release signing secrets are configured.
-Unsigned fallback builds show an "unknown publisher" SmartScreen prompt: choose
-**More info → Run anyway**. The NSIS installer receives desktop updates; Linux
-AppImage/deb and macOS DMG releases include their updater metadata. A release
-installed from a manually downloaded artifact may still require the matching
-installer format for updates.
-
-#### macOS says the app is damaged and can't be opened
-
-**Releases before v0.6.0** are unsigned. macOS quarantines them and may say the app is *damaged* or move it to the Trash. The app is fine; clear the quarantine flag once with `xattr -cr "/Applications/<app name>.app"`, or take a current signed build. From v0.6.0 on, macOS builds are signed with a Developer ID and notarized.
-
-### Uninstalling
-
-- **Windows**: *Settings → Apps → Installed apps → Nekko Agent → Uninstall*, or the **Uninstall Nekko Agent** shortcut in the Start Menu folder. The uninstaller asks whether to also delete your chats and settings (choose **No** to keep them for a reinstall).
-- **macOS**: drag **Nekko Agent** from Applications to the Trash. To also remove data: `rm -rf "$HOME/Library/Application Support/Nekko Agent"`.
-- **Linux**: remove the AppImage, or `sudo apt remove nekkoagent` for the `.deb`.
-
-## Why Nekko Agent
-
-**Use the hardware you already have, with frontier help when it matters.**
-Nekko Agent reads, edits, searches, and runs inside your codebases, combining
-local models, a multi-folder index, per-project memory, and guardrails with
-frontier providers in one agent environment.
-
-**Keep your preferred way of working.** Use the workbench to browse files,
-review diffs, and inspect context, or connect its local agent capabilities to
-your existing harness over CLI/MCP. Choosing a local model should not mean
-giving up the tools that make an agent useful.
-
-## Editions
-
-Same engine, same UI, multiple runtimes (see the design in the project spec):
-
-| Edition | How | Status |
-| --- | --- | --- |
-| **Desktop** | Electron app / `npm run dev` | ✅ available |
-| **Self-hosted web** | `npm run web`, offline, the same UI in your browser | ✅ available |
-| **Docker** | `docker compose up`, workspaces as volumes, local models via `host.docker.internal` | ✅ available |
-| **Phone remote control** | pair your phone (QR, one-time code) and run chats/training/goals on your home machine from anywhere, end-to-end encrypted; the iOS/Android app also runs small models on the phone itself; managed relay free in beta, or [self-host it](docs/REMOTE.md) with one Docker command | ✅ available |
-| **Nekko Cloud** (paid) | managed hosting: subscriptions, always-available **Zero-Data-Retention** mode, cloud chat-history + file management | 🔜 planned |
-
-The desktop, web, and Docker editions all run the **same engine + same React UI**, only the transport differs (Electron IPC vs HTTP/WebSocket): the engine is `nekkod`, a Rust daemon each edition starts.
 
 ### Run the Local Web UI
 
 ```bash
 npm install
-npm run web        # builds everything, then serves at http://localhost:1440
+npm run build:nekkod # build and stage the engine for a fresh source checkout
+npm run web          # build the UI and CLI, then serve http://localhost:1440
 ```
 
-Same app, in your browser, fully offline. It binds to `localhost` by default. A
-non-loopback bind refuses to start unless `NEKKO_TOKEN` is set; use
-`Authorization: Bearer <token>` for API requests and append `?token=…` only for
-browser WebSocket access. If a trusted reverse proxy provides authentication,
-the explicit escape hatch is `NEKKO_ALLOW_UNAUTHENTICATED=1`. Host and Origin
-checks can be extended for a proxy with comma-separated
-`NEKKO_ALLOWED_HOSTS` and `NEKKO_ALLOWED_ORIGINS`. Data lives in
-`~/.nekko` (override with `NEKKO_DATA_DIR`).
-
-![Nekko Agent Local Web UI](docs/screenshots/web-edition.png)
+The Local Web UI uses the same engine and React UI as the desktop app. A fresh
+source setup also needs a built daemon; see [CONTRIBUTING.md](CONTRIBUTING.md).
+It binds to localhost by default. Non-loopback access requires authentication
+unless explicitly disabled; see the [architecture guide](docs/hub/architecture.md)
+for deployment details. Local tasks can work offline after setup, not online providers or connectors.
 
 ### Run with Docker
 
 ```bash
-docker compose up        # build + run, then open http://localhost:1440
+docker compose up    # build + run, then open http://localhost:1440
 ```
 
-Mount your codebases into `./workspace` (the sandbox confines file tools there),
-and reach a model server on your host at `http://host.docker.internal:<port>`.
-Settings/sessions persist in the `nekko-agent-data` volume.
-Compose generates and prints a random token; read it with `docker compose logs`
-(or set your own `NEKKO_TOKEN`) before exposing the service beyond localhost.
+The app and its file tools run in the container. Mount projects into
+`./workspace` and connect a host model server at
+`http://host.docker.internal:<port>`. Settings and sessions persist in the
+`nekko-agent-data` volume. Compose generates a token; read it with
+`docker compose logs` or configure `NEKKO_TOKEN`. Review
+[docker-compose.yml](docker-compose.yml) before exposing the service.
 
-Cloud keeps inference and tools **on your machine**, the relay is an
-end-to-end-encrypted pipe to a paired local agent, so using your own model stays
-private by design.
+## CLI and MCP
 
-## Features
-
-- **Unified chat / cowork / code**: one thread, no mode switching.
-- **Built-in model server**: a Rust core driving llama.cpp that downloads, loads and serves
-  models from Hugging Face, with GPU fit estimates and keep-loaded controls.
-- **Local runners too**: auto-discover Ollama / LM Studio / vLLM; pull, load, and
-  unload Ollama models; manage servers and watch token usage.
-- **Cloud providers too**: ChatGPT plan sign-in, Anthropic, OpenAI, OpenRouter, any OpenAI-compatible endpoint.
-- **Spend and savings**: API spend, estimated savings from local models, and live hardware and model monitors.
-- **Automations**: workflows on a schedule or an event trigger, such as a GitHub pull request.
-- **Voice dictation**: Whisper Tiny English, transcribed on your computer.
-- **Skills**: a library sorted by job with every step visible, plus a marketplace.
-- **Context Inspector**: see exactly what enters the prompt (files, guidelines,
-  memory, connectors) with live token counts; toggle and pin anything.
-- **Guardrails**: risky commands (`rm -rf`, force push, `curl | sh`, …) prompt
-  before running; configurable allow / ask / deny per rule.
-- **Sandbox**: workspace-jail by default, optional Docker isolation, or ask-everything.
-- **Multi-folder index**: add multiple roots; file + symbol index with fast search.
-- **Memory**: global and per-project, stored as plain markdown.
-- **Connectors**: GitHub, GitLab, Linear, Jira, Slack, Discord, Microsoft Teams, Gmail, Google Drive, Trello, Asana, Todoist.
-- **Nekko the mascot**: a pixel-art cat that blinks, hops, works and naps in the corner of the app.
-
-## Architecture
-
-A Cargo workspace (the engine) beside an npm-workspaces monorepo (the apps):
-
-| Package | What |
-| --- | --- |
-| [`crates/nekkod`](crates/nekkod) | The engine daemon every edition starts: chats, tools, providers, automation, the model server, the phone relay agent. Built from the other crates in [`crates/`](crates). |
-| [`packages/shared`](packages/shared) | Types + IPC contracts (pure, no deps) |
-| [`packages/profile`](packages/profile) | The user's data folder: where it lives, moving it, older installs' profiles |
-| [`apps/desktop`](apps/desktop) | Electron app (main / preload / React renderer) |
-| [`apps/local-web-ui`](apps/local-web-ui) | Self-hosted Fastify Local Web UI |
-| [`apps/relay-server`](apps/relay-server) | End-to-end encrypted remote relay |
-| [`apps/cli`](apps/cli) | CLI and MCP stdio subagent surface |
-
-The engine has no Electron in it, so it is tested on its own (`cargo test --workspace`) and every edition reuses it.
-
-## CLI and MCP subagent
-
-External harnesses can drive the same host through the CLI or MCP server:
-
-```bash
-npm install --global nekko-agent   # publishing with the next release
-npx nekko-agent status --json
-npx nekko-agent mcp
-```
-
-From a checkout:
+The CLI can drive the same engine, and the MCP server exposes it to other agents.
+From a source checkout:
 
 ```bash
 npm run build --workspace=apps/cli
@@ -311,58 +169,36 @@ node apps/cli/dist/index.js status --json
 node apps/cli/dist/index.js mcp
 ```
 
-Use `--url http://host:port --token "$NEKKO_TOKEN"` for a running web
-edition. Chat defaults to guardrails approval; see the complete command list,
-machine-output schemas, safety model, MCP registration examples, and recipes
-in [docs/CLI.md](docs/CLI.md).
+Use `--url http://host:port --token "$NEKKO_TOKEN"` to reach a running Local Web UI.
+See [CLI setup](apps/cli/README.md) and the [command and safety reference](docs/CLI.md).
 
 ## Develop
 
 ```bash
-npm install
-npm run build:core   # build shared + core
-npm test             # vitest (guardrails, context, outline)
-npm run dev          # launch the desktop app with hot reload (electron-vite)
+npm run build         # release daemon, shared packages, CLI and desktop
+npm run build:nekkod  # release daemon only, staged into desktop resources/bin
+npm run build:app     # app packages only; does not rebuild the daemon
+npm test              # compliance, Node and Vitest suites
+npm run dist          # build and package desktop installers
 ```
 
-### Build the app and engine
+See [CONTRIBUTING.md](CONTRIBUTING.md) for platform prerequisites and the local
+workflow. The Rust engine lives in [`crates/`](crates), the desktop app in
+[`apps/desktop`](apps/desktop), and the browser runtime in
+[`apps/local-web-ui`](apps/local-web-ui). The [architecture guide](docs/hub/architecture.md)
+covers the daemon, apps, shared contracts and transports.
 
-```bash
-npm run build         # release nekkod + app (TypeScript packages, CLI, desktop)
-npm run build:nekkod  # release Rust daemon only, staged into desktop resources/bin
-npm run build:app     # TypeScript packages, CLI and desktop only; no Rust build
-```
+## What's next
 
-The combined build requires Rust/Cargo and fails if the daemon cannot be built.
-`build:nekkod` also checks the usual `~/.cargo/bin` installation when Cargo is not
-on PATH, and stages the runtime sidecar libraries alongside the executable.
-`build:app` does not update an already staged daemon; use the combined build after
-changing Rust code.
-
-### Test your changes locally (no installer, no Defender)
-
-After making changes, run **one** command to build and launch the real app for
-your current OS, no need to download the released installer:
-
-```bash
-npm run local        # build everything + launch the built desktop app (Windows/macOS)
-npm run web          # build + serve the Local Web UI at http://localhost:1440
-```
-
-`npm run local` builds the production renderer/main and runs it via
-`electron-vite preview` (no `electron-builder`, so it sidesteps the MSI/Defender
-step). Run it on each OS to test that OS's build; `npm run web` covers the
-browser. For a tight loop, `npm run dev` has hot reload.
-
-Build installers:
-
-```bash
-npm run dist         # electron-builder → apps/desktop/release
-```
-
-Releases are published to GitHub Releases by the [release workflow](.github/workflows/release.yml)
-on `v*` tags. Download links point to the [latest GitHub release](https://github.com/nekko-labs/nekko-agent/releases/latest).
+The [website roadmap](https://nekkoagent.com/#roadmap) describes model routers,
+sharing with teammates, planned voice-driven computer control and exploration of
+local project-check runners. **Dictation is available; general hands-free
+computer control is planned.** Do not assume GitHub Actions compatibility or
+that a setting labeled Coming soon is implemented. See
+[features and limitations](https://nekkoagent.com/docs/features) and the
+[release notes](https://github.com/nekko-labs/nekko-agent/releases) for current availability.
 
 ## License
 
-MIT © Nekko Labs
+MIT © [Nekko Labs](https://nekkolabs.com). Contributions welcome:
+[CONTRIBUTING.md](CONTRIBUTING.md).
