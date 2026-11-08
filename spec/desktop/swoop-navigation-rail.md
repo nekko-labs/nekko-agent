@@ -58,7 +58,7 @@ bottom of the rail, so it moves up under the last destination, set apart.
   never takes the active tile and is not part of the drag-to-reorder list.
 - Renderer-only. No host calls, settings, permissions or network use change.
 
-## Models brain-and-gear icon
+## Models brain-and-gear icon (superseded below)
 
 Implemented; focused icon tests, desktop typecheck, license checks and hidden
 macOS Electron navigation checks pass. Matching 1440px and 900px rest, hover and
@@ -73,3 +73,31 @@ keyboard focus, hover and active styling unchanged. The default phone tab bar
 still has no Models shortcut. No new runtime requests, dependencies, settings,
 permissions or data access. Acceptance: focused icon regression tests and matched
 rest/hover/active renderer captures at desktop and narrow widths.
+
+## Library grid and Models brain-circuit icons
+
+Implemented in source; eight focused icon tests, desktop typecheck, license/spec
+checks and 21 hidden Windows Electron interaction checks pass. Matched default-theme
+1440px/900px rest, expanded and active screenshots and a 390px phone capture were
+captured. Pixel review remains blocked: browser screenshot inspection timed out
+and native capture returned UnknownVizError. Visual approval and packaged builds
+remain unverified; do not mark this icon update shipped until the captured pairs
+are inspected.
+User intent: use Gentleface's four equal squares for **Library** and
+**brain-circuit** for **Models**, replacing the stacked pages and brain-gear.
+This supersedes the brain-and-gear icon choice above.
+
+- Shared desktop/Local Web UI rail uses Gentleface 0.6.0 **grid** and
+  **brain-circuit**, solid-round, on the native 16px grid rendered at 22px.
+  Preserve upstream geometry. Library's four squares keep the existing blue,
+  cyan and gold palette; Models keeps its violet fill.
+- Preserve labels, destinations, keyboard focus, expanded rail and active styling.
+  The default phone tabs contain neither shortcut and remain unchanged. Native
+  iOS/Android navigation is outside this shared-renderer icon change.
+- No new runtime requests, dependencies, permissions, settings or data access.
+  Paths are embedded; the upstream MIT notice is retained in the existing license
+  file and the 0.6.0 glyphs are recorded separately in ASSETS.md.
+- Acceptance: exact-path geometry regression tests plus matched default-theme rest,
+  expanded and active captures at 1440px and 900px, and unchanged 390px phone tabs.
+  Capture static expanded states with reduced motion in hidden Windows fixtures;
+  this does not establish real-pointer hover animation behavior or packaged builds.

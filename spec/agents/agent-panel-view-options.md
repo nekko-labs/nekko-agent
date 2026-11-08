@@ -31,6 +31,10 @@ Implemented: project, status, date and Completed group labels use the theme's pr
 
 Verification: CSS/markup regression tests cover spacing, theme-aware dividers and unchanged drag/drop padding. Matching isolated full-App Electron captures were inspected in light/dark at 1440px for both column and row layouts. The 760px captures verify the bottom-navigation icon and horizontal scrolling, but the vertical panel is hidden/covered on both base and change (existing narrow-drawer limitation, [#1909](https://github.com/nekko-labs/nekko-agent/issues/1909)); narrow column visual acceptance is not claimed. Group collapse/expand and divider placement checks pass. Packaged-app verification remains separate.
 
+## Sticky group headings in the vertical panel
+
+[Implemented; 11 focused tests and a hidden Electron scroll fixture passed, with inspected matched default-dark before/after images and scroll frames; packaged app and narrow drawer unverified.] While scrolling a column of grouped agents, the current group heading stays at the top of the Agents list until that group ends, then the next group takes its place. It keeps its disclosure control, count, activity indicator, project actions and context menu. The heading has a solid theme-aware background so card text does not show through. This applies to Activity, Project, Date and Computer groupings, including Completed, but not to the horizontal row or the ungrouped list. It does not add a preference, network request or permission. Acceptance: headers remain visible within their own group and hand off without covering the next heading; horizontal scrolling and collapses still work. Packaged desktop and native phone views are not part of this change.
+
 ## Cards that need you, and the model line (2026-10-23)
 
 `[implemented; unit-tested; verified in the hidden layout-evidence fixture with before/after captures in both themes; packaged desktop app not checked]`

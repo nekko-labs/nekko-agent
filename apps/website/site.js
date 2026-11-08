@@ -190,6 +190,7 @@
 
     function renderMenu() {
       menu.textContent = '';
+      const src = root.dataset.dlSource || 'section'; // hero or section
       const current = chosen();
       let wrote = false;
       for (const key of OS_ORDER) {
@@ -205,6 +206,8 @@
           a.href = urlFor(b) || RELEASES;
           a.setAttribute('role', 'menuitem');
           if (b === current) a.setAttribute('aria-current', 'true');
+          // cta slug: <src>-download-item-<os>-<fmt>-<arch>, e.g. hero-download-item-win-exe-x64
+          a.setAttribute('data-cta', `${src}-download-item-${b.os}-${b.fmt.replace(/^\./, '')}-${b.arch}`);
           a.innerHTML =
             `<span class="dl-fmt">${b.fmt}</span><span class="dl-hint">${b.hint}</span>`;
           menu.appendChild(a);
@@ -220,6 +223,7 @@
       all.className = 'dl-item';
       all.href = RELEASES;
       all.setAttribute('role', 'menuitem');
+      all.setAttribute('data-cta', `${src}-download-all-releases`);
       all.innerHTML = `<span class="dl-fmt">All downloads</span><span class="dl-hint">GitHub Releases</span>`;
       menu.appendChild(all);
     }
@@ -649,7 +653,7 @@
       website: form.elements.website?.value || '',
       // Product updates are their own unticked choice; the API records which policy text was agreed to.
       marketing: Boolean(form.elements.marketing?.checked),
-      policyVersion: '2026-11-03',
+      policyVersion: '2026-11-08',
     };
     button.disabled = true;
     let res;
