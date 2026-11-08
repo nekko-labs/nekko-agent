@@ -26,6 +26,15 @@ app.whenReady().then(async () => {
       for (const group of ['subscriptions', 'api', 'code', 'local']) {
         await run(`modeChipsFixture.show(${js(group)})`);
         await sleep(500);
+        if (group !== 'local') {
+          const settled = "Array.from(document.querySelectorAll('[id^=\"provider-\"]')).every(card => card.innerText.includes('Connected') && !card.innerText.includes('Checking sign-in'))";
+          for (let i = 0; i < 40 && !await run(settled); i++) await sleep(100);
+          await check('Health and sign-in settled ' + group + ' ' + width, settled);
+        }
+        await run('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+        // Drain a pending compositor frame before saving the final still.
+        await win.capturePage(undefined, { stayHidden: true, stayAwake: true });
+        await sleep(500);
         await check(`${group} cards mounted at ${width}`, `document.querySelectorAll('[id^="provider-"]').length === ${{ subscriptions: 2, api: 3, code: 2, local: 1 }[group]}`);
         await check(`No horizontal overflow ${group} ${width}`, 'document.documentElement.scrollWidth <= innerWidth');
         if (process.env.NEKKO_EXPECT_MODE_CHIPS === '1') {
