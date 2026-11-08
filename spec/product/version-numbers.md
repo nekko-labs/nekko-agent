@@ -46,7 +46,7 @@ After a `v0.9` tag: desktop 0.9.0 is the release, and the nightlies are 0.9.1, 0
 **Implemented; cross-platform recovery publication unverified.** Release tooling
 may be dispatched from current main with an explicit existing full `release_tag`.
 Application code is checked out from that immutable tag, while only the official
-Electron downloader comes from the workflow revision. This reserves no version,
+Electron and packaging-tool downloaders come from the workflow revision. This reserves no version,
 rewrites no tag and skips all npm publication in recovery mode. Electron archives
 come only from the official GitHub release-assets API and must match exact
 version/platform, size and official SHASUMS256; available GitHub asset digests must
@@ -56,3 +56,13 @@ publisher checks, feed checks or the complete-matrix publication dependency.
 Acceptance: tagged application SHA is logged and checked independently from the
 workflow SHA; published installer metadata, hashes, signing and notarization still
 require real release artifact verification. No user app/profile is touched.
+
+**Packaging-tool recovery implemented; end-to-end publication unverified.** For
+locked electron-builder 26.17.0, native Linux x64, macOS arm64 and Windows x64
+packaging archives (icons, 7zip, AppImage/FPM, DMG and NSIS/Windows resources)
+come from the official electron-builder-binaries release-assets API. Exact
+release/name/size, upstream pinned SHA256 and available GitHub digest must match.
+A fresh runner-local archive cache is seeded; builder rechecks its original pins
+and performs its own extraction. No extracted-cache trust, patched dependency,
+mirror, disabled checksum or signing bypass. Changed builder versions/pins or
+unsupported platforms fail for review rather than silently changing tool identity.

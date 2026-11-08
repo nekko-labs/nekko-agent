@@ -76,7 +76,7 @@ gh workflow run release.yml --ref main -f release_tag=v0.9.5
 ```
 
 This recovery mode checks out `refs/tags/v0.9.5` as application source, records
-its commit in the log, stamps 0.9.5, and uses only the download helper from the
+its commit in the log, stamps 0.9.5, and uses only the download helpers from the
 workflow revision. It publishes desktop installers/feeds only; daemon npm, Local
 Web UI npm and CLI npm jobs are skipped to avoid mixing main's packages with the
 tag. The original tag-local workflow still handles npm. Workflow head SHA is the
@@ -86,3 +86,11 @@ Do not run competing release attempts or publish a partial desktop matrix.
 
 Implemented recovery path is locally unit-tested and workflow-linted; end-to-end
 cross-platform recovery publication remains unverified until the first run passes.
+
+Packaging tools are fetched through the official electron-builder-binaries API
+and seeded into a fresh runner-local archive cache, with upstream 26.17.0
+SHA256 pins checked before builder performs its normal extraction. This covers
+icons/7zip plus native AppImage/FPM, DMG and Windows/NSIS tools. The helper
+fails for unsupported platforms or changed builder versions/pins: review its
+inventory against the new locked builder sources before updating it. A cache
+hit alone does not prove artifact integrity or release publication.
