@@ -18,7 +18,23 @@ export interface Shortcut {
   matches: (e: KeyboardEvent) => boolean;
 }
 
-export const SHORTCUTS: Record<'palette' | 'newAgent' | 'newTerminal' | 'newMedia' | 'searchChats' | 'contextPanel' | 'findInChat', Shortcut> = {
+export const SHORTCUTS: Record<'palette' | 'newAgent' | 'newTerminal' | 'newMedia' | 'searchChats' | 'contextPanel' | 'findInChat' | 'textBigger' | 'textSmaller' | 'textReset', Shortcut> = {
+  // Settings' text size, one step at a time, as a browser's zoom keys do. "+"
+  // is Shift+= on most layouts, so "=" counts too; "+" and "-" also come from
+  // the number pad. Ctrl/⌘ + scroll wheel does the same (see textZoom.ts), and
+  // Ctrl/⌘+0 goes back to 100%.
+  textBigger: {
+    label: `${MOD}Plus`,
+    matches: (e) => mod(e) && !e.altKey && (e.key === '+' || e.key === '='),
+  },
+  textSmaller: {
+    label: `${MOD}Minus`,
+    matches: (e) => mod(e) && !e.altKey && (e.key === '-' || e.key === '_'),
+  },
+  textReset: {
+    label: `${MOD}0`,
+    matches: (e) => mod(e) && !e.altKey && !e.shiftKey && e.key === '0',
+  },
   // Handled by the chat window that has focus (or the one the user is
   // driving), not by App: it opens that chat's own search bar.
   findInChat: {
