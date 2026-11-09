@@ -65,8 +65,8 @@ describe('cloud and local columns', () => {
     const out = renderToStaticMarkup(<ModelPicker {...props} />);
     expect(out).toContain('data-model-columns="2"');
     expect(out.indexOf('data-model-column="cloud"')).toBeLessThan(out.indexOf('data-model-column="local"'));
-    expect(out).toMatch(/overflow-y-auto overscroll-contain" data-model-scroll="cloud"/);
-    expect(out).toMatch(/overflow-y-auto overscroll-contain" data-model-scroll="local"/);
+    expect(out).toMatch(/overflow-y-auto overscroll-contain px-1" data-model-scroll="cloud"/);
+    expect(out).toMatch(/overflow-y-auto overscroll-contain px-1" data-model-scroll="local"/);
     expect(out).toContain('>Cloud</h3>');
     expect(out).toContain('>Local</h3>');
   });
@@ -91,7 +91,7 @@ describe('local models and provider headings', () => {
     expect(out).toContain('data-model-name="true">Muse-Glimmer-30B<');
     expect(out).toContain('>lmstudio/lmstudio-community</span>');
     expect(out).not.toContain('data-model-name="true">lmstudio/');
-    expect(out).toMatch(/text-xs font-semibold text-ink" data-provider-heading="true">Nekko Agent engine/);
+    expect(out).toMatch(/text-sm font-semibold text-ink"><span data-provider-heading="true">Nekko Agent engine/);
   });
   it('keeps a cloud id with a slash as its name and price line', () => {
     const providers = [{ id: 'or', kind: 'openrouter' as const, label: 'OpenRouter', enabled: true, baseUrl: 'https://openrouter.ai/api/v1' }];
@@ -106,9 +106,12 @@ describe('account emails in the picker', () => {
     try {
       const providers = [{ id: 'a', kind: 'anthropic' as const, label: 'Claude API', enabled: true, baseUrl: '', auth: 'subscription' as const, tokenKey: 'claude:a' }];
       const out = renderToStaticMarkup(<ModelPicker expanded open providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-      expect(out).toContain('Claude API<span class="font-normal normal-case tracking-normal text-ink-faint" data-account-email="true"> · Davide@Example.com</span>');
+      // One account: the family is the heading; the account and its email are the meta.
+      expect(out).toContain('data-provider-heading="true">Claude</span>');
+      expect(out).toContain('data-account-email="true" title="Anthropic · API · Davide@Example.com">Anthropic · API · Davide@Example.com</span>');
       const chip = renderToStaticMarkup(<ModelPicker open={false} providers={providers} providerId="a" modelId="m" models={[{ id: 'm', providerId: 'a', name: 'Claude Opus' }]} onOpenChange={() => {}} onProvider={() => {}} onModel={() => {}} />);
-      expect(chip).toContain('Model: Claude Opus · Claude API · Davide@Example.com');
+      expect(chip).toContain('Model: Claude Opus · Claude · Davide@Example.com');
+      expect(chip).not.toContain('data-model-chip-account');
     } finally { emails.byToken = {}; }
   });
 });
@@ -148,14 +151,17 @@ it('renders four accessible icon filters and disables Fusion when Auto is not al
 describe('account switcher', () => {
   const gpt = (id: string, tokenKey: string) => ({ id, kind: 'chatgpt' as const, label: 'ChatGPT', enabled: true, baseUrl: 'http://localhost', auth: 'subscription' as const, tokenKey });
   const base = { expanded: true, open: true, modelId: 'gpt-6', models: [{ id: 'gpt-6', providerId: 'a', name: 'GPT 6' }], onOpenChange: () => {}, onProvider: () => {}, onModel: () => {} };
-  it('lists each account of the current vendor by its email, the current one checked', () => {
+  it('lists each account of the family as a tab, told apart by email when their names match', () => {
     emails.byToken = { 'chatgpt:a': 'me@home.example', 'chatgpt:b': 'me@work.example' };
     try {
       const out = renderToStaticMarkup(<ModelPicker {...base} providers={[gpt('a', 'chatgpt:a'), gpt('b', 'chatgpt:b')]} providerId="a" />);
       expect(out).toContain('data-account-switcher');
-      expect(out).toMatch(/aria-checked="true"[^>]*>me@home\.example</);
-      expect(out).toMatch(/aria-checked="false"[^>]*>me@work\.example</);
-      expect(out).toContain('Use GPT 6 on me@work.example');
+      expect(out).toContain('role="radio" aria-checked="true" title="me@home.example · Subscription (this chat)"');
+      expect(out).toContain('role="radio" aria-checked="false" title="me@work.example · Subscription: show its models"');
+      expect(out).toContain('aria-label="This chat"');
+      // The chip names the account too, since the family has two.
+      const chip = renderToStaticMarkup(<ModelPicker {...base} expanded={false} open={false} providers={[gpt('a', 'chatgpt:a'), gpt('b', 'chatgpt:b')]} providerId="a" />);
+      expect(chip).toContain('data-model-chip-account="true">me@home.example</span>');
     } finally { emails.byToken = {}; }
   });
   it('shows no switcher with a single account', () => {
@@ -165,7 +171,8 @@ describe('account switcher', () => {
   it('says a Claude Agent switch starts a new Claude Code conversation', () => {
     const cc = (id: string, label: string, account?: string) => ({ id, kind: 'claude-code' as const, label, enabled: true, baseUrl: '', ...(account ? { claudeCode: { account } } : {}) });
     const out = renderToStaticMarkup(<ModelPicker {...base} modelId="opus" models={[{ id: 'opus', providerId: 'cc', name: 'Opus' }]} providers={[cc('cc', 'Claude Agent'), cc('ccw', 'Claude Agent · Work', 'work')]} providerId="cc" />);
-    expect(out).toContain('Claude Agent · Work');
+    expect(out).toContain('<span class="min-w-0 truncate">Work</span>');
+    expect(out).toContain('<span class="min-w-0 truncate">Subscription</span>');
     expect(out).toContain('new Claude Code conversation');
   });
 });
@@ -213,7 +220,7 @@ describe('account-scoped provider usage', () => {
       // The default is shown once, highlighted in its own provider group (#1687), so it has no pinned copy.
       const copies = pin === 'default' ? 1 : 2;
       expect(html.match(/role="option"/g)).toHaveLength(copies);
-      expect(html).toContain('data-provider-heading="true">Provider');
+      expect(html).toContain('data-provider-heading="true">OpenAI');
       expect(html.match(/data-model-name="true">Favorite</g)).toHaveLength(copies);
     } finally { useStore.setState({ settings: prev }); }
   });

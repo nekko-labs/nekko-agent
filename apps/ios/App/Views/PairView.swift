@@ -316,6 +316,9 @@ struct QRScanner: UIViewControllerRepresentable {
         /// One serial queue for starting and stopping: on a concurrent queue a quick
         /// open and close could stop before it started, leaving the camera on.
         private let sessionQueue = DispatchQueue(label: "nekko.capture")
+        /// Codes are reported here, not on the main queue: while SwiftUI lays out
+        /// the list around the preview, the main queue delivered them late.
+        private let metadataQueue = DispatchQueue(label: "nekko.capture.codes")
         private var preview: AVCaptureVideoPreviewLayer?
         /// Keeps the preview level with the horizon as the device turns (iPad in
         /// any orientation, iPhone sideways); without it the picture stayed
@@ -333,12 +336,19 @@ struct QRScanner: UIViewControllerRepresentable {
                   let input = try? AVCaptureDeviceInput(device: device),
                   session.canAddInput(input) else { return }
             Self.focusForCodes(device)
+            session.beginConfiguration()
             session.addInput(input)
             let output = AVCaptureMetadataOutput()
-            guard session.canAddOutput(output) else { return }
+            guard session.canAddOutput(output) else {
+                session.commitConfiguration()
+                return
+            }
             session.addOutput(output)
-            output.setMetadataObjectsDelegate(self, queue: .main)
+            output.setMetadataObjectsDelegate(self, queue: metadataQueue)
             output.metadataObjectTypes = [.qr]
+            session.commitConfiguration()
+            // After the format is settled: the zoom is worked out from its field of view.
+            Self.zoomForCodes(device)
             let layer = AVCaptureVideoPreviewLayer(session: session)
             layer.videoGravity = .resizeAspectFill
             view.layer.addSublayer(layer)
@@ -371,6 +381,25 @@ struct QRScanner: UIViewControllerRepresentable {
             }
         }
 
+        /// The main camera on recent iPhones cannot focus closer than about 20 cm,
+        /// and the code on a laptop screen is a few centimetres across, so people
+        /// brought the phone closer, out of focus, and nothing scanned. Zoom in
+        /// just enough that a 4 cm code fills half the frame at that distance
+        /// (Apple's AVCamBarcode approach), at most 2x so it is still easy to aim.
+        /// iPads and older iPhones focus closer and stay at 1x.
+        private static func zoomForCodes(_ device: AVCaptureDevice) {
+            let nearest = device.minimumFocusDistance // millimetres; -1 when unknown
+            guard nearest > 0 else { return }
+            let zoom = PairScanZoom.factor(
+                minimumFocusDistance: Double(nearest),
+                fieldOfView: Double(device.activeFormat.videoFieldOfView),
+                maxZoom: Double(device.activeFormat.videoMaxZoomFactor)
+            )
+            guard zoom > 1, (try? device.lockForConfiguration()) != nil else { return }
+            device.videoZoomFactor = CGFloat(zoom)
+            device.unlockForConfiguration()
+        }
+
         override func viewDidLayoutSubviews() {
             super.viewDidLayoutSubviews()
             // No implicit animation: the frame follows the rotation at once.
@@ -394,16 +423,40 @@ struct QRScanner: UIViewControllerRepresentable {
         }
 
         nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput objects: [AVMetadataObject], from connection: AVCaptureConnection) {
-            guard let code = (objects.first as? AVMetadataMachineReadableCodeObject)?.stringValue, Pairing.parse(code) != nil else { return }
-            // Delivered on the main queue (setMetadataObjectsDelegate above).
-            MainActor.assumeIsolated {
-                // The same code again after a pause is a retry (say, after turning
-                // Tailscale on); without the pause one scan would fire many times.
-                guard code != lastCode || Date().timeIntervalSince(lastAt) > 3 else { return }
-                lastCode = code
-                lastAt = Date()
-                onCode?(code)
-            }
+            // Any code in view that is a pairing link, not only the first one found.
+            guard let code = objects.lazy.compactMap({ ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue })
+                .first(where: { Pairing.parse($0) != nil }) else { return }
+            // Delivered on `metadataQueue`; the rest happens on the main actor.
+            Task { @MainActor [weak self] in self?.found(code) }
         }
+
+        private func found(_ code: String) {
+            // The same code again after a pause is a retry (say, after turning
+            // Tailscale on); without the pause one scan would fire many times.
+            guard code != lastCode || Date().timeIntervalSince(lastAt) > 3 else { return }
+            lastCode = code
+            lastAt = Date()
+            onCode?(code)
+        }
+    }
+}
+
+/// How far the pair scanner zooms, from the camera's nearest focus distance.
+enum PairScanZoom {
+    /// The smallest code we expect, in millimetres: the desktop's code on a laptop screen.
+    static let codeWidth = 40.0
+    /// How much of the frame's width that code should fill at the nearest focus.
+    static let fill = 0.5
+    /// More than this and the preview jumps around too much to aim.
+    static let cap = 2.0
+
+    /// `minimumFocusDistance` in millimetres, `fieldOfView` in degrees (horizontal).
+    static func factor(minimumFocusDistance: Double, fieldOfView: Double, maxZoom: Double) -> Double {
+        guard minimumFocusDistance > 0, fieldOfView > 0 else { return 1 }
+        // The distance at which a frame `codeWidth / fill` wide fills the field of view.
+        let halfAngle = fieldOfView / 2 * .pi / 180
+        let distance = (codeWidth / fill / 2) / tan(halfAngle)
+        guard distance < minimumFocusDistance else { return 1 }
+        return min(minimumFocusDistance / distance, cap, max(maxZoom, 1))
     }
 }

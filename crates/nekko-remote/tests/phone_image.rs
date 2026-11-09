@@ -86,7 +86,10 @@ fn phone_image_has_no_install_fetch_or_upload_authority() {
         )
         .is_ok()
     );
-    assert!(phone::screen("session:setOptions", &[json!("s_img"), json!({"chatType": "video"})]).is_err());
+    // #2149 lets phones pick the Video agent; unknown chat types stay refused
+    // (mirrors packages/shared/src/phone-access-image.test.ts).
+    assert!(phone::screen("session:setOptions", &[json!("s_img"), json!({"chatType": "video"})]).is_ok());
+    assert!(phone::screen("session:setOptions", &[json!("s_img"), json!({"chatType": "movie-generator"})]).is_err());
     assert!(phone::screen("session:setOptions", &[json!("s_img"), json!({"arbitrary": true})]).is_err());
 }
 

@@ -78,7 +78,8 @@ fun PairScreen(
     repo: ComputersRepository,
     initialLink: String?,
     onBack: () -> Unit,
-    onPaired: () -> Unit,
+    /** Called with the paired computer's id. */
+    onPaired: (String) -> Unit,
 ) {
     val p = Nekko.palette
     val context = LocalContext.current
@@ -114,8 +115,7 @@ fun PairScreen(
         busy = link
         scope.launch {
             try {
-                repo.pair(link)
-                onPaired()
+                onPaired(repo.pair(link))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

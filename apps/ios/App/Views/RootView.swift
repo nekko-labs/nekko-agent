@@ -53,6 +53,14 @@ struct RootView: View {
 
     var body: some View {
         content
+            // A pairing just worked: celebrate over whatever screen is now underneath.
+            .overlay {
+                if let id = app.justPaired, !covered {
+                    PairSuccessView(computerId: id) { app.justPaired = nil }
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.25), value: app.justPaired)
             // Under the cover the chats must not be readable by VoiceOver either.
             .accessibilityHidden(covered)
             // The app switcher snapshot shows a cover while the lock is on. It is a
@@ -129,8 +137,8 @@ struct RootView: View {
             .sheet(item: Binding(get: { covered ? nil : app.pendingLink.map(LinkBox.init) }, set: { app.pendingLink = $0?.link })) { box in
                 ConfirmPairSheet(link: box.link) { path = [] }
             }
-            // First run, step 3: right after the first pairing.
-            .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
+            // First run, step 3: right after the first pairing, once its celebration is over.
+            .fullScreenCover(isPresented: Binding(get: { app.showNotificationStep && app.justPaired == nil && !covered }, set: { if !$0 { app.showNotificationStep = false } })) {
                 NotificationStepView()
             }
             // SK-6 / SK-8: the step-up sheet, and the safety exits' confirmations.

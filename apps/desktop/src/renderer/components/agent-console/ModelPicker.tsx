@@ -10,15 +10,20 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../store.js';
 import { useProviderLimitsPortfolio } from '../../useLimits.js';
-import { accountEmailOf, accountShortName, accountSiblings, providerDisplayName, useAccountEmails } from '../../accountEmails.js';
+import { accountFamilies, identityLine, sharedEmail, useAccountIdentities, type AccountFamily, type AccountIdentity } from '../../providerAccounts.js';
 import { ProviderUsageMeters } from './ProviderUsageMeters.js';
 import { ContextMenu, ContextAction } from '../ContextMenu.js';
-import { CloudIcon, GridIcon, LaptopIcon, RouteIcon, StarIcon } from '../../icons.js';
+import { Group, QuietTabs } from '../primitives/Quiet.js';
+import { CheckIcon, CloudIcon, GridIcon, LaptopIcon, RouteIcon, StarIcon } from '../../icons.js';
 
 /**
- * Provider + model as one legible control (instead of two microscopic selects):
- * a chip naming the current model that opens a flat picker of every provider's
- * models, grouped by provider, starred on top, Auto first.
+ * Provider + model as one legible control: a chip naming the current model
+ * (and, when its family has several, the account) that opens a picker grouped
+ * by family. A family with several accounts (a personal Claude plan and an
+ * organization seat on the same login, an API key) shows them as tabs; picking
+ * one lists that account's models, and on the chat's own family it moves the
+ * chat to the same model there in one click. Quiet surfaces: no boxes inside
+ * the popover, groups told apart by space and type (docs/design-system.md).
  */
 export function ModelPicker({
   providers: allProviders,
@@ -68,11 +73,7 @@ export function ModelPicker({
    * The specific model id Claude Code reported in its `system/init` for this
    * chat (`session.claudeCodeContext.model`). When the chat was pinned to
    * `opus`/`sonnet`/`haiku`, Claude Code resolves that to the plan's current
-   * default (e.g. `claude-opus-4-7` -> we read it here so the chip reads the
-   * concrete version); when the chat was pinned to a concrete id (`claude-
-   * opus-5-5`), this is the same string and the chip just confirms it.
-   * Claude Code accepts both aliases and concrete ids on `--model`, so the
-   * picker lists both.
+   * default, so the chip reads the concrete version.
    */
   resolvedModelId?: string;
   /** Under the list, for what belongs with the model (such as Auto quality). */
@@ -87,6 +88,9 @@ export function ModelPicker({
   const setOpen = (next: boolean) => onOpenChange(next);
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<'all' | 'fusion' | 'cloud' | 'local'>('all');
+  // Which account each family is showing, when the user picked one to look at.
+  const [viewing, setViewing] = useState<Record<string, string>>({});
+  useEffect(() => { if (!open) setViewing({}); }, [open]);
   // Models per provider, fetched when the menu opens so the list covers every
   // provider (the `models` prop only holds the active provider's).
   const [byProvider, setByProvider] = useState<Record<string, ModelInfo[] | null>>({});
@@ -94,11 +98,32 @@ export function ModelPicker({
   // right now can say so instead of quietly failing on send.
   const { byToken: limitsByToken, answered } = useProviderLimitsPortfolio(providers, open || expanded);
   const limitsOf = (p: ProviderConfig) => limitsByToken[limitsKeyFor(p) ?? ''];
-  // Which account each signed-in provider uses, so two plans on one vendor
-  // (personal and work, say) are told apart in the chip and the list.
-  const accountEmails = useAccountEmails(providers);
-  const nameOf = (p: ProviderConfig) => providerDisplayName(p, accountEmails);
-  const twoColumns = scope === 'all' && providers.some((p) => isLocalProvider(p.kind)) && providers.some((p) => !isLocalProvider(p.kind));
+  // Who each account is (Personal · Max, Acme · Team, an API key's name).
+  const identities = useAccountIdentities(providers, open || expanded);
+  const idOf = (p: ProviderConfig): AccountIdentity => identities[p.id] ?? { name: p.label };
+  const families = useMemo(() => accountFamilies(providers), [providers]);
+  const familyOfProvider = (p: ProviderConfig) => families.find((f) => f.providers.includes(p));
+  const multiAccount = (p: ProviderConfig) => (familyOfProvider(p)?.providers.length ?? 0) > 1;
+  /** "Claude · Acme" when the family has several accounts, else the family alone. */
+  const accountLabel = (p: ProviderConfig) => {
+    const f = familyOfProvider(p);
+    return f && f.providers.length > 1 ? `${f.name} · ${idOf(p).name}` : (f?.name ?? p.label);
+  };
+  const nameOf = (p: ProviderConfig) => {
+    const email = idOf(p).email;
+    return email ? `${accountLabel(p)} · ${email}` : accountLabel(p);
+  };
+  // Under 600px (a phone, a folded screen) Cloud and Local stack in one scroll instead of squeezing side by side.
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && typeof window.innerWidth === 'number' && window.innerWidth < 600);
+  useEffect(() => {
+    if (!open && !expanded) return;
+    const measure = () => setNarrow(window.innerWidth < 600);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open, expanded]);
+  const bothKinds = scope === 'all' && providers.some((p) => isLocalProvider(p.kind)) && providers.some((p) => !isLocalProvider(p.kind));
+  const twoColumns = bothKinds && !narrow;
   const ref = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const [placement, setPlacement] = useState<React.CSSProperties>({});
@@ -185,10 +210,8 @@ export function ModelPicker({
   const providerLabel = currentProvider ? nameOf(currentProvider) : 'No provider';
   // `models` is the previous provider's until the new list lands; the picker may already hold it.
   const currentModel = models.find((m) => m.id === modelId) ?? (providerId ? byProvider[providerId]?.find((m) => m.id === modelId) : undefined);
-  // A Claude subscription chat gets its model picked by Claude Code, not us:
-  // the picker still shows the alias "Opus"/"Sonnet" row that we send with
-  // `--model`, but once Claude Code has reported which version it resolved
-  // ("claude-opus-4-7") the chip reads that instead of the generic alias.
+  // A Claude subscription chat gets its model picked by Claude Code: once it
+  // has reported which version it resolved the chip reads that instead of the alias.
   const claudeCodeResolved = currentProvider?.kind === 'claude-code' && resolvedModelId
     ? shortModelName(resolvedModelId)
     : null;
@@ -198,6 +221,8 @@ export function ModelPicker({
         ? claudeCodeResolved
         : currentModel ? modelRowLabel(currentModel, !!currentProvider && isLocalProvider(currentProvider.kind)).name
         : modelId ?? 'No model';
+  // The account rides along in the chip only when it is ambiguous.
+  const chipAccount = currentProvider && modelId !== AUTO_MODEL_ID && multiAccount(currentProvider) ? idOf(currentProvider).name : null;
 
   const pick = (pid: string, mid: string) => {
     if (pid !== providerId) onProvider(pid);
@@ -205,48 +230,29 @@ export function ModelPicker({
     if (!expanded) setOpen(false);
   };
 
-  // Accounts of the current vendor (two ChatGPT plans, two Claude Code
-  // logins): one click moves the chat to the same model on another account.
-  const accounts = accountSiblings(providers, currentProvider);
-  const switchTo = (p: ProviderConfig) => {
-    if (!modelId || modelId === AUTO_MODEL_ID) return onProvider(p.id);
-    pick(p.id, modelId);
+  /** The account a family is showing: the one picked to look at, else the chat's, else the first. */
+  const shownAccount = (f: AccountFamily): ProviderConfig =>
+    f.providers.find((p) => p.id === viewing[f.id]) ?? f.providers.find((p) => p.id === providerId) ?? f.providers[0];
+  /**
+   * An account tab. On the chat's own family it moves the chat to the same
+   * model on that account when the account offers it (one click to switch);
+   * otherwise, and on any other family, it shows that account's models.
+   */
+  const chooseAccount = (f: AccountFamily, p: ProviderConfig) => {
+    setViewing((prev) => ({ ...prev, [f.id]: p.id }));
+    const ownFamily = !!currentProvider && f.providers.includes(currentProvider);
+    if (ownFamily && p.id !== providerId && modelId && modelId !== AUTO_MODEL_ID && modelsOf(p.id).some((m) => m.id === modelId)) pick(p.id, modelId);
   };
-  /** Why an account cannot take the current model, or null when it can (or its list has not loaded). */
-  const accountBlocked = (p: ProviderConfig): string | null => {
+  const accountTabTitle = (f: AccountFamily, p: ProviderConfig) => {
+    const id = idOf(p);
+    const who = [identityLine(id), id.email !== id.name ? id.email : ''].filter(Boolean).join(' · ');
+    if (p.id === providerId) return `${who} (this chat)`;
+    const ownFamily = !!currentProvider && f.providers.includes(currentProvider);
     const list = byProvider[p.id];
-    if (!modelId || modelId === AUTO_MODEL_ID || !list) return null;
-    return list.some((m) => m.id === modelId) ? null : `${accountShortName(p, accountEmails)} does not offer ${currentName}`;
+    if (ownFamily && modelId && modelId !== AUTO_MODEL_ID && list?.some((m) => m.id === modelId)) return `${who}: move this chat to ${currentName} here`;
+    if (ownFamily && modelId && modelId !== AUTO_MODEL_ID && list) return `${who}: does not offer ${currentName}, pick one of its models`;
+    return `${who}: show its models`;
   };
-  const accountSwitcher = accounts.length > 1 && (
-    <div className="model-accounts mb-1 px-1" data-account-switcher>
-      <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Account">
-        <span className="px-2 text-xs font-medium text-ink-soft">Account</span>
-        {accounts.map((p) => {
-          const current = p.id === providerId;
-          const blocked = current ? null : accountBlocked(p);
-          const name = accountShortName(p, accountEmails);
-          return (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={current}
-              disabled={!!blocked}
-              title={blocked ?? (current ? `${name} (this chat)` : `Use ${currentName} on ${name}`)}
-              className={`max-w-[180px] truncate rounded-full border px-2 py-0.5 text-2xs ${current ? 'border-accent text-accent' : 'border-line text-ink-soft hover:text-ink'} ${blocked ? 'cursor-not-allowed opacity-50' : ''}`}
-              onClick={() => { if (!current) switchTo(p); }}
-            >
-              {name}
-            </button>
-          );
-        })}
-      </div>
-      {currentProvider?.kind === 'claude-code' && (
-        <p className="px-2 pt-1 text-2xs text-ink-faint">Switching starts a new Claude Code conversation on that account; this chat keeps its history here.</p>
-      )}
-    </div>
-  );
 
   /**
    * Why a model can't be run, or null when it can. Provider-agnostic: the
@@ -256,73 +262,56 @@ export function ModelPicker({
   const availabilityOf = (p: ProviderConfig, m: ModelInfo) =>
     resolveModelAvailability({ model: m, provider: p, limits: limitsOf(p) });
 
-  const row = (p: ProviderConfig, m: ModelInfo, showProvider: boolean) => {
+  /** `account`: name the row's account (search across a family's accounts); `family`: and its family too (pinned rows). */
+  const row = (p: ProviderConfig, m: ModelInfo, showAccount: false | 'account' | 'family') => {
     const key = `${p.id}::${m.id}`;
     const fav = favSet.has(key);
     const selected = p.id === providerId && modelId === m.id;
-    const price = formatModelPriceLabel({ modelId: m.id, auth: p.auth, isLocal: isLocalProvider(p.kind), pricing: modelPricing(m) });
+    const local = isLocalProvider(p.kind);
+    const price = formatModelPriceLabel({ modelId: m.id, auth: p.auth, isLocal: local, pricing: modelPricing(m) });
     // A blocked model stays in the list and says why. Hiding it makes a model
     // that exists look like one the app never heard of.
     const availability = availabilityOf(p, m);
     const blocked = availability.status === 'blocked';
     const why = availability.detail ?? blockLabel(availability);
-    // The engine sends the file's path as a detail, so a local model's subtext
-    // is where it lives rather than a price it does not have; a path-like id
-    // is split into a short name and its folder.
-    const label = modelRowLabel(m, isLocalProvider(p.kind));
-    const sub = label.sub;
-    const claudeVersion = p.kind === 'claude-code' && selected && resolvedModelId
-      ? shortModelName(resolvedModelId) : null;
-    const hint = blocked ? why : sub ?? (p.kind === 'claude-code'
-      ? claudeVersion ? `Currently ${claudeVersion} · Claude Code chooses the version` : 'Claude Code chooses the version when the chat starts'
-      : m.availability?.detail ?? price);
+    // A local model's detail is where it lives (a path-like id splits into a
+    // short name and its folder); a cloud model's is its price.
+    const label = modelRowLabel(m, local);
+    const claudeVersion = p.kind === 'claude-code' && selected && resolvedModelId ? shortModelName(resolvedModelId) : null;
+    const detail = blocked ? why : label.sub;
+    const meta = showAccount === 'family' ? accountLabel(p) : showAccount === 'account' ? idOf(p).name : key === defaultKey ? null : (p.kind === 'claude-code' ? null : (m.availability?.detail ?? price));
+    const tip = p.kind === 'claude-code'
+      ? (claudeVersion ? `Currently ${claudeVersion} · Claude Code chooses the version` : 'Claude Code chooses the version when the chat starts')
+      : [label.name, detail ?? meta].filter(Boolean).join(' · ');
     return (
       <div
         key={key}
         onContextMenu={readOnly ? undefined : (e) => { e.preventDefault(); setMenu({x:e.clientX,y:e.clientY,pid:p.id,mid:m.id}); }}
-        className={`flex w-full items-center rounded-lg hover:bg-surface-2 ${selected ? 'text-accent' : ''}`}
+        className="group/row flex w-full min-w-0 items-center rounded-lg"
+        data-model-row
       >
         <button
+          type="button"
           role="option"
           aria-selected={selected}
           aria-disabled={blocked}
           disabled={blocked}
-          className={`flex min-w-0 flex-1 flex-col px-3 py-1.5 text-left ${blocked ? 'cursor-not-allowed' : ''}`}
+          className="quiet-row min-w-0 flex-1"
           onClick={() => pick(p.id, m.id)}
-          title={`${label.name} · ${hint}`}
+          title={tip}
         >
-          <div className="flex w-full items-center gap-2">
-            {key === defaultKey && <span className="text-2xs text-accent">Default</span>}
-            {m.loaded && (
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ background: 'var(--success)' }}
-                title="Loaded in memory"
-              />
-            )}
-            <span className={`min-w-0 truncate text-xs font-medium leading-tight ${blocked ? 'text-ink-faint' : ''}`} data-model-name>{claudeVersion ? `${label.name} (${claudeVersion})` : label.name}</span>
-            {blocked && (
-              <span
-                className="shrink-0 rounded-sm px-1 py-0.5 text-2xs font-semibold leading-none"
-                style={{
-                  background: 'color-mix(in srgb, var(--danger) 14%, transparent)',
-                  color: 'var(--danger)',
-                }}
-              >
-                {blockLabel(availability)}
-              </span>
-            )}
-            {showProvider && <span className="ml-auto min-w-0 max-w-[55%] shrink truncate text-2xs text-ink-faint" title={nameOf(p)}>{nameOf(p)}</span>}
-          </div>
-          <span
-            className={`truncate text-2xs text-ink-faint ${sub ? 'font-mono' : ''}`}
-            title={hint}
-          >
-            {hint}
+          {m.loaded && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: 'var(--success)' }} title="Loaded in memory" />}
+          <span className={`flex min-w-0 flex-1 ${detail && local ? 'flex-col' : 'items-baseline gap-2'}`}>
+            <span className={`min-w-0 truncate text-xs font-medium leading-tight ${blocked ? 'text-ink-faint' : selected ? 'text-accent' : 'text-ink'}`} data-model-name>{claudeVersion ? `${label.name} (${claudeVersion})` : label.name}</span>
+            {detail && <span className={`min-w-0 truncate text-2xs ${blocked ? '' : 'text-ink-faint'} ${label.sub && !blocked ? 'font-mono' : ''}`} style={blocked ? { color: 'var(--danger)' } : undefined} title={detail}>{blocked ? `${blockLabel(availability)} · ${why}` : detail}</span>}
           </span>
+          {key === defaultKey && <span className="shrink-0 text-2xs text-accent">Default</span>}
+          {meta && <span className="max-w-[45%] shrink truncate text-2xs text-ink-faint" title={showAccount ? nameOf(p) : meta}>{meta}</span>}
+          {selected && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />}
         </button>
         {!readOnly && <button
-          className={`shrink-0 rounded-sm p-2 ${fav ? 'text-accent' : 'text-ink-faint hover:text-ink'}`}
+          type="button"
+          className={`shrink-0 rounded-md p-2 ${fav ? 'text-accent' : 'text-ink-faint opacity-0 hover:text-ink focus-visible:opacity-100 group-hover/row:opacity-100 touch:opacity-100'}`}
           title={fav ? 'Unstar' : 'Star (pin to the top of this list)'}
           aria-label={fav ? `Unstar ${m.name}` : `Star ${m.name}`}
           aria-pressed={fav}
@@ -334,55 +323,120 @@ export function ModelPicker({
     );
   };
 
-  // Section labels (Recent, Starred) stay small and faint; a provider heading is
-  // the thing you scan for, so it reads in the ink colour a size up.
-  const header = (label: string, email?: string, provider = false) => (
-    <p
-      className={provider
-        ? 'truncate px-3 pb-2 pt-1 text-xs font-semibold text-ink'
-        : 'truncate px-3 pb-0.5 pt-1 text-xs font-medium text-ink-soft'}
-      data-provider-heading={provider || undefined}
-      title={email ? `${label} · ${email}` : undefined}
-    >
-      {label}
-      {email && <span className="font-normal normal-case tracking-normal text-ink-faint" data-account-email> · {email}</span>}
-    </p>
-  );
+  /** One provider's rows (a local server's split by folder), with its default even when missing. */
+  const providerRows = (p: ProviderConfig, showAccount: false | 'account' = false) => {
+    const g = groups.find((group) => group.provider.id === p.id) ?? { provider: p, models: [] };
+    const remaining = q ? g.models : g.models.filter((m) => (favSet.has(`${p.id}::${m.id}`) || !pinnedKeys.has(`${p.id}::${m.id}`)));
+    const missingDefault = defaultProvider?.id === p.id && !defaultModel && !q;
+    const locs = [...new Set(remaining.map((m) => m.details?.location ?? ''))];
+    const byLoc = locs.length > 1
+      ? locs.map((loc) => ({ loc, models: remaining.filter((m) => (m.details?.location ?? '') === loc) }))
+      : [{ loc: '', models: remaining }];
+    return {
+      count: remaining.length + (missingDefault ? 1 : 0),
+      node: <>
+        {missingDefault && <button type="button" role="option" disabled aria-disabled="true" className="quiet-row text-xs text-ink-faint">{settings?.defaultModelId} <span className="text-2xs">Default · {defaultStatus}</span></button>}
+        {byLoc.map(({ loc, models: ms }) => (
+          <React.Fragment key={loc || '_'}>
+            {loc && <p className="truncate px-3 pb-1 pt-2 text-2xs text-ink-faint" title={loc}>{loc}</p>}
+            {ms.map((m) => row(p, m, showAccount))}
+          </React.Fragment>
+        ))}
+      </>,
+    };
+  };
+
+  // Group headings: the family is what you scan for, in ink a size up from the rows.
+  const heading = (label: string) => <span data-provider-heading>{label}</span>;
+
+  const familyGroup = (f: AccountFamily, column: ProviderConfig[]) => {
+    const members = f.providers.filter((p) => column.includes(p));
+    if (!members.length) return null;
+    const several = members.length > 1;
+    const shown = several && !q ? (members.includes(shownAccount(f)) ? shownAccount(f) : members[0]) : null;
+    // Searching spans every account of the family, each row naming its account.
+    const listed = q || !several ? members : [shown!];
+    const rows = listed.map((p) => ({ p, ...providerRows(p, several && q ? 'account' : false) }));
+    const meterProvider = shown ?? (members.length === 1 ? members[0] : null);
+    const hasMeter = !q && !!meterProvider && !!limitsKeyFor(meterProvider) && modelsOf(meterProvider.id).length > 0;
+    // While searching, a family with no match drops out entirely.
+    if (!rows.some((r) => r.count) && (q || (!hasMeter && !several))) return null;
+    const ids = members.map(idOf);
+    const email = sharedEmail(ids) ?? (meterProvider ? idOf(meterProvider).email : undefined);
+    // One account: its own name and plan ride in the heading's meta, since there are no tabs to say it.
+    const single = !several ? identityLine(idOf(members[0])) : '';
+    const metaText = [single !== f.name ? single : '', email].filter(Boolean).join(' · ');
+    const claudeSwitch = !!shown && shown.kind === 'claude-code' && currentProvider?.kind === 'claude-code' && members.filter((p) => p.kind === 'claude-code').length > 1;
+    return (
+      <Group key={f.id} as="div" dense role="group" label={f.name} title={heading(f.name)} meta={metaText && <span data-account-email title={metaText}>{metaText}</span>} data-provider-group={f.id}>
+        {several && !q && (
+          <div className="px-1 pb-1" data-account-switcher>
+            <QuietTabs
+              label={`${f.name} account`}
+              role="radiogroup"
+              value={shown!.id}
+              onChange={(id) => { const p = members.find((x) => x.id === id); if (p) chooseAccount(f, p); }}
+              items={members.map((p) => ({
+                value: p.id,
+                label: idOf(p).name,
+                hint: idOf(p).hint,
+                title: accountTabTitle(f, p),
+                icon: p.id === providerId ? <span className="h-1.5 w-1.5 shrink-0 self-center rounded-full bg-accent" aria-label="This chat" /> : undefined,
+              }))}
+            />
+            {claudeSwitch && <p className="px-2 pt-1 text-2xs text-ink-faint">Switching starts a new Claude Code conversation; history stays here.</p>}
+          </div>
+        )}
+        {hasMeter && <ProviderUsageMeters compact limits={limitsOf(meterProvider!)} answered={answered.has(limitsKeyFor(meterProvider!)!)} />}
+        {rows.map((r) => <React.Fragment key={r.p.id}>{r.node}</React.Fragment>)}
+        {several && !q && shown && rows[0]?.count === 0 && (
+          <p className="px-3 py-1 text-2xs text-ink-faint">{byProvider[shown.id] === undefined ? 'Loading models…' : byProvider[shown.id] === null ? 'Could not load this account\'s models.' : 'No models on this account.'}</p>
+        )}
+      </Group>
+    );
+  };
+
+  const pinnedGroup = (label: string, entries: { provider: ProviderConfig; model: ModelInfo }[], column: ProviderConfig[]) => {
+    const list = entries.filter((s) => column.includes(s.provider) && `${s.provider.id}::${s.model.id}` !== defaultKey);
+    if (!list.length || q) return null;
+    return <Group as="div" dense title={<span className="text-xs font-medium text-ink-soft">{label}</span>}>{list.map((s) => row(s.provider, s.model, 'family'))}</Group>;
+  };
 
   const columns = [
     { id: 'cloud', label: 'Cloud', providers: visibleProviders.filter((p) => !isLocalProvider(p.kind)) },
     { id: 'local', label: 'Local', providers: visibleProviders.filter((p) => isLocalProvider(p.kind)) },
   ].filter((column) => column.providers.length > 0);
 
+  const stacked = columns.length === 2 && narrow;
+
   const popup = (
-        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'card flex h-full min-h-0 w-full flex-col p-3 text-left' : 'card fixed z-50 flex flex-col p-3 shadow-(--shadow-float)'}>
-          <div role="group" aria-label="Model source" className="mb-2 grid shrink-0 grid-cols-4 gap-0.5 rounded-lg bg-surface-2 p-0.5">
-            {([
-              ['all', 'All', GridIcon], ['fusion', 'Fusion', RouteIcon],
-              ['cloud', 'Cloud', CloudIcon], ['local', 'Local', LaptopIcon],
-            ] as const).map(([value, label, Icon]) => (
-              <button key={value} type="button" aria-pressed={scope === value}
-                disabled={value === 'fusion' && !allowAuto}
-                title={value === 'fusion' ? (allowAuto ? 'Auto routing between models' : 'Auto routing is not available here') : `${label} models`}
-                onClick={() => setScope(value)}
-                className={`flex min-w-0 items-center justify-center gap-1 rounded-md px-2 py-1 text-2xs font-medium disabled:opacity-40 ${scope === value ? 'bg-paper text-accent shadow-(--shadow-sm)' : 'text-ink-faint hover:text-ink'}`}>
-                <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{label}
-              </button>
-            ))}
+        <div ref={popupRef} style={expanded ? undefined : placement} className={expanded ? 'flex h-full min-h-0 w-full flex-col text-left' : 'quiet-popover fixed z-50 flex flex-col p-2'} data-model-picker>
+          <div className="mb-2 flex shrink-0 flex-wrap items-center gap-2 px-1">
+            {(expanded || total > 8) && (
+              <input
+                className="quiet-field min-w-40 flex-1 text-xs"
+                placeholder="Search models"
+                value={query}
+                autoFocus={!expanded}
+                aria-label="Filter models"
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            )}
+            <div role="group" aria-label="Model source" className="flex shrink-0 items-center gap-1">
+              {([
+                ['all', 'All', GridIcon], ['fusion', 'Fusion', RouteIcon],
+                ['cloud', 'Cloud', CloudIcon], ['local', 'Local', LaptopIcon],
+              ] as const).map(([value, label, Icon]) => (
+                <button key={value} type="button" aria-pressed={scope === value}
+                  disabled={value === 'fusion' && !allowAuto}
+                  title={value === 'fusion' ? (allowAuto ? 'Auto routing between models' : 'Auto routing is not available here') : `${label} models`}
+                  onClick={() => setScope(value)}
+                  className="quiet-tab items-center">
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{label}
+                </button>
+              ))}
+            </div>
           </div>
-          {/* Wide enough for a local model's path to read under its name; still
-              capped so it never runs off a narrow pane. */}
-          {(expanded || total > 8) && (
-            <input
-              className="input mb-2 rounded-lg px-3 py-1 text-xs"
-              placeholder="Filter models…"
-              value={query}
-              autoFocus={!expanded}
-              aria-label="Filter models"
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          )}
-          {accountSwitcher}
           <div className="flex min-h-0 flex-1 flex-col" role="listbox" aria-label="Model">
             {providers.length === 0 && <p className="px-3 py-1 text-2xs text-ink-faint">No provider configured.</p>}
             {providers.length > 0 && groups.length === 0 && scope !== 'fusion' && (
@@ -390,58 +444,27 @@ export function ModelPicker({
             )}
             {allowAuto && total > 1 && !q && (scope === 'all' || scope === 'fusion') && (
               <button
+                type="button"
                 role="option"
                 aria-selected={modelId === AUTO_MODEL_ID}
-                className={`flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2 ${modelId === AUTO_MODEL_ID ? 'text-accent' : ''}`}
+                className="quiet-row mb-2 text-xs"
                 onClick={() => { onModel(providerId ?? '', AUTO_MODEL_ID); setOpen(false); }}
                 title="Nekko Agent picks the best model for each message"
               >
-                ✨ Auto <span className="text-2xs text-ink-faint">(pick best)</span>
+                <span className={`font-medium ${modelId === AUTO_MODEL_ID ? 'text-accent' : 'text-ink'}`}>✨ Auto</span>
+                <span className="text-2xs text-ink-faint">Picks the best model for each message</span>
+                {modelId === AUTO_MODEL_ID && <CheckIcon className="ml-auto h-3.5 w-3.5 shrink-0 text-accent" aria-hidden="true" />}
               </button>
             )}
-            <div className={`grid min-h-0 flex-1 ${columns.length === 2 ? 'grid-cols-2 divide-x divide-line' : 'grid-cols-1'}`} data-model-columns={columns.length}>
-              {columns.map((column) => (
-                <section key={column.id} aria-label={`${column.label} models`} className="flex min-h-0 min-w-0 flex-col" data-model-column={column.id}>
-                  <h3 className="shrink-0 px-3 py-1 text-xs font-semibold text-ink-soft">{column.label}</h3>
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-model-scroll={column.id}>
-                    {recentModels.some((s) => column.providers.includes(s.provider) && `${s.provider.id}::${s.model.id}` !== defaultKey) && !q && <>{header('Recent')}{recentModels.filter((s) => column.providers.includes(s.provider) && `${s.provider.id}::${s.model.id}` !== defaultKey).map((s) => row(s.provider, s.model, true))}</>}
-                    {starred.some((s) => column.providers.includes(s.provider) && `${s.provider.id}::${s.model.id}` !== defaultKey) && !q && (
-                      <>
-                        {header('★ Starred')}
-                        {starred.filter((s) => column.providers.includes(s.provider) && `${s.provider.id}::${s.model.id}` !== defaultKey).map((s) => row(s.provider, s.model, true))}
-                      </>
-                    )}
-                    {column.providers.map((provider) => {
-                      const g = groups.find((group) => group.provider.id === provider.id) ?? { provider, models: [] };
-                      const remaining = q ? g.models : g.models.filter((m) => (favSet.has(`${g.provider.id}::${m.id}`) || !pinnedKeys.has(`${g.provider.id}::${m.id}`)));
-                      const missingDefault = defaultProvider?.id === provider.id && !defaultModel && !q;
-                      // Keep the account meter visible even when every model is pinned above.
-                      if (!remaining.length && !missingDefault && !(g.models.length && limitsKeyFor(g.provider))) return null;
-                      // A local provider can serve models out of several folders; when
-                      // the rows say where they live, group them under that heading.
-                      const locs = [...new Set(remaining.map((m) => m.details?.location ?? ''))];
-                      const byLoc =
-                        locs.length > 1
-                          ? locs.map((loc) => ({ loc, models: remaining.filter((m) => (m.details?.location ?? '') === loc) }))
-                          : [{ loc: '', models: remaining }];
-                      return (
-                        <div key={g.provider.id} role="group" aria-label={nameOf(g.provider)} className="mt-3 border-t border-line pt-3" data-provider-group={g.provider.id}>
-                          {header(g.provider.label, accountEmailOf(g.provider, accountEmails), true)}
-                          {limitsKeyFor(g.provider) && <ProviderUsageMeters limits={limitsOf(g.provider)} answered={answered.has(limitsKeyFor(g.provider)!)} />}
-                          {missingDefault && <button role="option" disabled aria-disabled="true" className="w-full px-3 py-2 text-left text-xs text-ink-faint">{settings?.defaultModelId} <span className="text-2xs">Default · {defaultStatus}</span></button>}
-                          {byLoc.map(({ loc, models: ms }) => (
-                            <React.Fragment key={loc || '_'}>
-                              {loc && (
-                                <p className="truncate px-4 pb-0.5 pt-1 text-2xs italic text-ink-faint" title={loc}>
-                                  {loc}
-                                </p>
-                              )}
-                              {ms.map((m) => row(g.provider, m, false))}
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      );
-                    })}
+            <div className={stacked ? 'min-h-0 flex-1 overflow-y-auto overscroll-contain' : `grid min-h-0 flex-1 ${columns.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`} data-model-columns={columns.length}>
+              {columns.map((column, index) => (
+                <section key={column.id} aria-label={`${column.label} models`} className={stacked ? 'min-w-0' : 'flex min-h-0 min-w-0 flex-col'} style={index > 0 ? (stacked ? { boxShadow: 'inset 0 1px 0 var(--line)', marginTop: 'var(--q-group)', paddingTop: 16 } : { boxShadow: 'inset 1px 0 0 var(--line)' }) : undefined} data-model-column={column.id}>
+                  {columns.length === 2 && <h3 className="quiet-group-label shrink-0 px-4 pb-2">{column.label}</h3>}
+                  <div className={stacked ? 'px-1' : 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-1'} data-model-scroll={column.id}>
+                    {pinnedGroup('Recent', recentModels, column.providers)}
+                    {pinnedGroup('★ Starred', starred, column.providers)}
+                    {families.map((f) => familyGroup(f, column.providers))}
+                    {q && !groups.some((g) => column.providers.includes(g.provider)) && <p className="px-3 py-1 text-2xs text-ink-faint">No matches.</p>}
                   </div>
                 </section>
               ))}
@@ -453,7 +476,7 @@ export function ModelPicker({
 
   return (
     // min-w-20: squeezed by a phone-width strip, the chip used to wrap its name one letter per line.
-    <div ref={ref} className={expanded ? 'h-full min-h-0 w-full min-w-0' : 'relative min-w-20 max-w-[240px]'}>
+    <div ref={ref} className={expanded ? 'h-full min-h-0 w-full min-w-0' : 'relative min-w-20 max-w-[260px]'}>
       {menu && <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}><ContextAction onClick={() => { void window.nekko.updateSettings({defaultProviderId:menu.pid,defaultModelId:menu.mid}).then(() => refreshSettings()).catch(e => useStore.getState().pushToast('error', String(e))); setMenu(null); }}>Set as default</ContextAction></ContextMenu>}
       {!expanded && <button
         className="ctl-menu max-w-full"
@@ -465,6 +488,7 @@ export function ModelPicker({
         title={unavailableModel ? `${unavailableModel} is not available right now. Pick a model again.` : needsChoice ? 'This chat has no model yet - pick one' : `Model: ${currentName} · ${providerLabel}`}
       >
         <span className={`min-w-0 ${placeholder && !modelId ? 'whitespace-nowrap' : 'whitespace-normal'} break-words text-left`} data-model-chip-name>{unavailableModel ? <><s className="opacity-80">{unavailableModel}</s> · unavailable</> : needsChoice ? 'Choose a model' : placeholder && !modelId ? placeholder : currentName}</span>
+        {chipAccount && !unavailableModel && !needsChoice && <span className="min-w-0 max-w-[96px] shrink truncate text-ink-faint" data-model-chip-account>{chipAccount}</span>}
         <span className="ctl-caret shrink-0">▾</span>
       </button>}
       {/* Portalled out of the pane's overflow clipping and clamped to the viewport. */}
@@ -520,13 +544,13 @@ export function AutoQualityMenu({
         <span className="ctl-caret">▾</span>
       </button>
       {open && (
-        <div className="card absolute bottom-8 left-0 z-40 w-60 p-2 shadow-(--shadow-float)" role="menu">
+        <div className="quiet-popover absolute bottom-8 left-0 z-40 w-60 p-2" role="menu">
           {AUTO_QUALITIES.map((q) => (
             <button
               key={q}
               role="menuitemradio"
               aria-checked={quality === q}
-              className={`flex w-full flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2 ${quality === q ? 'text-accent' : ''}`}
+              className={`quiet-row flex-col items-start gap-0 ${quality === q ? 'text-accent' : ''}`}
               onClick={() => { onPick(q); setOpen(false); }}
             >
               <span className="text-sm font-medium">{AUTO_QUALITY_META[q].label}</span>
@@ -537,7 +561,7 @@ export function AutoQualityMenu({
             <button
               role="menuitemcheckbox"
               aria-checked={!!followCapacity}
-              className="flex w-full items-start gap-2 rounded-lg px-3 py-1 text-left hover:bg-surface-2"
+              className="quiet-row items-start"
               onClick={() => onFollowCapacity(!followCapacity)}
             >
               <span
@@ -554,7 +578,7 @@ export function AutoQualityMenu({
               </span>
             </button>
           )}
-          <p className="border-t border-line px-3 pb-0.5 pt-1 text-2xs text-ink-faint">Applies to this chat only.</p>
+          <p className="px-3 pb-1 pt-2 text-2xs text-ink-faint">Applies to this chat only.</p>
         </div>
       )}
     </div>
