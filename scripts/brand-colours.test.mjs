@@ -12,7 +12,7 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 
 // The retired green brand: ground, tile end, cream line, sage mark (hex, and Swift's 0-255 forms).
 const legacy = [
-  /#(?:FF)?(?:101714|263d2d|f2f1e9|a7c8ac)\b/i,
+  /(?:#|0x)(?:FF)?(?:101714|263d2d|f2f1e9|a7c8ac)\b/i,
   /0x10\s*\/\s*255,\s*green:\s*0x17/i,
   /\b16\s*\/\s*255,\s*green:\s*23\s*\/\s*255/,
   /\b242\s*\/\s*255,\s*green:\s*241\s*\/\s*255/,
@@ -59,6 +59,11 @@ test('Android 12+ opens on the brand plum with the white mark', () => {
     assert.match(read(`apps/android/app/src/main/res/${theme}/themes.xml`),
       /windowSplashScreenBackground">@color\/ic_launcher_background</, theme);
   }
+});
+
+test('the Android pixel cat is plum with a white line', () => {
+  assert.match(read('apps/android/app/src/main/java/com/nekko/android/ui/components/PairSuccess.kt'),
+    /fill: Color = Color\(0xFF190019\),\s*line: Color = Color\.White,/);
 });
 
 test('the desktop pixel mascot is plum with a white line', () => {

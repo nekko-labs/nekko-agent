@@ -102,7 +102,7 @@ What the app draws in the brand's own colours, whatever theme is chosen. Before 
 | iPhone launch screen (`LaunchBrandPlum.storyboard`), opening animation, return dissolve and app lock cover | plum `#190019` | white cat | none |
 | Android 12+ opening splash | plum `#190019` (`ic_launcher_background`) | white mark (`ic_launcher_mark`) | none |
 | Desktop / Local Web UI startup splash | plum `#190019` (already, #2272) | white | none |
-| Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat; desktop `PixelHead`) | plum `#190019` | white line and eyes | mouth `#C99BB3` |
+| Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat, the pairing celebration; Android `PixelCat`; desktop `PixelHead`) | plum `#190019` | white line and eyes | mouth `#C99BB3` |
 | Outline brand mark on a themed screen (iPhone first run and pairing) | none | the theme's `accent` | none |
 | iPhone Live Activity card (fixed dark `#1C1C1E`) | none | none | Dark Nekko accent `#C084B5` (dot, mic, filled buttons; 5.8:1 on the card, 6.7:1 under its dark text), was the retired lavender `#8B7DFF` |
 
