@@ -69,3 +69,4 @@ Nekko asks for a star at most twice: under the reply to your 10th prompt, and un
 - Sending another prompt without choosing counts as **Not now**.
 - Starring, **Don’t ask again**, or a star GitHub already shows for your connected account end it for good.
 - Only prompts sent from that window or browser count, and the count stays there: it is not synced and never sent anywhere.
+- On Android the same card shows in the chat, under the reply to the 10th and 50th prompt sent from the phone. **Star on GitHub** opens the repository in your browser (there is no in-app star on the phone), and the count stays on that phone.
