@@ -25,7 +25,9 @@ final class ChatRefreshTests: XCTestCase {
         // Past the settle after layout (under 0.2 s), with no touch from the test.
         Thread.sleep(forTimeInterval: 0.5)
         XCTAssertTrue(latest.isHittable, "the end of the transcript is on screen")
-        let before = app.staticTexts["Message 29: let’s check the refresh at the end of this chat."]
+        // User rows combine their children and announce the author prefix.
+        let before = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@", "You: Message 29: let’s check the refresh at the end of this chat.")).firstMatch
         XCTAssertTrue(before.exists && before.isHittable, "the rows above the end are drawn too")
         let shot = XCTAttachment(screenshot: app.screenshot())
         shot.name = "late-transcript"
