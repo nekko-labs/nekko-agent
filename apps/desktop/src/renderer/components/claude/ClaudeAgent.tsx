@@ -18,23 +18,33 @@ import { Modal } from '../primitives/index.js';
  * answer instead of flipping the panel back to "not installed".
  */
 export function useClaudeCodeStatus(providerId?: string, account?: string): { status: ClaudeCodeStatus | null; checking: boolean; refresh: () => void } {
-  const [status, setStatus] = useState<ClaudeCodeStatus | null>(null);
+  const key = JSON.stringify([providerId ?? null, account ?? null]);
+  const [result, setResult] = useState<{ key: string; status: ClaudeCodeStatus } | null>(null);
   const [checking, setChecking] = useState(false);
+  const activeKey = useRef(key);
+  activeKey.current = key;
+  const request = useRef(0);
   const misses = useRef(0);
+  const lastKey = useRef(key);
   const refresh = useCallback(() => {
+    const sequence = ++request.current;
+    if (lastKey.current !== key) { lastKey.current = key; misses.current = 0; }
     setChecking(true);
-    window.nekko
-      .getClaudeCodeStatus(providerId, account)
-      .then((next) => setStatus((prev) => keepFound(prev, next, misses)))
-      .catch((e) => setStatus((prev) => keepFound(prev, { installed: false, message: String(e) }, misses)))
-      .finally(() => setChecking(false));
-  }, [providerId, account]);
+    void window.nekko.getClaudeCodeStatus(providerId, account)
+      .catch((e) => ({ installed: false, message: String(e) } as ClaudeCodeStatus))
+      .then((next) => {
+        // Never let an old identity read authorize another profile's Save.
+        if (activeKey.current !== key || request.current !== sequence) return;
+        setResult((prev) => ({ key, status: keepFound(prev?.key === key ? prev.status : null, next, misses) }));
+        setChecking(false);
+      });
+  }, [providerId, account, key]);
   useEffect(() => {
     refresh();
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    return () => { request.current++; window.removeEventListener('focus', refresh); };
   }, [refresh]);
-  return { status, checking, refresh };
+  return { status: result?.key === key ? result.status : null, checking, refresh };
 }
 
 /** Checks in a row that must miss a found Claude Code before it reads as uninstalled. */
