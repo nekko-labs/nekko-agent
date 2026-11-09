@@ -13,7 +13,7 @@ final class PillVelocityDiagnosticTests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-splash", "NO", "-appLock", "NO", "-onboarded", "YES",
                                "-theme", "light", "-expertMode", "YES", "-uiTestReset", "YES",
-                               "-pillPlacement", "across:0.0", "-uiTestChatRefresh", "-uiTestLocalModel",
+                               "-pillPlacement", "across:0.0", "-uiTestChatRefresh", "-uiTestLocalModel", "-uiTestPillHardware",
                                "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
         defer { app.terminate() }
@@ -25,6 +25,7 @@ final class PillVelocityDiagnosticTests: XCTestCase {
         panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .press(forDuration: 0.7, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.4)))
         pause()
+        attach(app, name + "-docked-preconditions")
         XCTAssertGreaterThan(panel.frame.midX, window.frame.width * 0.7, "the pill docks on the right")
         XCTAssertGreaterThan(panel.frame.height, panel.frame.width, "the gauges stack")
         attach(app, name + "-before")

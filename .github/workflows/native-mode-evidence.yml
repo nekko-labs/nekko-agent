@@ -119,6 +119,7 @@ jobs:
           sparse-checkout: |
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
+            apps/ios/scripts/pill-hardware-fixture.mjs
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -155,6 +156,13 @@ jobs:
           p.write_text(s)
           PYFIX
           fi
+      - name: Supply identical offline hardware input for the velocity diagnostic only
+        if: inputs.ios_test_file == 'apps/ios/UITests/PillVelocityDiagnosticTests.swift'
+        run: |
+          set -euo pipefail
+          node .evidence-harness/apps/ios/scripts/pill-hardware-fixture.mjs
+          echo "identical_pill_hardware_fixture=true" >> apps/ios/evidence/revisions.txt
+          shasum -a 256 .evidence-harness/apps/ios/scripts/pill-hardware-fixture.mjs apps/ios/Protocol/Sources/NekkoKit/HardwareMonitorModel.swift >> apps/ios/evidence/revisions.txt
       - name: Test native protocol and phone request payloads
         working-directory: apps/ios/Protocol
         run: swift test
