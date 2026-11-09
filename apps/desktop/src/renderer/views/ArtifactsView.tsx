@@ -132,6 +132,8 @@ export function ArtifactsView() {
   const [showIntro, setShowIntro] = useState(() => !libraryIntroSeen());
   const closeIntro = () => { dismissLibraryIntro(); setShowIntro(false); };
   const [entries, setEntries] = useState<ArtifactEntry[] | null>(null);
+  // Every candidate chat has been read, so an empty index really means no files yet.
+  const [indexed, setIndexed] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ArtifactEntry | null>(null);
   const [includeCompleted, setIncludeCompleted] = useState(true);
@@ -150,6 +152,7 @@ export function ArtifactsView() {
   const key = candidates.map((s) => `${s.id}:${s.updatedAt}`).join('|');
   useEffect(() => {
     let live = true;
+    setIndexed(false);
     (async () => {
       const lists: ArtifactEntry[][] = [];
       for (let i = 0; i < candidates.length; i += 6) {
@@ -163,6 +166,7 @@ export function ArtifactsView() {
         setEntries(mergeArtifacts(lists));
       }
       if (live && candidates.length === 0) setEntries([]);
+      if (live) setIndexed(true);
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -250,8 +254,24 @@ export function ArtifactsView() {
     );
   };
 
-  const empty = entries && shown.length === 0 && (
-    query ? 'Nothing matches.' : 'Your Library is ready for its first file. Documents, pages, designs and diagrams your agents write or link to show up here.'
+  // No files at all yet: the illustrated placeholder fills the page in every layout.
+  const noFiles = indexed && total === 0;
+  const empty = query && entries && shown.length === 0 ? 'Nothing matches.' : null;
+
+  const placeholder = (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center" data-library-empty>
+      <div className="w-full max-w-xs"><LibraryArtwork /></div>
+      <h2 className="text-xl font-semibold">What your agents made</h2>
+      <p className="max-w-sm text-sm text-ink-faint">
+        Nothing here yet. Reports, pages, designs and diagrams your agents write or link to in a chat show up here, grouped by kind.
+      </p>
+      <p className="mt-2 max-w-sm rounded-xl border border-line bg-surface-2 px-3 py-2 text-xs text-ink-soft">
+        Try asking an agent: “Create a one-page report and link the file in your reply.”
+      </p>
+      {!includeCompleted && (
+        <button type="button" className="btn btn-ghost mt-1 text-xs" onClick={() => setIncludeCompleted(true)}>Include completed chats</button>
+      )}
+    </div>
   );
 
   return (
@@ -259,15 +279,17 @@ export function ArtifactsView() {
       {showIntro && <LibraryIntro onClose={closeIntro} />}
       <header className={`${selected ? 'hidden md:flex' : 'flex'} min-w-0 items-center gap-3 border-b border-line px-4 py-2`}>
         {!hasAppChrome && <h1 className="view-title shrink-0">Library</h1>}
-        <div className="library-types min-w-0 overflow-x-auto">
-          <SlideToggle label="Show" options={typeOptions} value={current} onChange={pickShow} transitionName="library-show" />
-        </div>
+        {!noFiles && (
+          <div className="library-types min-w-0 overflow-x-auto">
+            <SlideToggle label="Show" options={typeOptions} value={current} onChange={pickShow} transitionName="library-show" />
+          </div>
+        )}
         <span className="ml-auto shrink-0 text-2xs tabular-nums text-ink-faint">{entries ? `${total} item${total === 1 ? '' : 's'}` : 'Reading chats…'}</span>
         <button type="button" className="btn btn-ghost shrink-0 px-3 py-1 text-xs" onClick={() => setShowIntro(true)}>Library guide</button>
-        <SlideToggle label="Layout" options={LAYOUT_OPTIONS} value={layout} onChange={pickLayout} iconOnly className="hidden shrink-0 md:inline-flex" transitionName="library-layout" />
+        {!noFiles && <SlideToggle label="Layout" options={LAYOUT_OPTIONS} value={layout} onChange={pickLayout} iconOnly className="hidden shrink-0 md:inline-flex" transitionName="library-layout" />}
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      {noFiles ? placeholder : <div className="flex min-h-0 flex-1">
         <aside className={`library-list ${selected ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col ${listWide ? '' : 'md:w-[340px] md:border-r md:border-line'}`}>
           <div className={`space-y-2 px-3 pb-2 pt-3 ${listWide ? 'md:px-5' : ''}`}>
             <input className="input rounded-lg px-3 py-1 text-xs" placeholder="Filter by name, file or chat…" aria-label="Filter Library" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -336,7 +358,7 @@ export function ArtifactsView() {
             </div>
           )}
         </section>
-      </div>
+      </div>}
     </div>
   );
 }

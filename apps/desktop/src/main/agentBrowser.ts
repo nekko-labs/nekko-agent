@@ -13,9 +13,12 @@ import { phaseRecorder, untimed, type BrowserTiming, type PhaseMark } from './ag
 export type { BrowserTiming } from './agentBrowserTiming.js';
 
 /** A hidden browser nobody has touched for this long is closed. Each one is a
- *  full renderer that keeps painting (backgroundThrottling is off), and agents
- *  rarely send `close`, so they used to pile up until the app quit. */
-const IDLE_CLOSE_MS = 10 * 60_000;
+ *  full renderer with its own compositor and GPU surfaces even while asleep,
+ *  and agents rarely send `close`, so they used to pile up until the app quit. */
+const IDLE_CLOSE_MS = 3 * 60_000;
+const REAP_EVERY_MS = 30_000;
+/** A tab no action has needed for this long stops rendering (see `tabRenderer`). */
+const SLEEP_AFTER_MS = 15_000;
 const MAX_TABS = 8;
 /** Screenshot pixels above this size are not attached to the model. */
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
@@ -51,10 +54,86 @@ export interface ShellBridge {
 }
 
 
-interface Tab { win: BrowserWindow; page: Page; log: PageLogEntry[] }
+interface Tab { win: BrowserWindow; page: Page; log: PageLogEntry[]; renderer: TabRenderer }
 
 /** Actions that wait on the page's next frame: a click's input ack, a screenshot's paint. */
 const FRAME_ACTIONS = new Set(['click', 'screenshot']);
+
+export interface TabRenderer {
+  /** Run `work` with the tab rendering; it goes back to sleep `sleepAfterMs` after the last hold ends. */
+  hold<T>(work: () => Promise<T>): Promise<T>;
+  dispose(): void;
+}
+
+/**
+ * Keep a hidden tab's renderer asleep between actions.
+ *
+ * The windows used to be created with backgroundThrottling off and the default
+ * paintWhenInitiallyHidden, so content treated every never-shown window as
+ * visible: each one kept its layers rasterized in the GPU process and drew
+ * about a frame a second for as long as the tab lived. Now a window starts
+ * hidden (`paintWhenInitiallyHidden: false`) with throttling allowed, so its
+ * render widget is really hidden: no frames, timers throttled, and nothing
+ * rasterized until an action needs it.
+ *
+ * `setBackgroundThrottling(false)` shows a hidden widget again as
+ * hidden-but-painting (Electron 45, `WebContents::SetBackgroundThrottling`),
+ * and `true` hides it again. A cross-site navigation replaces the widget with
+ * one created hidden, and a fresh out-of-process iframe's view is only shown
+ * together with its main widget, so a wake hides first and then shows, and
+ * runs again whenever a frame commits while the tab is awake: whatever widgets
+ * the page has by then all paint. Only the first of overlapping holds wakes, so
+ * a capture never hides a tab mid-action.
+ *
+ * `stopPainting()`, `startPainting()` and `setFrameRate()` are not used: in
+ * Electron they only act on offscreen-rendering windows and are no-ops here.
+ */
+export function tabRenderer(win: BrowserWindow, sleepAfterMs = SLEEP_AFTER_MS): TabRenderer {
+  let holds = 0;
+  let asleep = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cancel = () => { if (timer) clearTimeout(timer); timer = undefined; };
+  const wake = () => {
+    if (win.isDestroyed()) return;
+    win.webContents.setBackgroundThrottling(true);
+    win.webContents.setBackgroundThrottling(false);
+    asleep = false;
+  };
+  const onCommit = () => { if (!asleep) wake(); };
+  win.webContents.on('did-frame-navigate', onCommit);
+  const sleep = () => {
+    timer = undefined;
+    if (holds || asleep || win.isDestroyed()) return;
+    win.webContents.setBackgroundThrottling(true);
+    asleep = true;
+  };
+  const rest = () => {
+    cancel();
+    if (holds || asleep || win.isDestroyed()) return;
+    timer = setTimeout(sleep, sleepAfterMs);
+    timer.unref?.();
+  };
+  return {
+    async hold<T>(work: () => Promise<T>): Promise<T> {
+      cancel();
+      holds++;
+      try {
+        if (holds === 1) wake();
+        return await work();
+      } finally { holds--; rest(); }
+    },
+    dispose() { cancel(); if (!win.isDestroyed()) win.webContents.off('did-frame-navigate', onCommit); },
+  };
+}
+
+/** Two animation frames: the page has painted what it has. Bounded, so a page that never paints fails the capture rather than the request. */
+function nextFrames(win: BrowserWindow, timeoutMs = 5_000): Promise<unknown> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    win.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))').catch(() => {}),
+    new Promise((resolve) => { timer = setTimeout(resolve, timeoutMs); }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 /**
  * Run `work` with the hidden window's compositor kept awake. Once a hidden
@@ -98,6 +177,8 @@ export async function startAgentBrowser(options: {
   onTiming?: (timing: BrowserTiming) => void;
   /** Keep hidden windows producing frames during clicks and screenshots (default true; benchmarks compare without). */
   wakeFrames?: boolean;
+  /** How long a tab keeps rendering after its last action (default 15 s; tests shorten it). */
+  sleepAfterMs?: number;
   /** Called once per chat's partition: Settings > Connections' request guard. */
   guard?: (session: Electron.Session) => void;
 } = {}): Promise<{ url: string; token: string; close: () => void }> {
@@ -131,16 +212,18 @@ export async function startAgentBrowser(options: {
       if (chat.tabs.some((t) => !t.win.isDestroyed() && t.win.isVisible()) || now - chat.lastUsed < IDLE_CLOSE_MS) continue;
       closeChat(sessionId);
     }
-  }, 60_000);
+  }, REAP_EVERY_MS);
   reaper.unref();
 
   const makeWindow = (sessionId: string): BrowserWindow => {
     const win = new BrowserWindow({
       width: 1100, height: 760, title: 'Nekko Browser',
       show: false, skipTaskbar: true,
+      // Starts really hidden and asleep; `tabRenderer` wakes it for each action.
+      paintWhenInitiallyHidden: false,
       // On Linux, focusable=false changes window-manager stacking behavior.
       ...(process.platform !== 'linux' ? { focusable: false } : {}),
-      webPreferences: { partition: partitionFor(sessionId), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, disableDialogs: true },
+      webPreferences: { partition: partitionFor(sessionId), sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: true, disableDialogs: true },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     // The agent already gets a failed navigation back; keep Electron's
@@ -159,12 +242,17 @@ export async function startAgentBrowser(options: {
   const openTab = async (sessionId: string, chat: ChatBrowser, mark: PhaseMark = untimed): Promise<Tab> => {
     if (chat.tabs.length >= MAX_TABS) throw new Error(`At most ${MAX_TABS} tabs per chat; close one first.`);
     const win = makeWindow(sessionId);
+    const renderer = tabRenderer(win, options.sleepAfterMs);
     try {
-      await mark('window', () => win.loadURL('about:blank'));
-      const page = await chat.driver.adopt(win, mark);
-      const tab: Tab = { win, page, log: [] };
+      // Awake while the driver attaches, as an action would be.
+      const page = await renderer.hold(async () => {
+        await mark('window', () => win.loadURL('about:blank'));
+        return chat.driver.adopt(win, mark);
+      });
+      const tab: Tab = { win, page, log: [], renderer };
       watchPage(page, tab.log);
       win.on('closed', () => {
+        tab.renderer.dispose();
         chat.driver.forget(win);
         const index = chat.tabs.indexOf(tab);
         if (index < 0) return;
@@ -176,6 +264,7 @@ export async function startAgentBrowser(options: {
       chat.active = chat.tabs.length - 1;
       return tab;
     } catch (error) {
+      renderer.dispose();
       if (!win.isDestroyed()) win.destroy();
       throw error;
     }
@@ -215,7 +304,7 @@ export async function startAgentBrowser(options: {
     const result = chat.queue.then(async () => {
       if (action === 'tab_new') {
         const tab = fresh ? activeTab(chat)! : await openTab(sessionId, chat, mark);
-        if (typeof input.url === 'string') return { output: await runPageAction(tab.page, { action: 'navigate', url: input.url }, mark) };
+        if (typeof input.url === 'string') { const url = input.url; return { output: await tab.renderer.hold(() => runPageAction(tab.page, { action: 'navigate', url }, mark)) }; }
         return { output: `Opened tab ${chat.active}.\n${describeTabs(chat)}` };
       }
       if (action === 'tab_switch' || action === 'tab_close') {
@@ -238,9 +327,11 @@ export async function startAgentBrowser(options: {
       if (input.visible === false) tab.win.hide();
       if (action === 'tabs') return { output: describeTabs(chat) };
       if (action === 'logs') { const text = describeLogs(tab.log); tab.log.length = 0; return { output: text }; }
-      if (options.wakeFrames !== false && FRAME_ACTIONS.has(String(action))) return withFramesAwake(tab.win, () => pageAction(tab, chat, input, mark));
-      return pageAction(tab, chat, input, mark);
-    });
+      // Every page action runs with the renderer awake: a sleeping page has
+      // no frames, throttled timers and no IntersectionObserver updates.
+      if (options.wakeFrames !== false && FRAME_ACTIONS.has(String(action))) return tab.renderer.hold(() => withFramesAwake(tab.win, () => pageAction(tab, chat, input, mark)));
+      return tab.renderer.hold(() => pageAction(tab, chat, input, mark));
+    }).finally(() => { chat.lastUsed = Date.now(); });
     chat.queue = result.catch(() => {});
     return result;
   }
@@ -312,8 +403,14 @@ export async function startAgentBrowser(options: {
       const { sessionId } = input;
       if (typeof sessionId !== 'string' || !sessionId || sessionId.length > 200) throw new Error(input.tool === 'capture' ? 'Invalid capture session' : 'Invalid browser request.');
       if (input.tool === 'capture') {
-        const owned = activeTab(chats.get(sessionId))?.win;
-        reply(200, await captureWindow(sessionId, input, recorderUrl, owned)); return;
+        const tab = activeTab(chats.get(sessionId));
+        const owned = tab?.win;
+        const capture = () => captureWindow(sessionId, input, recorderUrl, owned);
+        // The owned tab may be asleep: wake it and let it paint before the capture.
+        if (tab && owned && !owned.isDestroyed() && input.action === 'screenshot' && input.window_id === `nekko:${owned.id}`) {
+          reply(200, await tab.renderer.hold(() => withFramesAwake(owned, async () => { await nextFrames(owned); return capture(); }))); return;
+        }
+        reply(200, await capture()); return;
       }
       validateBrowserInput(input);
       if (input.action === 'navigate' && !isAllowedNavigation(input.url)) throw new Error('Only HTTP(S) pages can be opened.');

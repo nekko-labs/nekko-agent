@@ -45,8 +45,33 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(out, 'index.html'));
     for (let i = 0; i < 80 && !await run('!!window.layoutFixture'); i++) await sleep(100);
     await sleep(500);
+    // No files yet: chats with no links, in the default layout, List and a narrow window.
+    const reopen = async () => { await run(`layoutFixture.store.getState().setView('command')`); await sleep(150); await run(`layoutFixture.store.getState().setView('artifacts')`); await sleep(700); };
     await run(`(() => {
       document.querySelector('.zones-intro button[aria-label="Close"]')?.click();
+      localStorage.setItem('nekko.libraryIntroSeen', '1');
+      localStorage.removeItem('nekko.libraryLayout');
+      const f = layoutFixture, now = Date.now();
+      f.records.slice(0, 3).forEach((s, n) => {
+        s.messages = [{ id: 'eq' + n, role: 'user', content: 'Hello', createdAt: now - 1000 }, { id: 'ea' + n, role: 'assistant', content: 'Hi, no files here.', createdAt: now }];
+        s.updatedAt = now - n; f.putCachedSession(s);
+      });
+      f.store.setState({ settings: { ...f.store.getState().settings, theme: 'dark' } }); f.store.getState().applyTheme();
+      f.store.getState().refreshSessions();
+    })()`);
+    win.setContentSize(1440, 900); await reopen();
+    await shot('empty-desktop');
+    if (!baseline) {
+      await check(`!!document.querySelector('[data-library-empty] svg') && !document.querySelector('[role="radiogroup"]') && !document.querySelector('.library-list')`, 'empty-shows-illustration-without-sliders');
+      await run(`localStorage.setItem('nekko.libraryLayout', 'list')`); await reopen();
+      await check(`!!document.querySelector('[data-library-empty] svg') && document.querySelector('[data-library-layout]').dataset.libraryLayout === 'list'`, 'empty-illustration-in-list-layout');
+      await shot('empty-list');
+    }
+    win.setContentSize(430, 932); await sleep(300);
+    await shot('empty-narrow');
+    if (!baseline) await check(`!!document.querySelector('[data-library-empty] svg')?.getBoundingClientRect().width`, 'empty-illustration-on-narrow');
+    await run(`localStorage.removeItem('nekko.libraryLayout'); layoutFixture.store.getState().setView('command')`); await sleep(150);
+    await run(`(() => {
       localStorage.setItem('nekko.libraryIntroSeen', '1');
       localStorage.removeItem('nekko.libraryLayout'); localStorage.removeItem('nekko.libraryCollapsed');
       const f = layoutFixture, files = ${js(FILES)}, now = Date.now();
