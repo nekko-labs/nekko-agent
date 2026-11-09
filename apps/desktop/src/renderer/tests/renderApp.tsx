@@ -15,7 +15,7 @@ import type { AppSettings } from '@nekko-agent/shared';
 const VIEWS = ['DesignBoardView', 'ArtifactsView', 'SkillsView', 'TrainingView', 'WorkflowsView', 'CommandCenterView', 'ModelsView', 'ModelServerView', 'ConnectorsView', 'MemoryView', 'SettingsView', 'OnboardingView'];
 const CHROME: Array<[string, string]> = [
   ['AboutNekko', 'AboutNekko'], ['UpdateBanner', 'UpdateBanner'], ['RelayPairing', 'RelayPairing'], ['CommandPalette', 'CommandPalette'],
-  ['DeepLink', 'DeepLinkListener'], ['Toasts', 'Toasts'], ['TitleBar', 'TitleBar'], ['ResourceMonitor', 'ResourceHud'], ['AutumnBackground', 'AutumnBackground'],
+  ['DeepLink', 'DeepLinkListener'], ['Toasts', 'Toasts'], ['TitleBar', 'TitleBar'], ['ResourceMonitor', 'ResourceHud'], ['AutumnBackground', 'AutumnBackground'], ['WinterBackground', 'WinterBackground'],
 ];
 
 export async function renderApp(settings: Partial<AppSettings>, view = 'command'): Promise<string> {

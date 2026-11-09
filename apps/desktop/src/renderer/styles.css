@@ -66,6 +66,112 @@
   .autumn-leaf { animation: none; top: 18%; opacity: 0.06; }
 }
 
+/* Winter: faint drifting snow, a drift along the bottom that piles up over the
+   first hour, and (late at night) an aurora. Same rules as autumn: never
+   intercepts input; everything pauses while the window is hidden. */
+.winter-background {
+  position: fixed;
+  inset: 44px 0 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+  color: var(--accent);
+}
+.winter-background.is-paused * { animation-play-state: paused; }
+.winter-flake {
+  position: absolute;
+  top: -24px;
+  opacity: 0;
+  animation: winter-snowfall 36s linear infinite;
+}
+.winter-snow-cat { animation-name: winter-snowfall-cat; }
+@keyframes winter-snowfall {
+  0% { transform: translate3d(0, -24px, 0) rotate(0deg); opacity: 0; }
+  8%, 88% { opacity: 0.2; }
+  30% { transform: translate3d(14px, 30vh, 0) rotate(70deg); }
+  60% { transform: translate3d(-10px, 62vh, 0) rotate(150deg); }
+  100% { transform: translate3d(8px, 104vh, 0) rotate(240deg); opacity: 0; }
+}
+/* The snow cat stays upright so the face reads, and only sways. */
+@keyframes winter-snowfall-cat {
+  0% { transform: translate3d(0, -24px, 0); opacity: 0; }
+  8%, 88% { opacity: 0.22; }
+  30% { transform: translate3d(-12px, 30vh, 0) rotate(-8deg); }
+  60% { transform: translate3d(10px, 62vh, 0) rotate(8deg); }
+  100% { transform: translate3d(-6px, 104vh, 0) rotate(0deg); opacity: 0; }
+}
+.winter-drift {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 56px;
+  opacity: 0.06;
+  transform-origin: bottom;
+  transform: scaleY(0.3);
+  animation: winter-pile-up 3600s linear forwards;
+}
+@keyframes winter-pile-up { to { transform: scaleY(1); } }
+.winter-aurora {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 140px;
+  opacity: 0.08;
+  background: linear-gradient(100deg, transparent 5%, var(--accent-2) 25%, var(--accent) 45%, var(--accent-2) 65%, transparent 90%);
+  background-size: 200% 100%;
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent);
+  mask-image: linear-gradient(to bottom, #000, transparent);
+  animation: winter-aurora 48s ease-in-out infinite alternate;
+}
+@keyframes winter-aurora {
+  from { background-position: 0% 0; opacity: 0.05; }
+  to { background-position: 100% 0; opacity: 0.1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .winter-flake { animation: none; top: 22%; opacity: 0.08; }
+  .winter-flake:nth-child(odd) { top: 58%; }
+  .winter-drift { animation: none; transform: scaleY(0.6); }
+  .winter-aurora { animation: none; }
+}
+
+/* Winter's hidden snowball (GreetingNekko): it arcs up and right from the
+   greeting cat, then bursts into six flakes. */
+.winter-snowball {
+  position: absolute;
+  z-index: 4;
+  left: 40px;
+  top: 10px;
+  pointer-events: none;
+  animation: winter-snowball-arc 620ms cubic-bezier(0.25, 0.6, 0.4, 1) forwards;
+}
+.winter-snowball > svg { display: block; animation: winter-snowball-hide 1100ms steps(1, end) forwards; }
+.winter-snowball-puff { position: absolute; left: 6px; top: 6px; }
+.winter-snowball-puff > i {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: #f8fafc;
+  box-shadow: 0 0 0 0.5px #94a3b8;
+  opacity: 0;
+  --angle: calc(var(--i) * 60deg);
+  animation: winter-snowball-puff 480ms ease-out 600ms forwards;
+}
+@keyframes winter-snowball-arc {
+  0% { transform: translate(0, 0) scale(0.6); }
+  55% { transform: translate(90px, -46px) scale(1); }
+  100% { transform: translate(170px, -10px) scale(1); }
+}
+@keyframes winter-snowball-hide { 0% { opacity: 1; } 55% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes winter-snowball-puff {
+  0% { opacity: 1; transform: rotate(var(--angle)) translateX(0); }
+  100% { opacity: 0; transform: rotate(var(--angle)) translateX(16px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* No flight or burst: the ball just appears where it would land, then goes. */
+  .winter-snowball { animation: none; transform: translate(150px, -10px); }
+  .winter-snowball-puff > i { animation: none; }
+}
+
 
 @custom-variant dark (&:is([data-theme="dark"] *));
 /* A device with no hover (a phone or tablet running the Local Web UI): row
@@ -1375,6 +1481,21 @@
     --ink-soft: #9ca6b6;
     --ink-faint: #969fab;
     --line: #3b4252;
+  }
+
+  /* Winter (seasonal): a snowy night. Midnight-blue surfaces kept low in
+     saturation, ice-blue accent; primary buttons take midnight text because
+     white on the pale accent would not read. */
+  [data-theme='dark'][data-preset='winter'] {
+    --paper: #0a111d;
+    --win: #0f1828;
+    --surface: #111b2b;
+    --surface-2: #1a2638;
+    --ink: #eaf2fb;
+    --ink-soft: #a8bbd0;
+    --ink-faint: #8a9db4;
+    --line: #233249;
+    --on-accent: #0a111d;
   }
 
   [data-theme='light'][data-preset='solar'] {

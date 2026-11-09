@@ -61,5 +61,6 @@ extension ThemePreset {
         ThemePreset(id: "x-tidepool-colour", label: "Colourful", mode: .light, accent: 0x0E4A4F, accent2: 0xB04F36, family: "Tidepool", paper: 0xC1E5E5, surface: 0xECF7F7, surface2: 0xDDF1F1, ink: 0x17151F, inkSoft: 0x00282C, inkFaint: 0x466667, line: 0xA1C4C4),
         ThemePreset(id: "x-tidepool-dark", label: "Dark", mode: .dark, accent: 0xEF8A6A, accent2: 0xF0A891, family: "Tidepool", paper: 0x003B40, surface: 0x0B1617, surface2: 0x152021, ink: 0xEEF5F6, inkSoft: 0xD0D9DA, inkFaint: 0xA3ADAE, line: 0x293536),
         ThemePreset(id: "autumn", label: "Spooky", mode: .dark, accent: 0xFB923C, accent2: 0xEAB308, family: nil, paper: nil, surface: nil, surface2: nil, ink: nil, inkSoft: nil, inkFaint: nil, line: nil),
+        ThemePreset(id: "winter", label: "Winter", mode: .dark, accent: 0x8FD3FE, accent2: 0x9EF0C9, family: nil, paper: 0x0A111D, surface: 0x111B2B, surface2: 0x1A2638, ink: 0xEAF2FB, inkSoft: 0xA8BBD0, inkFaint: 0x8A9DB4, line: 0x233249),
     ]
 }
