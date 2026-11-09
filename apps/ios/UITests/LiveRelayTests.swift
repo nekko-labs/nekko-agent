@@ -253,14 +253,21 @@ final class LiveRelayTests: XCTestCase {
         let test = app.buttons["settings.notify.test"]
         XCTAssertTrue(reveal(test, in: app))
         settle()
+        // The button is disabled while the phone isn't online, and a tap on it then does nothing.
+        let enabled = expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: test)
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: busyWait), .completed, "Send a test notification is enabled")
         test.tap()
         let result = app.staticTexts["settings.notify.testResult"]
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         // A slow simulator can drop the first-run prompt, and then iOS asks here instead.
-        // Not a fixed wait: the banner checked below is only up for a few seconds.
-        let deadline = Date().addingTimeInterval(20)
+        // The result comes back from the computer, so it gets as long as any other round trip
+        // here (20 s was too short: runs 42592729091, 42617821734). Polled, not a fixed wait:
+        // the banner checked below is only up for a few seconds. The pause keeps the poll from
+        // flooding the simulator with springboard queries while the app works.
+        let deadline = Date().addingTimeInterval(computerWait)
         while !result.exists, Date() < deadline {
             if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
         XCTAssertTrue(result.exists, "the test reports which path it took")
         XCTAssertTrue(result.label.contains("shown by the app"), result.label)
