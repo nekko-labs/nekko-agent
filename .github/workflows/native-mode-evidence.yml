@@ -1,4 +1,4 @@
-name: Native mode label evidence
+name: PR2362 matched late transcript diagnostic
 # Manual evidence only. Does not replace or change Native iOS/Android checks.
 # Dispatch at the feature commit: both app revisions use that exact test harness.
 # Use full commit SHAs for both inputs so a moving branch cannot change the comparison.
@@ -119,6 +119,7 @@ jobs:
           sparse-checkout: |
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
+            apps/ios/App/Views/ChatRefreshFixture.swift
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -138,6 +139,16 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # PR2362 diagnostic only: identical DEBUG-only delayed-read fixture on both
+          # revisions. Never overlay ChatView or any other production view.
+          if [ "$IOS_TEST_FILE" = apps/ios/UITests/ChatRefreshTests.swift ]; then
+            cp .evidence-harness/apps/ios/App/Views/ChatRefreshFixture.swift apps/ios/App/Views/ChatRefreshFixture.swift
+            {
+              echo "overlay=apps/ios/App/Views/ChatRefreshFixture.swift (DEBUG only)"
+              shasum -a 256 apps/ios/App/Views/ChatRefreshFixture.swift "$IOS_TEST_FILE" apps/ios/App/Views/ChatView.swift
+              git diff --stat -- apps/ios/App/Views/ChatRefreshFixture.swift "$IOS_TEST_FILE"
+            } >> apps/ios/evidence/revisions.txt
+          fi
           # Only the security comparison needs the debug-only in-memory fixture.
           # Production views and behavior remain unchanged in both revisions.
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/SecurityComparisonTests.swift" ]]; then
@@ -183,6 +194,10 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
           xcodebuild "${COMMON[@]}" build-for-testing
+          # Preserve real timing, including a failing baseline.
+          xcrun simctl io "$DEVICE" recordVideo evidence/late-transcript.mp4 &
+          VIDEO=$!
+          trap 'kill -INT "$VIDEO" || true; wait "$VIDEO" || true' EXIT
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
       - name: Export attachments and clean up owned simulator
