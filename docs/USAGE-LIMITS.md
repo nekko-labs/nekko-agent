@@ -28,11 +28,13 @@ Provider groups have dividers and more breathing room. The dropdown has 12px inn
 
 ## Utilization and Budget on the Agents wall
 
-Utilization lists every enabled cloud provider on its own row. A Claude plan card left over from an older build says the plan sign-in is no longer available and points to adding an API key in Models.
+Utilization lists every enabled cloud provider on its own row, led by the provider's logo. A Claude plan card left over from an older build says the plan sign-in is no longer available and points to adding an API key in Models.
 
 Budget defaults to **1m**. Its ranges use inclusive **UTC** days: today, 1wk (7 days), 1m (30), 6m (180), 1y (365), and all-time through today. The active button has an accent tint and pressed state. All recorded details follow that selection: estimated API spend, input/output tokens, top agent by API cost, local tokens, local/subscription savings, fallback and unpriced-token counts, and which used models appear in the pricing comparison. Catalog unit prices and the selected fallback are reference/configuration values, not range totals. Older hosts without daily detail show unavailable details rather than substituting lifetime totals.
 
-Savings are estimated API equivalents before subscription fees, hardware and electricity, not actual net savings. Local and subscription usage has $0 incremental recorded API spend. Unknown local models use the explicitly chosen fallback or remain unpriced; unpriced tokens are excluded from savings.
+Budget leads with two numbers. **Actual spend** is what metered API keys and cloud usage cost; subscription and local-model turns never count toward it. **Theoretical spend** is what your local-model and subscription tokens would have cost at API prices, in other words what they saved. A bar under them shows the paid share of the API-price total, and a short list breaks theoretical spend into local models and subscriptions, with the top paid agent and the range's tokens.
+
+Savings are estimated API equivalents before subscription fees, hardware and electricity, not actual net savings. Cloud models the price catalog lists at $0 (OpenRouter free models, for example) count as $0 in both numbers. Local and subscription usage has $0 incremental recorded API spend. Unknown local models use the explicitly chosen fallback or remain unpriced; unpriced tokens are excluded from savings.
 
 The 2026-10-13 batch is implemented, unit and fixture interaction tested with TS/Rust daily-summary golden parity coverage. Image and motion inspection are pending; parent-owned landing is still outstanding.
 

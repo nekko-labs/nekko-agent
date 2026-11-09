@@ -2,23 +2,23 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_WALL_STATE } from '../commandWall.js';
+import { cssRule, stylesheet } from '../tests/css.js';
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
 vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>()), useShown: () => true }));
 const quota = vi.hoisted(() => ({ byToken: {} as Record<string, any>, answered: new Set<string>(), nextRefreshAt: null as number | null }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => quota }));
 const emails = vi.hoisted(() => ({ byToken: {} as Record<string, string> }));
 vi.mock('../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('../accountEmails.js')>()), useAccountEmails: () => emails.byToken }));
-vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 const resources = vi.hoisted(() => ({ gpu: null as import('@nekko-agent/shared').GpuStats | null, watched: null as string | null }));
 vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useWatchedComputer: () => resources.watched, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: resources.gpu }) }));
 import { ComputerModelServer, LocalModels, MonitorsDock, MonitorsToggle, readComputerUtilization } from './MonitorsDock.js';
 function render(minimized = false) {
-  const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, insights: false, hardware: true, localModels: false }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
-  return renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+  const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: false, hardware: true, localModels: false }, minimized: { ...DEFAULT_WALL_STATE.dock.minimized, hardware: minimized } } };
+  return renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
 }
 describe('monitors panel show and hide', () => {
-  const props = { setState: vi.fn(), tasks: [], running: new Set<string>(), now: 0, sessions: [], providers: [], usage: null, vitals: { working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }, onOpenChat: vi.fn(), onOpenModels: vi.fn() };
+  const props = { setState: vi.fn(), tasks: [], running: new Set<string>(), now: 0, sessions: [], providers: [], usage: null, onOpenChat: vi.fn(), onOpenModels: vi.fn() };
   it('puts an icon-only hide button last in the header, explained by a tooltip', () => {
     const html = render();
     const header = html.slice(html.indexOf('monitors-dock__toolbar'), html.indexOf('</header>'));
@@ -61,8 +61,8 @@ describe('wall dock presentation', () => {
   });
   it('clarifies stale quota without claiming an active refresh', () => {
     quota.byToken.plan = { updatedAt: 1000, staleAfterMs: 1000, windows: [] };
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={5000} sessions={[]} providers={[{ id: 'plan', kind: 'chatgpt', label: 'Plan', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'plan' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={5000} sessions={[]} providers={[{ id: 'plan', kind: 'chatgpt', label: 'Plan', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'plan' }]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('monitors-dock__utilization');
     expect(html).toContain('Refresh provider quota');
     expect(html).not.toContain('Quota may be outdated');
@@ -72,8 +72,8 @@ describe('wall dock presentation', () => {
   });
   it.each([[17, 83, 'var(--success)'], [83, 17, 'var(--danger)'], [0, 100, 'var(--success)'], [100, 0, 'var(--danger)']])('shows ChatGPT %i used as %i left with usage-based warnings', (used, left, tone) => {
     quota.byToken = { synthetic: { windows: [{ label: '7-day', usedPercent: used, resetAt: 0 }], updatedAt: 0, staleAfterMs: 60000 } };
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt', baseUrl: '', kind: 'openai', auth: 'subscription', tokenKey: 'synthetic', enabled: true, label: 'ChatGPT' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt', baseUrl: '', kind: 'openai', auth: 'subscription', tokenKey: 'synthetic', enabled: true, label: 'ChatGPT' }]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain(`${left}% left`);
     expect(html).toContain(`aria-valuenow="${left}"`);
     expect(html).toContain(`width:${left}%;background:${tone}`);
@@ -82,8 +82,8 @@ describe('wall dock presentation', () => {
   it.each(['auth_expired', 'signed_out'] as const)('offers Sign in again right in the panel for %s', (kind) => {
     quota.byToken = {};
     (quota as any).problems = { chatgpt: { kind, at: 0 } };
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt-sub', kind: 'chatgpt', label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'chatgpt' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'chatgpt-sub', kind: 'chatgpt', label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'chatgpt' }]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('data-dock-signin');
     expect(html).toContain('>Sign in again</button>');
     expect(html).not.toContain('in Settings');
@@ -95,13 +95,13 @@ describe('wall dock presentation', () => {
     (quota as any).problems = {};
     emails.byToken = { 'chatgpt:a': 'davide@example.com', 'chatgpt:b': 'davide@work.example' };
     try {
-      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
+      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
       const providers = [
         { id: 'p1', kind: 'chatgpt' as const, label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'chatgpt:a' },
         { id: 'p2', kind: 'chatgpt' as const, label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'chatgpt:b' },
         { id: 'p3', kind: 'chatgpt' as const, label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'chatgpt:c' },
       ];
-      const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={providers} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+      const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={providers} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
       expect(html).toContain('ChatGPT<span class="monitors-dock__account" data-account-email="true"> · davide@example.com</span>');
       expect(html).toContain('davide@work.example');
       // A plan signed in before emails were recorded keeps the bare label.
@@ -111,33 +111,42 @@ describe('wall dock presentation', () => {
   it('tells a Claude plan card from an older build to use an API key, with no sign-in', () => {
     quota.byToken = {};
     (quota as any).problems = {};
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'old', kind: 'anthropic', label: 'Claude', baseUrl: '', enabled: true, auth: 'subscription' }]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'old', kind: 'anthropic', label: 'Claude', baseUrl: '', enabled: true, auth: 'subscription' }]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('Claude plan sign-in is no longer available');
     expect(html).not.toContain('data-dock-signin');
   });
-  it('exposes both savings separately and never asks for a monthly budget', () => {
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, insights: false, hardware: false, localModels: false } } };
+  it('splits Budget into actual and theoretical spend, and never asks for a monthly budget', () => {
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, hardware: false, localModels: false } } };
     const usage = { totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [{ date: '1970-01-01', input: 0, output: 0, cost: 0, avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } }], avoidedCosts: { local: 1.23, subscription: 4.56, benchmarkTokens: 100, unpricedTokens: 200 } };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={usage} vitals={{ working: 3, waiting: 1, automations: 2, terminals: 1, tokensToday: 212000, spend: 'Included in plan', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={usage} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     // The Vitals panel is gone from the dock.
     expect(html).not.toContain('tokens today');
-    expect(html).toContain('Local AI saved');
-    expect(html).toContain('$1.23');
-    expect(html).toContain('Subscription saved');
-    expect(html).toContain('$4.56');
+    // Actual is only metered API and cloud spend; theoretical is what local and subscription tokens saved.
+    expect(html).toContain('aria-label="Actual spend"');
+    expect(html).toContain('aria-label="Theoretical spend"');
+    const actual = html.slice(html.indexOf('data-spend="actual"'), html.indexOf('data-spend="theoretical"'));
+    expect(actual).toContain('$0.00');
+    const theoretical = html.slice(html.indexOf('data-spend="theoretical"'), html.indexOf('monitors-dock__breakdown'));
+    expect(theoretical).toContain('$5.79');
+    expect(html).toContain('Local models</dt><dd>$1.23');
+    expect(html).toContain('Subscriptions</dt><dd>$4.56');
+    // Nothing paid: the whole bar is savings.
+    expect(html).toContain('you paid 0%');
+    expect(html).not.toContain('data-part="actual"');
+    expect(html).not.toContain('Local AI saved');
     expect(html).toContain('200 unpriced tokens excluded');
     expect(html).toContain('Resize Budget monitor height');
     expect(html).not.toContain('Monthly budget (USD)');
   });
   it('filters Budget spend and tokens with the Insights time ranges', () => {
-    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, insights: false, hardware: false, localModels: false } } };
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: false, budget: true, hardware: false, localModels: false } } };
     const now = Date.parse('2026-10-08T12:00:00Z');
     const usage: import('@nekko-agent/shared').UsageSummary = { avoidedCosts: { subscription: 2200, local: 0, benchmarkTokens: 0, unpricedTokens: 0 }, totalInput: 0, totalOutput: 0, totalCost: 0, byModel: {}, bySession: {}, byProvider: {}, bySessionCost: {}, daily: [
       { date: '2026-10-08', input: 100, output: 50, cost: 1, bySessionCost: { recent: 1 }, localTokens: 42, modelIds: ['recent-local'], avoidedCosts: { local: 2.34, subscription: 5.67, benchmarkTokens: 42, unpricedTokens: 7 } },
       { date: '2026-08-01', input: 1000, output: 500, cost: 10, bySessionCost: { old: 10 }, localTokens: 9999, modelIds: ['old-model'], avoidedCosts: { local: 1234, subscription: 2200, benchmarkTokens: 9999, unpricedTokens: 8888 } },
     ] };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={now} sessions={[]} providers={[]} usage={usage} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={now} sessions={[]} providers={[]} usage={usage} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(html).toContain('aria-label="Budget time range"');
     for (const r of ['today', '1wk', '1m', '6m', '1y', 'all-time']) expect(html).toContain(`>${r}</button>`);
     // Default 1m (last 30 days) excludes August.
@@ -148,6 +157,11 @@ describe('wall dock presentation', () => {
     expect(html).toContain('$1.00');
     expect(html).toContain('$2.34');
     expect(html).toContain('$5.67');
+    // Theoretical sums both savings; the bar shows the paid share of the API-price total.
+    expect(html).toContain('$8.01');
+    expect(html).toContain('$9.01 at API prices · you paid 11%');
+    expect(html).toContain('data-part="actual" style="width:');
+    expect(html).toContain('Top paid agent</dt><dd><span class="monitors-dock__breakdown-name" title="Chat">Chat</span>$1.00');
     expect(html).toContain('42 tokens');
     expect(html).toContain('42 local tokens use the fallback');
     expect(html).toContain('7 unpriced tokens excluded');
@@ -173,6 +187,30 @@ describe('wall dock presentation', () => {
     expect(html).not.toContain('aria-label="Hardware monitor"');
     expect(html).not.toContain('role="meter"');
   });
+  it('gives Utilization and Automations their Gentleface icons, lit like a restore button when the header is hovered', () => {
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: true, utilization: true, budget: false, hardware: false, localModels: false } } };
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    expect(html).toContain('data-gf-icon="bar-chart-horizontal"');
+    expect(html).toContain('data-gf-icon="bolt"');
+    expect(html.match(/class="monitors-dock__monitor-header" data-icon-hover="true"/g)).toHaveLength(2);
+    expect(html).not.toContain('Insights');
+    const css = stylesheet('components/monitorsDock.css');
+    expect(cssRule(css, '.monitors-dock__monitor-icon').color).toBe('var(--accent)');
+    expect(cssRule(css, '.monitors-dock__minimized button').color).toBe('var(--accent)');
+  });
+  it('leads each Utilization provider with its logo', () => {
+    quota.byToken = {};
+    (quota as any).problems = {};
+    const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
+    const providers = [
+      { id: 'cg', kind: 'chatgpt' as const, label: 'ChatGPT', baseUrl: '', enabled: true, auth: 'subscription' as const, tokenKey: 'cg' },
+      { id: 'or', kind: 'openrouter' as const, label: 'OpenRouter', baseUrl: '', enabled: true },
+    ];
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={providers} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    expect(html).toContain('<div class="monitors-dock__provider-head"><span class="provider-mark provider-mark-tile"');
+    expect(html).toContain('src="./providers/openai.svg"');
+    expect(html).toContain('src="./providers/openrouter.svg"');
+  });
 });
 
 describe('Local models monitor', () => {
@@ -183,7 +221,7 @@ describe('Local models monitor', () => {
   const models = [{ id: 'qwen', name: 'Qwen3 8B', path: '/m/qwen.gguf', sizeBytes: 5 * GB }, { id: 'gemma', name: 'Gemma 3 27B', path: '/m/gemma.gguf', sizeBytes: 16 * GB }] as any;
   it('is offered in Configure and on by default, under Hardware', () => {
     const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { ...DEFAULT_WALL_STATE.dock.monitors, utilization: false, budget: false, automations: false } } };
-    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={{ working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] }} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+    const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
     expect(DEFAULT_WALL_STATE.dock.monitors.localModels).toBe(true);
     expect(html).toContain('aria-label="Local models monitor"');
     expect(html.indexOf('aria-label="Hardware monitor"')).toBeLessThan(html.indexOf('aria-label="Local models monitor"'));
@@ -220,7 +258,6 @@ describe('Local models monitor', () => {
 });
 
 describe('monitors follow the computer switch', () => {
-  const vitals = { working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] };
   it("reads a connected computer's providers, quota by provider id, and usage through its gate", async () => {
     const calls: unknown[][] = [];
     const read = vi.fn(async (id: string, channel: string, args: unknown[] = []) => {
@@ -250,8 +287,8 @@ describe('monitors follow the computer switch', () => {
   it("swaps Utilization to the watched computer's, without this computer's providers or Manage providers", () => {
     resources.watched = 'gomi';
     try {
-      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, insights: false, hardware: false, localModels: false } } };
-      const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'mine', kind: 'chatgpt', label: 'My ChatGPT', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'mine' }]} usage={null} vitals={vitals} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+      const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, monitors: { automations: false, utilization: true, budget: false, hardware: false, localModels: false } } };
+      const html = renderToStaticMarkup(<MonitorsDock state={state} setState={vi.fn()} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[{ id: 'mine', kind: 'chatgpt', label: 'My ChatGPT', baseUrl: '', enabled: true, auth: 'subscription', tokenKey: 'mine' }]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
       expect(html).toContain("Reading that computer&#x27;s providers…");
       expect(html).not.toContain('My ChatGPT');
       expect(html).not.toContain('Manage providers');

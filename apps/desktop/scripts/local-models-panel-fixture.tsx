@@ -43,7 +43,7 @@ function Fixture() {
   const reset = (opts: { empty?: boolean; side?: 'right' | 'bottom' } = {}) => {
     empty = !!opts.empty;
     localStorage.clear();
-    const dock = { ...DEFAULT_WALL_STATE.dock, show: true, side: opts.side ?? 'right', monitorOrder: ['hardware', 'localModels', 'utilization', 'budget', 'automations', 'insights'], monitors: { hardware: true, localModels: true, utilization: false, budget: false, automations: false, insights: false } };
+    const dock = { ...DEFAULT_WALL_STATE.dock, show: true, side: opts.side ?? 'right', monitorOrder: ['hardware', 'localModels', 'utilization', 'budget', 'automations'], monitors: { hardware: true, localModels: true, utilization: false, budget: false, automations: false } };
     useStore.setState({ view: 'command', providers: [provider], models: [], activeProviderId: null, sessions: [], terminals: [], workspaces: [], activeWorkspaceId: null, activeSessionId: null, activeProjectId: null, settings: { providers: [provider], workspaceFolders: [], workspaces: [], monitors: { cpu: true, memory: true, gpu: true, vram: true }, theme: 'dark', experimental: {}, agent: {}, ui: {}, commandWall: { ...DEFAULT_WALL_STATE, zonesIntro: true, root: null, hero: null, autoAdd: false, watermark: Date.now(), dock } }, activeSkillBySession: {}, prsBySession: {}, installedSkillDefs: [], contextPanelOpen: false } as any);
     setEpoch((e) => e + 1);
   };

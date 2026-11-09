@@ -2,7 +2,6 @@ import { CreateMenu } from '../components/CreateMenu.js';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../store.js', () => ({ useStore: Object.assign(() => ({}), { getState: () => ({}) }) }));
 vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => null, AgentWindowDropdown: () => null, defaultFolderIds: () => [] }));
-vi.mock('../components/InsightsBox.js', () => ({}));
 vi.mock('../components/CommandWall.js', () => ({ CommandWall: () => null, TerminalExcerpt: () => null }));
 vi.mock('../components/WallComposer.js', () => ({ WallComposer: () => null }));
 vi.mock('../components/MonitorsDock.js', () => ({ MonitorsDock: () => null }));

@@ -88,7 +88,6 @@ export * from './spec.js';
 export * from './work-modes.js';
 export * from './saved-modes.js';
 export * from './orchestration.js';
-export * from './insights.js';
 export * from './messaging.js';
 export * from './model-select.js';
 export * from './agent-steps.js';

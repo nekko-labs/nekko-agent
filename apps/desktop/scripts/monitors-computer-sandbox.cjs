@@ -13,7 +13,7 @@ const js = value => JSON.stringify(value).replace(/</g, '\\u003c');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { scenes: {}, checks: [], errors: [] };
 app.disableHardwareAcceleration();
-const monitors = { hardware: true, localModels: true, utilization: true, budget: false, automations: false, insights: false };
+const monitors = { hardware: true, localModels: true, utilization: true, budget: false, automations: false };
 const wall = { root: { id: 'mode-pane', kind: 'chat', refId: 'd' }, hero: 'd', watermark: 1, autoAdd: false, layout: { mode: 'focus' }, dock: { side: 'right', monitors, show: true, simpleShow: true }, agentPanel: { show: true }, zonesIntro: true };
 const GB = 1024 ** 3;
 // This computer: one small model and a ChatGPT plan. gomi: a big model and its own Claude plan.

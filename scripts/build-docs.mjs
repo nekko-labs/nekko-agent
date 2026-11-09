@@ -305,6 +305,10 @@ ${rendered.html}
     </dialog>
     <script src="/docs.js?v=${ASSET_VERSION}" defer></script>
     <script src="/analytics.js?v=1" defer></script>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>
 `;

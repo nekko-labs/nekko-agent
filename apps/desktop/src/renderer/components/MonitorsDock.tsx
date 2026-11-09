@@ -2,18 +2,19 @@ import { monitorPickup } from './monitorPickup.js';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { AutomationTask, EngineStatus, GpuStats, LocalModel, MonitorKind, ProviderConfig, RuntimeStatus, SessionSummary, SubscriptionLimits, SystemStats, UsageSummary } from '@nekko-agent/shared';
 import { formatTemperature, temperatureTone, RUNTIME_CAPABILITIES, MODEL_PRICING, MODEL_COMPARISON_TIERS, MODEL_PRICING_SOURCE, MODEL_PRICING_CHECKED_AT, getModelPrice, DEFAULT_LOCAL_COST_BENCHMARK, describeLimitsProblem, formatUSD, gpuMemoryLabel, isLocalProvider, limitsKeyFor, oauthProviderOffered } from '@nekko-agent/shared';
-import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type InsightsPrefs, type MonitorKey } from '../commandWall.js';
+import { MONITORS, normalizeMonitorOrder, placeMonitor, reorderMonitor, type CommandWallState, type MonitorKey } from '../commandWall.js';
 import { useStore } from '../store.js';
 import { useProviderLimitsPortfolio } from '../useLimits.js';
 import { accountEmailOf, useAccountEmails } from '../accountEmails.js';
 import { BUDGET_RANGE_LABEL, budgetRange, localRuntimeMetrics, utilizationProviders } from './monitorMetrics.js';
 import { AutomationsPane } from './AutomationsPane.js';
-import { InsightsBox, type Vitals } from './InsightsBox.js';
 import { RangeToggles } from './RangeToggles.js';
 import type { InsightRange } from '../insightRanges.js';
 import { MonitorComputerSwitch, useMonitors, useResourceSample, useWatchedComputer } from './ResourceMonitor.js';
 import { BackgroundChip, useBackgroundState } from './BackgroundChip.js';
-import { BrainIcon, ServerIcon, MoneyIcon, ListIcon, GearIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon, PanelIcon } from '../icons.js';
+import { ServerIcon, MoneyIcon, SlidersIcon, CloseIcon, MinimizeIcon, CubeIcon, PanelIcon } from '../icons.js';
+import { GfBarChartHorizontalIcon, GfBoltIcon } from '../gentleface-icons.js';
+import { ProviderMark, providerMarkKind } from './providers/ProviderMark.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from './runtimes/verdict.js';
 import { HoverTip } from './HoverTip.js';
 import './monitorsDock.css';
@@ -25,7 +26,7 @@ import { dockMinimizeTransition } from './dockMinimize.js';
 import { useExpertMode } from '../simpleMode.js';
 import { EASE_OUT } from '../easing.js';
 
-const MONITOR_ICONS = { automations: GearIcon, utilization: ListIcon, budget: MoneyIcon, insights: BrainIcon, hardware: ServerIcon, localModels: CubeIcon };
+const MONITOR_ICONS: Record<MonitorKey, (p: { className?: string }) => React.ReactElement> = { automations: GfBoltIcon, utilization: GfBarChartHorizontalIcon, budget: MoneyIcon, hardware: ServerIcon, localModels: CubeIcon };
 
 export interface MonitorsDockProps {
   state: CommandWallState;
@@ -36,7 +37,6 @@ export interface MonitorsDockProps {
   sessions: SessionSummary[];
   providers: ProviderConfig[];
   usage: UsageSummary | null;
-  vitals: Vitals;
   onOpenChat: (id: string) => void;
   onOpenModels: () => void;
 }
@@ -198,8 +198,6 @@ export function MonitorsDock(props: MonitorsDockProps) {
   }, [configure]);
   const patch = (next: Partial<CommandWallState['dock']>) => setState((s) => ({ ...s, dock: { ...s.dock, ...next } }));
   const toggleMonitor = (key: MonitorKey, enabled: boolean) => setState((s) => ({ ...s, dock: { ...s.dock, monitors: { ...s.dock.monitors, [key]: enabled } } }));
-  const insights = (prefs: InsightsPrefs) => setState((s) => ({ ...s, insights: prefs }));
-  const insightProps = { usage: props.usage, sessions: props.sessions, providers: props.providers, vitals: props.vitals, onOpenModels: props.onOpenModels };
 
   const minimize = (key: MonitorKey, value: boolean) => {
     minimizeTransition.current.cancel();
@@ -290,7 +288,7 @@ export function MonitorsDock(props: MonitorsDockProps) {
           return <React.Fragment key={p.key}>
           {lift && !lifted && <LandingZone open={slot === restIndex} height={lift.height} />}
           <section className={`monitors-dock__monitor${collapsing === p.key ? ' monitors-dock__monitor--collapsing' : ''}`} data-monitor={p.key} data-monitor-lifted={lifted ? '' : undefined} aria-label={`${p.label} monitor`}>
-          <header className="monitors-dock__monitor-header" draggable={sideDock && collapsing === null} tabIndex={sideDock ? 0 : undefined}
+          <header className="monitors-dock__monitor-header" data-icon-hover draggable={sideDock && collapsing === null} tabIndex={sideDock ? 0 : undefined}
             aria-label={sideDock ? `${p.label} monitor header; use Alt+ArrowUp or Alt+ArrowDown to reorder` : undefined}
             title={sideDock ? 'Drag header to reorder; Alt+ArrowUp/Down moves this monitor' : undefined}
             onPointerDown={(e) => {
@@ -332,7 +330,6 @@ export function MonitorsDock(props: MonitorsDockProps) {
             {p.key === 'automations' && <AutomationsPane tasks={props.tasks} running={props.running} now={props.now} onOpen={props.onOpenChat} />}
             {p.key === 'utilization' && <Utilization providers={props.providers} usage={props.usage} now={props.now} onOpenModels={props.onOpenModels} />}
             {p.key === 'budget' && <Budget usage={props.usage} sessions={props.sessions} providers={props.providers} now={props.now} />}
-            {p.key === 'insights' && <InsightsBox budgetMonitorPresent {...insightProps} prefs={state.insights} onPrefs={insights} />}
             {p.key === 'hardware' && <Hardware providers={props.providers} />}
             {p.key === 'localModels' && <LocalModels />}
           </ResizableMonitorBody>
@@ -477,7 +474,10 @@ function Utilization({ providers, usage: localUsage, now, onOpenModels }: Pick<M
       const needsSignIn = problem?.kind === 'auth_expired' || problem?.kind === 'signed_out';
       const email = accountEmailOf(provider, accountEmails);
       return <div key={provider.id} className="monitors-dock__provider" data-limits-problem={problem?.kind}>
-        <strong className="monitors-dock__provider-name" title={email ? `${provider.label} · ${email}` : undefined}>{provider.label}{email && <span className="monitors-dock__account" data-account-email> · {email}</span>}</strong>
+        <div className="monitors-dock__provider-head">
+          <ProviderMark kind={providerMarkKind(provider)} tile />
+          <strong className="monitors-dock__provider-name" title={email ? `${provider.label} · ${email}` : undefined}>{provider.label}{email && <span className="monitors-dock__account" data-account-email> · {email}</span>}</strong>
+        </div>
         {status && <p role={problem ? 'status' : undefined} style={problem ? { color: needsSignIn ? 'var(--danger)' : 'var(--warning)' } : undefined}>{needsSignIn ? signInStatus(problem!.kind) : status}</p>}
         {/* An expired or missing sign-in is fixed right here, with the same
             sign-in the provider card uses, not by a trip to Settings. */}
@@ -571,17 +571,41 @@ function Budget({ usage, now, sessions, providers }: Pick<MonitorsDockProps, 'us
     } catch { setError('Could not update cloud comparison. Please try again.'); }
     finally { setSaving(false); }
   };
+  // Actual: what metered API keys and cloud usage cost. Theoretical: what the
+  // local and subscription tokens would have cost at API prices, i.e. saved.
+  const theoretical = avoided ? avoided.local + avoided.subscription : null;
+  const atApiPrices = spend != null && theoretical != null ? spend + theoretical : null;
+  const paidShare = atApiPrices ? (spend! / atApiPrices) * 100 : null;
+  const topTitle = top && top[1] > 0 ? sessions.find(s => s.id === top[0])?.title ?? 'Chat' : null;
+  const compact = (n: number) => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
   return <div className="monitors-dock__metrics monitors-dock__budget">
     <RangeToggles chart="Budget" range={range} onChange={setRange} />
-    <div><div className="monitors-dock__metric-row"><span>Spend <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{spend == null ? 'Unavailable' : formatUSD(spend)}</strong></div><p className="monitors-dock__note">Estimated recorded API spend · UTC · excludes subscriptions</p></div>
-    <div className="monitors-dock__metric-row"><span>Tokens <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : 'Unavailable'}</strong></div>
-    <div className="monitors-dock__metric-row"><span>Top agent <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{top && top[1] > 0 ? `${sessions.find(s => s.id === top[0])?.title ?? 'Chat'} · ${formatUSD(top[1])}` : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</strong></div>
-    <div className="monitors-dock__metric-row"><span>Local models <small>({BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{usage ? '$0 API' : 'Unavailable'} · {ranged?.localTokens == null ? 'Unavailable' : ranged.localTokens.toLocaleString()} tokens</strong></div>
-    <div className="monitors-dock__savings">
-      <div className="monitors-dock__metric-row"><span>Local AI saved <small>(est. · {BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{avoided ? formatUSD(avoided.local) : 'Unavailable'}</strong></div>
-      <div className="monitors-dock__metric-row"><span>Subscription saved <small>(est. · {BUDGET_RANGE_LABEL[range].toLowerCase()})</small></span><strong>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</strong></div>
-      <p className="monitors-dock__note">{BUDGET_RANGE_LABEL[range]} API equivalents, before plan fees, hardware and electricity.</p>
+    <div className="monitors-dock__spend-grid">
+      <section className="monitors-dock__spend" data-spend="actual" aria-label="Actual spend">
+        <span className="monitors-dock__spend-label">Actual spend</span>
+        <strong className="monitors-dock__spend-value">{spend == null ? 'Unavailable' : formatUSD(spend)}</strong>
+        <span className="monitors-dock__spend-hint">API and cloud bills</span>
+      </section>
+      <section className="monitors-dock__spend" data-spend="theoretical" aria-label="Theoretical spend">
+        <span className="monitors-dock__spend-label">Theoretical spend</span>
+        <strong className="monitors-dock__spend-value">{theoretical == null ? 'Unavailable' : formatUSD(theoretical)}</strong>
+        <span className="monitors-dock__spend-hint">Local and subscriptions</span>
+      </section>
     </div>
+    {paidShare != null && <div className="monitors-dock__split">
+      <div className="monitors-dock__split-bar" role="img" aria-label={`You paid ${Math.round(paidShare)}% of the ${formatUSD(atApiPrices!)} this usage costs at API prices`}>
+        {paidShare > 0 && <span data-part="actual" style={{ width: `${paidShare}%` }} />}
+        {paidShare < 100 && <span data-part="theoretical" style={{ width: `${100 - paidShare}%` }} />}
+      </div>
+      <p className="monitors-dock__note">{formatUSD(atApiPrices!)} at API prices · you paid {Math.round(paidShare)}%</p>
+    </div>}
+    <dl className="monitors-dock__breakdown" aria-label={`Budget breakdown, ${BUDGET_RANGE_LABEL[range].toLowerCase()}`}>
+      <div data-row="local"><dt>Local models</dt><dd>{avoided ? formatUSD(avoided.local) : 'Unavailable'}{ranged?.localTokens != null && <small>{ranged.localTokens.toLocaleString()} tokens</small>}</dd></div>
+      <div data-row="subscription"><dt>Subscriptions</dt><dd>{avoided ? formatUSD(avoided.subscription) : 'Unavailable'}</dd></div>
+      <div data-row="top"><dt>Top paid agent</dt><dd>{topTitle ? <><span className="monitors-dock__breakdown-name" title={topTitle}>{topTitle}</span>{formatUSD(top![1])}</> : ranged?.bySessionCost == null ? 'Unavailable' : 'No API spend'}</dd></div>
+      <div data-row="tokens"><dt>Tokens</dt><dd title={ranged ? `${ranged.input.toLocaleString()} in · ${ranged.output.toLocaleString()} out` : undefined}>{ranged ? `${compact(ranged.input)} in · ${compact(ranged.output)} out` : 'Unavailable'}</dd></div>
+    </dl>
+    <p className="monitors-dock__note">{BUDGET_RANGE_LABEL[range]} · UTC. Theoretical is the API price of the same tokens, before plan fees, hardware and electricity.</p>
     <details><summary>Cloud pricing comparison</summary>
       <label className="monitors-dock__benchmark">Fallback for unpriced local models
         <select value={benchmark} disabled={saving} onChange={(e) => void changeBenchmark(e.target.value)}>

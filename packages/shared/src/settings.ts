@@ -76,7 +76,7 @@ export type WallLayoutMode = 'grid' | 'focus';
 /** `fixedGrid`: Dynamic draws even rows and columns (`rows` x `cols`) instead of the free-form split tree. */
 export interface WallLayout { mode: WallLayoutMode; cols: number; rows: number; fixedGrid?: boolean }
 export type MonitorsSide = 'right' | 'left' | 'top' | 'bottom';
-export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'insights' | 'hardware' | 'localModels';
+export type MonitorKey = 'automations' | 'utilization' | 'budget' | 'hardware' | 'localModels';
 export interface MonitorsDock {
   side: MonitorsSide;
   /** Whether the panel is open in Detailed. */
@@ -97,12 +97,13 @@ export interface MonitorsDock {
 export const DEFAULT_WALL_LAYOUT: WallLayout = { mode: 'grid', cols: 3, rows: 2, fixedGrid: false };
 export const DEFAULT_MONITORS_DOCK: MonitorsDock = {
   side: 'right', show: true, simpleShow: false,
-  // The hardware monitor leads; a Vitals panel was here until 2026-10-13
-  // (sanitizeMonitorsDock drops it from saved docks). Local models sits under
-  // Hardware: which model holds the GPU explains what the meters above report.
-  monitorOrder: ['hardware', 'localModels', 'utilization', 'budget', 'automations', 'insights'],
-  minimized: { hardware: false, localModels: false, utilization: false, budget: false, automations: false, insights: false },
-  monitors: { hardware: true, localModels: true, utilization: true, budget: true, automations: true, insights: false },
+  // The hardware monitor leads; a Vitals panel was here until 2026-10-13 and an
+  // Insights panel until 2026-11-09 (sanitizeMonitorsDock drops both from saved
+  // docks). Local models sits under Hardware: which model holds the GPU
+  // explains what the meters above report.
+  monitorOrder: ['hardware', 'localModels', 'utilization', 'budget', 'automations'],
+  minimized: { hardware: false, localModels: false, utilization: false, budget: false, automations: false },
+  monitors: { hardware: true, localModels: true, utilization: true, budget: true, automations: true },
 };
 
 /** The saved Agent board wall; `root` is the renderer's split tree (`layout.ts`), checked on load. */
@@ -119,7 +120,8 @@ export interface CommandWallSetting {
   root: unknown;
   autoAdd: boolean;
   filter: 'all' | 'chat' | 'terminal';
-  insights: { panels: Record<string, boolean> };
+  /** The retired Insights monitor's panel choices; walls saved before 2026-11-09 carry it, nothing reads it. */
+  insights?: { panels: Record<string, boolean> };
   watermark: number;
   /** Where the wall's one composer sits, and the size it was dragged to (CSS pixels; absent means default). */
   composer?: { side: 'top' | 'bottom'; align: 'left' | 'center' | 'right'; width?: number; height?: number };

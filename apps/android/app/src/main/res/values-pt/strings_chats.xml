@@ -248,4 +248,9 @@
     <string name="chats_group_month">Últimos 30 dias</string>
     <string name="chats_group_older">Mais antigos</string>
     <string name="chats_tool_step_up">Sempre permitir %2$s neste chat em %1$s</string>
+    <string name="chats_pair_success_title">Conectado!</string>
+    <string name="chats_pair_success_named">%1$s está pareado. As conversas estão a caminho.</string>
+    <string name="chats_pair_success_body">Seu computador está pareado. As conversas estão a caminho.</string>
+    <string name="chats_pair_success_done">Vamos lá</string>
+    <string name="chats_pair_success_illustration">Seu computador e este telefone estão conectados</string>
 </resources>
