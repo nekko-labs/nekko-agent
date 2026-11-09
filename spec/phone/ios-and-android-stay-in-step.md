@@ -54,7 +54,6 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([repo
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
 | Full system-permissions checklist in onboarding and Settings (no video) | Notifications-only onboarding; checklist not yet implemented | [#2251](https://github.com/nekko-labs/nekko-agent/issues/2251) |
-| Remember expanded/collapsed chat groups across launches | `rememberSaveable` only; durable phone preference pending | [#2133](https://github.com/nekko-labs/nekko-agent/issues/2133) |
 | Computer controls: persistent connection opt-out, Models disclosure and filters, Cloud fleet group, and service management | Not implemented on Android | [#2059](https://github.com/nekko-labs/nekko-agent/issues/2059) |
 | Watching and Done groups, collapsible groups (PR status on rows landed 2026-11-09) | Only a Needs you group | [#2107](https://github.com/nekko-labs/nekko-agent/issues/2107) |
 | One chat list across every computer, group by computer | One computer's list at a time | [#2108](https://github.com/nekko-labs/nekko-agent/issues/2108) |

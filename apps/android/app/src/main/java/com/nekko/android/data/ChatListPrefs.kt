@@ -24,4 +24,22 @@ object ChatListPrefs {
             }
         },
     )
+
+    /**
+     * The groups closed on this phone, by their stable key (the iPhone's `openedChatGroups`,
+     * inverted because Android's groups start open). Kept across leaving the list and cold
+     * launches; a group never closed stays open. Anything unreadable reads as none closed.
+     */
+    val COLLAPSED_GROUPS: PhonePrefs.Key<Set<String>> = PhonePrefs.key(
+        "chatList.collapsedGroups",
+        emptySet(),
+        { keys -> JsonArray(keys.sorted().map(::JsonPrimitive)).toString() },
+        { raw ->
+            (runCatching { Json.parseToJsonElement(raw) }.getOrNull() as? JsonArray)
+                ?.mapNotNull { runCatching { it.jsonPrimitive.contentOrNull }.getOrNull() }?.toSet()
+        },
+    )
+
+    /** [collapsed] after a tap on [key]'s header. */
+    fun toggled(collapsed: Set<String>, key: String): Set<String> = if (key in collapsed) collapsed - key else collapsed + key
 }
