@@ -89,7 +89,13 @@ object ConnectionAdvice {
                 "The relay answers, but $computer isn’t connected to it. Wake $computer and open Nekko Agent with Remote access on.",
                 "If $computer is awake, check it uses the same relay: Settings → Remote access shows it.",
             )
-            RelayState.CONNECTING -> buildList {
+            RelayState.CONNECTING -> if (detail == RelayStatus.HOST_NOT_FOUND) {
+                // The paired address is gone: checking the internet won't help, pairing again will.
+                listOf(
+                    "$host doesn’t exist anymore, so this phone can’t reach $computer through it.",
+                    "On $computer, open Settings → Remote access, change how phones connect (Tailscale works with nothing hosted), then pair this phone again.",
+                )
+            } else buildList {
                 RelayHint.problem(relayUrl, debug)?.let { add(RelayHint.message(it, computer)) }
                 if (Tailnet.isTailnetRelay(relayUrl)) {
                     if (!phoneOnTailnet) {

@@ -76,6 +76,8 @@
     <string name="settings_connected">接続済み</string>
     <string name="settings_what_to_try">試してみること</string>
     <string name="settings_try_again_now">今すぐ再試行</string>
+    <string name="settings_advice_host_gone">%1$s はもう存在しないため、このスマートフォンはそこを経由して %2$s に接続できません。</string>
+    <string name="settings_advice_host_gone_fix">%1$s で 設定 → リモートアクセス を開き、スマートフォンの接続方法を変更してから（Tailscale ならホスティング不要です）、このスマートフォンをもう一度ペアリングしてください。</string>
     <string name="settings_routes">経路</string>
     <string name="settings_checking">確認中…</string>
     <string name="settings_check_routes">経路を確認</string>

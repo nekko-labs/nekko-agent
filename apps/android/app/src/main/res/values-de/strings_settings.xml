@@ -76,6 +76,8 @@
     <string name="settings_connected">Verbunden</string>
     <string name="settings_what_to_try">Was du versuchen kannst</string>
     <string name="settings_try_again_now">Jetzt erneut versuchen</string>
+    <string name="settings_advice_host_gone">%1$s gibt es nicht mehr, daher erreicht dieses Telefon %2$s darüber nicht.</string>
+    <string name="settings_advice_host_gone_fix">Öffne auf %1$s Einstellungen → Fernzugriff, ändere, wie sich Telefone verbinden (Tailscale funktioniert ohne gehosteten Dienst), und kopple dieses Telefon dann erneut.</string>
     <string name="settings_routes">Routen</string>
     <string name="settings_checking">Wird geprüft …</string>
     <string name="settings_check_routes">Routen prüfen</string>
