@@ -100,6 +100,7 @@ import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { WorktreeChip } from './WorktreeChip.js';
 import { FolderPicker, openRepoBrowser } from './FolderPicker.js';
+import { environmentActions } from '../environmentActions.js';
 import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
@@ -1982,6 +1983,14 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     await window.nekko.answerQuestion(sessionId, pending.callId, answers);
     setQuestion((current) => current?.callId === pending.callId ? null : current);
   };
+  const sessionNow = useRef(session);
+  sessionNow.current = session;
+  // A chat on another computer has no folders here to add.
+  const questionActions = useMemo(() => computer ? undefined : environmentActions(
+    sessionId,
+    () => useStore.getState().sessions.find((x) => x.id === sessionId) ?? sessionNow.current,
+    setSession,
+  ), [computer, sessionId]);
 
 
   const hasProvider = !!computer || !needsProviderSetup(providers, modelId ?? models[0]?.id);
@@ -2861,7 +2870,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 <ConnectivityNotices notices={mergeConnectivityNotices(session?.connectivityNotices, liveConnectivity)} />
                 {remoteBlock && <div role="status" data-computer-block className="mx-auto mb-1 w-full max-w-3xl rounded-lg border px-3 py-1.5 text-xs text-ink-soft" style={{ borderColor: 'var(--line)', background: 'var(--surface-2)' }}>{remoteBlock}</div>}
                 {question && <div className="conversation-question" data-agent-question>
-                  <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" />
+                  <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" actions={questionActions} />
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
