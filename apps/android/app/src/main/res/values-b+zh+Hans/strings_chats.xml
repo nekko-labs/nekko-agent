@@ -253,4 +253,11 @@
     <string name="chats_pair_success_body">已与你的电脑配对。聊天正在同步。</string>
     <string name="chats_pair_success_done">开始吧</string>
     <string name="chats_pair_success_illustration">你的电脑和此手机已连接</string>
+    <string name="chats_row_model">模型 %1$s</string>
+    <string name="chats_row_context">上下文窗口已用百分之 %1$d</string>
+    <string name="chats_row_pr">拉取请求 %1$d，%2$s</string>
+    <string name="chats_pr_open">打开</string>
+    <string name="chats_pr_draft">草稿</string>
+    <string name="chats_pr_merged">已合并</string>
+    <string name="chats_pr_closed">已关闭</string>
 </resources>
