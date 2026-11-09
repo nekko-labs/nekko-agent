@@ -57,13 +57,19 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "\(theme)-1-pair")
         app.buttons["Pair"].firstMatch.tap()
         passCelebration(app, attachAs: "\(theme)-1a-paired")
-        // Step 3 follows the first pairing (after the celebration); only then does iOS ask.
-        let allowNotifications = app.buttons["firstRun.allowNotifications"]
-        XCTAssertTrue(allowNotifications.waitForExistence(timeout: 20), "the notification step follows pairing")
+        // Step 3 follows the first pairing (after the celebration): the permission
+        // checklist (#2262). Notifications are asked from their own row, the only
+        // system prompt here; Continue alone never prompts.
+        let finish = app.buttons["permissions.continue"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 20), "the permission checklist follows pairing")
         attach(app, "\(theme)-1b-notifications-step")
-        allowNotifications.tap()
-        tapSystemAlertIfShown()
-        XCTAssertTrue(waitGone(allowNotifications, 10))
+        let notifications = app.buttons["permissions.action.notifications"]
+        if notifications.waitForExistence(timeout: 3) {
+            notifications.tap()
+            tapSystemAlertIfShown()
+        }
+        finish.tap()
+        XCTAssertTrue(waitGone(finish, 10))
 
         let newChat = app.navigationBars.buttons["New chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
@@ -473,7 +479,7 @@ final class LiveRelayTests: XCTestCase {
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["chats.view.groupBy"].waitForExistence(timeout: 5), "Group by")
         attach(app, "beyond-6-view-menu")
-        app.buttons["chats.view.done"].tap()
+        closeViewOptions(app)
         auditAccessibility(app, "beyond-chats")
 
         // IO-26: the computer's automation, run from the phone; its answer comes back.
@@ -618,10 +624,14 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-3b-docked-right")
         // A swipe into the edge tucks it away as a slim tab; a tap on the tab brings it back.
         let tab = app.buttons["chat.pill.tab"]
-        // A real swipe's length: XCUITest's swipeRight stays inside the slim docked pill.
-        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.995, dy: 0.4)), withVelocity: .fast, thenHoldForDuration: 0)
+        // From the narrow monitor's centre, the edge can be less than the tuck's 24 points away.
+        // Start just inside its inner edge and stay horizontal, rather than opening its tap action.
+        let tuckStart = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
+        let tuckEnd = tuckStart.withOffset(CGVector(dx: window.frame.maxX - 1 - tuckStart.screenPoint.x, dy: 0))
+        XCTAssertGreaterThan(tuckEnd.screenPoint.x - tuckStart.screenPoint.x, 24, "the swipe crosses the tuck threshold")
+        tuckStart.press(forDuration: 0.01, thenDragTo: tuckEnd, withVelocity: .fast, thenHoldForDuration: 0)
         XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe into the side tucks the pill away")
+        XCTAssertFalse(app.buttons["monitor.sheet"].exists, "a tuck swipe does not open the monitor details")
         XCTAssertFalse(panel.exists)
         settle()
         attach(app, "modes-3c-tucked-right")
@@ -910,7 +920,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(groupBy.tapUntil { byComputer.exists }, "Group by opens its choices")
         XCTAssertTrue(byComputer.waitForExistence(timeout: 5), "Group by → Computer")
         byComputer.tap()
-        app.buttons["chats.view.done"].tap()
+        closeViewOptions(app)
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
             .waitForExistence(timeout: 5), "a heading for this iPhone")
         attach(app, "fleet-5-by-computer")
@@ -1058,8 +1068,13 @@ final class LiveRelayTests: XCTestCase {
         let done = app.buttons["pairSuccess.done"]
         guard done.waitForExistence(timeout: 5) else { return }
         if let name { attach(app, name) }
-        done.tap()
-        _ = waitGone(done, 5)
+        // It also closes by itself 3.4 s after it plays (without VoiceOver), so a tap
+        // can find Let's go already gone (seen in testFollowUpInASubagent). Let it
+        // close; tap only if it is still up after that.
+        if !waitGone(done, 6) {
+            done.tap()
+            _ = waitGone(done, 5)
+        }
     }
 
     private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
