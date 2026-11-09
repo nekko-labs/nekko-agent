@@ -1,17 +1,17 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { uniqueFolders, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
-import { CloseIcon, FolderIcon, PlusIcon, StarIcon } from '../icons.js';
+import { CloseIcon, FolderIcon, PlusIcon, StarIcon, TrashIcon } from '../icons.js';
 import { useStore } from '../store.js';
 import { toggleDefaultFolder } from '../defaultFolders.js';
-import { addFolderToChat, applyFolderSelection, withoutPrimary, withPrimary } from '../sessionFolders.js';
+import { addFolderToChat, applyFolderSelection, withoutPrimary, withPrimary, withExcluded } from '../sessionFolders.js';
 import { MiddleTruncate } from './primitives/MiddleTruncate.js';
 
 type ChatFolders = Pick<SessionMeta, 'workspaceId' | 'supportingWorkspaceIds'>;
 const NO_DEFAULTS: string[] = [];
 
 /** The menu body: one row per folder, "No folder", then "Add folder…". */
-export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear, onAdd, onRemove, onToggleDefault }: {
+export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear, onAdd, onRemove, onExclude, onToggleDefault }: {
   folders: WorkspaceFolder[];
   chat: ChatFolders | null;
   /** Starred folders new chats start with. */
@@ -20,6 +20,8 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
   onClear: () => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
+  /** Unwire only this chat, without revoking the saved folder for other chats. */
+  onExclude?: (id: string) => void;
   onToggleDefault?: (id: string) => void;
 }) {
   const primary = chat?.workspaceId;
@@ -48,8 +50,11 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
           </span>
           <MiddleTruncate text={f.path} tail={24} className="text-2xs text-ink-faint" />
         </button>
-        <button type="button" aria-label={`Revoke access to ${f.name}`} title="Revoke saved folder access, not delete files" className="shrink-0 rounded p-2 text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => onRemove(f.id)}>
+        {onExclude && (primary === f.id || supporting.has(f.id)) && <button type="button" aria-label={`Remove ${f.name} from this chat`} title="Remove from this chat, keep saved folder access" className="shrink-0 rounded p-2 text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => onExclude(f.id)}>
           <CloseIcon className="h-3.5 w-3.5" />
+        </button>}
+        <button type="button" aria-label={`Revoke access to ${f.name}`} title="Revoke saved folder access, not delete files" className="shrink-0 rounded p-2 text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => onRemove(f.id)}>
+          <TrashIcon className="h-3.5 w-3.5" />
         </button>
       </div>
       );
@@ -173,7 +178,7 @@ export function FolderPicker({ sessionId, session, disabled, onChange, selectedS
       </button>
       {open && createPortal(
         <div ref={menu} style={position} className="card fixed z-[100] overflow-y-auto p-2 shadow-(--shadow-float)" role="menu" aria-label="Primary folder">
-          <FolderPickerMenu folders={folders} chat={chat} defaults={defaults} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} onToggleDefault={toggleDefaultFolder} />
+          <FolderPickerMenu folders={folders} chat={chat} defaults={defaults} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} onExclude={(id) => run(() => applyFolderSelection(sessionId, withExcluded(chat, id)))} onToggleDefault={toggleDefaultFolder} />
         </div>, document.body,
       )}
     </div>

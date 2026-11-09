@@ -264,4 +264,9 @@
     <string name="chats_group_month">Previous 30 days</string>
     <string name="chats_group_older">Older</string>
     <string name="chats_tool_step_up">Always allow %2$s in this chat on %1$s</string>
+    <string name="chats_pair_success_title">You’re connected!</string>
+    <string name="chats_pair_success_named">%1$s is paired. Its chats are on their way.</string>
+    <string name="chats_pair_success_body">Your computer is paired. Its chats are on their way.</string>
+    <string name="chats_pair_success_done">Let’s go</string>
+    <string name="chats_pair_success_illustration">Your computer and this phone are linked</string>
 </resources>

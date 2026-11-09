@@ -16,6 +16,7 @@ the runbooks it links. Read a runbook before the work it names.
 | Version numbers, cutting a release (a `vMAJOR.MINOR.0` tag; never bump a version in a PR) | [docs/runbooks/releasing.md](docs/runbooks/releasing.md) |
 | Cutting an iOS release / TestFlight upload (manual GitHub action, not EAS or desktop tags) | [docs/runbooks/ios-release.md](docs/runbooks/ios-release.md) |
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
+| Designing or restyling a screen (layout, spacing, rows, status) | [docs/design-system.md](docs/design-system.md) |
 | A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |
 | A change that alters a recorded engine behavior | [docs/runbooks/golden-fixtures.md](docs/runbooks/golden-fixtures.md) |
 | Running the CI runner pilot | [docs/runbooks/ci-runner-pilot.md](docs/runbooks/ci-runner-pilot.md) |

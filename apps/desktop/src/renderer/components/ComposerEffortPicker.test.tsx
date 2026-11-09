@@ -16,6 +16,18 @@ beforeEach(() => { mode.expert = false; withProvider(); });
 const box = () => composerBox(renderChatPane(chatSession(), { commandCenter: true }));
 
 describe('composer effort and suggestions', () => {
+  for (const cleanStart of [false, true]) for (const props of [{}, { commandCenter: true }, { surface: 'composer' as const }]) {
+    it(`keeps one Mode/Suggestions row for new=${cleanStart}, ${JSON.stringify(props)}`, () => {
+      mode.expert = true;
+      const out = composerBox(renderChatPane(chatSession({ messages: cleanStart ? [] : chatSession().messages }), { ...props, cleanStart }));
+      expect(out.match(/data-composer-mode-row/g)).toHaveLength(1);
+      expect(out.match(/data-chat-mode-button/g)).toHaveLength(1);
+      expect(out.match(/data-composer-suggestions/g)).toHaveLength(1);
+      const row = out.slice(out.indexOf('data-composer-mode-row'));
+      expect(row.indexOf('data-chat-mode-button')).toBeLessThan(row.indexOf('data-composer-suggestions'));
+      expect(row).toContain('composer-suggestions ml-auto shrink-0');
+    });
+  }
   it('shows effort in the Simple composer by default, not only inside the model menu', () => {
     const out = box();
     expect(out).toContain('data-composer-foot');
@@ -25,23 +37,24 @@ describe('composer effort and suggestions', () => {
     expect(out).not.toContain('data-composer-suggestions');
     expect(out).not.toContain('Prompt suggestions test control');
   });
-  it('keeps new-chat suggestions beside the microphone without repeating the control', () => {
+  it('keeps new-chat suggestions at the right of Mode without repeating the control', () => {
     mode.expert = true;
     const out = composerBox(renderChatPane(chatSession({ messages: [] }), { commandCenter: true, cleanStart: true }));
     expect(out.match(/data-composer-suggestions/g)).toHaveLength(1);
-    expect(out).not.toContain('composer-suggestions-row');
-    expect(out.indexOf('data-composer-suggestions')).toBeLessThan(out.indexOf('data-composer-action'));
+    expect(out).toContain('composer-suggestions ml-auto shrink-0');
+    expect(out.indexOf('data-composer-suggestions')).toBeGreaterThan(out.indexOf('data-composer-mode-row'));
+    expect(out.indexOf('data-composer-suggestions')).toBeGreaterThan(out.indexOf('data-composer-action'));
   });
-  it('puts suggestions beside the microphone, in the action bar, only in Expert', () => {
+  it('puts suggestions in the Mode row, below the action bar, only in Expert', () => {
     mode.expert = true;
     const out = box();
     expect(out).toContain('data-composer-suggestions');
     expect(out).toContain('Prompt suggestions test control');
     expect(out.indexOf('data-composer-suggestions')).toBeGreaterThan(out.indexOf('data-composer-foot'));
-    expect(out.indexOf('data-composer-suggestions')).toBeLessThan(out.indexOf('data-composer-action'));
+    expect(out.indexOf('data-composer-suggestions')).toBeGreaterThan(out.indexOf('data-composer-action'));
     expect(out.slice(0, out.indexOf('data-composer-suggestions'))).not.toContain('Prompt suggestions test control');
     const chat = composerBox(renderChatPane(chatSession()));
     expect(chat.indexOf('data-composer-suggestions')).toBeGreaterThan(chat.indexOf('composer-bar'));
-    expect(chat.indexOf('data-composer-suggestions')).toBeLessThan(chat.indexOf('data-composer-action'));
+    expect(chat.indexOf('data-composer-suggestions')).toBeGreaterThan(chat.indexOf('data-composer-action'));
   });
 });

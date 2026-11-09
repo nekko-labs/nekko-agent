@@ -75,55 +75,8 @@ pub fn issue_info(url: &str, owner: &str, repo: &str, number: u64, j: &Value) ->
     })
 }
 
-/// `collectSessionPrUrls(messages)`: only a successful `gh pr create` (or a
-/// `gh api .../pulls -X POST`) whose whole output is one PR URL counts.
-pub fn collect_session_pr_urls(messages: &[Value]) -> Vec<String> {
-    static SHELL: OnceLock<Regex> = OnceLock::new();
-    static CREATE: OnceLock<Regex> = OnceLock::new();
-    static API: OnceLock<Regex> = OnceLock::new();
-    static POST: OnceLock<Regex> = OnceLock::new();
-    static URL: OnceLock<Regex> = OnceLock::new();
-    let mut calls: HashMap<String, &Value> = HashMap::new();
-    for m in messages {
-        for c in m.get("toolCalls").and_then(Value::as_array).into_iter().flatten() {
-            calls.insert(c.get("id").map(js::display).unwrap_or_else(|| "undefined".into()), c);
-        }
-    }
-    let mut urls: Vec<String> = Vec::new();
-    for m in messages {
-        let result = m.get("toolResult").filter(|r| !r.is_null());
-        let call = result
-            .and_then(|r| r.get("toolCallId"))
-            .filter(|id| js::truthy(Some(id)))
-            .and_then(|id| calls.get(&js::display(id)));
-        let Some(call) = call else { continue };
-        if js::truthy(result.and_then(|r| r.get("isError"))) || call.get("name") != Some(&json!("bash")) {
-            continue;
-        }
-        let command = call.get("input").and_then(|i| i.get("command")).filter(|c| !c.is_null());
-        let command = command.map(js::display).unwrap_or_default();
-        let command = js::trim(&command);
-        if !command.starts_with("gh ") || re(&SHELL, r"[\r\n;&|`]", "").find(command).is_some() {
-            continue;
-        }
-        let create = re(&CREATE, r"^gh\s+pr\s+create(?:\s|$)", "").find(command).is_some();
-        let api = re(&API, r"^gh\s+api\s+(?:repos\/)?[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pulls(?:\s|$)", "")
-            .find(command)
-            .is_some()
-            && re(&POST, r"(?:-X|--method)\s+POST\b", "").find(command).is_some();
-        if !create && !api {
-            continue;
-        }
-        let output = result.and_then(|r| r.get("output")).filter(|o| !o.is_null()).map(js::display).unwrap_or_default();
-        let value = js::trim(&output);
-        if re(&URL, r"^https?:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+$", "").find(value).is_some()
-            && !urls.iter().any(|u| u == value)
-        {
-            urls.push(value.to_string());
-        }
-    }
-    urls
-}
+// Summaries and live PR reads must attribute exactly the same creation results.
+pub use nekko_store::pr::collect_session_pr_urls;
 
 /// `rollupChecks(statusCheckRollup)`.
 pub fn rollup_checks(rollup: Option<&Value>) -> &'static str {

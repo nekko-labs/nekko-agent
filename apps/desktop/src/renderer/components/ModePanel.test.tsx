@@ -11,7 +11,6 @@ const store = vi.hoisted(() => ({
   pushToast: vi.fn(),
 }));
 vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: typeof store) => unknown) => select(store), { getState: () => store }) }));
-vi.mock('../sessionFolders.js', () => ({ addFolderToChat: vi.fn(), applyFolderSelection: vi.fn(), withExcluded: vi.fn() }));
 const yolo = vi.hoisted(() => ({ allow: vi.fn(async (_current: string | undefined, _next: string) => true) }));
 vi.mock('./YoloWarning.js', () => ({ allowModeChange: yolo.allow }));
 vi.mock('react-dom', async (original) => ({ ...(await original<typeof import('react-dom')>()), createPortal: (node: unknown) => node }));
@@ -36,9 +35,12 @@ describe('Mode panel markup', () => {
   it('shows the rail, environment, privacy and approach settings without duplicate model controls', () => {
     const out = html();
     for (const name of STARTER_MODES.map((m) => m.name)) expect(out).toContain(name);
-    for (const text of ['Environment', 'Privacy', 'Approach', 'Run on', 'Use worktrees', 'Incognito', 'Internet access', 'Folders', 'Approvals', 'Tools', 'MCP servers', 'Connectors', 'Skills', 'System prompt', 'Memory']) expect(out).toContain(text);
+    for (const text of ['Environment', 'Privacy', 'Approach', 'Run on', 'Use worktrees', 'Incognito', 'Internet access', 'Approvals', 'Tools', 'MCP servers', 'Connectors', 'Skills', 'System prompt', 'Memory']) expect(out).toContain(text);
     expect(out).toContain('git-scm.com/docs/git-worktree');
-    expect(out).toContain('agent-nekko');
+    // Folder names and actions now live in the composer, not Mode.
+    expect(out).not.toContain('agent-nekko');
+    expect(out).not.toContain('mode-folders');
+    expect(out).not.toContain('What folders does');
     // Explanation copy still ships, now as HoverTip labels on the row's info trigger.
     expect(out).toContain('data-hover-tip="Your machine, with your shell, apps and credentials.');
     expect(out).toContain('data-hover-tip="This chat is not saved to your history.');
