@@ -9,17 +9,127 @@
 //! need the TS host, through internal callbacks: a PR's state
 //! (`watch:snapshot`, `gh pr view` in pr.ts) and continuing the chat
 //! (`watch:resume`, which admits the turn as `chat:send` does).
+//!
+//! Finished watches (done, cancelled, failed) are pruned ([`prune`]) when
+//! the scheduler starts and whenever a watch finishes, so the file holds the
+//! armed watches plus a short recent history, not every watch ever armed.
 
 use crate::turns::Turns;
 use nekko_js as js;
 use nekko_store::SessionStore;
 use serde_json::{Map, Value, json};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 const TICK: Duration = Duration::from_secs(15);
+
+/// A finished watch is kept this long after it ended (7 days)...
+pub const KEEP_FINISHED_MS: f64 = 7.0 * 24.0 * 3600.0 * 1000.0;
+/// ...and only among its chat's newest this many finished watches.
+pub const KEEP_FINISHED_PER_CHAT: usize = 20;
+
+fn finished(w: &Value) -> bool {
+    matches!(str_of(w, "status"), Some("done" | "cancelled" | "error"))
+}
+
+/// When a finished watch ended: `endedAt`, or, for one that finished before
+/// the field existed, its deadline (a timer ends at it; a PR watch at or
+/// before it). Neither: as old as can be.
+fn ended_at(w: &Value) -> f64 {
+    [num(w, "endedAt"), num(w, "deadlineAt")].into_iter().find(|t| t.is_finite()).unwrap_or(0.0)
+}
+
+/// A host-armed PR watch's `(chat, PR)`: what `pr_autowatch::should_arm` reads.
+fn auto_key(w: &Value) -> Option<(String, String)> {
+    (w.get("auto") == Some(&Value::Bool(true)) && str_of(w, "kind") == Some("pr"))
+        .then(|| Some((str_of(w, "sessionId")?.to_string(), str_of(w, "url")?.to_string())))
+        .flatten()
+}
+
+/// Drop the finished watches nothing needs any more; returns whether any went.
+///
+/// Armed watches always stay. A finished one stays while the chat's watch rows
+/// can show it: ended within [`KEEP_FINISHED_MS`] and among the chat's newest
+/// [`KEEP_FINISHED_PER_CHAT`] finished ones, and never once its chat is deleted
+/// (`deleted`). Older rows in the transcript keep their headline and lose only
+/// the status chip.
+///
+/// One exception keeps the host's own PR watches correct: for each `(chat, PR)`
+/// it armed, its newest watch (the stopping one, cancelled or failed, when
+/// there is one) is kept whatever its age and carries a `rounds` count of the
+/// older ones dropped, so `should_arm` still stops after a cancel, a failed
+/// wake-up or `MAX_ROUNDS` wake-ups.
+pub fn prune(watches: &mut Vec<Value>, now: f64, deleted: &dyn Fn(&str) -> bool) -> bool {
+    let mut carriers: HashMap<(String, String), usize> = HashMap::new();
+    for (i, w) in watches.iter().enumerate() {
+        let Some(key) = auto_key(w) else { continue };
+        let stops = crate::pr_autowatch::stops;
+        if !carriers.get(&key).is_some_and(|&j| stops(&watches[j]) && !stops(w)) {
+            carriers.insert(key, i);
+        }
+    }
+    let carrier: HashSet<usize> = carriers.values().copied().collect();
+    let mut gone: HashMap<&str, bool> = HashMap::new();
+    let mut drop = vec![false; watches.len()];
+    let mut by_chat: HashMap<&str, Vec<(f64, usize)>> = HashMap::new();
+    for (i, w) in watches.iter().enumerate() {
+        if !finished(w) {
+            continue;
+        }
+        let chat = str_of(w, "sessionId").unwrap_or_default();
+        if *gone.entry(chat).or_insert_with(|| deleted(chat)) {
+            drop[i] = true;
+        } else if !carrier.contains(&i) {
+            let ended = ended_at(w);
+            if now - ended > KEEP_FINISHED_MS {
+                drop[i] = true;
+            } else {
+                by_chat.entry(chat).or_default().push((ended, i));
+            }
+        }
+    }
+    for list in by_chat.values_mut() {
+        // Newest first; a tie goes to the later one in the file.
+        list.sort_by(|a, b| b.0.total_cmp(&a.0).then(b.1.cmp(&a.1)));
+        for &(_, i) in list.iter().skip(KEEP_FINISHED_PER_CHAT) {
+            drop[i] = true;
+        }
+    }
+    if !drop.contains(&true) {
+        return false;
+    }
+    let mut folded: HashMap<usize, usize> = HashMap::new();
+    for (i, w) in watches.iter().enumerate() {
+        if let Some(&c) = drop[i].then(|| auto_key(w).and_then(|k| carriers.get(&k))).flatten()
+            && !drop[c]
+        {
+            let n = folded.entry(c).or_default();
+            *n = n.saturating_add(crate::pr_autowatch::rounds(w));
+        }
+    }
+    for (c, extra) in folded {
+        let total = crate::pr_autowatch::rounds(&watches[c]).saturating_add(extra);
+        watches[c]["rounds"] = json!(total);
+    }
+    let mut i = 0;
+    watches.retain(|_| {
+        i += 1;
+        !drop[i - 1]
+    });
+    true
+}
+
+/// Mark a watch that just finished with when it did (kept if already set).
+fn mark_ended(w: &mut Value, now: f64) {
+    if let Some(obj) = w.as_object_mut()
+        && !obj.contains_key("endedAt")
+    {
+        obj.insert("endedAt".into(), json!(now));
+    }
+}
 
 /// `parsePrUrl(url)`: whether the text holds a GitHub PR URL.
 pub fn is_pr_url(url: &str) -> bool {
@@ -42,9 +152,15 @@ fn num(w: &Value, k: &str) -> f64 {
 }
 
 /// `listAgentWatchViews(sessionId)` over the file at `path`.
+#[cfg(test)]
 pub fn views_of(path: &std::path::Path, session_id: &str) -> Value {
     let Ok(text) = std::fs::read_to_string(path) else { return json!([]) };
     let Ok(Value::Array(all)) = serde_json::from_str::<Value>(&text) else { return json!([]) };
+    views_in(&all, session_id)
+}
+
+/// `listAgentWatchViews(sessionId)` over every watch.
+fn views_in(all: &[Value], session_id: &str) -> Value {
     Value::Array(all.iter().filter(|w| str_of(w, "sessionId") == Some(session_id)).map(view).collect())
 }
 
@@ -82,6 +198,11 @@ pub fn view(w: &Value) -> Value {
 /// a PR's state, and continuing a chat. [`HostSide`] is the real one.
 pub trait WatchHost: Send + Sync {
     fn exists(&self, session_id: &str) -> bool;
+    /// Whether the chat is gone for good (deleted, not just archived), so its
+    /// finished watches can go too.
+    fn deleted(&self, _session_id: &str) -> bool {
+        false
+    }
     fn status_changed(&self, _session_id: &str) {}
     fn busy<'a>(&'a self, turns: Option<&'a Turns>, session_id: &'a str) -> BoxFut<'a, bool>;
     fn snapshot<'a>(&'a self, url: &'a str) -> BoxFut<'a, Result<String, String>>;
@@ -103,8 +224,16 @@ impl WatchHost for HostSide {
         self.hub.publish("agent:event", json!({ "type": "session_meta", "sessionId": session_id }), false);
     }
 
+    /// The chat's metadata only: a long chat's transcript is megabytes, and
+    /// this runs for every due watch on every tick.
     fn exists(&self, session_id: &str) -> bool {
-        self.store.get(session_id).is_some_and(|s| !js::truthy(s.get("archivedAt")))
+        self.store.meta(session_id).is_some_and(|s| !js::truthy(s.get("archivedAt")))
+    }
+
+    /// No chat file at all (a read error is not proof it is gone).
+    fn deleted(&self, session_id: &str) -> bool {
+        !nekko_store::valid_id(session_id)
+            || matches!(self.store.dir().join(format!("{session_id}.json")).try_exists(), Ok(false))
     }
 
     fn busy<'a>(&'a self, turns: Option<&'a Turns>, session_id: &'a str) -> BoxFut<'a, bool> {
@@ -134,8 +263,8 @@ impl WatchHost for HostSide {
     /// not drive, else a normal turn through the router; its error is the failure.
     fn resume<'a>(&'a self, session_id: &'a str, text: &'a str) -> BoxFut<'a, Result<(), String>> {
         Box::pin(async move {
-            let s = self.store.get(session_id);
-            let Some(s) = s.filter(|s| !["archivedAt", "incognito", "offline"].iter().any(|k| js::truthy(s.get(*k))))
+            let s = self.store.meta(session_id);
+            let Some(s) = s.filter(|s| !["archivedAt", "incognito", "offline"].iter().any(|k| js::truthy(s.get(k))))
             else {
                 return Err("Chat cannot be resumed by a watch".into());
             };
@@ -167,6 +296,20 @@ pub struct Watches {
     /// `(chat, PR URL)` pairs found merged or closed, so a chat's old PRs are
     /// read once per daemon run, not at every turn end.
     settled: std::sync::Mutex<std::collections::HashSet<(String, String)>>,
+    /// The file as last read or written, so a tick or a listing does not
+    /// re-parse it. Keyed by the file's modified time and length, so a write
+    /// from outside (a test, a hand edit) is still read.
+    loaded: std::sync::Mutex<Option<Loaded>>,
+}
+
+struct Loaded {
+    stamp: (std::time::SystemTime, u64),
+    all: Arc<Vec<Value>>,
+}
+
+/// The file's modified time and length, when the platform reports both.
+fn stamp_of(meta: &std::fs::Metadata) -> Option<(std::time::SystemTime, u64)> {
+    Some((meta.modified().ok()?, meta.len()))
 }
 
 impl Watches {
@@ -188,6 +331,7 @@ impl Watches {
             write: tokio::sync::Mutex::new(()),
             registrations: std::sync::Mutex::new(std::collections::HashMap::new()),
             settled: std::sync::Mutex::default(),
+            loaded: std::sync::Mutex::default(),
         })
     }
 
@@ -236,18 +380,73 @@ impl Watches {
 
     /// `list(sessionId)`: corrupt state is an error, never silently replaced.
     pub fn list(&self, session_id: Option<&str>) -> Result<Vec<Value>, String> {
+        let all = self.load()?;
+        Ok(all.iter().filter(|w| session_id.is_none_or(|s| str_of(w, "sessionId") == Some(s))).cloned().collect())
+    }
+
+    /// Every watch: the copy in memory while the file is unchanged, else a
+    /// fresh read (an unreadable or corrupt file is never cached).
+    fn load(&self) -> Result<Arc<Vec<Value>>, String> {
+        let mut loaded = self.loaded.lock().unwrap_or_else(|e| e.into_inner());
+        let stamp = match std::fs::metadata(&self.path) {
+            Ok(meta) => stamp_of(&meta),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                *loaded = None;
+                return Ok(Arc::default());
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        if let (Some(l), Some(stamp)) = (loaded.as_ref(), stamp)
+            && l.stamp == stamp
+        {
+            return Ok(l.all.clone());
+        }
+        *loaded = None;
         let text = match std::fs::read_to_string(&self.path) {
             Ok(t) => t,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Arc::default()),
             Err(e) => return Err(e.to_string()),
         };
         let parsed: Value = serde_json::from_str(&text).map_err(|e| format!("Invalid agent watch state: {e}"))?;
         let Value::Array(all) = parsed else { return Err("Invalid agent watch state".into()) };
-        Ok(all.into_iter().filter(|w| session_id.is_none_or(|s| str_of(w, "sessionId") == Some(s))).collect())
+        let all = Arc::new(all);
+        // Read after the stamp, so the stamp is never newer than the copy.
+        if let Some(stamp) = stamp {
+            *loaded = Some(Loaded { stamp, all: all.clone() });
+        }
+        Ok(all)
     }
 
     fn save(&self, watches: &[Value]) -> Result<(), String> {
-        nekko_settings::write_json_atomic(&self.path, &Value::Array(watches.to_vec())).map_err(|e| e.to_string())
+        let mut loaded = self.loaded.lock().unwrap_or_else(|e| e.into_inner());
+        *loaded = None;
+        // As `nekko_settings::write_json_atomic` writes it, keeping the text:
+        // the copy in memory is that text parsed back, exactly what a re-read
+        // would give (`JSON.stringify` writes a whole `1.0` as `1`, say).
+        let text = js::stringify_pretty(&Value::Array(watches.to_vec()), "  ");
+        js::fs::atomic_write(&self.path, text.as_bytes(), js::fs::AtomicWrite::PRIVATE).map_err(|e| e.to_string())?;
+        if let (Some(stamp), Ok(Value::Array(all))) =
+            (std::fs::metadata(&self.path).ok().as_ref().and_then(stamp_of), serde_json::from_str(&text))
+        {
+            *loaded = Some(Loaded { stamp, all: Arc::new(all) });
+        }
+        Ok(())
+    }
+
+    /// [`prune`] with this daemon's clock and chats.
+    fn prune_in(&self, watches: &mut Vec<Value>) -> bool {
+        prune(watches, (self.now)(), &|s| self.host.deleted(s))
+    }
+
+    /// Prune the file once (the scheduler's start).
+    pub async fn prune_now(&self) {
+        let _guard = self.write.lock().await;
+        let Ok(mut watches) = self.list(None) else { return };
+        if self.prune_in(&mut watches)
+            && let Err(e) = self.save(&watches)
+        {
+            eprintln!("nekkod: could not prune agent watches: {e}");
+        }
     }
 
     /// `nextWakeAt(sessionId)`: the earliest deadline of an armed watch.
@@ -275,7 +474,7 @@ impl Watches {
     /// of each watch, newest last, prompts left out; `[]` when the file
     /// cannot be read.
     pub fn views(&self, session_id: &str) -> Value {
-        views_of(&self.path, session_id)
+        views_in(&self.load().unwrap_or_default(), session_id)
     }
 
     /// Stop pending wakes durably before a stopped chat's view is removed.
@@ -293,8 +492,12 @@ impl Watches {
                 w["status"] = json!("cancelled");
                 w["pending"] = Value::Null;
                 w["lastError"] = json!("Chat stopped or closed");
+                mark_ended(w, (self.now)());
                 changed = true;
             }
+        }
+        if changed {
+            self.prune_in(&mut watches);
         }
         self.save(&watches)?;
         if changed {
@@ -321,9 +524,11 @@ impl Watches {
                 }
             }
         }
-        let ended_session = matches!(str_of(w, "status"), Some("done" | "cancelled" | "error"))
-            .then(|| str_of(w, "sessionId").map(str::to_string))
-            .flatten();
+        let ended_session = finished(w).then(|| str_of(w, "sessionId").map(str::to_string)).flatten();
+        if ended_session.is_some() {
+            mark_ended(w, (self.now)());
+            self.prune_in(&mut watches);
+        }
         if self.save(&watches).is_ok()
             && let Some(session_id) = ended_session
         {
@@ -350,7 +555,11 @@ impl Watches {
             };
             let changed = str_of(w, "status") != Some("cancelled");
             w["status"] = json!("cancelled");
+            mark_ended(w, (self.now)());
             let id = str_of(w, "id").unwrap_or_default().to_string();
+            if changed {
+                self.prune_in(&mut watches);
+            }
             self.save(&watches)?;
             if changed {
                 self.host.status_changed(session_id);
@@ -480,13 +689,14 @@ impl Watches {
         if self.polling.swap(true, Ordering::AcqRel) {
             return;
         }
-        let watches = self.list(None).unwrap_or_default();
-        for w in watches {
-            let id = str_of(&w, "id").unwrap_or_default().to_string();
-            if str_of(&w, "status") != Some("active") || num(&w, "nextPollAt") > (self.now)() {
+        // The copy in memory: a tick re-reads the file only when it changed.
+        let watches = self.load().unwrap_or_default();
+        for w in watches.iter() {
+            let id = str_of(w, "id").unwrap_or_default().to_string();
+            if str_of(w, "status") != Some("active") || num(w, "nextPollAt") > (self.now)() {
                 continue;
             }
-            let session_id = str_of(&w, "sessionId").unwrap_or_default().to_string();
+            let session_id = str_of(w, "sessionId").unwrap_or_default().to_string();
             if !self.host.exists(&session_id) {
                 self.patch(&id, json!({ "status": "cancelled", "lastError": "Chat deleted or archived" })).await;
                 continue;
@@ -494,8 +704,8 @@ impl Watches {
             if self.host.busy(turns, &session_id).await {
                 continue;
             }
-            if let Err(e) = self.deliver(turns, &w, &id, &session_id).await {
-                let failures = num(&w, "failures") + 1.0;
+            if let Err(e) = self.deliver(turns, w, &id, &session_id).await {
+                let failures = num(w, "failures") + 1.0;
                 let failures = if failures.is_nan() { 1.0 } else { failures };
                 let backoff = (60_000.0 * 2f64.powf(failures.min(4.0))).min(900_000.0);
                 // `String(error)` of the Error the TS host threw.
@@ -551,11 +761,12 @@ impl Watches {
         Ok(())
     }
 
-    /// The scheduler: a tick now (overdue watches recover at startup) and
-    /// every 15 seconds.
+    /// The scheduler: prune finished watches, then a tick now (overdue
+    /// watches recover at startup) and every 15 seconds.
     pub fn start(self: &Arc<Self>, turns: Arc<Turns>) {
         let me = self.clone();
         tokio::spawn(async move {
+            me.prune_now().await;
             let mut every = tokio::time::interval(TICK);
             loop {
                 every.tick().await;
@@ -582,6 +793,7 @@ mod tests {
         status_changes: Mutex<Vec<String>>,
         expected_saved_status: Mutex<Option<(PathBuf, String)>>,
         snapshot_gate: Mutex<Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>>,
+        deleted: Mutex<Vec<String>>,
     }
 
     impl WatchHost for Fake {
@@ -595,6 +807,9 @@ mod tests {
         }
         fn exists(&self, _: &str) -> bool {
             !self.gone.load(Ordering::SeqCst)
+        }
+        fn deleted(&self, session_id: &str) -> bool {
+            self.deleted.lock().unwrap().iter().any(|s| s == session_id)
         }
         fn busy<'a>(&'a self, _: Option<&'a Turns>, _: &'a str) -> BoxFut<'a, bool> {
             Box::pin(async move { self.busy.load(Ordering::SeqCst) })
@@ -1009,6 +1224,162 @@ mod tests {
         assert!(r.w.tool("s", &json!({ "action": "list" })).await.is_err());
         r.w.tick(None).await;
         assert_eq!(std::fs::read_to_string(r.dir.join("watches.json")).unwrap(), "invalid");
+    }
+
+    const DAY: f64 = 24.0 * 3600.0 * 1000.0;
+
+    fn finished_watch(id: &str, chat: &str, status: &str, ended: f64) -> Value {
+        json!({ "id": id, "sessionId": chat, "kind": "timer", "status": status, "deadlineAt": ended - 60_000.0, "endedAt": ended })
+    }
+
+    fn ids(watches: &[Value]) -> Vec<&str> {
+        watches.iter().map(|w| str_of(w, "id").unwrap()).collect()
+    }
+
+    #[test]
+    fn prunes_finished_watches_by_age_count_and_deleted_chat() {
+        let now = 100.0 * DAY;
+        let mut all = vec![
+            // Armed watches stay, however old.
+            json!({ "id": "armed", "sessionId": "a", "kind": "timer", "status": "active", "deadlineAt": 1.0 }),
+            finished_watch("old", "a", "done", now - 8.0 * DAY),
+            finished_watch("week", "a", "cancelled", now - 6.9 * DAY),
+            finished_watch("failed", "a", "error", now - DAY),
+            // From before `endedAt`: its deadline stands in.
+            json!({ "id": "legacy-old", "sessionId": "a", "status": "done", "deadlineAt": now - 30.0 * DAY }),
+            json!({ "id": "legacy-new", "sessionId": "a", "status": "done", "deadlineAt": now - DAY }),
+            json!({ "id": "no-time", "sessionId": "a", "status": "done" }),
+            // An unknown status is not a finished one.
+            json!({ "id": "odd", "sessionId": "a", "status": "paused", "deadlineAt": 1.0 }),
+            json!({ "id": "gone-armed", "sessionId": "gone", "status": "active", "deadlineAt": now }),
+            finished_watch("gone-done", "gone", "done", now),
+        ];
+        // Chat b: 25 recent finished watches, oldest first in the file, then
+        // one that ended earliest though it sits last in the file.
+        for i in 0..25 {
+            all.push(finished_watch(&format!("b{i}"), "b", "done", now - 3.0 * DAY + f64::from(i) * 1000.0));
+        }
+        all.push(finished_watch("b-earliest", "b", "done", now - 4.0 * DAY));
+        assert!(prune(&mut all, now, &|s| s == "gone"));
+        let mut expected: Vec<String> =
+            ["armed", "week", "failed", "legacy-new", "odd", "gone-armed"].map(String::from).to_vec();
+        expected.extend((5..25).map(|i| format!("b{i}")));
+        assert_eq!(ids(&all), expected);
+        assert_eq!(all.iter().filter(|w| w["sessionId"] == "b").count(), KEEP_FINISHED_PER_CHAT);
+        // A second pass finds nothing more to drop.
+        assert!(!prune(&mut all, now, &|s| s == "gone"));
+    }
+
+    #[test]
+    fn keeps_what_the_hosts_pr_watches_need_to_stop() {
+        let url = "https://github.com/o/r/pull/1";
+        let now = 100.0 * DAY;
+        let auto = |id: &str, chat: &str, status: &str, ended: f64| {
+            let mut w = finished_watch(id, chat, status, ended);
+            w["kind"] = json!("pr");
+            w["url"] = json!(url);
+            w["auto"] = json!(true);
+            w
+        };
+        let on_pr = |all: &[Value], chat: &str| -> bool {
+            let mine: Vec<&Value> = all.iter().filter(|w| w["sessionId"] == chat && w["url"] == url).collect();
+            crate::pr_autowatch::should_arm(&mine)
+        };
+        let mut all = Vec::new();
+        // Chat a: every round the host may run, all a month old.
+        for i in 0..crate::pr_autowatch::MAX_ROUNDS {
+            all.push(auto(&format!("a{i}"), "a", "done", now - 30.0 * DAY + i as f64));
+        }
+        // Chat c: five old rounds, the user cancelled the last one.
+        for i in 0..4 {
+            all.push(auto(&format!("c{i}"), "c", "done", now - 30.0 * DAY));
+        }
+        all.push(auto("c-cancel", "c", "cancelled", now - 20.0 * DAY));
+        // Chat d: three old rounds, two recent ones.
+        for (i, age) in [30.0, 29.0, 28.0, 2.0, 1.0].into_iter().enumerate() {
+            all.push(auto(&format!("d{i}"), "d", "done", now - age * DAY));
+        }
+        // Chat e: a stopping watch older than a later one (not something the
+        // host arms, but the stop still has to win).
+        all.push(auto("e-error", "e", "error", now - 30.0 * DAY));
+        all.push(auto("e-later", "e", "done", now - 30.0 * DAY));
+        let before: Vec<bool> = ["a", "c", "d", "e"].iter().map(|c| on_pr(&all, c)).collect();
+        assert_eq!(before, [false, false, true, false]);
+        assert!(prune(&mut all, now, &|_| false));
+        assert_eq!(ids(&all), ["a23", "c-cancel", "d3", "d4", "e-error"]);
+        assert_eq!(all[0]["rounds"], crate::pr_autowatch::MAX_ROUNDS);
+        assert_eq!(all[1]["rounds"], 5);
+        assert!(all[2].get("rounds").is_none());
+        assert_eq!(all[3]["rounds"], 4);
+        assert_eq!(all[4]["rounds"], 2);
+        // should_arm answers as it did before the prune.
+        let after: Vec<bool> = ["a", "c", "d", "e"].iter().map(|c| on_pr(&all, c)).collect();
+        assert_eq!(after, before);
+        // Rounds carried forward keep adding up on later prunes.
+        all.push(auto("d5", "d", "done", now));
+        assert!(prune(&mut all, now + 7.0 * DAY, &|_| false));
+        assert_eq!(ids(&all), ["a23", "c-cancel", "e-error", "d5"]);
+        assert_eq!(all[3]["rounds"], 6);
+        assert!(on_pr(&all, "d"));
+        // A deleted chat takes even these with it.
+        assert!(prune(&mut all, now, &|c| c == "a"));
+        assert_eq!(ids(&all), ["c-cancel", "e-error", "d5"]);
+    }
+
+    #[tokio::test]
+    async fn finishing_a_watch_prunes_and_stamps_when_it_ended() {
+        let r = rig("prune-finish");
+        let old = finished_watch("old", "s", "done", 1_000_000.0 - 8.0 * DAY);
+        let gone = finished_watch("gone", "deleted", "done", 1_000_000.0);
+        std::fs::write(r.dir.join("watches.json"), json!([old, gone]).to_string()).unwrap();
+        r.fake.deleted.lock().unwrap().push("deleted".into());
+        r.w.tool("s", &timer("Continue", 60)).await.unwrap();
+        // Arming is not finishing: nothing pruned yet.
+        assert_eq!(r.all().len(), 3);
+        r.advance(61_000);
+        r.w.tick(None).await;
+        let all = r.all();
+        assert_eq!(all.len(), 1);
+        assert_eq!((all[0]["status"].clone(), all[0]["endedAt"].clone()), (json!("done"), json!(1_061_000)));
+        // A cancel through the tool stamps it too, and keeps the first stamp.
+        r.w.tool("s", &timer("Again", 60)).await.unwrap();
+        let id = r.all()[1]["id"].clone();
+        r.advance(1_000);
+        r.w.tool("s", &json!({ "action": "cancel", "id": id })).await.unwrap();
+        r.advance(1_000);
+        r.w.tool("s", &json!({ "action": "cancel", "id": id })).await.unwrap();
+        assert_eq!(r.all()[1]["endedAt"], json!(1_062_000));
+        // Closing the chat stamps its armed watches.
+        r.w.tool("s", &timer("Third", 60)).await.unwrap();
+        r.w.cancel_session("s").await.unwrap();
+        assert_eq!(r.all()[2]["endedAt"], json!(1_063_000));
+        // A week later the scheduler's start drops all three.
+        r.advance(8 * 24 * 3600 * 1000);
+        r.w.prune_now().await;
+        assert!(r.all().is_empty());
+    }
+
+    #[tokio::test]
+    async fn keeps_the_file_in_memory_until_it_changes() {
+        let r = rig("cache");
+        assert!(r.w.load().unwrap().is_empty(), "a missing file is empty");
+        r.w.tool("s", &timer("Continue", 60)).await.unwrap();
+        let first = r.w.load().unwrap();
+        assert_eq!(first.len(), 1);
+        // Unchanged: the same copy, no re-read.
+        assert!(Arc::ptr_eq(&first, &r.w.load().unwrap()));
+        // Written from outside: read again.
+        let path = r.dir.join("watches.json");
+        let mut edited: Vec<Value> = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        edited[0]["nextPollAt"] = json!(0);
+        std::fs::write(&path, Value::Array(edited).to_string()).unwrap();
+        assert_eq!(r.w.load().unwrap()[0]["nextPollAt"], 0);
+        // Corrupt state is an error every time, never a stale copy.
+        std::fs::write(&path, "invalid").unwrap();
+        assert!(r.w.list(None).is_err());
+        assert!(r.w.list(None).is_err());
+        std::fs::remove_file(&path).unwrap();
+        assert!(r.all().is_empty());
     }
 
     #[test]

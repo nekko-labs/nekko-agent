@@ -217,156 +217,110 @@
       </section>
       -->
 
-      <!-- ===== why Nekko: five promises, one demo panel each. Travis is
-           producing the videos; drop each one into its slot like the control
-           panel's (<video class="panel-video" … data-autoplay> with a poster):
-           site.js plays it only while it is on screen, and the placeholder
-           label hides itself. ===== -->
-      <section id="why-nekko" class="chapter panels">
-        <h2 class="reveal">An agent you can trust with your own data</h2>
-        <p class="chapter-lede reveal">Cloud agents are good. They are also someone else's computer. Nekko gives you the same quality of experience on your own machine, with your data where you can see it.</p>
+      <!-- ===== why Nekko: the five product pillars as a timed tour. A numbered
+           list on the left, the active pillar's 8 s demo on the right (source:
+           video/pillars). site.js advances it every 8 s, pauses it while hovered,
+           focused, off screen or in a hidden tab, and leaves it still under
+           reduced motion. Without JS every pillar's text shows and the first
+           poster stays. ===== -->
+      <section id="why-nekko" class="chapter pillars" aria-labelledby="pillars-title">
+        <h2 id="pillars-title" class="reveal">An agent built for local models. <span class="grad">Finally.</span></h2>
+        <p class="chapter-lede reveal">Private, fast, and on every machine you own.</p>
 
-        <article class="panel glass reveal" id="control">
-          <div class="panel-copy">
-            <span class="mf-num">IN CONTROL</span>
-            <h3>Your models. Your data. Nothing hidden.</h3>
-            <p>Pick the model for every chat: one running on your own computer, or ChatGPT, Claude and Gemini when you want them. The Context Inspector shows every file, note and instruction about to go with your request, so you can leave out what is not needed. Every command the agent wants to run and every line it changes waits for your say.</p>
-            <ul class="panel-points">
-              <li>Local, cloud, or both, chosen per chat and per workflow</li>
-              <li>See the exact context before it is sent</li>
-              <li>Approve commands, review changes line by line, undo any of them</li>
-            </ul>
-            <a class="card-link" href="#features" data-cta="panel-control-features">How the controls work <span aria-hidden="true">↓</span></a>
-          </div>
-          <button class="media panel-media" type="button" data-demo="control" aria-label="Demo video: switching a chat from a local model to Claude Opus, then approving each file edit before it is made. Opens larger.">
-            <video class="panel-video" muted loop playsinline preload="none" width="1602" height="900" poster="media/demo-control-poster.webp" data-autoplay data-poster-light="media/demo-control-light-poster.webp?v=1">
-              <source src="media/demo-control.webm" data-src-light="media/demo-control-light.webm?v=1" type="video/webm; codecs=av01.0.09M.08">
-              <source src="media/demo-control.mp4" data-src-light="media/demo-control-light.mp4?v=1" type="video/mp4">
-            </video>
-          </button>
-        </article>
-
-        <article class="panel glass reveal" id="experience">
-          <div class="panel-copy">
-            <span class="mf-num">NO COMPROMISE</span>
-            <h3>The power of a terminal. The polish of a great app.</h3>
-            <p>Tired of the gap between the cloud experience and the local one? We were too. Nekko is a premium app for local AI: the agent, the model server, the diff review, the terminal and your connected tools, together in one window that feels finished. Prefer the shell? The same engine is there as a CLI and an MCP server.</p>
-            <ul class="panel-points">
-              <li>Model server and agent in one app, no second window to babysit</li>
-              <li>Changes panel with line-by-line keep or undo</li>
-              <li>CLI and MCP for Claude Code, Codex and Cursor</li>
-            </ul>
-            <a class="card-link" href="#editions" data-cta="panel-experience-editions">Desktop, browser, Docker or terminal <span aria-hidden="true">↓</span></a>
-          </div>
-          <button class="media panel-media" type="button" data-demo="experience" aria-label="Demo video: two chats side by side, a local model writing taglines while Claude Opus adds a section to a web page. Opens larger.">
-            <video class="panel-video" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-experience-poster.webp?v=3" data-autoplay data-poster-light="media/demo-experience-light-poster.webp?v=1">
-              <source src="media/demo-experience.mp4?v=3" data-src-light="media/demo-experience-light.mp4?v=1" type="video/mp4">
-            </video>
-          </button>
-        </article>
-
-        <article class="panel glass reveal panel-fast" id="fast">
-          <div class="panel-copy">
-            <span class="mf-num">FAST</span>
-            <h3>Local code edits. 5× faster than Ollama.</h3>
-            <p>Same model file. Same machine. Less waiting. Nekko returned a 156-line file with a function renamed in <strong>2.5 seconds</strong>. Ollama took <strong>13.9 seconds</strong>. Both made the correct edit.</p>
-            <p>Nekko enables llama.cpp’s n-gram speculative decoding by default: propose repeated text, then let the model verify it. That helps when an edited file repeats much of the input—not on every task.</p>
-            <figure class="speed-proof" aria-label="Published benchmark medians, not a live demonstration" aria-describedby="bench-note">
-              <figcaption class="mf-num">Whole-file rename benchmark</figcaption>
-              <div class="speed-row"><span>Nekko Agent</span><div class="speed-track"><div class="bar k-nekko" style="--v: 18%" title="Nekko Agent: 2.5 seconds"><b>2.5 s</b></div></div></div>
-              <div class="speed-row"><span>Ollama 0.40.11</span><div class="speed-track"><div class="bar k-ollama" style="--v: 100%" title="Ollama: 13.9 seconds"><b>13.9 s</b></div></div></div>
-              <p class="micro">Published benchmark medians, not a live demonstration.</p>
-            </figure>
-            <a class="card-link" href="/docs/benchmarks" data-cta="panel-fast-benchmarks">Method, raw runs and limitations <span aria-hidden="true">→</span></a>
-          </div>
-          <!-- Why it's faster: one file per look (dark for Dark, light for White and Colourful); the hidden one never loads. -->
-          <button class="media panel-media" type="button" aria-label="Why is Nekko faster: model passes counted side by side for one code edit, 15 seconds, no sound. Opens larger.">
-            <video class="panel-video why-video why-video-dark" muted loop playsinline preload="none" width="1920" height="1080" poster="media/why-faster-dark-poster.webp" data-autoplay>
-              <source src="media/why-faster-dark.mp4" type="video/mp4">
-            </video>
-            <video class="panel-video why-video why-video-light" muted loop playsinline preload="none" width="1920" height="1080" poster="media/why-faster-light-poster.webp" data-autoplay>
-              <source src="media/why-faster-light.mp4" type="video/mp4">
-            </video>
-          </button>
-
-          <p class="micro bench-method" id="bench-note">Apple M5 Max, 128 GB · Qwen3-8B Q4_K_M, same GGUF weights · cool-chip medians, 8 requests per server · October 2026. One 156-line function rename, with the whole file returned. These timings measure inference replies, not a complete agent workflow. Results vary by hardware and workload; MLX is faster at plain decode, and speculation adds first-token overhead. <a href="/docs/benchmarks" data-cta="panel-fast-benchmarks-full">Full results, including the earlier NVIDIA benchmarks →</a></p>
-          <!-- benchmark: three measures, higher is better, from docs/benchmarks.md (2026-09-30) -->
-          <figure class="bench" aria-describedby="bench-nvidia-note">
-            <figcaption class="bench-title">More comparisons · NVIDIA RTX 5090<br />Tokens per second, higher is better <span class="bench-legend"><i class="k-nekko"></i>Nekko <i class="k-ollama"></i>Ollama <i class="k-lms"></i>LM Studio</span></figcaption>
-            <div class="bench-row">
-              <span class="bench-label">Plain decode</span>
-              <div class="bench-bars">
-                <div class="bar k-nekko" style="--v: 29%" title="Nekko Agent engine: 154 tokens/s"><b>154</b></div>
-                <div class="bar k-ollama" style="--v: 22%" title="Ollama 0.23.0: 115 tokens/s"><b>115</b></div>
-                <div class="bar k-lms" style="--v: 22%" title="LM Studio 2.46.0: 116 tokens/s"><b>116</b></div>
+        <div class="pillar-tour reveal" data-pillar-tour aria-roledescription="carousel" aria-label="What makes Nekko Agent different">
+          <ol class="pillar-list" role="tablist" aria-orientation="vertical" aria-label="Five reasons to use Nekko Agent">
+            <li role="presentation" class="pillar-item is-active">
+              <button class="pillar-tab" role="tab" id="pillar-tab-local" aria-selected="true" aria-controls="pillar-panel" data-pillar="local"
+                      data-alt="Picking a local model in Nekko Agent, then Claude Code using it over MCP">
+                <span class="pillar-num">01</span><span class="pillar-title">Built for local models</span>
+              </button>
+              <div class="pillar-detail">
+                <p>No separate model engine to install: it is built in. Claude Code, Codex and Cursor can use your local models through the CLI and MCP server.</p>
+                <a class="card-link" href="/docs/cli" data-cta="pillar-local-cli">CLI and MCP <span aria-hidden="true">→</span></a>
+                <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
-            </div>
-            <div class="bench-row">
-              <span class="bench-label">Code edit</span>
-              <div class="bench-bars">
-                <div class="bar k-nekko" style="--v: 100%" title="Nekko Agent engine: 534 tokens/s"><b>534</b></div>
-                <div class="bar k-ollama" style="--v: 20%" title="Ollama 0.23.0: 106 tokens/s"><b>106</b></div>
-                <div class="bar k-lms" style="--v: 20%" title="LM Studio 2.46.0: 108 tokens/s"><b>108</b></div>
+            </li>
+            <li role="presentation" class="pillar-item">
+              <button class="pillar-tab" role="tab" id="pillar-tab-speed" aria-selected="false" aria-controls="pillar-panel" data-pillar="speed" tabindex="-1"
+                      data-alt="Side-by-side replay: Nekko Agent returns the edited file in 2.5 seconds, Ollama in 13.9">
+                <span class="pillar-num">02</span><span class="pillar-title">Fast. Really fast.</span>
+              </button>
+              <div class="pillar-detail">
+                <p>A whole-file code edit in 2.5 s against 13.9 s on Ollama: same model, same machine. Speculative decoding helps most when an edit repeats its input.</p>
+                <a class="card-link" href="#benchmarks" data-cta="pillar-speed-summary">Benchmark summary <span aria-hidden="true">↓</span></a>
+                <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
-            </div>
-            <div class="bench-row">
-              <span class="bench-label">Four requests at once</span>
-              <div class="bench-bars">
-                <div class="bar k-nekko" style="--v: 48%" title="Nekko Agent engine: 256 tokens/s"><b>256</b></div>
-                <div class="bar k-ollama" style="--v: 21%" title="Ollama 0.23.0: 113 tokens/s"><b>113</b></div>
-                <div class="bar k-lms" style="--v: 39%" title="LM Studio 2.46.0: 210 tokens/s"><b>210</b></div>
+            </li>
+            <li role="presentation" class="pillar-item">
+              <button class="pillar-tab" role="tab" id="pillar-tab-privacy" aria-selected="false" aria-controls="pillar-panel" data-pillar="privacy" tabindex="-1"
+                      data-alt="Privacy Shield swapping an email and card number for placeholders, then the encrypted phone relay">
+                <span class="pillar-num">03</span><span class="pillar-title">Your data stays yours</span>
+              </button>
+              <div class="pillar-detail">
+                <p>Local chats never leave your computer. Privacy Shield hides personal details from cloud models, and your phone reaches your computer end-to-end encrypted. Even we can&rsquo;t see in.</p>
+                <a class="card-link" href="/docs/privacy-shield" data-cta="pillar-privacy-shield">How Privacy Shield works <span aria-hidden="true">→</span></a>
+                <div class="pillar-line" aria-hidden="true"><i></i></div>
               </div>
+            </li>
+            <li role="presentation" class="pillar-item">
+              <button class="pillar-tab" role="tab" id="pillar-tab-fleet" aria-selected="false" aria-controls="pillar-panel" data-pillar="fleet" tabindex="-1"
+                      data-alt="Three chats running at once on a Studio PC, a Mac mini and a Claude subscription">
+                <span class="pillar-num">04</span><span class="pillar-title">One fleet, every machine</span>
+              </button>
+              <div class="pillar-detail">
+                <p>Cloud models, local models, and that 5090 and Mac mini in the corner. Connect your computers and pick any of their models from one place.</p>
+                <a class="card-link" href="/docs/remote" data-cta="pillar-fleet-remote">Connecting computers <span aria-hidden="true">→</span></a>
+                <div class="pillar-line" aria-hidden="true"><i></i></div>
+              </div>
+            </li>
+            <li role="presentation" class="pillar-item">
+              <button class="pillar-tab" role="tab" id="pillar-tab-anywhere" aria-selected="false" aria-controls="pillar-panel" data-pillar="anywhere" tabindex="-1"
+                      data-alt="A MacBook running Nekko Agent with an iPhone in front of it: the agent asks to run the tests, Allow is tapped on the phone, and both show the tests passing">
+                <span class="pillar-num">05</span><span class="pillar-title">Take it anywhere</span>
+              </button>
+              <div class="pillar-detail">
+                <p>macOS, Windows and Linux, plus iPhone, Android, iPad and folding phones. Approve a command from your pocket while the work runs at home.</p>
+                <a class="card-link" href="#beta" data-cta="pillar-anywhere-beta">Phone apps are in beta: get early access <span aria-hidden="true">↓</span></a>
+                <div class="pillar-line" aria-hidden="true"><i></i></div>
+              </div>
+            </li>
+          </ol>
+
+          <div class="pillar-stage">
+            <div class="pillar-media" id="pillar-panel" role="tabpanel" aria-labelledby="pillar-tab-local">
+              <video class="pillar-video" muted playsinline preload="none" width="1280" height="720" poster="media/pillar-local-poster.jpg"
+                     aria-label="Picking a local model in Nekko Agent, then Claude Code using it over MCP"></video>
             </div>
-            <p class="micro" id="bench-nvidia-note">Gemma 4 12B Q4_K_M, NVIDIA RTX 5090, median of 3 runs, 30 September 2026. Ollama 0.23.0 and LM Studio 2.46.0. Returning to a paused chat took 0.8 s against Ollama's 1.3 s and LM Studio's 1.6 s. Ollama starts a fresh long chat faster (1.3 s to 1.7 s). Your hardware will differ; the harness is open, so run it yourself.</p>
-          </figure>
-        </article>
-
-        <article class="panel glass reveal" id="secure">
-          <div class="panel-copy">
-            <span class="mf-num">SECURE</span>
-            <h3>A safe space. Even we can't see in.</h3>
-            <p>People need a place where their information stays theirs. We took Apple's idea of a service that cannot see your data even if it wanted to, and built Nekko around it. Local chats never leave your computer. Your phone talks to it through end-to-end encryption, so your chats and commands cross the relay only as ciphertext (the short status on your Lock Screen is the exception: it goes through Apple's and Google's push services as plain text). And when you do choose a cloud model, Privacy Shield swaps your emails, keys, card numbers and private names for placeholders before anything is sent, then puts the real values back on the way home.</p>
-            <ul class="panel-points">
-              <li>Local models: nothing leaves your machine, works offline</li>
-              <li>Phone to computer: chats and commands are end-to-end encrypted through the relay. The short status on your Lock Screen goes through Apple's and Google's push services as plain text</li>
-              <li>Cloud models: Privacy Shield hides private values, Incognito keeps no transcript</li>
-            </ul>
-            <a class="card-link" href="/docs/privacy-shield" data-cta="panel-secure-privacy-shield">How Privacy Shield works <span aria-hidden="true">→</span></a>
+            <button class="pillar-pause" type="button" data-pillar-pause aria-label="Pause the tour" hidden>
+              <svg class="ic-pause" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2h3v12H4zM9 2h3v12H9z" fill="currentColor"/></svg>
+              <svg class="ic-play" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 2l10 6-10 6z" fill="currentColor"/></svg>
+            </button>
           </div>
-          <button class="media panel-media" type="button" data-demo="secure" aria-label="Demo video, an illustration: Privacy Shield swaps an email, an API key, a card number and a name for placeholders, only the placeholders reach a cloud model, and the real values are put back on your computer. Opens larger.">
-            <video class="panel-video secure-video-dark" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-secure-poster.webp" data-autoplay>
-              <source src="media/demo-secure.mp4" type="video/mp4">
-            </video>
-            <video class="panel-video secure-video-light" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-secure-light-poster.webp" data-autoplay>
-              <source src="media/demo-secure-light.mp4" type="video/mp4">
-            </video>
-          </button>
-        </article>
+        </div>
 
-        <article class="panel glass reveal" id="convenient">
-          <div class="panel-copy">
-            <span class="mf-num">CONVENIENT <span class="chip">Beta</span></span>
-            <h3>Bring local with you.</h3>
-            <p>An easy phone app for iPhone and Android. Start a chat, approve a risky command, check on a long run, or dictate a message, all from your pocket while the work runs on your computer at home. No computer nearby? Download a small model and chat on the phone itself, with nothing sent anywhere.</p>
-            <ul class="panel-points">
-              <li>Pair with a QR code, then reach your computer from anywhere</li>
-              <li>Approvals and questions arrive as a tap, with a buzz</li>
-              <li>On-phone models for when you are offline</li>
-            </ul>
-            <a class="card-link" href="#beta" data-cta="panel-convenient-beta">Get early access <span aria-hidden="true">↓</span></a>
-          </div>
-          <!-- dark and light files; CSS shows the one for the current look -->
-          <button class="media panel-media" type="button" data-demo="convenient" aria-label="Demo video, an illustration of the beta phone app: a long run on your computer at home pauses on a risky command, your phone buzzes asking for approval, you tap Approve, and the run finishes. Opens larger.">
-            <video class="panel-video panel-look-dark" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-poster.webp" data-autoplay>
-              <source src="media/demo-convenient.mp4" type="video/mp4">
-            </video>
-            <video class="panel-video panel-look-light" muted loop playsinline preload="none" width="1280" height="720" poster="media/demo-convenient-light-poster.webp" data-autoplay>
-              <source src="media/demo-convenient-light.mp4" type="video/mp4">
-            </video>
-          </button>
-        </article>
+        <div class="pillar-bench reveal" id="benchmarks" aria-labelledby="bench-title">
+          <h3 id="bench-title">Benchmark summary</h3>
+          <dl class="pillar-bench-stats">
+            <div>
+              <dt>Whole-file rename benchmark</dt>
+              <dd><b>2.5 s</b> vs 13.9 s on Ollama 0.40.11</dd>
+              <dd class="micro">Apple M5 Max · Qwen3-8B, same GGUF weights · cool-chip medians, 8 requests per server · October 2026</dd>
+            </div>
+            <div>
+              <dt>Code edit</dt>
+              <dd><b>534</b> vs 106 tokens/s on Ollama</dd>
+              <dd class="micro">NVIDIA RTX 5090 · Gemma 4 12B · Ollama 0.23.0 · 30 September 2026</dd>
+            </div>
+            <div>
+              <dt>Four requests at once</dt>
+              <dd><b>256</b> vs 113 tokens/s on Ollama, 210 on LM Studio</dd>
+              <dd class="micro">NVIDIA RTX 5090 · Gemma 4 12B · LM Studio 2.46.0 · 30 September 2026</dd>
+            </div>
+          </dl>
+          <p class="micro">Where we are not ahead: MLX decodes plain text faster on Apple Silicon, speculation adds first-token overhead, and Ollama starts a fresh long chat faster. These time inference replies, not a complete agent workflow. <a href="/docs/benchmarks" data-cta="pillar-bench-docs">Full method, raw runs and limitations <span aria-hidden="true">→</span></a></p>
+        </div>
 
-        <p class="micro center reveal panels-foot">Also in the box: scheduled agents and triggers, Whisper dictation on your computer, cost tracking for cloud models, skills and sub-agents, and connectors for GitHub, Linear, Slack, Discord, Gmail and Drive.</p>
+        <p class="micro center reveal panels-foot">Also in the box: scheduled agents and triggers, Whisper dictation on your computer, cost tracking for cloud models, skills and sub-agents, and connectors for GitHub, Linear, Slack, Discord, Gmail and Drive. The demos are illustrations in the app&rsquo;s design; the speed demo replays published benchmark medians.</p>
       </section>
 
       <!-- ===== beta sign-up: after the "what it does" tour, before the technical detail ===== -->

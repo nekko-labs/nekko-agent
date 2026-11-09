@@ -21,7 +21,7 @@ The sheet on desktop, the Local Web UI and Docker is one form that opens up as i
 
 - **Always there:** the choice of **Good** or **Needs improvement** (nothing preselected) and the contributing line linking to `CONTRIBUTING.md`. Nothing else shows until a choice is made.
 - **After choosing Needs improvement:** Summary, Description, Screenshots, Include app info (its switch at the far right), **Other ways** (collapsed, with the agent prompt, the GitHub issue forms and the email line as separate options inside one border) and Send.
-- **After choosing Good:** Summary, Description, the email line and Send.
+- **After choosing Good:** Summary, Description, optional contact details, **Give us a GitHub star!**, the email line and Send. Both kinds offer optional contact details.
 - **The email line:** plain text, "Email us at feedback@nekkoagent.com". A Copy button appears on hovering the address, or on keyboard focus.
 - **Good and screenshots:** Praise rarely needs screenshots or app info, so they are not offered, and any set before changing to Good are not sent. Text typed before changing the choice stays.
 - **Screenshots:** optional, by drop, paste or the file picker. Up to 3, each up to 5 MB, so at most 15 MB a note. PNG, JPG and JPEG only, proven by the file's first bytes as well as its extension (`feedbackScreenshotProblem`). A refused file says why, in view, and the rest are kept. Each added screenshot shows a thumbnail; one that can't be drawn shows a picture icon instead of a broken image, and stays on the note. The sheet warns that screenshots can show names, chats or file paths.
@@ -72,8 +72,8 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 
 ## Privacy boundary
 
-- No account, token, device id, device name or model, locale, IP, chat content or file path is sent or stored, apart from what a person shows in a screenshot they choose to add. The request is unauthenticated even when someone is signed in.
-- Screenshots are the one thing a person can send that may identify them. The sheet says so beside the picker. Nekko Cloud strips image metadata, such as location in a phone photo, before storing a screenshot, never stores its file name, and deletes it after 90 days.
+- No account, token, device id, device name or model, locale, IP, chat content or file path is automatically sent or stored, apart from what a person includes in their note or chosen screenshots. Optional name and email are sent only when typed into those fields, as part of the note, for feedback follow-up only (no marketing/signup). The request is unauthenticated even when someone is signed in.
+- Notes, optional contact details, and screenshots may identify their sender. The sheet says so beside the picker. Nekko Cloud strips image metadata, such as location in a phone photo, before storing a screenshot, never stores its file name, and deletes it after 90 days.
 - The server does not request-log the route, keeps rate-limit counts in memory only, and stores each note with only the day it arrived (`feedback` table: `message`, `app_info`, `received_on`; screenshots hang off the note and add no time or sender), so a note can't be lined up with account activity by time.
 - People are told what app info contains before they switch it on.
 
@@ -98,4 +98,16 @@ The same text on every app (`packages/shared/src/feedback.ts` is the reference; 
 
 - Screenshots on desktop and the Local Web UI: implemented 2026-11-06 (#1860) end to end: the form, `nekkod` forwarding them to `POST /v1/feedback/screenshots`, and Nekko Cloud checking, stripping and storing them. Tested: the API against PGlite with real PNG and JPEG bytes (metadata removed, a corrupt file refused with nothing stored, the per-IP limit, 90-day retention); Rust unit tests for the forwarding and the 404 and bad-screenshot errors. Not run against the deployed API, which needs a `fly deploy` before the app ships (until then the app shows "Nekko Cloud can't take screenshots yet" and stores nothing). The privacy policy page does not mention screenshots or their 90 days yet.
 
-- Not built: reading the notes anywhere but the database, replying to a sender (there is no way to reach them, on purpose), log attachments, screenshots on the phone apps.
+- Not built: reading the notes anywhere but the database, an integrated reply inbox (optional typed email now permits manual follow-up), log attachments, screenshots on the phone apps.
+
+## Optional contact and GitHub support (#2342)
+
+Implemented for desktop/shared Local Web UI renderer; native iOS/Android unchanged. Name (up to 200 characters) and email (up to 320) start blank, are independent and optional, are never prefilled from account/settings, and stay in the draft on failure. Entered email must be valid or cleared. The disclosure says “We don’t spam” and no mailing-list signup. Contact-only edits participate in discard confirmation. Contact labels and text append to the existing message and count toward the same 4,000 code-point limit; blank fields add nothing. The wire/schema/cloud deployment is unchanged.
+
+Good feedback (including its success state) and the new first Settings group, **Help out the Nekko Team**, share one GitHub support control. Settings also moves the existing usage-report opt-in into that group, without changing its value or behavior.
+
+The Rust daemon owns `support:starStatus` / `support:star`. It uses only an explicitly connected GitHub connector token, not environment variables, gh credentials or a cloud login. It calls GET /user then GET /user/starred/nekko-labs/nekko-agent; only an explicit star click can PUT that fixed path. Status reads never write; existing stars return without writing. Errors/permissions/network failure remain unverified, with an Open GitHub fallback. No credentials enter the renderer. Requests obey Settings → Connections → GitHub. Account login is shown before writing; an external browser star is not assumed successful and is rechecked on window focus or Check status.
+
+A confirmed star appears selected with happy Nekko on both surfaces. Newly confirmed API stars, or a verified transition from not-starred to starred on the same account after starring in the browser, animate once per account/browser profile; existing stars do not animate, and reduced motion disables the animation. A local thank-you marker is not proof of star status: remote status is always read again. No unstar action is provided.
+
+Verification status: 4,212 shared/desktop tests pass, plus the full web/desktop production build and all-workspace TypeScript check. A hidden, nonfocusable, network-blocked Electron journey passed 13 assertions covering explicit writes, shared state/no replay, optional email validation/focus, failed-send draft retention, contact payload, browser fallback and reduced motion. Desktop/narrow before/after pixels and a first-star GIF are captured and published in PR #2349, but inspection tools failed (browser screenshot timeout, native UnknownVizError), so visual approval remains blocked. Rust mock-server tests await CI; local cargo is unavailable. Live GitHub writes are intentionally not exercised on the developer’s account.

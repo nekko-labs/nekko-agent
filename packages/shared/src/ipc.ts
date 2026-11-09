@@ -491,6 +491,8 @@ export const IpcChannels = {
   telemetryCapture: 'telemetry:capture',
   telemetryStatus: 'telemetry:status',
   // Send feedback (crates/nekkod/src/feedback.rs): no sign-in needed.
+  supportStarStatus: 'support:starStatus',
+  supportStar: 'support:star',
   feedbackInfo: 'feedback:info',
   feedbackSend: 'feedback:send',
   // Setup's optional email: joins Nekko Cloud's `app` list (crates/nekkod/src/feedback.rs).
@@ -605,6 +607,8 @@ export interface NekkoApi {
   /** Whether reports are on, whether this build has a project to send to, and how many events wait. */
   telemetryStatus(): Promise<{ enabled: boolean; configured: boolean; queued: number }>;
   /** Send feedback: the app facts the sheet may share (app, version, OS, CPU type; nothing identifying). */
+  supportStarStatus(): Promise<import('./support.js').SupportStarStatus>;
+  supportStar(): Promise<import('./support.js').SupportStarStatus>;
   feedbackInfo(): Promise<import('./feedback.js').FeedbackAppInfo>;
   /** Send feedback's quick note to Nekko Cloud, with the facts above only when `includeAppInfo`, and any screenshots. */
   feedbackSend(message: string, includeAppInfo: boolean, screenshots?: import('./feedback.js').FeedbackScreenshot[]): Promise<{ ok: true }>;

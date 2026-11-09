@@ -269,4 +269,11 @@
     <string name="chats_pair_success_body">Your computer is paired. Its chats are on their way.</string>
     <string name="chats_pair_success_done">Let’s go</string>
     <string name="chats_pair_success_illustration">Your computer and this phone are linked</string>
+    <string name="chats_row_model">Model %1$s</string>
+    <string name="chats_row_context">Context window %1$d percent full</string>
+    <string name="chats_row_pr">Pull request %1$d, %2$s</string>
+    <string name="chats_pr_open">open</string>
+    <string name="chats_pr_draft">draft</string>
+    <string name="chats_pr_merged">merged</string>
+    <string name="chats_pr_closed">closed</string>
 </resources>

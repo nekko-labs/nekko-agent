@@ -10,6 +10,7 @@
 //! Every file is written to a temp name and renamed into place, so a reader
 //! never sees half a file.
 
+pub mod blobs;
 pub mod client_ids;
 pub mod meta;
 mod phase;
@@ -43,6 +44,11 @@ pub struct SessionStore {
     /// One lock per chat a write is in progress on, so a long save of one
     /// chat never holds up another's. Dropped when nobody holds it.
     chats: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    /// Running turns' chats whose newest state is in memory but not yet on
+    /// disk ([`defer_turn_save`](Self::defer_turn_save)). Every read and
+    /// every write of a chat here writes its pending save first, so nothing
+    /// ever reads a chat older than the turn has made it.
+    deferred: Mutex<HashMap<String, Arc<Mutex<Value>>>>,
 }
 
 /// Session ids are `s_<time>_<random>` (base36 and base64url). Anything else
@@ -68,12 +74,16 @@ impl SessionStore {
             cache: Mutex::new(HashMap::new()),
             all: RwLock::new(()),
             chats: Mutex::new(HashMap::new()),
+            deferred: Mutex::new(HashMap::new()),
         }
     }
 
     /// Run `f` with chat `id`'s writes held: no other write to that chat, and
     /// no clear or purge, lands meanwhile. Not reentrant.
     pub(crate) fn with_chat<R>(&self, id: &str, f: impl FnOnce() -> R) -> R {
+        // Before any lock is taken: a pending turn save lands first, and a
+        // flush (which writes under this same chat lock) never runs inside it.
+        let _ = self.flush(id);
         let _all = self.all.read().unwrap_or_else(|e| e.into_inner());
         let lock = self.chats.lock().unwrap_or_else(|e| e.into_inner()).entry(id.to_string()).or_default().clone();
         let out = {
@@ -106,13 +116,104 @@ impl SessionStore {
             .collect()
     }
 
+    /// A chat file, with the pictures kept beside it put back (blobs.rs).
     fn read(path: &Path) -> Option<Value> {
         let bytes = std::fs::read(path).ok()?;
-        serde_json::from_slice(&bytes).ok()
+        let mut chat: Value = serde_json::from_slice(&bytes).ok()?;
+        if memchr::memmem::find(&bytes, blobs::REF.as_bytes()).is_some()
+            && let Some(dir) = path.parent()
+        {
+            blobs::restore(&mut chat, &blobs::dir(dir));
+        }
+        Some(chat)
+    }
+
+    /// Remove the picture files no chat refers to any more and that are
+    /// older than `min_age` (younger ones may belong to a save in flight).
+    /// Returns how many were removed.
+    pub fn gc_blobs(&self, min_age: std::time::Duration) -> usize {
+        let blob_dir = blobs::dir(&self.dir);
+        let Ok(entries) = std::fs::read_dir(&blob_dir) else { return 0 };
+        self.flush_all();
+        let mut used = HashSet::new();
+        for (path, _) in self.files() {
+            if let Ok(bytes) = std::fs::read(&path) {
+                blobs::references(&bytes, &mut used);
+            }
+        }
+        let mut removed = 0;
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !blobs::valid_name(&name) || used.contains(&name) {
+                continue;
+            }
+            let old = entry.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok());
+            if old.is_some_and(|age| age >= min_age) && std::fs::remove_file(entry.path()).is_ok() {
+                removed += 1;
+            }
+        }
+        removed
+    }
+
+    /// Hold a running turn's save of `session` (with `messages` as its
+    /// transcript, moved in now) until [`flush`](Self::flush). A turn
+    /// checkpoints on every step and tool result, and each save rewrites the
+    /// whole chat file (megabytes in a long chat); deferred, the saves within
+    /// a short window become one. Anything that reads or writes the chat here
+    /// writes it first.
+    pub fn defer_turn_save(&self, session: &Arc<Mutex<Value>>, messages: Option<Vec<Value>>) {
+        let id = {
+            let mut s = session.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(m) = messages
+                && let Some(obj) = s.as_object_mut()
+            {
+                obj.insert("messages".into(), Value::Array(m));
+            }
+            s.get("id").and_then(Value::as_str).unwrap_or_default().to_string()
+        };
+        if valid_id(&id) {
+            self.deferred.lock().unwrap_or_else(|e| e.into_inner()).insert(id, session.clone());
+        }
+    }
+
+    /// Write chat `id`'s deferred turn save, if it has one.
+    pub fn flush(&self, id: &str) -> Result<(), String> {
+        let pending = self.deferred.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+        match pending {
+            Some(session) => self.save_turn_shared(&session, None),
+            None => Ok(()),
+        }
+    }
+
+    /// Write every deferred turn save (before a listing, and at shutdown).
+    pub fn flush_all(&self) {
+        let ids: Vec<String> = self.deferred.lock().unwrap_or_else(|e| e.into_inner()).keys().cloned().collect();
+        for id in ids {
+            if let Err(e) = self.flush(&id) {
+                eprintln!("nekko-store: could not save chat {id}: {e}");
+            }
+        }
+    }
+
+    /// Drop chat `id`'s deferred turn save, for a caller about to save the
+    /// same chat with a newer transcript.
+    pub fn discard_deferred(&self, id: &str) {
+        self.deferred.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+    }
+
+    /// Whether chat `id` has a deferred turn save waiting.
+    pub fn has_deferred(&self, id: &str) -> bool {
+        self.deferred.lock().unwrap_or_else(|e| e.into_inner()).contains_key(id)
     }
 
     /// `getSession`: the whole chat, or `None` when there is no such (readable) chat.
     pub fn get(&self, id: &str) -> Option<Value> {
+        let _ = self.flush(id);
+        self.get_raw(id)
+    }
+
+    /// [`get`](Self::get) as the file stands, for a caller already inside the chat's lock.
+    pub(crate) fn get_raw(&self, id: &str) -> Option<Value> {
         if !valid_id(id) {
             return None;
         }
@@ -123,6 +224,12 @@ impl SessionStore {
     /// no such (readable) chat. Much cheaper than [`get`](Self::get) for a
     /// long chat.
     pub fn meta(&self, id: &str) -> Option<Meta> {
+        let _ = self.flush(id);
+        self.meta_raw(id)
+    }
+
+    /// [`meta`](Self::meta) as the file stands, for a caller already inside the chat's lock.
+    pub(crate) fn meta_raw(&self, id: &str) -> Option<Meta> {
         if !valid_id(id) {
             return None;
         }
@@ -131,6 +238,7 @@ impl SessionStore {
 
     /// `listSessions`: every chat with its transcript, newest first.
     pub fn list(&self) -> Vec<Value> {
+        self.flush_all();
         let mut all: Vec<Value> = self.files().iter().filter_map(|(p, _)| Self::read(p)).collect();
         newest_first(&mut all);
         all
@@ -138,6 +246,12 @@ impl SessionStore {
 
     /// Every chat without its transcript, newest first.
     pub fn list_meta(&self) -> Vec<Value> {
+        self.flush_all();
+        self.list_meta_raw()
+    }
+
+    /// [`list_meta`](Self::list_meta) as the files stand, for a caller holding every chat's lock.
+    pub(crate) fn list_meta_raw(&self) -> Vec<Value> {
         let mut all: Vec<Value> = self
             .files()
             .iter()
@@ -152,6 +266,7 @@ impl SessionStore {
     /// anywhere: the rest are searched as bytes and never parsed. A chat that
     /// has the key `"activeRun"`, say, has to contain that text.
     pub fn list_containing(&self, needle: &str) -> Vec<Value> {
+        self.flush_all();
         let finder = memchr::memmem::Finder::new(needle.as_bytes());
         let mut all: Vec<Value> = self
             .files()
@@ -169,6 +284,7 @@ impl SessionStore {
     /// `listSessionSummaries`: every chat without its transcript, newest
     /// first. Only files that changed since the last call are read.
     pub fn summaries(&self) -> Vec<Value> {
+        self.flush_all();
         let files = self.files();
         let mut out = Vec::with_capacity(files.len());
         let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -181,7 +297,13 @@ impl SessionStore {
                 out.push(summary.clone());
                 continue;
             }
-            match Self::read(file).as_ref().and_then(summarize) {
+            // Pictures are only counted here: never read back from their files.
+            match std::fs::read(file)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+                .as_ref()
+                .and_then(summarize)
+            {
                 Some(summary) => {
                     cache.insert(file.clone(), (mtime, size, summary.clone()));
                     out.push(summary);

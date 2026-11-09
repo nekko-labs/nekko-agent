@@ -69,6 +69,8 @@ fn pending_read(read: &Option<Pending>, revision: u64) -> Option<PendingRead> {
 pub type Events = mpsc::UnboundedReceiver<(String, Value)>;
 
 const REDIAL: Duration = Duration::from_secs(2);
+/// How long a dial to the relay may take before it counts as failed.
+const CONNECT_LIMIT: Duration = Duration::from_secs(15);
 /// How often waiting terminal output is checked against its pacing window.
 const TICK: Duration = Duration::from_millis(25);
 
@@ -237,8 +239,13 @@ async fn run(shared: Arc<Shared>, spec: Spawn, mut stopped: watch::Receiver<bool
             (1006, nekko_net::blocked_message(ID))
         } else {
             blocked = false;
+            // Bounded: events queue for this socket while it connects, and a
+            // dial nobody answers used to hold them for as long as the OS let it.
             let connect = tokio::select! {
-                r = tokio_tungstenite::connect_async(url.as_str()) => r,
+                r = tokio::time::timeout(CONNECT_LIMIT, tokio_tungstenite::connect_async(url.as_str())) => {
+                    r.map_err(|_| format!("no answer in {} s", CONNECT_LIMIT.as_secs()))
+                        .and_then(|r| r.map_err(|e| e.to_string()))
+                }
                 _ = stopped.changed() => return,
             };
             match connect {

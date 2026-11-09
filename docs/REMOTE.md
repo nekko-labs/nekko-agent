@@ -121,6 +121,8 @@ New chat and phone-only chat support Markdown formatting while you type. Effort 
 
 The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, Watching and Done. Existing saved view choices stay intact. Empty groups disappear unless you turn on **View options → Show → Always show groups**. Status moves animate; Reduce Motion disables that movement.
 
+Each chat row on the iPhone and on Android reads like the desktop's agent card. Under the title: the provider's logo and the model (*Opus 5.5*), then, while the chat is still in progress (working, waiting on you or watching), how full its context window is, such as *45k/1M*, in green, amber from 60% and red from 85%. At the bottom right, a chip for its pull requests: the one that matters most (open before draft, merged or closed), with GitHub's glyph and colour for its state, and *+2* when there are more. **View → Card details** turns each of these off.
+
 From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
 
 ## The phone app
@@ -199,7 +201,8 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > connects this iPhone to a git provider (GitHub, GitHub Enterprise, GitLab, Bitbucket) and to
 > project tools (Linear, Jira, Floop, Asana, ClickUp, Trello, Todoist). Each token stays in this
 > iPhone's Keychain and goes only to its own service; your computers keep their own connectors.
-> Connect checks the token first and says who it signed in as.
+> Connect checks the token first and says who it signed in as. Each service is shown with its own
+> logo.
 >
 > **Pull requests** (iPhone): in the chat list's menu. **Mine** lists the open pull requests to
 > review, opened by you and assigned to you on the selected git provider; **Projects** lists the
@@ -534,7 +537,8 @@ inference or close the native apps' remaining feature and release gaps; see the
 
 **The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
-the Dynamic Island (only ever one, scoped to the active computer). The current
+the Dynamic Island (only ever one, tied to the active computer; while the app runs its counts
+cover every chat the chat list shows, and its header says so: "All computers"). The current
 [status dashboard](voice.md#from-the-status-dashboard) replaces tappable chat chips with
 Building, Need input and Done counts, primary **Talk to Nekko**, and secondary **Open app**.
 On iOS 18+ voice requires authentication; on iOS 17 it opens the list without automatic

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   FEEDBACK_CONTRIBUTING_URL, FEEDBACK_ISSUES_URL, FEEDBACK_MAX_CHARS, FEEDBACK_SUMMARY_MAX_CHARS,
-  agentPrompt, appInfoLine, feedbackNote, feedbackNoteLength, type FeedbackAppInfo, type FeedbackKind,
+  agentPrompt, appInfoLine, feedbackContactProblem, feedbackNote, feedbackNoteLength, type FeedbackAppInfo, type FeedbackKind,
 } from '@nekko-agent/shared';
 import { CheckIcon, CloseIcon, WrenchIcon } from '../icons.js';
 import { FeedbackScreenshots, useFeedbackScreenshots } from './FeedbackScreenshots.js';
 import { StarryNekko } from './StarryNekko.js';
+import { GitHubStarSupport } from './GitHubStarSupport.js';
 import { Modal, Toggle } from './primitives/index.js';
 
 /** Opens the sheet from anywhere: the rail button, the command palette, Help → Send feedback…. */
@@ -90,7 +91,7 @@ function EmailLine() {
 export function OtherWays({ kind, info }: { kind: FeedbackKind | null; info: FeedbackAppInfo | null }) {
   const [copied, setCopied] = useState(false);
   if (!kind) return null;
-  if (kind === 'good') return <EmailLine />;
+  if (kind === 'good') return <div className="grid gap-3"><GitHubStarSupport feedback /><EmailLine /></div>;
 
   const prompt = agentPrompt(info);
   const copy = () => {
@@ -150,6 +151,8 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   const [kind, setKind] = useState<FeedbackKind | null>(null);
   const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [includeInfo, setIncludeInfo] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const [sending, setSending] = useState(false);
@@ -161,6 +164,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   const firstChoice = useRef<HTMLInputElement>(null);
   const summaryField = useRef<HTMLInputElement>(null);
   const descriptionField = useRef<HTMLTextAreaElement>(null);
+  const emailField = useRef<HTMLInputElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const sendButton = useRef<HTMLButtonElement>(null);
   const keepEditing = useRef<HTMLButtonElement>(null);
@@ -175,11 +179,13 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
   useEffect(() => { if (sent) closeButton.current?.focus(); }, [sent]);
   useEffect(() => { if (discarding) keepEditing.current?.focus(); }, [discarding]);
 
-  const length = kind ? feedbackNoteLength(kind, summary, description) : 0;
+  const contact = { name, email };
+  const contactProblem = feedbackContactProblem(contact);
+  const length = kind ? feedbackNoteLength(kind, summary, description, contact) : 0;
   const over = length - FEEDBACK_MAX_CHARS;
   const summaryProblem = summary.trim() ? null : 'Add a short summary.';
   const descriptionProblem = !description.trim() ? 'Add a description.' : over > 0 ? `Shorten this by ${over.toLocaleString('en-US')} characters.` : null;
-  const blocked = !!summaryProblem || !!descriptionProblem;
+  const blocked = !!summaryProblem || !!descriptionProblem || !!contactProblem;
   const showSummaryProblem = attempted && summaryProblem;
   const showDescriptionProblem = (attempted || over > 0) && descriptionProblem;
 
@@ -187,7 +193,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     if (!kind || sending) return;
     if (blocked) {
       setAttempted(true);
-      (summaryProblem ? summaryField : descriptionField).current?.focus();
+      (summaryProblem ? summaryField : descriptionProblem ? descriptionField : emailField).current?.focus();
       return;
     }
     setSending(true);
@@ -195,7 +201,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     try {
       // Only Needs improvement offers app info and screenshots; anything set before changing to Good stays behind.
       const improving = kind === 'improve';
-      await window.nekko.feedbackSend(feedbackNote(kind, summary, description), improving && includeInfo, improving && SCREENSHOTS_ENABLED ? await screenshots.forUpload() : []);
+      await window.nekko.feedbackSend(feedbackNote(kind, summary, description, contact), improving && includeInfo, improving && SCREENSHOTS_ENABLED ? await screenshots.forUpload() : []);
       setDiscarding(false);
       setSent(kind);
     } catch (e) {
@@ -210,7 +216,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
     if (discarding) {
       setDiscarding(false);
       requestAnimationFrame(() => sendButton.current?.focus());
-    } else if (!sent && (summary.trim() || description.trim() || screenshots.shots.length)) {
+    } else if (!sent && (summary.trim() || description.trim() || name.trim() || email.trim() || screenshots.shots.length)) {
       setDiscarding(true);
     } else {
       onClose();
@@ -265,7 +271,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
         <div className="flex items-start gap-3 px-5 pb-3 pt-5">
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold text-ink">Send feedback</h2>
-            {!sent && <p className="mt-0.5 text-xs text-ink-faint">Tell Nekko Labs what's working and what could be better. It's sent without your name or account, so we can't reply.</p>}
+            {!sent && <p className="mt-0.5 text-xs text-ink-faint">Tell Nekko Labs what's working and what could be better. Stay anonymous, or leave your email if you’d like a reply.</p>}
           </div>
           <button ref={closeButton} type="button" className="btn btn-ghost px-2! py-1!" aria-label="Close" onClick={requestClose}>
             <CloseIcon className="h-4 w-4" />
@@ -279,6 +285,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
               <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-success-soft text-success"><CheckIcon className="h-4 w-4" /></span>
             </h3>
             <p className="mt-1 text-xs text-ink-soft">{PROMPTS[sent].sent}</p>
+            {sent === 'good' && <div className="mt-3"><GitHubStarSupport feedback /></div>}
             <div className="mt-3"><ContributeNote /></div>
           </div>
         ) : (
@@ -339,6 +346,20 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                     {showDescriptionProblem && <p id="feedback-description-error" className="mt-1 text-xs text-danger">{descriptionProblem}</p>}
                   </div>
 
+                  <fieldset className="rounded-xl border border-line p-3">
+                    <legend className="px-1 text-xs font-medium text-ink-soft">Want us to know who you are? (optional)</legend>
+                    <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2">
+                      <label className="text-xs text-ink-soft" htmlFor="feedback-name">Name (optional)
+                        <input id="feedback-name" className="input mt-1 w-full" value={name} maxLength={200} autoComplete="name" onChange={e => setName(e.target.value)} aria-describedby="feedback-contact-privacy" />
+                      </label>
+                      <label className="text-xs text-ink-soft" htmlFor="feedback-contact-email">Email (optional)
+                        <input ref={emailField} id="feedback-contact-email" type="email" className="input mt-1 w-full" value={email} maxLength={320} autoComplete="email" onChange={e => setEmail(e.target.value)} aria-invalid={attempted && !!contactProblem} aria-describedby="feedback-contact-privacy feedback-contact-error" />
+                      </label>
+                    </div>
+                    <p id="feedback-contact-privacy" className="mt-2 text-2xs text-ink-faint">We don’t spam. These details are sent with this feedback only, so we can follow up. No mailing-list signup.</p>
+                    {attempted && contactProblem && <p id="feedback-contact-error" className="mt-1 text-xs text-danger" role="alert">{contactProblem}</p>}
+                  </fieldset>
+
                   {SCREENSHOTS_ENABLED && kind === 'improve' && <FeedbackScreenshots {...screenshots} />}
 
                   {kind === 'improve' && (
@@ -371,7 +392,7 @@ export function FeedbackBody({ onClose }: { onClose: () => void }) {
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    {!attempted && over <= 0 && blocked && <span className="mr-auto text-xs text-ink-faint">{summaryProblem ?? descriptionProblem}</span>}
+                    {!attempted && over <= 0 && blocked && <span className="mr-auto text-xs text-ink-faint">{summaryProblem ?? descriptionProblem ?? contactProblem}</span>}
                     <button
                       ref={sendButton}
                       type="submit"

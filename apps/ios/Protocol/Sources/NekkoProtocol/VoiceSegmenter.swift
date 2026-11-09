@@ -42,6 +42,9 @@ public struct VoiceSegmenter {
         return segment
     }
 
+    /// Speech has started in the utterance being collected (reset by each cut).
+    public var hearingSpeech: Bool { firstVoiced != nil }
+
     private var isKeepable: Bool {
         guard let first = firstVoiced else { return false }
         return Double(lastVoicedEnd - first) / sampleRate >= Self.minSpeechSeconds

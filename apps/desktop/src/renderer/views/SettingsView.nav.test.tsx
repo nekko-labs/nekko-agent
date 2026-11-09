@@ -15,15 +15,15 @@ function scroller(tops: number[], atBottom = false) {
 }
 
 describe('Settings section nav', () => {
-  it('puts phone pairing second, right after General', () => {
-    expect(SETTINGS_GROUPS.slice(0, 2).map((g) => g.id)).toEqual(['general', 'phone']);
+  it('puts team support first, keeping General and Phone pairing adjacent', () => {
+    expect(SETTINGS_GROUPS.slice(0, 3).map((g) => g.id)).toEqual(['support', 'general', 'phone']);
   });
   it('highlights the last group whose top has scrolled past the top', () => {
-    expect(activeGroup(scroller([-400, 10, 300]))).toBe('phone');
-    expect(activeGroup(scroller([0, 200, 400]))).toBe('general');
+    expect(activeGroup(scroller([-400, 10, 300]))).toBe('general');
+    expect(activeGroup(scroller([0, 200, 400]))).toBe('support');
   });
   it('highlights the last group once scrolled to the bottom, even if it is short', () => {
-    expect(activeGroup(scroller([-800, -500, 80], true))).toBe('computers');
+    expect(activeGroup(scroller([-800, -500, 80], true))).toBe('phone');
   });
   it('jumps the same distance at any text size, though rects are zoomed and scrollTop is not', () => {
     const at = (zoom: number, targetTop: number) => scrollTopFor(

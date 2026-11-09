@@ -40,7 +40,7 @@
         </dict>
     </array>
     <key>NSSupportsLiveActivities</key><true/>
-    <key>UIBackgroundModes</key><array><string>remote-notification</string><string>fetch</string></array>
+    <key>UIBackgroundModes</key><array><string>audio</string><string>remote-notification</string><string>fetch</string></array>
     <key>BGTaskSchedulerPermittedIdentifiers</key><array><string>dev.nekkolabs.nekkoagent.outbox</string></array>
     <key>NSCameraUsageDescription</key><string>Scan the pairing code your computer shows in Settings → Remote access.</string>
     <key>NSFaceIDUsageDescription</key><string>Unlock Nekko Agent and confirm changes it makes on your computer.</string>
