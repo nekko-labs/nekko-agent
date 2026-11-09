@@ -24,6 +24,11 @@ replace('store.rowPrs[s.id] ?? []', '(ProcessInfo.processInfo.arguments.contains
 if (!source.includes('.accessibilityIdentifier("chats.group.')) {
   replace('.accessibilityHint("Double-tap to fold or unfold the group.")', '.accessibilityHint("Double-tap to fold or unfold the group.")\n        .accessibilityIdentifier("chats.group.\\(g.key)")');
 }
+// Give the pre-fix baseline the same nonvisual row selector as the fixed app.
+// This changes no visibility, preference, or Card details interaction behavior.
+if (!source.includes('.accessibilityIdentifier("chats.row.updated")')) {
+  replace('.font(.caption2).foregroundStyle(palette.inkFaint).padding(.top, 3)', '.font(.caption2).foregroundStyle(palette.inkFaint).padding(.top, 3)\n                    .accessibilityIdentifier("chats.row.updated")');
+}
 fs.writeFileSync(file, source);
 const root = 'apps/ios/App/NekkoApp.swift';
 source = fs.readFileSync(root, 'utf8');
