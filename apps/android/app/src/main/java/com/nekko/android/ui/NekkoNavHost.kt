@@ -58,6 +58,13 @@ import com.nekko.android.ui.settings.SettingsDeps
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import com.nekko.android.data.DEFAULT_COMPUTER_NAME
+import com.nekko.android.ui.components.PairSuccessOverlay
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -168,161 +175,174 @@ fun NekkoNavHost(
     // A phone paired before the first run existed never sees it.
     LaunchedEffect(repo) { FirstRun.atLaunch(phonePrefs, repo.state.first { it.ready }.computers.isNotEmpty()) }
 
-    NavHost(navController = nav, startDestination = Routes.CHATS) {
-        composable(Routes.VOICE) {
-            val context = LocalContext.current
-            val app = context.applicationContext as com.nekko.android.NekkoApp
-            com.nekko.android.ui.screens.NekkoVoiceSheet(repo, phonePrefs, app.connection.card) {
-                nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
+    // A pairing just worked: celebrate over whatever screen is now underneath (PairSuccessOverlay).
+    var justPaired by rememberSaveable { mutableStateOf<String?>(null) }
+
+    Box(Modifier.fillMaxSize()) {
+        NavHost(navController = nav, startDestination = Routes.CHATS) {
+            composable(Routes.VOICE) {
+                val context = LocalContext.current
+                val app = context.applicationContext as com.nekko.android.NekkoApp
+                com.nekko.android.ui.screens.NekkoVoiceSheet(repo, phonePrefs, app.connection.card) {
+                    nav.navigate(Routes.CHATS) { popUpTo(Routes.CHATS) { inclusive = true }; launchSingleTop = true }
+                }
             }
-        }
-        composable(Routes.CHATS) {
-            // First run (IO-31): step 1 before pairing, step 3 right after the first pairing.
-            if (firstRunStep(repo, phonePrefs)) return@composable
-            if (mode != PaneMode.ONE) {
-                Panes(window, panes, repo, phonePrefs, shareInbox, nav, startFresh)
-                return@composable
+            composable(Routes.CHATS) {
+                // First run (IO-31): step 1 before pairing, step 3 right after the first pairing.
+                if (firstRunStep(repo, phonePrefs)) return@composable
+                if (mode != PaneMode.ONE) {
+                    Panes(window, panes, repo, phonePrefs, shareInbox, nav, startFresh)
+                    return@composable
+                }
+                ChatsScreen(
+                    repo = repo,
+                    onOpenChat = { nav.navigate(Routes.chat(it)) },
+                    onNewChat = { nav.navigate(Routes.NEW) },
+                    onPair = { nav.navigate(Routes.pair()) },
+                    onComputers = { nav.navigate(Routes.COMPUTERS) },
+                    onSettings = { nav.navigate(Routes.SETTINGS) },
+                    onMonitors = { nav.navigate(Routes.MONITORS) },
+                    onSkipFirstRun = firstRunSkip(phonePrefs),
+                    phonePrefs = phonePrefs,
+                )
             }
-            ChatsScreen(
-                repo = repo,
-                onOpenChat = { nav.navigate(Routes.chat(it)) },
-                onNewChat = { nav.navigate(Routes.NEW) },
-                onPair = { nav.navigate(Routes.pair()) },
-                onComputers = { nav.navigate(Routes.COMPUTERS) },
-                onSettings = { nav.navigate(Routes.SETTINGS) },
-                onMonitors = { nav.navigate(Routes.MONITORS) },
-                onSkipFirstRun = firstRunSkip(phonePrefs),
-                phonePrefs = phonePrefs,
-            )
-        }
-        composable(Routes.MONITORS) {
-            if (mode != PaneMode.ONE) {
-                // Opened (or the phone unfolded) on Monitors: it joins the panes beside the chat.
-                LaunchedEffect(Unit) {
-                    panes.update { l ->
-                        if (l.first == PaneContent.Monitors || l.second == PaneContent.Monitors) l
-                        else l.replace(if (l[l.focused] is PaneContent.Chat) l.focused.other else l.focused, PaneContent.Monitors)
+            composable(Routes.MONITORS) {
+                if (mode != PaneMode.ONE) {
+                    // Opened (or the phone unfolded) on Monitors: it joins the panes beside the chat.
+                    LaunchedEffect(Unit) {
+                        panes.update { l ->
+                            if (l.first == PaneContent.Monitors || l.second == PaneContent.Monitors) l
+                            else l.replace(if (l[l.focused] is PaneContent.Chat) l.focused.other else l.focused, PaneContent.Monitors)
+                        }
+                        nav.onMain { backToChats() }
                     }
-                    nav.onMain { backToChats() }
+                    return@composable
                 }
-                return@composable
+                val vm = viewModel(key = "monitors") { MonitorsViewModel(repo) }
+                MonitorsScreen(vm = vm, repo = repo, onOpenChat = { nav.navigate(Routes.chat(it)) }, onBack = { nav.popBackStack() })
             }
-            val vm = viewModel(key = "monitors") { MonitorsViewModel(repo) }
-            MonitorsScreen(vm = vm, repo = repo, onOpenChat = { nav.navigate(Routes.chat(it)) }, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
-            val id = entry.arguments?.getString("id").orEmpty()
-            if (mode != PaneMode.ONE) {
-                // A chat opened from a link, New chat, or the closed phone as it unfolds: into a chat pane.
-                LaunchedEffect(id) {
-                    val running = repo.state.value.activity.keys
-                    panes.update(running) { it.open(id) }
-                    nav.onMain { backToChats() }
+            composable(Routes.CHAT, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                val id = entry.arguments?.getString("id").orEmpty()
+                if (mode != PaneMode.ONE) {
+                    // A chat opened from a link, New chat, or the closed phone as it unfolds: into a chat pane.
+                    LaunchedEffect(id) {
+                        val running = repo.state.value.activity.keys
+                        panes.update(running) { it.open(id) }
+                        nav.onMain { backToChats() }
+                    }
+                    return@composable
                 }
-                return@composable
+                val context = LocalContext.current
+                val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo, AndroidMic(context), phonePrefs) }
+                // Text shared into a chat that was just created; taken once, never sent by itself.
+                val draft = remember(id) { shareInbox.takeDraft(id) }
+                val dictationOn by phonePrefs.flow(Dictation.ENABLED).collectAsStateWithLifecycle()
+                ChatScreen(
+                    vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = { nav.popBackStack() },
+                    onOpenChat = { newId, text ->
+                        text?.let { shareInbox.putDraft(newId, it) }
+                        nav.navigate(Routes.chat(newId))
+                    },
+                    onNewChat = { nav.navigate(Routes.NEW) },
+                    onStartFresh = startFresh,
+                )
             }
-            val context = LocalContext.current
-            val vm = viewModel(key = "chat:$id") { ChatViewModel(id, repo, AndroidMic(context), phonePrefs) }
-            // Text shared into a chat that was just created; taken once, never sent by itself.
-            val draft = remember(id) { shareInbox.takeDraft(id) }
-            val dictationOn by phonePrefs.flow(Dictation.ENABLED).collectAsStateWithLifecycle()
-            ChatScreen(
-                vm = vm, initialDraft = draft, dictationOn = dictationOn, onBack = { nav.popBackStack() },
-                onOpenChat = { newId, text ->
-                    text?.let { shareInbox.putDraft(newId, it) }
-                    nav.navigate(Routes.chat(newId))
-                },
-                onNewChat = { nav.navigate(Routes.NEW) },
-                onStartFresh = startFresh,
-            )
-        }
-        composable(Routes.NEW) {
-            // The phone's default model for the active computer (Settings → New chats).
-            val defaults = remember(phonePrefs) { NewChatDefaults(phonePrefs) }
-            val c by repo.state.collectAsStateWithLifecycle()
-            val models by defaults.modelsFlow.collectAsStateWithLifecycle()
-            val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
-            // Text shared from another app (Share to Nekko), editable here, never sent by itself.
-            val shared by shareInbox.shared.collectAsStateWithLifecycle()
-            // Taken once, so a later New chat opens on the usual default.
-            val startPick = remember { freshPick.also { freshPick = null } }
-            NewChatScreen(
-                repo = repo,
-                phonePick = phonePick,
-                startPick = startPick,
-                shared = shared,
-                onEditShared = shareInbox::edit,
-                onBack = {
-                    shareInbox.clear()
-                    nav.popBackStack()
-                },
-                onPair = { nav.navigate(Routes.pair()) },
-                onQueued = {
-                    shareInbox.clear()
-                    nav.popBackStack()
-                },
-                onCreated = { id ->
-                    shareInbox.handOff(id)
-                    nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
-                },
-            )
-        }
-        composable(
-            Routes.PAIR,
-            arguments = listOf(navArgument("link") { type = NavType.StringType; nullable = true; defaultValue = null }),
-        ) { entry ->
-            PairScreen(
-                repo = repo,
-                initialLink = entry.arguments?.getString("link"),
-                onBack = { nav.popBackStack() },
-                onPaired = {
-                    FirstRun.paired(phonePrefs)
-                    nav.onMain { backToChats() }
-                },
-            )
-        }
-        composable(Routes.SETTINGS) {
-            val deps = remember(nav) {
-                SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
+            composable(Routes.NEW) {
+                // The phone's default model for the active computer (Settings → New chats).
+                val defaults = remember(phonePrefs) { NewChatDefaults(phonePrefs) }
+                val c by repo.state.collectAsStateWithLifecycle()
+                val models by defaults.modelsFlow.collectAsStateWithLifecycle()
+                val phonePick = remember(models, c.activeId) { c.activeId?.let(defaults::model) }
+                // Text shared from another app (Share to Nekko), editable here, never sent by itself.
+                val shared by shareInbox.shared.collectAsStateWithLifecycle()
+                // Taken once, so a later New chat opens on the usual default.
+                val startPick = remember { freshPick.also { freshPick = null } }
+                NewChatScreen(
+                    repo = repo,
+                    phonePick = phonePick,
+                    startPick = startPick,
+                    shared = shared,
+                    onEditShared = shareInbox::edit,
+                    onBack = {
+                        shareInbox.clear()
+                        nav.popBackStack()
+                    },
+                    onPair = { nav.navigate(Routes.pair()) },
+                    onQueued = {
+                        shareInbox.clear()
+                        nav.popBackStack()
+                    },
+                    onCreated = { id ->
+                        shareInbox.handOff(id)
+                        nav.onMain { navigate(Routes.chat(id)) { popUpTo(Routes.NEW) { inclusive = true } } }
+                    },
+                )
             }
-            SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
+            composable(
+                Routes.PAIR,
+                arguments = listOf(navArgument("link") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            ) { entry ->
+                PairScreen(
+                    repo = repo,
+                    initialLink = entry.arguments?.getString("link"),
+                    onBack = { nav.popBackStack() },
+                    onPaired = { id ->
+                        FirstRun.paired(phonePrefs)
+                        justPaired = id
+                        nav.onMain { backToChats() }
+                    },
+                )
+            }
+            composable(Routes.SETTINGS) {
+                val deps = remember(nav) {
+                    SettingsDeps(repo, themePrefs, phonePrefs, haptics, open = { route -> nav.navigate(route) { launchSingleTop = true } })
+                }
+                SettingsScreen(deps = deps, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.SIMPLE_MODE) {
+                SimpleModeScreen(prefs = phonePrefs, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.LICENSES) {
+                LicensesScreen(onBack = { nav.popBackStack() })
+            }
+            composable(Routes.AUTOMATIONS) {
+                AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.PROVIDERS) {
+                ProvidersScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.LOGS) {
+                LogsScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.FILES) {
+                FilesScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.USAGE) {
+                UsageScreen(repo = repo, onBack = { nav.popBackStack() })
+            }
+            composable(Routes.COMPUTERS) {
+                ComputersScreen(
+                    repo = repo,
+                    onBack = { nav.popBackStack() },
+                    onPair = { nav.navigate(Routes.pair()) },
+                    onOpen = { id -> nav.navigate(Routes.computer(id)) },
+                )
+            }
+            composable(Routes.COMPUTER, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+                ComputerScreen(
+                    repo = repo,
+                    computerId = entry.arguments?.getString("id").orEmpty(),
+                    onBack = { nav.popBackStack() },
+                    onProviders = { nav.navigate(Routes.PROVIDERS) },
+                )
+            }
         }
-        composable(Routes.SIMPLE_MODE) {
-            SimpleModeScreen(prefs = phonePrefs, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.LICENSES) {
-            LicensesScreen(onBack = { nav.popBackStack() })
-        }
-        composable(Routes.AUTOMATIONS) {
-            AutomationsScreen(repo = repo, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.PROVIDERS) {
-            ProvidersScreen(repo = repo, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.LOGS) {
-            LogsScreen(repo = repo, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.FILES) {
-            FilesScreen(repo = repo, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.USAGE) {
-            UsageScreen(repo = repo, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.COMPUTERS) {
-            ComputersScreen(
-                repo = repo,
-                onBack = { nav.popBackStack() },
-                onPair = { nav.navigate(Routes.pair()) },
-                onOpen = { id -> nav.navigate(Routes.computer(id)) },
-            )
-        }
-        composable(Routes.COMPUTER, arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
-            ComputerScreen(
-                repo = repo,
-                computerId = entry.arguments?.getString("id").orEmpty(),
-                onBack = { nav.popBackStack() },
-                onProviders = { nav.navigate(Routes.PROVIDERS) },
-            )
+        AnimatedVisibility(visible = justPaired != null, enter = fadeIn(tween(200)), exit = fadeOut(tween(250))) {
+            // Held while it fades out, after justPaired is already cleared.
+            val id = remember { justPaired.orEmpty() }
+            val state by repo.state.collectAsStateWithLifecycle()
+            val name = state.computers.firstOrNull { it.id == id }?.name?.takeIf { it != DEFAULT_COMPUTER_NAME }
+            PairSuccessOverlay(name) { justPaired = null }
         }
     }
 }

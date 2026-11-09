@@ -68,6 +68,26 @@ export function pairingAlts(relayUrl: string, local: LocalRelayStatus | null): s
   return local.lanUrls;
 }
 
+/**
+ * How big the pairing QR is drawn, in CSS pixels. The link carries the relay,
+ * room, key, host key, code and LAN routes (about 230-300 characters, a version
+ * 9-12 code), so at the old 132 px each module was about 2 px, under half a
+ * millimetre on a laptop screen: phones had to come so close that their main
+ * camera could no longer focus. At this size a module is about 4 px.
+ */
+export const PAIRING_QR_SIZE = 232;
+
+/**
+ * The pairing QR as an SVG data URL: sharp at any zoom or display scale (the
+ * old PNG was scaled from 220 px down to 132, blurring module edges). Low error
+ * correction, because a screen is never smudged or torn, gives fewer, larger
+ * modules; the two-module margin keeps a white quiet zone in the dark theme.
+ */
+export async function pairingQr(link: string): Promise<string> {
+  const svg = await QRCode.toString(link, { type: 'svg', errorCorrectionLevel: 'L', margin: 2, color: { dark: '#000000', light: '#ffffff' } });
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 export function RemoteAccess() {
   const [status, setStatus] = useState<RemoteStatus>({ enabled: false });
   const [relayUrl, setRelayUrl] = useState('');
@@ -141,7 +161,7 @@ export function RemoteAccess() {
   }, [status.enabled, liveGrant?.code, alts]);
 
   useEffect(() => {
-    if (link) QRCode.toDataURL(link, { margin: 1, width: 220 }).then(setQr).catch(() => setQr(''));
+    if (link) pairingQr(link).then(setQr).catch(() => setQr(''));
     else setQr('');
   }, [link]);
 
@@ -251,7 +271,15 @@ export function RemoteAccess() {
             {/* Pairing QR (short-lived, single-use) */}
             {liveGrant && link && (
               <div className="mt-2 flex flex-col items-start gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
-                {qr && <img src={qr} alt="Pairing QR" width={132} height={132} className="rounded-lg border border-line" />}
+                {qr && (
+                  <img
+                    src={qr}
+                    alt="Pairing QR"
+                    width={PAIRING_QR_SIZE}
+                    height={PAIRING_QR_SIZE}
+                    className="shrink-0 rounded-lg border border-line bg-white"
+                  />
+                )}
                 <div className="min-w-0">
                   <div className="text-sm font-medium">Scan with your phone's camera to connect.</div>
                   <div
