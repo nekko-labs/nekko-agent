@@ -71,4 +71,14 @@ final class VoiceSegmenterTests: XCTestCase {
         XCTAssertNil(s.feed(tone(0.1)))
         XCTAssertNil(s.flush())
     }
+
+    func testHearingSpeechStartsWithVoiceAndResetsAtTheCut() {
+        var s = segmenter()
+        XCTAssertNil(s.feed(quiet(0.5)))
+        XCTAssertFalse(s.hearingSpeech)
+        XCTAssertNil(s.feed(tone(0.3)))
+        XCTAssertTrue(s.hearingSpeech)
+        XCTAssertNotNil(s.feed(quiet(1.4)))
+        XCTAssertFalse(s.hearingSpeech)
+    }
 }
