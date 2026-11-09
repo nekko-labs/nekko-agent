@@ -73,6 +73,9 @@ final class AppModel {
     /// First run, step 3 (IO-31): shown right after the first pairing, where
     /// notification permission is asked.
     var showNotificationStep = false
+    /// The computer that was just paired: the celebration shows over everything
+    /// until it is dismissed (PairSuccessView), then the first run goes on.
+    var justPaired: String?
     /// The step-up sheet's question (SK-6), while the store waits for the owner's answer.
     private(set) var stepUpRequest: StepUpRequest?
     private var stepUpAnswer: CheckedContinuation<StepUpProof?, Never>?
@@ -155,6 +158,8 @@ final class AppModel {
         if let i = args.firstIndex(of: "-uiTestShare"), i + 1 < args.count { shareInbox.offer(args[i + 1]) }
         // First run's step 3 without pairing a computer first.
         if args.contains("-uiTestNotificationStep") { showNotificationStep = true }
+        // The pairing celebration without pairing a computer first.
+        if args.contains("-uiTestPairSuccess") { justPaired = "ui-test" }
         #endif
         if NativeFixtureRoute.isolated { return }
         // Here, not in `start()`: a tap on the card can launch the app in the
@@ -602,6 +607,7 @@ final class AppModel {
         let id: String
         do { id = try await store.pair(link) } catch { return error.localizedDescription }
         if prefs.defaultComputer == nil { prefs.defaultComputer = id }
+        justPaired = id
         if prefs.onboarded {
             if await notifier.requestPermission() { registerForPush() }
         } else {
