@@ -450,12 +450,19 @@ final class LiveRelayTests: XCTestCase {
         // the top, where the transcript is; the middle of the screen is the message box.
         // XCTest calls the bubble hittable while it is still under the navigation bar, where a
         // long press opens nothing, so scroll until it is below the bar.
+        // The queue editor's Save leaves the message box focused: put the keyboard away
+        // first, or the transcript is a strip a late scroll to the end can take back
+        // (run 42609313779: up at the first prompt, then back at the end).
+        let hideKeyboard = app.buttons["composer.hideKeyboard"]
+        if hideKeyboard.exists { hideKeyboard.tap(); settle() }
         let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
         let barBottom = app.navigationBars.firstMatch.frame.maxY
-        for _ in 0..<12 where !(first.exists && first.frame.minY > barBottom + 8) {
-            top.press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 160)))
+        for _ in 0..<2 where !(first.exists && first.frame.minY > barBottom + 8) {
+            for _ in 0..<12 where !(first.exists && first.frame.minY > barBottom + 8) {
+                top.press(forDuration: 0.05, thenDragTo: top.withOffset(CGVector(dx: 0, dy: 160)))
+            }
+            settle()
         }
-        settle()
         XCTAssertTrue(first.waitForExistence(timeout: 10), "the first prompt is on screen")
         // The menu item carries the identifier `chat.fork` (#868); XCTest matches
         // an element's identifier, not its label, once one is set.
