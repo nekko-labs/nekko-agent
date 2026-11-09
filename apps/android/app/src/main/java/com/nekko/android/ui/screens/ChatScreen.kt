@@ -82,6 +82,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.chat.ChatController
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
@@ -293,6 +294,18 @@ private fun ChatScreenContent(
     val prompts by vm.prompts.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val res = LocalResources.current
+    // The notification's "Always allow this tool": taken once the app is unlocked and this
+    // chat's card shows that very call; the card then presses its own Always allow.
+    val alwaysLink = (context.applicationContext as? com.nekko.android.NekkoApp)?.alwaysAllow
+    val alwaysWanted = alwaysLink?.request?.collectAsStateWithLifecycle()?.value
+    val lockStatus = LocalAppLock.current?.status?.collectAsStateWithLifecycle()?.value
+    var alwaysNow by remember(vm.sessionId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(vm.sessionId, alwaysWanted, lockStatus?.locked, chat.approval?.call?.id) {
+        val a = chat.approval ?: return@LaunchedEffect
+        if (ChatController.offersToolScope(a.call.name) && alwaysLink?.take(vm.sessionId, a.call.id, locked = lockStatus?.locked == true) == true) {
+            alwaysNow = a.call.id
+        }
+    }
     val editInNewChat = stringResource(R.string.chats_edit_in_new_chat)
     val forkFromHere = stringResource(R.string.chats_fork_from_here)
     // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
@@ -679,7 +692,7 @@ private fun ChatScreenContent(
                             if (e.refusal?.asksForStepUp != true) throw e
                             modeStepUp = PendingStepUp(res.getString(R.string.chats_tool_step_up, computerName, a.call.name)) { proof -> vm.alwaysAllowTool(proof) }
                         }
-                    })
+                    }, startAlways = alwaysNow == a.call.id, onStartedAlways = { alwaysNow = null })
                 }
                 chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
