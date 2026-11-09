@@ -205,6 +205,12 @@ where Auto routing is not supported, such as a fixed-model workflow step.
 The iPhone and Android apps' model lists have **All**, **Cloud** and **Local** at
 the top too (they offer no Auto, so no Fusion).
 
+### Search everything (Ctrl/Cmd+K)
+
+Press **Ctrl+K** (**⌘K** on macOS) to search the whole app from one box: commands, Settings pages, individual settings, chats, the messages inside them and the files your chats made. The best matches come first, and message matches always come after the rest. The chips under the box show how many results each type has; click one, or press **Tab** (Shift+Tab to go back), to show only Commands, Settings, Chats, Messages or Artifacts.
+
+Each result has two lines: where it lives (for example *Messages › Release notes* or *Settings › Customize › Text size*), then the text it was found in, with the matching words highlighted. Common synonyms count, so *prefs*, *preferences*, *options* or *config* find Settings, and *appearance* finds the theme. Settings show their switch or choice at the right: change it there, or press Enter to flip it. Enter on a message opens its chat and finds the word in it.
+
 ### How the Agents panel groups your agents
 
 The selected agent has a tinted background across its row, so you can spot the chat you are viewing without hovering. Hovering a chat row adds a soft tinted glow with a quick fade, without switching chats. Keyboard focus gets the same glow and a visible outline; reduced motion removes the fade. Other rows stay flat at rest; their status icons still show whether they are working, waiting or finished.

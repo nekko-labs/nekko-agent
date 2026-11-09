@@ -3778,6 +3778,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .chat-finder-input { border-bottom: 1px solid var(--line); }
 .chat-finder-input:focus { border-bottom-color: var(--accent); }
 .chat-finder-row.is-cursor { background: var(--surface-2); }
+/* Ctrl+K results: the highlighted row, and the words that matched (the same
+   wash Find in chat uses for its matches). */
+.palette-row.is-active { background: var(--surface-2); }
+.palette-mark { background-color: color-mix(in srgb, var(--highlight) 32%, transparent); color: inherit; border-radius: 2px; }
 /* The wait before a search, drawn as a line that fills while typing pauses. */
 .chat-finder-progress { height: 2px; margin: 0 8px; border-radius: 1px; background: var(--accent); transform: scaleX(0); transform-origin: left; opacity: 0; }
 .chat-finder-progress[data-active] { opacity: 0.7; animation: chat-finder-wait 1s linear forwards; }
