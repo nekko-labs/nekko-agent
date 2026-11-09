@@ -32,7 +32,7 @@ import { approvalAfterResult } from './ChatPane.approval.js';
 import { useStore } from '../store.js';
 import { SubagentBanner } from './SubagentBanner.js';
 import { useGitStatus } from '../useGitStatus.js';
-import { beginResumedRun, clearLiveRun, getLiveRun, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
+import { beginResumedRun, clearLiveRun, getLiveRun, onRunOrphaned, takeFinishedRun, useLiveRun, type LiveRun } from '../liveRuns.js';
 import { getCachedSession, holdTranscript, loadSession, putCachedSession } from '../sessionCache.js';
 import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { usePaneVisible } from '../paneVisibility.js';
@@ -1211,7 +1211,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           break;
       }
     });
-    return off;
+    // The engine went away mid-turn (a crash or restart) and its replacement
+    // has no such run: stop showing it as working and read back the reply it
+    // marked interrupted on disk.
+    const offOrphan = onRunOrphaned((id) => {
+      if (id !== sessionId || !streamingRef.current) return;
+      endTurn();
+      loadSession(sessionId).then((s) => { if (s) setSession(s); }).catch(() => {});
+    });
+    return () => { off(); offOrphan(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, setMascotMood]);
 
