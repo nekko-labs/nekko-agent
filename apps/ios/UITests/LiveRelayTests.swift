@@ -1064,8 +1064,13 @@ final class LiveRelayTests: XCTestCase {
         let done = app.buttons["pairSuccess.done"]
         guard done.waitForExistence(timeout: 5) else { return }
         if let name { attach(app, name) }
-        done.tap()
-        _ = waitGone(done, 5)
+        // It also closes by itself 3.4 s after it plays (without VoiceOver), so a tap
+        // can find Let's go already gone (seen in testFollowUpInASubagent). Let it
+        // close; tap only if it is still up after that.
+        if !waitGone(done, 6) {
+            done.tap()
+            _ = waitGone(done, 5)
+        }
     }
 
     private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {
