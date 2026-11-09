@@ -24,9 +24,9 @@ describe('folders have one stable composer location (#2339)', () => {
       const session = chatSession({ messages: cleanStart ? [] : chatSession().messages, workspaceId: 'code', supportingWorkspaceIds: ['docs'] });
       const html = renderChatPane(session, { ...props, cleanStart });
       const box = composerBox(html);
-      expect(html.match(/aria-label="Selected folders:/g)).toHaveLength(1);
+      expect(html.match(/aria-label="Environment:/g)).toHaveLength(1);
       expect(box).toMatch(/class="composer-bar[^"]*"><div class="relative/);
-      const folder = box.indexOf('aria-label="Selected folders: code, docs"');
+      const folder = box.indexOf('aria-label="Environment: code, docs"');
       const plus = box.indexOf('aria-label="Add a photo, video, file, folder, or skill"');
       expect(folder).toBeGreaterThan(-1);
       expect(plus).toBeGreaterThan(-1);
@@ -38,7 +38,7 @@ describe('folders have one stable composer location (#2339)', () => {
   it('keeps the picker with no selected or saved folder', () => {
     useStore.setState({ settings: { workspaces: [] } as never });
     const box = composerBox(renderChatPane(chatSession({ messages: [] }), { cleanStart: true, commandCenter: true }));
-    expect(box).toContain('aria-label="Selected folders: none"');
+    expect(box).toContain('aria-label="Environment: none"');
     expect(box).toContain('No folder');
   });
 });

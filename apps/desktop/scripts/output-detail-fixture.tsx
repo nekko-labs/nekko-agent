@@ -6,8 +6,8 @@ const patches: unknown[] = [];
   updateSettings: async (patch: unknown) => { patches.push(patch); return { ...Object.assign(settings, patch) }; },
 };
 Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/CustomizeExperience'), import('../src/renderer/store'), import('../src/renderer/components/ModeViews')]).then(async ([React, { createRoot }, { CustomizeExperience, openCustomize }, { useStore }, { ModeSwitch }]) => {
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   localStorage.setItem('nekko.simpleChoices', JSON.stringify({ asks: 'hide', cost: 'show' }));
   useStore.setState({ settings, settingsLoaded: true } as any);

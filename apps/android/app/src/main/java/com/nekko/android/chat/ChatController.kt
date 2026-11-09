@@ -149,8 +149,17 @@ class ChatController(
     private val guarded: (suspend (channel: String, args: List<JsonElement>, stepUp: StepUpProof?) -> JsonElement)? = null,
     /** Generation always uses the existing authorized Change path, never an unsigned fallback. */
     private val generateImage: (suspend (JsonElement) -> JsonElement)? = null,
+    /**
+     * A prompt sent from this phone got its finished reply (`done`), for the GitHub star ask.
+     * Never for a reply that failed or was stopped, nor for turns this phone did not start here:
+     * queued prompts, the outbox, automations, the computer's own sends.
+     */
+    private val onPromptReplied: () -> Unit = {},
 ) {
     private val _state = MutableStateFlow(ChatState())
+
+    /** The running turn was started by [send] here, so its `done` counts ([onPromptReplied]). */
+    @Volatile private var prompted = false
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
     /** The reservation survives terminal events until the image RPC/authorization actually returns. */
@@ -363,6 +372,15 @@ class ChatController(
         }
         if (voiceProblem != null) voiceFailure?.completeExceptionally(IllegalStateException(voiceProblem))
         _state.update { it.copy(turn = Transcript.apply(it.turn, e)) }
+        when (e) {
+            is AgentEvent.Done -> if (prompted) {
+                prompted = false
+                onPromptReplied()
+            }
+            // A failure, and a stop (the computer ends a stopped turn with an error), never count.
+            is AgentEvent.Error -> prompted = false
+            else -> Unit
+        }
         // Re-read the saved transcript when the turn ends, then drop the overlay it replaces.
         return e is AgentEvent.Done || e is AgentEvent.Error || e is AgentEvent.SessionMeta
     }
@@ -422,6 +440,7 @@ class ChatController(
             val shown = if (skill == null) text else "/${skill.name} $text".trim()
             it.copy(turn = LiveTurn(running = true, blocks = listOf(Block.User("pending-$at", shown, at, images))))
         }
+        prompted = true
         // Resolves only when the whole turn ends; the events carry the progress.
         scope.launch {
             try {
@@ -437,6 +456,7 @@ class ChatController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                prompted = false
                 if (ob != null && !(e is RelayException && e.fromComputer)) {
                     // No answer (the connection dropped): it may or may not have arrived. The outbox
                     // sends it again with the same id once the computer is back, and it runs once.

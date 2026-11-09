@@ -40,7 +40,8 @@ const ASK_GUIDANCE: &str = "Asking first:
 - If the request is genuinely ambiguous and the readings lead to materially different work, call `ask_user` BEFORE starting, with the real alternatives as options. One round, at most 4 questions.
 - Ask about decisions that are the user's to make: scope, product behaviour, which of several things they meant, and anything expensive to undo (a schema, a public interface, deleting or overwriting).
 - Do not ask what you can find out yourself by reading the code, and do not ask for permission to run tools, the app already handles that. Do not ask to confirm a plan you are confident in.
-- When a reasonable default exists, take it, say which one you took and why, and carry on. A stated assumption beats a question, and a question beats building the wrong thing.";
+- When a reasonable default exists, take it, say which one you took and why, and carry on. A stated assumption beats a question, and a question beats building the wrong thing.
+- When the user asks you to change or work on a project or repository that is not among the workspace folders listed below, and you cannot find it in them, do not guess or start in another folder. Call `ask_user` first, with options such as: search this computer for it (then look with your file tools and, when you find it, ask again with an option whose `action` is `addFolder` with its path), choose the folder (`action` `pickFolder`), or add it from their connected GitHub or GitLab (`action` `connectRepo`). The answer says what was added and where; a folder added this way is usable at once by its full path.";
 
 /// `PLAN_GUIDANCE`.
 const PLAN_GUIDANCE: &str = "Working plan:

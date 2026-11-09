@@ -88,6 +88,8 @@
     <string name="settings_connected">Connected</string>
     <string name="settings_what_to_try">What to try</string>
     <string name="settings_try_again_now">Try again now</string>
+    <string name="settings_advice_host_gone">%1$s doesn’t exist anymore, so this phone can’t reach %2$s through it.</string>
+    <string name="settings_advice_host_gone_fix">On %1$s, open Settings → Remote access, change how phones connect (Tailscale works with nothing hosted), then pair this phone again.</string>
     <string name="settings_routes">Routes</string>
     <string name="settings_checking">Checking…</string>
     <string name="settings_check_routes">Check routes</string>

@@ -6,8 +6,8 @@ import { ensureNekko } from './web-client.js';
 import { CloudLogin, cloudAuthRequired } from './components/CloudLogin.js';
 import { UpdateProvider } from './components/UpdateBanner.js';
 // The website's two fonts, bundled so the app never fetches them (--font-sans, --font-mono).
-import '@fontsource-variable/inter-tight';
-import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import './styles.css';
 import { useStore } from './store.js';
 import { fadeInReloadCover, pageWasReloaded, playReloadCover, playSplash } from './splash.js';

@@ -72,6 +72,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -91,6 +93,12 @@ import com.nekko.android.ui.chat.allSubagents
 import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
+import com.nekko.android.ui.chat.StarAskCard
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
@@ -223,6 +231,7 @@ private fun ChatScreenContent(
     val subagents by vm.subagents.collectAsStateWithLifecycle()
     val agentContext = AgentContext(watches, subagents.children, subagents.activity, chat.running, chat.modelId)
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
+    val starCard by vm.starCard.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
@@ -351,6 +360,18 @@ private fun ChatScreenContent(
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
         if (nearBottom) list.scrollToItem(lastIndex)
+    }
+
+    // The GitHub star card opens under the last reply: if that reply's end is in view, bring the whole card up after it expands.
+    LaunchedEffect(starCard) {
+        if (starCard == ChatViewModel.StarCard.NONE) return@LaunchedEffect
+        val before = list.layoutInfo
+        if ((before.visibleItemsInfo.lastOrNull()?.index ?: -1) < before.totalItemsCount - 1) return@LaunchedEffect
+        delay(220)
+        val info = list.layoutInfo
+        val last = info.visibleItemsInfo.lastOrNull()?.takeIf { it.index == info.totalItemsCount - 1 } ?: return@LaunchedEffect
+        val hidden = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
+        if (hidden > 0) list.animateScrollBy(hidden.toFloat(), tween(200))
     }
 
     // Keep the newest message in view when the list gets shorter (the keyboard opens, the message box grows),
@@ -628,6 +649,18 @@ private fun ChatScreenContent(
                                             stringResource(R.string.chats_tokens_per_second, String.format(Locale.US, "%.1f", rate)),
                                             style = MaterialTheme.typography.bodySmall,
                                             color = p.inkFaint,
+                                        )
+                                    }
+                                    // The GitHub star ask under the 10th and 50th reply, never over a question, an approval, a failure or a saved copy.
+                                    val starShows = starCard != ChatViewModel.StarCard.NONE && !chat.running && chat.question == null &&
+                                        chat.approval == null && chat.error == null && chat.savedAt == null && completedAt == null
+                                    AnimatedVisibility(starShows, enter = fadeIn(tween(200)) + expandVertically(tween(200)), exit = fadeOut(tween(150)) + shrinkVertically(tween(150))) {
+                                        StarAskCard(
+                                            thanked = starCard == ChatViewModel.StarCard.THANKS,
+                                            onStar = vm::starred,
+                                            onLater = { vm.closeStarAsk() },
+                                            onNever = { vm.closeStarAsk(forever = true) },
+                                            onClose = { vm.closeStarAsk() },
                                         )
                                     }
                                 }

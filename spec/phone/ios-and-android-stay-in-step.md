@@ -44,10 +44,12 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Older OS fallback | iOS 17: Open app for voice opens list without auto-listening | Foreground sheet as above | iOS 17 is an app handoff, not equivalent background voice or an app-wide voice sheet. |
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
 | Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
+| Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
+| GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md)) | Being built | Built 2026-11-09: inline card, link to the repository only, emulator-verified, not on a physical phone | iPhone: [#2423](https://github.com/nekko-labs/nekko-agent/issues/2423). Both: the native store rating request once on the App Store and Google Play (planned). |
 
 ## Android is behind the iPhone today
 
-Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by reading the code, not on a device ([report](../../reports/android-ios-parity-2026-11-07.md)).
+Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30 ([report](../../reports/android-ios-parity-2026-11-07.md)), and again on 2026-11-09 against the changes since, by reading the code, not on a device.
 
 | Feature | Android side | Tracked by |
 | --- | --- | --- |
@@ -66,14 +68,13 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by re
 | Live card: chats as chips that open the chat | Focused chat and its actions only | [#2116](https://github.com/nekko-labs/nekko-agent/issues/2116) |
 | Simple/Detailed in the menus, chat-title mascot, pull-up refresh | Mode still in the pill | [#2117](https://github.com/nekko-labs/nekko-agent/issues/2117) |
 | Dark launcher icon and Spooky seasonal icon | Neither; Android can swap launcher icons with an activity alias | [#2118](https://github.com/nekko-labs/nekko-agent/issues/2118) |
-| Say when Nekko Cloud is unreachable while pairing | Can sit on Connecting | [#2119](https://github.com/nekko-labs/nekko-agent/issues/2119) |
 | Pixel build-up before unlocking | Biometric lock without the opening | [#2120](https://github.com/nekko-labs/nekko-agent/issues/2120) |
-| Always allow an MCP tool from the notification and live card | In the chat only | [#2065](https://github.com/nekko-labs/nekko-agent/issues/2065) |
+| Always allow an MCP tool from the notification and live card (iPhone since 2026-11-08) | Allow and Deny only there; the chat's own card has it | [#2065](https://github.com/nekko-labs/nekko-agent/issues/2065) |
 | Push notifications | No push; the keep-alive service covers an open connection | [#2121](https://github.com/nekko-labs/nekko-agent/issues/2121) |
 | Nekko Cloud machines | Deferred until proven on the iPhone | [#2122](https://github.com/nekko-labs/nekko-agent/issues/2122) |
 | Apple Watch glance | No Wear OS app; needs a decision | [#2123](https://github.com/nekko-labs/nekko-agent/issues/2123) |
+| Customize page: view, this phone's tone, skills | Missing; Simple/Detailed is in the pill | [#2426](https://github.com/nekko-labs/nekko-agent/issues/2426) |
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
-| Always allow an MCP tool from a notification or the Lock Screen card (2026-11-07) | Allow and Deny only there; the chat's own card has it | #2065 |
 | "Send your first prompt" intro | Not built; the iPhone's shows on the first new chat | [#2234](https://github.com/nekko-labs/nekko-agent/issues/2234) |
 
 Android features the iPhone lacks have not been audited yet.

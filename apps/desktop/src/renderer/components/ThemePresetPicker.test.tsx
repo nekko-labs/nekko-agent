@@ -10,13 +10,15 @@ describe('theme palette slices', () => {
   it('uses adjacent hard stops rather than blending colors', () => {
     expect(slicedSwatch(['#111', '#222', '#333', '#444'])).toBe('conic-gradient(from 0deg, #111 0% 25%, #222 25% 50%, #333 50% 75%, #444 75% 100%)');
   });
-  it('shows the Nekko light/dark toggle above the curated themes, with Spooky under Seasonal', () => {
+  it('shows the Nekko light/dark toggle above the curated themes, with Spooky and Winter under Seasonal', () => {
     const markup = renderToStaticMarkup(<ThemePresetPicker settings={{ theme: 'dark', accent: '#6d5efc' } as AppSettings} update={() => {}} />);
     expect(markup).toContain('role="switch" aria-label="settings.themeDark" aria-checked="true"');
     expect(markup.indexOf('class="theme-mode-toggle"')).toBeLessThan(markup.indexOf('aria-label="Themes"'));
     for (const name of ['Nekko', 'Nebula', 'Terminal', 'Nord', 'Ember', 'Forest', 'Blueberry']) expect(markup).toContain(`title="${name}"`);
     for (const gone of ['Solar', 'Lilac', 'Lavender', 'Raspberry', 'Cyber', 'Tidepool', 'Colourful']) expect(markup).not.toContain(`title="${gone}`);
     expect(markup.match(/title="Spooky"/g)).toHaveLength(1);
+    expect(markup.match(/title="Winter"/g)).toHaveLength(1);
+    expect(markup.indexOf('title="Winter"')).toBeGreaterThan(markup.indexOf('aria-label="Seasonal"'));
     expect(markup.indexOf('aria-label="Seasonal"')).toBeGreaterThan(markup.indexOf('aria-label="Themes"'));
   });
   it('selects a family directly without a separate versions submenu', () => {

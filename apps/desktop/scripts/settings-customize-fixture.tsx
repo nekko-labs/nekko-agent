@@ -17,8 +17,8 @@ const lists = new Set(['listProviders', 'listModels', 'listRunners', 'listShells
 } });
 (window as any).nekkoChrome = { platform: 'win32', titleBarHeight: 38, setTitleBarOverlay: () => {}, serviceControl: async () => ({}) };
 Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/views/SettingsView'), import('../src/renderer/store'), import('../src/renderer/components/UpdateBanner')]).then(async ([React, { createRoot }, { SettingsView }, { useStore }, { UpdateProvider }]) => {
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   localStorage.setItem('nekko.chatMode', 'expert');
   useStore.setState({ settings, settingsLoaded: true } as any);

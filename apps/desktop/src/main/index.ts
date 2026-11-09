@@ -11,6 +11,7 @@ import { pickFolderDialog, registerIpc, shellBridge } from './ipc.js';
 import { fixedWindowBounds, initialWindowBounds, loadWindowBounds, MIN_WINDOW, saveWindowBounds, setWindowStateDir } from './windowState.js';
 import { registerDevLaunch, reportDevReady } from './devLaunchProcess.js';
 import { preservePackagedProfile } from './appIdentity.js';
+import { resolveAppIcon } from './appIcon.js';
 import { desktopVersion } from './appVersion.js';
 import { EngineProcess } from './engine-process.js';
 import { startAppLog } from './appLog.js';
@@ -221,12 +222,7 @@ function installMacAppMenu(): void {
 }
 
 function resolveWindowIcon(): string | undefined {
-  const candidates = [
-    join(__dirname, '../renderer/icon-512.png'),
-    join(__dirname, '../renderer/public/icon-512.png'),
-    join(__dirname, '../../src/renderer/public/icon-512.png'),
-  ];
-  return candidates.find((path) => existsSync(path));
+  return resolveAppIcon(__dirname, app.isPackaged);
 }
 
 /** A Windows toast loads its image itself, so a packaged icon has to leave app.asar. */

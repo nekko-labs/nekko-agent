@@ -3,8 +3,8 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { ModelsView } from '../src/renderer/views/ModelsView';
 import { useStore } from '../src/renderer/store';
-import '@fontsource-variable/inter-tight';
-import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import '../src/renderer/styles.css';
 
 const provider = (id: string, kind: string, label: string, extra = {}) => ({ id, kind, label, enabled: true, baseUrl: '', ...extra });

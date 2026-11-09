@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client';
 
 async function main() {
   const { CreateMenuRows } = await import('../src/renderer/components/CreateMenu');
-  await import('@fontsource-variable/inter-tight');
+  await import('@fontsource-variable/geist');
   await import('../src/renderer/styles.css');
   document.documentElement.dataset.theme = 'dark';
   const root = createRoot(document.getElementById('root')!);

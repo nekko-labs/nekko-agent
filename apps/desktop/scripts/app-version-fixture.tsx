@@ -5,8 +5,8 @@ const version = new URLSearchParams(location.search).get('version')!;
   onUpdateEvent: () => () => {},
 };
 Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/AboutNekko'), import('../src/renderer/components/UpdateBanner'), import('../src/renderer/store')]).then(async ([React, { createRoot }, { AboutNekko }, { UpdateProvider }, { useStore }]) => {
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   useStore.setState({ settings: { autoUpdate: false } } as any);
   document.body.style.background = 'var(--paper)';

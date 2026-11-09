@@ -3,7 +3,8 @@ import { LIST_PAGE, pageGroups, showMoreLabel } from '../../listPaging.js';
 import type { GpuFit, LocalModel, ModelModality, ResidentModel } from '@nekko-agent/shared';
 import { MODALITY_LABELS, MODEL_FOLDER_PROVIDERS, unsupportedLoadReason } from '@nekko-agent/shared';
 import { useStore } from '../../store.js';
-import { CheckIcon, TrashIcon, WarningIcon } from '../../icons.js';
+import { TrashIcon, WarningIcon } from '../../icons.js';
+import { StatusDot } from '../primitives/index.js';
 import { formatBytes, formatTokens, placementLabel, placementTitle } from '../runtimes/verdict.js';
 import { EngineLoadDrawer } from './EngineLoadDrawer.js';
 import { ImageGeneration } from './ImageGeneration.js';
@@ -51,22 +52,6 @@ function bucketOf(modality?: ModelModality): Filter {
   return 'chat';
 }
 
-/** Chip colors per modality: servable kinds are neutral, the rest warn. */
-function modalityTone(modality?: ModelModality): string {
-  switch (modality) {
-    case 'vision':
-      return 'var(--accent)';
-    case 'embedding':
-      return 'var(--success, var(--accent))';
-    case 'image':
-    case 'audio':
-    case 'draft':
-    case 'unknown':
-      return 'var(--warning, #d1a054)';
-    default:
-      return 'var(--ink-faint)';
-  }
-}
 
 export function ModelLibrary({
   providerId,
@@ -247,31 +232,29 @@ export function ModelLibrary({
       </div>
 
       {importing && (
-        <div className="mt-2 flex gap-2">
+        <div className="mt-(--q-inline) flex gap-2">
           <input
-            className="input flex-1 font-mono text-xs"
+            className="quiet-field flex-1 font-mono text-xs"
             placeholder="C:\\models\\qwen2.5-7b-instruct-q4_k_m.gguf"
             value={importPath}
             onChange={(e) => setImportPath(e.target.value)}
             spellCheck={false}
           />
-          <button className="btn btn-outline py-1 text-xs" onClick={runImport} disabled={!importPath.trim()}>
+          <button className="btn btn-ghost py-1 text-xs" onClick={runImport} disabled={!importPath.trim()}>
             Add
           </button>
         </div>
       )}
 
       {buckets.length > 2 && (
-        <div className="mt-2 flex flex-wrap gap-1">
+        <div className="mt-(--q-inline) flex flex-wrap gap-1" role="tablist" aria-label="Filter models">
           {buckets.map((f) => (
             <button
               key={f}
-              className="rounded-full px-2 py-0.5 text-2xs"
-              style={
-                filter === f
-                  ? { background: 'color-mix(in srgb, var(--accent) 16%, transparent)', color: 'var(--accent)' }
-                  : { color: 'var(--ink-faint)' }
-              }
+              type="button"
+              role="tab"
+              aria-selected={filter === f}
+              className="quiet-tab"
               onClick={() => setFilter(f)}
             >
               {FILTER_LABELS[f]}
@@ -281,13 +264,13 @@ export function ModelLibrary({
       )}
 
       {!canLoad && models.length > 0 && (
-        <p className="mt-2 rounded-xl border border-dashed px-3 py-2 text-xs" style={{ borderColor: 'var(--line)', color: 'var(--warning)' }}>
+        <p className="mt-(--q-inline) text-xs text-warning-text">
           These are on disk and ready. Download the engine above to run them here.
         </p>
       )}
 
       {models.length === 0 ? (
-        <p className="mt-3 rounded-xl border border-dashed px-4 py-3 text-xs text-ink-faint" style={{ borderColor: 'var(--line)' }}>
+        <p className="mt-(--q-inline) text-xs text-ink-faint">
           Nothing here yet. Download one of the picks for this machine above or a model from the list, open{' '}
           <strong>Folders</strong> to point at a folder another app already fills, or add a GGUF you have.
         </p>
@@ -298,18 +281,18 @@ export function ModelLibrary({
       ) : (
         <div>
           {paged.groups.map(([loc, ms]) => (
-            <div key={loc} className="mt-2">
+            <div key={loc} className="mt-(--q-group) first:mt-(--q-inline)">
               {groups.length > 1 && (
-                <p className="px-1 pb-1 pt-1 text-xs font-medium text-ink-soft">{loc}</p>
+                <p className="quiet-group-label mb-(--q-heading)">{loc}</p>
               )}
-              <div className="space-y-1">{ms.map(renderRow)}</div>
+              <div className="-mx-2">{ms.map(renderRow)}</div>
             </div>
           ))}
           {paged.hidden > 0 && (
             <button
               type="button"
               data-model-library-more
-              className="mt-2 w-full rounded-lg px-3 py-1.5 text-left text-xs text-ink-faint hover:bg-surface-2 hover:text-ink"
+              className="quiet-row mt-(--q-inline) text-xs text-ink-faint hover:text-ink"
               onClick={() => setShown((n) => n + LIST_PAGE)}
             >
               {showMoreLabel(paged.hidden)}
@@ -330,170 +313,116 @@ export function ModelLibrary({
     return (
       <div key={m.id}>
         <div
-          className="flex flex-wrap items-center gap-2 rounded-lg px-3 py-2 text-xs"
-          style={{
-            background: 'var(--surface-2)',
-            opacity: unsupported ? 0.85 : 1,
-            boxShadow: fitWarn ? 'inset 2px 0 0 var(--warning, #d1a054)' : undefined,
-          }}
+          className="flex min-h-(--q-row) flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-xs transition-colors duration-(--dur-fast) hover:bg-(--q-wash)"
+          style={{ opacity: unsupported ? 0.85 : 1, background: m.loaded ? 'var(--accent-soft)' : undefined }}
+          data-quiet-row
         >
-          <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <CheckIcon className="h-3 w-3 shrink-0 text-success" />
-              <MiddleTruncate text={m.name} tail={20} className="max-w-full font-medium" />
-              <span className="text-2xs text-ink-faint">{gpuGuidance(m.sizeBytes, undefined, m)}</span>
-              {m.modality && m.modality !== 'chat' && (
-                        <span
-                          className="chip shrink-0"
-                          style={{ color: modalityTone(m.modality) }}
-                          title={modalityTitle(m.modality)}
-                        >
-                          {MODALITY_LABELS[m.modality]}
-                        </span>
-                      )}
-                      {m.format === 'mlx' && (
-                        <span className="chip shrink-0" title="An MLX model folder, run by the MLX runtime on Apple Silicon">
-                          MLX
-                        </span>
-                      )}
-                      {m.modality === 'vision' && !m.hasProjector && (
-                        <span className="chip shrink-0" style={{ color: 'var(--warning, #d1a054)' }} title="Its projector file (mmproj-*.gguf) is missing, so it answers text only">
-                          no projector
-                        </span>
-                      )}
-                      {m.loaded && (
-                        <span
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-2xs text-white"
-                          style={{ background: 'var(--success)' }}
-                        >
-                          <CheckIcon className="h-2.5 w-2.5" /> in memory
-                        </span>
-                      )}
-                      {autoloadIds?.has(m.id) && (
-                        <span className="chip shrink-0" title="Loads automatically when the engine starts">
-                          on start
-                        </span>
-                      )}
-                      {m.gpuFit === 'partial' && !unsupported && (
-                        <span
-                          className="chip shrink-0"
-                          style={{ color: 'var(--warning, #d1a054)' }}
-                          title="Under its saved settings, part of it runs on the CPU rather than fully in VRAM. Open Settings to change that."
-                        >
-                          part on CPU
-                        </span>
-                      )}
-                      {m.gpuFit === 'wont' && !unsupported && (
-                        <span
-                          className="chip shrink-0"
-                          style={{ color: 'var(--warning, #d1a054)' }}
-                          title="The planner says it will not fit on this machine, even partly offloaded to the CPU."
-                        >
-                          won't fit
-                        </span>
-                      )}
-                      {m.gpuFit === 'cpu' && !unsupported && (
-                        <span className="chip shrink-0" title="No GPU to offload to, so it runs on the CPU">
-                          CPU only
-                        </span>
-                      )}
-                      {m.managed === false && (
-                        <span className="chip shrink-0" title={`Read from ${m.path}`}>
-                          {m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'other folder'}
-                        </span>
-                      )}
-                    </div>
-                    <p className="truncate text-2xs text-ink-faint">
-                      {[
-                        m.quantization,
-                        m.parameterSize,
-                        formatBytes(m.sizeBytes),
-                        m.maxContext && `${formatTokens(m.maxContext)} max context`,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
-                    <p className="truncate font-mono text-2xs text-ink-faint" title={m.path}>
-                      {m.path}
-                    </p>
-                  </div>
+          <div className="min-w-48 flex-1" title={m.path}>
+            <MiddleTruncate text={m.name} tail={20} className="block max-w-full text-sm font-medium" />
+            <p className="truncate text-2xs text-ink-faint" title={m.modality && m.modality !== 'chat' ? modalityTitle(m.modality) : undefined}>
+              {[
+                gpuGuidance(m.sizeBytes, undefined, m),
+                m.quantization,
+                m.parameterSize,
+                formatBytes(m.sizeBytes),
+                m.maxContext && `${formatTokens(m.maxContext)} max context`,
+                m.modality && m.modality !== 'chat' && MODALITY_LABELS[m.modality],
+                m.format === 'mlx' && 'MLX',
+                autoloadIds?.has(m.id) && 'loads on start',
+                m.gpuFit === 'cpu' && !unsupported && 'CPU only',
+                m.managed === false && `from ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'another folder'}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+          </div>
 
-                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                    {m.loaded && live?.loadedOn && (
-                      <span className="text-2xs text-ink-faint" title={placementTitle(live)}>
-                        {placementLabel(live)}
-                      </span>
-                    )}
-                    {!unsupported && !m.loaded && (
-                      <button
-                        className="rounded-full border px-2 py-1 text-2xs"
-                        style={{ borderColor: autoloadIds?.has(m.id) ? 'var(--accent)' : 'var(--line)' }}
-                        title={
-                          autoloadIds?.has(m.id)
-                            ? 'Loads when the engine starts. Click to stop that.'
-                            : running
-                              ? 'Also load it when the engine starts'
-                              : 'Load it automatically when the engine starts'
-                        }
-                        onClick={() => void toggleAutoload(m, !autoloadIds?.has(m.id))}
-                      >
-                        on start
-                      </button>
-                    )}
-                    {!unsupported && (
-                      <button
-                        className="rounded-full border px-2 py-1 text-2xs hover:border-[var(--accent)]"
-                        style={{ borderColor: open === m.id ? 'var(--accent)' : 'var(--line)' }}
-                        onClick={() => setOpen(open === m.id ? null : m.id)}
-                      >
-                        {m.modality === 'image' ? 'Image settings' : 'Settings'}
-                      </button>
-                    )}
-                    {unsupported ? null : m.loaded ? (
-                      <button
-                        className="rounded-full border px-2 py-1 text-2xs"
-                        style={{ borderColor: 'var(--line)' }}
-                        disabled={busy === m.id}
-                        onClick={() => void unload(m.id)}
-                      >
-                        {busy === m.id ? 'unloading…' : 'Unload'}
-                      </button>
-                    ) : (
-                      <button
-                        className="rounded-full px-3 py-1 text-2xs text-white disabled:opacity-50"
-                        style={{ background: 'var(--accent)' }}
-                        title={canLoad ? `Load ${m.name} into memory` : 'Download the engine first'}
-                        disabled={busy === m.id || (!canLoad && m.modality !== 'image')}
-                        onClick={() => void quickLoad(m)}
-                      >
-                        {busy === m.id ? 'loading…' : 'Load'}
-                      </button>
-                    )}
-                    {m.managed === false ? (
-                      // The file belongs to whichever app downloaded it. Saying so
-                      // beats a delete button that refuses after the click.
-                      <span
-                        className="px-2 text-2xs text-ink-faint"
-                        title={`Delete this in ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'the app that downloaded it'}`}
-                      >
-                        borrowed
-                      </span>
-                    ) : (
-                      <button className="btn btn-ghost px-2 py-1" title="Delete this model" onClick={() => void remove(m)}>
-                        <TrashIcon className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            {m.loaded ? (
+              <span className="mr-1 inline-flex items-center gap-1.5 text-2xs text-ink-soft" title={live ? placementTitle(live) : undefined}>
+                <StatusDot color="var(--accent)" size={6} />
+                In memory{live?.loadedOn ? ` · ${placementLabel(live)}` : ''}
+              </span>
+            ) : missingProjector ? (
+              <span className="mr-1 inline-flex items-center gap-1.5 text-2xs text-warning-text" title="Its projector file (mmproj-*.gguf) is missing, so it answers text only">
+                <StatusDot tone="warning" size={6} />
+                No projector
+              </span>
+            ) : !unsupported && (m.gpuFit === 'partial' || m.gpuFit === 'wont') ? (
+              <span
+                className="mr-1 inline-flex items-center gap-1.5 text-2xs text-warning-text"
+                title={m.gpuFit === 'partial'
+                  ? 'Under its saved settings, part of it runs on the CPU rather than fully in VRAM. Open Settings to change that.'
+                  : 'The planner says it will not fit on this machine, even partly offloaded to the CPU.'}
+              >
+                <StatusDot tone="warning" size={6} />
+                {m.gpuFit === 'partial' ? 'Part on CPU' : 'Won’t fit'}
+              </span>
+            ) : null}
+            {!unsupported && !m.loaded && (
+              <button
+                className={`btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs ${autoloadIds?.has(m.id) ? 'text-accent' : ''}`}
+                aria-pressed={!!autoloadIds?.has(m.id)}
+                title={
+                  autoloadIds?.has(m.id)
+                    ? 'Loads when the engine starts. Click to stop that.'
+                    : running
+                      ? 'Also load it when the engine starts'
+                      : 'Load it automatically when the engine starts'
+                }
+                onClick={() => void toggleAutoload(m, !autoloadIds?.has(m.id))}
+              >
+                On start
+              </button>
+            )}
+            {!unsupported && (
+              <button
+                className={`btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs ${open === m.id ? 'text-accent' : ''}`}
+                aria-expanded={open === m.id}
+                onClick={() => setOpen(open === m.id ? null : m.id)}
+              >
+                {m.modality === 'image' ? 'Image settings' : 'Settings'}
+              </button>
+            )}
+            {unsupported ? null : m.loaded ? (
+              <button className="btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11! text-2xs" disabled={busy === m.id} onClick={() => void unload(m.id)}>
+                {busy === m.id ? 'Unloading…' : 'Unload'}
+              </button>
+            ) : (
+              <button
+                className="btn btn-ghost min-h-8! px-2 py-1 text-2xs font-medium text-accent touch:min-h-11! disabled:opacity-50"
+                title={canLoad ? `Load ${m.name} into memory` : 'Download the engine first'}
+                disabled={busy === m.id || (!canLoad && m.modality !== 'image')}
+                onClick={() => void quickLoad(m)}
+              >
+                {busy === m.id ? 'Loading…' : 'Load'}
+              </button>
+            )}
+            {m.managed === false ? (
+              // The file belongs to whichever app downloaded it. Saying so
+              // beats a delete button that refuses after the click.
+              <span
+                className="px-2 text-2xs text-ink-faint"
+                title={`Delete this in ${m.folderProvider ? MODEL_FOLDER_PROVIDERS[m.folderProvider].label : 'the app that downloaded it'}`}
+              >
+                borrowed
+              </span>
+            ) : (
+              <button className="btn btn-ghost quiet-row-action min-h-8! px-2 py-1 touch:min-h-11!" title="Delete this model" aria-label="Delete this model" onClick={() => void remove(m)}>
+                <TrashIcon className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
 
                 {unsupported && (
-                  <p className="mt-1 flex items-start gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-(--q-tight) flex items-start gap-2 px-2 text-2xs text-warning-text">
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     {unsupported}
                   </p>
                 )}
                 {missingProjector && !unsupported && (
-                  <p className="mt-1 flex flex-wrap items-center gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-(--q-tight) flex flex-wrap items-center gap-2 px-2 text-2xs text-warning-text">
                     <WarningIcon className="h-3 w-3 shrink-0" />
                     Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
                     <button
@@ -506,7 +435,7 @@ export function ModelLibrary({
                   </p>
                 )}
                 {m.lastLoadError && !m.loaded && (
-                  <p className="mt-1 flex flex-wrap items-start gap-2 px-3 text-2xs" style={{ color: 'var(--danger, var(--warning, #d1a054))' }}>
+                  <p className="mt-(--q-tight) flex flex-wrap items-start gap-2 px-2 text-2xs text-danger-text">
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     <span>Last load failed: {m.lastLoadError}</span>
                     {missingProjector && (

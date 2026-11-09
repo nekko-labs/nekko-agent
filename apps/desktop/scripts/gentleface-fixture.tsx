@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { InfoIcon, FolderIcon, TerminalIcon, ServerIcon, SendIcon, LockIcon, GaugeIcon } from '../src/renderer/icons';
 import { SidebarCollapseIcon, SidebarExpandIcon, FocusIcon, ShieldQuestionIcon, BrainCircuitIcon, WorkflowIcon, RouterIcon, LogOutIcon, CheckCircleIcon } from '../src/renderer/gentleface-icons';
 import '../src/renderer/styles.css';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 const icons = { Info: InfoIcon, Files: FolderIcon, Terminal: TerminalIcon, Server: ServerIcon, Send: SendIcon, Privacy: LockIcon, Effort: GaugeIcon, Collapse: SidebarCollapseIcon, Expand: SidebarExpandIcon, Focus: FocusIcon, Permissions: ShieldQuestionIcon, Memory: BrainCircuitIcon, Workflow: WorkflowIcon, Router: RouterIcon, SignOut: LogOutIcon, Complete: CheckCircleIcon };
 createRoot(document.getElementById('root')!).render(<main style={{ padding: 28, color: 'var(--ink)', background: 'var(--surface)', minHeight: '100vh' }}>
   <h1 style={{ fontSize: 22, marginBottom: 12 }}>Nekko Agent controls</h1>

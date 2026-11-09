@@ -19,6 +19,7 @@ import { AboutNekko } from './components/AboutNekko.js';
 import { FeedbackSheet, openFeedback } from './components/FeedbackSheet.js';
 import { FeedbackIcon } from './icons.js';
 import { AutumnBackground } from './components/AutumnBackground.js';
+import { WinterBackground } from './components/WinterBackground.js';
 import { syncAppActivity } from './appActivity.js';
 import { startDecorClock } from './decorClock.js';
 import { startTextZoom } from './textZoom.js';
@@ -399,6 +400,7 @@ export function App() {
       {/* Global overlays stay mounted even while settings load, so deep links,
           toasts, and update banners keep working on any settings failure. */}
       {settings?.themePreset === 'autumn' && <AutumnBackground />}
+      {settings?.themePreset === 'winter' && <WinterBackground />}
       <ErrorBoundary label="Customize"><CustomizeExperience /></ErrorBoundary>
       <ErrorBoundary label="Updates"><UpdateBanner /></ErrorBoundary>
       <ErrorBoundary label="Notices"><AppNotices /></ErrorBoundary>

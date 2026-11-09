@@ -145,12 +145,12 @@ export function ImageModeControls({ session, onChange, busy }: { session: Sessio
         {companions && <button className="ctl-toggle" disabled={busy} onClick={() => void save({ ...companions.defaults, seed: -1 })}>Restore model defaults</button>}
       </div>}
       {!runtime ? (
-        <button className="ctl-toggle ml-auto shrink-0 whitespace-nowrap text-[var(--warning,#d1a054)]" onClick={() => setView('modelserver')} title="Image models run in stable-diffusion.cpp">
+        <button className="ctl-toggle ml-auto shrink-0 whitespace-nowrap text-[var(--warning)]" onClick={() => setView('modelserver')} title="Image models run in stable-diffusion.cpp">
           Finish photo setup in Models
         </button>
       ) : companions && !companions.ready ? (
         <button
-          className="ctl-toggle ml-auto shrink-0 whitespace-nowrap text-[var(--warning,#d1a054)]"
+          className="ctl-toggle ml-auto shrink-0 whitespace-nowrap text-[var(--warning)]"
           disabled={fetching}
           onClick={() => void fetchCompanions()}
           title={`${companions.label} needs ${companions.files.filter((f) => !f.path).map((f) => f.role).join(', ')}`}

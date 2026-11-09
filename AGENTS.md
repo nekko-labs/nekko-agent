@@ -16,7 +16,7 @@ the runbooks it links. Read a runbook before the work it names.
 | Version numbers, cutting a release (a `vMAJOR.MINOR.0` tag; never bump a version in a PR) | [docs/runbooks/releasing.md](docs/runbooks/releasing.md) |
 | Cutting an iOS release / TestFlight upload (manual GitHub action, not EAS or desktop tags) | [docs/runbooks/ios-release.md](docs/runbooks/ios-release.md) |
 | A red check, on your PR or on `main` | [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md) |
-| Designing or restyling a screen (layout, spacing, rows, status) | [docs/design-system.md](docs/design-system.md) |
+| Any UI work: layout, spacing, colour, type, icons, status, motion, copy | [docs/design-system.md](docs/design-system.md) |
 | A change to how the app looks or moves | [docs/runbooks/visual-evidence.md](docs/runbooks/visual-evidence.md) |
 | A change that alters a recorded engine behavior | [docs/runbooks/golden-fixtures.md](docs/runbooks/golden-fixtures.md) |
 | Running the CI runner pilot | [docs/runbooks/ci-runner-pilot.md](docs/runbooks/ci-runner-pilot.md) |
@@ -40,6 +40,10 @@ Full procedure: [docs/runbooks/landing-a-pr.md](docs/runbooks/landing-a-pr.md).
 Full procedure: [docs/runbooks/failing-checks.md](docs/runbooks/failing-checks.md).
 
 Diagnose the failing step before anything else. A failure `main` also has is a baseline problem: make sure an issue exists and fix it forward in its own PR. Rerun only after naming a concrete transient cause, once. Never weaken a budget or delete a check to get past it. After two wake-ups with no new evidence, or 30 minutes without a narrowed cause, report the blocker and the next distinct experiment.
+
+## Follow the design system
+
+Every UI change follows [docs/design-system.md](docs/design-system.md) and passes its checklist: space instead of borders and cards, 8/20 spacing, say it once (detail behind a tap), show only what applies now, tokens only (no hex, Tailwind palette colour or token fallback), our status glyphs, Gentleface icons played once on hover, and a quiet motion for every action. Touching an older screen moves it over.
 
 ## UI changes need visual evidence
 

@@ -8,8 +8,8 @@ let fullSessionReads = 0;
 }, { get(target, key: string) { return key in target ? target[key as keyof typeof target] : key.startsWith('on') ? noop : async () => null; } });
 localStorage.setItem('nekko.agentPanelView', JSON.stringify({ groupBy: 'project', showMetadata: false }));
 Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/store'), import('../src/renderer/views/WorkspacesView')]).then(async ([React, { createRoot }, { useStore }, { AgentSidebar }]) => {
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   const sessions = ['alpha', 'beta', 'completed'].flatMap((group) => Array.from({ length: 65 }, (_, i) => ({
     id: `${group}-${i}`, title: `${group === 'completed' ? 'Completed' : group === 'alpha' ? 'Alpha' : 'Beta'} task ${String(i + 1).padStart(2, '0')}`,

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { PrInfo, PrAction, PrDiff, PrChecks, PrEvent } from '@nekko-agent/shared';
 import { getExecutionMode, parsePrUrl } from '@nekko-agent/shared';
 import { useStore } from '../store.js';
+import { mergeConfetti } from '../seasonal.js';
 import { useShown } from '../simpleMode.js';
 import { subscribePrPolling } from '../prPolling.js';
 import { PrProgress } from './WorkProgress.js';
@@ -33,10 +34,10 @@ const CHECK_META: Record<PrChecks, { label: string; color: string; dot: string }
 
 const openExternally = (url: string) => window.nekko.openPath(url).catch(() => {});
 
-/** Static autumn confetti stays decorative and never competes with the milestone text. */
-function AutumnConfetti() {
+/** Static seasonal confetti (seasonal.ts) stays decorative and never competes with the milestone text. */
+function SeasonalConfetti({ symbols }: { symbols: string[] }) {
   return <span aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-    {['🍂', '🎃', '🍁', '🍂', '🎃', '🍁'].map((symbol, i) => (
+    {symbols.map((symbol, i) => (
       <span key={i} className="absolute" style={{ left: (8 + i * 16) + '%', top: i % 2 ? '58%' : '8%', fontSize: 12, opacity: 0.28, transform: 'rotate(' + (i % 2 ? -18 : 18) + 'deg)' }}>{symbol}</span>
     ))}
   </span>;
@@ -61,7 +62,7 @@ export const PR_EVENT_LABELS: Record<PrEvent, string> = {
 
 /** An anchored lifecycle milestone; the first open card also carries live status/actions. */
 export function PrCard({ url, info, event = 'created', sessionId, live }: { url: string; info?: PrInfo; event?: PrEvent; sessionId?: string; live?: boolean }) {
-  const spooky = useStore((s) => s.settings?.themePreset === 'autumn');
+  const preset = useStore((s) => s.settings?.themePreset);
   // Hidden in Settings > Simple mode, an open PR stays a plain milestone in the chat.
   const showStatus = useShown('pr-status', { pr: true });
   const parsed = parsePrUrl(url);
@@ -73,10 +74,11 @@ export function PrCard({ url, info, event = 'created', sessionId, live }: { url:
     return <OpenPrCard url={url} info={info} sessionId={sessionId} label={label} event={event} />;
   }
   const merged = event === 'merged';
+  const confetti = merged ? mergeConfetti(preset) : undefined;
   return (
     <div className="relative my-2 overflow-hidden rounded-xl border px-4 py-3" data-pr-event={event}
       style={merged ? MERGED_CARD_STYLE : { borderColor: 'var(--line)', background: 'var(--surface)' }}>
-      {merged && spooky && <AutumnConfetti />}
+      {merged && confetti && <SeasonalConfetti symbols={confetti} />}
       <div className="relative flex flex-wrap items-center gap-x-2 gap-y-1">
         <a href={url} className="min-w-0 truncate font-mono text-xs font-medium hover:underline" onClick={(e) => { e.preventDefault(); openExternally(url); }}>{label}</a>
         {info?.title && <span className="min-w-0 flex-1 truncate text-xs text-ink-soft">{info.title}</span>}
@@ -204,11 +206,11 @@ export function PrPane({ url }: { url: string }) {
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
       <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
-        <span className="shrink-0 text-green-400">⑂</span>
+        <span className="shrink-0 text-success-text">⑂</span>
         <span className="truncate font-semibold">{label}</span>
         {loaded && (
           <span className="shrink-0 text-2xs">
-            <span className="text-green-500">+{totals.adds}</span> <span className="text-red-400">-{totals.dels}</span> · {totals.files} file{totals.files === 1 ? '' : 's'}
+            <span className="text-success-text">+{totals.adds}</span> <span className="text-danger-text">-{totals.dels}</span> · {totals.files} file{totals.files === 1 ? '' : 's'}
           </span>
         )}
         <button className="ml-auto shrink-0 text-2xs text-ink-faint hover:text-ink" onClick={() => openExternally(url)}>Open on GitHub ↗</button>
@@ -240,7 +242,7 @@ function PrFileDiff({ file }: { file: PrDiff['files'][number] }) {
         <span className="w-2 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
         <span className="truncate font-medium" title={file.path}>{name}</span>
         {file.status !== 'modified' && <span className="chip text-2xs uppercase">{file.status}</span>}
-        <span className="ml-auto shrink-0 text-2xs"><span className="text-green-500">+{file.additions}</span> <span className="text-red-400">-{file.deletions}</span></span>
+        <span className="ml-auto shrink-0 text-2xs"><span className="text-success-text">+{file.additions}</span> <span className="text-danger-text">-{file.deletions}</span></span>
       </button>
       {open && (
         file.patch ? (

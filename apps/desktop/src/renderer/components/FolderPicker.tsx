@@ -1,17 +1,28 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { uniqueFolders, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
-import { CloseIcon, FolderIcon, PlusIcon, StarIcon, TrashIcon } from '../icons.js';
+import { uniqueFolders, type RemoteRepo, type Session, type SessionMeta, type WorkspaceFolder } from '@nekko-agent/shared';
+import { CloseIcon, FolderIcon, PlugIcon, PlusIcon, StarIcon, TrashIcon } from '../icons.js';
+import { ConnectorIcon } from '../connectorIcons.js';
 import { useStore } from '../store.js';
 import { toggleDefaultFolder } from '../defaultFolders.js';
-import { addFolderToChat, applyFolderSelection, withoutPrimary, withPrimary, withExcluded } from '../sessionFolders.js';
+import { addFolderToChat, addRepoToChat, applyFolderSelection, hasRepoProvider, withoutPrimary, withPrimary, withExcluded } from '../sessionFolders.js';
 import { MiddleTruncate } from './primitives/MiddleTruncate.js';
+import { RepoBrowser } from './RepoBrowser.js';
 
 type ChatFolders = Pick<SessionMeta, 'workspaceId' | 'supportingWorkspaceIds'>;
 const NO_DEFAULTS: string[] = [];
 
-/** The menu body: one row per folder, "No folder", then "Add folder…". */
-export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear, onAdd, onRemove, onExclude, onToggleDefault }: {
+/** The menu's section headings. */
+function Heading({ children }: { children: React.ReactNode }) {
+  return <div role="presentation" className="px-3 pb-0.5 pt-1.5 text-2xs font-medium uppercase tracking-wide text-ink-faint">{children}</div>;
+}
+
+/**
+ * The Environment menu body (#2404): the chat's local folders, then its
+ * repositories from a git provider, each with an add action (or "Connect
+ * repositories" when no provider is connected), then "No folder".
+ */
+export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear, onAdd, onRemove, onExclude, onToggleDefault, reposConnected, onAddRepo, onConnectRepos }: {
   folders: WorkspaceFolder[];
   chat: ChatFolders | null;
   /** Starred folders new chats start with. */
@@ -23,15 +34,23 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
   /** Unwire only this chat, without revoking the saved folder for other chats. */
   onExclude?: (id: string) => void;
   onToggleDefault?: (id: string) => void;
+  /** A GitHub or GitLab connector is connected. */
+  reposConnected?: boolean;
+  /** Browse the connected accounts' repositories. Without it the Repositories section is hidden. */
+  onAddRepo?: () => void;
+  onConnectRepos?: () => void;
 }) {
   const primary = chat?.workspaceId;
   const supporting = new Set(chat?.supportingWorkspaceIds ?? []);
   // min-w-0 flex-1: a long name or path shrinks the row instead of pushing
   // the revoke button out of the menu.
   const row = 'flex min-w-0 flex-1 flex-col rounded-lg px-3 py-1 text-left hover:bg-surface-2';
+  const action = 'flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs text-accent hover:bg-surface-2';
+  const local = folders.filter((f) => !f.repo);
+  const repos = folders.filter((f) => f.repo);
+  const showRepos = !!onAddRepo || !!onConnectRepos;
 
-  return <>
-    {folders.map((f) => {
+  const folderRow = (f: WorkspaceFolder) => {
       const starred = defaults.includes(f.id);
       return (
       <div key={f.id} className="flex items-center">
@@ -45,7 +64,8 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
         <button role="menuitemradio" aria-checked={primary === f.id} title={f.path}
           className={`${row} ${primary === f.id ? 'text-accent' : ''}`} onClick={() => onPick(f.id)}>
           <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
-            <span className="min-w-0 truncate" dir="auto">{f.name}</span>
+            {f.repo && <span className="shrink-0"><ConnectorIcon kind={f.repo.provider} size={12} /></span>}
+            <span className="min-w-0 truncate" dir="auto">{f.repo?.fullName ?? f.name}</span>
             {supporting.has(f.id) && <span className="shrink-0 text-2xs font-normal text-ink-faint">supporting</span>}
           </span>
           <MiddleTruncate text={f.path} tail={24} className="text-2xs text-ink-faint" />
@@ -58,19 +78,37 @@ export function FolderPickerMenu({ folders, chat, defaults = [], onPick, onClear
         </button>
       </div>
       );
-    })}
+  };
 
-    <button role="menuitemradio" aria-checked={!primary} className={`${row} ${!primary ? 'text-accent' : ''}`} onClick={onClear}>
-      <span className="text-xs font-medium">No folder</span>
-      <span className="text-2xs text-ink-faint">No working directory</span>
+  return <>
+    {showRepos && <Heading>Folders</Heading>}
+    {(showRepos ? local : folders).map(folderRow)}
+    <button role="menuitem" className={action} onClick={onAdd}>
+      <PlusIcon className="h-3.5 w-3.5" /> Add folder…
     </button>
 
+    {showRepos && <>
+      <div className="mt-1 border-t border-line pt-1" role="presentation" />
+      <Heading>Repositories</Heading>
+      {repos.map(folderRow)}
+      {reposConnected && onAddRepo
+        ? <button role="menuitem" className={action} onClick={onAddRepo}><PlusIcon className="h-3.5 w-3.5" /> Add repository…</button>
+        : <button role="menuitem" className={action} onClick={onConnectRepos} title="Connect GitHub or GitLab in Connectors"><PlugIcon className="h-3.5 w-3.5" /> Connect repositories</button>}
+    </>}
+
     <div className="mt-1 border-t border-line pt-1">
-      <button role="menuitem" className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs text-accent hover:bg-surface-2" onClick={onAdd}>
-        <PlusIcon className="h-3.5 w-3.5" /> Add folder…
+      <button role="menuitemradio" aria-checked={!primary} className={`${row} ${!primary ? 'text-accent' : ''}`} onClick={onClear}>
+        <span className="text-xs font-medium">No folder</span>
+        <span className="text-2xs text-ink-faint">No working directory</span>
       </button>
     </div>
   </>;
+}
+
+/** Ask the composer's Environment menu to open on its repository list. */
+export const ADD_REPO_EVENT = 'nekko:environment-add-repo';
+export function openRepoBrowser(sessionId: string) {
+  window.dispatchEvent(new CustomEvent(ADD_REPO_EVENT, { detail: { sessionId } }));
 }
 
 /**
@@ -96,7 +134,10 @@ export function FolderPicker({ sessionId, session, disabled, onChange, selectedS
   const selected = [primary, ...folders.filter((f) => f.id !== primary?.id && chat?.supportingWorkspaceIds?.includes(f.id))].filter((f): f is WorkspaceFolder => !!f);
   const names = selected.map((f) => f.name).join(', ');
 
+  const reposConnected = hasRepoProvider(useStore((s) => s.settings?.connectors));
   const [open, setOpen] = useState(false);
+  // 'repos': the menu shows the connected accounts' repositories to clone.
+  const [mode, setMode] = useState<'list' | 'repos'>('list');
   const [position, setPosition] = useState<React.CSSProperties>({});
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -134,7 +175,18 @@ export function FolderPicker({ sessionId, session, disabled, onChange, selectedS
   }, [open]);
 
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+  useEffect(() => { if (!open) setMode('list'); }, [open]);
 
+  // The composer's + menu (and anything else) can open the repository list.
+  useEffect(() => {
+    const show = (e: Event) => {
+      if ((e as CustomEvent<{ sessionId?: string }>).detail?.sessionId !== sessionId || disabled) return;
+      setMode('repos');
+      setOpen(true);
+    };
+    window.addEventListener(ADD_REPO_EVENT, show);
+    return () => window.removeEventListener(ADD_REPO_EVENT, show);
+  }, [sessionId, disabled]);
   const run = (work: () => Promise<Session | null>) => {
     setOpen(false);
     button.current?.focus({ preventScroll: true });
@@ -145,6 +197,15 @@ export function FolderPicker({ sessionId, session, disabled, onChange, selectedS
   const pick = (id: string) => { if (id !== chat?.workspaceId) run(() => applyFolderSelection(sessionId, withPrimary(chat, id))); else { useStore.getState().setActiveProject(id); setOpen(false); } };
   const clear = () => { if (chat?.workspaceId) run(() => applyFolderSelection(sessionId, withoutPrimary(chat))); else { useStore.getState().setActiveProject(null); setOpen(false); } };
   const add = () => run(() => addFolderToChat(sessionId, chat, 'primary'));
+  const connectRepos = () => { setOpen(false); useStore.getState().setView('connectors'); };
+  // The menu stays open while a clone runs; the browser shows its progress.
+  const addRepo = async (repo: RemoteRepo) => {
+    const { session: s, path } = await addRepoToChat(sessionId, chat, repo);
+    if (s) onChange(s);
+    setOpen(false);
+    button.current?.focus({ preventScroll: true });
+    useStore.getState().pushToast('success', `Added ${repo.fullName} to this chat (${path})`);
+  };
 
   // Revoking one folder is housekeeping inside the list, not a choice that
   // ends the menu: it stays open so several can be cleared in a row.
@@ -169,17 +230,25 @@ export function FolderPicker({ sessionId, session, disabled, onChange, selectedS
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={selectedSummary ? `Selected folders: ${names || 'none'}` : `Primary folder: ${primary?.name ?? 'none'}`}
-        title={selectedSummary && selected.length ? `${selected.map((f) => f.path).join('\n')}${disabled ? '\nFolder can change once the reply finishes' : ''}` : disabled ? 'Folder can change once the reply finishes' : primary?.path ?? 'Choose the folder this agent works in'}
+        aria-label={selectedSummary ? `Environment: ${names || 'none'}` : `Primary folder: ${primary?.name ?? 'none'}`}
+        title={selectedSummary && selected.length ? `${selected.map((f) => f.path).join('\n')}${disabled ? '\nThe environment can change once the reply finishes' : ''}` : disabled ? 'The environment can change once the reply finishes' : primary?.path ?? 'Choose the folders and repositories this agent works in'}
       >
         <FolderIcon className="h-3.5 w-3.5 shrink-0" />
         <span className="truncate">{selectedSummary ? names || 'No folder' : primary?.name ?? 'No folder'}</span>
         <span className="ctl-caret">▾</span>
       </button>
       {open && createPortal(
-        <div ref={menu} style={position} className="card fixed z-[100] overflow-y-auto p-2 shadow-(--shadow-float)" role="menu" aria-label="Primary folder">
-          <FolderPickerMenu folders={folders} chat={chat} defaults={defaults} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} onExclude={(id) => run(() => applyFolderSelection(sessionId, withExcluded(chat, id)))} onToggleDefault={toggleDefaultFolder} />
-        </div>, document.body,
+        mode === 'repos'
+          ? <div ref={menu} style={position} className="card fixed z-[100] flex flex-col overflow-hidden p-2 shadow-(--shadow-float)" role="dialog" aria-label="Add a repository">
+              <button type="button" className="mb-1 flex items-center gap-1 rounded-lg px-2 py-1 text-left text-xs text-ink-faint hover:bg-surface-2 hover:text-ink" onClick={() => setMode('list')}>
+                <span aria-hidden>‹</span> Environment
+              </button>
+              <RepoBrowser onPick={addRepo} onConnect={connectRepos} />
+            </div>
+          : <div ref={menu} style={position} className="card fixed z-[100] overflow-y-auto p-2 shadow-(--shadow-float)" role="menu" aria-label="Environment">
+              <FolderPickerMenu folders={folders} chat={chat} defaults={defaults} onPick={pick} onClear={clear} onAdd={add} onRemove={remove} onExclude={(id) => run(() => applyFolderSelection(sessionId, withExcluded(chat, id)))} onToggleDefault={toggleDefaultFolder}
+                reposConnected={reposConnected} onAddRepo={() => setMode('repos')} onConnectRepos={connectRepos} />
+            </div>, document.body,
       )}
     </div>
   );

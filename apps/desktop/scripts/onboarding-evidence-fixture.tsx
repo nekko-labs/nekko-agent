@@ -18,8 +18,8 @@ const bridge: any = {
 Object.assign(window, { nekko: new Proxy(bridge, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } }) });
 (async () => {
   const [{ createRoot }, React, { App }, { UpdateProvider }] = await Promise.all([import('react-dom/client'), import('react'), import('../src/renderer/App'), import('../src/renderer/components/UpdateBanner')]);
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   createRoot(document.getElementById('root')!).render(React.createElement(UpdateProvider, null, React.createElement(App)));
   (window as any).onboardingFixture = { settings, joined, simple: () => ({ mode: localStorage.getItem('nekko.chatMode'), choices: localStorage.getItem('nekko.simpleChoices') }) };

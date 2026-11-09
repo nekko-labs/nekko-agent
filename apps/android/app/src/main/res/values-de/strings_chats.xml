@@ -17,6 +17,7 @@
     <string name="chats_banner_online">%1$s ist online</string>
     <string name="chats_banner_offline">%1$s ist offline. Öffne dort Nekko Agent.</string>
     <string name="chats_banner_connecting">Verbinde mit %1$s …</string>
+    <string name="chats_banner_host_not_found">%1$s, die Adresse, mit der dieses Telefon gekoppelt wurde, ist nicht auffindbar. Ändere auf %2$s unter Einstellungen → Fernzugriff, wie sich Telefone verbinden, und kopple dann erneut.</string>
     <string name="chats_reconnect">Neu verbinden</string>
     <string name="chats_pair_again">Erneut koppeln</string>
     <string name="chats_manage_computers">Computer verwalten</string>

@@ -22,7 +22,7 @@ import { formatBytes, formatCount } from '../runtimes/verdict.js';
 
 const FIT_CHIP: Record<string, { label: string; color: string } | undefined> = {
   fits: { label: 'fits here', color: 'var(--success)' },
-  tight: { label: 'tight fit', color: 'var(--warning, #d1a054)' },
+  tight: { label: 'tight fit', color: 'var(--warning)' },
   'wont-load': { label: 'needs more memory', color: 'var(--danger)' },
 };
 
@@ -158,7 +158,7 @@ export function CatalogBrowser({
                     </span>
                   ))}
                   {m.gated && (
-                    <span className="text-2xs" style={{ color: 'var(--warning, #d1a054)' }} title="This repository needs accepted terms or a token">
+                    <span className="text-2xs" style={{ color: 'var(--warning)' }} title="This repository needs accepted terms or a token">
                       gated
                     </span>
                   )}

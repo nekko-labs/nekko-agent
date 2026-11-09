@@ -51,6 +51,7 @@ import com.nekko.android.connection.RoutePolicy
 import com.nekko.protocol.Pairing
 import com.nekko.protocol.RelayRoute
 import com.nekko.protocol.RelayState
+import com.nekko.protocol.RelayStatus
 import com.nekko.protocol.RouteSupervisor
 import kotlinx.coroutines.launch
 import java.time.ZoneId
@@ -73,7 +74,11 @@ fun ConnectionStatusSection(deps: SettingsDeps) {
     // The route in use or being dialed (AN-28); the pairing's relay before the first dial.
     val inUse = state.route ?: c.relayUrl
     val others = remember(c.relayUrl, c.alts, inUse) { RouteSupervisor.order(listOf(c.relayUrl) + c.alts).filter { it != inUse } }
-    val advice = ConnectionAdvice.advise(inUse, c.name, state.conn, state.denied, state.connDetail, tailnet, BuildConfig.DEBUG)
+    // The paired address is gone (its name doesn't resolve): ConnectionAdvice's two lines, in the phone's language.
+    val advice = if (state.conn == RelayState.CONNECTING && state.connDetail == RelayStatus.HOST_NOT_FOUND) listOf(
+        stringResource(R.string.settings_advice_host_gone, Pairing.relayHost(inUse), c.name),
+        stringResource(R.string.settings_advice_host_gone_fix, c.name),
+    ) else ConnectionAdvice.advise(inUse, c.name, state.conn, state.denied, state.connDetail, tailnet, BuildConfig.DEBUG)
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val copiedText = stringResource(R.string.settings_copied)

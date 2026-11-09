@@ -24,6 +24,7 @@ import com.nekko.android.data.ComputersState
 import com.nekko.android.data.PhonePrefs
 import com.nekko.android.monitors.EXPERT_MODE
 import com.nekko.android.data.PillPlace
+import com.nekko.android.data.StarAsk
 import com.nekko.android.data.SimpleMode
 import com.nekko.android.monitors.HardwareMonitorController
 import com.nekko.android.voice.Dictation
@@ -68,13 +69,37 @@ class ChatViewModel(
     /** The phone's microphone and its settings; null keeps dictation off (tests, previews). */
     mic: MicHardware? = null,
     private val phonePrefs: PhonePrefs? = null,
+    /** The GitHub star ask's count on this phone; off without prefs and under instrumentation unless a test passes one. */
+    private val starAsk: StarAsk? = StarAsk.forApp(phonePrefs),
 ) : ViewModel() {
+    /** What the GitHub star card under the last reply shows (spec/platform/github-star-ask.md). */
+    enum class StarCard { NONE, ASK, THANKS }
+
+    private val _starCard = MutableStateFlow(StarCard.NONE)
+
+    /** The card stays under the reply until the next send or a choice. */
+    val starCard: StateFlow<StarCard> = _starCard.asStateFlow()
+
     private val controller = ChatController(
         sessionId, repo.caller, viewModelScope, { env(repo.state.value) }, outbox = repo.outbox, saved = repo.transcripts,
         // The same path as a mode raise: plain first, signed when the computer answers proof-required.
         guarded = { channel, args, stepUp -> if (stepUp == null) repo.callRaising(channel, args) else repo.callChange(channel, args, stepUp) },
         generateImage = { request -> repo.callChange(Channels.CHAT_GENERATE_IMAGE, listOf(request), timeoutMs = TURN_TIMEOUT_MS) },
+        // The 10th and 50th reply here carry the card; the ask is used up as it shows.
+        onPromptReplied = { if (starAsk?.afterReply() == true) _starCard.value = StarCard.ASK },
     )
+
+    /** Star on GitHub (the screen opens the repository): never asked again, and a thank-you in the card. */
+    fun starred() {
+        starAsk?.stop()
+        _starCard.value = StarCard.THANKS
+    }
+
+    /** Not now, Don't ask again ([forever]), or closing the thank-you. */
+    fun closeStarAsk(forever: Boolean = false) {
+        if (forever) starAsk?.stop()
+        _starCard.value = StarCard.NONE
+    }
 
     /** Dictation into this chat's message box (Settings → Dictation). */
     val dictation: DictationController? = if (mic == null || phonePrefs == null) null else DictationController(
@@ -381,6 +406,8 @@ class ChatViewModel(
         if (session.chatType == "image" && photos.state.value.photos.isNotEmpty()) {
             throw com.nekko.protocol.RelayException("Image generation accepts text only. Remove the attached photos first.")
         }
+        // Sending without choosing removes the star card; that ask is already used up (Not now).
+        _starCard.value = StarCard.NONE
         controller.send(text, skill, images)
     }
 

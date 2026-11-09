@@ -45,12 +45,12 @@ describe('Pixel Nekko', () => {
   });
 
   it('only adds the orange wizard hat when explicitly requested', () => {
-    expect(renderToStaticMarkup(<NekkoAvatar wizardHat />)).toContain('orange-wizard-hat');
+    expect(renderToStaticMarkup(<NekkoAvatar hat="wizard" />)).toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<NekkoAvatar />)).not.toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<MiniNekko />)).not.toContain('orange-wizard-hat');
   });
   it('puts the Spooky wizard hat on an enabled mascot only', async () => {
-    expect(renderToStaticMarkup(<Mascot mood="idle" enabled wizardHat />)).toContain('orange-wizard-hat');
+    expect(renderToStaticMarkup(<Mascot mood="idle" enabled hat="wizard" />)).toContain('orange-wizard-hat');
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled />)).not.toContain('orange-wizard-hat');
     // Each chat window hosts its own Nekko now (ChatMascot), so the app shell
     // itself (nav rail, overlays) shouldn't carry a `pixel-mascot` button and
@@ -60,8 +60,21 @@ describe('Pixel Nekko', () => {
     expect(spooky).not.toContain('orange-wizard-hat');
     expect(await renderApp({})).not.toContain('orange-wizard-hat');
   });
+  it("wears Winter's knitted cat-ear beanie, with holly at Christmas, and only one hat at a time", () => {
+    const beanie = renderToStaticMarkup(<NekkoAvatar hat="beanie" />);
+    expect(beanie).toContain('data-part="winter-beanie"');
+    expect(beanie).toContain('data-part="snowflake"');
+    expect(beanie).not.toContain('orange-wizard-hat');
+    // The knitted ears rise above the head's box, so the avatar lets them show.
+    expect(beanie).toContain('overflow="visible"');
+    const holly = renderToStaticMarkup(<NekkoAvatar hat="holly" />);
+    expect(holly).toContain('data-motif="holly"');
+    expect(holly).not.toContain('data-part="snowflake"');
+    expect(renderToStaticMarkup(<NekkoAvatar />)).not.toContain('overflow="visible"');
+    expect(renderToStaticMarkup(<Mascot mood="idle" enabled={false} hat="beanie" />)).toBe('');
+  });
   it('wears the wizard hat smaller and higher, on the crown', () => {
-    expect(renderToStaticMarkup(<NekkoAvatar wizardHat />)).toContain('transform="translate(16.5 9) scale(0.8) translate(-16.5 -12)"');
+    expect(renderToStaticMarkup(<NekkoAvatar hat="wizard" />)).toContain('transform="translate(16.5 9) scale(0.8) translate(-16.5 -12)"');
   });
   it('draws the nav rail Agents cat without eyes', () => {
     const eyeless = renderToStaticMarkup(<NekkoAvatar eyes={false} />);

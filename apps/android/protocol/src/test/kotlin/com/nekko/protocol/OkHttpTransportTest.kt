@@ -57,4 +57,29 @@ class OkHttpTransportTest {
         }
         assertEquals(RelayRoute.INTERNET, RelayRoute.of("ws://evil-ts.net.example.com"))
     }
+
+    @Test fun `a name that doesn't resolve is host not found, whatever the message says`() {
+        // Android's own message is "Unable to resolve host …"; a translated or wrapped one must still classify.
+        assertEquals(RelayStatus.HOST_NOT_FOUND, OkHttpTransport.reason(java.net.UnknownHostException("Unable to resolve host \"nekko-relay.invalid\"")))
+        assertEquals(RelayStatus.HOST_NOT_FOUND, OkHttpTransport.reason(java.net.UnknownHostException()))
+        assertEquals(RelayStatus.HOST_NOT_FOUND, OkHttpTransport.reason(java.io.IOException("Hôte introuvable", java.net.UnknownHostException("x"))))
+        assertEquals("Connection refused", OkHttpTransport.reason(java.net.ConnectException("Connection refused")))
+        assertEquals("connection failed", OkHttpTransport.reason(java.io.IOException()))
+    }
+
+    @Test fun `a relay name that doesn't resolve closes with host not found`() {
+        // No network: the lookup fails the way a gone name does.
+        val noDns = okhttp3.OkHttpClient.Builder()
+            .dns { host -> throw java.net.UnknownHostException("Unable to resolve host \"$host\": No address associated with hostname") }
+            .build()
+        val got = java.util.concurrent.atomic.AtomicReference<String>()
+        val closed = CountDownLatch(1)
+        OkHttpTransport(noDns).open("wss://nekko-relay.invalid/relay", object : WsListener {
+            override fun onOpen() {}
+            override fun onMessage(text: String) {}
+            override fun onClosed(code: Int, reason: String) { got.set(reason); closed.countDown() }
+        })
+        assertTrue(closed.await(5, TimeUnit.SECONDS))
+        assertEquals(RelayStatus.HOST_NOT_FOUND, got.get())
+    }
 }
