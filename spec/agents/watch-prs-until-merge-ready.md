@@ -39,6 +39,10 @@ until the user came back. Every user and project now gets the watch by default.
   host's watch on it, when a wake-up fails to deliver, or after 24 wake-ups for
   that PR in that chat. A turn the user stopped arms nothing. Merged and closed
   PRs are remembered per daemon run, so old PRs are read once, not every turn.
+  When old finished watches are pruned `[2026-11-09]`, the newest host watch
+  for each chat and PR (the cancelled or failed one, when there is one) is
+  kept and carries a `rounds` count of the ones dropped, so these stops still
+  hold. They are dropped only when the chat is deleted.
 - Not armed for a chat the host may not wake `[fixed 2026-11-05]`: a Claude
   Code chat on a Claude plan, whose `unattended_runs` row is off
   (`claude:capability`, the same answer admission's gate uses). Before, the
