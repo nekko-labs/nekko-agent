@@ -14,7 +14,7 @@ import { MarkdownSession } from './Markdown.js';
 import { ContextMenu, ContextAction } from './ContextMenu.js';
 import { measuredUsageCost } from './ChatPane.cost.js';
 import { chatPaneSettings, initialChatBrain } from './ChatPane.settings.js';
-import { ChevronDownIcon, ChevronUpIcon, CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
+import { BranchIcon, ChevronDownIcon, ChevronUpIcon, CopyIcon, ControlPanelIcon, PhotoIcon, FileIcon, FolderIcon, WandIcon } from '../icons.js';
 import { attachmentName, pastedFileName, planAttachment, unreadableNote } from '../composerAttachments.js';
 import { needsProviderSetup } from './providers/providerSetup.js';
 import { SetupIllustration } from './providers/ProviderChoices.js';
@@ -98,7 +98,7 @@ import { NekkoAvatar } from './Mascot.js';
 import { ChatMascot } from './ChatMascot.js';
 import { PixelWaveBackground, pixelWaveFor, showEmptyAgentWave } from './PixelWaveBackground.js';
 import { WorktreeChip } from './WorktreeChip.js';
-import { FolderPicker } from './FolderPicker.js';
+import { FolderPicker, openRepoBrowser } from './FolderPicker.js';
 import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
@@ -3403,6 +3403,15 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                         >
                           <FolderIcon className="h-3.5 w-3.5 shrink-0" />
                           <span className="flex-1">Folder</span>
+                        </button>
+                        <button
+                          role="menuitem"
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-1 text-left text-xs hover:bg-surface-2"
+                          onClick={() => { closeAttachMenu(); openRepoBrowser(sessionId); }}
+                          onMouseEnter={closeSkillsFly}
+                        >
+                          <BranchIcon className="h-3.5 w-3.5 shrink-0" />
+                          <span className="flex-1">Repository</span>
                         </button>
                         {/* Simple has no strip above the box: its two switches live here. */}
                         {plusCarries && session && <>

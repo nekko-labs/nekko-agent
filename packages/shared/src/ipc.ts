@@ -219,6 +219,8 @@ export const IpcChannels = {
   workspaceList: 'workspace:list',
   workspaceAdd: 'workspace:add',
   workspaceAddByPath: 'workspace:addByPath',
+  reposList: 'repos:list',
+  reposClone: 'repos:clone',
   workspaceRemove: 'workspace:remove',
   workspaceIndex: 'workspace:index',
   workspaceIndexStatus: 'workspace:indexStatus',
@@ -1002,6 +1004,10 @@ export interface NekkoApi {
   addWorkspace(): Promise<WorkspaceFolder[]>;
   addWorkspaceByPath(path: string): Promise<WorkspaceFolder[]>;
   removeWorkspace(id: string): Promise<WorkspaceFolder[]>;
+  /** Repositories the connected GitHub/GitLab accounts can reach, matching `query`. */
+  listRepos(query?: string): Promise<import('./workspace.js').RemoteRepoList>;
+  /** Clone a listed repository onto this computer and save it as a folder. */
+  cloneRepo(repo: Pick<import('./workspace.js').RemoteRepo, 'provider' | 'fullName' | 'cloneUrl' | 'webUrl'>): Promise<import('./workspace.js').RepoCloneResult>;
   indexWorkspace(id: string): Promise<IndexStatus>;
   getIndexStatus(id: string): Promise<IndexStatus | null>;
   searchWorkspace(id: string, query: string): Promise<SearchHit[]>;
