@@ -39,8 +39,10 @@ describe('Send feedback sheet', () => {
     expect(improve).toMatch(/<details[\s\S]*Email us at[\s\S]*feedback@nekkoagent\.com[\s\S]*<\/details>/);
   });
 
-  it('offers only the email address on Good, in place of the other ways', () => {
+  it('offers GitHub star support and email on Good, without the improvement routes', () => {
     const good = renderToStaticMarkup(<OtherWays kind="good" info={null} />);
+    expect(good).toContain('Give us a GitHub star!');
+    expect(good).toContain('data-testid="github-star-support"');
     expect(good).toContain('Email us at');
     expect(good).toContain('feedback@nekkoagent.com');
     expect(good).toContain('data-testid="feedback-email-copy"');

@@ -146,4 +146,47 @@ final class NekkoVoiceTests: XCTestCase {
         XCTAssertEqual(shown.last, "Not sent. Voice capture or delivery failed. Open app to review.")
         XCTAssertFalse(shown.contains { $0.contains("private transcript or credential") })
     }
+
+    func testHearingFeedbackShowsOnceAndOnlyWhileListening() async {
+        let r = NekkoVoiceRunner()
+        var release: CheckedContinuation<String, Never>?
+        var shown: [String] = []
+        r.capture = { await withCheckedContinuation { release = $0 } }
+        r.routeWithCommit = { _, _ in "Reply" }
+        r.show = { _, text in shown.append(text) }
+        r.heardSpeech()
+        XCTAssertTrue(shown.isEmpty, "no capture, no feedback")
+        let task = Task { await r.talk() }
+        while release == nil { await Task.yield() }
+        XCTAssertTrue(r.isListening)
+        r.heardSpeech()
+        r.heardSpeech()
+        release?.resume(returning: "status")
+        await task.value
+        XCTAssertEqual(shown, [LiveCardVoice.listening, LiveCardVoice.hearing, LiveCardVoice.processing, "Reply"])
+        XCTAssertFalse(r.isListening)
+        r.heardSpeech()
+        XCTAssertEqual(shown.last, "Reply", "late speech after capture never reopens the phase")
+    }
+    func testKnownFailureGetsItsRemedyAndCancelCanSayWhy() async {
+        struct NeedsMic: Error {}
+        let r = NekkoVoiceRunner()
+        var shown: [String] = []
+        r.show = { _, text in shown.append(text) }
+        r.describe = { $0 is NeedsMic ? LiveCardVoice.micNeeded : nil }
+        r.capture = { throw NeedsMic() }
+        await r.talk()
+        XCTAssertEqual(shown.last, LiveCardVoice.micNeeded)
+        r.capture = { throw RelayError("raw") }
+        await r.talk()
+        XCTAssertEqual(shown.last, "Not sent. Voice capture or delivery failed. Open app to review.")
+        var release: CheckedContinuation<String, Never>?
+        r.capture = { await withCheckedContinuation { release = $0 } }
+        let task = Task { await r.talk() }
+        while release == nil { await Task.yield() }
+        r.cancel(message: "Not sent. The microphone didn’t start.")
+        release?.resume(returning: "late")
+        await task.value
+        XCTAssertEqual(shown.last, "Not sent. The microphone didn’t start.")
+    }
 }

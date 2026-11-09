@@ -40,6 +40,10 @@ pub struct ChangeTracker {
 }
 
 fn current(path: &str) -> String {
+    // A file past the snapshot limit is never snapshotted, so it is not read whole to diff either.
+    if crate::nodefs::size(path) > MAX_SNAPSHOT_BYTES {
+        return String::new();
+    }
     crate::nodefs::read_utf8(path).unwrap_or_default()
 }
 fn remove(file: &Path) -> Result<(), String> {

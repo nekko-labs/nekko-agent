@@ -139,8 +139,82 @@ export function beginResumedRun(sessionId: string, transcriptThroughId?: string)
   startSubagentActivity(sessionId);
   finished.delete(sessionId);
   runs.set(sessionId, { ...emptyRun(sessionId, Date.now()), transcriptThroughId });
+  lastEventAt.set(sessionId, Date.now());
   markDirty(sessionId);
 }
+
+/** When each run last heard from the engine, for `reconcileRunning`. */
+const lastEventAt = new Map<string, number>();
+/** Runs the engine has listed as running at least once. */
+const confirmed = new Set<string>();
+/** Runs the engine left out of its last running list (one miss is not enough). */
+const missing = new Set<string>();
+/**
+ * A run the engine has not mentioned for this long, and does not list, is
+ * over even if it was never confirmed: past a worktree setup's 15-minute limit.
+ */
+export const UNCONFIRMED_RUN_MAX_MS = 20 * 60_000;
+const orphanListeners = new Set<(sessionId: string) => void>();
+
+/** End a session's run here, as a `done` or `error` would. */
+function retireRun(id: string): void {
+  // Here and not only in the pane: a reply can end with no pane open to hear it.
+  reportAgentWorking(id, false);
+  const ended = runs.get(id);
+  runs.delete(id);
+  lastEventAt.delete(id);
+  confirmed.delete(id);
+  missing.delete(id);
+  if (ended) {
+    finished.delete(id);
+    finished.set(id, ended);
+    while (finished.size > FINISHED_MAX) finished.delete(finished.keys().next().value!);
+  }
+  markDirty(id);
+}
+
+/**
+ * Drop runs the engine no longer has. A run only ends here on `done` or
+ * `error`, and an engine that dies mid-turn (an out-of-memory abort, a crash, a
+ * restart) never sends either: its replacement marks the reply interrupted on
+ * disk, but the chat kept saying "Thinking" until the app was reloaded.
+ *
+ * `running` is the engine's list, asked for at `askedAt`. A run is ended when
+ * it was confirmed running before and is now missing twice in a row, or was
+ * never confirmed and has been silent past `UNCONFIRMED_RUN_MAX_MS`. A run that
+ * heard an event after the list was asked for is left alone. Returns the
+ * sessions it ended.
+ */
+export function reconcileRunning(running: readonly string[], askedAt: number): string[] {
+  const listed = new Set(running);
+  const ended: string[] = [];
+  for (const id of [...runs.keys()]) {
+    const heard = lastEventAt.get(id) ?? runs.get(id)!.startedAt;
+    if (listed.has(id) || heard >= askedAt) {
+      if (listed.has(id)) confirmed.add(id);
+      missing.delete(id);
+      continue;
+    }
+    const over = confirmed.has(id) ? missing.has(id) : askedAt - heard >= UNCONFIRMED_RUN_MAX_MS;
+    if (!over) {
+      if (confirmed.has(id)) missing.add(id);
+      continue;
+    }
+    retireRun(id);
+    ended.push(id);
+  }
+  for (const id of ended) for (const fn of orphanListeners) fn(id);
+  return ended;
+}
+
+/** Hear a run `reconcileRunning` ended because the engine no longer has it. */
+export function onRunOrphaned(fn: (sessionId: string) => void): () => void {
+  orphanListeners.add(fn);
+  return () => { orphanListeners.delete(fn); };
+}
+
+/** How often the running list is checked while any run is live. */
+export const RECONCILE_EVERY_MS = 30_000;
 
 /**
  * Sessions whose next repaint is still pending.
@@ -197,21 +271,13 @@ export function applyEvent(event: AgentEvent, now = Date.now()): void {
   const id = event.sessionId;
   if (!runs.has(id) && STARTS_RUN.has(event.type)) startSubagentActivity(id);
   foldSubagentActivity(event, now);
+  if (runs.has(id) || STARTS_RUN.has(event.type)) lastEventAt.set(id, now);
 
   // The rail folds first, so a card repainted this frame is never a step behind.
   const folded = reduceLiveActivity(runs.get(id)?.activity, event, now);
 
   if (event.type === 'done' || event.type === 'error') {
-    // Here and not only in the pane: a reply can end with no pane open to hear it.
-    reportAgentWorking(id, false);
-    const ended = runs.get(id);
-    runs.delete(id);
-    if (ended) {
-      finished.delete(id);
-      finished.set(id, ended);
-      while (finished.size > FINISHED_MAX) finished.delete(finished.keys().next().value!);
-    }
-    markDirty(id);
+    retireRun(id);
     return;
   }
 
@@ -346,7 +412,13 @@ export function applyReplay(replay: AgentReplay): void {
 export function startLiveRuns(): () => void {
   const offEvents = window.nekko.onAgentEvent((e: AgentEvent) => applyEvent(e));
   const offReplay = window.nekko.onAgentReplay?.((r) => applyReplay(r));
-  return () => { offEvents(); offReplay?.(); };
+  // Only while something runs: an idle app asks the engine nothing.
+  const reconcile = setInterval(() => {
+    if (!runs.size) return;
+    const askedAt = Date.now();
+    window.nekko.runningSessions().then((ids) => reconcileRunning(ids, askedAt)).catch(() => {});
+  }, RECONCILE_EVERY_MS);
+  return () => { offEvents(); offReplay?.(); clearInterval(reconcile); };
 }
 
 /** The run in flight for a session, or undefined when it is idle. */
@@ -444,6 +516,10 @@ export function __resetLiveRuns(): void {
   resetSubagentActivity();
   runs.clear();
   finished.clear();
+  lastEventAt.clear();
+  confirmed.clear();
+  missing.clear();
+  orphanListeners.clear();
   listeners.clear();
   globalListeners.clear();
   dirty.clear();

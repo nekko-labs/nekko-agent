@@ -29,7 +29,7 @@ export interface SettingEntry {
   id: string;
   label: string;
   /** The Settings group (`settings-<group>` on the page) it lives in. */
-  group: 'general' | 'customize' | 'agents' | 'tools' | 'system';
+  group: 'support' | 'general' | 'customize' | 'agents' | 'tools' | 'system';
   /** Extra words people search for that the label does not say. */
   keywords?: string;
   control: SettingControl;
@@ -42,7 +42,7 @@ const toggle = (get: (s: AppSettings) => boolean, set: (v: boolean, s: AppSettin
  * Per-item controls (each hook, MCP server, guardrail) stay on their page.
  */
 export const SETTINGS_INDEX: SettingEntry[] = [
-  { id: 'telemetry', label: 'Help improve Nekko Agent', group: 'general', keywords: 'usage crash reports telemetry analytics privacy', control: toggle((s) => s.telemetry?.enabled === true, (v) => ({ telemetry: telemetryChoice(v) })) },
+  { id: 'telemetry', label: 'Help improve Nekko Agent', group: 'support', keywords: 'usage crash reports telemetry analytics privacy', control: toggle((s) => s.telemetry?.enabled === true, (v) => ({ telemetry: telemetryChoice(v) })) },
   ...(['skills', 'connectors'] as const).map((view): SettingEntry => ({
     id: `sidebar-${view}`, label: `Show ${view === 'skills' ? 'Skills' : 'Connectors'} in sidebar`, group: 'customize', keywords: 'view nav',
     control: toggle((s) => s.sidebarViews?.[view] === true, (v, s) => ({ sidebarViews: { ...s.sidebarViews, [view]: v } })),
@@ -75,7 +75,8 @@ export const SETTINGS_INDEX: SettingEntry[] = [
 
 /** Each Settings group with the sections it holds, so searching "hooks" or "guardrails" can jump there. */
 export const SETTINGS_PAGES: Array<{ group: string; label: string; keywords: string }> = [
-  { group: 'general', label: 'General', keywords: 'usage crash reports telemetry voice dictation notifications chat history' },
+  { group: 'support', label: 'Help out the Nekko Team', keywords: 'support star starred github improve usage crash reports telemetry privacy' },
+  { group: 'general', label: 'General', keywords: 'voice dictation notifications chat history' },
   { group: 'phone', label: 'Phone pairing', keywords: 'qr mobile iphone remote access sync' },
   { group: 'customize', label: 'Customize', keywords: 'view appearance theme agents wall customization desktop behavior fun style fonts text size accessibility bigger larger smaller motion animation animations reduce simple mode expert detailed controls hide show developer' },
   { group: 'agents', label: 'Agents', keywords: 'chat modes agent loop hooks spec-driven development orchestration delegation routes automations' },

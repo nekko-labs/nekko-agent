@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   FEEDBACK_MAX_CHARS, FEEDBACK_SCREENSHOT_MAX_BYTES, agentPrompt, appInfoLine, feedbackNote, feedbackNoteLength,
-  feedbackScreenshotProblem, feedbackScreenshotType,
+  feedbackScreenshotProblem, feedbackScreenshotType, feedbackContactProblem,
 } from './feedback.js';
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -54,5 +54,28 @@ describe('feedback', () => {
     expect(prompt).toContain('Leave out anything personal');
     expect(prompt.split('\n').at(-1)).toBe('App: Nekko Agent 1.4.0 (ios, iOS 18.1, arm64)');
     expect(agentPrompt(null)).not.toContain('App:');
+  });
+});
+
+describe('optional feedback contact', () => {
+  it('preserves anonymous wire text when both fields are blank', () => {
+    expect(feedbackNote('good', 'Quick', 'Helpful', { name: ' ', email: '' })).toBe('Good: Quick\n\nHelpful');
+    expect(feedbackContactProblem({})).toBeNull();
+  });
+  it('includes only the explicitly supplied fields, trimmed, without a signup', () => {
+    expect(feedbackNote('good', 'Quick', 'Helpful', { name: ' Ada ' })).toBe('Good: Quick\n\nHelpful\n\nName (optional): Ada');
+    expect(feedbackNote('improve', 'Slow', 'Please fix', { email: ' ada@example.com ' })).toContain('Email (optional, feedback replies only): ada@example.com');
+  });
+  it('validates contact details without requiring either field', () => {
+    expect(feedbackContactProblem({ name: 'Ada', email: '' })).toBeNull();
+    expect(feedbackContactProblem({ email: 'ada@example.com' })).toBeNull();
+    for (const email of ['invalid', 'a@@b.com', 'a@b', 'a @b.com']) expect(feedbackContactProblem({ email })).toBeTruthy();
+    expect(feedbackContactProblem({ name: 'x'.repeat(201) })).toBeTruthy();
+    expect(feedbackContactProblem({ name: 'Ada\nAdmin' })).toBeTruthy();
+  });
+  it('counts contact details and their labels against the existing total limit', () => {
+    const contact = { name: '🐈 Ada', email: 'ada@example.com' };
+    expect(feedbackNoteLength('good', 'Hi', 'There', contact)).toBe([...feedbackNote('good', 'Hi', 'There', contact)].length);
+    expect(feedbackNoteLength('good', '', '', contact)).toBeGreaterThan(0);
   });
 });

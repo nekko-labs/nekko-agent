@@ -192,7 +192,12 @@ pub fn top_app(procs: &[Proc], own: &HashSet<u32>) -> Option<App> {
         if name.is_empty() || system(&name) {
             continue;
         }
-        let app = apps.entry(name.to_ascii_lowercase()).or_insert_with(|| App { name, bytes: 0, processes: 0, pids: Vec::new() });
+        let app = apps.entry(name.to_ascii_lowercase()).or_insert_with(|| App {
+            name,
+            bytes: 0,
+            processes: 0,
+            pids: Vec::new(),
+        });
         app.bytes += p.bytes;
         app.processes += 1;
         app.pids.push(p.pid);

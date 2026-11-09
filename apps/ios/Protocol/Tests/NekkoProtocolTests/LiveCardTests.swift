@@ -272,4 +272,40 @@ final class LiveCardTests: XCTestCase {
         }
         for c in try XCTUnwrap(root["replyLine"] as? [[String]]) { XCTAssertEqual(replyLine(c[0]), c[1], c[0]) }
     }
+
+    func testPhoneOnlyFieldsStayOffTheWireUntilSetAndRoundTrip() throws {
+        let plain = LiveCardState(chats: [], focusId: nil, more: 0, listening: false, heard: "", counts: ["working": 1])
+        let json = String(decoding: try JSONEncoder().encode(plain), as: UTF8.self)
+        XCTAssertFalse(json.contains("scope"), "a computer's fixture bytes are unchanged")
+        XCTAssertFalse(json.contains("listeningSince"))
+        var local = plain
+        local.scope = "All computers"
+        local.listening = true
+        local.listeningSince = Date(timeIntervalSinceReferenceDate: 1000)
+        XCTAssertEqual(try JSONDecoder().decode(LiveCardState.self, from: JSONEncoder().encode(local)), local)
+        let pushed = try JSONDecoder().decode(LiveCardState.self, from: Data(#"{"chats":[],"counts":{"done":2}}"#.utf8))
+        XCTAssertNil(pushed.scope)
+        XCTAssertNil(pushed.listeningSince)
+    }
+
+    func testScopeLabelFollowsWhatTheChatListShows() {
+        XCTAssertNil(cardScope(computerName: "Mac", computers: 1, phoneChats: false))
+        XCTAssertEqual(cardScope(computerName: "Mac", computers: 1, phoneChats: true), "Mac + iPhone")
+        XCTAssertEqual(cardScope(computerName: "Mac", computers: 3, phoneChats: false), "All computers")
+        XCTAssertEqual(cardScope(computerName: "Mac", computers: 2, phoneChats: true), "All computers")
+    }
+
+    func testCapturingPhasesOfferCancelAndFinish() {
+        var s = LiveCardState(chats: [], focusId: nil, more: 0, listening: true, heard: LiveCardVoice.listening)
+        XCTAssertTrue(LiveCardVoice.capturing(s))
+        s.heard = LiveCardVoice.hearing
+        XCTAssertTrue(LiveCardVoice.capturing(s))
+        for later in [LiveCardVoice.processing, LiveCardVoice.sending] {
+            s.heard = later
+            XCTAssertFalse(LiveCardVoice.capturing(s), later)
+        }
+        s.listening = false
+        s.heard = LiveCardVoice.listening
+        XCTAssertFalse(LiveCardVoice.capturing(s))
+    }
 }

@@ -49,12 +49,16 @@ struct CardsUp {
 /// its last state until the app runs again or iOS ends it (8 hours).
 @MainActor
 final class RunActivities {
-    /// The active computer's chats and who is running.
+    /// Every chat the chat list shows (each paired computer's and this iPhone's) and
+    /// who is running, so the counts match the list. The card itself belongs to the
+    /// active computer (`computerId`): its pushes and its voice scope.
     struct Source {
         var summaries: [SessionSummary]
         var activity: [String: NekkoProtocol.Activity]
         var computerId: String
         var computerName: String
+        /// What the counts cover when that is more than the active computer (`cardScope`).
+        var scope: String? = nil
     }
 
     /// What the events say about a chat's latest run (the chat list doesn't).
@@ -170,6 +174,9 @@ final class RunActivities {
     func talk(listening: Bool, heard: String, sentTo: String? = nil, now: Date = Date()) {
         guard let card else { return }
         var state = card.state
+        // The timer starts when the mic opens and runs through each listening phase.
+        if listening, !state.listening || state.listeningSince == nil { state.listeningSince = now }
+        if !listening { state.listeningSince = nil }
         state.listening = listening
         state.heard = heard
         self.sentTo = sentTo.map { id in (id, state.chats.first { $0.id == id }?.reply ?? "") }
@@ -194,10 +201,13 @@ final class RunActivities {
         let level = level()
         let chats: [LiveChat], computerId: String, computerName: String
         var cached: LiveCardState?
+        let scope: String?
         if let src = source() {
             chats = liveChats(src, now: now)
             (computerId, computerName) = (src.computerId, src.computerName)
+            scope = src.scope
         } else if let card {
+            scope = card.state.scope
             // A tap on the card can launch the app before it has the list.
             cached = card.state
             chats = card.state.chats.filter {
@@ -222,6 +232,8 @@ final class RunActivities {
                                     listening: previous?.listening ?? false, heard: previous?.heard ?? "", counts: [:])
         }
         guard var state = rebuilt else { end(); return }
+        state.scope = scope
+        state.listeningSince = state.listening ? previous?.listeningSince : nil
         if let cached {
             state.more += cached.more
             state.counts = cached.counts
@@ -280,6 +292,13 @@ final class RunActivities {
         trailing = nil
         card.update(state)
         lastUpdate = now
+    }
+
+    /// Draws the card again as it is, after something the view reads outside its
+    /// state changed (the microphone permission, `VoiceReadiness`).
+    func redraw() {
+        guard let card else { return }
+        card.update(card.state)
     }
 
     #if DEBUG
@@ -398,6 +417,9 @@ struct CardContent {
     var state: LiveCardState
 
     mutating func receive(_ pushed: LiveCardState) -> LiveCardState? {
+        // A card the phone built from every computer's chats (`scope`) is ahead of
+        // one computer's push while the app runs to see it; suspended, the push stands.
+        if state.scope != nil, pushed.scope == nil { return state }
         let kept = SystemCard.keepingVoice(pushed: pushed, local: state)
         state = kept ?? pushed
         return kept
@@ -448,6 +470,7 @@ final class SystemCard: CardActivity {
         var kept = pushed
         kept.listening = local.listening
         kept.heard = local.heard
+        kept.listeningSince = local.listeningSince
         return kept
     }
 

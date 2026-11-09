@@ -42,6 +42,16 @@ fn the_store_lists_the_golden_set_as_the_ts_lister_would() {
     assert!(summaries.iter().all(|s| s.get("messages").is_none()));
 }
 
+/// A chat file as the TS host laid it out (two-space JSON): the store now
+/// writes compact JSON, so the recorded text is compared after re-indenting
+/// it, key order kept. Text that is not JSON is left as it is.
+fn repretty(text: &str) -> String {
+    serde_json::from_str::<Value>(text)
+        .ok()
+        .and_then(|v| serde_json::to_string_pretty(&v).ok())
+        .unwrap_or_else(|| text.to_string())
+}
+
 /// `updatedAt` is the save time, the one field the two sides cannot agree on.
 fn normalize(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -97,7 +107,7 @@ fn every_write_leaves_the_file_the_ts_host_would() {
                 Err(e) => errors.push(e),
             }
         }
-        let text = std::fs::read_to_string(data.join("sessions").join(format!("{fixture}.json"))).unwrap();
+        let text = repretty(&std::fs::read_to_string(data.join("sessions").join(format!("{fixture}.json"))).unwrap());
         assert_eq!(normalize(&text), expected[fixture].as_str().unwrap(), "{fixture}: file differs");
         let refusals = expected.get(&format!("{fixture}:errors")).and_then(Value::as_str).unwrap_or("[]");
         assert_eq!(serde_json::to_string(&errors).unwrap(), refusals, "{fixture}: refusals differ");
@@ -235,7 +245,7 @@ fn a_running_turn_saves_exactly_as_save_turn_session_does() {
         };
         assert_eq!(error.map(Value::String).unwrap_or(Value::Null), want["error"], "{name} ({mode}): error");
         // A save that failed leaves the fixture as checked out, which may have CRLF line ends.
-        let written = std::fs::read_to_string(&path).ok().map(|t| normalize(&t.replace("\r\n", "\n")));
+        let written = std::fs::read_to_string(&path).ok().map(|t| normalize(&repretty(&t.replace("\r\n", "\n"))));
         assert_eq!(written.map(Value::String).unwrap_or(Value::Null), want["written"], "{name} ({mode}): file");
         assert_eq!(Value::String(normalize(&pretty(&copy))), want["memory"], "{name} ({mode}): memory");
         std::fs::remove_dir_all(data).ok();
@@ -289,7 +299,7 @@ fn a_fork_is_the_file_the_ts_host_would_write() {
         assert_eq!(std::fs::read_to_string(&src_file).unwrap(), src_text, "{name}: the source changed");
         let fork_id = fork["id"].as_str().unwrap();
         assert!(fork_id.starts_with("s_") && fork_id != id, "{name}: {fork_id}");
-        let text = std::fs::read_to_string(data.join("sessions").join(format!("{fork_id}.json"))).unwrap();
+        let text = repretty(&std::fs::read_to_string(data.join("sessions").join(format!("{fork_id}.json"))).unwrap());
         assert_eq!(normalize_fork(&text), expected[name].as_str().unwrap(), "{name}: fork differs");
         // What the call returns is what it wrote.
         assert_eq!(pretty(&fork), text, "{name}: returned chat differs from the file");

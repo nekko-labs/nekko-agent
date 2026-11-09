@@ -93,6 +93,54 @@ pub fn read_utf8(p: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// The size of the file at `p`, or 0 when it cannot be read.
+pub fn size(p: &str) -> u64 {
+    std::fs::metadata(p).map(|m| m.len()).unwrap_or(0)
+}
+
+/// [`read_utf8`] of at most the first `max` bytes, for a file too big to
+/// read whole. A character cut at the end becomes U+FFFD.
+pub fn read_utf8_head(p: &str, max: u64) -> Result<String, String> {
+    use std::io::Read;
+    if std::fs::metadata(p).is_ok_and(|m| m.is_dir()) {
+        return Err(message(EISDIR, "read", None));
+    }
+    let file = std::fs::File::open(p).map_err(|e| os_error(&e, "open", p))?;
+    let mut bytes = Vec::new();
+    file.take(max).read_to_end(&mut bytes).map_err(|e| os_error(&e, "read", p))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Lines `start..=end` (1-based) of the file at `p`, read as a stream so a
+/// huge file is never held whole, and how many lines were read (the file's
+/// total when the range runs past its end).
+pub fn read_utf8_lines(p: &str, start: u64, end: u64) -> Result<(Vec<String>, u64), String> {
+    use std::io::BufRead;
+    if std::fs::metadata(p).is_ok_and(|m| m.is_dir()) {
+        return Err(message(EISDIR, "read", None));
+    }
+    let file = std::fs::File::open(p).map_err(|e| os_error(&e, "open", p))?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut out = Vec::new();
+    let mut line = Vec::new();
+    let mut n = 0u64;
+    loop {
+        line.clear();
+        if reader.read_until(b'\n', &mut line).map_err(|e| os_error(&e, "read", p))? == 0 {
+            break;
+        }
+        n += 1;
+        if n >= start {
+            let text = line.strip_suffix(b"\n").unwrap_or(&line);
+            out.push(String::from_utf8_lossy(text).into_owned());
+        }
+        if n >= end {
+            break;
+        }
+    }
+    Ok((out, n))
+}
+
 /// `writeFileSync(p, s, 'utf8')`.
 pub fn write_utf8(p: &str, s: &str) -> Result<(), String> {
     if std::fs::metadata(p).is_ok_and(|m| m.is_dir()) {

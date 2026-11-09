@@ -11,7 +11,6 @@
 use crate::client_ids::{client_message_id_of, has_client_message_id, remember_client_message_ids};
 use crate::{Meta, SessionStore, valid_id};
 use nekko_js as js;
-use serde::ser::{Serialize, SerializeMap, Serializer};
 use serde_json::{Map, Value, json};
 use std::path::Path;
 use std::sync::Mutex;
@@ -249,33 +248,6 @@ fn merge_disk(target: &mut Map<String, Value>, disk: &Meta, queued: Option<(usiz
     Ok(())
 }
 
-/// A chat to write, its transcript (when given) apart from its other fields:
-/// serialized exactly as the whole object would be, with `messages` in its
-/// place among them (or last, when the fields have no such key).
-struct Chat<'a> {
-    fields: &'a Map<String, Value>,
-    messages: Option<&'a [Value]>,
-}
-
-impl Serialize for Chat<'_> {
-    fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
-        let Some(messages) = self.messages else { return self.fields.serialize(ser) };
-        let placed = self.fields.contains_key("messages");
-        let mut map = ser.serialize_map(Some(self.fields.len() + usize::from(!placed)))?;
-        for (k, v) in self.fields {
-            if k == "messages" {
-                map.serialize_entry(k, messages)?;
-            } else {
-                map.serialize_entry(k, v)?;
-            }
-        }
-        if !placed {
-            map.serialize_entry("messages", messages)?;
-        }
-        map.end()
-    }
-}
-
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
 fn is_archived(s: &Value) -> bool {
@@ -314,6 +286,17 @@ fn base64url(bytes: &[u8]) -> String {
 /// the last one.
 fn write_atomic(file: &Path, text: &str) -> std::io::Result<()> {
     nekko_js::fs::atomic_write(file, text.as_bytes(), Default::default())
+}
+
+/// [`write_atomic`] for a blob's bytes.
+pub(crate) fn write_atomic_bytes(file: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    nekko_js::fs::atomic_write(file, bytes, Default::default())
+}
+
+/// A chat as its file holds it: compact JSON with its pictures moved beside it.
+fn chat_text(dir: &Path, fields: &Map<String, Value>, messages: Option<&[Value]>) -> Result<String, String> {
+    let blobs = crate::blobs::dir(dir);
+    serde_json::to_string(&crate::blobs::MovedChat { fields, messages, dir: &blobs }).map_err(|e| e.to_string())
 }
 
 // Inject the timezone for deterministic parity tests without process-global TZ.
@@ -401,14 +384,15 @@ impl SessionStore {
         self.dir.join(format!("{id}.json"))
     }
 
-    /// `saveSession`.
+    /// `saveSession`. Compact JSON: a chat file is rewritten on every save, and
+    /// indentation made it about a fifth bigger for nobody to read.
     fn save(&self, s: &mut Map<String, Value>) -> Result<(), String> {
         s.insert("updatedAt".into(), json!(nekko_js::now_ms()));
         let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
         if nekko_js::truthy(s.get("incognito")) {
             self.remove_review(id)?;
         }
-        self.write_text(id, &serde_json::to_string_pretty(s).map_err(|e| e.to_string())?)
+        self.write_text(id, &chat_text(&self.dir, s, None)?)
     }
 
     fn write_text(&self, id: &str, text: &str) -> Result<(), String> {
@@ -420,7 +404,7 @@ impl SessionStore {
     /// chat are serialized, so two UI patches never lose one another.
     fn patch(&self, id: &str, change: impl FnOnce(&mut Map<String, Value>) -> bool) -> Result<Option<Value>, String> {
         self.with_chat(id, || {
-            let Some(Value::Object(mut s)) = self.get(id) else { return Ok(None) };
+            let Some(Value::Object(mut s)) = self.get_raw(id) else { return Ok(None) };
             if change(&mut s) {
                 self.save(&mut s)?;
             }
@@ -439,7 +423,7 @@ impl SessionStore {
         let id = target.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
         self.with_chat(&id, || {
             // Only the user's fields are read back, so the transcript on disk is skipped.
-            match self.meta(&id) {
+            match self.meta_raw(&id) {
                 Some(disk) => merge_disk(target, &disk, queued)?,
                 None if queued.is_some() => return Err("Session not found.".into()),
                 None => {}
@@ -458,7 +442,7 @@ impl SessionStore {
         let lock = || session.lock().unwrap_or_else(|e| e.into_inner());
         let id = lock().get("id").and_then(Value::as_str).unwrap_or_default().to_string();
         let result = self.with_chat(&id, || {
-            let disk = self.meta(&id);
+            let disk = self.meta_raw(&id);
             let head = {
                 let mut s = lock();
                 let Value::Object(target) = &mut *s else { return Err("a session that is not an object".into()) };
@@ -481,8 +465,7 @@ impl SessionStore {
             if nekko_js::truthy(head.get("incognito")) {
                 self.remove_review(&id)?;
             }
-            let doc = Chat { fields: &head, messages: messages.as_deref() };
-            self.write_text(&id, &serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?)
+            self.write_text(&id, &chat_text(&self.dir, &head, messages.as_deref())?)
         });
         if let Some(m) = messages
             && let Some(obj) = lock().as_object_mut()
@@ -693,7 +676,8 @@ impl SessionStore {
         let id = s.get("id").and_then(Value::as_str).filter(|id| valid_id(id)).ok_or("a session without a valid id")?;
         self.with_chat(id, || {
             std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
-            let text = serde_json::to_string_pretty(s).map_err(|e| e.to_string())?;
+            let fields = s.as_object().ok_or("a session that is not an object")?;
+            let text = chat_text(&self.dir, fields, None)?;
             write_atomic(&self.path(id), &text).map_err(|e| format!("could not save the chat: {e}"))
         })
     }
@@ -735,9 +719,10 @@ impl SessionStore {
         before_delete: impl Fn(&str) -> Result<(), String>,
     ) -> Result<usize, String> {
         // Every chat's writes held; the transcripts are not needed to choose.
+        self.flush_all();
         let _all = self.all.write().unwrap_or_else(|e| e.into_inner());
         let mut count = 0;
-        for session in self.list_meta() {
+        for session in self.list_meta_raw() {
             let updated = js::to_number(session.get("updatedAt"));
             if !all
                 && !matches!(
@@ -793,6 +778,15 @@ impl SessionStore {
                 bytes = bytes.saturating_add(meta.len());
             }
         }
+        // The chats' pictures, kept beside them (blobs.rs).
+        for entry in std::fs::read_dir(crate::blobs::dir(&self.dir)).into_iter().flatten().flatten() {
+            if crate::blobs::valid_name(&entry.file_name().to_string_lossy())
+                && let Ok(meta) = std::fs::symlink_metadata(entry.path())
+                && meta.file_type().is_file()
+            {
+                bytes = bytes.saturating_add(meta.len());
+            }
+        }
         (bytes, completed_count)
     }
 
@@ -824,9 +818,10 @@ impl SessionStore {
     ) -> Result<usize, String> {
         // Validate even when the store is empty.
         history_range_matches(zone, now_ms, range, now_ms as f64)?;
+        self.flush_all();
         let _all = self.all.write().unwrap_or_else(|e| e.into_inner());
         let mut count = 0;
-        for session in self.list_meta() {
+        for session in self.list_meta_raw() {
             if !is_archived(&session) {
                 continue;
             }
@@ -880,7 +875,7 @@ impl SessionStore {
     }
 
     fn fork_held(&self, id: &str, before_message_id: &Value) -> Result<Option<Value>, String> {
-        let Some(src) = self.get(id) else { return Ok(None) };
+        let Some(src) = self.get_raw(id) else { return Ok(None) };
         let Some(src) = src.as_object() else { return Ok(None) };
         let messages = src.get("messages");
         // `beforeMessageId ? findIndex(m => m.id === beforeMessageId) : -1`.

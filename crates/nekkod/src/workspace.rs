@@ -157,6 +157,17 @@ async fn folders(ctx: &Ctx) -> Vec<Value> {
     crate::settings::current(ctx).await.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
+/// A chat's fields without its transcript, or Null. What a caller that never
+/// reads `messages` should use: a long chat is megabytes of transcript and
+/// screenshots, and `workspace:gitStatus` asks every 15 s per card.
+async fn session_meta(ctx: &Ctx, id: &str) -> Value {
+    let store = ctx.sessions.clone();
+    let id = id.to_string();
+    blocking(move || store.meta(&id).map(nekko_store::Meta::into_value).unwrap_or(Value::Null))
+        .await
+        .unwrap_or(Value::Null)
+}
+
 /// The user's settings.
 async fn settings(ctx: &Ctx) -> Value {
     crate::settings::current(ctx).await
@@ -207,7 +218,7 @@ async fn git_folder(ctx: &Ctx, id: &str) -> Option<String> {
     let settings = settings(ctx).await;
     let saved = settings.get("workspaces").and_then(Value::as_array).cloned().unwrap_or_default();
     let Some(sid) = id.strip_prefix("session:") else { return folder_path(&saved, id) };
-    let s = session(ctx, sid).await;
+    let s = session_meta(ctx, sid).await;
     if s.is_null() {
         return None;
     }

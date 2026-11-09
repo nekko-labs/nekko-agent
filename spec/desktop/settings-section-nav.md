@@ -7,9 +7,10 @@ area: desktop
 
 User intent: find the QR code that links a phone without hunting through one long Settings page, and see Settings split into clear sections.
 
-- Settings has a section list on the left: **General**, **Phone pairing**, **Computers** (when available), **Customize**, **Agents**, **Safety**, **Connections**, **Tools**, **System**. Clicking one jumps to that section with a fast scroll (about 200ms, ease-out; instant when the system asks for reduced motion), and the clicked item stays highlighted through the jump; the item for the section at the top of the page stays highlighted as you scroll. In a narrow window the list becomes a wrapping row above the page.
+- Settings has a section list on the left: **Help out the Nekko Team**, **General**, **Phone pairing**, **Computers** (when available), **Customize**, **Agents**, **Safety**, **Connections**, **Tools**, **System**. Clicking one jumps to that section with a fast scroll (about 200ms, ease-out; instant when the system asks for reduced motion), and the clicked item stays highlighted through the jump; the item for the section at the top of the page stays highlighted as you scroll. In a narrow window the list becomes a wrapping row above the page.
 - The page is grouped to match, each group under a small heading with a divider between groups:
-  - General: Usage reports, Dictation, Notifications, Chat history.
+  - Help out the Nekko Team: Help improve Nekko Agent (usage reports), Support by starring the project on GitHub.
+  - General: Dictation, Notifications, Chat history.
   - Phone pairing: Remote access, then Sync.
   - Computers: Connected computers and pairing.
   - Customize: View settings, Appearance, Desktop behavior, Fun, Agents wall, Customization (About you and standing instructions), Fonts and text ([Style](style-fonts-and-text-size.md)), Accessibility, Simple mode visibility.
@@ -18,7 +19,7 @@ User intent: find the QR code that links a phone without hunting through one lon
   - Connections: All connections off and every connection with its log ([Connections](../platform/connections-switch-and-activity-log.md)).
   - Tools: Git management, Project management, Pull requests, Terminal, MCP servers.
   - System: Updates, Developer, Experimental, Backup & restore, Data & privacy.
-- Phone pairing is second in the list on purpose, so the QR is one click from opening Settings.
+- Phone pairing follows General (third after Help out the Nekko Team), so the QR remains one click from opening Settings.
 - In Remote access, **Paired devices** and **+ Pair a device** come first once remote access is on, and the pairing QR opens directly under the button, above the device list. Relay details, the local relay, network visibility, phone changes and phone access follow. Before remote access is on, the card offers two ways to connect, Tailscale or Nekko Cloud (see [remote control](../phone/driving-your-home-model-from-your-phone-remote-control.md)).
 - The card keeps the name "Remote access", so every "Settings → Remote access" instruction in the apps and docs still points to it.
 - Search within Settings stays in the rail and searches the whole page; the section list is not searched.
@@ -57,3 +58,7 @@ Implemented: a single Customize rail entry contains the existing personalization
 Acceptance: each moved control appears once under Customize; Phone pairing stays second; System and Computers stay separate; navigation, search and preference saving work in wide and narrow layouts.
 
 Verification: 31 initial focused settings/search tests passed. CI then caught a stale standalone Accessibility navigation assertion; the follow-up corrected it and stale command-palette destinations, added nine search-routing cases, and passed all 3,219 desktop tests across 349 files, profile/desktop production builds and desktop typecheck. Hidden Electron verified Customize search destinations and legacy style/accessibility/simple anchor positions; the fixture explicitly drains the navigation helper's two requestAnimationFrame callbacks because a never-shown window suspends them, so this proves destinations, not visible-window timing. Hidden, network-blocked Electron baseline/head captures and interaction assertions passed with no renderer errors at requested 1280x900 and 600x900 sizes. Pixel inspection remains blocked: browser screenshot timed out and native image delivery returned UnknownVizError. Captured images are not visually approved. Packaged desktop, deployed Local Web UI and native phone apps are unverified.
+
+## Help out the Nekko Team (#2342)
+
+Implemented first group and searchable navigation destination. The existing telemetry preference moves here without changing its value. GitHub support is an explicit API action rather than a local preference toggle; its selected state reflects a verified GitHub star. See [feedback support](../platform/send-feedback.md#optional-contact-and-github-support-2342) for privacy, animation, and verification status. This supersedes older “General keeps usage reports” and “Phone pairing stays second” placement notes above.

@@ -36,26 +36,32 @@ test('marketing preview serves only static website files and read requests', asy
   assert.match(replay, /href="\/docs\/benchmarks"/);
   assert.doesNotMatch(page.body, /class="hero-proof/);
   for (const f of ['hero-v2.mp4', 'hero-v2-light.mp4', 'hero-v2-poster.webp', 'hero-v2-light-poster.webp']) assert.equal((await get(`/media/${f}`)).status, 200, f);
-  assert.doesNotMatch(page.body, /Time to complete reply/); // shown once, as the graphic under the fast copy
-  assert.match(page.body, /Whole-file rename benchmark/);
-  assert.match(page.body, /Ollama 0\.40\.11/);
-  assert.match(page.body, /cool-chip medians, 8 requests per server/);
-  assert.match(page.body, /inference replies, not a complete agent workflow/);
-  assert.match(page.body, /href="\/docs\/benchmarks"/);
-  // Broader comparisons follow (rather than replace) the primary latency claim.
-  const broader = page.body.indexOf('More comparisons · NVIDIA RTX 5090');
-  assert.ok(broader > page.body.indexOf('Whole-file rename benchmark'));
-  const comparison = page.body.slice(broader, page.body.indexOf('</article>', broader));
-  assert.match(comparison, /Plain decode/);
-  assert.match(comparison, /Code edit/);
-  assert.match(comparison, /Four requests at once/);
-  assert.ok(comparison.includes('154 tokens/s'));
-  assert.ok(comparison.includes('534 tokens/s'));
-  assert.ok(comparison.includes('256 tokens/s'));
-  assert.match(comparison, /LM Studio 2.46.0/);
-  assert.match(comparison, /30 September 2026/);
-  assert.match(comparison, /Ollama starts a fresh long chat faster/);
-  assert.match(page.body, /aria-describedby="bench-nvidia-note"/);
+  assert.doesNotMatch(page.body, /Time to complete reply/);
+  // Why Nekko is the five-pillar tour: a vertical tablist beside one demo, the
+  // speed pillar titled without a superlative it cannot prove.
+  assert.match(page.body, /data-pillar-tour/);
+  assert.equal((page.body.match(/role="tab"/g) ?? []).length, 5);
+  assert.match(page.body, /Fast\. Really fast\./);
+  for (const id of ['local', 'speed', 'privacy', 'fleet', 'anywhere']) {
+    for (const f of [`pillar-${id}.mp4`, `pillar-${id}-light.mp4`, `pillar-${id}-poster.jpg`, `pillar-${id}-light-poster.jpg`]) {
+      assert.equal((await get(`/media/${f}`)).status, 200, f);
+    }
+  }
+  // The benchmark summary keeps the result, its conditions, the measured losses
+  // and the link to the full method, so the headline never hides them.
+  const bench = page.body.slice(page.body.indexOf('id="benchmarks"'), page.body.indexOf('panels-foot', page.body.indexOf('id="benchmarks"')));
+  assert.ok(bench.length > 200, 'benchmark summary present');
+  assert.match(bench, /Whole-file rename benchmark/);
+  assert.match(bench, /Ollama 0\.40\.11/);
+  assert.match(bench, /cool-chip medians, 8 requests per server/);
+  assert.match(bench, /534/);
+  assert.match(bench, /256/);
+  assert.match(bench, /LM Studio 2\.46\.0/);
+  assert.match(bench, /30 September 2026/);
+  assert.match(bench, /Where we are not ahead: MLX decodes plain text faster/);
+  assert.match(bench, /Ollama starts a fresh long chat faster/);
+  assert.match(bench, /inference replies, not a complete agent workflow/);
+  assert.match(bench, /href="\/docs\/benchmarks"/);
   assert.doesNotMatch(page.body, /Maybe the fastest|data-demo="fast"/);
   assert.match(page.headers['content-type'], /text\/html/);
   assert.equal(page.headers['cache-control'], 'no-store');

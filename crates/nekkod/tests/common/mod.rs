@@ -468,8 +468,11 @@ pub async fn until_model_asked(model: &ScriptedModel, count: usize, what: &str, 
 }
 
 pub fn saved_session(rig: &TurnRig, id: &str) -> Value {
-    let path = rig.data.join("sessions").join(format!("{id}.json"));
-    serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    let dir = rig.data.join("sessions");
+    let mut chat = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{id}.json"))).unwrap()).unwrap();
+    // As the store reads it: pictures put back from beside the chat.
+    nekko_store::blobs::restore(&mut chat, &nekko_store::blobs::dir(&dir));
+    chat
 }
 
 pub async fn wait_for<F: Fn() -> bool>(what: &str, f: F) {

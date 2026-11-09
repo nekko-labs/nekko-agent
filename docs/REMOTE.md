@@ -534,7 +534,8 @@ inference or close the native apps' remaining feature and release gaps; see the
 
 **The native iPhone app** (`apps/ios`, SwiftUI) runs chats over the encrypted relay, and
 adds what only iOS can: one **Live Activity** card for all your chats on the Lock Screen and in
-the Dynamic Island (only ever one, scoped to the active computer). The current
+the Dynamic Island (only ever one, tied to the active computer; while the app runs its counts
+cover every chat the chat list shows, and its header says so: "All computers"). The current
 [status dashboard](voice.md#from-the-status-dashboard) replaces tappable chat chips with
 Building, Need input and Done counts, primary **Talk to Nekko**, and secondary **Open app**.
 On iOS 18+ voice requires authentication; on iOS 17 it opens the list without automatic
