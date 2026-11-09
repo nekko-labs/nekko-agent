@@ -77,7 +77,8 @@ struct LiveCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                PixelCat().frame(width: 16, height: 16)
+                // No taller than the 11 pt line beside it: the card is capped at 160 pt.
+                PixelCat().frame(width: 13, height: 13)
                 Text("Nekko Agent").fontWeight(.semibold)
                 Spacer(minLength: 4)
                 // A card the phone built covers every chat its list shows; a computer's push, that computer.
