@@ -104,7 +104,17 @@ final class PhoneParityTests: XCTestCase {
         // now exposes the same preference as an inline switch in its Show disclosure.
         let inlineAlways = app.switches["chats.view.showEmptyGroups"]
         let menuAlways = app.buttons["Always show groups"]
-        XCTAssertTrue(app.buttons["Show"].tapUntil { inlineAlways.exists || menuAlways.exists }, "Show exposes its controls")
+        let show = app.buttons["Show"]
+        XCTAssertTrue(show.waitForExistence(timeout: 5), "View options has Show")
+        show.tap()
+        // Show's rows open below the fold of the popover's lazy Form, and a row that is
+        // not on screen does not exist for XCTest. Tapping Show again only folds it, so
+        // scroll the Form to them instead (the baseline's menu opens on the first tap).
+        let form = app.popovers.firstMatch.collectionViews.firstMatch
+        for _ in 0..<5 where !(inlineAlways.exists || menuAlways.exists) {
+            if form.exists { form.swipeUp() } else { show.tap() }
+        }
+        XCTAssertTrue(inlineAlways.exists || menuAlways.exists, "Show exposes its controls")
         let usesInlineControls = inlineAlways.exists
         let always = usesInlineControls ? inlineAlways : menuAlways
         XCTAssertTrue(always.waitForExistence(timeout: 3))
@@ -141,27 +151,6 @@ final class PhoneParityTests: XCTestCase {
 
     /// Form rows may exist in accessibility while clipped by the popover.
     /// Scroll that Form, not the chat list behind it, before tapping a control.
-    private func revealViewOption(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
-        let popover = app.popovers.firstMatch
-        let form = popover.collectionViews.firstMatch
-        guard popover.waitForExistence(timeout: 3), form.exists else {
-            XCTFail("View options exposes its scrollable Form")
-            return false
-        }
-        for attempt in 0...4 {
-            if element.exists, !element.frame.isEmpty,
-               popover.frame.contains(element.frame), element.isHittable {
-                return true
-            }
-            if attempt < 4 { form.swipeUp() }
-        }
-        let hierarchy = XCTAttachment(string: app.debugDescription)
-        hierarchy.name = "view-option-not-reachable"
-        hierarchy.lifetime = .keepAlways
-        add(hierarchy)
-        XCTFail("View option is not fully visible and hittable: \(element)")
-        return false
-    }
 
     private func launch(_ fixture: String, extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
