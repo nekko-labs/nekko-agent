@@ -50,7 +50,11 @@
   },
   "overrides": {
     "app-builder-lib": {
-      "@electron/get": "5.1.0"
+      "@electron/get": "5.1.0",
+      "minimatch": "^11.0.5",
+      "@electron/universal": {
+        "minimatch": "^11.0.5"
+      }
     },
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
