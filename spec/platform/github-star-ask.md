@@ -38,6 +38,19 @@ Decided 2026-11-09:
 - **Network.** Showing the card reads the star status through the engine only when the GitHub connector is connected (the same read Settings does); with no connector there is no request.
 - **Numbers** live in `STAR_ASK_AT` (`packages/shared/src/support.ts`); the phone apps use the same 10 and 50.
 
-## iPhone, iPad and Android
+## iPhone and iPad
 
-Not built yet: [#2423](https://github.com/nekko-labs/nekko-agent/issues/2423), [#2424](https://github.com/nekko-labs/nekko-agent/issues/2424). Same card, same numbers, opening the repository in the browser.
+[#2423](https://github.com/nekko-labs/nekko-agent/issues/2423). `[Implemented 2026-11-09; the rules and the counting are unit-tested in code that compiles locally, but the iOS app was not built or run on this machine (no Xcode): the app's unit tests and a fixture UI test (the 10th reply's card, the next send removing it, Not now, Don't ask again, Star on GitHub's thank-you) run in Native iOS CI; not tried on a device]`
+
+- **What counts.** A prompt sent from the chat screen (typed, dictated, a photo, a saved prompt or a skill, the first message of a new chat, a Git action) whose reply then finishes (`done`). A reply that fails or is stopped does not count, nor do follow-ups queued while a reply runs, prompts sent later from the outbox after being offline, automations, or turns started on the computer or another device (`ChatModel.promptReplies`).
+- **When it shows.** Under the reply to the 10th counted prompt, then the 50th, at the end of the transcript, only while that chat has no question, approval or failure showing and is not the phone's read-only saved copy. Not a sheet or modal.
+- **The card.** The chat's own inline surface: a star, "Nekko Agent is open source", "If it helps you, a star on GitHub helps more people find it.", then **Star on GitHub**, **Not now** and **Don't ask again**. Translated in the app's catalog.
+- **Each ask is used once,** exactly as on the desktop: used up when it shows, the next send removes it (Not now), and a late first ask uses up the second too. Leaving the chat also removes it.
+- **Star on GitHub** opens <https://github.com/nekko-labs/nekko-agent> in the browser, thanks them in the card ("Thank you! Nekko is happy you're here."), and stops the asks for good. There is no GitHub connector star on the phone, so it is a link only: no login and no GitHub request. **Don't ask again** also stops it for good.
+- **Kept on this device only:** UserDefaults `starAsk`, the same JSON as the desktop (`{"prompts":…,"asked":…,"stopped":true}`), through `Prefs`. Never synced, never sent. Malformed values read as a fresh start. UI test runs never see it unless a test passes `-starAskPrompts N`.
+- **Rules:** `StarAsk` (`apps/ios/Protocol/Sources/NekkoKit/StarAsk.swift`), a port of `packages/shared/src/support.ts` with the same 10 and 50.
+- **Not yet:** the native rating request (`SKStoreReviewController`) replaces the card once the app is on the App Store (planned, see Intent).
+
+## Android
+
+Not built yet: [#2424](https://github.com/nekko-labs/nekko-agent/issues/2424). Same card, same numbers, opening the repository in the browser.

@@ -75,6 +75,7 @@ Checked on 2026-11-07 against every iOS change on `main` since 2026-10-30, by re
 | Background grace period | The keep-alive service holds the socket instead | AN-28 |
 | Always allow an MCP tool from a notification or the Lock Screen card (2026-11-07) | Allow and Deny only there; the chat's own card has it | #2065 |
 | "Send your first prompt" intro | Not built; the iPhone's shows on the first new chat | [#2234](https://github.com/nekko-labs/nekko-agent/issues/2234) |
+| GitHub star ask under the 10th and 50th reply ([spec](../platform/github-star-ask.md#iphone-and-ipad), iPhone since #2423) | Being built in parallel; same card, numbers and link | [#2424](https://github.com/nekko-labs/nekko-agent/issues/2424) |
 
 Android features the iPhone lacks have not been audited yet.
 

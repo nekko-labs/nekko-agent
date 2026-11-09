@@ -57,6 +57,8 @@ struct ChatView: View {
     @State private var windowFrame: CGRect = .zero
     /// Something is being dragged over the chat.
     @State private var dropping = false
+    /// The GitHub star ask under the reply that reached 10 (then 50) prompts, until the next send or a choice.
+    @State private var starAsk = false
 
     var body: some View {
         Group {
@@ -78,6 +80,7 @@ struct ChatView: View {
             store.focus(chat: sessionId)
             if chat?.sessionId != sessionId {
                 chat?.stop()
+                starAsk = false
                 chat = ChatModel(sessionId: sessionId, store: store)
             }
             chat?.start()
@@ -190,6 +193,12 @@ struct ChatView: View {
                     if let e = chat.error {
                         Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
                     }
+                    // Under the reply, never over a question, an approval, a failure or a saved copy.
+                    if starAsk && !chat.running && chat.turn.approval == nil && chat.turn.question == nil && chat.error == nil && chat.savedAt == nil {
+                        GitHubStarAsk(stop: { prefs.stopStarAsk() }, close: { withAnimation(.easeOut(duration: 0.16)) { starAsk = false } })
+                            .id("starAsk")
+                            .transition(.opacity)
+                    }
                     Color.clear.frame(height: 1).id("bottom")
                         .onAppear { atBottom = true }
                         .onDisappear { atBottom = false }
@@ -245,6 +254,14 @@ struct ChatView: View {
             // After the card has been laid out: scrolling in the same update used the old inset.
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
             .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
+            // A prompt sent from here got its reply: it counts, and the 10th and 50th carry the star ask.
+            .onChange(of: chat.promptReplies) { old, new in
+                guard new > old, prefs.starAskAfterReply() else { return }
+                withAnimation(.easeOut(duration: 0.2)) { starAsk = true }
+                if atBottom { scrollAfterLayout(proxy) }
+            }
+            // The next send takes it away; unanswered, it was Not now.
+            .onChange(of: chat.promptsSent) { _, _ in starAsk = false }
             .overlay(alignment: .bottomTrailing) {
                 // Fades in and out (a fade, so also with Reduce Motion) rather than popping:
                 // `atBottom` changes outside any animation, as the end scrolls in or out of view.
