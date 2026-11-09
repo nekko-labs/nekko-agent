@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import type { SeasonalHat } from '../seasonal.js';
+import { SeasonalHatArt } from './SeasonalHat.js';
 
 export type MascotMood = 'idle' | 'waving' | 'thinking';
 
@@ -33,15 +35,8 @@ function usePageHidden() {
 }
 
 
-/**
- * The hat is drawn at full size on the head's grid, then shrunk to 80% around
- * its brim and lifted so the brim sits on the crown between the ears rather
- * than over the forehead.
- */
-const WIZARD_HAT_TRANSFORM = 'translate(16.5 9) scale(0.8) translate(-16.5 -12)';
-
-export const NekkoAvatar = React.forwardRef<SVGSVGElement, { size?: number; title?: string; wizardHat?: boolean; stationary?: boolean; quiet?: boolean; eyes?: boolean; pupilOffset?: { x: number; y: number } }>(function NekkoAvatar(
-  { size = 28, title, wizardHat = false, stationary = false, quiet = false, eyes = true, pupilOffset },
+export const NekkoAvatar = React.forwardRef<SVGSVGElement, { size?: number; title?: string; hat?: SeasonalHat; stationary?: boolean; quiet?: boolean; eyes?: boolean; pupilOffset?: { x: number; y: number } }>(function NekkoAvatar(
+  { size = 28, title, hat, stationary = false, quiet = false, eyes = true, pupilOffset },
   ref,
 ) {
   const hidden = usePageHidden();
@@ -50,11 +45,7 @@ export const NekkoAvatar = React.forwardRef<SVGSVGElement, { size?: number; titl
       shapeRendering="crispEdges" role={title ? 'img' : 'presentation'} aria-label={title}
       aria-hidden={title ? undefined : true} focusable="false">
       <PixelHead eyes={eyes} pupilOffset={pupilOffset} />
-      {wizardHat && <g data-part="orange-wizard-hat" strokeLinejoin="miter" transform={WIZARD_HAT_TRANSFORM}>
-        <polygon points="9,10 16,0 19,2 23,10" fill="#fb923c" stroke="#9a3412" strokeWidth="1" />
-        <rect x="8" y="9" width="17" height="3" fill="#ea580c" stroke="#9a3412" strokeWidth="1" />
-        <rect x="16" y="7" width="3" height="2" fill="#fde68a" />
-      </g>}
+      {hat && <SeasonalHatArt hat={hat} />}
     </svg>
   );
 });
@@ -63,8 +54,8 @@ export function MiniNekko({ size = 18 }: { size?: number }) {
   return <span className="pixel-working inline-block shrink-0 align-middle" style={{ lineHeight: 0 }}><NekkoAvatar size={size} /></span>;
 }
 
-/** The corner mascot is the one place a seasonal theme dresses Nekko up (Spooky adds the wizard hat). */
-export function Mascot({ mood, enabled, working = false, wizardHat = false }: { mood: MascotMood; enabled: boolean; working?: boolean; wizardHat?: boolean }) {
+/** The corner mascot can wear a seasonal theme's hat (Spooky's wizard hat, Winter's beanie). */
+export function Mascot({ mood, enabled, working = false, hat }: { mood: MascotMood; enabled: boolean; working?: boolean; hat?: SeasonalHat }) {
   const [sleeping, setSleeping] = useState(false);
   const [greeting, setGreeting] = useState(false);
   useEffect(() => {
@@ -98,7 +89,7 @@ export function Mascot({ mood, enabled, working = false, wizardHat = false }: { 
       data-mascot-pose={pose} aria-label={pose === 'working' ? 'Nekko is working' : 'Say hello to Nekko'}
       title={pose === 'sleeping' ? 'Nekko is sleeping' : 'Say hello to Nekko'}
       onClick={() => { setSleeping(false); setGreeting(true); }}>
-      <NekkoAvatar size={64} quiet={!working} stationary={working} wizardHat={wizardHat} />
+      <NekkoAvatar size={64} quiet={!working} stationary={working} hat={hat} />
     </button>
   );
 }

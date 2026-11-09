@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useStore } from '../store.js';
+import { isWinterPreset, snowballTap, type SeasonalHat } from '../seasonal.js';
+import { SeasonalHatArt } from './SeasonalHat.js';
 
 /** A bounded glance keeps both pixel eyes inside the face. */
 export function greetingGaze(dx: number, dy: number) {
@@ -81,9 +84,6 @@ export function useComposerGaze(ref: React.RefObject<SVGSVGElement | null>, { re
   return look;
 }
 
-/** Same hat geometry as `NekkoAvatar`, on the peek face's identical 32px grid. */
-const WIZARD_HAT_TRANSFORM = 'translate(16.5 9) scale(0.8) translate(-16.5 -12)';
-
 /**
  * The faces the per-chat Nekko can wear instead of following the caret:
  * `alert` is the low-memory card's alarm pose (ring eyes, open mouth, an amber
@@ -93,13 +93,13 @@ const WIZARD_HAT_TRANSFORM = 'translate(16.5 9) scale(0.8) translate(-16.5 -12)'
 export type PeekFace = 'alert' | 'smile';
 
 /** The pixel head peeking over a composer edge, paws hanging over it. */
-export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string; look: { x: number; y: number }; laugh?: boolean; face?: PeekFace; wizardHat?: boolean; paws?: boolean }>(function PeekNekkoArt(
-  { className, look, laugh = false, face, wizardHat = false, paws = true },
+export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string; look: { x: number; y: number }; laugh?: boolean; face?: PeekFace; hat?: SeasonalHat; paws?: boolean }>(function PeekNekkoArt(
+  { className, look, laugh = false, face, hat, paws = true },
   ref,
 ) {
   const happyEyes = 'M10 17V15H11V14H13V15H14V17H13V16H11V17Z M19 17V15H20V14H22V15H23V17H22V16H20V17Z';
   return (
-    <svg ref={ref} className={className} viewBox="0 0 32 30" width="80" height="75" shapeRendering="crispEdges" aria-hidden="true" focusable="false" overflow={wizardHat || face === 'alert' ? 'visible' : undefined}>
+    <svg ref={ref} className={className} viewBox="0 0 32 30" width="80" height="75" shapeRendering="crispEdges" aria-hidden="true" focusable="false" overflow={hat || face === 'alert' ? 'visible' : undefined}>
       {/* Only the paws hang over the composer; the chin stays behind its edge.
           The window reaches 12 units higher so the hat and the "!" fit in it,
           startled hop included: the head (and all it wears) can then sink
@@ -117,11 +117,8 @@ export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string;
           </g> : <g data-nekko-look transform={`translate(${look.x} ${look.y})`} fill="var(--ink)">
             <path d="M11 15H13V18H11Z M20 15H22V18H20Z" />
           </g>}
-          {wizardHat && <g data-part="orange-wizard-hat" strokeLinejoin="miter" transform={WIZARD_HAT_TRANSFORM}>
-            <polygon points="9,10 16,0 19,2 23,10" fill="#fb923c" stroke="#9a3412" strokeWidth="1" />
-            <rect x="8" y="9" width="17" height="3" fill="#ea580c" stroke="#9a3412" strokeWidth="1" />
-            <rect x="16" y="7" width="3" height="2" fill="#fde68a" />
-          </g>}
+          {/* Same hat art as NekkoAvatar, on the peek face's identical 32px grid. */}
+          {hat && <SeasonalHatArt hat={hat} />}
         </g>
       </svg>
       {/* The outer group carries the show/hide motion; the inner one keeps the
@@ -135,21 +132,51 @@ export const PeekNekkoArt = React.forwardRef<SVGSVGElement, { className: string;
   );
 });
 
-/** Local tap-to-laugh greeting; gaze follows this composer's caret at rest. */
+/** How long a thrown snowball stays on screen: the arc, then the puff. */
+const SNOWBALL_MS = 1_100;
+
+/**
+ * Winter's hidden snowball: a pixel ball that arcs up and away from the
+ * greeting cat and bursts into a puff of flakes. Decorative only.
+ */
+export function Snowball() {
+  return (
+    <span className="winter-snowball" data-winter-egg="snowball" aria-hidden="true">
+      <svg viewBox="0 0 8 8" width="12" height="12" shapeRendering="crispEdges"><path d="M2 0H6V1H7V2H8V6H7V7H6V8H2V7H1V6H0V2H1V1H2Z" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.6" /></svg>
+      <span className="winter-snowball-puff">{[0, 1, 2, 3, 4, 5].map((i) => <i key={i} style={{ '--i': i } as React.CSSProperties} />)}</span>
+    </span>
+  );
+}
+
+/**
+ * Local tap-to-laugh greeting; gaze follows this composer's caret at rest.
+ * Under the Winter theme, three quick taps also make him throw a snowball.
+ */
 export function GreetingNekko() {
   const ref = useRef<SVGSVGElement>(null);
+  const winter = useStore((s) => isWinterPreset(s.settings?.themePreset));
   const [laugh, setLaugh] = useState(0);
+  const [snowball, setSnowball] = useState(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const snowballTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const taps = useRef<number[]>([]);
+  useEffect(() => () => { clearTimeout(timer.current); clearTimeout(snowballTimer.current); }, []);
   const laughNow = () => {
     clearTimeout(timer.current);
     setLaugh(n => n + 1);
     timer.current = setTimeout(() => setLaugh(0), 1200);
+    if (!winter) return;
+    const tap = snowballTap(taps.current, Date.now());
+    taps.current = tap.taps;
+    if (!tap.throws) return;
+    clearTimeout(snowballTimer.current);
+    setSnowball(n => n + 1);
+    snowballTimer.current = setTimeout(() => setSnowball(0), SNOWBALL_MS);
   };
   const look = useComposerGaze(ref, { deps: [laugh] });
   return (
     <span className="greeting-nekko-slot"><button type="button" className="greeting-nekko-button" onClick={laughNow} aria-label="Make Nekko laugh" aria-pressed={laugh > 0}>
       <PeekNekkoArt key={laugh} ref={ref} className={`greeting-nekko${laugh ? ' is-laughing' : ''}`} look={look} laugh={laugh > 0} />
-    </button></span>
+    </button>{snowball > 0 && <Snowball key={snowball} />}</span>
   );
 }
