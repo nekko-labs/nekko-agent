@@ -24,6 +24,9 @@ export function transcriptBytes(session: Session): number {
   for (const m of session.messages) {
     chars += m.content.length + (m.reasoning?.length ?? 0) + (m.toolResult?.output.length ?? 0);
     if (m.images) for (const img of m.images) chars += img.length;
+    // Screenshots a tool returned: usually most of a long agent chat's bytes,
+    // and left out before, so eight cached chats could hold far past the budget.
+    if (m.toolResult?.images) for (const img of m.toolResult.images) chars += img.length;
   }
   return chars * 2;
 }
