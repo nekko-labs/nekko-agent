@@ -21,6 +21,8 @@ pub const INTERRUPTED_NOTE: &str =
     "_This reply was cut off before it finished. Everything above is kept, resume to carry on from here._";
 const SWEEP_FIRST: Duration = Duration::from_secs(60);
 const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
+/// A picture file this new may belong to a chat save still on its way.
+const BLOB_MIN_AGE: Duration = Duration::from_secs(60 * 60);
 
 /// `auto_start_engine` off (a one-shot CLI command): the model server is left as it is.
 pub fn start(ctx: &Ctx, auto_start_engine: bool) {
@@ -43,6 +45,12 @@ pub fn start(ctx: &Ctx, auto_start_engine: bool) {
                 tick.tick().await;
                 for (root, branch) in crate::worktrees::sweep_merged(&ctx).await {
                     eprintln!("[worktrees] removed {root} ({branch}): its PR merged");
+                }
+                // Pictures no chat refers to any more (deleted or cleared chats).
+                let store = ctx.sessions.clone();
+                let removed = tokio::task::spawn_blocking(move || store.gc_blobs(BLOB_MIN_AGE)).await.unwrap_or(0);
+                if removed > 0 {
+                    eprintln!("[sessions] removed {removed} unused picture file(s)");
                 }
             }
         });

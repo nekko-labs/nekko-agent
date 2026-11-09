@@ -525,6 +525,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }
     }
 
+    // Running turns hold their newest checkpoint for up to two seconds: write them.
+    {
+        let sessions = sessions.clone();
+        let _ = tokio::task::spawn_blocking(move || sessions.flush_all()).await;
+    }
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
     }
