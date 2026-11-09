@@ -393,7 +393,7 @@ export function TerminalPane({ terminalId }: { terminalId: string }) {
       <TerminalViewersBadge terminalId={terminalId} initial={info?.viewers} />
       <span className="max-w-[26ch] truncate font-mono">{info?.cwd ?? ''}</span>
       {info && !info.running && (
-        <span className="shrink-0 text-red-400">shell exited{info.exitCode != null ? ` (${info.exitCode})` : ''}</span>
+        <span className="shrink-0 text-danger-text">shell exited{info.exitCode != null ? ` (${info.exitCode})` : ''}</span>
       )}
     </span>
   );

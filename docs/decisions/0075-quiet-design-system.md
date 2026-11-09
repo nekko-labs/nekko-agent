@@ -17,7 +17,7 @@ Philip reviewed a working guide with live examples and chose each option.
 
 - **Principles**: space before lines; say it once; only what matters now; colour means something; every action moves; one surface per layer.
 - **Spacing**: 8px steps inside components, 20px for layout (panel padding, group gap; sections 40). 4px only for tightly coupled pairs. Rows 40 tall on a page, 32 in a popover.
-- **Dark neutrals**: Dusk, halfway between the old Ink dark and a blue midnight (`#0B0C14` page). Light stays Light Nekko, with a lighter faint ink (`#6E5A6C`).
+- **Dark neutrals**: Dusk, halfway between the old Ink dark and a blue midnight (`#0B0C14` page). Light stays Light Nekko unchanged: its faint ink sits over the plum selection gradient, so it cannot get lighter and still pass 4.5:1.
 - **Third colour**: Petrol (`#1F6680` / `#6BB8D4`) for information, "New" and the third chart series. It replaces the blue `--info` and sits across the wheel from plum. Indigo was rejected as too close to plum.
 - **State words**: each state colour gains a darker `-text` value that passes 4.5:1. Working stays green (the rocket); `--running` aliases `--success` and `--highlight` aliases `--warning`.
 - **Type**: Geist and Geist Mono replace Inter Tight and JetBrains Mono. The website keeps its fonts for now.

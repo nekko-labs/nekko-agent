@@ -95,7 +95,7 @@ export function EngineInstallCard({
           </p>
         </>
       ) : (
-        <p className="mt-3 text-xs" style={{ color: 'var(--warning, #d1a054)' }}>
+        <p className="mt-3 text-xs" style={{ color: 'var(--warning)' }}>
           There is no published build for this platform. Point Nekko Agent at a llama-server you built yourself.
         </p>
       )}

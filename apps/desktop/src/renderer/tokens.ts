@@ -22,6 +22,15 @@ export const STATUS = {
   highlight: 'var(--highlight)',
 } as const;
 
+/** The same states as words: darker where the base hue falls under 4.5:1 as text. */
+export const STATUS_TEXT = {
+  success: 'var(--success-text)',
+  danger: 'var(--danger-text)',
+  warning: 'var(--warning-text)',
+  info: 'var(--info-text)',
+  attention: 'var(--attention-text)',
+} as const;
+
 /** Translucent fills of the same states, for chips and banners. */
 export const STATUS_SOFT = {
   success: 'var(--success-soft)',

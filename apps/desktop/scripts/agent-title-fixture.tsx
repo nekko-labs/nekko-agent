@@ -1,6 +1,6 @@
 // Real cards with synthetic data. No host, credentials or network requests.
 (window as any).nekko = new Proxy({}, { get: (_, key) => String(key).startsWith('on') ? () => () => {} : async () => null });
-Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/WorkspaceCard'), import('../src/renderer/store'), import('../src/renderer/styles.css'), import('@fontsource-variable/inter-tight')]).then(([React, { createRoot }, { WorkspaceCard }, { useStore }]) => {
+Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/WorkspaceCard'), import('../src/renderer/store'), import('../src/renderer/styles.css'), import('@fontsource-variable/geist')]).then(([React, { createRoot }, { WorkspaceCard }, { useStore }]) => {
   const now = 1800000000000;
   useStore.setState({ providers: [], models: [], prsBySession: {}, sessionCtxEstimate: {} });
   const records = [
