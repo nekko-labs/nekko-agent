@@ -8,7 +8,7 @@ vi.mock('../components/primitives/index.js', async (original) => ({
   Modal: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
 }));
 
-import { CiRunnersFirstVisit, afterList, afterReply, retryDelay, runnersBody } from './CiRunnersView.js';
+import { CiRunnersFirstVisit, afterList, afterReply, retryDelay, runnersBody, watchRunnerPresence, type RunnerPresence } from './CiRunnersView.js';
 import { DEFAULT_RUNNER_SETTINGS, type ImageView, type RunnerView } from '@nekko-agent/shared';
 
 (globalThis as unknown as { window: unknown }).window = {
@@ -18,6 +18,63 @@ import { DEFAULT_RUNNER_SETTINGS, type ImageView, type RunnerView } from '@nekko
     setRunnerEnabled: () => Promise.reject(new Error('unused')),
   },
 };
+
+describe('runner presence for the Scheduled Tasks sub-navigation', () => {
+  const flush = () => new Promise<void>((r) => setImmediate(r));
+
+  it('a_read_that_fails_while_the_service_starts_retries_and_finds_the_runner', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const seen: RunnerPresence[] = [];
+      let calls = 0;
+      const stop = watchRunnerPresence({
+        listRunners: () => (++calls === 1 ? Promise.reject(new Error('runner:list: Nekko service is unavailable. Start it from the tray.')) : Promise.resolve([{}])),
+      }, (p) => seen.push(p));
+      await flush();
+      expect(seen).toEqual([]);
+      vi.advanceTimersByTime(retryDelay(0));
+      await flush();
+      expect(seen).toEqual(['some']);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('unknown_channel_hides_it_but_keeps_checking', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const seen: RunnerPresence[] = [];
+      let calls = 0;
+      const stop = watchRunnerPresence({
+        listRunners: () => (++calls === 1 ? Promise.reject(new Error('unknown channel runner:list')) : Promise.resolve([{}])),
+      }, (p) => seen.push(p));
+      await flush();
+      expect(seen).toEqual(['unsupported']);
+      vi.advanceTimersByTime(retryDelay(0));
+      await flush();
+      expect(seen).toEqual(['unsupported', 'some']);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a_push_beats_a_slower_read_and_stops_the_retries', async () => {
+    const seen: RunnerPresence[] = [];
+    let push: (v: readonly unknown[]) => void = () => {};
+    let resolve: (v: readonly unknown[]) => void = () => {};
+    const stop = watchRunnerPresence({
+      listRunners: () => new Promise((r) => { resolve = r; }),
+      onRunnersChanged: (cb) => { push = cb; return () => {}; },
+    }, (p) => seen.push(p));
+    push([{}]);
+    resolve([]);
+    await flush();
+    expect(seen).toEqual(['some']);
+    stop();
+  });
+});
 
 describe('CI runners section', () => {
   it('first_visit_matches_mockup_1', () => {

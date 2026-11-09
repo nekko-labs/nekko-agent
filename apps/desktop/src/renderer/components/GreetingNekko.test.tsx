@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { cssRule, hasKeyframes, stylesheet } from '../tests/css.js';
-import { GreetingNekko, greetingGaze } from './GreetingNekko.js';
+import { GreetingNekko, greetingGaze, Snowball } from './GreetingNekko.js';
 
 describe('Greeting Nekko', () => {
   it('tracks direction, remains bounded, and handles a coincident caret', () => {
@@ -48,7 +48,7 @@ describe('Greeting Nekko', () => {
 describe('Per-chat Nekko', () => {
   it('peeks over the composer with the greeting art, its hat, and the visibility toggle', async () => {
     const { ChatMascot } = await import('./ChatMascot.js');
-    const markup = renderToStaticMarkup(<ChatMascot enabled working={false} wizardHat />);
+    const markup = renderToStaticMarkup(<ChatMascot enabled working={false} hat="wizard" />);
     expect(markup).toContain('class="chat-mascot"');
     expect(markup).toContain('data-chat-mascot="idle"');
     expect(markup).toContain('data-part="peek-paws"');
@@ -56,8 +56,8 @@ describe('Per-chat Nekko', () => {
     expect(markup).toContain('class="peek-paws-slot"><g');
     expect(markup).toContain('data-nekko-look="true"');
     expect(markup).toContain('orange-wizard-hat');
-    expect(renderToStaticMarkup(<ChatMascot enabled working={false} wizardHat={false} />)).not.toContain('orange-wizard-hat');
-    expect(renderToStaticMarkup(<ChatMascot enabled={false} working={false} wizardHat={false} />)).toBe('');
+    expect(renderToStaticMarkup(<ChatMascot enabled working={false} />)).not.toContain('orange-wizard-hat');
+    expect(renderToStaticMarkup(<ChatMascot enabled={false} working={false} />)).toBe('');
   });
 
   it('sits on the composer top-left with its chin on the edge, the plan sheet beside it', () => {
@@ -86,14 +86,14 @@ describe('Per-chat Nekko', () => {
 
   it('is already down, alarmed and pawless when he arrives with an approval waiting', async () => {
     const { ChatMascot } = await import('./ChatMascot.js');
-    const markup = renderToStaticMarkup(<ChatMascot enabled working={false} wizardHat={false} away />);
+    const markup = renderToStaticMarkup(<ChatMascot enabled working={false} away />);
     expect(markup).toContain('data-chat-mascot-pose="away"');
     expect(markup).toContain('data-nekko-face="alert"');
     expect(markup).toContain('fill="var(--warning)"');
     expect(markup).not.toContain('data-nekko-look');
     expect(markup).toContain('class="peek-paws-slot"><g');
     // He stays mounted, so his gaze and paw state are kept for his return.
-    expect(renderToStaticMarkup(<ChatMascot enabled working={false} wizardHat={false} />)).not.toContain('data-chat-mascot-pose');
+    expect(renderToStaticMarkup(<ChatMascot enabled working={false} />)).not.toContain('data-chat-mascot-pose');
   });
 
   it('draws the alarm pose of the low-memory card and the laugh\'s ^ ^ eyes as a smile', async () => {
@@ -112,9 +112,22 @@ describe('Per-chat Nekko', () => {
     expect(smile).toContain('M10 17V15H11V14H13V15H14V17H13V16H11V17Z');
     expect(smile).not.toContain('M14 20H19V22H18V23H15V22H14Z');
     // The hat goes down with him, inside the window that cuts him off.
-    const hat = renderToStaticMarkup(<PeekNekkoArt className="x" look={{ x: 0, y: 0 }} face="alert" wizardHat />);
+    const hat = renderToStaticMarkup(<PeekNekkoArt className="x" look={{ x: 0, y: 0 }} face="alert" hat="wizard" />);
     expect(hat.indexOf('orange-wizard-hat')).toBeGreaterThan(hat.indexOf('data-part="peek-head"'));
     expect(hat.indexOf('orange-wizard-hat')).toBeLessThan(hat.indexOf('data-part="peek-paws"'));
+  });
+
+  it("throws Winter's hidden snowball as a decorative arc and puff, standing still when motion is reduced", () => {
+    const ball = renderToStaticMarkup(<Snowball />);
+    expect(ball).toContain('data-winter-egg="snowball"');
+    expect(ball).toContain('aria-hidden="true"');
+    expect(ball.match(/<i /g)).toHaveLength(6);
+    // Not thrown until the taps say so.
+    expect(renderToStaticMarkup(<GreetingNekko />)).not.toContain('winter-snowball');
+    const css = stylesheet('styles.css');
+    for (const k of ['winter-snowball-arc', 'winter-snowball-puff', 'winter-snowball-hide']) expect(hasKeyframes(css, k)).toBe(true);
+    expect(cssRule(css, '.winter-snowball', { media: 'prefers-reduced-motion: reduce' })).toMatchObject({ animation: 'none' });
+    expect(cssRule(css, '.winter-snowball-puff > i', { media: 'prefers-reduced-motion: reduce' })).toMatchObject({ animation: 'none' });
   });
 
   it('sinks the whole head below the edge, quickly back, and without motion when reduced', () => {

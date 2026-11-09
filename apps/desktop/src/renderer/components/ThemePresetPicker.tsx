@@ -13,7 +13,7 @@ const THEMES = [
   { id: 'ember', label: 'Ember' }, { id: 'x-forest-white', label: 'Forest' },
   { id: 'x-blueberry-white', label: 'Blueberry' },
 ];
-const SEASONAL = [{ id: 'autumn', label: 'Spooky' }];
+const SEASONAL = [{ id: 'autumn', label: 'Spooky' }, { id: 'winter', label: 'Winter' }];
 
 /** Hard stops show the actual palette colors without blended intermediate shades. */
 export function slicedSwatch(colors: readonly string[]): string {

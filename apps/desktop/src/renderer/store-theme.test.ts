@@ -73,7 +73,7 @@ describe('System theme', () => {
 });
 
 describe('independent palette and mode application', () => {
-  it.each(['nebula', 'terminal', 'nord', 'ember', 'autumn'])('applies %s to the core light mode without a dark surface override', async (id) => {
+  it.each(['nebula', 'terminal', 'nord', 'ember', 'autumn', 'winter'])('applies %s to the core light mode without a dark surface override', async (id) => {
     const { themePalettePatch } = await import('./themeMode.js');
     darkMode(true);
     const settings = themePalettePatch({ theme: 'light' }, id, true);

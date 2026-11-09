@@ -10,6 +10,7 @@ pub mod connectors;
 pub mod github;
 pub mod http;
 pub mod js;
+pub mod repos;
 
 pub use actions::{Outcome, render_template, run_action, template_context};
 pub use connectors::{can_poll, fetch, poll, snippets};
