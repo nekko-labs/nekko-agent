@@ -13,6 +13,46 @@ export interface WorkspaceFolder {
    * commands terminal; a failure is reported to the chat rather than stopping it.
    */
   worktreeSetup?: string;
+  /** Set when the folder is a clone of a connected git provider's repository (#2404). */
+  repo?: WorkspaceRepo;
+}
+
+/** The git providers a chat's environment can add repositories from. */
+export type RepoProvider = 'github' | 'gitlab';
+export const REPO_PROVIDERS: RepoProvider[] = ['github', 'gitlab'];
+
+/** The repository a saved folder was cloned from. */
+export interface WorkspaceRepo {
+  provider: RepoProvider;
+  /** `owner/name` (GitLab: `group/sub/name`). */
+  fullName: string;
+  webUrl?: string;
+}
+
+/** A repository the connected account can reach (`repos:list`). */
+export interface RemoteRepo {
+  provider: RepoProvider;
+  id: string;
+  fullName: string;
+  cloneUrl: string;
+  webUrl: string;
+  defaultBranch: string;
+  private: boolean;
+  description: string;
+  updatedAt: string;
+}
+
+export interface RemoteRepoList {
+  repos: RemoteRepo[];
+  /** Every connected provider asked, with its error if listing failed. */
+  providers: { kind: RepoProvider; error?: string }[];
+}
+
+/** `repos:clone`: the saved folders and the one now holding the clone. */
+export interface RepoCloneResult {
+  workspaces: WorkspaceFolder[];
+  folderId: string | null;
+  path: string;
 }
 
 /**

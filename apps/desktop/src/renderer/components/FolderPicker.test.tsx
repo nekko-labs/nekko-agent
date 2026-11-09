@@ -32,7 +32,7 @@ describe('composer folder picker', () => {
     useStore.setState({ settings: { ...prev.settings, workspaces: folders } as any, sessions: [{ id: 's', workspaceId: 'a', supportingWorkspaceIds: ['a', 'b', 'gone'] } as any] });
     try {
       const html = renderToStaticMarkup(<FolderPicker sessionId="s" session={null} selectedSummary onChange={() => {}} />);
-      expect(html).toContain('Selected folders: nekko-agent, hypergate');
+      expect(html).toContain('Environment: nekko-agent, hypergate');
       expect(html).toContain('>nekko-agent, hypergate<');
       expect(html).toContain('/code/hypergate');
       expect(html).not.toContain('gone');
@@ -83,6 +83,36 @@ describe('composer folder picker', () => {
     expect(out.match(/aria-pressed="true"/g)).toHaveLength(1);
     expect(out).toContain('aria-label="Stop starting new chats in hypergate"');
     expect(out).toContain('aria-label="Start new chats in nekko-agent"');
+  });
+});
+
+describe('environment menu (#2404)', () => {
+  const repo = { id: 'r', name: 'app', path: '/home/me/nekko-repos/me/app', addedAt: 0, repo: { provider: 'github' as const, fullName: 'me/app' } };
+  const menu = (extra: Partial<React.ComponentProps<typeof FolderPickerMenu>>) => renderToStaticMarkup(
+    <FolderPickerMenu folders={[...folders, repo]} chat={{ workspaceId: 'r' }} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} onExclude={() => {}} {...extra} />);
+
+  it('splits local folders from repositories and offers to add a repository when a provider is connected', () => {
+    const out = menu({ reposConnected: true, onAddRepo: () => {}, onConnectRepos: () => {} });
+    expect(out.indexOf('>Folders<')).toBeLessThan(out.indexOf('>nekko-agent<'));
+    expect(out.indexOf('>Repositories<')).toBeGreaterThan(out.indexOf('Add folder…'));
+    expect(out.indexOf('>me/app<')).toBeGreaterThan(out.indexOf('>Repositories<'));
+    expect(out).toContain('Add repository…');
+    expect(out).not.toContain('Connect repositories');
+    // A repository can be removed from the chat like any folder.
+    expect(out).toContain('aria-label="Remove app from this chat"');
+  });
+
+  it('offers to connect repositories when no git provider is connected', () => {
+    const out = menu({ reposConnected: false, onAddRepo: () => {}, onConnectRepos: () => {} });
+    expect(out).toContain('Connect repositories');
+    expect(out).not.toContain('Add repository…');
+  });
+
+  it('keeps the plain folder list when the host offers no repositories', () => {
+    const out = menu({});
+    expect(out).not.toContain('>Repositories<');
+    expect(out).not.toContain('>Folders<');
+    expect(out).toContain('>me/app<');
   });
 });
 
