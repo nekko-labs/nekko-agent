@@ -35,8 +35,8 @@ struct ToolPolicyPicker: View {
                 Text(SimpleMode.asksName(selection)).lineLimit(1).truncationMode(.tail)
                 Image(systemName: "chevron.up.chevron.down").font(.caption2)
             }
-            .font(.footnote).foregroundStyle(palette.ink)
-            .frame(minHeight: 44).contentShape(Rectangle())
+            .font(.footnote.weight(.medium)).foregroundStyle(palette.ink)
+            .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("When the agent asks you")

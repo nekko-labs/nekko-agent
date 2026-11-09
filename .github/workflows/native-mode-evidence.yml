@@ -119,6 +119,7 @@ jobs:
           sparse-checkout: |
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
+            apps/ios/App/Views/ChatStatusFixture.swift
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -138,6 +139,10 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # Overlay only deterministic test data for the title comparison.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/TitleComposerEvidenceTests.swift" ]]; then
+            cp .evidence-harness/apps/ios/App/Views/ChatStatusFixture.swift apps/ios/App/Views/
+          fi
           # Only the security comparison needs the debug-only in-memory fixture.
           # Production views and behavior remain unchanged in both revisions.
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/SecurityComparisonTests.swift" ]]; then

@@ -12,7 +12,7 @@ struct ChatStatusFixture: View {
         NavigationStack {
             List {
                 Section("General") {
-                    fixtureRow("Working", activity: .running, model: "claude-opus-5-5", provider: "claude-code", tokens: 45_000,
+                    fixtureRow(ProcessInfo.processInfo.arguments.contains("-uiTestLongTitles") ? "Fix automatic chat titles and make composer options compact" : "Working", activity: .running, model: "claude-opus-5-5", provider: "claude-code", tokens: 45_000,
                                prs: [Self.pr(41, .open, draft: true)])
                     fixtureRow("Needs attention", activity: .needsYou, model: "gpt-5", provider: "chatgpt", tokens: 268_000)
                     fixtureRow("Watching", activity: nil, activeWatchCount: 1, model: "claude-sonnet-5-5", tokens: 910_000,

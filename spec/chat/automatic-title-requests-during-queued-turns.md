@@ -27,3 +27,9 @@ Subscription sign-ins without the existing capability approval, and unread/unkno
 Calling the tool is model-driven and subject to the existing tool permissions. A capability grant is not a guarantee that Claude will call it. If it is not called, is refused, or fails, the placeholder remains and a later eligible user turn can ask again. No extra call is made to force a title.
 
 Focused coverage: CLI tool registry/offering and authenticated forwarding; outgoing naming-note content including images and slash commands; eligibility/privacy and sideband exclusions; fake-Claude daemon execution, blank-title rejection, persisted title plus `session_meta`, manual-rename protection and dispatch-time capability/privacy rechecks. These tests use no live Claude calls. Real subscription behavior and desktop visual evidence remain unverified by this backend change.
+
+## Task-based placeholders (#2413)
+
+Implemented; focused Rust tests pass, native phone evidence pending. Before any model-driven naming succeeds, a new chat gets a single-line, whitespace-normalized placeholder capped at the existing 48 UTF-16-unit budget. If a heading of at most four words is followed by an unordered task bullet (-, *, + or • followed by a space), use that first task rather than the project heading. Other prompts keep their normalized prefix. Empty input stays New chat. The original prompt is not edited, and existing names and titleAuto ownership rules are unchanged.
+
+This fixes prompts such as `Nekko agent` + newline + `- Fix chat names` appearing identical when their raw multiline prefix was drawn in a one-line row. It does not force a model call, bypass subscription capabilities, or retroactively rewrite saved chats. Existing multiline titles are flattened for display on iOS and get up to two lines with the timestamp moved into the metadata row.

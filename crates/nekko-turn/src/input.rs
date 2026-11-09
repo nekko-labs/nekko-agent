@@ -72,7 +72,8 @@ pub fn apply_turn_input(session: &mut Value, opts: &Value, now: u64) {
             messages.push(Value::Object(msg));
         }
         if s.get("title").and_then(Value::as_str) == Some("New chat") {
-            let title = js::slice16(text, 48);
+            let title_text = placeholder_title(text);
+            let title = title_text.as_str();
             s.insert("title".into(), json!(if title.is_empty() { "New chat" } else { title }));
             s.insert("titleAuto".into(), json!(true));
         }
@@ -84,6 +85,21 @@ pub fn apply_turn_input(session: &mut Value, opts: &Value, now: u64) {
         let ids = remember_client_message_ids(s.get("clientMessageIds"), &[id.to_string()]);
         s.insert("clientMessageIds".into(), ids);
     }
+}
+
+/// A readable fallback without a model call. A short heading followed by a
+/// task list names the project, not the task, so prefer the first bullet.
+fn placeholder_title(text: &str) -> String {
+    let mut lines = text.lines().map(str::trim).filter(|line| !line.is_empty());
+    let first = lines.next().unwrap_or_default();
+    let next = lines.next().unwrap_or_default();
+    let bullet = ["- ", "* ", "+ ", "• "].iter().find_map(|prefix| next.strip_prefix(prefix));
+    let source = if first.split_whitespace().count() <= 4 {
+        bullet.filter(|task| !task.trim().is_empty()).unwrap_or(text)
+    } else {
+        text
+    };
+    js::slice16(js::trim(&js::fold_space(source)), 48).to_string()
 }
 
 /// `titlePrompt(messages)`: the title request, or `None` with nothing to name the chat from.
@@ -140,4 +156,36 @@ pub fn send_options_for_queued_item(base: &Value, item: &Value) -> Value {
         }
     }
     Value::Object(out)
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::*;
+
+    #[test]
+    fn fallback_names_task_instead_of_project_heading() {
+        assert_eq!(placeholder_title("Nekko agent\n- Fix chat names\n- Compact composer"), "Fix chat names");
+        assert_eq!(placeholder_title("# Project\n\n* Repair the runner"), "Repair the runner");
+        assert_eq!(placeholder_title("Fix chat names\nwith more room"), "Fix chat names with more room");
+        assert_eq!(placeholder_title("  \n  "), "");
+        assert_eq!(placeholder_title("Nekko agent"), "Nekko agent");
+        assert!(placeholder_title(&"😺".repeat(100)).encode_utf16().count() <= 48);
+    }
+
+    #[test]
+    fn new_chat_gets_a_single_line_task_placeholder() {
+        let mut session = json!({"title": "New chat", "messages": []});
+        apply_turn_input(&mut session, &json!({"text": "Nekko agent\n- Fix chat names\n- Compact composer"}), 1);
+        assert_eq!(session["title"], "Fix chat names");
+        assert_eq!(session["titleAuto"], true, "model naming remains eligible");
+        assert_eq!(session["messages"][0]["content"], "Nekko agent\n- Fix chat names\n- Compact composer");
+    }
+
+    #[test]
+    fn placeholder_never_replaces_an_existing_name() {
+        let mut session = json!({"title": "My chosen title", "titleAuto": false, "messages": []});
+        apply_turn_input(&mut session, &json!({"text": "Nekko agent\n- Fix chat names"}), 1);
+        assert_eq!(session["title"], "My chosen title");
+        assert_eq!(session["titleAuto"], false);
+    }
 }
