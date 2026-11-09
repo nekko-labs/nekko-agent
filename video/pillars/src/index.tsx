@@ -6,80 +6,12 @@
 // the layouts follow docs/design-system.md (quiet surfaces: space and type,
 // not boxes). They are illustrations, not screen recordings; the speed demo
 // replays the measured times from docs/benchmarks (2026-10-30, M5 Max).
-import React, { createContext, useContext } from 'react';
-import {
-  AbsoluteFill, Composition, Easing, interpolate, registerRoot, staticFile, useCurrentFrame,
-} from 'remotion';
+import React from 'react';
+import { AbsoluteFill, Composition, Easing, interpolate, registerRoot, useCurrentFrame } from 'remotion';
+import { Check, Cat, Dot, FPS, FRAMES, In, MONO, SANS, THEMES, Th, clamp, fontCss, p, typed, useT } from './kit';
+import { Anywhere } from './anywhere';
 
-export const FPS = 30;
-export const FRAMES = 240; // 8 s
 const W = 1280, H = 720;
-
-type Theme = {
-  paper: string; win: string; surface: string; surface2: string; ink: string; soft: string;
-  faint: string; line: string; accent: string; accentSoft: string; ok: string; warn: string;
-  shadow: string; codeBg: string;
-};
-const THEMES: Record<'dark' | 'light', Theme> = {
-  dark: {
-    paper: '#0c0c11', win: '#17171e', surface: '#16161c', surface2: '#20202a', ink: '#eceaf3',
-    soft: '#a3a1b0', faint: '#898894', line: '#26262f', accent: '#c084b5',
-    accentSoft: 'rgba(192,132,181,0.18)', ok: '#4cc38a', warn: '#e5a54b',
-    shadow: '0 24px 60px rgba(0,0,0,0.55)', codeBg: '#111116',
-  },
-  light: {
-    paper: '#fbfbfd', win: '#fcfcfe', surface: '#ffffff', surface2: '#f2f2f7', ink: '#17171d',
-    soft: '#52525e', faint: '#6c6c77', line: '#e8e8ef', accent: '#5a2352',
-    accentSoft: 'rgba(90,35,82,0.11)', ok: '#1f8a55', warn: '#a8650c',
-    shadow: '0 24px 60px rgba(40,20,50,0.14)', codeBg: '#f6f6fa',
-  },
-};
-const Th = createContext<Theme>(THEMES.dark);
-const useT = () => useContext(Th);
-
-const fontCss = `
-@font-face{font-family:'Inter Tight';font-weight:100 900;src:url(${staticFile('fonts/inter-tight-latin-wght-normal.woff2')}) format('woff2');}
-@font-face{font-family:'JetBrains Mono';font-weight:100 900;src:url(${staticFile('fonts/jetbrains-mono-latin-wght-normal.woff2')}) format('woff2');}
-`;
-const SANS = "'Inter Tight', system-ui, sans-serif";
-const MONO = "'JetBrains Mono', ui-monospace, monospace";
-
-const ease = Easing.bezier(0.22, 1, 0.36, 1);
-const clamp = { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' } as const;
-/** 0 -> 1 between frames a and b, eased. */
-const p = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], { ...clamp, easing: ease });
-/** Typewriter: the first n characters of text between frames a and b. */
-const typed = (f: number, a: number, b: number, text: string) =>
-  text.slice(0, Math.round(interpolate(f, [a, b], [0, text.length], clamp)));
-
-/** Enter: fade, un-blur and a small rise. */
-function In({ at, children, style, dur = 12 }: { at: number; children: React.ReactNode; style?: React.CSSProperties; dur?: number }) {
-  const f = useCurrentFrame();
-  const v = p(f, at, at + dur);
-  return <div style={{ ...style, opacity: v * ((style?.opacity as number) ?? 1), filter: `blur(${(1 - v) * 8}px)`, transform: `translateY(${(1 - v) * 14}px)` }}>{children}</div>;
-}
-
-/** The app's PixelHead (apps/desktop/src/renderer/components/Mascot.tsx). */
-function Cat({ size, eyes = 'open' }: { size: number; eyes?: 'open' | 'happy' }) {
-  const t = useT();
-  return (
-    <svg viewBox="0 0 32 32" width={size} height={size} shapeRendering="crispEdges">
-      <path d="M4 5H6V7H8V9H11V10H21V9H24V7H26V5H28V19H27V22H25V24H22V26H10V24H7V22H5V19H4Z" fill={t.paper} stroke={t.ink} strokeWidth="2" strokeLinejoin="miter" />
-      <path fill={t.ink} d={eyes === 'open'
-        ? 'M11 15H13V18H11Z M20 15H22V18H20Z'
-        : 'M9 17H10V15H11V14H12V15H13V17H12V16H10V17Z M19 17H20V15H21V14H22V15H23V17H22V16H20V17Z'} />
-      <path d="M15 20H17V21H15Z" fill={t.accent} />
-    </svg>
-  );
-}
-
-function Dot({ color, pulse = 0 }: { color: string; pulse?: number }) {
-  return <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 5, background: color, boxShadow: pulse ? `0 0 0 ${4 * pulse}px ${color}33` : 'none', flexShrink: 0 }} />;
-}
-
-function Check({ size = 18, color }: { size?: number; color: string }) {
-  return <svg width={size} height={size} viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
-}
 
 /** Loop envelope + theme + fonts. */
 function Stage({ theme, children }: { theme: 'dark' | 'light'; children: React.ReactNode }) {
@@ -443,84 +375,6 @@ function Fleet() {
           </In>
         );
       })}
-    </>
-  );
-}
-
-// ─── 05 Everywhere ──────────────────────────────────────────────────────────
-/** A mini chat as each device shows it: the ask, then the approval state. */
-function MiniChat({ scale, approve, compact }: { scale: number; approve: 'ask' | 'tapping' | 'approved' | 'passed'; compact?: boolean }) {
-  const t = useT();
-  const s = (n: number) => n * scale;
-  const state = {
-    ask: { text: 'Run npm test?', color: t.warn },
-    tapping: { text: 'Run npm test?', color: t.warn },
-    approved: { text: 'Approved · running', color: t.accent },
-    passed: { text: 'Tests passed', color: t.ok },
-  }[approve];
-  return (
-    <div style={{ padding: s(14), fontSize: s(15), lineHeight: 1.35 }}>
-      <div style={{ marginLeft: 'auto', width: 'fit-content', maxWidth: '82%', background: t.surface2, borderRadius: s(10), padding: `${s(7)}px ${s(10)}px` }}>Fix the flaky test</div>
-      {!compact && <div style={{ color: t.soft, marginTop: s(10) }}>Found it: a timer race in cart.test.ts.</div>}
-      <div style={{ marginTop: s(10), display: 'flex', alignItems: 'center', gap: s(7), color: t.ink, fontWeight: 600 }}>
-        <Dot color={state.color} /> {state.text}
-      </div>
-    </div>
-  );
-}
-function Device({ x, y, w, h, radius, label, at, children, hinge }: { x: number; y: number; w: number; h: number; radius: number; label: string; at: number; children: React.ReactNode; hinge?: boolean }) {
-  const t = useT();
-  return (
-    <In at={at}>
-      <div style={{ position: 'absolute', left: x, top: y, width: w, height: h, borderRadius: radius, border: `3px solid ${t.ink}22`, background: t.win, overflow: 'hidden', boxShadow: t.shadow }}>
-        {children}
-        {hinge && <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 2, background: `${t.ink}18` }} />}
-      </div>
-      <div style={{ position: 'absolute', left: x, top: y + h + 14, width: w, textAlign: 'center', fontSize: 20, color: t.soft }}>{label}</div>
-    </In>
-  );
-}
-function Anywhere() {
-  const t = useT();
-  const f = useCurrentFrame();
-  const approve = f < 132 ? 'ask' : f < 146 ? 'tapping' : f < 182 ? 'approved' : 'passed';
-  const shown = f >= 96 ? approve : null;
-  const tap = p(f, 132, 146);
-  return (
-    <>
-      {/* Desktop */}
-      <Device x={60} y={70} w={600} h={400} radius={14} label="macOS · Windows · Linux" at={4}>
-        <div style={{ height: 40, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', borderBottom: `1px solid ${t.line}`, fontSize: 17, fontWeight: 600 }}><Cat size={20} /> Agents</div>
-        {shown ? <MiniChat scale={1.5} approve={shown} /> : <MiniChat scale={1.5} approve="ask" compact />}
-        <div style={{ position: 'absolute', left: 20, bottom: 18 }}><Cat size={42} eyes={approve === 'passed' ? 'happy' : 'open'} /></div>
-      </Device>
-      {/* Tablet */}
-      <Device x={720} y={70} w={300} h={210} radius={18} label="iPad" at={24}>
-        {shown && <MiniChat scale={0.95} approve={shown} />}
-      </Device>
-      {/* Phone */}
-      <Device x={1060} y={70} w={160} h={320} radius={26} label="iPhone · Android" at={36}>
-        <div style={{ paddingTop: 22 }}>{shown && <MiniChat scale={0.82} approve={shown} compact />}</div>
-        {shown && f < 182 && (
-          <div style={{ position: 'absolute', left: 12, right: 12, bottom: 18, textAlign: 'center', padding: '10px 0', borderRadius: 10, background: t.accent, color: t.paper, fontSize: 16, fontWeight: 600, transform: `scale(${1 - Math.sin(tap * Math.PI) * 0.08})` }}>
-            {approve === 'ask' ? 'Approve' : 'Approved'}
-          </div>
-        )}
-        {f >= 132 && f < 156 && <div style={{ position: 'absolute', left: 80 - 30 * tap, bottom: 34 - 30 * tap + 4, width: 60 * tap, height: 60 * tap, borderRadius: '50%', border: `2px solid ${t.accent}`, opacity: 1 - tap }} />}
-      </Device>
-      {/* Folding phone, open: two panes */}
-      <Device x={720} y={350} w={300} h={200} radius={18} label="Folding phones" at={48} hinge>
-        <div style={{ display: 'flex', height: '100%' }}>
-          <div style={{ width: '50%', padding: 12, fontSize: 13, color: t.soft, lineHeight: 1.6 }}>
-            <div style={{ color: t.ink, fontWeight: 600 }}>Chats</div>Fix the flaky test<br />Weekly report<br />Billing refactor
-          </div>
-          <div style={{ width: '50%' }}>{shown && <MiniChat scale={0.72} approve={shown} compact />}</div>
-        </div>
-      </Device>
-      <In at={70} style={{ position: 'absolute', left: 60, top: 560, width: 600 }}>
-        <div style={{ fontSize: 26, fontWeight: 600 }}>{approve === 'passed' ? 'Approved from your phone.' : 'One chat, on every screen.'}</div>
-        <div style={{ fontSize: 19, color: t.soft, marginTop: 8 }}>The work runs on your computer. Every device is a window into it.</div>
-      </In>
     </>
   );
 }

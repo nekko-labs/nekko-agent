@@ -27,7 +27,9 @@ describe('command palette settings search', () => {
   it('routes moved controls to Customize without moving operational settings', () => {
     const moved = ['sidebar-skills', 'sidebar-connectors', 'background-animation', 'language', 'chat-pane-action', 'auto-complete', 'tips', 'warn-before-yolo', 'confirm-deletions', 'close-behavior', 'low-memory', 'agent-activity-animation', 'mascot', 'tray-farewell', 'text-size'];
     for (const id of moved) expect(SETTINGS_INDEX.find((entry) => entry.id === id)?.group).toBe('customize');
-    expect(SETTINGS_INDEX.filter((entry) => entry.group === 'general').map((entry) => entry.id)).toEqual(['telemetry', 'desktop-notifications']);
+    expect(SETTINGS_INDEX.filter((entry) => entry.group === 'general').map((entry) => entry.id)).toEqual(['desktop-notifications']);
+    expect(SETTINGS_INDEX.find(entry => entry.id === 'telemetry')?.group).toBe('support');
+    expect(matchSettingsPages('github star').map(page => page.group)).toEqual(['support']);
     expect(matchSettingsPages('notifications').map((page) => page.group)).toEqual(['general']);
     expect(matchSettingsPages('remote access').map((page) => page.group)).toEqual(['phone']);
   });

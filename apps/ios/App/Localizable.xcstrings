@@ -3855,6 +3855,46 @@
         }
       }
     },
+    "Allow microphone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mikrofon erlauben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir micrófono"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autoriser le micro"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "マイクを許可"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitir microfone"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许麦克风"
+          }
+        }
+      }
+    },
     "Allow notifications": {
       "localizations": {
         "de": {
@@ -8619,6 +8659,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "继续询问"
+          }
+        }
+      }
+    },
+    "Listening": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hört zu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escuchando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À l’écoute"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞いています"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvindo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在聆听"
+          }
+        }
+      }
+    },
+    "Listening… speak now": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hört zu… jetzt sprechen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escuchando… habla ahora"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À l’écoute… parlez maintenant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聞いています… 話してください"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvindo… fale agora"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在聆听… 请说话"
           }
         }
       }
@@ -24131,6 +24251,46 @@
         }
       }
     },
+    "Pause when you’re done. Nothing is sent until you confirm.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mach eine Pause, wenn du fertig bist. Nichts wird gesendet, bevor du bestätigst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz una pausa cuando termines. No se envía nada hasta que lo confirmes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marquez une pause quand vous avez fini. Rien n’est envoyé avant votre confirmation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "話し終えたら少し間を空けてください。確認するまで何も送信されません。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faça uma pausa quando terminar. Nada é enviado até você confirmar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说完后停顿一下。确认之前不会发送任何内容。"
+          }
+        }
+      }
+    },
     "Photo": {
       "localizations": {
         "de": {
@@ -28733,6 +28893,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "已存储到“照片”"
+          }
+        }
+      }
+    },
+    "Say “status”, or “send to” a chat name, “saying”, then the message.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sag „status“ oder „send to“, einen Chatnamen, „saying“ und dann die Nachricht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Di “status”, o “send to”, el nombre de un chat, “saying” y luego el mensaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dites « status », ou « send to », le nom d’un chat, « saying », puis le message."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「status」、または「send to」+チャット名+「saying」+メッセージと話してください。"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diga “status”, ou “send to”, o nome de um chat, “saying” e depois a mensagem."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "说“status”，或说“send to”加聊天名称、“saying”，再说消息内容。"
           }
         }
       }

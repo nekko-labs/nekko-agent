@@ -24,8 +24,22 @@ const KIND_LABELS: Record<FeedbackKind, string> = { good: 'Good', improve: 'Need
  * The quick note as Nekko Cloud stores it. The wire has one `message`, so the
  * choice, summary and description travel inside it and share its limit.
  */
-export function feedbackNote(kind: FeedbackKind, summary: string, description: string): string {
-  return `${KIND_LABELS[kind]}: ${summary.trim()}\n\n${description.trim()}`.trim();
+export interface FeedbackContact { name?: string; email?: string }
+
+/** Contact details are opt-in note content, never a signup or inferred from settings. */
+export function feedbackContactProblem(contact: FeedbackContact): string | null {
+  const name = contact.name?.trim() ?? '';
+  const email = contact.email?.trim() ?? '';
+  if ([...name].length > 200 || /[\r\n]/.test(name)) return 'Keep your name to one line, up to 200 characters.';
+  if (email && (email.length > 320 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return 'Enter a valid email address or leave it blank.';
+  return null;
+}
+
+export function feedbackNote(kind: FeedbackKind, summary: string, description: string, contact: FeedbackContact = {}): string {
+  const lines = [`${KIND_LABELS[kind]}: ${summary.trim()}\n\n${description.trim()}`.trim()];
+  if (contact.name?.trim()) lines.push(`Name (optional): ${contact.name.trim()}`);
+  if (contact.email?.trim()) lines.push(`Email (optional, feedback replies only): ${contact.email.trim()}`);
+  return lines.join('\n\n');
 }
 
 /** Screenshots a note can carry, and the most each one can weigh. */
@@ -52,8 +66,8 @@ export function feedbackScreenshotProblem(name: string, size: number, head: Uint
 }
 
 /** Characters the note will use, counted as the server counts them: 0 until something is typed. */
-export function feedbackNoteLength(kind: FeedbackKind, summary: string, description: string): number {
-  return summary.trim() || description.trim() ? [...feedbackNote(kind, summary, description)].length : 0;
+export function feedbackNoteLength(kind: FeedbackKind, summary: string, description: string, contact: FeedbackContact = {}): number {
+  return summary.trim() || description.trim() || contact.name?.trim() || contact.email?.trim() ? [...feedbackNote(kind, summary, description, contact)].length : 0;
 }
 
 /**

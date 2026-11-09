@@ -121,14 +121,23 @@ public struct LiveCardState: Codable, Hashable, Sendable {
     public var listening: Bool
     /// What the mic heard so far.
     public var heard: String
+    /// What the counts cover when the phone built the card itself from every chat
+    /// it lists ("All computers"); nil on a computer's push, which covers that
+    /// computer only and is headed with its name. Never sent by the relay.
+    public var scope: String?
+    /// When the card's mic opened, for the running timer while listening. Local only.
+    public var listeningSince: Date?
 
-    public init(chats: [LiveChat], focusId: String?, more: Int, listening: Bool, heard: String, counts: [String: Int]? = nil) {
+    public init(chats: [LiveChat], focusId: String?, more: Int, listening: Bool, heard: String, counts: [String: Int]? = nil,
+                scope: String? = nil, listeningSince: Date? = nil) {
         self.chats = chats
         self.focusId = focusId
         self.counts = counts
         self.more = more
         self.listening = listening
         self.heard = heard
+        self.scope = scope
+        self.listeningSince = listeningSince
     }
 
     /// Pushes from the relay may leave fields out; they fall back to empty.
@@ -140,7 +149,38 @@ public struct LiveCardState: Codable, Hashable, Sendable {
         more = try c.decodeIfPresent(Int.self, forKey: .more) ?? 0
         listening = try c.decodeIfPresent(Bool.self, forKey: .listening) ?? false
         heard = try c.decodeIfPresent(String.self, forKey: .heard) ?? ""
+        scope = try c.decodeIfPresent(String.self, forKey: .scope)
+        listeningSince = try c.decodeIfPresent(Date.self, forKey: .listeningSince)
     }
+}
+
+/// The card mic's phases, as `LiveCardState.heard` carries them while `listening`,
+/// and the one note that changes the card's main button. The card draws its own
+/// prompts for each; none of them holds what was said.
+public enum LiveCardVoice {
+    /// The microphone is open and no speech has been heard yet.
+    public static let listening = ""
+    /// Speech started: the next pause ends listening on its own.
+    public static let hearing = "Hearing you…"
+    public static let processing = "Processing…"
+    public static let sending = "Sending…"
+    /// iOS can't ask for the microphone from the Lock Screen: the card's main
+    /// button opens the app to ask instead (`LiveCardView.voiceSetupURL`).
+    public static let micNeeded = "Microphone access needed. Tap Allow microphone."
+
+    /// Still capturing speech: Cancel and Finish speaking apply.
+    public static func capturing(_ state: LiveCardState) -> Bool {
+        state.listening && (state.heard == listening || state.heard == hearing)
+    }
+}
+
+/// What the card's counts cover, when the phone builds it from its whole chat
+/// list, as the chat list shows it: nil for one computer and no chats on the
+/// phone (the header shows the computer's name, as on that computer's push),
+/// "All computers" for several, "<computer> + iPhone" for one plus phone chats.
+public func cardScope(computerName: String, computers: Int, phoneChats: Bool) -> String? {
+    if computers > 1 { return "All computers" }
+    return phoneChats ? "\(computerName) + iPhone" : nil
 }
 
 public enum LiveCardRules {

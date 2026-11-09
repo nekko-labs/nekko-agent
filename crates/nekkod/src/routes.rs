@@ -602,6 +602,7 @@ impl Table {
                 crate::connections::route(Some(ctx.workspace.data_dir()), channel, &args).await
             }),
         );
+        t.add(crate::support::CHANNELS, handler!(|ctx, channel, _args| crate::support::route(ctx, channel).await));
         t.add(
             crate::feedback::CHANNELS,
             handler!(|ctx, channel, args| crate::feedback::route(ctx, channel, &args).await),

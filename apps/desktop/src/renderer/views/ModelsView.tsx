@@ -20,6 +20,7 @@ import { MiddleTruncate } from '../components/primitives/MiddleTruncate.js';
 import { ModelRowName } from './ModelRowName.js';
 import { ProviderMark, providerColor, providerMarkKind } from '../components/providers/ProviderMark.js';
 import { ProviderBillingBadge } from '../components/providers/ProviderBillingBadge.js';
+import { ProviderFamilies } from './ProviderFamilies.js';
 
 const isLocal = (k: ProviderKind) => isLocalProvider(k);
 
@@ -128,9 +129,16 @@ export function ModelsView({ localOnly = false }: { localOnly?: boolean }) {
         <button type="button" className="btn btn-ghost float-right" aria-label="Close provider setup" onClick={() => setAdding(false)}>×</button>
         <AddProvider scope={localOnly ? 'local' : 'cloud'} key={addKind ?? 'any'} fixedKind={addKind} onDone={() => { setAdding(false); setAddKind(undefined); refreshProviders(); }} />
       </div>}
-      <div className="models-provider-grid">
-        {visible.map((p) => <div key={p.id} id={`provider-${p.id}`}><ProviderCard provider={p} onChanged={refreshProviders} /></div>)}
-      </div>
+      {localOnly
+        ? <div className="models-provider-grid">
+          {visible.map((p) => <div key={p.id} id={`provider-${p.id}`}><ProviderCard provider={p} onChanged={refreshProviders} /></div>)}
+        </div>
+        // Cloud providers read as families with their accounts and models (quiet surfaces).
+        : <ProviderFamilies
+          providers={visible}
+          onAdd={(kind) => { reveal.current = true; setAddKind(kind); setAdding(true); }}
+          renderDetails={(p) => <ProviderCard provider={p} onChanged={refreshProviders} embedded />}
+        />}
     </section>
   );
 }
@@ -282,7 +290,12 @@ function RetiredClaudePlan({ provider, onChanged }: { provider: ProviderConfig; 
   );
 }
 
-type ProviderCardProps = { provider: ProviderConfig; onChanged: () => void };
+type ProviderCardProps = {
+  provider: ProviderConfig;
+  onChanged: () => void;
+  /** Under an account row on the Models page: no card, no header (the row is the header), no model list (the family lists them). */
+  embedded?: boolean;
+};
 
 function ProviderCard(props: ProviderCardProps) {
   // Only enabled Claude Code cards probe the CLI. Source and chip share one read.
@@ -296,7 +309,7 @@ function ClaudeCodeProviderCard(props: ProviderCardProps) {
   return <ProviderCardContent {...props} claudeStatus={status} />;
 }
 
-function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCardProps & { claudeStatus?: ClaudeCodeStatus | null }) {
+function ProviderCardContent({ provider, onChanged, embedded = false, claudeStatus }: ProviderCardProps & { claudeStatus?: ClaudeCodeStatus | null }) {
   const settings = useStore((s) => s.settings);
   const refreshSettings = useStore((s) => s.refreshSettings);
   const pushToast = useStore((s) => s.pushToast);
@@ -569,8 +582,8 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
 
   if (retiredClaudePlan) {
     return (
-      <div className="card p-5">
-        {header}
+      <div className={embedded ? 'min-w-0' : 'card p-5'}>
+        {!embedded && header}
         <RetiredClaudePlan provider={provider} onChanged={onChanged} />
       </div>
     );
@@ -581,8 +594,8 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
   // not woken just because this page opened.
   if (!enabled) {
     return (
-      <div className="card p-5">
-        {header}
+      <div className={embedded ? 'min-w-0' : 'card p-5'}>
+        {!embedded && header}
         <p className="mt-3 text-xs text-ink-faint">
           Disabled. Nekko Agent won't check, list, or start this provider, and it is hidden from model pickers. Turn it on to use it again.
         </p>
@@ -591,8 +604,9 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
   }
 
   return (
-    <div className="card p-5">
-      {header}
+    <div className={embedded ? 'min-w-0' : 'card p-5'}>
+      {!embedded && header}
+      {embedded && isClaudeKind(provider.kind) && <ClaudeSource provider={provider} status={claudeStatus} />}
 
       {/* A local server gets the full control surface: power, address, residency,
           and the fit planner. Start/stop, the address, and the model list all live
@@ -613,6 +627,16 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button className="btn btn-outline py-1 text-xs" onClick={test}>Test connection</button>
+        {embedded && <button
+          className="btn btn-ghost py-1 text-xs"
+          onClick={async () => {
+            if (provider.tokenKey) await window.nekko.oauthSignOut(provider.id).catch(() => {});
+            await window.nekko.removeProvider(provider.id);
+            onChanged();
+          }}
+        >
+          Remove account
+        </button>}
         {conn.state === 'fail' && <span className="text-xs" style={{ color: 'var(--danger)' }}>{conn.message}</span>}
         {conn.state === 'fail' && !subscription && reconnectOAuth && (
           <button className="btn btn-outline py-1 text-xs" onClick={() => setReconnecting((v) => !v)}>
@@ -624,7 +648,7 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
       {/* The failing-card fix path: sign in with the subscription (or mint a
           new OpenRouter key) and the credential on this card resets in place. */}
       {reconnecting && !subscription && reconnectOAuth && (
-        <div className="mt-3 rounded-xl border p-3 text-xs" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-3 text-xs">
           <div className="space-y-2">
             <p className="text-ink-faint">
               {provider.kind === 'openrouter'
@@ -642,7 +666,7 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
 
       {provider.kind === 'claude-code' && limits && <LimitsPanel limits={limits} now={now} subName="Claude Code" />}
       {subscription && (
-        <div className="mt-3 rounded-xl border p-3 text-xs" style={{ borderColor: 'var(--line)' }}>
+        <div className="mt-3 text-xs">
           {sub === null ? (
             <span className="text-ink-faint">Checking sign-in…</span>
           ) : sub.connected ? (
@@ -723,7 +747,7 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
         </div>
       )}
 
-      {filtering && (
+      {!embedded && filtering && (
         <input
           className="input mt-2 rounded-lg px-3 py-1 text-xs"
           placeholder="Filter models…"
@@ -733,7 +757,7 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
         />
       )}
 
-      <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
+      {!embedded && <div className="mt-2 max-h-44 space-y-1 overflow-y-auto">
         {models.length === 0 && (problem ? (
           <div className="flex items-start justify-between gap-2 text-xs" role="alert">
             <p className="min-w-0 break-words" style={{ color: 'var(--danger)' }}>{problem}</p>
@@ -807,7 +831,7 @@ function ProviderCardContent({ provider, onChanged, claudeStatus }: ProviderCard
           </div>
         );
         })}
-      </div>
+      </div>}
     </div>
   );
 }

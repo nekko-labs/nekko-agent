@@ -300,11 +300,11 @@ async fn events(
                     Ok(ev) => {
                         if only.as_ref().is_some_and(|p| !ev.text.starts_with(p.as_str())) { continue }
                         if !subs.wants(&ev) { continue }
-                        if sink.send(Message::Text(ev.text.clone())).await.is_err() { break }
+                        if !send_text(&mut sink, ev.text.clone()).await { break }
                     }
                     Err(RecvError::Lagged(_)) => {
                         let lagged = json!({ "channel": "daemon:lagged", "payload": null }).to_string();
-                        if sink.send(Message::Text(lagged.into())).await.is_err() { break }
+                        if !send_text(&mut sink, lagged.into()).await { break }
                     }
                     Err(RecvError::Closed) => break,
                 },
@@ -320,7 +320,7 @@ async fn events(
                         subs.set(ids, all);
                         let mut gone = false;
                         for frame in subs.replays(&app.ctx.hub) {
-                            if sink.send(Message::Text(frame)).await.is_err() { gone = true; break }
+                            if !send_text(&mut sink, frame).await { gone = true; break }
                         }
                         if gone { break }
                     }
@@ -345,6 +345,21 @@ async fn rpc(
     ws.on_upgrade(move |socket| rpc_socket(socket, app, term_data, subs))
 }
 
+/// How long one frame may take to reach a client before its socket is
+/// dropped (the client reconnects and resyncs). Every event the hub keeps and
+/// every reply queued for the socket waits on this send, so a client that
+/// stopped reading (a frozen window, a dead connection the OS has not
+/// noticed) used to hold all of it, screenshots included, without limit.
+const SEND_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Send one text frame within [`SEND_LIMIT`]; false when the socket is gone or too slow.
+async fn send_text<S>(sink: &mut S, text: Utf8Bytes) -> bool
+where
+    S: futures_util::Sink<Message> + Unpin,
+{
+    matches!(tokio::time::timeout(SEND_LIMIT, sink.send(Message::Text(text))).await, Ok(Ok(())))
+}
+
 /// What a socket narrowed at connect (`?sessions=`) is sent first: the running
 /// turns of the chats it leaves out, as their first event and the wait they
 /// are in (so a window that connects mid-turn still marks them running), and
@@ -357,7 +372,7 @@ where
     let mut frames: Vec<Utf8Bytes> = subs.status(hub);
     frames.extend(subs.replays(hub));
     for frame in frames {
-        if sink.send(Message::Text(frame)).await.is_err() {
+        if !send_text(sink, frame).await {
             return false;
         }
     }
@@ -480,7 +495,7 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                 // Replies first: a caller waiting on a result beats a busy event stream.
                 biased;
                 reply = out_rx.recv() => match reply {
-                    Some(Out::Reply(text)) => if sink.send(Message::Text(text.into())).await.is_err() { break },
+                    Some(Out::Reply(text)) => if !send_text(&mut sink, text.into()).await { break },
                     Some(Out::Subscribe(id, ids, all)) => {
                         // Narrowing a socket that took every chat: the turns it
                         // leaves out are named once (as when connecting
@@ -491,10 +506,10 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                         let status = if widened { subs.status(&hub) } else { Vec::new() };
                         let mut failed = false;
                         for frame in status.into_iter().chain(subs.replays(&hub)) {
-                            if sink.send(Message::Text(frame)).await.is_err() { failed = true; break }
+                            if !send_text(&mut sink, frame).await { failed = true; break }
                         }
                         let reply = json!({ "id": id, "result": true }).to_string();
-                        if failed || sink.send(Message::Text(reply.into())).await.is_err() { break }
+                        if failed || !send_text(&mut sink, reply.into()).await { break }
                     }
                     None => break,
                 },
@@ -502,11 +517,11 @@ async fn rpc_socket(socket: WebSocket, app: App, term_data: bool, mut subs: Subs
                     Ok(ev) => {
                         if ev.term_data && !term_data { continue }
                         if !subs.wants(&ev) { continue }
-                        if sink.send(Message::Text(ev.text.clone())).await.is_err() { break }
+                        if !send_text(&mut sink, ev.text.clone()).await { break }
                     }
                     Err(RecvError::Lagged(_)) => {
                         let lagged = json!({ "channel": "daemon:lagged", "payload": null }).to_string();
-                        if sink.send(Message::Text(lagged.into())).await.is_err() { break }
+                        if !send_text(&mut sink, lagged.into()).await { break }
                     }
                     Err(RecvError::Closed) => break,
                 },

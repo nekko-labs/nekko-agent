@@ -881,7 +881,9 @@ pub async fn sweep_merged(ctx: &crate::routes::Ctx) -> Vec<(String, String)> {
     }
     let store = ctx.sessions.clone();
     let owners = |store: Arc<nekko_store::SessionStore>, running: Vec<String>| {
-        let sessions = store.list();
+        // Owners need only `id`, `title` and `gitWorktrees`: never the transcripts,
+        // which are hundreds of MB across every chat.
+        let sessions = store.list_meta();
         move |r: &str| owner_in(&sessions, &running, r)
     };
     let running = crate::routes::running_chats(ctx);
@@ -933,7 +935,9 @@ pub async fn route(ctx: &crate::routes::Ctx, channel: &str, args: &[Value]) -> R
     let root = args.first().and_then(Value::as_str).unwrap_or_default().to_string();
     let channel = channel.to_string();
     tokio::task::spawn_blocking(move || {
-        let sessions = store.list();
+        // Owners need only `id`, `title` and `gitWorktrees`: never the transcripts,
+        // which are hundreds of MB across every chat.
+        let sessions = store.list_meta();
         let lookup = |r: &str| owner_in(&sessions, &running, r);
         match channel.as_str() {
             "chatWorktrees:list" => Ok(Value::Array(list(&settings, &lookup))),

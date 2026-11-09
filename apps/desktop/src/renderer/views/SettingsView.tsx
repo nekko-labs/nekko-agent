@@ -20,6 +20,7 @@ import { SecuritySettings } from '../components/security/SecuritySettings.js';
 import { SyncSettings } from '../components/cloud/SyncSettings.js';
 import { ConnectionsSettings } from '../components/ConnectionsSettings.js';
 import { UsageReportsSection } from '../components/UsageReports.js';
+import { GitHubStarSupport } from '../components/GitHubStarSupport.js';
 import { EXPERIMENTAL_FLAGS, saveSettings } from '../settingsIndex.js';
 import { zoomOf } from '../textScale.js';
 import { DelegationRouteSettings } from '../components/DelegationRouteSettings.js';
@@ -56,8 +57,9 @@ const CHAT_MODES: Array<{ value: ChatMode; label: string; desc: string }> = [
   { value: 'yolo', label: CHAT_MODE_LABEL.yolo, desc: 'Run everything without confirming (deny rules still block).' },
 ];
 
-/** The left-hand nav. Phone pairing sits second so the QR is one click from opening Settings. */
+/** Help out the team sits first; General and Phone pairing remain adjacent. */
 export const SETTINGS_GROUPS = [
+  { id: 'support', label: 'Help out the Nekko Team', icon: WandIcon },
   { id: 'general', label: 'General', icon: SunIcon },
   { id: 'phone', label: 'Phone pairing', icon: PhoneIcon },
   { id: 'computers', label: 'Computers', icon: ComputerIcon },
@@ -99,9 +101,9 @@ function AdvancedFold({ children }: { children: React.ReactNode }) {
 /** The group whose top has passed the top of the scroller (the last one once scrolled to the bottom). */
 export function activeGroup(scroller: HTMLElement): SettingsGroupId {
   const groups = [...scroller.querySelectorAll<HTMLElement>('[data-settings-group]')];
-  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? 'general') as SettingsGroupId;
+  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) return (groups.at(-1)?.dataset.settingsGroup ?? 'support') as SettingsGroupId;
   const top = scroller.getBoundingClientRect().top + 24;
-  let cur: string = 'general';
+  let cur: string = 'support';
   for (const g of groups) if (g.getBoundingClientRect().top <= top) cur = g.dataset.settingsGroup!;
   return cur as SettingsGroupId;
 }
@@ -118,7 +120,7 @@ export function SettingsView() {
   const prevOnboardingOpen = useRef(onboardingOpen);
   const pageRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [active, setActive] = useState<SettingsGroupId>('general');
+  const [active, setActive] = useState<SettingsGroupId>('support');
   // Simple says nothing about computers until one is connected; Detailed is where the first one is paired.
   const [expert] = useExpertMode();
   const hasComputers = useStore((s) => s.computers.length > 0);
@@ -211,8 +213,11 @@ export function SettingsView() {
         <div ref={pageRef} className="settings-page" data-presenter-exempt>
           {settingsError && <ServiceLoadState label="settings" error={settingsError} retry={reload} />}
           <div className="min-w-0">
-            <SettingsGroup id="general">
+            <SettingsGroup id="support">
               <ErrorBoundary label="Usage reports"><UsageReportsSection settings={settings} update={update} /></ErrorBoundary>
+              <div className="mt-4"><ErrorBoundary label="GitHub support"><GitHubStarSupport /></ErrorBoundary></div>
+            </SettingsGroup>
+            <SettingsGroup id="general">
               <ErrorBoundary label="Voice settings"><VoiceSettings /></ErrorBoundary>
               <ErrorBoundary label="Notifications"><NotificationsSection settings={settings} update={update} /></ErrorBoundary>
               <ErrorBoundary label="Chat history"><HistorySettings openSync={() => goTo('phone')} refreshSessions={() => useStore.getState().refreshSessions()} /></ErrorBoundary>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { TELEMETRY_PROMISES, telemetryChoice, type AppSettings } from '@nekko-agent/shared';
 import { Toggle } from './primitives/Toggle.js';
 
-/** Settings > General (first): the opt-in usage and crash reports, with what they promise. */
+/** Settings > Help out the Nekko Team: the opt-in usage and crash reports, with what they promise. */
 export function UsageReportsSection({ settings, update }: { settings: AppSettings; update: (patch: Partial<AppSettings>) => void }) {
   const on = settings.telemetry?.enabled === true;
   const [configured, setConfigured] = useState(true);

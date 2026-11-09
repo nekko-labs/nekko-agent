@@ -150,10 +150,22 @@ pub fn should_arm(watches_on_pr: &[&Value]) -> bool {
     }
     let auto: Vec<&&Value> = watches_on_pr.iter().filter(|w| w.get("auto") == Some(&Value::Bool(true))).collect();
     // The user cancelled the host's watch, or a wake-up could not be delivered.
-    if auto.iter().any(|w| matches!(status(w).as_deref(), Some("cancelled" | "error"))) {
+    if auto.iter().any(|w| stops(w)) {
         return false;
     }
-    auto.len() < MAX_ROUNDS
+    auto.iter().fold(0usize, |n, w| n.saturating_add(rounds(w))) < MAX_ROUNDS
+}
+
+/// A host watch that ends the host's watching of its PR: the user cancelled
+/// it, or its wake-up could not be delivered.
+pub fn stops(w: &Value) -> bool {
+    matches!(w.get("status").and_then(Value::as_str), Some("cancelled" | "error"))
+}
+
+/// The wake-up rounds one host watch stands for: itself, plus the older ones
+/// folded into it when the watch file was pruned (`watches::prune`).
+pub fn rounds(w: &Value) -> usize {
+    w.get("rounds").and_then(Value::as_u64).filter(|n| *n > 0).map_or(1, |n| usize::try_from(n).unwrap_or(usize::MAX))
 }
 
 #[cfg(test)]
@@ -258,6 +270,13 @@ mod tests {
         assert!(!should_arm(&[&failed]));
         let rounds: Vec<Value> = (0..MAX_ROUNDS).map(|_| w("done", true)).collect();
         assert!(!should_arm(&rounds.iter().collect::<Vec<_>>()));
+        // Rounds folded into one watch by a prune (watches::prune) still count.
+        let folded = json!({ "status": "done", "auto": true, "rounds": MAX_ROUNDS - 1 });
+        assert!(should_arm(&[&folded]));
+        assert!(!should_arm(&[&folded, &done]));
+        let silly = json!({ "status": "done", "auto": true, "rounds": u64::MAX });
+        assert!(!should_arm(&[&silly, &silly]));
+        assert_eq!(super::rounds(&json!({ "rounds": 0 })), 1);
     }
 
     #[test]

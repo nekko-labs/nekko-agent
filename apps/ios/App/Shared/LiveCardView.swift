@@ -14,12 +14,26 @@ struct LiveCardView: View {
 
     static let background = Color(red: 28/255, green: 28/255, blue: 30/255)
     /// Plum, not the retired lavender `#8B7DFF` (spec/brand/colour-palette.md).
-    fileprivate static let accent = BrandColor.accentOnDark
+    static let accent = BrandColor.accentOnDark
     private static let onAccent = Color(red: 0x0C/255, green: 0x0C/255, blue: 0x11/255)
     private static let grey = Color(red: 0xA3/255, green: 0xA1/255, blue: 0xB0/255)
-    private static let attention = Color(red: 0xED/255, green: 0xBE/255, blue: 0x79/255)
+    static let attention = Color(red: 0xED/255, green: 0xBE/255, blue: 0x79/255)
     static let chatsURL = URL(string: "nekko-agent://chats")!
     static let showsMic = true
+
+    /// **Allow microphone**: opens the app, which asks for the microphone (and speech
+    /// recognition when the phone would transcribe) at once, or opens Settings when
+    /// it was turned off there. A Lock Screen intent can't show those prompts.
+    static func voiceSetupURL(_ computerId: String) -> URL {
+        var c = URLComponents()
+        c.scheme = "nekko-agent"
+        c.host = "voice"
+        c.queryItems = [URLQueryItem(name: "computer", value: computerId)]
+        return c.url!
+    }
+
+    /// The mic needs the app first: no permission yet, or the last tap found none.
+    var needsMicSetup: Bool { state.heard == LiveCardVoice.micNeeded || !VoiceReadiness.micGranted() }
 
     // Kept for existing composer deep links; the dashboard never uses this route.
     static func listenURL(_ sessionId: String) -> URL {
@@ -55,23 +69,18 @@ struct LiveCardView: View {
                 Circle().fill(Self.accent).frame(width: 6, height: 6)
                 Text("Nekko Agent").fontWeight(.semibold)
                 Spacer(minLength: 4)
-                Text(verbatim: computerName).foregroundStyle(Self.grey).privacySensitive()
+                // A card the phone built covers every chat its list shows; a computer's push, that computer.
+                Text(verbatim: state.scope ?? computerName).foregroundStyle(Self.grey).privacySensitive()
             }
             .font(.system(size: 11)).lineLimit(1)
             if state.listening {
-                HStack(spacing: 8) {
-                    MicGlyph().stroke(Self.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-                        .frame(width: 17, height: 17)
-                    Text(state.heard.isEmpty ? "Listening…" : state.heard)
-                        .font(.system(size: 13, weight: .medium)).lineLimit(2)
-                }
-                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                if state.heard == "Processing…" {
+                voicePhase
+                if state.heard == LiveCardVoice.processing {
                     HStack(spacing: 8) {
                         button(CancelTalkIntent()) { action(Text("Cancel"), primary: false) }
                         appLink { action(Text("Open app"), primary: false) }
                     }
-                } else if state.heard == "Sending…" {
+                } else if state.heard == LiveCardVoice.sending {
                     appLink { action(Text("Open app"), primary: false) }
                 } else {
                     HStack(spacing: 8) {
@@ -97,16 +106,11 @@ struct LiveCardView: View {
                 }
                 HStack(spacing: 8) {
                     if #available(iOS 18, *) {
-                        button(TalkToNekkoIntent(computerId: computerId)) {
-                            HStack(spacing: 6) {
-                                MicGlyph().stroke(Self.onAccent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
-                                    .frame(width: 15, height: 15)
-                                Text("Talk to Nekko")
-                            }
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Self.onAccent)
-                            .frame(maxWidth: .infinity).frame(height: 44)
-                            .background(Self.accent, in: RoundedRectangle(cornerRadius: 12))
+                        if needsMicSetup {
+                            // Straight to the app's permission prompt, not a tap that waits on a prompt nobody sees.
+                            link(Self.voiceSetupURL(computerId)) { talkLabel(Text("Allow microphone")) }
+                        } else {
+                            button(TalkToNekkoIntent(computerId: computerId)) { talkLabel(Text("Talk to Nekko")) }
                         }
                     } else {
                         appLink { action(Text("Open app for voice"), primary: true) }
@@ -122,6 +126,52 @@ struct LiveCardView: View {
         }
         .foregroundStyle(.white)
         .environment(\.colorScheme, .dark)
+    }
+
+    /// While the mic is up: what it is doing, how long it has listened, and what to say.
+    /// Speech ends at the first pause by itself; Finish speaking ends it sooner.
+    private var voicePhase: some View {
+        let hearing = state.heard == LiveCardVoice.hearing
+        let capturing = LiveCardVoice.capturing(state)
+        return HStack(alignment: .center, spacing: 8) {
+            MicGlyph().stroke(hearing ? Self.attention : Self.accent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                .frame(width: 17, height: 17)
+            VStack(alignment: .leading, spacing: 2) {
+                if state.heard == LiveCardVoice.listening {
+                    Text("Listening… speak now").font(.system(size: 13, weight: .medium))
+                } else {
+                    Text(verbatim: state.heard).font(.system(size: 13, weight: .medium))
+                }
+                if hearing {
+                    Text("Pause when you’re done. Nothing is sent until you confirm.")
+                } else if capturing {
+                    Text("Say “status”, or “send to” a chat name, “saying”, then the message.")
+                }
+            }
+            .font(.system(size: 10)).foregroundStyle(.white)
+            .lineLimit(2).minimumScaleFactor(0.85)
+            Spacer(minLength: 4)
+            if capturing, let since = state.listeningSince {
+                // Counts on its own: no update per second.
+                Text(timerInterval: since...since.addingTimeInterval(3600), countsDown: false)
+                    .font(.system(size: 11)).monospacedDigit().foregroundStyle(Self.grey)
+                    .frame(width: 40, alignment: .trailing)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func talkLabel(_ label: Text) -> some View {
+        HStack(spacing: 6) {
+            MicGlyph().stroke(Self.onAccent, style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+                .frame(width: 15, height: 15)
+            label
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Self.onAccent)
+        .frame(maxWidth: .infinity).frame(height: 44)
+        .background(Self.accent, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func metric(_ status: LiveChatState, label: LocalizedStringKey) -> some View {
@@ -167,8 +217,29 @@ struct LiveCardView: View {
     }
 
     @ViewBuilder
+    private func link(_ url: URL, @ViewBuilder label: () -> some View) -> some View {
+        if interactive { Link(destination: url, label: label) }
+        else { label() }
+    }
+
+    @ViewBuilder
     private func button(_ intent: some AppIntent, @ViewBuilder label: () -> some View) -> some View {
         if interactive { Button(intent: intent, label: label).buttonStyle(.plain) }
         else { label() }
+    }
+}
+
+/// The compact and minimal Dynamic Island while the card's mic is up: a microphone,
+/// amber once speech is heard, so listening shows even with the island collapsed.
+struct LiveMicIndicator: View {
+    let state: LiveCardState
+    var size: CGFloat = 14
+
+    var body: some View {
+        MicGlyph()
+            .stroke(state.heard == LiveCardVoice.hearing ? LiveCardView.attention : LiveCardView.accent,
+                    style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+            .frame(width: size, height: size)
+            .accessibilityLabel(Text("Listening"))
     }
 }

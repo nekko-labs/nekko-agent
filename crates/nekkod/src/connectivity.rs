@@ -16,6 +16,11 @@ use tokio::sync::watch;
 pub const LOST: &str = "Internet reachability lost. Saved progress is retained; select Continue after reconnecting.";
 pub use nekko_loop::INTERNET_PAUSED as PAUSED;
 const POLL: Duration = Duration::from_secs(5);
+/// The cadence once a connection is confirmed and the last probe passed. A
+/// loss is still caught within one interval, and the probes after a miss run
+/// at [`POLL`] again. Every probe is a logged request, so at 5 s two endpoints
+/// added some 30,000 lines a day to the network log while agents ran.
+const ONLINE_POLL: Duration = Duration::from_secs(20);
 const MAX_WAIT: Duration = Duration::from_secs(30 * 60);
 const ENDPOINTS: [&str; 2] = ["https://www.gstatic.com/generate_204", "https://cp.cloudflare.com/generate_204"];
 type Work<T> = Pin<Box<dyn Future<Output = T> + Send>>;
@@ -100,8 +105,8 @@ impl Connectivity {
                     let client = client.clone();
                     async move { nekko_net::send("model-providers", client.get(url)).await.is_ok_and(|r| r.status() == 204) }
                 };
-                let (a, b) = tokio::join!(check(ENDPOINTS[0]), check(ENDPOINTS[1]));
-                a || b
+                // The second endpoint only when the first fails: either one answering is enough.
+                check(ENDPOINTS[0]).await || check(ENDPOINTS[1]).await
             })
         }))
     }
@@ -148,7 +153,11 @@ impl Connectivity {
                     }
                     let reachable = (me.probe)().await;
                     me.sample(reachable).await;
-                    tokio::time::sleep(POLL).await;
+                    let steady = {
+                        let inner = lock(&me.inner);
+                        inner.debounce.state == State::Online && inner.debounce.bad == 0
+                    };
+                    tokio::time::sleep(if steady { ONLINE_POLL } else { POLL }).await;
                 }
             });
         }

@@ -71,6 +71,7 @@ mod remote_image;
 mod repository_review;
 mod resource_queue;
 mod routes;
+mod support;
 // The runner supervisor that calls into it lands with the VM pool (T211, T212).
 // Unix only: VMs run only on macOS, and the NAT is built on Unix sockets.
 #[cfg(unix)]
@@ -524,6 +525,11 @@ async fn run(cfg: config::Config) -> anyhow::Result<()> {
         }
     }
 
+    // Running turns hold their newest checkpoint for up to two seconds: write them.
+    {
+        let sessions = sessions.clone();
+        let _ = tokio::task::spawn_blocking(move || sessions.flush_all()).await;
+    }
     if let Some(d) = &after.desktop {
         d.shutdown(&after).await;
     }
