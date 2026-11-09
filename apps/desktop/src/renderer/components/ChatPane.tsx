@@ -105,6 +105,8 @@ import { summarizeChanges } from '../changeSummary.js';
 import { AgentCompanionButtons } from './AgentCompanionButtons.js';
 import { addFolderToChat, shouldAutoFile } from '../sessionFolders.js';
 import { AuditTrail } from './AuditTrail.js';
+import { GitHubStarAsk } from './GitHubStarAsk.js';
+import { starAskAfterReply } from '../starAsk.js';
 import { ShieldCheckIcon } from '../icons.js';
 import { PanelIcon, DownloadIcon, PlusIcon, SearchIcon, CloseIcon, BoltIcon, IncognitoIcon, ThoughtIcon, ListIcon, TerminalIcon, WorktreeIcon, CheckIcon, TrashIcon, UndoIcon } from '../icons.js';
 import { GfSendIcon, GfStopIcon } from '../gentleface-icons.js';
@@ -744,6 +746,11 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // Pinned to the reply it was written for (forId) so
   // a newer turn can't inherit stale suggestions.
   const [suggestions, setSuggestions] = useState<{ forId: string; next: string | null; options: string[] } | null>(null);
+  // The in-chat GitHub star ask (spec/platform/github-star-ask.md), only in the
+  // pane whose prompt reached the count, until the next send or a choice.
+  const userPromptRef = useRef(false);
+  const [starAsk, setStarAsk] = useState(false);
+  const closeStarAsk = useCallback(() => setStarAsk(false), []);
   // A failed reply stays in the transcript with a retry, instead of vanishing
   // with the toast.
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
@@ -1193,6 +1200,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           refreshCtxThrottled();
           break;
         case 'error':
+          userPromptRef.current = false;
           if (e.message !== 'Stopped') {
             useStore.getState().pushToast('error', describeInterruption(e.message || 'Something went wrong.', false).reason);
           }
@@ -1200,6 +1208,9 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
           endTurn();
           break;
         case 'done':
+          // A prompt sent from this pane got its reply: it counts, and the 10th
+          // and 50th carry the GitHub star ask under them.
+          if (userPromptRef.current) { userPromptRef.current = false; if (starAskAfterReply()) setStarAsk(true); }
           endTurn();
           refreshCtx();
           void requestSuggestions();
@@ -1554,7 +1565,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   // from something else you're already typing in. The provider count is a
   // dependency because the textarea is disabled until providers have loaded.
 
-  const beginTurn = () => {
+  // `prompted`: someone sent this from here, so a finished reply counts toward the GitHub star ask.
+  const beginTurn = (prompted = false) => {
+    userPromptRef.current = prompted;
+    setStarAsk(false);
     reportAgentWorking(sessionId, true);
     streamingRef.current = true;
     setStreaming(true);
@@ -1691,7 +1705,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
     if (fromDraft) { setDraft(''); clearDraft(sessionId); if (images.length) setPendingImages([]); }
     setEditOffer(false);
-    beginTurn();
+    beginTurn(true);
     setSession((prev) => prev ? { ...prev, messages: [...prev.messages, { id: 'tmp', role: 'user', content: prompt, createdAt: Date.now(), ...(images.length ? { images } : {}) }] } : prev);
     admitted?.();
     await window.nekko.generateImageTurn({ sessionId, prompt, params: { ...params, modelId: params.modelId }, ...(images.length ? { images, size } : {}) });
@@ -1767,7 +1781,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     }
     if (override === undefined) { setDraft(''); setPendingImages([]); setPendingVideos([]); setAttachmentNotes({}); clearDraft(sessionId); }
     setActiveSkill(null);
-    beginTurn();
+    beginTurn(true);
     setSession((prev) =>
       prev ? {
         ...prev,
@@ -1888,7 +1902,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
     const brain = requireBrain(newText);
     if (!brain) return;
     await window.nekko.truncateSession(sessionId, messageId);
-    beginTurn();
+    beginTurn(true);
     setSession((prev) => {
       if (!prev) return prev;
       const idx = prev.messages.findIndex((m) => m.id === messageId);
@@ -2873,6 +2887,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                   <QuestionCard key={question.callId} request={question} onAnswer={answerQuestion} onSkip={() => answerQuestion([])} tone="attention" actions={questionActions} />
                 </div>}
                 {showFollowUpChoices && <FollowUpChoices key={liveSuggestions!.forId} options={liveSuggestions!.options} canDelegate={canDelegateFollowUp} onSend={text => { void send(text); }} />}
+                {starAsk && !streaming && !question && !approval && !errorNotice && !readOnly && <GitHubStarAsk onClose={closeStarAsk} />}
                 {!imageMode && <PrWatchContinuation sessionId={sessionId} replyId={lastMsgId ?? ''} prs={prs}
                   eligible={canOfferPrWatch(session?.messages ?? [], streaming || !!held || !!errorNotice || !!question || !!approval)}
                   onContinue={async (prompt) => { await send(prompt); }} />}
