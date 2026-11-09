@@ -152,7 +152,7 @@ async fn count_vms_times_out_and_kills_the_helper() {
     let h = helper(dir.path(), &format!("echo $$ > '{d}/pid'\nexec sleep 30"));
     let mut v = vm(h, true);
     v.count_timeout = Duration::from_secs(1);
-    let r = tokio::time::timeout(Duration::from_secs(3), v.count_vms()).await.expect("count-vms hung the caller");
+    let r = tokio::time::timeout(Duration::from_secs(3), v.count_macos_vms()).await.expect("count-vms hung the caller");
     assert!(r.unwrap_err().contains("did not finish"));
     assert!(!alive(pid(dir.path()).await), "the helper is killed and reaped");
 }
@@ -177,10 +177,31 @@ async fn nat_failure_stops_the_vm() {
 #[tokio::test]
 async fn count_vms_parses_and_rejects_garbage() {
     let dir = tempfile::tempdir().unwrap();
+    // A Linux VM (Docker's, say) is in `count` but not in `macos`.
+    let h = helper(dir.path(), "echo '{\"count\":2,\"macos\":1}'");
+    assert_eq!(vm(h, true).count_macos_vms().await, Ok(1));
+    // An older helper has only `count`.
     let h = helper(dir.path(), "echo '{\"count\":1}'");
-    assert_eq!(vm(h, true).count_vms().await, Ok(1));
+    assert_eq!(vm(h, true).count_macos_vms().await, Ok(1));
     let h = helper(dir.path(), "echo nope");
-    assert!(vm(h, true).count_vms().await.is_err());
+    assert!(vm(h, true).count_macos_vms().await.is_err());
+}
+
+#[tokio::test]
+async fn live_counts_a_vm_until_it_is_reaped() {
+    let dir = tempfile::tempdir().unwrap();
+    let h = helper(dir.path(), "echo '{\"event\":\"started\"}'\nexec sleep 30");
+    let v = vm(h, true);
+    let handle = v.start(spec(dir.path())).await.unwrap();
+    assert_eq!(v.live.load(Ordering::SeqCst), 1);
+    handle.kill();
+    tokio::time::timeout(Duration::from_secs(3), handle.done).await.expect("the VM kept running").unwrap();
+    assert_eq!(v.live.load(Ordering::SeqCst), 0, "uncounted by the time done fires");
+    // A helper that never starts is uncounted too.
+    let h = helper(dir.path(), "exit 1");
+    let v = vm(h, true);
+    assert!(v.start(spec(dir.path())).await.is_err());
+    assert_eq!(v.live.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -319,7 +340,7 @@ fn tar_rename_works_with_the_real_tar() {
 fn the_job_path_has_no_first_boot_and_no_forward() {
     let src = include_str!("vm.rs");
     let job = src.split("async fn start(&self, spec: RunSpec)").nth(1).unwrap();
-    let job = job.split("async fn count_vms").next().unwrap();
+    let job = job.split("async fn count_macos_vms").next().unwrap();
     assert!(job.contains("job_net_config("), "start uses the job network");
     for banned in ["--first-boot", "forward", "NetConfig {", "BuildSpec"] {
         assert!(!job.contains(banned), "HelperVm::start must not mention {banned}");

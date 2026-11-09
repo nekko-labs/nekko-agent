@@ -140,7 +140,9 @@ Choose **Continue in the background** to close the sheet: the runner card shows 
 sheet again. Quitting Nekko pauses the build, and **Resume setup** picks up where it left off. The
 build holds the Mac awake while it works, and pauses with its reason on screen when there is no free
 VM slot, memory is critical, the Mac is hot, the disk is too full, or, from the install on, the Mac
-is on battery. If a stage fails, **Setup stopped** gives the reason, **Show log** the detail, and
+is on battery. A stage that boots a VM takes a place from the runner: an idle runner VM stops at
+once, and a runner VM with a job is waited for ("Waiting for a CI job to finish"). Linux VMs, such
+as Docker Desktop's, take no place. If a stage fails, **Setup stopped** gives the reason, **Show log** the detail, and
 **Try again** restarts that stage, except that a failed lockdown goes back to before Xcode, because
 it runs once per image. **Cancel setup** deletes the build and leaves an image already in use alone.
 
