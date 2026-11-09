@@ -94,6 +94,45 @@ export function afterReply(current: RunnersState, v: RunnerView, since: number, 
 /** Retry an unavailable list every 2 s, doubling, at most every minute (no reconnect event reaches the renderer). */
 export const retryDelay = (attempt: number) => Math.min(60_000, 2000 * 2 ** attempt);
 
+export type RunnerPresence = 'none' | 'some' | 'unsupported';
+
+/**
+ * Whether this computer has runners, for the Scheduled Tasks sub-navigation.
+ * A failed read retries on `retryDelay`, like the section's own list: a read
+ * made while the service starts or reconnects must not hide this Mac's
+ * runners for the whole visit, since no reconnect event reaches the renderer
+ * and a push comes only on a change. A push is newer than any read, so it wins.
+ * Returns the cleanup.
+ */
+export function watchRunnerPresence(
+  api: { listRunners?(): Promise<readonly unknown[]>; onRunnersChanged?(cb: (views: readonly unknown[]) => void): () => void },
+  set: (p: RunnerPresence) => void,
+): () => void {
+  let live = true;
+  let pushed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const seen = (views: readonly unknown[]) => set(views.length > 0 ? 'some' : 'none');
+  const list = (attempt: number): void => void api.listRunners?.().then(
+    (views) => { if (live && !pushed) seen(views); },
+    (e: unknown) => {
+      if (!live || pushed) return;
+      if ((e instanceof Error ? e.message : String(e)).startsWith('unknown channel')) set('unsupported');
+      timer = setTimeout(() => list(attempt + 1), retryDelay(attempt));
+    },
+  );
+  list(0);
+  const off = api.onRunnersChanged?.((views) => {
+    pushed = true;
+    clearTimeout(timer);
+    seen(views);
+  });
+  return () => {
+    live = false;
+    clearTimeout(timer);
+    off?.();
+  };
+}
+
 const nowSecs = () => Date.now() / 1000;
 
 /** The CI runners section at the foot of the Scheduled Tasks list: this Mac's runners from nekkod. */
