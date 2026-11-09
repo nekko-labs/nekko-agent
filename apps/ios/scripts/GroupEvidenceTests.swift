@@ -16,14 +16,17 @@ final class GroupEvidenceTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Build the app"].waitForExistence(timeout: 5))
         attach(app, "card-groups-expanded")
         let fields = [
-            (setting: "chats.view.showModel", row: "chats.row.model"),
-            (setting: "chats.view.showContext", row: "chats.row.context"),
-            (setting: "chats.view.showPullRequests", row: "chats.row.prs"),
-            (setting: "chats.view.showUpdated", row: "chats.row.updated"),
+            (setting: "chats.view.showModel", marker: "Model opus"),
+            (setting: "chats.view.showContext", marker: "Context window"),
+            (setting: "chats.view.showPullRequests", marker: "pull request #42"),
+            (setting: "chats.view.showUpdated", marker: " ago"),
         ]
         if after {
+            // ChatRow combines its children: inspect its real spoken label rather than
+            // child identifiers that are not exposed. The English offline fixture
+            // has a timestamp several days old ("… ago"), never a live seconds ticker.
             // Every field must initially be visible, not just absent after a toggle.
-            for field in fields { XCTAssertTrue(row(app, field.row).exists, field.row) }
+            for field in fields { XCTAssertTrue(row(app).label.contains(field.marker), field.marker) }
             for index in fields.indices {
                 app.buttons["chats.view"].tap()
                 app.buttons["Card details"].tap()
@@ -44,7 +47,7 @@ final class GroupEvidenceTests: XCTestCase {
                 XCTAssertEqual(control.value as? String, "0", fields[index].setting)
                 closeViewOptions(app)
                 for other in fields.indices {
-                    XCTAssertEqual(row(app, fields[other].row).exists, other > index, fields[other].row)
+                    XCTAssertEqual(row(app).label.contains(fields[other].marker), other > index, fields[other].marker)
                 }
                 if index == 0 { attach(app, "card-details-model-hidden") }
             }
@@ -54,7 +57,7 @@ final class GroupEvidenceTests: XCTestCase {
             app.launch()
             XCTAssertTrue(group.waitForExistence(timeout: 15))
             group.tap()
-            for field in fields { XCTAssertFalse(row(app, field.row).exists, field.row) }
+            for field in fields { XCTAssertFalse(row(app).label.contains(field.marker), field.marker) }
             attach(app, "card-details-persisted")
             app.buttons["chats.view"].tap()
             app.buttons["Card details"].tap()
@@ -68,8 +71,8 @@ final class GroupEvidenceTests: XCTestCase {
         }
     }
 
-    private func row(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    private func row(_ app: XCUIApplication) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "chats.row").firstMatch
     }
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) -> XCUIElement {

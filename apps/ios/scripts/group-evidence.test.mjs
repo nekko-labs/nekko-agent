@@ -25,7 +25,6 @@ for (const revision of ['before', 'after']) {
       assert.ok(view.includes('withAnimation { flip(&prefs.openedChatGroups, g.key) }'));
       assert.ok(view.includes('guard query.isEmpty else { return }'));
       assert.ok(view.includes('DisclosureGroup("Card details")'));
-      assert.ok(view.includes('.accessibilityIdentifier("chats.row.updated")'));
       assert.ok(read('App/NekkoApp.swift').includes('let flags = ["-uiTestGroupList", '));
       const prefs = read('App/Platform/Prefs.swift');
       assert.ok(prefs.includes('!ProcessInfo.processInfo.arguments.contains("-uiTestKeepGroups")'));
