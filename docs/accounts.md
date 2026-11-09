@@ -38,12 +38,12 @@ Nekko does not switch accounts on its own unless you ask it to: in a chat on **�
 
 **Your first subscription account** takes one press: **Add provider → Claude → Subscription** shows three steps, *Install Claude Code*, *Sign in* and *Connect*, starting at the one your computer has reached. Press the button and each step starts when the last one finishes; you only need to sign in when your browser opens.
 
-**API accounts** (an Anthropic API key, or Bedrock, Vertex or Foundry) work like any other API provider: choose **Add provider → Claude → API → Connect** once per key or cloud account.
+**API accounts** (an Anthropic API key, or Bedrock, Vertex or Foundry) work like any other API provider: choose **Add provider → Claude → API → Connect** once per key or cloud account. Give each a recognizable **Connection name**, such as `Production API` or `Sandbox API`, before saving. Adding another key creates a separate connection; it does not replace the previous key.
 
 **Subscription accounts** run the Claude Code you already have installed. Each one is a separate Claude Code login:
 
-1. On the Models page, choose **Add provider → Claude**, then the **Subscription** column. Your usual Claude Code login connects first.
-2. Choose **+ Another subscription account** and give it a name, such as `Work`. Nekko shows the folder Claude Code will keep that login in: `~/.claude-work`.
+1. On the Models page, choose **Add provider → Claude**, then the **Subscription** column. Connect your usual Claude Code login, or choose **+ Another subscription account** for a separate named profile.
+2. Choose **+ Another subscription account** and give it a name, such as `Work`. Nekko shows the folder Claude Code will keep that login in: `~/.claude-work`. A profile name a saved connection already uses is blocked before sign-in, even if that connection is turned off. Choose a different name rather than overwriting its login.
 3. Choose **Sign in to Work**. A terminal opens inside the panel and runs Claude Code's own sign-in on that folder (`claude auth login --claudeai`), which opens Anthropic's sign-in page in your browser. Sign in there; if no page opens, open the link the terminal shows and paste back any code it asks for. The panel moves on by itself once you're signed in.
 4. Nekko reads who the new login is (`claude auth status` prints its email, organization and plan) and checks it against the accounts you already have:
    - **A different person or organization** (say, your company's Team seat beside your personal Max plan): **Add Work** is ready.
