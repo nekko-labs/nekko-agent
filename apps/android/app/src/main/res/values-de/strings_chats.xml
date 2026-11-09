@@ -253,4 +253,11 @@
     <string name="chats_pair_success_body">Dein Computer ist gekoppelt. Die Chats sind unterwegs.</string>
     <string name="chats_pair_success_done">Los geht’s</string>
     <string name="chats_pair_success_illustration">Dein Computer und dieses Telefon sind verbunden</string>
+    <string name="chats_row_model">Modell %1$s</string>
+    <string name="chats_row_context">Kontextfenster zu %1$d Prozent voll</string>
+    <string name="chats_row_pr">Pull-Request %1$d, %2$s</string>
+    <string name="chats_pr_open">offen</string>
+    <string name="chats_pr_draft">Entwurf</string>
+    <string name="chats_pr_merged">gemergt</string>
+    <string name="chats_pr_closed">geschlossen</string>
 </resources>

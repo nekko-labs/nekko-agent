@@ -41,6 +41,8 @@ final class AppModel {
     private let talker = NekkoVoiceRunner()
     private let voiceDispatcher = NekkoVoiceDispatcher()
     private var voiceComputerId: String?
+    /// Background time for a card voice capture and its delivery after the intent returns.
+    private var talkTime: UIBackgroundTaskIdentifier = .invalid
     /// Made in `start()`, with its handlers.
     private var network: NetworkWatcher?
     private var started = false
@@ -165,9 +167,15 @@ final class AppModel {
         // Here, not in `start()`: a tap on the card can launch the app in the
         // background, locked, and the card needs no connection to answer it.
         activities.level = { [weak self] in self?.prefs.liveActivityLevel ?? .none }
+        // The counts cover every chat the chat list shows (each paired computer's and this
+        // iPhone's), so the card agrees with the list; the card stays the active computer's.
         activities.source = { [weak self] in
             guard let self, self.store.summariesLoaded, let c = self.store.active else { return nil }
-            return .init(summaries: self.store.summaries, activity: self.store.activity, computerId: c.id, computerName: c.name)
+            let phoneChats = self.phone.summaries
+            return .init(summaries: self.store.chats(on: nil) + phoneChats,
+                         activity: self.store.activity(on: nil).merging(self.phone.activity) { a, _ in a },
+                         computerId: c.id, computerName: c.name,
+                         scope: cardScope(computerName: c.name, computers: self.store.computers.count, phoneChats: !phoneChats.isEmpty))
         }
         // The computer builds the same card for the relay to push: it hears these too.
         IntentRouter.focus = { [weak self] sid in await self?.focusCard(sid) }
@@ -222,6 +230,7 @@ final class AppModel {
             return self.prefs.notifyNeedsYou ? self.store.attentionCount : 0
         }
         watchBadge()
+        publishVoiceReadiness()
         Task { await refreshNotificationPermission() }
         // A mode raise the computer wants a security key or a code for (SK-6).
         store.stepUpPrompt = { [weak self] request in await self?.askStepUp(request) }
@@ -257,6 +266,7 @@ final class AppModel {
         OutboxRefresh.cancel()
         if started {
             store.nudge()
+            publishVoiceReadiness()
             Task { await refreshNotificationPermission() }
         }
         takeShare()
@@ -373,7 +383,15 @@ final class AppModel {
                   self.voiceScopeAllowed(id) else { throw CancellationError() }
             self.start(force: true)
             self.store.resume()
+            // Away from the app iOS holds a permission prompt until it opens: refuse instead of waiting.
+            self.cardDictation.promptsAllowed = UIApplication.shared.applicationState == .active
+            self.cardDictation.onSpeech = { [weak self] in self?.talker.heardSpeech() }
             return try await self.cardDictation.captureOnce(store: self.store, computerId: id)
+        }
+        talker.describe = { [weak self] error in
+            guard (error as? DictationError) == .needsPermission else { return nil }
+            self?.publishVoiceReadiness()
+            return LiveCardVoice.micNeeded
         }
         talker.finish = { [weak self] in self?.cardDictation.stopListening() }
         talker.discard = { [weak self] in self?.cardDictation.discard() }
@@ -386,7 +404,7 @@ final class AppModel {
             }
             let loaded = id == self.store.activeId ? self.store.summariesLoaded : self.store.peers[id]?.loaded == true
             let context = NekkoVoiceDispatcher.Context(
-                computerId: id, computerName: card.attributes.computerName,
+                computerId: id, computerName: card.state.scope ?? card.attributes.computerName,
                 online: self.store.state(of: id) == .online, loaded: loaded,
                 card: card.state,
                 targets: self.store.chats(on: id).filter { !$0.archived }.map { .init(id: $0.id, name: $0.title) })
@@ -432,9 +450,33 @@ final class AppModel {
                 if self.voiceComputerId == computerId { self.talker.finishListening() }
                 return
             }
+            // A Lock Screen tap can't show the microphone prompt (iOS holds it until the app
+            // opens, and the tap would seem dead): say so; the card's button then opens the app to ask.
+            let foreground = UIApplication.shared.applicationState == .active
+            if !foreground, !Dictation.micGranted {
+                self.publishVoiceReadiness()
+                self.activities.talk(listening: false, heard: LiveCardVoice.micNeeded)
+                return
+            }
             self.voiceComputerId = computerId
-            await self.talker.talk()
-            self.voiceComputerId = nil
+            self.beginTalkTime()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.talker.talk()
+                self.voiceComputerId = nil
+                self.endTalkTime()
+            }
+            // Return once the microphone is open (or the attempt ended), not after the whole
+            // capture and delivery: the card's Finish speaking and Cancel are intents of their
+            // own and must not wait behind this one. A start that never opens the mic gives up.
+            let deadline = Date().addingTimeInterval(foreground ? 60 : 15)
+            while self.talker.busy, self.talker.isListening, !self.cardDictation.recording {
+                if Date() >= deadline {
+                    self.talker.cancel(message: "Not sent. The microphone didn’t start. Open app to try again.")
+                    break
+                }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
         }
         // Compatibility with a card drawn before this update: ignore its chat id.
         IntentRouter.talk = { [weak self] _ in
@@ -443,6 +485,50 @@ final class AppModel {
         }
         IntentRouter.finishTalk = { [weak self] in self?.talker.finishListening() }
         IntentRouter.cancelTalk = { [weak self] in self?.talker.cancel() }
+    }
+
+    /// Keeps the app running through a card capture and its delivery after the
+    /// intent returns. UIKit needs the task ended before its expiration handler returns.
+    private func beginTalkTime() {
+        endTalkTime()
+        talkTime = UIApplication.shared.beginBackgroundTask(withName: "nekko.talk") { [weak self] in
+            MainActor.assumeIsolated {
+                self?.talker.cancel(message: "Not sent. iOS ended listening. Open app to try again.")
+                self?.endTalkTime()
+            }
+        }
+    }
+
+    private func endTalkTime() {
+        guard talkTime != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(talkTime)
+        talkTime = .invalid
+    }
+
+    /// Tells the card whether Talk to Nekko can open the microphone without a prompt
+    /// (`VoiceReadiness`), and redraws it when that changed.
+    private func publishVoiceReadiness() {
+        if VoiceReadiness.save(micGranted: Dictation.micGranted) { activities.redraw() }
+    }
+
+    /// The card's **Allow microphone** (`nekko-agent://voice`): ask for the microphone
+    /// (and speech recognition, used when the computer can't transcribe) now, in the
+    /// app, where iOS shows the prompts; open Settings when it was turned off there.
+    func setUpCardVoice() async {
+        // The link can arrive just before the scene is active; a prompt needs it active.
+        for _ in 0..<20 where UIApplication.shared.applicationState != .active {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        let result = await Dictation.requestCardVoicePermissions()
+        publishVoiceReadiness()
+        switch result {
+        case .ready:
+            activities.talk(listening: false, heard: "Microphone on. Tap Talk to Nekko on the card.")
+        case .openedSettings:
+            activities.talk(listening: false, heard: "Microphone is off for Nekko Agent. Turn it on in Settings.")
+        case .refused:
+            activities.talk(listening: false, heard: "Microphone not allowed. Nothing recorded.")
+        }
     }
 
     /// The composer of `chatId` takes a waiting `?listen=1` once: only for a chat the
@@ -502,7 +588,8 @@ final class AppModel {
     private func onEvent(_ e: AgentEvent, computerId: String) {
         let chat = store.chats(on: computerId).first { $0.id == e.sessionId }
         let computer = store.computers.first { $0.id == computerId }
-        if computerId == store.activeId { activities.onEvent(e) }
+        // Every computer's runs: the card counts the whole chat list.
+        activities.onEvent(e)
         switch e {
         case .approvalRequired, .question:
             if foreground, prefs.hapticNeedsYou { Haptics.needsYou() }
@@ -590,6 +677,11 @@ final class AppModel {
         }
         // The card's count line ("3 Working · 5 Done"): opening the app is the point.
         if url.scheme == "nekko-agent", url.host == "chats" { return }
+        // The card's Allow microphone: ask at once.
+        if url.scheme == "nekko-agent", url.host == "voice" {
+            Task { await setUpCardVoice() }
+            return
+        }
         if let link = Pairing.parse(url.absoluteString) { pendingLink = link }
     }
 

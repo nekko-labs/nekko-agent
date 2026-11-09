@@ -17,6 +17,12 @@ use serde_json::Value;
 
 /// A file tool's read cap, in UTF-16 code units.
 const READ_CAP: usize = 60_000;
+/// Above this, `read_file` never loads the file whole: a line range is read as
+/// a stream and a whole read takes only the head it can show. Reading a
+/// multi-GB log, dump or model whole could abort the daemon out of memory.
+const READ_WHOLE_MAX: u64 = 16 * 1024 * 1024;
+/// Above this, `edit_file` refuses: an edit needs the file whole, twice.
+const EDIT_MAX: u64 = 64 * 1024 * 1024;
 const GLOB_LIMIT: usize = 200;
 const GREP_LIMIT: usize = 100;
 
@@ -86,7 +92,9 @@ fn read_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     if !nodefs::exists(&p) {
         return Ok(ToolResult::err(call, format!("File not found: {p}")));
     }
-    let content = nodefs::read_utf8(&p)?;
+    let size = nodefs::size(&p);
+    let big = size > READ_WHOLE_MAX;
+    let content = if big { String::new() } else { nodefs::read_utf8(&p)? };
     if arg(call, "start_line").is_some_and(|v| !v.is_null()) || arg(call, "end_line").is_some_and(|v| !v.is_null()) {
         let line_arg = |key: &str, default: u64| -> Option<u64> {
             match arg(call, key).filter(|v| !v.is_null()) {
@@ -102,23 +110,47 @@ fn read_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
                 "start_line and end_line must be positive integers, with end_line >= start_line.",
             ));
         };
-        let lines: Vec<&str> = content.split('\n').collect();
-        let selected = lines
-            .iter()
-            .enumerate()
-            .skip((start - 1) as usize)
-            .take((end - start + 1) as usize)
-            .map(|(i, line)| format!("{}: {line}", i + 1))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let (selected, total) = if big {
+            let (lines, total) = nodefs::read_utf8_lines(&p, start, end)?;
+            let selected = lines
+                .iter()
+                .enumerate()
+                .map(|(i, line)| format!("{}: {line}", start as usize + i))
+                .collect::<Vec<_>>()
+                .join("\n");
+            (selected, total as usize)
+        } else {
+            let lines: Vec<&str> = content.split('\n').collect();
+            let selected = lines
+                .iter()
+                .enumerate()
+                .skip((start - 1) as usize)
+                .take((end - start + 1) as usize)
+                .map(|(i, line)| format!("{}: {line}", i + 1))
+                .collect::<Vec<_>>()
+                .join("\n");
+            (selected, lines.len())
+        };
         let output = if js::len16(&selected) > READ_CAP {
             format!("{}\n…(truncated; request a smaller line range)", js::slice16(&selected, READ_CAP))
         } else if selected.is_empty() {
-            format!("(no lines at or after {start}; {} total lines)", lines.len())
+            format!("(no lines at or after {start}; {total} total lines)")
         } else {
             selected
         };
         return Ok(ToolResult::ok(call, output));
+    }
+    if big {
+        // Enough bytes for READ_CAP characters of any width.
+        let head = nodefs::read_utf8_head(&p, (READ_CAP * 4) as u64)?;
+        return Ok(ToolResult::ok(
+            call,
+            format!(
+                "{}\n\u{2026}(truncated: the file is {} MB; use start_line and end_line to read later lines)",
+                js::slice16(&head, READ_CAP),
+                size / (1024 * 1024)
+            ),
+        ));
     }
     Ok(ToolResult::ok(
         call,
@@ -157,6 +189,13 @@ async fn edit_file(call: &ToolCall, ctx: &ToolContext) -> Outcome {
     assert_writable(&p, ctx)?;
     if !nodefs::exists(&p) {
         return Ok(ToolResult::err(call, format!("File not found: {p}")));
+    }
+    let size = nodefs::size(&p);
+    if size > EDIT_MAX {
+        return Ok(ToolResult::err(
+            call,
+            format!("{p} is {} MB, too large to edit in place. Use a script or command instead.", size / (1024 * 1024)),
+        ));
     }
     if !write_approved(call, ctx, &p, "Edit").await {
         return Ok(ToolResult::err(call, "Edit not approved by user."));

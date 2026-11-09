@@ -61,6 +61,9 @@ export function useWatchedComputer(): string | null {
 }
 
 function poll() {
+  // Nobody sees a meter while the window is hidden (in the tray, minimised):
+  // each GPU sample starts `nvidia-smi`, so skip until it is back.
+  if (typeof document !== 'undefined' && document.hidden) return;
   if (target) {
     const asked = target;
     window.nekko.computerStats(asked).then((s) => {

@@ -83,6 +83,8 @@ const QUIET: Duration = Duration::from_secs(30);
 
 /// The most running chats kept for one other computer.
 const MAX_REMOTE_TURNS: usize = 256;
+/// Frames each hub ring holds for its slowest socket.
+const HUB_FRAMES: usize = 4 * 1024;
 
 #[derive(Default)]
 struct Sessions {
@@ -149,8 +151,12 @@ fn approx_size(v: &Value) -> usize {
 
 impl Hub {
     pub fn new() -> Self {
-        let (tx, _) = broadcast::channel(16 * 1024);
-        let (remote, _) = broadcast::channel(16 * 1024);
+        // A frame stays in the ring until every socket has read it, and a
+        // tool result's frame carries its screenshots: 16,384 of them behind
+        // one slow reader could be gigabytes. A socket that falls this far
+        // behind is told `daemon:lagged` and resyncs, as before.
+        let (tx, _) = broadcast::channel(HUB_FRAMES);
+        let (remote, _) = broadcast::channel(HUB_FRAMES);
         Self { tx, remote, sessions: Arc::default() }
     }
 

@@ -279,6 +279,14 @@ struct Shared {
     cancel: Cancel,
     steering: Steering,
     events: mpsc::UnboundedSender<Out>,
+    /// The transcript at the newest checkpoint the forwarder has not saved yet.
+    /// One slot, not one copy per event: each checkpoint used to queue a deep
+    /// copy of the whole transcript (tens of MB in a long chat) on the
+    /// unbounded channel, and quick tools queued them faster than the
+    /// forwarder saved, which is how nekkod ran out of memory (2026-11-09).
+    /// A later transcript holds everything an earlier one did, so saving only
+    /// the newest loses nothing.
+    latest: Arc<Mutex<Option<Vec<Value>>>>,
     /// `settings.defaultChatMode`, for the live policy check on each approval.
     default_mode: Option<String>,
     /// The message of the last `error` event the turn sent, for a parent that
@@ -908,6 +916,7 @@ impl Turns {
             cancel: Cancel::default(),
             steering: Arc::default(),
             events: tx,
+            latest: Arc::default(),
             default_mode: spec.pointer("/settings/defaultChatMode").and_then(Value::as_str).map(str::to_string),
             last_error: Arc::default(),
             unattended: Unattended::default(),
@@ -1318,6 +1327,7 @@ impl Turns {
                 turn_from,
                 started_at,
                 last_error: shared.last_error.clone(),
+                latest: shared.latest.clone(),
             },
         ));
 
@@ -1528,6 +1538,7 @@ impl Turns {
         let mut history: Vec<Value> =
             lock(&session).get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
         let events = shared.events.clone();
+        let latest = shared.latest.clone();
         let str_of = |v: &Value, k: &str| str_at(v, k).map(str::to_string);
         let run = RunOptions {
             session_id: session_id.clone(),
@@ -1548,8 +1559,10 @@ impl Turns {
             steering: shared.steering.clone(),
         };
         run_agent(run, &client, &runner, &mut |event: Value, transcript: &[Value]| {
-            let snapshot = is_checkpoint(&event).then(|| transcript.to_vec());
-            let _ = events.send(Out::Loop(event, snapshot));
+            if is_checkpoint(&event) {
+                *lock(&latest) = Some(transcript.to_vec());
+            }
+            let _ = events.send(Out::Loop(event, None));
         })
         .await;
         drop(runner);
@@ -1593,9 +1606,12 @@ impl Turns {
         let mut history: Vec<Value> =
             lock(session).get("messages").and_then(Value::as_array).cloned().unwrap_or_default();
         let events = shared.events.clone();
+        let latest = shared.latest.clone();
         let send = |event: Value, history: &[Value]| {
-            let snapshot = is_checkpoint(&event).then(|| history.to_vec());
-            let _ = events.send(Out::Loop(event, snapshot));
+            if is_checkpoint(&event) {
+                *lock(&latest) = Some(history.to_vec());
+            }
+            let _ = events.send(Out::Loop(event, None));
         };
         let fail = |message: &str, history: &[Value]| {
             send(json!({ "type": "error", "sessionId": session_id, "message": message }), history);
@@ -2236,6 +2252,10 @@ struct Forward {
     turn_from: usize,
     started_at: u64,
     last_error: Arc<Mutex<Option<String>>>,
+    /// [`Shared::latest`]: the transcript a checkpoint saves, taken by the
+    /// first checkpoint that finds it; one that finds it taken saves the chat
+    /// as it stands, which already has that newer transcript.
+    latest: Arc<Mutex<Option<Vec<Value>>>>,
 }
 
 /// The turn's events, in order. A checkpoint is saved before the UI is told
@@ -2249,6 +2269,8 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     let mut deltas = Deltas::default();
     // A step's save still being written.
     let mut saving: Option<tokio::task::JoinHandle<()>> = None;
+    // When the chat's deferred checkpoint save is due to be written.
+    let mut save_due: Option<tokio::time::Instant> = None;
     let mut phase = lock(&f.session).get("messages").and_then(Value::as_array).and_then(|m| nekko_store::loop_phase(m));
     loop {
         let due = deltas.due();
@@ -2256,6 +2278,14 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             out = rx.recv() => out,
             _ = tokio::time::sleep_until(due.unwrap_or_else(tokio::time::Instant::now)), if due.is_some() => {
                 deltas.flush(&f.hub);
+                continue;
+            }
+            _ = tokio::time::sleep_until(save_due.unwrap_or_else(tokio::time::Instant::now)), if save_due.is_some() => {
+                save_due = None;
+                if let Some(save) = saving.take() {
+                    let _ = save.await;
+                }
+                saving = Some(flush_deferred(f.store.clone(), f.session_id.clone()));
                 continue;
             }
         };
@@ -2267,7 +2297,10 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
                 f.hub.publish("agent:event", e, false);
                 continue;
             }
-            Some(Out::Loop(e, s)) => (e, s),
+            Some(Out::Loop(e, s)) => {
+                let s = s.or_else(|| if is_checkpoint(&e) { lock(&f.latest).take() } else { None });
+                (e, s)
+            }
         };
         if snapshot.is_none() && Deltas::joinable(&event) {
             deltas.push(&f.hub, event);
@@ -2322,6 +2355,21 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
             if let Some(save) = saving.take() {
                 let _ = save.await;
             }
+            // A step or a tool result is held and written with the next ones
+            // at most every [`SAVE_EVERY`]: any read of the chat writes it
+            // first, so a pane that re-reads it now still sees it. The end of
+            // the turn, a steering message and a phase change are written now.
+            let kind = str_at(&event, "type");
+            if !f.incognito && !moved && matches!(kind, Some("step" | "tool_result")) {
+                f.store.defer_turn_save(&f.session, snapshot);
+                save_due.get_or_insert_with(|| tokio::time::Instant::now() + SAVE_EVERY);
+                note_error(&f.last_error, &event);
+                f.hub.publish("agent:event", event, false);
+                continue;
+            }
+            // Written whole below; a held save of the same chat would only be older.
+            f.store.discard_deferred(&f.session_id);
+            save_due = None;
             match snapshot {
                 Some(messages) if str_at(&event, "type") == Some("step") => {
                     note_error(&f.last_error, &event);
@@ -2356,7 +2404,22 @@ async fn forward(mut rx: mpsc::UnboundedReceiver<Out>, mut f: Forward) -> Option
     if let Some(save) = saving.take() {
         let _ = save.await;
     }
+    if save_due.is_some() {
+        let _ = flush_deferred(f.store.clone(), f.session_id.clone()).await;
+    }
     last_stop
+}
+
+/// How often a running turn's held checkpoint saves are written at most.
+const SAVE_EVERY: Duration = Duration::from_secs(2);
+
+/// Write a chat's held checkpoint save, off the async threads.
+fn flush_deferred(store: Arc<SessionStore>, id: String) -> tokio::task::JoinHandle<()> {
+    tokio::task::spawn_blocking(move || {
+        if let Err(e) = store.flush(&id) {
+            eprintln!("nekkod: could not save a running turn's chat: {e}");
+        }
+    })
 }
 
 /// The `decide` tool on the local decision model (chat.ts: `decisions.run`

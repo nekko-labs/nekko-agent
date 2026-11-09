@@ -100,3 +100,5 @@ export * from './turn-stats.js';
 export * from './claude-policy.js';
 export * from './claude-plan-usage-fixture.js';
 export * from './service-management.js';
+
+export * from './support.js';

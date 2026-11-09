@@ -48,6 +48,11 @@ pub struct AgentLogs {
     settings: ReadSettings,
     hub: Hub,
     terms: Mutex<HashMap<String, Term>>,
+    /// Whether each chat seen here is a sandbox chat, read once. A chat's
+    /// execution mode is set when it is made, and asking the store on every
+    /// chunk of command output parsed the whole chat file each time (tens of
+    /// MB for a long one, hundreds of times a second across busy chats).
+    sandboxed: Mutex<HashMap<String, bool>>,
     removed: Mutex<HashSet<PathBuf>>,
     writer: Mutex<mpsc::Sender<Op>>,
 }
@@ -169,9 +174,21 @@ impl AgentLogs {
             settings,
             hub,
             terms: Mutex::default(),
+            sandboxed: Mutex::default(),
             removed: Mutex::default(),
             writer: Mutex::new(tx),
         })
+    }
+
+    /// Whether a chat runs in the sandbox, from its fields (never its transcript), cached.
+    fn sandboxed(&self, session_id: &str) -> bool {
+        if let Some(known) = lock(&self.sandboxed).get(session_id) {
+            return *known;
+        }
+        let Some(meta) = self.store.meta(session_id) else { return false };
+        let sandbox = crate::worktrees::execution_mode(&meta.into_value()) == "sandbox";
+        lock(&self.sandboxed).insert(session_id.to_string(), sandbox);
+        sandbox
     }
 
     /// `agentLogPath`: refused for an id that is not a plain chat id.
@@ -236,12 +253,17 @@ impl AgentLogs {
     }
 
     fn append_status(&self, session_id: &str, workspace_id: Option<&str>, data: &str, running: bool) {
-        let session = self.store.get(session_id);
-        if session.as_ref().is_some_and(|s| crate::worktrees::execution_mode(s) == "sandbox") {
+        if self.sandboxed(session_id) {
             return;
         }
         let Ok(path) = self.path(session_id) else { return };
         let id = format!("{PREFIX}{session_id}");
+        // The chat's fields only to place a terminal being made, read outside the lock.
+        let session = if lock(&self.terms).contains_key(&id) {
+            None
+        } else {
+            self.store.meta(session_id).map(nekko_store::Meta::into_value)
+        };
         {
             let mut terms = lock(&self.terms);
             let term = terms.entry(id.clone()).or_insert_with(|| {

@@ -1278,3 +1278,55 @@ video { filter: brightness(1.0001); }
   .contributor-avatar { width: 48px; height: 48px; }
   .contributor-name { width: max-content; max-width: 88px; white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* ===== why Nekko: the pillar tour. No boxes: space and type do the
+   separating (docs/design-system.md). site.js marks the tour .is-js (only the
+   active pillar's text shows) and .is-timed (the progress line runs); .is-held
+   pauses the line, .is-paused swaps the pause icon for play. ===== */
+.pillar-tour { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; margin-top: 30px; }
+.pillar-list { list-style: none; margin: 0; padding: 0; }
+.pillar-tab {
+  display: flex; align-items: baseline; gap: 16px; width: 100%; padding: 12px 0;
+  border: 0; background: none; font: inherit; text-align: left; color: var(--muted); cursor: pointer;
+}
+.pillar-tab:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 4px; border-radius: 4px; }
+.pillar-item.is-active .pillar-tab { color: var(--ink); }
+@media (hover: hover) { .pillar-tab:hover { color: var(--ink); } }
+.pillar-num { width: 24px; flex-shrink: 0; font: 12px var(--mono); color: var(--muted); }
+.pillar-item.is-active .pillar-num { color: var(--accent); }
+.pillar-title { font-size: 21px; font-weight: 650; line-height: 1.25; letter-spacing: -0.01em; }
+.pillar-detail { padding: 0 0 18px 40px; }
+.pillar-detail p { font-size: 15px; line-height: 1.6; }
+.pillar-detail .card-link { display: inline-block; margin-top: 8px; font-size: 13.5px; }
+.pillar-line { display: none; height: 2px; margin-top: 16px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.pillar-line i { display: block; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; }
+.pillar-tour.is-js .pillar-item:not(.is-active) .pillar-detail { display: none; }
+.pillar-tour.is-timed .pillar-item.is-active .pillar-line { display: block; }
+.pillar-tour.is-timed .pillar-item.is-active .pillar-line i { animation: pillar-progress 8s linear forwards; }
+.pillar-tour.is-timed.is-held .pillar-item.is-active .pillar-line i { animation-play-state: paused; }
+@keyframes pillar-progress { to { transform: scaleX(1); } }
+.pillar-stage { display: flex; flex-direction: column; }
+.pillar-media { aspect-ratio: 16 / 9; overflow: hidden; border-radius: 14px; border: 1px solid var(--line); background: var(--media-bg); box-shadow: var(--shadow); }
+.pillar-video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pillar-pause {
+  align-self: flex-end; margin-top: 10px; width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer;
+}
+.pillar-pause[hidden] { display: none; }
+.pillar-pause:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.pillar-pause .ic-play, .pillar-tour.is-paused .pillar-pause .ic-pause { display: none; }
+.pillar-tour.is-paused .pillar-pause .ic-play { display: block; }
+@media (max-width: 900px) {
+  .pillar-tour { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .pillar-stage { order: -1; }
+  .pillar-title { font-size: 18px; }
+}
+
+/* the benchmark summary under the tour: three results, then where we are not ahead */
+.pillar-bench { margin-top: 64px; scroll-margin-top: 90px; }
+.pillar-bench-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; margin: 18px 0 20px; }
+.pillar-bench-stats dt { font-size: 13px; color: var(--muted); }
+.pillar-bench-stats dd { margin: 0; color: var(--ink); font-size: 15px; }
+.pillar-bench-stats dd b { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; color: var(--accent); margin-right: 4px; }
+.pillar-bench-stats dd.micro { margin-top: 6px; color: var(--muted); font-size: 12px; }
+@media (max-width: 900px) { .pillar-bench-stats { grid-template-columns: minmax(0, 1fr); gap: 20px; } }

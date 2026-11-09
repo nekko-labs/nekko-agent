@@ -134,11 +134,47 @@ impl ChatGptProvider {
         // From the first generated delta to the event that reports usage.
         let mut decode = DecodeClock::new(self.io.clock.clone());
         let mut sse = SseParser::default();
-        while let Some(bytes) = sink.read(&mut res).await? {
+        // The last event that moved the response on; keep-alives do not count.
+        let stall = crate::http::stream_stall();
+        let mut progress_at = tokio::time::Instant::now();
+        // Whether any event arrived, so a body cut off part-way is told from an empty one.
+        let mut started = false;
+        loop {
+            let next = sink.read(&mut res);
+            let read = match stall {
+                Some(limit) => match tokio::time::timeout_at(progress_at + limit, next).await {
+                    Ok(read) => read?,
+                    Err(_) => {
+                        return Err(ProviderError::new(format!(
+                            "ChatGPT stopped sending: no progress for {} s",
+                            limit.as_secs()
+                        ))
+                        .into());
+                    }
+                },
+                None => next.await?,
+            };
+            let Some(bytes) = read else {
+                // The body ended with neither `response.completed` nor
+                // `[DONE]` after the response had started: the server dropped
+                // the stream part-way. Fail so the loop asks again instead of
+                // keeping a truncated step. An empty body ends as it always has.
+                if started {
+                    return Err(
+                        ProviderError::new("ChatGPT stream ended unexpectedly before the response completed").into()
+                    );
+                }
+                break;
+            };
             let batch = sse.feed(&bytes);
             for data in &batch.data {
                 let Ok(ev) = serde_json::from_str::<Value>(data) else { continue };
-                match ev.get("type").and_then(Value::as_str) {
+                let kind = ev.get("type").and_then(Value::as_str);
+                started = true;
+                if is_progress(kind) {
+                    progress_at = tokio::time::Instant::now();
+                }
+                match kind {
                     // The model has started generating an item (hidden
                     // reasoning, a tool call): time it from here, or a step
                     // with no visible text measures as instant.
@@ -346,6 +382,13 @@ impl ChatGptProvider {
 
 /// Map normalized chat history onto Responses API input items. A `system`
 /// message in history is covered by `instructions` and dropped here.
+/// Whether an event moves the response on. Lifecycle pings and keep-alives
+/// arrive while a stalled response produces nothing, so they do not count;
+/// every other event (an item, a delta, a part) does.
+fn is_progress(kind: Option<&str>) -> bool {
+    !matches!(kind, None | Some("response.created" | "response.in_progress" | "response.queued" | "keepalive" | "ping"))
+}
+
 fn to_response_items(req: &ChatRequest) -> Vec<Value> {
     let mut out = Vec::new();
     for m in &crate::types::with_tool_images(&req.messages) {

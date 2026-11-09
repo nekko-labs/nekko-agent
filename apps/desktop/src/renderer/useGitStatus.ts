@@ -25,17 +25,26 @@ export function useGitStatus(workspaceId: string | undefined, checkoutMode?: boo
       return;
     }
     let live = true;
+    let inFlight = false;
     const read = () => {
+      // One read at a time, and none while the window is hidden: a stalled
+      // engine used to collect hundreds of queued reads from the cards.
+      if (inFlight || document.hidden) return;
+      inFlight = true;
       window.nekko
         .getGitStatus(workspaceId)
         .then((s) => { if (live) setStatus(s.repo ? s : null); })
-        .catch(() => { if (live) setStatus(null); });
+        .catch(() => { if (live) setStatus(null); })
+        .finally(() => { inFlight = false; });
     };
+    // Back from hidden: catch up at once rather than on the next tick.
+    const onVisible = () => { if (!document.hidden) read(); };
+    document.addEventListener('visibilitychange', onVisible);
     // The first read waits for the first frame: a card or pane that just
     // appeared paints before it asks.
     const cancel = afterPaint(read);
     const t = setInterval(read, POLL_MS);
-    return () => { live = false; cancel(); clearInterval(t); };
+    return () => { live = false; cancel(); clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
   }, [workspaceId, checkoutMode]);
 
   return status;

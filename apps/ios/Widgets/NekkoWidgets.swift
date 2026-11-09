@@ -87,12 +87,20 @@ struct NekkoCardLiveActivity: Widget {
             } compactLeading: {
                 PixelCat().frame(width: 22, height: 22)
             } compactTrailing: {
-                HStack(spacing: 3) {
-                    LiveStatusGlyph(state: urgent, size: 14)
-                    Text("\(context.state.counts?.values.reduce(0, +) ?? (context.state.chats.count + context.state.more))").font(.caption2.weight(.semibold)).monospacedDigit()
+                if context.state.listening {
+                    LiveMicIndicator(state: context.state)
+                } else {
+                    HStack(spacing: 3) {
+                        LiveStatusGlyph(state: urgent, size: 14)
+                        Text("\(context.state.counts?.values.reduce(0, +) ?? (context.state.chats.count + context.state.more))").font(.caption2.weight(.semibold)).monospacedDigit()
+                    }
                 }
             } minimal: {
-                LiveStatusGlyph(state: urgent, size: 14)
+                if context.state.listening {
+                    LiveMicIndicator(state: context.state)
+                } else {
+                    LiveStatusGlyph(state: urgent, size: 14)
+                }
             }
             .widgetURL(LiveCardView.chatsURL)
             .keylineTint(urgent.tint)
