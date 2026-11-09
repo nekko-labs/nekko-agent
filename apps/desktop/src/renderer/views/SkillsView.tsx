@@ -40,12 +40,12 @@ import { formatCount } from '../components/runtimes/verdict.js';
 /** Per-node-kind visual identity for the workflow canvas. */
 const KIND: Record<SkillNodeKind, { color: string; glyph: string; label: string }> = {
   trigger: { color: 'var(--warning)', glyph: '⚡', label: 'Trigger' },
-  context: { color: '#6f9bff', glyph: '▤', label: 'Context' },
-  agent: { color: '#a78bfa', glyph: '✦', label: 'Agent' },
+  context: { color: 'var(--info)', glyph: '▤', label: 'Context' },
+  agent: { color: 'var(--accent)', glyph: '✦', label: 'Agent' },
   tool: { color: 'var(--success)', glyph: '⚙', label: 'Tool' },
-  decision: { color: 'var(--highlight)', glyph: '◆', label: 'Decision' },
-  loop: { color: '#f472b6', glyph: '↻', label: 'Loop' },
-  output: { color: '#34d399', glyph: '✓', label: 'Output' },
+  decision: { color: 'var(--attention)', glyph: '◆', label: 'Decision' },
+  loop: { color: 'var(--accent-2)', glyph: '↻', label: 'Loop' },
+  output: { color: 'var(--ink-soft)', glyph: '✓', label: 'Output' },
 };
 
 /** What each node kind means, teaching copy for the explainer panel. */
@@ -381,7 +381,7 @@ function SkillCard({ skill, installed, selected, onOpen }: { skill: SkillDef; in
 const SOURCE_META: Record<MarketplaceSkill['source'], { label: string; color: string }> = {
   nekkolabs: { label: 'Nekko Labs', color: 'var(--accent)' },
   community: { label: 'community', color: 'var(--info)' },
-  vaizer: { label: 'Vaizer', color: '#a78bfa' },
+  vaizer: { label: 'Vaizer', color: 'var(--accent-2)' },
   github: { label: 'GitHub', color: 'var(--ink-soft)' },
 };
 
@@ -392,7 +392,7 @@ function TierChip({ tier }: { tier?: MarketplaceSkill['tier'] }) {
   return (
     <span
       className="shrink-0 rounded-full px-2 py-0 text-2xs"
-      style={{ background: 'var(--surface-2)', color: official ? '#a78bfa' : 'var(--success)' }}
+      style={{ background: 'var(--surface-2)', color: official ? 'var(--accent)' : 'var(--success-text)' }}
       title={official ? 'Built and reviewed by Nekko Labs' : 'Community-submitted: audit before use, skills run with your permissions'}
     >
       {official ? '🟣 official' : '🟢 community'}
@@ -888,7 +888,7 @@ function MarketplaceTab() {
                     <span className="text-xs font-medium">{t.label}</span>
                     <span className="text-2xs text-ink-faint" title={t.dir ?? ''}>{t.hint}</span>
                     {installed ? (
-                      <button className="btn btn-ghost px-2! py-0.5! text-2xs text-red-400" disabled={busy} onClick={() => uninstall(t.id)}>
+                      <button className="btn btn-ghost px-2! py-0.5! text-2xs text-danger-text" disabled={busy} onClick={() => uninstall(t.id)}>
                         Remove
                       </button>
                     ) : selected.blocked ? (
@@ -967,7 +967,7 @@ function AddFromGitHub({
         </button>
       </div>
       {result && (
-        <p className="mt-1 text-2xs" style={{ color: result.ok ? 'var(--ink-soft)' : 'var(--danger, #f87171)' }} role="status">
+        <p className="mt-1 text-2xs" style={{ color: result.ok ? 'var(--ink-soft)' : 'var(--danger)' }} role="status">
           {result.ok ? `${result.skills.length} skill${result.skills.length === 1 ? '' : 's'} found in ${result.repo}.` : result.message}
         </p>
       )}

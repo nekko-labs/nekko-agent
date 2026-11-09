@@ -50,7 +50,7 @@ describe('agent status glyphs', () => {
     // Nekko is the agent's icon now: no robot head.
     expect(windowBody(wall, 'a')).not.toContain('numbered-agent-icon');
     expect(windowBody(wall, 'a')).toContain('pixel-nekko');
-    expect(windowBody(wall, 'a')).toContain('style="background:#4dc28a"');
+    expect(windowBody(wall, 'a')).toContain('style="background:var(--success)"');
     expect(windowBody(wall, 'b')).toMatch(/data-agent-status="true"><span class="wall-mascot pixel-happy"[^>]*aria-label="Done"/);
     // The window passes the status to the chat as a value, and the chat draws no footer copy of it.
     expect(windowBody(wall, 'a')).toContain('data-status="working"');

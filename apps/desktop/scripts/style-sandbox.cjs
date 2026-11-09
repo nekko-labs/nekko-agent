@@ -40,8 +40,8 @@ app.whenReady().then(async () => {
     await run(fonts);
     await capture('home');
     report.measures.bodyFont = await run(`getComputedStyle(document.body).fontFamily`);
-    report.measures.interLoaded = await run(`document.fonts.check('16px "Inter Tight Variable"')`);
-    report.measures.monoLoaded = await run(`document.fonts.check('16px "JetBrains Mono Variable"')`);
+    report.measures.interLoaded = await run(`document.fonts.check('16px "Geist Variable"')`);
+    report.measures.monoLoaded = await run(`document.fonts.check('16px "Geist Mono Variable"')`);
     await run(`layoutFixture.store.getState().setView('settings')`);
     await sleep(1500);
     const style = await run(`!!document.getElementById('settings-style')`);

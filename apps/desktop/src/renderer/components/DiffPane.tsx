@@ -61,7 +61,7 @@ export function DiffPane({ sessionId }: { sessionId: string }) {
         {changes.length > 0 && (
           <span className="ml-auto flex items-center gap-1">
             <button className="btn btn-ghost px-2 py-0.5 text-2xs" onClick={keepAll} title="Keep every change">Keep all</button>
-            <button className="btn btn-ghost px-2 py-0.5 text-2xs text-red-400" onClick={revertAll} title="Revert every file to its original">Revert all</button>
+            <button className="btn btn-ghost px-2 py-0.5 text-2xs text-danger-text" onClick={revertAll} title="Revert every file to its original">Revert all</button>
           </span>
         )}
       </div>
@@ -131,7 +131,7 @@ function FileDiff({ sessionId, change, onChanged }: { sessionId: string; change:
           <span className="truncate font-medium">{name}</span>
           {change.original === '' && <span className="chip text-2xs uppercase">new</span>}
           <span className="ml-1 shrink-0 text-2xs">
-            <span className="text-green-500">+{adds}</span> <span className="text-red-400">-{dels}</span>
+            <span className="text-success-text">+{adds}</span> <span className="text-danger-text">-{dels}</span>
           </span>
         </button>
         <span className="flex shrink-0 items-center gap-1">
@@ -141,7 +141,7 @@ function FileDiff({ sessionId, change, onChanged }: { sessionId: string; change:
             </button>
           )}
           <button className="btn btn-ghost px-2 py-0.5 text-2xs" onClick={keepFile} title="Keep this file's changes">Keep</button>
-          <button className="btn btn-ghost px-2 py-0.5 text-2xs text-red-400" onClick={revertFile} title="Revert this file to its original">Revert file</button>
+          <button className="btn btn-ghost px-2 py-0.5 text-2xs text-danger-text" onClick={revertFile} title="Revert this file to its original">Revert file</button>
         </span>
       </div>
 

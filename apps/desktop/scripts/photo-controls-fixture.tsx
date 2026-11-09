@@ -1,7 +1,7 @@
 // Real Photo controls/model details against a synthetic bridge. No downloads or inference.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 import '../src/renderer/styles.css';
 const model: any = { id: 'klein', name: 'FLUX.2 klein 4B', path: '/fixtures/klein.gguf', modality: 'image', sizeBytes: 2400000000 };
 let runtime = false, support = true;

@@ -137,7 +137,7 @@ export function AutomationsPane({ tasks, running, now, onOpen }: { tasks: Automa
                     ) : t.status === 'paused' ? (
                       <button className="btn btn-ghost px-2 py-0.5 text-xs" onClick={() => window.nekko.updateTask(t.id, { status: 'active' })}>Resume</button>
                     ) : null}
-                    <button className="rounded-sm p-1 text-ink-faint hover:text-red-400" title="Delete automation" onClick={() => window.nekko.deleteTask(t.id)}><TrashIcon className="h-3.5 w-3.5" /></button>
+                    <button className="rounded-sm p-1 text-ink-faint hover:text-danger-text" title="Delete automation" onClick={() => window.nekko.deleteTask(t.id)}><TrashIcon className="h-3.5 w-3.5" /></button>
                   </span>
                 </div>
                 <div className="mt-0.5 flex items-baseline gap-2 pl-9 text-xs text-ink-faint">

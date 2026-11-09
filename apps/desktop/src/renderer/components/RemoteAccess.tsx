@@ -288,7 +288,7 @@ export function RemoteAccess() {
                     aria-label={`Code expires in ${Math.floor(secsLeft / 60)} minutes ${secsLeft % 60} seconds`}
                   >
                     <span className="text-2xs text-ink-faint">Expires in</span>
-                    <span className={`font-mono text-xl font-semibold tabular-nums ${secsLeft < 60 ? 'text-amber-500' : ''}`}>
+                    <span className={`font-mono text-xl font-semibold tabular-nums ${secsLeft < 60 ? 'text-warning-text' : ''}`}>
                       {Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}
                     </span>
                   </div>
