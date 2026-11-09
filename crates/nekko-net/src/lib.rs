@@ -28,6 +28,7 @@ pub const IDS: &[&str] = &[
     "skill-sources",
     "cloud-sync",
     "feedback",
+    "updates-email",
     "phone-relay",
     "connected-computers",
     "local-relay",
