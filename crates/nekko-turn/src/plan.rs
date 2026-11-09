@@ -226,6 +226,16 @@ fn orchestration_hint(o: &Value) -> String {
 /// `turnSystemPrompt(input)`. `input` is the TS `TurnPromptInput`:
 /// `workspaces`, `tools`, `settings`, `sandbox`, `executionMode`,
 /// `worktreeNotices`, `contextBlock`, `platform`, `workMode`.
+/// ` (repository github:owner/name)` for a folder cloned from a git provider
+/// (#2404), so the model can match "the app repo" to its folder; else empty.
+pub fn repo_suffix(workspace: &Value) -> String {
+    let repo = &workspace["repo"];
+    match (repo["provider"].as_str(), repo["fullName"].as_str()) {
+        (Some(p), Some(full)) if !full.is_empty() => format!(" (repository {p}:{full})"),
+        _ => String::new(),
+    }
+}
+
 pub fn turn_system_prompt(input: &Value) -> String {
     let c = catalog();
     let settings = input.get("settings").unwrap_or(&Value::Null);
@@ -239,7 +249,11 @@ pub fn turn_system_prompt(input: &Value) -> String {
         .map(|a| {
             a.iter()
                 .map(|w| Workspace {
-                    name: w.get("name").map(js::display).unwrap_or_else(|| "undefined".into()),
+                    name: format!(
+                        "{}{}",
+                        w.get("name").map(js::display).unwrap_or_else(|| "undefined".into()),
+                        repo_suffix(w)
+                    ),
                     path: w.get("path").map(js::display).unwrap_or_else(|| "undefined".into()),
                 })
                 .collect()

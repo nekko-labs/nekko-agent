@@ -44,6 +44,7 @@ Both implementations use scoped counts and initial English `status`, `send to NA
 | Older OS fallback | iOS 17: Open app for voice opens list without auto-listening | Foreground sheet as above | iOS 17 is an app handoff, not equivalent background voice or an app-wide voice sheet. |
 | Recognition privacy | Computer transcription or on-device-only iOS recognizer | Existing Dictation engine; phone provider may use network recognition | Do not promise identical on-device-only guarantees. |
 | Native proof | No new native test/evidence pass or physical-device proof claimed | No new native test/evidence pass or physical-device proof claimed | Run native builds/tests, inspect matched evidence and verify device auth/microphone/lifecycle before closing the verification gap. |
+| Chat environment: repositories and question actions (desktop since #2404) | Actioned `ask_user` options show as plain answers; no repository list | Same | [#2415](https://github.com/nekko-labs/nekko-agent/issues/2415) |
 
 ## Android is behind the iPhone today
 

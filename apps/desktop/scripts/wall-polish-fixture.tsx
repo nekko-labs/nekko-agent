@@ -68,12 +68,12 @@ function StatusGallery() {
 /** The Spooky corner mascot (with its hat) and the nav rail's Agents cat, large enough to inspect. */
 function MascotGallery() {
   return <div style={{ padding: 24, display: 'flex', gap: 48, alignItems: 'flex-end' }} className="bg-paper" data-mascot-gallery>
-    <div data-gallery="hat"><NekkoAvatar size={192} stationary quiet wizardHat /></div>
+    <div data-gallery="hat"><NekkoAvatar size={192} stationary quiet hat="wizard" /></div>
     <div data-gallery="nav" style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
       <span className="nav-item active" style={{ display: 'grid', placeItems: 'center', width: 44, height: 44 }}><NekkoAvatar size={22} stationary eyes={false} /></span>
       <NekkoAvatar size={132} stationary eyes={false} />
     </div>
-    <Mascot mood="idle" enabled wizardHat />
+    <Mascot mood="idle" enabled hat="wizard" />
   </div>;
 }
 

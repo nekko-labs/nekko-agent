@@ -268,6 +268,8 @@ const api: NekkoApi = {
   },
   addWorkspaceByPath: (path) => inv(IpcChannels.workspaceAddByPath, path),
   removeWorkspace: (id) => inv(IpcChannels.workspaceRemove, id),
+  listRepos: (query) => inv(IpcChannels.reposList, query ?? ''),
+  cloneRepo: (repo) => inv(IpcChannels.reposClone, repo),
   indexWorkspace: (id) => inv(IpcChannels.workspaceIndex, id),
   getIndexStatus: (id) => inv(IpcChannels.workspaceIndexStatus, id),
   searchWorkspace: (id, query) => inv(IpcChannels.workspaceSearch, id, query),

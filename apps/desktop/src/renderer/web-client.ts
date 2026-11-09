@@ -591,6 +591,8 @@ function makeWebClient(): NekkoApi {
     },
     addWorkspaceByPath: (path) => call(IpcChannels.workspaceAddByPath, path),
     removeWorkspace: (id) => call(IpcChannels.workspaceRemove, id),
+    listRepos: (query) => call(IpcChannels.reposList, query ?? ''),
+    cloneRepo: (repo) => call(IpcChannels.reposClone, repo),
     indexWorkspace: (id) => call(IpcChannels.workspaceIndex, id),
     getIndexStatus: (id) => call(IpcChannels.workspaceIndexStatus, id),
     searchWorkspace: (id, query) => call(IpcChannels.workspaceSearch, id, query),
