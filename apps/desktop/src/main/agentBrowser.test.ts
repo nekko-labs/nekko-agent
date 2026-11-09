@@ -7,11 +7,14 @@ const fake = vi.hoisted(() => {
     opts: any;
     destroyed = false;
     handlers = new Map<string, (...args: any[]) => void>();
+    id = windows.length + 1;
     webContents = {
       setWindowOpenHandler: vi.fn(), on: vi.fn(), getTitle: () => 'Example',
       beginFrameSubscription: vi.fn(), endFrameSubscription: vi.fn(),
+      setBackgroundThrottling: vi.fn(), off: vi.fn(), executeJavaScript: vi.fn(async () => undefined),
       session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn(), on: vi.fn() },
     };
+    capturePage = vi.fn(async () => ({ isEmpty: () => false, getSize: () => ({ width: 1100, height: 760 }), toPNG: () => Buffer.from('png') }));
     constructor(opts: any) { this.opts = opts; windows.push(this); }
     on(name: string, cb: (...args: any[]) => void) { this.handlers.set(name, cb); }
     isDestroyed() { return this.destroyed; }
@@ -24,8 +27,8 @@ const fake = vi.hoisted(() => {
   }
   return { Window, windows };
 });
-vi.mock('electron', () => ({ BrowserWindow: fake.Window, app: { userAgentFallback: 'test', getPath: () => '' } }));
-import { errorLine, startAgentBrowser, withFramesAwake, type BrowserDriver } from './agentBrowser.js';
+vi.mock('electron', () => ({ BrowserWindow: fake.Window, app: { userAgentFallback: 'test', getPath: () => '' }, desktopCapturer: { getSources: async () => [] } }));
+import { errorLine, startAgentBrowser, tabRenderer, withFramesAwake, type BrowserDriver } from './agentBrowser.js';
 
 afterEach(() => { fake.windows.length = 0; });
 
@@ -268,6 +271,133 @@ describe('hidden-window frames', () => {
         expect(subscribed).toEqual(wakeFrames === false ? [] : ['begin', 'end', 'begin', 'end']);
       } finally { bridge.close(); }
     }
+  });
+});
+
+describe('idle tabs stop rendering', () => {
+  // 'hide' and 'show' are setBackgroundThrottling(true) and (false); a wake is both, in that order.
+  const win = () => {
+    const calls: string[] = [];
+    const listeners = new Map<string, () => void>();
+    let destroyed = false;
+    const webContents = {
+      setBackgroundThrottling: (allowed: boolean) => calls.push(allowed ? 'hide' : 'show'),
+      on: (event: string, fn: () => void) => listeners.set(event, fn),
+      off: (event: string, fn: () => void) => { if (listeners.get(event) === fn) listeners.delete(event); },
+    };
+    return { calls, listeners, commit: () => listeners.get('did-frame-navigate')?.(), destroy: () => { destroyed = true; }, win: { isDestroyed: () => destroyed, webContents } as any };
+  };
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('starts asleep, wakes for an action, and sleeps again after the grace period', async () => {
+    vi.useFakeTimers();
+    const w = win();
+    const renderer = tabRenderer(w.win, 1_000);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(w.calls).toEqual([]); // created asleep: nothing to do until an action
+    expect(await renderer.hold(async () => { w.calls.push('work'); return 7; })).toBe(7);
+    expect(w.calls).toEqual(['hide', 'show', 'work']);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(w.calls).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(w.calls.at(-1)).toBe('hide');
+    // An action inside the grace period wakes again (the page may have new widgets) and restarts the countdown.
+    w.calls.length = 0;
+    await renderer.hold(async () => {});
+    await vi.advanceTimersByTimeAsync(500);
+    await renderer.hold(async () => {});
+    await vi.advanceTimersByTimeAsync(999);
+    expect(w.calls).toEqual(['hide', 'show', 'hide', 'show']);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(w.calls.at(-1)).toBe('hide');
+  });
+
+  it('never sleeps while an action holds the tab, and an overlapping hold never re-hides it', async () => {
+    vi.useFakeTimers();
+    const w = win();
+    const renderer = tabRenderer(w.win, 1_000);
+    let finish!: () => void;
+    const held = renderer.hold(() => new Promise<void>((resolve) => { finish = resolve; }));
+    await expect(renderer.hold(async () => { throw new Error('page'); })).rejects.toThrow('page');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(w.calls).toEqual(['hide', 'show']);
+    finish(); await held;
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(w.calls).toEqual(['hide', 'show', 'hide']);
+  });
+
+  it('re-wakes on a frame commit while awake, never while asleep', async () => {
+    vi.useFakeTimers();
+    const w = win();
+    const renderer = tabRenderer(w.win, 1_000);
+    w.commit();
+    expect(w.calls).toEqual([]);
+    await renderer.hold(async () => { w.commit(); });
+    expect(w.calls).toEqual(['hide', 'show', 'hide', 'show']);
+    w.commit(); // inside the grace period: the new page paints too
+    expect(w.calls).toHaveLength(6);
+    await vi.advanceTimersByTimeAsync(1_000);
+    w.commit();
+    expect(w.calls).toEqual(['hide', 'show', 'hide', 'show', 'hide', 'show', 'hide']);
+    renderer.dispose();
+    expect(w.listeners.size).toBe(0);
+  });
+
+  it('touches neither a destroyed nor a disposed tab', async () => {
+    vi.useFakeTimers();
+    const gone = win();
+    const a = tabRenderer(gone.win, 10);
+    await a.hold(async () => {});
+    gone.destroy();
+    await vi.advanceTimersByTimeAsync(20);
+    await a.hold(async () => {});
+    expect(gone.calls).toEqual(['hide', 'show']);
+    const disposed = win();
+    const b = tabRenderer(disposed.win, 10);
+    await b.hold(async () => {});
+    b.dispose();
+    await vi.advanceTimersByTimeAsync(20);
+    expect(disposed.calls).toEqual(['hide', 'show']);
+  });
+
+  it('wakes a sleeping tab for every page action and captures, then lets it sleep again', async () => {
+    const { driver, pages } = fakeDriver();
+    const bridge = await startAgentBrowser({ driver: async () => driver, sleepAfterMs: 20 });
+    const post = async (input: object) => (await fetch(bridge.url, { method: 'POST', headers: { Authorization: `Bearer ${bridge.token}` }, body: JSON.stringify({ sessionId: 'idle', ...input }) })).json();
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+    try {
+      await post({ action: 'navigate', url: 'https://example.com' });
+      const w = fake.windows.at(-1);
+      const order: string[] = [];
+      w.webContents.setBackgroundThrottling.mockImplementation((allowed: boolean) => order.push(allowed ? 'hide' : 'show'));
+      w.webContents.beginFrameSubscription.mockImplementation(() => order.push('frames'));
+      expect(w.opts).toMatchObject({ show: false, paintWhenInitiallyHidden: false }); // created hidden and asleep
+      expect(w.opts.webPreferences.backgroundThrottling).toBe(true);
+      await settle();
+      expect(order).toEqual(['hide']);
+      pages[0].evaluate.mockImplementation(async () => { order.push('evaluate'); return 'Body'; });
+      await post({ action: 'inspect' });
+      expect(order).toEqual(['hide', 'hide', 'show', 'evaluate']);
+      await settle();
+      expect(order.at(-1)).toBe('hide');
+      // A screenshot wakes the renderer before subscribing to frames.
+      pages[0].screenshot.mockImplementation(async () => { order.push('screenshot'); return PNG; });
+      order.length = 0;
+      await post({ action: 'screenshot' });
+      expect(order).toEqual(['hide', 'show', 'frames', 'screenshot']);
+      await settle();
+      // The capture tool's owned-window screenshot wakes it and waits for paint too.
+      w.webContents.executeJavaScript.mockImplementation(async () => { order.push('paint'); });
+      w.capturePage.mockImplementation(async () => { order.push('capture'); return { isEmpty: () => false, getSize: () => ({ width: 1100, height: 760 }), toPNG: () => Buffer.from('png') }; });
+      order.length = 0;
+      const listed = await post({ tool: 'capture', action: 'list' });
+      expect(order).toEqual([]); // listing never wakes a tab
+      const shot = await post({ tool: 'capture', action: 'screenshot', window_id: listed.windows[0].id });
+      expect(shot).toMatchObject({ source: 'owned-page', width: 1100, height: 760 });
+      expect(order).toEqual(['hide', 'show', 'frames', 'paint', 'capture']);
+      await settle();
+      expect(order.at(-1)).toBe('hide');
+    } finally { bridge.close(); }
   });
 });
 
