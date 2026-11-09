@@ -75,8 +75,10 @@ If you turn on step-up (Settings, Security), raising a chat's mode from a comput
 2. On your phone: scan the QR in the Nekko Agent app (**Computers → Pair a computer**), or with the
    phone's camera app, which hands the `nekko-agent-pair:` link to the Nekko Agent app. Without the
    app, the pairing link also opens the web app in a browser over the relay, but it is limited to
-   what a phone may do (below), so most desktop screens there are unavailable.
-3. The phone shows up under **Paired devices**, with a live connection dot.
+   what a phone may do (below), so most desktop screens there are unavailable. Hold the phone about
+   20 cm from the screen: the app zooms in a little on phones whose camera cannot focus closer.
+3. The phone celebrates for a moment (*You're connected!*; tap anywhere or **Let's go** to carry
+   on), and the phone shows up under **Paired devices**, with a live connection dot.
 
 **Updating from a version before November 2026:** the first time your computer starts with the
 update, it replaces its pairing secret (the phones it knew stay listed). Each phone then says the
