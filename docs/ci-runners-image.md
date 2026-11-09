@@ -81,8 +81,10 @@ never harms the image you have.
 | Test | A clone must boot, reject a `not-a-config` seed and power off within 10 minutes, and its boot log must show the runner ran: a guest also powers off on a seed it could not read | Keeps the build and shows the log |
 | Finish | Swaps the image in, writes `image.json` (the proof plus `tools`), applies the chosen mode, turns the runner on, deletes the build folder | Safe to run again |
 
-Between stages it waits, with the reason on screen, for a free VM slot, critical memory, heat,
-the disk floor, and, from Install on, for power. It uses 8 GB and leaves 2 cores free. Quitting
+Between stages it waits, with the reason on screen, for critical memory, heat, the disk floor,
+from Install on for power, and, before a stage that boots a VM (Install, Xcode, Lockdown, Tools,
+Test), for a free macOS VM slot. An idle runner VM gives its slot up at once; a running job is
+waited for. Linux VMs, Docker Desktop's included, take no slot. It uses 8 GB and leaves 2 cores free. Quitting
 Nekko pauses it, and the next launch offers to resume. A hung command fails its stage: each has a
 limit (license 3 min, first launch 20, simulator 60, Homebrew 20, `zstd` and `gnu-tar` 10, `node`,
 `gh` and `jq` 15, lockdown 15, test boot 10).

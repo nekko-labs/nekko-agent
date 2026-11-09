@@ -92,16 +92,9 @@ class LiveRelayTest {
             // touch at its old centre can miss; click it through its semantics.
             click(hasText("Pair"))
 
-            // The pairing celebration (#2360) covers everything until it goes, so a tap
-            // on the step below would land on it; Let's go closes it early.
-            val celebrating = { compose.onAllNodes(hasTestTag("pairSuccess.done")).fetchSemanticsNodes().isNotEmpty() }
-            compose.waitUntil(30_000) { celebrating() || compose.onAllNodes(hasText("Step 3 of 3")).fetchSemanticsNodes().isNotEmpty() }
-            if (celebrating()) {
-                shot("1a-paired")
-                compose.onAllNodes(hasTestTag("pairSuccess.done")).onFirst().performClick()
-            }
-            compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("pairSuccess")).fetchSemanticsNodes().isEmpty() }
-
+            // The pairing celebration covers the app until it goes; Let's go closes it early
+            // (FirstRunJourneyTest does the same). Taps meant for step 3 otherwise land on it.
+            closePairCelebration()
             // Step 3, right after the first pairing: notifications (granted above, so nothing is asked).
             waitFor(hasText("Step 3 of 3"), 30_000)
             shot("1a-first-run-notifications")
@@ -237,6 +230,13 @@ class LiveRelayTest {
         compose.onNode(box).performClick()
         compose.onNode(box).performTextInput(text)
         tap(hasContentDescription("Send"))
+    }
+
+    private fun closePairCelebration() {
+        val celebrating = { compose.onAllNodes(hasTestTag("pairSuccess.done")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30_000) { celebrating() || compose.onAllNodes(hasText("Step 3 of 3")).fetchSemanticsNodes().isNotEmpty() }
+        if (celebrating()) click(hasTestTag("pairSuccess.done"))
+        compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("pairSuccess")).fetchSemanticsNodes().isEmpty() }
     }
 
     private fun waitFor(matcher: SemanticsMatcher, timeoutMs: Long = 10_000) {

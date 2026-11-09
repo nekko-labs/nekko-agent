@@ -6,8 +6,8 @@ struct PixelCat: View {
     var happy = false
     var shocked = false
     var blink = false
-    var fill = Color(red: 16/255, green: 23/255, blue: 20/255)
-    var line = Color(red: 242/255, green: 241/255, blue: 233/255)
+    var fill = BrandColor.plum
+    var line = BrandColor.mark
 
     var body: some View {
         Canvas { context, size in
@@ -33,7 +33,7 @@ struct PixelCat: View {
             } else {
                 pixels(blink ? [CGRect(x: 10, y: 17, width: 4, height: 1), CGRect(x: 19, y: 17, width: 4, height: 1)] : [CGRect(x: 11, y: 15, width: 2, height: 3), CGRect(x: 20, y: 15, width: 2, height: 3)])
             }
-            context.fill(Path(CGRect(x: 15, y: 20, width: 2, height: 1)), with: .color(Color(red: 167/255, green: 200/255, blue: 172/255)))
+            context.fill(Path(CGRect(x: 15, y: 20, width: 2, height: 1)), with: .color(BrandColor.plumLight))
         }
         .accessibilityHidden(true)
     }

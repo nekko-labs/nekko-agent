@@ -241,7 +241,9 @@ impl Runners {
         let mut sup =
             Supervisor::new(dir.clone(), sense, vm, provider, Box::new(crate::awake::Hold::default()), host_name);
         let building = Arc::new(AtomicBool::new(false));
-        sup.set_building(building.clone());
+        let build_slot =
+            Arc::new(supervisor::BuildSlot::new(build_vm.as_ref().map(|v| v.live.clone()).unwrap_or_default()));
+        sup.set_building(building.clone(), build_slot.clone());
         let gh =
             github_setup::gh_path(std::env::var("NEKKO_GH_PATH").ok(), &["/opt/homebrew/bin/gh", "/usr/local/bin/gh"]);
         let setup = GithubSetup::new(github.clone(), &dir, hub.clone(), gh);
@@ -263,6 +265,7 @@ impl Runners {
             image::RealBuildHost::new(build_vm, images, me.mac.clone(), Arc::downgrade(&me)),
             job_vault,
             building,
+            build_slot,
             Box::new(move |v| job_hub.publish(image::EVENT, json!(v), false)),
         );
         let _ = me.image.set(Arc::new(job));
