@@ -483,6 +483,15 @@
 }
 /* Groups stack with the group gap; the first in a container takes none. */
 .quiet-group + .quiet-group { margin-top: var(--q-group); }
+/* A row's own actions (remove, revert, load): hidden until the row is hovered
+   or focused, always shown on touch. The row carries data-quiet-row. */
+.quiet-row-action { transition: opacity var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); }
+@media (hover: hover) {
+  .quiet-row-action { opacity: 0; }
+  [data-quiet-row]:hover .quiet-row-action,
+  [data-quiet-row]:focus-within .quiet-row-action,
+  .quiet-row-action:focus-visible { opacity: 1; }
+}
 
 @utility quiet-group-label {
   @apply text-xs font-medium text-ink-soft;
