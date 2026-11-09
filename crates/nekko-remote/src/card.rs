@@ -506,7 +506,9 @@ impl Cards {
                     e.pointer("/request/questions/0/question").and_then(Value::as_str).unwrap_or("A question for you");
                 self.running(&sid, now, q.to_string(), Some(None))
             }
-            "tool_result" | "question_resolved" | "approval_resolved" => self.running(&sid, now, "Working…".into(), None),
+            "tool_result" | "question_resolved" | "approval_resolved" => {
+                self.running(&sid, now, "Working…".into(), None)
+            }
             "done" => self.finish(&sid, now, LiveChatState::Done, "Finished"),
             "error" => {
                 let msg = e.get("message").and_then(Value::as_str).unwrap_or("").to_lowercase();

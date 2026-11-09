@@ -31,7 +31,7 @@ fn phone_image_fractional_cfg_cannot_cross_the_phone_boundary_but_local_desktop_
         "modelId": "image/sd", "width": 512, "height": 512, "steps": 28, "cfgScale": 4.5, "seed": -1
     }});
     assert_eq!(phone_image::request_problem(&opts), Some("cfgScale".into()));
-    assert!(phone::screen("chat:generateImage", &[opts.clone()]).is_err());
+    assert!(phone::screen("chat:generateImage", std::slice::from_ref(&opts)).is_err());
     assert_eq!(phone_image::host_request_problem(&opts), None);
     assert_eq!(opts["params"]["cfgScale"], 4.5, "never round or mutate a request");
 }
