@@ -3,6 +3,7 @@ const { app, BrowserWindow, session } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const out = process.env.NEKKO_INTEGRATION_OUT;
+app.disableHardwareAcceleration(); // capturePage throws UnknownVizError on GPU-less hosts otherwise
 app.setPath('userData', path.join(out, 'profile'));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { captures: [], checks: [], errors: [] };
@@ -12,7 +13,8 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_w, _p, done) => done(false));
   const win = new BrowserWindow({ width: 1280, height: 900, useContentSize: true, show: false, focusable: false, skipTaskbar: true, x: -6000, y: -6000, webPreferences: { sandbox: true, contextIsolation: true, backgroundThrottling: false, offscreen: true } });
   const run = s => win.webContents.executeJavaScript(s, true);
-  const shot = async name => { const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(f); };
+  // Entrance animations don't advance in a hidden window, so settle them before a still.
+  const shot = async name => { await run('document.getAnimations().forEach(a => { try { a.finish(); } catch {} })'); await sleep(50); const f = path.join(out, name + '.png'); fs.writeFileSync(f, (await win.capturePage(undefined, { stayHidden: true })).toPNG()); report.captures.push(f); };
   win.on('focus', () => report.errors.push('took focus'));
   win.webContents.on('console-message', e => { if (e.level === 'error') report.errors.push(e.message.slice(0, 500)); });
   try {
