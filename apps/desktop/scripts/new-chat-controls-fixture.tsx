@@ -17,8 +17,8 @@ const bridge: any = {
 };
 (window as any).nekko = new Proxy(bridge, { get(t, k: string) { if (k in t) return t[k]; if (k.startsWith('on')) return () => () => {}; return () => Promise.resolve(null); } });
 Promise.all([import('react'), import('react-dom/client'), import('../src/renderer/components/ChatPane'), import('../src/renderer/store'), import('../src/renderer/sessionCache')]).then(async ([React, { createRoot }, { ChatPane }, { useStore }, { putCachedSession }]) => {
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   putCachedSession(record);
   useStore.setState({ providers, models: catalogs.cloud, settings, activeSessionId: record.id } as any);

@@ -228,7 +228,7 @@ export function EngineSection({
               <div
                 role="alert"
                 className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border p-3"
-                style={{ borderColor: 'var(--warning, #d1a054)' }}
+                style={{ borderColor: 'var(--warning)' }}
               >
                 <p className="min-w-0 flex-1 text-xs">{install.problem.message}</p>
                 <button
@@ -257,7 +257,7 @@ export function EngineSection({
             {repairing && <DownloadProgress group={runtimeDownload.group} />}
 
             {status.settings.bind === 'lan' && running && (
-              <p className="mt-2 text-xs" style={{ color: 'var(--warning, #d1a054)' }}>
+              <p className="mt-2 text-xs" style={{ color: 'var(--warning)' }}>
                 Reachable from your whole network on port {status.settings.port}
                 {status.settings.apiKey ? ', and a key is required.' : '. No key is set, so anything on it can use your models.'}
               </p>
@@ -401,7 +401,7 @@ function AddressPill({ address }: { address: string }) {
 }
 
 function StatusDot({ running, busy }: { running: boolean; busy: boolean }) {
-  const color = busy ? 'var(--warning, #d1a054)' : running ? 'var(--accent)' : 'var(--ink-faint)';
+  const color = busy ? 'var(--warning)' : running ? 'var(--accent)' : 'var(--ink-faint)';
   return (
     <span
       className="inline-block h-2 w-2 shrink-0 rounded-full"

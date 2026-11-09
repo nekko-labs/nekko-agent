@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CreateMenuRows, type CreateKind } from '../src/renderer/components/CreateMenu';
 import { MediaAgentWelcome } from '../src/renderer/components/MediaAgentIntro';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 import '../src/renderer/styles.css';
 function Fixture() {
   const [kind, setKind] = useState<CreateKind | null>(null);

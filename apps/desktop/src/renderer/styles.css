@@ -115,6 +115,13 @@
   --color-neutral-soft: var(--neutral-soft);
   --color-running: var(--running);
   --color-highlight: var(--highlight);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-success-text: var(--success-text);
+  --color-danger-text: var(--danger-text);
+  --color-warning-text: var(--warning-text);
+  --color-attention-text: var(--attention-text);
+  --color-info-text: var(--info-text);
 
   /* Shadows come from the theme tokens (--shadow-sm, -md, -float, -lift), never
      Tailwind's untinted black scale: shadow-(--shadow-float). */
@@ -138,9 +145,9 @@
      4px grid: 4 / 8 / 12 / 16 / 24 / 32, never 6, 7, 10, 14 or 18. */
   --pane-gap: 8px;
 
-  /* The website's two fonts, bundled (main.tsx). Settings > Style overrides them on :root. */
-  --font-sans: 'Inter Tight Variable', 'Inter Tight', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  /* Geist and Geist Mono (docs/design-system.md), bundled in main.tsx. Settings > Style overrides them on :root. */
+  --font-sans: 'Geist Variable', 'Geist', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace;
 }
 
 /*
@@ -1237,13 +1244,17 @@
     --dur-fast: 0.12s;
     --dur-med: 0.2s;
     --dur-slow: 0.26s;
-    /* Quiet surfaces rhythm (docs/design-system.md): the gaps that replace
-     borders and card tiles. Name to meta on a row, heading to its rows,
-     group to group, section to section. */
+    /* Quiet surfaces rhythm (docs/design-system.md): 8px steps inside
+     components, 20px steps for layout, 4px only for tightly coupled pairs.
+     These gaps replace borders and card tiles. */
+    --q-tight: 4px;
     --q-inline: 8px;
-    --q-heading: 4px;
-    --q-group: 24px;
-    --q-section: 32px;
+    --q-heading: 8px;
+    --q-pad: 20px;
+    --q-group: 20px;
+    --q-section: 40px;
+    --q-row: 40px;
+    --q-row-dense: 32px;
     --q-wash: color-mix(in srgb, currentColor 6%, transparent);
     --q-wash-strong: color-mix(in srgb, currentColor 9%, transparent);
     /* Semantic status colors. Every screen reads state through these (never a
@@ -1253,13 +1264,23 @@
     --warning: #c9871f;
     /* An agent waiting on you: orange, louder than a warning chip. */
     --attention: #e8701a;
-    --info: #3f7fb8;
+    /* Petrol, the third colour: information, "New", chart series three. */
+    --info: #1f6680;
     --neutral: #8a8f98;
-    --running: #3b82f6;
-    --highlight: #d99b12;
+    /* Working is the green rocket; best-so-far marks are a warning amber. */
+    --running: var(--success);
+    --highlight: var(--warning);
+    /* Words in a state colour. The base values above are for glyphs, dots and
+     meter fills; as text they fall under 4.5:1 on light surfaces. */
+    --success-text: #226f49;
+    --danger-text: #b23a2d;
+    --warning-text: #8a5a0c;
+    --attention-text: #a84c0a;
+    --info-text: #1f6680;
     --success-soft: color-mix(in srgb, var(--success) 14%, transparent);
     --danger-soft: color-mix(in srgb, var(--danger) 14%, transparent);
     --warning-soft: color-mix(in srgb, var(--warning) 14%, transparent);
+    --attention-soft: color-mix(in srgb, var(--attention) 14%, transparent);
     --info-soft: color-mix(in srgb, var(--info) 14%, transparent);
     --neutral-soft: color-mix(in srgb, var(--neutral) 14%, transparent);
     /* Context/provenance categories, shared by the metrics bar, the context
@@ -1288,15 +1309,17 @@
     color-scheme: light;
   }
 
+  /* Dusk: the dark neutrals (decision 0075), halfway between the old ink
+     black and a blue midnight. The blue shows in panels and lines. */
   [data-theme='dark'] {
-    --paper: #0c0c11;
-  --win: #17171e;
-    --surface: #16161c;
-    --surface-2: #20202a;
-    --ink: #eceaf3;
-    --ink-soft: #a3a1b0;
-    --ink-faint: #898894;
-    --line: #26262f;
+    --paper: #0b0c14;
+    --win: #181a25;
+    --surface: #14151f;
+    --surface-2: #1d1f2c;
+    --ink: #eaeaf4;
+    --ink-soft: #a3a4b6;
+    --ink-faint: #87899b;
+    --line: #252735;
     --accent: #c084b5;
     --accent-2: #c99bb3;
     --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
@@ -1317,13 +1340,17 @@
     --danger: #e0574a;
     --warning: #e0a44a;
     --attention: #f58a3a;
-    --info: #5b9dd9;
+    --info: #6bb8d4;
     --neutral: #8a8f98;
-    --running: #60a5fa;
-    --highlight: #fbbf24;
+    --success-text: #4ec98a;
+    --danger-text: #ef6a5d;
+    --warning-text: #e0a44a;
+    --attention-text: #f58a3a;
+    --info-text: #6bb8d4;
     --success-soft: color-mix(in srgb, var(--success) 18%, transparent);
     --danger-soft: color-mix(in srgb, var(--danger) 18%, transparent);
     --warning-soft: color-mix(in srgb, var(--warning) 18%, transparent);
+    --attention-soft: color-mix(in srgb, var(--attention) 18%, transparent);
     --info-soft: color-mix(in srgb, var(--info) 18%, transparent);
     --neutral-soft: color-mix(in srgb, var(--neutral) 18%, transparent);
     --cat-guideline: #c08adb;
@@ -1919,8 +1946,8 @@
     --merged-chip: rgba(43, 18, 76, 0.1);
   }
   [data-theme='dark'][data-preset='x-plum-dark'] {
-    --paper: #0c0c11;
-    --win: #17171e;
+    --paper: #0b0c14;
+    --win: #181a25;
     --ink: #ffffff;
     --on-accent: #190019;
     --accent-soft: color-mix(in srgb, #5a2352 55%, var(--surface));
@@ -1930,8 +1957,8 @@
     --merged-chip: rgba(133, 79, 108, 0.16);
   }
   [data-theme='dark'][data-preset='x-indigo-dark'] {
-    --paper: #0c0c11;
-    --win: #17171e;
+    --paper: #0b0c14;
+    --win: #181a25;
     --ink: #ffffff;
     --on-accent: #2b124c;
     --accent-soft: color-mix(in srgb, #4a2a7a 55%, var(--surface));

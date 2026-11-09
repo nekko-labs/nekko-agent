@@ -1,6 +1,6 @@
 # Fonts and text
 
-Nekko Agent uses the same two fonts as nekkoagent.com: **Inter Tight** for the interface and **JetBrains Mono** for code. Both ship inside the app, so nothing is downloaded to show them.
+Nekko Agent uses two fonts: **Geist** for the interface and **Geist Mono** for code. Both ship inside the app, so nothing is downloaded to show them.
 
 Change them in **Settings > Style**:
 

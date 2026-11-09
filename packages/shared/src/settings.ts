@@ -252,9 +252,9 @@ export interface AppSettings {
   accent2?: string;
   /** Selected theme preset id (`system`, `nebula`, `terminal`, etc.). */
   themePreset?: string;
-  /** Settings > Style: the interface font family; unset is Inter Tight, the website's. */
+  /** Settings > Style: the interface font family; unset is Geist (docs/design-system.md). */
   fontSans?: string;
-  /** Settings > Style: the code font family; unset is JetBrains Mono, the website's. */
+  /** Settings > Style: the code font family; unset is Geist Mono. */
   fontMono?: string;
   /** Settings > Style: interface scale in percent; unset is 100. */
   textScale?: number;

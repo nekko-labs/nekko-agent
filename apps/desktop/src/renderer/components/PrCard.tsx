@@ -204,11 +204,11 @@ export function PrPane({ url }: { url: string }) {
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'var(--paper)' }}>
       <div className="flex items-center gap-2 border-b border-line px-3 py-1 text-xs">
-        <span className="shrink-0 text-green-400">⑂</span>
+        <span className="shrink-0 text-success-text">⑂</span>
         <span className="truncate font-semibold">{label}</span>
         {loaded && (
           <span className="shrink-0 text-2xs">
-            <span className="text-green-500">+{totals.adds}</span> <span className="text-red-400">-{totals.dels}</span> · {totals.files} file{totals.files === 1 ? '' : 's'}
+            <span className="text-success-text">+{totals.adds}</span> <span className="text-danger-text">-{totals.dels}</span> · {totals.files} file{totals.files === 1 ? '' : 's'}
           </span>
         )}
         <button className="ml-auto shrink-0 text-2xs text-ink-faint hover:text-ink" onClick={() => openExternally(url)}>Open on GitHub ↗</button>
@@ -240,7 +240,7 @@ function PrFileDiff({ file }: { file: PrDiff['files'][number] }) {
         <span className="w-2 text-2xs text-ink-faint">{open ? '▾' : '▸'}</span>
         <span className="truncate font-medium" title={file.path}>{name}</span>
         {file.status !== 'modified' && <span className="chip text-2xs uppercase">{file.status}</span>}
-        <span className="ml-auto shrink-0 text-2xs"><span className="text-green-500">+{file.additions}</span> <span className="text-red-400">-{file.deletions}</span></span>
+        <span className="ml-auto shrink-0 text-2xs"><span className="text-success-text">+{file.additions}</span> <span className="text-danger-text">-{file.deletions}</span></span>
       </button>
       {open && (
         file.patch ? (

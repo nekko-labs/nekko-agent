@@ -154,7 +154,7 @@ export function ResidentModels({
                   {r.loadedOn && (
                     <span
                       className="text-2xs text-ink-faint"
-                      style={r.loadedOn !== 'gpu' ? { color: 'var(--warning, #d1a054)' } : undefined}
+                      style={r.loadedOn !== 'gpu' ? { color: 'var(--warning)' } : undefined}
                       title={placementTitle(r)}
                     >
                       {placementLabel(r)}

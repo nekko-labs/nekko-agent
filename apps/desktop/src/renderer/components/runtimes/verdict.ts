@@ -110,9 +110,9 @@ export function verdictColor(verdict: FitPlan['verdict']): string {
     case 'fits':
       return 'var(--success)';
     case 'tight':
-      return 'var(--warning, #d1a054)';
+      return 'var(--warning)';
     case 'spills':
-      return 'var(--warning, #d1a054)';
+      return 'var(--warning)';
     case 'wont-load':
       return 'var(--danger)';
     case 'unknown':

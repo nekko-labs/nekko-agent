@@ -2,7 +2,7 @@
 // clip is a still drawn here, not a generated one. Never contacts a host.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 import '../src/renderer/styles.css';
 
 const GB = 1e9;

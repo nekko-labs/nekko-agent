@@ -62,7 +62,7 @@ function modalityTone(modality?: ModelModality): string {
     case 'audio':
     case 'draft':
     case 'unknown':
-      return 'var(--warning, #d1a054)';
+      return 'var(--warning)';
     default:
       return 'var(--ink-faint)';
   }
@@ -334,7 +334,7 @@ export function ModelLibrary({
           style={{
             background: 'var(--surface-2)',
             opacity: unsupported ? 0.85 : 1,
-            boxShadow: fitWarn ? 'inset 2px 0 0 var(--warning, #d1a054)' : undefined,
+            boxShadow: fitWarn ? 'inset 2px 0 0 var(--warning)' : undefined,
           }}
         >
           <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
@@ -357,7 +357,7 @@ export function ModelLibrary({
                         </span>
                       )}
                       {m.modality === 'vision' && !m.hasProjector && (
-                        <span className="chip shrink-0" style={{ color: 'var(--warning, #d1a054)' }} title="Its projector file (mmproj-*.gguf) is missing, so it answers text only">
+                        <span className="chip shrink-0" style={{ color: 'var(--warning)' }} title="Its projector file (mmproj-*.gguf) is missing, so it answers text only">
                           no projector
                         </span>
                       )}
@@ -377,7 +377,7 @@ export function ModelLibrary({
                       {m.gpuFit === 'partial' && !unsupported && (
                         <span
                           className="chip shrink-0"
-                          style={{ color: 'var(--warning, #d1a054)' }}
+                          style={{ color: 'var(--warning)' }}
                           title="Under its saved settings, part of it runs on the CPU rather than fully in VRAM. Open Settings to change that."
                         >
                           part on CPU
@@ -386,7 +386,7 @@ export function ModelLibrary({
                       {m.gpuFit === 'wont' && !unsupported && (
                         <span
                           className="chip shrink-0"
-                          style={{ color: 'var(--warning, #d1a054)' }}
+                          style={{ color: 'var(--warning)' }}
                           title="The planner says it will not fit on this machine, even partly offloaded to the CPU."
                         >
                           won't fit
@@ -487,13 +487,13 @@ export function ModelLibrary({
                 </div>
 
                 {unsupported && (
-                  <p className="mt-1 flex items-start gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-1 flex items-start gap-2 px-3 text-2xs" style={{ color: 'var(--warning)' }}>
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     {unsupported}
                   </p>
                 )}
                 {missingProjector && !unsupported && (
-                  <p className="mt-1 flex flex-wrap items-center gap-2 px-3 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-1 flex flex-wrap items-center gap-2 px-3 text-2xs" style={{ color: 'var(--warning)' }}>
                     <WarningIcon className="h-3 w-3 shrink-0" />
                     Its projector (mmproj-*.gguf) is missing: it answers text but cannot see images.
                     <button
@@ -506,7 +506,7 @@ export function ModelLibrary({
                   </p>
                 )}
                 {m.lastLoadError && !m.loaded && (
-                  <p className="mt-1 flex flex-wrap items-start gap-2 px-3 text-2xs" style={{ color: 'var(--danger, var(--warning, #d1a054))' }}>
+                  <p className="mt-1 flex flex-wrap items-start gap-2 px-3 text-2xs" style={{ color: 'var(--danger)' }}>
                     <WarningIcon className="mt-0.5 h-3 w-3 shrink-0" />
                     <span>Last load failed: {m.lastLoadError}</span>
                     {missingProjector && (

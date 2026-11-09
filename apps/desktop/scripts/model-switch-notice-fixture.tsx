@@ -17,8 +17,8 @@ const bridge: any = {
     import('react-dom/client'), import('react'), import('../src/renderer/components/ChatPane'),
     import('../src/renderer/views/SettingsView'), import('../src/renderer/components/UpdateBanner'), import('../src/renderer/store'), import('../src/renderer/sessionCache'),
   ]);
-  await import('@fontsource-variable/inter-tight');
-  await import('@fontsource-variable/jetbrains-mono');
+  await import('@fontsource-variable/geist');
+  await import('@fontsource-variable/geist-mono');
   await import('../src/renderer/styles.css');
   const f = { bridge, store: useStore, records, putCachedSession, lastSend: undefined as any };
   (window as any).layoutFixture = f;
