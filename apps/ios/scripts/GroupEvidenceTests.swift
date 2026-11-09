@@ -43,7 +43,14 @@ final class GroupEvidenceTests: XCTestCase {
                     XCTAssertEqual(control.value as? String, other < index ? "0" : "1", fields[other].setting)
                 }
                 let control = reveal(app, app.switches[fields[index].setting].firstMatch)
-                control.tap()
+                // Native AX represents this Form toggle as a 308pt-wide row
+                // containing the actual 63pt switch. The row's label center is
+                // inert; drive the child control whose frame the AX tree records.
+                let thumb = control.switches.firstMatch
+                XCTAssertTrue(thumb.exists, fields[index].setting)
+                XCTAssertTrue(control.frame.contains(thumb.frame), fields[index].setting)
+                XCTAssertTrue(thumb.isHittable, fields[index].setting)
+                thumb.tap()
                 XCTAssertEqual(control.value as? String, "0", fields[index].setting)
                 closeCardViewOptions(app)
                 for other in fields.indices {

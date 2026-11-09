@@ -64,3 +64,15 @@ test('card details checks real spoken fields and keeps reveal drags inside the F
   assert.ok(ui.includes('"-uiTestKeepCardDetails"'));
   assert.ok(ui.includes('XCTAssertFalse(row(app).label.contains(field.marker)'));
 });
+
+// iOS27 exposes a whole Form row as a Switch with an actual switch child.
+test('card details drives the native switch thumb and retains post-tap checks', () => {
+  const ui = fs.readFileSync(path.join(root, 'apps/ios/scripts/GroupEvidenceTests.swift'), 'utf8');
+  assert.ok(ui.includes('let thumb = control.switches.firstMatch'));
+  assert.ok(ui.includes('XCTAssertTrue(thumb.exists, fields[index].setting)'));
+  assert.ok(ui.includes('control.frame.contains(thumb.frame)'));
+  assert.ok(ui.includes('XCTAssertTrue(thumb.isHittable, fields[index].setting)'));
+  assert.ok(ui.includes('thumb.tap()'));
+  assert.ok(!ui.includes('control.tap()'));
+  assert.ok(ui.includes('XCTAssertEqual(control.value as? String, "0", fields[index].setting)'));
+});
