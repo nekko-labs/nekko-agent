@@ -1162,6 +1162,37 @@ final class RunActivitiesTests: XCTestCase {
         XCTAssertEqual(content.state, ended, "an empty pushed card cannot retain old chats")
     }
 
+    /// A card the phone built from every computer's chats outranks one computer's push while the app runs.
+    func testFleetCardKeepsItsCountsOverOneComputersPush() {
+        var local = LiveCardState(chats: [], focusId: nil, more: 0, listening: false, heard: "", counts: ["working": 3])
+        local.scope = "All computers"
+        var content = CardContent(state: local)
+        var pushed = local
+        pushed.scope = nil
+        pushed.counts = ["working": 1]
+        XCTAssertEqual(content.receive(pushed), local, "the phone's whole-list card is written back")
+        XCTAssertEqual(content.state, local)
+        XCTAssertNil(content.receive(local), "observing our own write is not echoed")
+    }
+
+    func testListeningTimerStartsWithTheMicAndClearsAfter() throws {
+        summaries = [chat("a", "Billing fix")]
+        let r = make()
+        r.onEvent(.text(sessionId: "a", delta: "Hi"))
+        r.refresh()
+        defer { r.endAll() }
+        let card = try XCTUnwrap(started.first)
+        let opened = Date()
+        r.talk(listening: true, heard: LiveCardVoice.listening, now: opened)
+        XCTAssertEqual(card.state.listeningSince, opened)
+        r.talk(listening: true, heard: LiveCardVoice.hearing, now: opened.addingTimeInterval(2))
+        XCTAssertEqual(card.state.listeningSince, opened, "one timer across the listening phases")
+        r.refresh(now: opened.addingTimeInterval(3), urgent: true)
+        XCTAssertEqual(card.state.listeningSince, opened, "a rebuild keeps it")
+        r.talk(listening: false, heard: "Cancelled. Nothing sent.", now: opened.addingTimeInterval(4))
+        XCTAssertNil(card.state.listeningSince)
+    }
+
     func testCountOnlyPushReplacesTotalsWithoutEcho() {
         let old = LiveCardState(chats: [], focusId: nil, more: 20, listening: false, heard: "", counts: ["working": 20])
         var content = CardContent(state: old)

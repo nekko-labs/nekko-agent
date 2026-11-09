@@ -9,11 +9,16 @@ import SwiftUI
 enum DictationError: Error, Equatable, LocalizedError {
     /// The phone has no on-device recognizer for its language, and speech never goes to a server.
     case noOnDevice(language: String)
+    /// The Live Activity's mic, away from the app: iOS would hold its microphone or speech
+    /// prompt until the app opens, so capture stops instead of waiting on it.
+    case needsPermission
 
     var errorDescription: String? {
         switch self {
         case .noOnDevice(let language):
             return "This phone can't turn speech into text on the phone for \(language), so dictation is off. Turn on Nekko Voice on your computer to dictate."
+        case .needsPermission:
+            return LiveCardVoice.micNeeded
         }
     }
 }
@@ -97,6 +102,16 @@ final class Dictation {
     /// Phone-only chats must never send audio to a paired computer.
     var allowComputer = true
     var available: Bool { AVAudioApplication.shared.recordPermission != .denied }
+    /// False for the Live Activity's mic while the app is off screen: a permission prompt
+    /// can't show there (iOS holds it until the app opens), so `start` refuses instead.
+    var promptsAllowed = true
+    /// `start` stopped because a prompt it needed can't show (`promptsAllowed`).
+    private var permissionNeeded = false
+    /// `captureOnce`: speech started (once per capture), for the card's "Hearing you".
+    var onSpeech: (() -> Void)?
+    private var speechSignalled = false
+    /// The microphone is allowed (no prompt needed to open it).
+    static var micGranted: Bool { AVAudioApplication.shared.recordPermission == .granted }
 
     var status: String {
         if recording { return holding ? "Listening… let go when you’re done" : "Listening… tap stop when you’re done" }
@@ -212,6 +227,7 @@ final class Dictation {
         defer { starting = false }
         error = nil
         notice = nil
+        permissionNeeded = false
         self.store = store
         audioCancelled = false
         captureGeneration += 1
@@ -230,11 +246,19 @@ final class Dictation {
         // Only first use, or a phone that can't recognize on the device, pays the relay round trip to ask
         // the computer: otherwise there is nothing to prompt for or refuse, and the mic opens at once.
         if transcribe == nil, !Self.phoneReady, !(await computerHasWhisper(store)) {
+            if !promptsAllowed, SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+                permissionNeeded = true
+                return
+            }
             let auth = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
             if let refusal = Self.phoneRefusal(authorized: auth == .authorized, recognizer: SFSpeechRecognizer()) {
                 error = refusal
                 return
             }
+        }
+        if !promptsAllowed, !Self.micGranted {
+            permissionNeeded = true
+            return
         }
         guard await AVAudioApplication.requestRecordPermission() else {
             error = "Microphone access is off. Allow it in Settings → Nekko Agent."
@@ -318,6 +342,28 @@ final class Dictation {
     }
     #endif
 
+    enum CardVoicePermission { case ready, openedSettings, refused }
+
+    /// The card's **Allow microphone**, in the app where iOS can show the prompts: the
+    /// microphone's (or Settings, when it was turned off there, as iOS won't ask again),
+    /// then speech recognition's while still unasked, which the phone needs to transcribe
+    /// when the computer can't. Never starts listening.
+    static func requestCardVoicePermissions() async -> CardVoicePermission {
+        switch AVAudioApplication.shared.recordPermission {
+        case .denied:
+            if let url = URL(string: UIApplication.openSettingsURLString) { _ = await UIApplication.shared.open(url) }
+            return .openedSettings
+        case .granted:
+            break
+        default:
+            guard await AVAudioApplication.requestRecordPermission() else { return .refused }
+        }
+        if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+            _ = await withCheckedContinuation { c in SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) } }
+        }
+        return .ready
+    }
+
     /// Speech is allowed and this phone recognizes its language on the device (both answered without waiting).
     private static var phoneReady: Bool {
         SFSpeechRecognizer.authorizationStatus() == .authorized && SFSpeechRecognizer()?.supportsOnDeviceRecognition == true
@@ -356,11 +402,13 @@ final class Dictation {
         once = 0
         refusal = nil
         error = nil
+        speechSignalled = false
         defer {
             sink = nil
             once = nil
         }
         await open()
+        if !recording, permissionNeeded { throw DictationError.needsPermission }
         if !recording, let error { throw RelayError(error) }
         while recording { try? await Task.sleep(nanoseconds: 50_000_000) }
         await drain()
@@ -498,12 +546,20 @@ final class Dictation {
             held += samples
             if Double(held.count) >= Self.maxSeconds * Self.sampleRate { stopListening() }
         } else if let segment = segmenter.feed(samples) {
+            signalSpeech()
             enqueue(segment)
             if once != nil { stopListening() }
         } else if let heard = once {
+            if segmenter.hearingSpeech { signalSpeech() }
             once = heard + samples.count
             if Double(heard + samples.count) >= Self.maxSeconds * Self.sampleRate { stopListening() }
         }
+    }
+
+    private func signalSpeech() {
+        guard once != nil, !speechSignalled else { return }
+        speechSignalled = true
+        onSpeech?()
     }
 
     /// Transcribes after every earlier segment: the computer refuses a second transcription while one runs.

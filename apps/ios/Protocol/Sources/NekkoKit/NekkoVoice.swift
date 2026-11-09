@@ -145,8 +145,14 @@ public final class NekkoVoiceRunner {
     public var routeWithCommit: ((String, NekkoVoiceCommit) async throws -> String)?
     public var show: (Bool, String) -> Void = { _, _ in }
     public var onCancel: () -> Void = {}
+    /// The card's words for a capture or delivery failure that has a known remedy
+    /// (no microphone permission yet); nil keeps the generic failure line.
+    public var describe: (Error) -> String? = { _ in nil }
     public private(set) var busy = false
+    /// The microphone phase (from the tap until the words are captured).
+    public var isListening: Bool { listening }
     private var listening = false
+    private var heardSpeechShown = false
     private var generation = 0
     private var delivery: NekkoVoiceCommit?
     /// Processing remains visible, but is cancellable until synchronous persistence.
@@ -159,17 +165,18 @@ public final class NekkoVoiceRunner {
         generation += 1
         let token = generation
         let permit = NekkoVoiceCommit { [weak self] in self?.busy == true && self?.generation == token }
-        permit.onCommit = { [weak self] in self?.show(true, "Sending…") }
+        permit.onCommit = { [weak self] in self?.show(true, LiveCardVoice.sending) }
         delivery = permit
+        heardSpeechShown = false
         defer { busy = false; listening = false; delivery = nil }
-        show(true, "")
+        show(true, LiveCardVoice.listening)
         do {
             let text = try await capture().trimmingCharacters(in: .whitespacesAndNewlines)
             guard token == generation else { return }
             listening = false
             guard !text.isEmpty else { show(false, "No words heard. Nothing sent."); return }
             // Keep the card alive and retain local voice state through push updates.
-            show(true, "Processing…")
+            show(true, LiveCardVoice.processing)
             let reply: String
             if let routeWithCommit { reply = try await routeWithCommit(text, permit) }
             else { reply = try await route(text) }
@@ -179,17 +186,23 @@ public final class NekkoVoiceRunner {
             guard token == generation else { return }
             // Recognizer/server diagnostics may contain captured words or credentials.
             // Keep raw errors off the Lock Screen, as with the transcript itself.
-            show(false, "Not sent. Voice capture or delivery failed. Open app to review.")
+            show(false, describe(error) ?? "Not sent. Voice capture or delivery failed. Open app to review.")
         }
     }
+    /// Speech started while listening: the card says it is hearing, once per capture.
+    public func heardSpeech() {
+        guard listening, !heardSpeechShown else { return }
+        heardSpeechShown = true
+        show(true, LiveCardVoice.hearing)
+    }
     public func finishListening() { if listening { finish() } }
-    public func cancel() {
+    public func cancel(message: String = "Cancelled. Nothing sent.") {
         // Once persisted, an outbox delivery cannot honestly be recalled.
         guard delivery?.committed != true else { return }
         generation += 1
         listening = false
         onCancel()
         discard()
-        show(false, "Cancelled. Nothing sent.")
+        show(false, message)
     }
 }
