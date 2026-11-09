@@ -56,11 +56,14 @@ final class ComputersTests: XCTestCase {
         field.tap()
         field.typeText("relay=wss://relay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&host=BJ7go4GGB9flqEQfjn77eO%2BWT5J%2Bxi8WJkMUlZycp%2BJNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE%3D")
         app.buttons["Pair"].tap()
-        if app.buttons["Not now"].waitForExistence(timeout: 3) { app.buttons["Not now"].tap() }
         // Onboarded, pairing asks iOS for notifications straight away; answer it here
         // rather than inside the next tap's interruption handling.
         let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
         if allow.waitForExistence(timeout: 4) { allow.tap() }
+        // The pairing celebration covers the app until it goes; Let's go closes it early.
+        let celebrated = app.buttons["pairSuccess.done"]
+        if celebrated.waitForExistence(timeout: 2) { celebrated.tap() }
+        if app.buttons["Not now"].waitForExistence(timeout: 3) { app.buttons["Not now"].tap() }
     }
 
     /// The computer menu, tapped by coordinate once it has a real frame: XCTest

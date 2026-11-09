@@ -113,9 +113,15 @@ class FirstRunJourneyTest {
         compose.onAllNodes(hasText("Pairing link")).onFirst().performTextInput(link)
         settle()
         compose.onAllNodes(hasText("Pair")).onFirst().performClick()
+        // The celebration covers everything until it goes; Let's go closes it early.
+        val celebrating = { compose.onAllNodesWithTag("pairSuccess.done").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { celebrating() || compose.onAllNodes(hasText("Step 3 of 3")).fetchSemanticsNodes().isNotEmpty() }
+        if (shots && celebrating()) shot("3-paired")
+        if (celebrating()) compose.onNodeWithTag("pairSuccess.done").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("pairSuccess").fetchSemanticsNodes().isEmpty() }
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Step 3 of 3")).fetchSemanticsNodes().isNotEmpty() }
         settle()
-        if (shots) shot("3-notifications")
+        if (shots) shot("4-notifications")
         assertFalse(prefs.get(FirstRun.DONE))
         return prefs
     }

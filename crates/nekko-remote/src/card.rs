@@ -917,6 +917,7 @@ mod tests {
                     needs_you: i < MAX_CHATS,
                     call_id: None,
                     severity: None,
+                    always_allow: false,
                     finished: (i == MAX_CHATS).then_some(LiveChatState::Done),
                     finished_at: (i == MAX_CHATS).then_some(T0),
                 },
