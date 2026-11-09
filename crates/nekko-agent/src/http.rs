@@ -119,6 +119,24 @@ pub fn stream_idle() -> Option<Duration> {
     }
 }
 
+/// How long a streamed reply may go without progress before it is given up
+/// and retried, even while bytes still arrive.
+///
+/// [`stream_idle`] only fires on a silent socket. A ChatGPT response that has
+/// stalled server-side keeps the connection alive (keep-alive comments,
+/// `response.in_progress`) without ever producing an item, and used to hold a
+/// turn for about fifteen minutes until the server dropped it. Three minutes
+/// is well past the longest reasoning ever recorded here (132 s over 6,600
+/// calls, 2026-11-09), and reasoning streams summary events as it goes.
+/// `NEKKO_STREAM_STALL_MS` overrides the limit (0 disables it).
+pub fn stream_stall() -> Option<Duration> {
+    match std::env::var("NEKKO_STREAM_STALL_MS").ok().and_then(|v| v.trim().parse::<u64>().ok()) {
+        Some(0) => None,
+        Some(ms) => Some(Duration::from_millis(ms)),
+        None => Some(Duration::from_secs(180)),
+    }
+}
+
 /// The real wire. No overall timeout and no proxy from the environment, like
 /// Node's fetch; only a connect limit and an idle limit on the body.
 pub struct ReqwestTransport {
