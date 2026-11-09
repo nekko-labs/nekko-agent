@@ -1,6 +1,6 @@
 import React from 'react';
 import { AbsoluteFill, Composition, registerRoot } from 'remotion';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 import { ScheduledTasksDemoVideo, SCHEDULED_DEMO_FPS, SCHEDULED_DEMO_FRAMES, SCHEDULED_DEMO_SIZE } from '../../src/renderer/components/ScheduledTasksDemo.js';
 
 // Default app palettes from styles.css. The in-app player inherits live tokens.
@@ -9,6 +9,6 @@ const palettes = {
   dark: { '--paper': '#0c0c11', '--surface': '#16161c', '--surface-2': '#20202a', '--ink': '#eceaf3', '--ink-soft': '#a3a1b0', '--line': '#26262f', '--accent': '#c084b5', '--accent-soft': 'color-mix(in srgb, #c084b5 18%, transparent)' },
 };
 registerRoot(() => <>{(['light', 'dark'] as const).map(theme => {
-  const Video = () => <AbsoluteFill style={{ ...palettes[theme], '--font-sans': 'Inter Tight Variable, sans-serif' } as React.CSSProperties}><ScheduledTasksDemoVideo /></AbsoluteFill>;
+  const Video = () => <AbsoluteFill style={{ ...palettes[theme], '--font-sans': 'Geist Variable, sans-serif' } as React.CSSProperties}><ScheduledTasksDemoVideo /></AbsoluteFill>;
   return <Composition key={theme} id={`ScheduledTasks-${theme}`} component={Video} durationInFrames={SCHEDULED_DEMO_FRAMES} fps={SCHEDULED_DEMO_FPS} {...SCHEDULED_DEMO_SIZE} />;
 })}</>);

@@ -68,6 +68,7 @@ private struct LockScreenPreview: View {
             if level != .none {
                 LiveCardView(state: .sample, level: level, interactive: false, computerName: "Mac")
                     .padding(14)
+                    .background(LiveCardView.wash, in: RoundedRectangle(cornerRadius: 22))
                     .background(LiveCardView.background.opacity(0.92), in: RoundedRectangle(cornerRadius: 22))
                     .transition(.opacity)
             }

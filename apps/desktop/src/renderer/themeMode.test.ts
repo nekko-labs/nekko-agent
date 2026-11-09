@@ -3,7 +3,7 @@ import { findThemePreset } from '@nekko-agent/shared';
 import { resolveThemeAppearance, themeModePatch, themePalettePatch } from './themeMode.js';
 import { contrastRatio, parseColor } from './contrast.js';
 
-const palettes = ['x-plum-white', 'nebula', 'terminal', 'nord', 'ember', 'x-forest-white', 'x-blueberry-white', 'autumn'];
+const palettes = ['x-plum-white', 'nebula', 'terminal', 'nord', 'ember', 'x-forest-white', 'x-blueberry-white', 'autumn', 'winter'];
 describe.each(palettes)('%s in both base modes', (id) => {
   it.each(['light', 'dark'] as const)('keeps %s when choosing a palette, and survives reload', (mode) => {
     const patch = themePalettePatch({ theme: mode }, id, mode !== 'dark');
@@ -45,7 +45,7 @@ describe('legacy and default settings', () => {
     expect(themeModePatch(legacy, 'light', true)).toEqual(themePalettePatch({ theme: 'light' }, 'nebula', true));
   });
   it('uses core light surfaces with readable accents for formerly dark-only palettes', () => {
-    for (const id of ['nebula', 'terminal', 'nord', 'ember', 'autumn']) {
+    for (const id of ['nebula', 'terminal', 'nord', 'ember', 'autumn', 'winter']) {
       const p = themePalettePatch({ theme: 'light' }, id, false);
       for (const color of [p.accent!, p.accent2!]) {
         expect(contrastRatio(parseColor(color), parseColor('#f2f2f7')), id).toBeGreaterThanOrEqual(4.5);

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_conversation">Sprachgespräch</string>
+    <string name="voice_explanation">Tippe auf Start und sprich dann. Jeder gesprochene Beitrag wird an diesen Textchat gesendet. Das Telefon liest die neue abgeschlossene Antwort vor und hört dann wieder zu. Stoppen, Verlassen, Sperren oder Trennen beendet die Sprachfunktion, nicht die Arbeit des Agenten. Sprachbeiträge werden nie in die Warteschlange gestellt oder erneut gesendet. Lass das Nachrichtenfeld leer.</string>
+    <string name="voice_start">Start</string>
+    <string name="voice_stop">Sprachfunktion stoppen</string>
+    <string name="voice_close">Schließen</string>
+    <string name="voice_cancel">Abbrechen</string>
+    <string name="voice_settings">Mikrofoneinstellungen öffnen</string>
+    <string name="voice_permission_granted">Mikrofon erlaubt. Tippe auf Start oder halte erneut gedrückt, um zu beginnen.</string>
+    <string name="voice_permission_denied">Erlaube den Mikrofonzugriff unter Einstellungen → Apps → Nekko Agent → Berechtigungen und starte dann erneut.</string>
+    <string name="voice_unavailable">Dieses Telefon benötigt eine installierte Spracherkennung auf dem Gerät (Android 12 oder neuer). Es wird keine Cloud-Spracherkennung als Ersatz verwendet.</string>
+    <string name="voice_ready">Bereit</string>
+    <string name="voice_listening">Hört zu</string>
+    <string name="voice_waiting">Denkt nach</string>
+    <string name="voice_speaking">Spricht</string>
+    <string name="voice_stopped">Gestoppt</string>
+    <string name="voice_heard">Du hast gesagt</string>
+    <string name="voice_reply">Antwort</string>
+    <string name="voice_hold">Zum Sprechen gedrückt halten</string>
+    <string name="voice_hold_accessibility">Diktat per Gedrückthalten starten oder beenden</string>
+    <string name="voice_commands">Auf „Nekko“-Befehle hören</string>
+    <string name="voice_finish">Zuhören beenden</string>
+</resources>

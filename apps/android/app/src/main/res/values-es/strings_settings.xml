@@ -76,6 +76,8 @@
     <string name="settings_connected">Conectado</string>
     <string name="settings_what_to_try">Qué probar</string>
     <string name="settings_try_again_now">Intentar de nuevo ahora</string>
+    <string name="settings_advice_host_gone">%1$s ya no existe, así que este teléfono no puede llegar a %2$s a través de ella.</string>
+    <string name="settings_advice_host_gone_fix">En %1$s, abre Ajustes → Acceso remoto, cambia cómo se conectan los teléfonos (Tailscale funciona sin nada alojado) y vuelve a vincular este teléfono.</string>
     <string name="settings_routes">Rutas</string>
     <string name="settings_checking">Verificando…</string>
     <string name="settings_check_routes">Verificar rutas</string>

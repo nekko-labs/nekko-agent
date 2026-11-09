@@ -20,7 +20,7 @@ The reference for every colour in the Nekko and Indigo app themes, the app icon 
 | **Text, dark mode** | `#FFFFFF` | All body text in Dark. |
 | **Text, light mode** | `#000000` | All body text in Light. |
 
-There is no third accent yet (open question, 2026-11-03).
+**Third colour: Petrol** (`--info`), `#1F6680` in light and `#6BB8D4` in dark, settled 2026-11-09 with the design system ([decision 0075](../../docs/decisions/0075-quiet-design-system.md)). It carries information: notices, tips, "New" tags and the third chart series (`--accent-2` is the second). It replaced the blue `--info` (`#3F7FB8` / `#5B9DD9`). Indigo was considered and rejected as too close to plum.
 
 Retired, do not use in new material: lavender `#9D8CE6`, indigo `#453A92`, `#5B4EA7`, `#6D5EFC`, aqua `#8AE4F2`, mint `#A5F9DF`, rose `#DFB6B2`.
 
@@ -39,15 +39,15 @@ The main colours are near-black, so small accents (links, icons, headings, toggl
 
 Light Nekko and Indigo use pale family-tinted surfaces so the same colour roles as Dark remain visible without becoming dark themes. Dark surfaces are unchanged. The desktop/Local Web UI and generated iOS/Android palette catalogs share these light surface tokens. Native apps retain their own existing backdrop geometry.
 
-| Token | Light Nekko | Light Indigo | Dark (both) |
+| Token | Light Nekko | Light Indigo | Dark, Dusk (both) |
 |---|---|---|---|
-| Page (`--paper`) | `#FBF6F9` | `#F7F5FC` | `#0C0C11` |
-| Window (`--win`) | `#FCF8FB` | `#FAF8FE` | `#17171E` |
-| Panel (`--surface`) | `#FFFBFD` | `#FDFBFF` | `#16161C` |
-| Raised panel (`--surface-2`) | `#F2E7EF` | `#EDE8F6` | `#20202A` |
-| Lines (`--line`) | `#E3D3DF` | `#DDD4EB` | `#26262F` |
-| Muted text (`--ink-soft`) | `#40313F` | `#3C314A` | `#A3A1B0` |
-| Faint text (`--ink-faint`) | `#493648` | `#43384F` | `#898894` |
+| Page (`--paper`) | `#FBF6F9` | `#F7F5FC` | `#0B0C14` |
+| Window (`--win`) | `#FCF8FB` | `#FAF8FE` | `#181A25` |
+| Panel (`--surface`) | `#FFFBFD` | `#FDFBFF` | `#14151F` |
+| Raised panel (`--surface-2`) | `#F2E7EF` | `#EDE8F6` | `#1D1F2C` |
+| Lines (`--line`) | `#E3D3DF` | `#DDD4EB` | `#252735` |
+| Muted text (`--ink-soft`) | `#40313F` | `#3C314A` | `#A3A4B6` |
+| Faint text (`--ink-faint`) | `#493648` | `#43384F` | `#87899B` |
 
 Selected rows mix the primary accent into the panel surface, as Dark does, rather than stacking a translucent secondary accent over whatever happens to sit behind them. Body text stays black, main buttons stay deep plum/indigo with white text, and saved custom accents are not migrated or overwritten.
 
@@ -89,7 +89,7 @@ Reproduce with `NEKKO_CONTROLS_SANDBOX=light-theme-sandbox.cjs node apps/desktop
 - **Shared generation:** `npx electron apps/desktop/scripts/make-icons.cjs` writes desktop PNG/SVG/ICO, web/PWA assets, installer BMPs, iOS light/dark SVG/opaque RGB PNGs and the matching Watch PNG. It uses a throwaway profile and hidden non-focusable window. Raster encoding avoids host ICC metadata; transparent pixels are unpremultiplied before PNG encoding.
 - **Site and docs:** `node scripts/make-site-icon.cjs` writes the favicon and logo from the shared artwork and renders `og.png` from `docs/brand/nekko-banner-1280x640.png`, replacing the pre-rename name and secret-agent mascot. Website, privacy, generated docs, renderer favicon and touch/manifest references use a `plum-white-2` cache key. The social banner is unchanged. The renderer now declares its favicon explicitly.
 - **Checks:** focused tests inspect current generator output, committed vectors, PNG palettes/dimensions/opacity, every embedded ICO PNG, installer pixels, Android ARGB values and cache keys. Native catalog/resource compilation and visual evidence are recorded in the linked PR. Full Windows installer, Android launcher, selected iOS dark appearance and Watch launcher are not established by these tests.
-- **OS consumers:** macOS Settings/Finder/Dock, Windows taskbar/shortcuts and Linux launchers inherit the packaged icon; the desktop tray and notification artwork resolve to the same renderer asset. Development bundles hash the icon to rebuild their ICNS/EXE on the next launch. Do not mutate a running bundle or clear user OS caches. Existing installed bundles need an updated build and restart; OS cache refresh is not claimed by source checks. The DMG and both installer-art generators use the same plum family.
+- **OS consumers:** macOS Settings/Finder/Dock, Windows taskbar/shortcuts and Linux launchers inherit the packaged icon; the desktop window/taskbar button, tray and notification artwork resolve to the same renderer asset (`apps/desktop/src/main/appIcon.ts`). An unpackaged run reads `src/renderer/public/icon-512.png` first, because `electron-vite dev` never rebuilds `out/renderer/` and a leftover copy there kept the tray and taskbar violet after the logo changed. Development bundles hash the icon to rebuild their ICNS/EXE on the next launch. Do not mutate a running bundle or clear user OS caches. Existing installed bundles need an updated build and restart; OS cache refresh is not claimed by source checks. The DMG and both installer-art generators use the same plum family.
 - **Verification boundary:** source/container checks and matched asset previews cover the generated icons, not installed macOS Settings/Dock, Windows/Linux shells, native device launchers, iOS selected dark mode or Watch launchers. These OS journeys require disposable platform sessions/builds.
 - **Preserved deliberately:** existing cat-mark geometry, seasonal Spooky artwork, user-selected plum/indigo themes, third-party provider logos, historical screenshots/evidence and immutable release files. This asset cleanup is not a whole-site/theme recolor or a mascot redesign.
 
@@ -104,7 +104,7 @@ What the app draws in the brand's own colours, whatever theme is chosen. Before 
 | Desktop / Local Web UI startup splash | plum `#190019` (already, #2272) | white | none |
 | Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat, the pairing celebration; Android `PixelCat`; desktop `PixelHead`) | plum `#190019` | white line and eyes | mouth `#C99BB3` |
 | Outline brand mark on a themed screen (iPhone first run and pairing) | none | the theme's `accent` | none |
-| iPhone Live Activity card (fixed dark `#1C1C1E`) | none | none | Dark Nekko accent `#C084B5` (dot, mic, filled buttons; 5.8:1 on the card, 6.7:1 under its dark text), was the retired lavender `#8B7DFF` |
+| iPhone Live Activity card (fixed dark plum `#190019`, washed with the accent from the top, 16% to 4%; was grey `#1C1C1E`) | plum `#190019` | none | Dark Nekko accent `#C084B5` (mic, filled buttons; 5.5:1 at the top of the wash, 6.8:1 on plain plum, 6.7:1 under its dark text), was the retired lavender `#8B7DFF`; secondary buttons `#3A1438` |
 
 - The iPhone reads all of these from `BrandColor` (`apps/ios/App/Shared/BrandColor.swift`); a themed surface uses the theme's `Palette` instead.
 - The launch storyboard is renamed whenever its colour changes (`LaunchScreen`, `Launch`, `LaunchPlum`, now `LaunchBrandPlum`) because iOS keeps showing a cached launch screen under the old name.
@@ -145,6 +145,16 @@ The site theme remains plum; the favicon and logo use the plum icon assets above
 | Hero screenshot frames | Dark `#241F23`, Light `#C9A9C4` |
 
 The previous lavender site is kept at tag `website-lavender-original`.
+
+## Dusk, state words and status badges (2026-11-09)
+
+`[implemented in the shared desktop/Local Web UI renderer, #2400]`
+
+- **Dusk** replaces the cool black (`#0C0C11`) as the dark neutrals of the base Dark look and of Dark Nekko and Dark Indigo: a hint of blue in panels and lines, almost none in the page. The iPhone and Android theme catalogs (written from `packages/shared/src/themes.ts`) carry Dusk for Dark Nekko and Dark Indigo; their base Dark look keeps its own palette until the phone follow-up.
+- **State words**: each state colour has a `-text` value for words, because the base hues fall under 4.5:1 as text on light surfaces. Light: success `#226F49`, warning `#8A5A0C`, danger `#B23A2D`, attention `#A84C0A`, info `#1F6680`. Dark: the base hues, except danger `#EF6A5D`.
+- **Working is green**: `--running` is the success green (the working rocket); `--highlight` (best so far) is the warning amber. The blue running colour and the third amber are retired.
+- **Status badges** on Nekko (agent windows) use the state tokens: working and done success, needs you attention, error danger, watching neutral. They previously used the iPhone's system tints, including a blue for watching.
+- Light Nekko and Light Indigo keep their faint ink: it sits over the plum selection gradient, where a lighter value falls under 4.5:1.
 
 ## Rules
 

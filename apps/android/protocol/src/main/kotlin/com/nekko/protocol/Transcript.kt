@@ -29,6 +29,7 @@ sealed interface Block {
         val interrupted: Boolean = false,
         /** When the computer saved it (ms); null while live. Simple's folded steps time the turn from it. */
         val at: Long? = null,
+        val thumbs: List<String> = emptyList(),
     ) : Block
     data class Tool(
         override val id: String,
@@ -66,8 +67,8 @@ object Transcript {
                     m.images,
                 )
                 "assistant" -> {
-                    if (m.content.isNotBlank() || !m.reasoning.isNullOrBlank()) {
-                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted, at = m.createdAt)
+                    if (m.content.isNotBlank() || !m.reasoning.isNullOrBlank() || m.images.isNotEmpty()) {
+                        out += Block.Assistant(m.id, m.content, m.reasoning?.ifEmpty { null }, interrupted = m.interrupted, at = m.createdAt, thumbs = m.images)
                     }
                     for (call in m.toolCalls) {
                         toolIndex[call.id] = out.size
@@ -124,7 +125,8 @@ object Transcript {
             // A user stop arrives as an error; it isn't one from the user's side.
             error = if (Regex("^(stopped|aborted)$", RegexOption.IGNORE_CASE).matches(e.message)) null else e.message,
         )
-        is AgentEvent.SessionMeta, is AgentEvent.Other -> turn
+        is AgentEvent.Other -> if (e.type == "image_status") turn.copy(running = true) else turn
+        is AgentEvent.SessionMeta -> turn
     }
 
     private fun appendStream(turn: LiveTurn, change: (Block.Assistant) -> Block.Assistant): LiveTurn {
@@ -228,6 +230,7 @@ object ActivityTracker {
             is AgentEvent.Text, is AgentEvent.Reasoning, is AgentEvent.ToolCallStarted,
             is AgentEvent.ToolResultReady, is AgentEvent.QuestionResolved -> Activity.RUNNING
             is AgentEvent.Done, is AgentEvent.Error -> null
+            is AgentEvent.Other -> if (e.type == "image_status") Activity.RUNNING else return activity
             else -> return activity
         }
         if (next == cur) return activity

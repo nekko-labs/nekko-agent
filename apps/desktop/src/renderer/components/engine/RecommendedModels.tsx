@@ -167,8 +167,8 @@ export function RecommendationList({
                   <span
                     className="rounded-full px-2 py-0.5 text-2xs"
                     style={{
-                      background: `color-mix(in srgb, ${p.fit === 'fits' ? 'var(--success)' : 'var(--warning, #d1a054)'} 16%, transparent)`,
-                      color: p.fit === 'fits' ? 'var(--success)' : 'var(--warning, #d1a054)',
+                      background: `color-mix(in srgb, ${p.fit === 'fits' ? 'var(--success)' : 'var(--warning)'} 16%, transparent)`,
+                      color: p.fit === 'fits' ? 'var(--success)' : 'var(--warning)',
                     }}
                     title={fit.title}
                   >
@@ -191,7 +191,7 @@ export function RecommendationList({
                   )}
                 </p>
                 {t.belowTargetSpeed && (
-                  <p className="mt-0.5 text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+                  <p className="mt-0.5 text-2xs" style={{ color: 'var(--warning)' }}>
                     Slower than the {t.minTokensPerSecond} tok/s this task wants; the fastest that fits here.
                   </p>
                 )}
@@ -264,7 +264,7 @@ function ImageRecommendationRow({
           <span className="chip" title={`${p.repo}: ${p.files.join(', ')}`}>{p.quant}</span>
           <span
             className="rounded-full px-2 py-0.5 text-2xs"
-            style={{ background: `color-mix(in srgb, ${ok ? 'var(--success)' : 'var(--warning, #d1a054)'} 16%, transparent)`, color: ok ? 'var(--success)' : 'var(--warning, #d1a054)' }}
+            style={{ background: `color-mix(in srgb, ${ok ? 'var(--success)' : 'var(--warning)'} 16%, transparent)`, color: ok ? 'var(--success)' : 'var(--warning)' }}
             title={fit.title}
           >
             {fit.text}

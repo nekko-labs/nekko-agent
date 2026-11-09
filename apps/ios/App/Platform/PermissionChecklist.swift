@@ -16,7 +16,7 @@ final class PermissionChecklist {
 
         var label: String {
             switch self {
-            case .unknown: return String(localized: "Not checked")
+            case .unknown: return String(localized: "Not set")
             case .allowed: return String(localized: "Allowed")
             case .denied: return String(localized: "Off in Settings")
             case .restricted: return String(localized: "Restricted by device")
@@ -35,26 +35,26 @@ final class PermissionChecklist {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .notifications: return String(localized: "Know when your computer needs you")
-            case .network: return String(localized: "Find computers on your network")
-            case .liveActivities: return String(localized: "Follow work from the Lock Screen")
-            case .camera: return String(localized: "Scan a pairing code")
-            case .microphone: return String(localized: "Speak your messages")
-            case .speech: return String(localized: "Turn speech into text on this device")
-            case .authentication: return String(localized: "Protect access to your computer")
-            case .photos: return String(localized: "Save images to Photos")
+            case .notifications: return String(localized: "Alerts")
+            case .network: return String(localized: "Nearby computers")
+            case .liveActivities: return String(localized: "Lock Screen progress")
+            case .camera: return String(localized: "Camera")
+            case .microphone: return String(localized: "Microphone")
+            case .speech: return String(localized: "Speech to text")
+            case .authentication: return String(localized: "Face ID or passcode")
+            case .photos: return String(localized: "Save to Photos")
             }
         }
         var detail: String {
             switch self {
-            case .notifications: return String(localized: "Approvals, questions, finished replies and failures. Choose which alerts you want in Settings. Delivery also depends on your computer and relay being reachable.")
-            case .network: return String(localized: "Discover nearby Nekko computers and connect over your local network. Looking never pairs a computer. iOS does not provide a permission status; finding a computer verifies access for this check.")
-            case .liveActivities: return String(localized: "See progress and waiting approvals on supported Lock Screens. This system setting is separate from notifications. Choose what the card shows in Settings → Live Activities.")
-            case .camera: return String(localized: "Use the camera to scan your computer’s pairing QR code. Pasting a pairing link works without it.")
-            case .microphone: return String(localized: "Dictate instead of typing. Allowing access here does not start recording.")
-            case .speech: return String(localized: "Use on-device speech recognition when computer transcription is unavailable. Language and on-device support are checked when dictation starts; speech is never sent to Apple’s servers.")
-            case .authentication: return String(localized: "Check Face ID, Touch ID or device passcode authentication without changing App lock. Manage App lock in Settings → Security.")
-            case .photos: return String(localized: "Add images you choose to save from chats. Add-only access does not let Nekko read your photo library.")
+            case .notifications: return String(localized: "Approvals, questions and finished replies.")
+            case .network: return String(localized: "Find Nekko on your Wi-Fi. Never pairs on its own.")
+            case .liveActivities: return String(localized: "Follow work without opening the app.")
+            case .camera: return String(localized: "Scan a pairing code. Pasting a link works too.")
+            case .microphone: return String(localized: "Dictate instead of typing. Never records on its own.")
+            case .speech: return String(localized: "Transcribed on this device, never sent to Apple.")
+            case .authentication: return String(localized: "A quick check. App lock stays as it is.")
+            case .photos: return String(localized: "Save images from chats. Nekko can’t see your library.")
             }
         }
         var icon: String {
@@ -96,13 +96,9 @@ final class PermissionChecklist {
         }
         access[.camera] = Self.capture(AVCaptureDevice.authorizationStatus(for: .video))
         if AVCaptureDevice.default(for: .video) == nil { access[.camera] = .unavailable }
-        switch AVAudioApplication.shared.recordPermission {
-        case .granted: access[.microphone] = .allowed
-        case .denied: access[.microphone] = .denied
-        case .undetermined: access[.microphone] = .unknown
-        @unknown default: access[.microphone] = .unknown
-        }
-        if AVCaptureDevice.authorizationStatus(for: .audio) == .restricted { access[.microphone] = .restricted }
+        // Read the capture authorization on every foreground transition.
+        // This also represents restricted access rather than treating it as denial.
+        access[.microphone] = Self.capture(AVCaptureDevice.authorizationStatus(for: .audio))
         switch SFSpeechRecognizer.authorizationStatus() {
         case .authorized: access[.speech] = .allowed
         case .denied: access[.speech] = .denied
@@ -159,7 +155,7 @@ final class PermissionChecklist {
             }
             nearby.stop()
             if status(.network) == .unknown {
-                message = String(localized: "No computer found. Access may still be allowed. Check Local Network in system Settings and make sure your computer is visible on this network.")
+                message = String(localized: "No computer found yet. Check it’s on this Wi-Fi, or turn on Local Network in Settings.")
             }
         case .camera: _ = await AVCaptureDevice.requestAccess(for: .video)
         case .microphone: _ = await AVAudioApplication.requestRecordPermission()
@@ -174,7 +170,7 @@ final class PermissionChecklist {
                     access[.authentication] = .allowed
                 }
             } catch {
-                message = String(localized: "Authentication was not completed. You can try again later.")
+                message = String(localized: "Not completed. Try again anytime.")
             }
         case .liveActivities: break
         }

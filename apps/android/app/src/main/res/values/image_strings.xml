@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="image_kind_text">Chat</string>
+    <string name="image_kind_image">Image</string>
+    <string name="image_model">Local image model</string>
+    <string name="image_models_loading">Reading image models from the computer…</string>
+    <string name="image_no_models">No image models available. Add an image model on the computer, then retry here.</string>
+    <string name="image_retry_models">Read models again</string>
+    <string name="image_model_missing">Saved model %1$s is not available. Choose an image model from this computer.</string>
+    <string name="image_width">Width (256–2048, multiples of 64)</string>
+    <string name="image_height">Height (256–2048, multiples of 64)</string>
+    <string name="image_steps">Steps (1–100)</string>
+    <string name="image_cfg">CFG (whole number, 0–30)</string>
+    <string name="image_seed">Seed (-1 random, up to 2147483647)</string>
+    <string name="image_integer_settings">These settings cannot be signed. Choose whole numbers explicitly; fractional saved values are never rounded.</string>
+    <string name="image_working">Working…</string>
+    <string name="image_settings">Image settings</string>
+    <string name="image_save_settings">Save image settings</string>
+    <string name="image_create">Start image chat</string>
+    <string name="image_offline">Reconnect to create or send an image chat. Image prompts are never queued as text.</string>
+    <string name="image_unsupported">This computer does not advertise image generation. Update Nekko Agent on the computer.</string>
+    <string name="image_prompt_only">Describe an image using text only. Attachments and skills are not supported. Generation uses the existing signed Change authorization.</string>
+    <string name="image_reply_n">Generated image %1$d</string>
+    <string name="image_open">Open image</string>
+    <string name="image_close">Close</string>
+    <string name="image_unavailable">This image could not be loaded. Reconnect and try again.</string>
+</resources>

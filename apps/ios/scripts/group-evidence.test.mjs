@@ -9,14 +9,29 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../..', import.meta.url));
 const script = path.join(root, 'apps/ios/scripts/group-evidence.mjs');
 
-for (const revision of ['before', 'after']) {
-  test(`group evidence overlays ${revision} without replacing production disclosure`, () => {
+for (const [revision, persistence] of [['before', true], ['after', true], ['before', false], ['before', 'partial']]) {
+  test(`group evidence overlays ${revision} (persistence=${persistence}) without replacing production disclosure`, () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'nekko-group-evidence-'));
     try {
       for (const file of ['App/NekkoApp.swift', 'App/Views/ChatsView.swift', 'App/Platform/Prefs.swift', 'scripts/GroupEvidenceTests.swift']) {
         const target = path.join(dir, 'apps/ios', file.replace('scripts/', 'UITests/'));
         fs.mkdirSync(path.dirname(target), { recursive: true });
         fs.copyFileSync(path.join(root, 'apps/ios', file), target);
+      }
+      if (persistence === 'partial') {
+        const prefs = path.join(dir, 'apps/ios/App/Platform/Prefs.swift');
+        fs.writeFileSync(prefs, fs.readFileSync(prefs, 'utf8').replace(
+          'openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])', 'openedChatGroups = []'));
+        assert.throws(() => execFileSync(process.execPath, [script, `--${revision}`], { cwd: dir, stdio: 'pipe' }),
+          /Unrecognized group persistence/);
+        return;
+      }
+      if (!persistence) {
+        const prefs = path.join(dir, 'apps/ios/App/Platform/Prefs.swift');
+        const source = fs.readFileSync(prefs, 'utf8')
+          .replace('d.set(openedChatGroups.sorted(), forKey: "openedChatGroups")', '')
+          .replace('openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])', 'openedChatGroups = []');
+        fs.writeFileSync(prefs, source);
       }
       execFileSync(process.execPath, [script, `--${revision}`], { cwd: dir });
       const read = file => fs.readFileSync(path.join(dir, 'apps/ios', file), 'utf8');
@@ -28,9 +43,15 @@ for (const revision of ['before', 'after']) {
       assert.ok(read('App/NekkoApp.swift').includes('let flags = ["-uiTestGroupList", '));
       const prefs = read('App/Platform/Prefs.swift');
       assert.ok(prefs.includes('!ProcessInfo.processInfo.arguments.contains("-uiTestKeepGroups")'));
-      assert.ok(prefs.includes('openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])'));
+      assert.equal(prefs.includes('openedChatGroups = Set(d.stringArray(forKey: "openedChatGroups") ?? [])'), persistence);
       const ui = read('UITests/GroupEvidenceTests.swift');
-      assert.ok(ui.includes(`let remembersGroups = ${revision === 'after'}`));
+      assert.ok(ui.includes(`let remembersGroups = ${persistence}`));
+      assert.ok(ui.includes(`let after = ${revision === 'after'}`));
+      for (const line of [
+        'XCTAssertEqual(building.value as? String, remembersGroups ? "Expanded" : "Collapsed")',
+        'XCTAssertEqual(watching.value as? String, remembersGroups ? "Expanded" : "Collapsed")',
+        'if remembersGroups { building.tap() }',
+      ]) assert.ok(ui.includes(line), `preserve assertion: ${line}`);
       assert.ok(ui.includes('"groups-after-relaunch"'));
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });

@@ -121,6 +121,18 @@ class ConnectionTest {
     }
 
     @Test
+    fun `only an MCP tool's approval offers always allow`() {
+        val mcp = EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = true, callId = "call_1", toolName = "mcp__github__create_issue")
+        assertTrue(mcp.canAlwaysAllow)
+        assertTrue(mcp.canDeny)
+        assertFalse(EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = false, callId = "call_1", toolName = "bash").canAlwaysAllow)
+        // No call to answer, or not an approval: nothing to allow.
+        assertFalse(EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = false, toolName = "mcp__github__create_issue").canAlwaysAllow)
+        assertFalse(EventNotice.of("s1", PhoneEvent.NEEDS_INPUT, "Fix", "Mac", hideContent = false, callId = "call_1", toolName = "mcp__github__create_issue").canAlwaysAllow)
+        assertFalse(EventNotice.of("s1", PhoneEvent.APPROVAL, "Fix", "Mac", hideContent = false, callId = "call_1").canAlwaysAllow)
+    }
+
+    @Test
     fun `with the app lock on a notice does not name the chat`() {
         val n = EventNotice.of("s1", PhoneEvent.APPROVAL, "Rotate prod keys", "Mac", hideContent = true)
         assertEquals("Open Nekko to see it.", n.text)

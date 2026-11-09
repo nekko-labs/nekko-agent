@@ -283,4 +283,10 @@
     <string name="chat_audit_by_mode">由聊天的模式</string>
     <string name="chat_audit_by_rule">由一条防护规则</string>
     <string name="chat_audit_by_other">通过 %1$s</string>
+    <string name="chat_star_title">Nekko Agent 是开源的</string>
+    <string name="chat_star_detail">如果它对你有帮助，在 GitHub 上点个星标能让更多人发现它。</string>
+    <string name="chat_star_on_github">在 GitHub 上点星标</string>
+    <string name="chat_star_never">不再询问</string>
+    <string name="chat_star_thanks">谢谢！Nekko 很高兴有你在。</string>
+    <string name="chat_star_thanks_detail">已在浏览器中打开 GitHub。在那里点一下即可加星标。</string>
 </resources>

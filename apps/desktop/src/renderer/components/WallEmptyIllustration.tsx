@@ -1,20 +1,23 @@
 import React from 'react';
 import { useStore } from '../store.js';
 import { NekkoAvatar } from './Mascot.js';
+import { isShogatsu } from '../seasonal.js';
 
 /**
  * The empty wall's illustration: a wall with dashed window frames waiting to be
  * filled, and Nekko sitting under it. Special themes dress it up (Spooky adds
- * pumpkins, a bat and a cobweb; the wizard hat is the corner mascot's alone). Decorative only; colours come
+ * pumpkins, a bat and a cobweb; Winter adds a snow cap, icicles, flakes and a
+ * snowman, who gives way to a kagami mochi over Oshogatsu, January 1 to 3; hats
+ * are the chat mascot's alone). Decorative only; colours come
  * from the theme so it reads in light and dark.
  */
-export type WallEmptyVariant = 'default' | 'spooky';
+export type WallEmptyVariant = 'default' | 'spooky' | 'winter';
 
 export function wallEmptyVariant(preset: string | undefined): WallEmptyVariant {
-  return preset === 'autumn' ? 'spooky' : 'default';
+  return preset === 'autumn' ? 'spooky' : preset === 'winter' ? 'winter' : 'default';
 }
 
-export function WallEmptyIllustration({ variant }: { variant?: WallEmptyVariant }) {
+export function WallEmptyIllustration({ variant, now }: { variant?: WallEmptyVariant; now?: Date }) {
   const preset = useStore((s) => s.settings?.themePreset);
   const v = variant ?? wallEmptyVariant(preset);
   const spooky = v === 'spooky';
@@ -54,6 +57,8 @@ export function WallEmptyIllustration({ variant }: { variant?: WallEmptyVariant 
               <path d="M12 3c-1-3 1-5 3-6" stroke="var(--success)" strokeWidth="3" />
             </g>
           </g>
+        ) : v === 'winter' ? (
+          <WinterScene newYear={isShogatsu(now ?? new Date())} />
         ) : (
           <g data-part="default" stroke="var(--accent)" strokeOpacity="0.6" strokeWidth="1.5">
             {/* Sparkles: the wall is ready. */}
@@ -65,6 +70,57 @@ export function WallEmptyIllustration({ variant }: { variant?: WallEmptyVariant 
       {/* Nekko is the same pixel cat as the app icon, sitting on the floor line. */}
       <span className="wall-empty-cat"><NekkoAvatar size={44} stationary quiet /></span>
     </div>
+  );
+}
+
+/**
+ * Snow lying along the wall's top edge: a band over the edge with 13 soft
+ * bumps on top and a gently wavy underside, overhanging the wall by 4 units
+ * each side and stopping above the frames.
+ */
+const SNOW_CAP = `M16 20${Array.from({ length: 13 }, (_, i) => ` q8 ${i % 2 ? 2 : 4} 16 0`).join('')}V13${Array.from({ length: 13 }, (_, i) => ` q-8 -${i % 2 ? 8 : 10} -16 0`).join('')}Z`;
+/** Snow is white in both modes; a faint outline keeps it visible on light paper. */
+const SNOW = '#f4f8fc';
+
+/** Winter's dressing for the empty wall, on the same 240x150 grid. */
+function WinterScene({ newYear }: { newYear: boolean }) {
+  return (
+    <g data-part="winter">
+      {/* Snow lying along the top of the wall. */}
+      <path d={SNOW_CAP} fill={SNOW} stroke="var(--ink-faint)" strokeOpacity="0.6" strokeWidth="1.2" />
+      {/* Icicles in the gaps above the frames. */}
+      <g fill="var(--accent)" fillOpacity="0.35">
+        <path d="M44 16h4l-2 8zM62 16h3l-1.5 6zM110 16h4l-2 9zM140 16h3l-1.5 7zM178 16h4l-2 8zM200 16h3l-1.5 6z" />
+      </g>
+      {/* A few flakes in the air. */}
+      <g stroke="var(--accent)" strokeOpacity="0.6" strokeWidth="1.2">
+        <path d="M12 52v6M9 55h6M10 53l4 4M14 53l-4 4" />
+        <path d="M228 40v5M225.5 42.5h5" />
+        <path d="M150 128v5M147.5 130.5h5" />
+      </g>
+      {newYear ? (
+        <g data-part="kagami-mochi" data-winter-egg="kagami-mochi" transform="translate(180 110)">
+          {/* The sanbo stand, two rice cakes and a mikan on top. */}
+          <path d="M2 26h32l-3 4H5z" fill="#c8a46a" stroke="#8a6a3a" strokeWidth="1" />
+          <ellipse cx="18" cy="21" rx="14" ry="5.5" fill="#fbfaf6" stroke="var(--ink-faint)" strokeWidth="1" />
+          <ellipse cx="18" cy="14.5" rx="10" ry="4.5" fill="#fbfaf6" stroke="var(--ink-faint)" strokeWidth="1" />
+          <circle cx="18" cy="7" r="4" fill="#f59e0b" stroke="#b45309" strokeWidth="1" />
+          <path d="M18 3l3-2" stroke="#15803d" strokeWidth="1.5" />
+        </g>
+      ) : (
+        <g data-part="snowman" transform="translate(186 98)">
+          <circle cx="10" cy="32" r="10" fill={SNOW} stroke="var(--ink-faint)" strokeWidth="1.2" />
+          <circle cx="10" cy="15" r="7.5" fill={SNOW} stroke="var(--ink-faint)" strokeWidth="1.2" />
+          {/* Scarf, coal eyes and a carrot nose. */}
+          <path d="M3.5 19.5h13M12 19.5l2 6" stroke="#d6283b" strokeWidth="2.4" />
+          <circle cx="7.5" cy="13" r="1" fill="#1f2937" />
+          <circle cx="12.5" cy="13" r="1" fill="#1f2937" />
+          <path d="M10 15.5l5 1-5 1z" fill="#f97316" />
+          <circle cx="10" cy="29" r="1" fill="#1f2937" />
+          <circle cx="10" cy="34" r="1" fill="#1f2937" />
+        </g>
+      )}
+    </g>
   );
 }
 

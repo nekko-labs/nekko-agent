@@ -74,6 +74,14 @@ describe('PR milestones and live card', () => {
     expect(renderToStaticMarkup(<PrCard url={url} event="merged" />)).not.toContain('🎃');
     theme.preset = 'autumn';
   });
+  it('scatters snow over merges under Winter', () => {
+    theme.preset = 'winter';
+    const markup = renderToStaticMarkup(<PrCard url={url} event="merged" />);
+    expect(markup).toMatch(/❄️|🎄|🎍/);
+    expect(markup).not.toContain('🎃');
+    expect(renderToStaticMarkup(<PrCard url={url} event="closed" />)).not.toMatch(/❄️|🎄|🎍/);
+    theme.preset = 'autumn';
+  });
   it('opens up for a live PR into the actions the composer used to carry', () => {
     const markup = renderToStaticMarkup(<PrCard url={url} info={pr} event="created" sessionId="s" />);
     expect(markup).toContain('data-pr-actions');

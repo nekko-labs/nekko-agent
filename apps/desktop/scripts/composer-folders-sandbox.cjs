@@ -35,7 +35,7 @@ app.whenReady().then(async () => {
         const rect = e => e?.getBoundingClientRect();
         const modeRow = document.querySelector('[data-composer-mode-row]');
         const mode = modeRow?.querySelector('button');
-        return { first: !!plus && bar.firstElementChild.contains(plus), count: document.querySelectorAll('[aria-label^="Selected folders:"]').length,
+        return { first: !!plus && bar.firstElementChild.contains(plus), count: document.querySelectorAll('[aria-label^="Environment:"]').length,
           next: !!folder && folder.previousElementSibling?.contains(plus),
           aligned: !!suggest && !!mode && modeRow.contains(suggest) && Math.abs((rect(suggest).top + rect(suggest).bottom) / 2 - (rect(mode).top + rect(mode).bottom) / 2) < 2 && Math.abs(rect(suggest).right - (rect(modeRow).right - 8)) < 2,
           overflow: document.documentElement.scrollWidth > innerWidth,
@@ -62,7 +62,7 @@ app.whenReady().then(async () => {
           check(label + ': suggestions Escape restores focus', await run(`!document.querySelector('[aria-label="Prompt suggestions"]') && document.activeElement === document.querySelector('[data-prompt-suggestions]')`));
         }
         await run(`document.querySelector('.composer-folders button').click()`); await sleep(200);
-        check(label + ': folder menu opens', await run(`!!document.querySelector('[role="menu"][aria-label="Primary folder"]')`));
+        check(label + ': folder menu opens', await run(`!!document.querySelector('[role="menu"][aria-label="Environment"]')`));
         if (expert && !clean) await shot('folders-menu-' + width);
         await run(`Array.from(document.querySelectorAll('[role="menuitemradio"]')).find(e => e.textContent.includes('docs')).click()`); await sleep(200);
         check(label + ': picking retains original as supporting', await run(`layoutFixture.records[0].workspaceId === 'docs' && layoutFixture.records[0].supportingWorkspaceIds.includes('code')`));
@@ -71,7 +71,7 @@ app.whenReady().then(async () => {
         check(label + ': remove is per-chat, not saved-access revocation', await run(`layoutFixture.records[0].workspaceId === 'docs' && !layoutFixture.records[0].supportingWorkspaceIds.includes('code') && layoutFixture.settings.workspaces.length === 2`));
         await run(`document.querySelector('.composer-folders button').click()`); await sleep(100);
         await run(`document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}))`); await sleep(100);
-        check(label + ': Escape closes and restores focus', await run(`!document.querySelector('[role="menu"][aria-label="Primary folder"]') && document.activeElement === document.querySelector('.composer-folders button')`));
+        check(label + ': Escape closes and restores focus', await run(`!document.querySelector('[role="menu"][aria-label="Environment"]') && document.activeElement === document.querySelector('.composer-folders button')`));
       }
     }
     for (const width of [1000, 390]) for (const surface of ['full', 'composer']) {

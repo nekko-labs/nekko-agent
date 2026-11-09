@@ -48,7 +48,7 @@ app.whenReady().then(async () => {
     }
     fs.writeFileSync(path.join(out, 'greeting-timing.gif'), buf.subarray(0, gif.end()));
     report.later = await run("document.querySelector('[data-clean-start-greeting] h2')?.textContent");
-    await run("window.folderCalls=0; layoutFixture.bridge.pickFolder=async()=>{window.folderCalls++; return null}; document.querySelector('[aria-label^=\"Selected folders:\"], [aria-label^=\"Primary folder:\"]')?.click()");
+    await run("window.folderCalls=0; layoutFixture.bridge.pickFolder=async()=>{window.folderCalls++; return null}; document.querySelector('[aria-label^=\"Environment:\"], [aria-label^=\"Primary folder:\"]')?.click()");
     await sleep(300);
     await shot('folders-desktop');
     report.menu = await run("Array.from(document.querySelectorAll('[role=menu] button')).map(b=>({text:b.textContent,rect:b.getBoundingClientRect().toJSON()}))");

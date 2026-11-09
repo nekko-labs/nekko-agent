@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { AskQuestion, AskRequest } from '@nekko-agent/shared';
 import { isAskComplete } from '@nekko-agent/shared';
-import { QuestionCard, toAnswers, togglePick } from './QuestionCard.js';
+import { QuestionCard, pendingAction, toAnswers, togglePick, withActionNotes } from './QuestionCard.js';
 
 const request: AskRequest = {
   callId: 'call_1',
@@ -174,5 +174,30 @@ describe('toAnswers', () => {
     const afterLastPick = { ...live, q2: togglePick([], 'E2E', true) };
     const out = toAnswers(questions, afterLastPick, {});
     expect(out).toContainEqual({ questionId: 'q2', labels: ['E2E'], note: undefined });
+  });
+});
+
+describe('environment actions on options (#2404)', () => {
+  const q: AskQuestion = {
+    id: 'q1', header: 'Project', question: 'Where is it?',
+    options: [{ label: 'Search this computer' }, { label: 'Choose a folder', action: { kind: 'pickFolder' } }, { label: 'From GitHub', action: { kind: 'connectRepo' } }],
+  };
+
+  it('runs the action of a picked option once, and never for a plain option', () => {
+    expect(pendingAction(q, ['Search this computer'], {})).toBeUndefined();
+    expect(pendingAction(q, ['Choose a folder'], {})?.action).toEqual({ kind: 'pickFolder' });
+    expect(pendingAction(q, ['Choose a folder'], { q1: { label: 'Choose a folder' } })).toBeUndefined();
+    // Changing the pick after one action ran asks for the new one.
+    expect(pendingAction(q, ['From GitHub'], { q1: { label: 'Choose a folder' } })?.action).toEqual({ kind: 'connectRepo' });
+  });
+
+  it('tells the agent what was added alongside the picked answer', () => {
+    const notes = { q1: { label: 'Choose a folder', note: '(Added the folder app at /code/app.)' } };
+    expect(withActionNotes([{ questionId: 'q1', labels: ['Choose a folder'] }], notes))
+      .toEqual([{ questionId: 'q1', labels: ['Choose a folder'], note: '(Added the folder app at /code/app.)' }]);
+    expect(withActionNotes([{ questionId: 'q1', labels: ['Choose a folder'], note: 'the old one' }], notes)[0]!.note)
+      .toBe('the old one (Added the folder app at /code/app.)');
+    // A note for an answer no longer picked is not sent.
+    expect(withActionNotes([{ questionId: 'q1', labels: ['Search this computer'] }], notes)[0]!.note).toBeUndefined();
   });
 });

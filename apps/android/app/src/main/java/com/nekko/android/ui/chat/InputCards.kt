@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,9 +68,18 @@ import kotlinx.serialization.json.JsonPrimitive
  * An approval: Deny / Allow, and **Always allow this tool** for an MCP call when [onAlwaysAllow]
  * is given (decision 0054): it allows this call and stops asking for this tool in this chat only.
  * A failed decision keeps the card and says why.
+ *
+ * [startAlways] (the notification's Always allow, taken for this call) presses
+ * Always allow once, as a tap would: the same save, prompts and errors on this card.
  */
 @Composable
-fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit, onAlwaysAllow: (suspend () -> Unit)? = null) {
+fun ApprovalCard(
+    approval: Approval,
+    onDecide: suspend (Boolean) -> Unit,
+    onAlwaysAllow: (suspend () -> Unit)? = null,
+    startAlways: Boolean = false,
+    onStartedAlways: () -> Unit = {},
+) {
     val p = Nekko.palette
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
@@ -117,6 +127,11 @@ fun ApprovalCard(approval: Approval, onDecide: suspend (Boolean) -> Unit, onAlwa
         Unit
     }
     val idle = busy == null && !always
+    LaunchedEffect(approval.call.id, startAlways) {
+        if (!startAlways || !offersAlways || !idle) return@LaunchedEffect
+        onStartedAlways()
+        alwaysAllow()
+    }
     InputCardFrame(edge) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(Icons.Filled.Warning, contentDescription = null, tint = edge, modifier = Modifier.size(18.dp))

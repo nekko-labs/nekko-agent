@@ -359,7 +359,9 @@ From New chat's folder picker, choose **Manage folders** to add a computer path 
 > **Always allow this tool** beside Allow and Deny: it allows this call and stops asking for that one
 > tool in that chat, after your fingerprint, face or screen lock (and your security key or code
 > when the computer asks for one). Other tools keep asking, a new chat starts with none allowed, and
-> the chat never switches to No restrictions. Monitors and notifications still offer Allow and Deny only.
+> the chat never switches to No restrictions. The approval notification of an MCP tool offers it too:
+> after you unlock the phone it opens the chat, and the card does the same, with the same confirmation.
+> If you cancel the confirmation, nothing is allowed. Monitors still offer Allow and Deny only.
 >
 > **Write offline** (iPhone and Android): with no connection to your computer you can still write. What you
 > type in a chat's message box, and in New chat, is kept on the phone, so leaving the screen or

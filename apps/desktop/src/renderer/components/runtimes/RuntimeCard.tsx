@@ -179,7 +179,7 @@ export function RuntimeCard({
             </div>
           ))}
           {spilled && (
-            <p className="text-2xs" style={{ color: 'var(--warning, #d1a054)' }}>
+            <p className="text-2xs" style={{ color: 'var(--warning)' }}>
               Part of what is loaded is running on the CPU, which is much slower than the GPU.
             </p>
           )}
@@ -236,7 +236,7 @@ export function RuntimeCard({
 }
 
 function StatusDot({ running, busy, error }: { running: boolean; busy: boolean; error: boolean }) {
-  const color = error ? 'var(--danger)' : busy ? 'var(--warning, #d1a054)' : running ? 'var(--success)' : 'var(--ink-faint)';
+  const color = error ? 'var(--danger)' : busy ? 'var(--warning)' : running ? 'var(--success)' : 'var(--ink-faint)';
   return (
     <span
       className="inline-block h-2 w-2 shrink-0 rounded-full"

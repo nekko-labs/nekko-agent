@@ -68,9 +68,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -79,6 +82,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.nekko.android.chat.ChatController
 import com.nekko.android.chat.ChatViewModel
 import com.nekko.android.ui.chat.ApprovalCard
 import com.nekko.android.ui.chat.BlockView
@@ -90,6 +94,12 @@ import com.nekko.android.ui.chat.allSubagents
 import com.nekko.android.ui.chat.ChatColumns
 import com.nekko.android.ui.chat.Composer
 import com.nekko.android.ui.chat.QuestionCard
+import com.nekko.android.ui.chat.StarAskCard
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import com.nekko.android.ui.components.Notice
 import com.nekko.android.ui.components.Tone
 import com.nekko.android.ui.theme.Nekko
@@ -185,6 +195,7 @@ fun ChatScreen(
     onNewChat: (() -> Unit)? = null,
     /** Simple's "chat getting long" line → New chat on this computer with [ModelPick] (the chat's model) chosen. */
     onStartFresh: ((ModelPick?) -> Unit)? = null,
+    onSettings: (() -> Unit)? = null,
 ) {
     // Simple or Expert and the per-control choices, read from the chat's own prefs so the screen works outside the app's provider;
     // a model loaded on the computer's Model Server brings the monitors into Simple too.
@@ -195,7 +206,7 @@ fun ChatScreen(
     val loaded = hardware.localModelLoaded
     val simple = remember(expert, raw, loaded, pill) { SimpleView(expert, SimpleMode.parse(raw), loaded, pill, vm::setPillPlace, vm::setExpert) }
     CompositionLocalProvider(LocalSimple provides simple) {
-        ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat, onStartFresh)
+        ChatScreenContent(vm, initialDraft, dictationOn, onBack, onOpenChat, pane, onNewChat, onStartFresh, onSettings)
     }
 }
 
@@ -210,6 +221,7 @@ private fun ChatScreenContent(
     pane: PaneSlot?,
     onNewChat: (() -> Unit)?,
     onStartFresh: ((ModelPick?) -> Unit)?,
+    onSettings: (() -> Unit)?,
 ) {
     val simple = LocalSimple.current
     val showHardware = simple.shown("hardware")
@@ -220,6 +232,7 @@ private fun ChatScreenContent(
     val subagents by vm.subagents.collectAsStateWithLifecycle()
     val agentContext = AgentContext(watches, subagents.children, subagents.activity, chat.running, chat.modelId)
     val completedAt by vm.completedAt.collectAsStateWithLifecycle()
+    val starCard by vm.starCard.collectAsStateWithLifecycle()
     val changesAllowed by vm.changesAllowed.collectAsStateWithLifecycle()
     val insert by vm.insert.collectAsStateWithLifecycle()
     var showChanges by remember { mutableStateOf(false) }
@@ -234,6 +247,7 @@ private fun ChatScreenContent(
     val computers by vm.computers.collectAsStateWithLifecycle()
     val computerName = computers.active?.name ?: stringResource(R.string.chats_your_computer)
     var showModelEffort by remember { mutableStateOf(false) }
+    var showImageSettings by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     val pill = rememberModePill { !list.canScrollBackward }
     // The top bar's bottom and the message box's top (root coordinates): the pill moves between them.
@@ -268,11 +282,30 @@ private fun ChatScreenContent(
     var restoreError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val p = Nekko.palette
-    val mic = rememberMic(vm.dictation.takeIf { dictationOn })
+    var showVoiceConversation by remember(vm) { mutableStateOf(false) }
+    val focused by rememberUpdatedState(pane?.focused != false && !showMenu && !showRename && !showMode &&
+        !showChanges && !showAudit && !showPrs && !showModelEffort && !showImageSettings && modeStepUp == null)
+    val voiceComputer = remember(vm) { vm.repo.state.value.activeId }
+    val mic = rememberMic(vm.dictation.takeIf { dictationOn }, vm.computers) {
+        vm.voiceEnabled && focused && voiceComputer != null && vm.repo.state.value.activeId == voiceComputer &&
+            vm.repo.state.value.conn == com.nekko.protocol.RelayState.ONLINE && vm.completedAt.value == null && vm.repo.overlays.value[vm.sessionId] == null
+    }
     val attach = rememberAttach(vm)
     val prompts by vm.prompts.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val res = LocalResources.current
+    // The notification's "Always allow this tool": taken once the app is unlocked and this
+    // chat's card shows that very call; the card then presses its own Always allow.
+    val alwaysLink = (context.applicationContext as? com.nekko.android.NekkoApp)?.alwaysAllow
+    val alwaysWanted = alwaysLink?.request?.collectAsStateWithLifecycle()?.value
+    val lockStatus = LocalAppLock.current?.status?.collectAsStateWithLifecycle()?.value
+    var alwaysNow by remember(vm.sessionId) { mutableStateOf<String?>(null) }
+    LaunchedEffect(vm.sessionId, alwaysWanted, lockStatus?.locked, chat.approval?.call?.id) {
+        val a = chat.approval ?: return@LaunchedEffect
+        if (ChatController.offersToolScope(a.call.name) && alwaysLink?.take(vm.sessionId, a.call.id, locked = lockStatus?.locked == true) == true) {
+            alwaysNow = a.call.id
+        }
+    }
     val editInNewChat = stringResource(R.string.chats_edit_in_new_chat)
     val forkFromHere = stringResource(R.string.chats_fork_from_here)
     // Fork the chat from a saved message: a prompt goes back into the new chat's box, a reply keeps
@@ -328,9 +361,11 @@ private fun ChatScreenContent(
     LaunchedEffect(rows.size, keyed.size, streamTick, chat.error, chat.ready) {
         if (!chat.ready || keyed.isEmpty()) return@LaunchedEffect
         if (!openedAtBottom) {
-            // The list replaces the spinner in this frame: wait until it has items, then jump without animating.
+            // The list replaces the spinner in this frame. Its first layout can notify snapshotFlow
+            // while measurement is still running: request the jump for the next measure instead of
+            // forcing a reentrant measure through scrollToItem.
             snapshotFlow { list.layoutInfo.totalItemsCount }.first { it > 0 }
-            list.scrollToItem(lastIndex)
+            list.requestScrollToItem(lastIndex)
             openedAtBottom = true
             return@LaunchedEffect
         }
@@ -338,6 +373,18 @@ private fun ChatScreenContent(
         val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
         val nearBottom = lastVisible >= info.totalItemsCount - 3
         if (nearBottom) list.scrollToItem(lastIndex)
+    }
+
+    // The GitHub star card opens under the last reply: if that reply's end is in view, bring the whole card up after it expands.
+    LaunchedEffect(starCard) {
+        if (starCard == ChatViewModel.StarCard.NONE) return@LaunchedEffect
+        val before = list.layoutInfo
+        if ((before.visibleItemsInfo.lastOrNull()?.index ?: -1) < before.totalItemsCount - 1) return@LaunchedEffect
+        delay(220)
+        val info = list.layoutInfo
+        val last = info.visibleItemsInfo.lastOrNull()?.takeIf { it.index == info.totalItemsCount - 1 } ?: return@LaunchedEffect
+        val hidden = last.offset + last.size + info.afterContentPadding - info.viewportEndOffset
+        if (hidden > 0) list.animateScrollBy(hidden.toFloat(), tween(200))
     }
 
     // Keep the newest message in view when the list gets shorter (the keyboard opens, the message box grows),
@@ -402,6 +449,14 @@ private fun ChatScreenContent(
         StepUpSheet(vm.repo, pending, onDone = { modeStepUp = null }, onDismiss = { modeStepUp = null })
     }
 
+    if (showImageSettings) {
+        com.nekko.android.ui.chat.ImageChatSettingsSheet(
+            chat.imageParams ?: com.nekko.protocol.ImageChatParams(),
+            enabled = online && !chat.running && computers.imageGeneration,
+            loadModels = vm::imageModels, onSave = vm::setImageParams,
+            onDismiss = { showImageSettings = false },
+        )
+    }
     if (showModelEffort) {
         ModelEffortSheet(chat, computers, onSet = vm::setOptions, onLoadModels = { vm.loadModels() }, onRunOption = vm::setRunOption, onLoadTools = vm::tools, onSetTool = { name, on -> vm.setTool(name, on, chat.disabledTools) }, onDismiss = { showModelEffort = false })
     }
@@ -572,7 +627,7 @@ private fun ChatScreenContent(
                             itemsIndexed(rows, key = { _, row -> rowKey(row) }) { _, row ->
                                 val run = (row as? TranscriptRow.Run)?.run
                                 // Watch chips and subagent rows read the chat's watches and child chats.
-                                CompositionLocalProvider(LocalAgentContext provides agentContext) {
+                                CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo) {
                                     when {
                                         row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
                                             openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
@@ -609,6 +664,18 @@ private fun ChatScreenContent(
                                             color = p.inkFaint,
                                         )
                                     }
+                                    // The GitHub star ask under the 10th and 50th reply, never over a question, an approval, a failure or a saved copy.
+                                    val starShows = starCard != ChatViewModel.StarCard.NONE && !chat.running && chat.question == null &&
+                                        chat.approval == null && chat.error == null && chat.savedAt == null && completedAt == null
+                                    AnimatedVisibility(starShows, enter = fadeIn(tween(200)) + expandVertically(tween(200)), exit = fadeOut(tween(150)) + shrinkVertically(tween(150))) {
+                                        StarAskCard(
+                                            thanked = starCard == ChatViewModel.StarCard.THANKS,
+                                            onStar = vm::starred,
+                                            onLater = { vm.closeStarAsk() },
+                                            onNever = { vm.closeStarAsk(forever = true) },
+                                            onClose = { vm.closeStarAsk() },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -625,7 +692,7 @@ private fun ChatScreenContent(
                             if (e.refusal?.asksForStepUp != true) throw e
                             modeStepUp = PendingStepUp(res.getString(R.string.chats_tool_step_up, computerName, a.call.name)) { proof -> vm.alwaysAllowTool(proof) }
                         }
-                    })
+                    }, startAlways = alwaysNow == a.call.id, onStartedAlways = { alwaysNow = null })
                 }
                 chat.question?.let { QuestionCard(it, onAnswer = vm::answer) }
                 prs.firstOrNull()?.takeIf { simple.shown("pr-status", pr = true) }?.let { pr -> PrChip(pr) { showPrs = true } }
@@ -691,17 +758,31 @@ private fun ChatScreenContent(
                         // In a pane, text dragged from the other pane lands here (never sent by itself).
                         modifier = if (pane == null) Modifier else Modifier.messageDropTarget(vm.sessionId, vm::quote),
                         mic = mic,
-                        skills = chat.skills,
+                        skills = if (chat.chatType == "image") emptyList() else chat.skills,
                         insert = insert,
                         onInserted = vm::inserted,
-                        attach = attach,
-                        prompts = prompts,
+                        // Keep a restored tray removable, but never offer new image attachments.
+                        attach = if (chat.chatType == "image" && attach.state.photos.isEmpty()) null else attach,
+                        prompts = if (chat.chatType == "image") emptyList() else prompts,
                         queuedPrompts = chat.queuedPrompts,
                         onEditQueued = vm::editQueued,
                         onInterrupt = vm::interruptQueued,
                         onNewAgent = onNewChat,
                         onTerminal = vm::openTerminals,
-                        footer = { ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }, asks = chat.mode ?: vm.defaultMode, onOpenAsks = { showMode = true }) },
+                        onVoiceConversation = if (dictationOn && chat.chatType != "image") ({ showVoiceConversation = true }) else null,
+                        voiceControls = if (chat.chatType == "image") null else { composer ->
+                            com.nekko.android.voice.ChatVoiceControls(
+                                vm, dictationOn, focused, composer,
+                                showVoiceConversation, { showVoiceConversation = false }, onOpenChat, onNewChat, onSettings,
+                            )
+                        },
+                        footer = {
+                            if (chat.chatType == "image") {
+                                TextButton(onClick = { showImageSettings = true }, modifier = Modifier.testTag("image.settings")) {
+                                    Text(stringResource(R.string.image_settings) + " · " + (chat.imageParams?.modelId ?: stringResource(R.string.image_model)))
+                                }
+                            } else ChatOptionsRow(chat, enabled = online, onOpenModelEffort = { showModelEffort = true }, asks = chat.mode ?: vm.defaultMode, onOpenAsks = { showMode = true })
+                        },
                     )
                 }
             }
@@ -800,33 +881,39 @@ private fun CompletedBar(restoring: Boolean, error: String?, onRestore: () -> Un
  * tapped (Android shows its own prompt), then starts or stops dictation.
  */
 @Composable
-private fun rememberMic(d: DictationController?): MicUi? {
+private fun rememberMic(d: DictationController?, updates: kotlinx.coroutines.flow.Flow<*>? = null, authorized: () -> Boolean = { true }): MicUi? {
     if (d == null) return null
     val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val owner = LocalLifecycleOwner.current
+    val lifecycle = owner.lifecycle
     val lock = LocalAppLock.current
     val scope = rememberCoroutineScope()
+    val token = remember(d, owner) { Any() }
+    val currentAuthorization by rememberUpdatedState(authorized)
+    fun allowed() = currentAuthorization() && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) && lock?.locked != true && lock?.covered?.value != true
     val state by d.state.collectAsStateWithLifecycle()
     val error by d.error.collectAsStateWithLifecycle()
-    var pending by remember(d) { mutableStateOf<((String) -> Unit)?>(null) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        val onText = pending
-        pending = null
-        if (onText != null && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && lock?.locked != true) {
-            if (granted) d.toggle(onText) else d.denied()
-        }
+        // A permission result never restarts capture. Tap the microphone again.
+        if (!granted) d.denied()
     }
+    val safety = remember(d, owner) { com.nekko.android.voice.VoiceSafety(context, owner) { com.nekko.android.voice.VoiceAudioOwner.release(token); d.cancel() } }
     DisposableEffect(d, lifecycle, lock, scope) {
-        val dispose = observeMicLifecycle(d, lifecycle, lock, scope) { pending = null }
-        onDispose { dispose() }
+        val dispose = observeMicLifecycle(d, lifecycle, lock, scope) { com.nekko.android.voice.VoiceAudioOwner.release(token) }
+        safety.start()
+        val authorityJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            updates?.collect { if (!allowed()) { com.nekko.android.voice.VoiceAudioOwner.release(token); d.cancel() } }
+        }
+        onDispose { authorityJob.cancel(); dispose(); safety.close(); com.nekko.android.voice.VoiceAudioOwner.release(token) }
     }
+    LaunchedEffect(allowed()) { if (!allowed()) { com.nekko.android.voice.VoiceAudioOwner.release(token); d.cancel() } }
     return MicUi(state, error, d.computerName()) { onText ->
-        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && lock?.locked != true) {
+        if (allowed()) {
             val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-            if (has) d.toggle(onText) else {
-                pending = onText
-                ask.launch(Manifest.permission.RECORD_AUDIO)
-            }
+            if (has) {
+                com.nekko.android.voice.VoiceAudioOwner.claim(token) { d.cancel() }
+                d.toggle { words -> if (allowed() && com.nekko.android.voice.VoiceAudioOwner.owns(token)) onText(words) }
+            } else ask.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 }
@@ -852,9 +939,13 @@ internal fun observeMicLifecycle(
     val lockJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
         lock?.status?.collect { if (it.locked) cancel() }
     }
+    val coverJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+        lock?.covered?.collect { if (it) cancel() }
+    }
     return {
         lifecycle.removeObserver(observer)
         lockJob.cancel()
+        coverJob.cancel()
         cancel()
     }
 }

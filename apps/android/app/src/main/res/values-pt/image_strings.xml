@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="image_kind_text">Conversa</string>
+    <string name="image_kind_image">Imagem</string>
+    <string name="image_model">Modelo de imagens local</string>
+    <string name="image_models_loading">Lendo modelos de imagens do computador…</string>
+    <string name="image_no_models">Nenhum modelo de imagens disponível. Adicione um modelo de imagens no computador e tente novamente aqui.</string>
+    <string name="image_retry_models">Ler modelos novamente</string>
+    <string name="image_model_missing">O modelo salvo %1$s não está disponível. Escolha um modelo de imagens deste computador.</string>
+    <string name="image_width">Largura (256–2048, múltiplos de 64)</string>
+    <string name="image_height">Altura (256–2048, múltiplos de 64)</string>
+    <string name="image_steps">Etapas (1–100)</string>
+    <string name="image_cfg">CFG (número inteiro, 0–30)</string>
+    <string name="image_seed">Semente (-1 aleatória, até 2147483647)</string>
+    <string name="image_integer_settings">Estas configurações não podem ser assinadas. Escolha números inteiros explicitamente; valores fracionários salvos nunca são arredondados.</string>
+    <string name="image_working">Trabalhando…</string>
+    <string name="image_settings">Configurações de imagem</string>
+    <string name="image_save_settings">Salvar configurações de imagem</string>
+    <string name="image_create">Iniciar conversa de imagens</string>
+    <string name="image_offline">Reconecte-se para criar ou enviar uma conversa de imagens. Solicitações de imagens nunca são colocadas na fila como texto.</string>
+    <string name="image_unsupported">Este computador não informa suporte à geração de imagens. Atualize o Nekko Agent no computador.</string>
+    <string name="image_prompt_only">Descreva uma imagem apenas com texto. Anexos e habilidades não são compatíveis. A geração usa a autorização Change assinada existente.</string>
+    <string name="image_reply_n">Imagem gerada %1$d</string>
+    <string name="image_open">Abrir imagem</string>
+    <string name="image_close">Fechar</string>
+    <string name="image_unavailable">Não foi possível carregar esta imagem. Reconecte-se e tente novamente.</string>
+</resources>

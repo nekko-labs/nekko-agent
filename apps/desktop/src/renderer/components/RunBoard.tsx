@@ -4,7 +4,7 @@ import { formatRuntime, layoutMaze, runOutputDir, runStats, isLocalProvider, for
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store.js';
 import { LogSurface, StatTile } from './primitives/index.js';
-import { STATUS } from '../tokens.js';
+import { STATUS, STATUS_TEXT } from '../tokens.js';
 import { joinPath, runArtifactTarget } from '../runArtifactTarget.js';
 
 /**
@@ -174,7 +174,7 @@ export function RunNowStrip({ run }: { run: TrainingRun }) {
         <span className="relative inline-flex h-2.5 w-2.5 rounded-full" style={{ background: STATUS.running }} />
       </span>
       <div className="min-w-0">
-        <div className="truncate text-xs font-semibold" style={{ color: STATUS.running }}>{headline}</div>
+        <div className="truncate text-xs font-semibold" style={{ color: STATUS_TEXT.success }}>{headline}</div>
         {lastLog && <div className="truncate text-2xs text-(--ink-soft)">{lastLog.text}</div>}
       </div>
     </div>
@@ -183,7 +183,7 @@ export function RunNowStrip({ run }: { run: TrainingRun }) {
 
 function nodeColor(exp: ExperimentNode, run: TrainingRun, parentScore?: number): { fill: string; ring?: string } {
   if (exp.id === run.bestExperimentId) return { fill: STATUS.highlight, ring: 'color-mix(in srgb, var(--highlight) 35%, transparent)' };
-  if (exp.status === 'running') return { fill: STATUS.running, ring: 'color-mix(in srgb, var(--running) 35%, transparent)' };
+  if (exp.status === 'running') return { fill: STATUS.info, ring: 'color-mix(in srgb, var(--info) 35%, transparent)' };
   if (exp.status === 'failed') return { fill: 'color-mix(in srgb, var(--danger) 55%, transparent)' };
   const improved =
     exp.score != null && parentScore != null && (run.config?.minimizeMetric ? exp.score < parentScore : exp.score > parentScore);
@@ -232,10 +232,10 @@ export function IdeaMaze({ run }: { run: TrainingRun }) {
         </span>
         <span className="ml-auto flex items-center gap-3 font-mono text-2xs text-(--ink-faint)">
           <span><i className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: 'color-mix(in srgb, var(--ink-faint) 65%, transparent)' }} />tried</span>
-          <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-green-400 align-middle" />got better</span>
-          <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-400 align-middle" />best so far</span>
-          <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-400 align-middle" />running</span>
-          <span><i className="mr-1 inline-block h-0.5 w-4 bg-amber-400/70 align-middle" />path to the leader</span>
+          <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-success align-middle" />got better</span>
+          <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-warning align-middle" />best so far</span>
+          <span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-info align-middle" />running</span>
+          <span><i className="mr-1 inline-block h-0.5 w-4 bg-warning/70 align-middle" />path to the leader</span>
         </span>
       </div>
       {lastLog && (
@@ -313,7 +313,7 @@ export function IdeaMaze({ run }: { run: TrainingRun }) {
           <div className="flex flex-wrap items-baseline gap-x-3">
             <b className="font-mono">{sel.title}</b>
             <span className="font-mono text-2xs uppercase text-(--ink-faint)">{sel.status}</span>
-            {sel.score != null && <span className="font-mono text-cyan-400">{fmtScore(sel.score)}{sel.metric ? ` ${sel.metric}` : ''}</span>}
+            {sel.score != null && <span className="font-mono text-info-text">{fmtScore(sel.score)}{sel.metric ? ` ${sel.metric}` : ''}</span>}
             {sel.approach && <span className="text-(--ink-faint)">family: {sel.approach}</span>}
             {sel.parentId && <span className="text-(--ink-faint)">branched from {sel.parentId}</span>}
           </div>
@@ -374,7 +374,7 @@ export function HintComposer({
       {pending.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {pending.map((h) => (
-            <span key={h.id} className="rounded-full border border-amber-400/40 px-2 py-0.5 text-2xs text-amber-300" title="Will be folded into the agent's next iteration">
+            <span key={h.id} className="rounded-md bg-warning-soft px-2 py-0.5 text-2xs text-warning-text" title="Will be folded into the agent's next iteration">
               ⏳ {h.text.slice(0, 60)}
             </span>
           ))}

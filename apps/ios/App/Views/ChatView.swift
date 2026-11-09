@@ -84,7 +84,10 @@ struct ChatView: View {
             app.notifier.clear(sessionId: sessionId)
             if let first = app.firstMessages.removeValue(forKey: sessionId), let chat {
                 await chat.reload()
-                do { try await chat.send(first.text, images: first.images) } catch {
+                do {
+                    try await chat.send(first.text, images: first.images)
+                    if chat.isImageChat && store.drafts.draft(sessionId).text == first.text { store.drafts.clear(sessionId) }
+                } catch {
                     chat.handBack(first)
                     actionError = error.localizedDescription
                 }
@@ -142,9 +145,9 @@ struct ChatView: View {
                         case .row(let row, let reasoning):
                         switch row {
                         case .block(let b):
-                            BlockView(block: b, chat: chat, voice: rowCache.voices[b.id], photos: b.isPrompt ? chat.photos(b.id) : [], reasoning: reasoning) { i in
-                                viewing = PhotoSet(photos: chat.photos(b.id), index: i, messageId: b.id)
-                            }
+                            BlockView(block: b, chat: chat, voice: rowCache.voices[b.id], photos: chat.photos(b.id), reasoning: reasoning,
+                                      openPhoto: { i in viewing = PhotoSet(photos: chat.photos(b.id), index: i, messageId: b.id) },
+                                      editPicture: chat.canEdit(b.id) ? { i in editPicture(chat, b.id, i) } : nil)
                             .id(b.id)
                             // Drag a message to the other pane's composer (FD-4); it lands as text, never sent.
                             .modifier(PaneDraggable(text: inPanes ? b.copyText : nil))
@@ -316,11 +319,11 @@ struct ChatView: View {
                     ModeMenuPicker()
                     // A saved copy is read-only: changing the chat needs the computer.
                     Group {
-                        if ModelEffortButton.parts(prefs, chat).model {
-                            Button { showModels = true } label: { Label("Model", systemImage: "cpu") }
+                        if chat.isImageChat || ModelEffortButton.parts(prefs, chat).model {
+                            Button { showModels = true } label: { Label(chat.isImageChat ? "Image settings" : "Model", systemImage: chat.isImageChat ? "photo.badge.plus" : "cpu") }
                         }
                         // Simple shows this under the message box, in plain words.
-                        if prefs.expertMode && prefs.shows("asks") {
+                        if !chat.isImageChat && prefs.expertMode && prefs.shows("asks") {
                             Menu {
                                 ForEach(PcSettings.ChatMode.allCases, id: \.self) { m in
                                     Button {
@@ -364,8 +367,11 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showModels) {
-            ModelPicker(selected: (chat.session?.providerId, chat.modelId)) { p, m in
-                act { try await chat.setOptions(providerId: p, modelId: m) }
+            if chat.isImageChat { ImageChatSettingsSheet(chat: chat) }
+            else {
+                ModelPicker(selected: (chat.session?.providerId, chat.modelId)) { p, m in
+                    act { try await chat.setOptions(providerId: p, modelId: m) }
+                }
             }
         }
         .sheet(isPresented: $showChanges) { ChangesView(chat: chat) }
@@ -488,6 +494,17 @@ struct ChatView: View {
     private func act(_ body: @escaping () async throws -> Void) {
         Task {
             do { try await body() } catch { actionError = error.localizedDescription }
+        }
+    }
+
+    /// Edit under a made picture: it goes into the message box as a photo to edit
+    /// (as large as the computer sends it, scaled as the desktop does), never sent by itself.
+    private func editPicture(_ chat: ChatModel, _ messageId: String, _ index: Int) {
+        act {
+            let picture = try await chat.pictureToEdit(messageId, index)
+            guard let photo = ImageAttachments.forEdit(picture) else { throw RelayError(String(localized: "That picture couldn’t be read.")) }
+            chat.attach(images: [photo])
+            Haptics.tap()
         }
     }
 
@@ -741,6 +758,8 @@ struct BlockView: View {
     /// Simple mode hides what the model thought (`thinking`).
     var reasoning = true
     var openPhoto: (Int) -> Void = { _ in }
+    /// An image chat's made picture: Edit puts picture `i` in the message box. Nil: no Edit (a clip, or no picture).
+    var editPicture: ((Int) -> Void)? = nil
     @Environment(\.palette) private var palette
     @State private var showReasoning = false
 
@@ -793,6 +812,14 @@ struct BlockView: View {
                         }
                     }
                     .modifier(Voiced(voice: voice))
+                }
+                if !photos.isEmpty {
+                    if photos.contains(where: { !$0.isEmpty }) {
+                        PhotoStrip(photos: photos, open: openPhoto)
+                        if let editPicture { EditPictureButtons(count: photos.count, edit: editPicture) }
+                    } else { Label("Image unavailable in this copy", systemImage: "photo") }
+                } else if let count = chat?.session?.messages.first(where: { $0.id == block.id })?.imageCount, count > 0 {
+                    Label("Reconnect to view generated images", systemImage: "photo")
                 }
                 if interrupted { Label("Interrupted", systemImage: "pause.circle").font(.caption).foregroundStyle(palette.warning) }
             }
@@ -1102,7 +1129,7 @@ struct Composer: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
-            if skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
+            if !chat.isImageChat, skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
             } else if let note = chat.offlineNote {
@@ -1204,7 +1231,7 @@ struct Composer: View {
                 // Markdown source with a formatting toolbar in the card (MD-3); VoiceOver's
                 // "Hide keyboard" action is on the text view itself.
                 MarkdownComposerField(text: $text, focused: $focused,
-                                      placeholder: chat.running ? "Queue a follow-up" : "Message",
+                                      placeholder: chat.isImageChat ? (images.isEmpty ? "Describe an image to generate" : "Describe the change") : chat.running ? "Queue a follow-up" : "Message",
                                       onPasteImages: pasteImages, boxed: false)
                     .padding(.horizontal, 12).padding(.top, 10)
                 HStack(alignment: .center, spacing: 4) {
@@ -1223,13 +1250,15 @@ struct Composer: View {
                                 ForEach(store.pcSettings.prompts) { p in Button("/\(p.name)") { prompt = p; skill = nil } }
                             } label: { Label("Saved prompts", systemImage: "text.badge.star") }
                         }
-                        if !chat.skills.isEmpty {
+                        if !chat.isImageChat && !chat.skills.isEmpty {
                             Menu {
                                 ForEach(chat.skills) { s in Button("/\(s.name)") { skill = s; prompt = nil } }
                             } label: { Label("Skills on \(store.active?.name ?? "computer")", systemImage: "wand.and.stars") }
                         }
                         // A PhotosPicker inside a Menu never opens its sheet: the menu closing dismisses it.
-                        Button { pickingPhotos = true } label: { Label("Photos", systemImage: "photo.on.rectangle") }
+                        Button { pickingPhotos = true } label: {
+                            Label(chat.isImageChat ? "Photos to edit" : "Photos", systemImage: "photo.on.rectangle")
+                        }
                         // Asked for by the user, so iOS shows its paste prompt only then.
                         Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
                             .disabled(!UIPasteboard.general.hasImages)
@@ -1260,10 +1289,10 @@ struct Composer: View {
                             guard let id = store.activeId else { throw RelayError("Choose a computer first.") }
                             return .computer(chat, computerId: id)
                         })
-                        .disabled(chat.savedAt != nil || chat.sendsLater)
+                        .disabled(chat.isImageChat || chat.savedAt != nil || chat.sendsLater)
                     }
                     // Stop while running with nothing to queue; a photo or skill alone can be queued.
-                    if chat.running && !hasContent {
+                    if chat.running && (!hasContent || chat.isImageChat) {
                         Button { chat.abort() } label: {
                             Image(systemName: "stop.fill").font(.body.weight(.bold)).frame(width: 36, height: 36)
                                 .background(palette.danger, in: Circle()).foregroundStyle(.white)
@@ -1299,7 +1328,7 @@ struct Composer: View {
                 if parts.model || parts.effort || prefs.shows("context") {
                     HStack(spacing: 0) {
                         if parts.model || parts.effort { ModelEffortButton(chat: chat) }
-                        if !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
+                        if !chat.isImageChat && !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
                         Spacer(minLength: 8)
                         if prefs.shows("context") { ContextGauge(chat: chat) }
                     }
@@ -1315,7 +1344,7 @@ struct Composer: View {
         .task(id: photos) {
             guard !photos.isEmpty else { return }
             loadingPhotos = true
-            let loaded = await ImageAttachments.load(photos)
+            let loaded = await ImageAttachments.load(photos, toEdit: chat.isImageChat)
             if !Task.isCancelled { images = loaded }
             loadingPhotos = false
         }
@@ -1359,7 +1388,8 @@ struct Composer: View {
         // A photo dropped on the chat (from the other pane): into the message, at most four, never sent.
         .onChange(of: chat.insertImages) { _, dropped in
             guard !dropped.isEmpty else { return }
-            let taken = chat.takeImages()
+            // In an image chat they are photos to edit: sized as the desktop sizes them.
+            let taken = chat.isImageChat ? chat.takeImages().compactMap(ImageAttachments.forEdit) : chat.takeImages()
             let room = max(0, 4 - images.count)
             images += taken.prefix(room)
             if taken.count > room { error = "A message takes four photos at most." }
@@ -1424,7 +1454,9 @@ struct Composer: View {
     private func pasteImages() {
         let pasted = UIPasteboard.general.images ?? []
         let room = max(0, 4 - images.count)
-        let added = pasted.prefix(room).compactMap(ImageAttachments.encode)
+        // An image chat edits them: attached as the desktop attaches photos to edit (photoEdit.ts).
+        let toEdit = chat.isImageChat
+        let added = pasted.prefix(room).compactMap { toEdit ? ImageAttachments.encode($0, maxSide: CGFloat(PhotoEdit.maxEdge)) : ImageAttachments.encode($0) }
         if added.isEmpty {
             error = "There’s no image on the clipboard."
             return
@@ -1432,7 +1464,7 @@ struct Composer: View {
         images += added
     }
 
-    private var canSend: Bool { chat.blocked == nil && !loadingPhotos && hasContent }
+    private var canSend: Bool { chat.blocked == nil && !loadingPhotos && hasContent && (!chat.isImageChat || (!chat.running && !chat.sending && skill == nil)) }
 
     private var current: Draft { Draft(text: text, skill: skill, images: images, refusal: refusal) }
 
@@ -1455,6 +1487,13 @@ struct Composer: View {
 
     /// A draft changed in the store, not from here: a waiting prompt taken back, or one refused.
     private func adopt(_ stored: Draft?) {
+        // Initial image generation keeps its prompt durable while authorization
+        // is open. Clear that box only when the same saved draft was accepted.
+        if chat.isImageChat, stored == nil, store.drafts.drafts[chat.sessionId] == nil, current == lastSaved {
+            lastSaved = Draft()
+            text = ""; skill = nil; images = []; refusal = nil
+            return
+        }
         let d = stored ?? Draft()
         guard d != lastSaved, !d.isEmpty else { return }
         lastSaved = d
@@ -1467,7 +1506,7 @@ struct Composer: View {
     /// `/re` → the computer's skills starting with "re", at the start or after what's typed.
     private var skillMatches: [SkillSummary] {
         guard skill == nil, prompt == nil, let q = SlashMenu.trigger(text)?.query.lowercased() else { return [] }
-        return chat.skills.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
+        return chat.isImageChat ? [] : chat.skills.filter { q.isEmpty || $0.name.lowercased().hasPrefix(q) }.prefix(8).map { $0 }
     }
 
     /// A confirm or a choice from a voice command: answered by voice or a tap.
@@ -1588,7 +1627,7 @@ struct Composer: View {
         var body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var s = skill
         // "/name rest" typed out in full runs that skill.
-        if s == nil, body.hasPrefix("/"), let space = body.firstIndex(of: " ") ?? Optional(body.endIndex) {
+        if !chat.isImageChat, s == nil, body.hasPrefix("/"), let space = body.firstIndex(of: " ") ?? Optional(body.endIndex) {
             let name = String(body[body.index(after: body.startIndex)..<space])
             if let match = chat.skills.first(where: { $0.name == name }) {
                 s = match
@@ -1604,6 +1643,24 @@ struct Composer: View {
         let sentBody = wrap(body)
         let sentSkill = s
         let saved = text
+        if chat.isImageChat {
+            // Unlike text turns there is no exactly-once image outbox. Keep the
+            // prompt durable during authorization/generation and never replay it.
+            saveDraft()
+            return Task {
+                do {
+                    try await chat.send(sentBody, skill: sentSkill, images: sentImages)
+                    if text == saved {
+                        text = ""; prompt = nil
+                        // The photos were edited: they leave the box with the prompt.
+                        if images == sentImages { images = []; photos = [] }
+                        saveDraft()
+                    }
+                    Haptics.tap()
+                    return true
+                } catch { self.error = error.localizedDescription; return false }
+            }
+        }
         text = ""
         skill = nil
         prompt = nil
@@ -1635,28 +1692,44 @@ struct Composer: View {
 enum ImageAttachments {
     /// Photos → JPEG data URLs the computer's vision models take, scaled so a
     /// few of them stay well under the relay's frame cap.
-    static func load(_ items: [PhotosPickerItem]) async -> [String] {
+    /// `toEdit`: photos an image chat edits, as the desktop attaches them (photoEdit.ts):
+    /// at most `PhotoEdit.maxEdge` px, and a PNG stays a PNG (it may be transparent).
+    static func load(_ items: [PhotosPickerItem], toEdit: Bool = false) async -> [String] {
         var out: [String] = []
         for item in items.prefix(4) {
             guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data),
-                  let url = encode(image) else { continue }
+                  let url = toEdit ? encode(image, maxSide: CGFloat(PhotoEdit.maxEdge), png: isPNG(data)) : encode(image) else { continue }
             out.append(url)
         }
         return out
     }
 
-    /// One image as a JPEG data URL, at most 1,600 px on its long side.
-    static func encode(_ image: UIImage) -> String? {
-        let maxSide: CGFloat = 1600
-        let scale = min(1, maxSide / max(image.size.width, image.size.height))
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+    /// One image as a JPEG (or PNG) data URL, at most `maxSide` px on its long side.
+    static func encode(_ image: UIImage, maxSide: CGFloat = 1600, png: Bool = false) -> String? {
+        // Whole pixels, rounded as the desktop's fitWithin: the computer reads the edit's shape from them.
+        let fitted = PhotoEdit.fit(PixelSize(width: Int(image.size.width.rounded()), height: Int(image.size.height.rounded())), max: Int(maxSide))
+        let size = CGSize(width: fitted.width, height: fitted.height)
         // Scale 1: `size` is in pixels. The default (the screen's 3x) made 4,800 px JPEGs.
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
+        format.opaque = !png
         let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+        if png, let data = resized.pngData() { return "data:image/png;base64," + data.base64EncodedString() }
         guard let jpeg = resized.jpegData(compressionQuality: 0.8) else { return nil }
         return "data:image/jpeg;base64," + jpeg.base64EncodedString()
     }
+
+    /// A picture (a data URL) ready to edit: kept as it is when the computer's gate
+    /// takes it and it is small enough, else scaled like a picked photo to edit.
+    static func forEdit(_ dataURL: String) -> String? {
+        if PhotoEdit.accepts(dataURL), let size = PhotoEdit.size(of: dataURL), max(size.width, size.height) <= PhotoEdit.maxEdge {
+            return dataURL
+        }
+        guard let image = DataURLImage.decode(dataURL) else { return nil }
+        return encode(image, maxSide: CGFloat(PhotoEdit.maxEdge), png: dataURL.hasPrefix("data:image/png"))
+    }
+
+    private static func isPNG(_ data: Data) -> Bool { data.starts(with: [0x89, 0x50, 0x4E, 0x47]) }
 }
 
 /// Simple mode's note above the message box once a chat fills 85% of its

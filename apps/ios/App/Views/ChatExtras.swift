@@ -185,6 +185,34 @@ struct PhotoStrip: View {
     }
 }
 
+/// Edit under an image chat's made pictures, as on the desktop: one button per
+/// picture ("Edit", or "Edit picture 2" when there are several). It puts the
+/// picture in the message box to describe a change; nothing is sent until Send.
+struct EditPictureButtons: View {
+    let count: Int
+    var edit: (Int) -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { i in
+                Button { edit(i) } label: {
+                    Label(count == 1 ? "Edit" : "Edit picture \(i + 1)", systemImage: "wand.and.stars")
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, 12).frame(minHeight: 32)
+                        .background(palette.surface, in: Capsule())
+                        .overlay(Capsule().stroke(palette.line))
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(palette.accent)
+                .accessibilityHint("Adds this picture to your message to change it")
+                .accessibilityIdentifier("chat.editPicture")
+            }
+        }
+    }
+}
+
 /// Full-screen photos: swipe between them, pinch or double-tap to zoom where
 /// you pinch or tap, pan a zoomed photo (UIScrollView: it follows the fingers
 /// and bounces at the edges and at the zoom limits), and swipe up or down to

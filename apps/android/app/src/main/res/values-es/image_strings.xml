@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="image_kind_text">Chat</string>
+    <string name="image_kind_image">Imagen</string>
+    <string name="image_model">Modelo de imágenes local</string>
+    <string name="image_models_loading">Leyendo los modelos de imágenes del ordenador…</string>
+    <string name="image_no_models">No hay modelos de imágenes disponibles. Añade uno en el ordenador y vuelve a intentarlo aquí.</string>
+    <string name="image_retry_models">Volver a leer los modelos</string>
+    <string name="image_model_missing">El modelo guardado %1$s no está disponible. Elige un modelo de imágenes de este ordenador.</string>
+    <string name="image_width">Anchura (256–2048, múltiplos de 64)</string>
+    <string name="image_height">Altura (256–2048, múltiplos de 64)</string>
+    <string name="image_steps">Pasos (1–100)</string>
+    <string name="image_cfg">CFG (número entero, 0–30)</string>
+    <string name="image_seed">Semilla (-1 aleatoria, hasta 2147483647)</string>
+    <string name="image_integer_settings">Estos ajustes no se pueden firmar. Elige números enteros explícitamente; los valores fraccionarios guardados nunca se redondean.</string>
+    <string name="image_working">Trabajando…</string>
+    <string name="image_settings">Ajustes de imagen</string>
+    <string name="image_save_settings">Guardar ajustes de imagen</string>
+    <string name="image_create">Iniciar chat de imágenes</string>
+    <string name="image_offline">Vuelve a conectarte para crear o enviar un chat de imágenes. Las solicitudes de imágenes nunca se ponen en cola como texto.</string>
+    <string name="image_unsupported">Este ordenador no indica que admita la generación de imágenes. Actualiza Nekko Agent en el ordenador.</string>
+    <string name="image_prompt_only">Describe una imagen solo con texto. No se admiten archivos adjuntos ni habilidades. La generación usa la autorización Change firmada existente.</string>
+    <string name="image_reply_n">Imagen generada %1$d</string>
+    <string name="image_open">Abrir imagen</string>
+    <string name="image_close">Cerrar</string>
+    <string name="image_unavailable">No se pudo cargar esta imagen. Vuelve a conectarte e inténtalo de nuevo.</string>
+</resources>

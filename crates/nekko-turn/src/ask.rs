@@ -33,9 +33,27 @@ fn normalize_options(value: Option<&Value>) -> Vec<Value> {
         if !description.is_empty() {
             opt.insert("description".into(), json!(description));
         }
+        if let Some(action) = normalize_action(o.get("action")) {
+            opt.insert("action".into(), action);
+        }
         out.push(Value::Object(opt));
     }
     out
+}
+
+/// An option's environment action (#2404): `pickFolder`, `connectRepo`, or
+/// `addFolder` with a path. Anything else is dropped, never an error: the
+/// option still works as a plain answer.
+fn normalize_action(value: Option<&Value>) -> Option<Value> {
+    let kind = trimmed_str(value?.get("kind"));
+    match kind.as_str() {
+        "pickFolder" | "connectRepo" => Some(json!({ "kind": kind })),
+        "addFolder" => {
+            let path = trimmed_str(value?.get("path"));
+            (!path.is_empty() && path.len() <= 4096).then(|| json!({ "kind": kind, "path": path }))
+        }
+        _ => None,
+    }
 }
 
 /// `parseAskRequest(callId, input, now)`: the request, or the reason it cannot be read.
@@ -109,4 +127,33 @@ pub fn format_ask_answers(request: &Value, answers: &Value) -> String {
         "The user answered:\n\n{}\n\nWork to these answers. Do not ask again about anything settled here.",
         lines.join("\n\n")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn option_actions_match_the_shared_parser() {
+        let input = json!({ "questions": [{
+            "header": "Project",
+            "question": "Where is hypergate?",
+            "options": [
+                { "label": "Search this computer" },
+                { "label": "Use it", "action": { "kind": "addFolder", "path": " /code/hypergate " } },
+                { "label": "Choose a folder", "action": { "kind": "pickFolder" } },
+                { "label": "Add from GitHub", "action": { "kind": "connectRepo", "path": "ignored" } },
+                { "label": "Odd", "action": { "kind": "deleteEverything" } },
+                { "label": "No path", "action": { "kind": "addFolder" } }
+            ]
+        }]});
+        let req = parse_ask_request("c", &input, 0).unwrap();
+        let options = req["questions"][0]["options"].as_array().unwrap();
+        assert_eq!(options.len(), 5, "capped at five");
+        assert_eq!(options[0], json!({ "label": "Search this computer" }));
+        assert_eq!(options[1]["action"], json!({ "kind": "addFolder", "path": "/code/hypergate" }));
+        assert_eq!(options[2]["action"], json!({ "kind": "pickFolder" }));
+        assert_eq!(options[3]["action"], json!({ "kind": "connectRepo" }));
+        assert_eq!(options[4], json!({ "label": "Odd" }));
+    }
 }

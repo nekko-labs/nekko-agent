@@ -598,9 +598,12 @@ struct ChatRow: View {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
+                if summary.chatType == "image" {
+                    Label("Image", systemImage: "photo").font(.caption2).foregroundStyle(palette.accent)
+                }
                 if modelShown || contextShown != nil {
                     HStack(spacing: 6) {
-                        if modelShown, let model = summary.modelId {
+                        if modelShown, let model = shownModelId {
                             ModelFact(model: model, mark: ChatCard.providerMark(kind: providerKind, modelId: model))
                         }
                         if let context = contextShown { ContextFact(context: context) }
@@ -637,7 +640,9 @@ struct ChatRow: View {
 
     private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
 
-    private var modelShown: Bool { showModel && summary.modelId != nil }
+    /// An image chat shows the image model it draws with, not the chat model.
+    private var shownModelId: String? { summary.chatType == "image" ? summary.imageParams?.modelId : summary.modelId }
+    private var modelShown: Bool { showModel && shownModelId != nil }
 
     /// The context gauge, while the chat is in progress (the desktop hides it once a chat is done).
     private var contextShown: ChatCard.Context? {

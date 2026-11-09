@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="image_kind_text">Chat</string>
+    <string name="image_kind_image">Bild</string>
+    <string name="image_model">Lokales Bildmodell</string>
+    <string name="image_models_loading">Bildmodelle werden vom Computer gelesen…</string>
+    <string name="image_no_models">Keine Bildmodelle verfügbar. Füge auf dem Computer ein Bildmodell hinzu und versuche es hier erneut.</string>
+    <string name="image_retry_models">Modelle erneut lesen</string>
+    <string name="image_model_missing">Das gespeicherte Modell %1$s ist nicht verfügbar. Wähle ein Bildmodell von diesem Computer.</string>
+    <string name="image_width">Breite (256–2048, Vielfache von 64)</string>
+    <string name="image_height">Höhe (256–2048, Vielfache von 64)</string>
+    <string name="image_steps">Schritte (1–100)</string>
+    <string name="image_cfg">CFG (ganze Zahl, 0–30)</string>
+    <string name="image_seed">Startwert (-1 zufällig, bis 2147483647)</string>
+    <string name="image_integer_settings">Diese Einstellungen können nicht signiert werden. Wähle ausdrücklich ganze Zahlen; gespeicherte Bruchwerte werden niemals gerundet.</string>
+    <string name="image_working">In Arbeit…</string>
+    <string name="image_settings">Bildeinstellungen</string>
+    <string name="image_save_settings">Bildeinstellungen speichern</string>
+    <string name="image_create">Bildchat starten</string>
+    <string name="image_offline">Verbinde dich erneut, um einen Bildchat zu erstellen oder eine Bildanfrage zu senden. Bildanfragen werden niemals als Text in die Warteschlange gestellt.</string>
+    <string name="image_unsupported">Dieser Computer meldet keine Unterstützung für Bilderzeugung. Aktualisiere Nekko Agent auf dem Computer.</string>
+    <string name="image_prompt_only">Beschreibe ein Bild nur mit Text. Anhänge und Skills werden nicht unterstützt. Die Erzeugung nutzt die bestehende signierte Change-Autorisierung.</string>
+    <string name="image_reply_n">Erzeugtes Bild %1$d</string>
+    <string name="image_open">Bild öffnen</string>
+    <string name="image_close">Schließen</string>
+    <string name="image_unavailable">Dieses Bild konnte nicht geladen werden. Verbinde dich erneut und versuche es noch einmal.</string>
+</resources>

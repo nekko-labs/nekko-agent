@@ -697,6 +697,7 @@ impl Table {
             crate::connectors::CHANNELS,
             handler!(|ctx, channel, args| crate::connectors::route(ctx, channel, &args).await),
         );
+        t.add(crate::repos::CHANNELS, handler!(|ctx, channel, args| crate::repos::route(ctx, channel, &args).await));
         t.add(crate::remote::CHANNELS, handler!(|ctx, channel, args| ctx.remote.route(channel, &args).await));
         t.add(crate::messaging::CHANNELS, handler!(|ctx, channel, args| ctx.messaging.route(channel)));
         t.add(
