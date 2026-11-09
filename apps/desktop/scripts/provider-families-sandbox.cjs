@@ -6,6 +6,7 @@ const out = process.env.NEKKO_INTEGRATION_OUT;
 if (!out) throw Error('Run through layout-evidence-integration.cjs');
 const before = process.env.NEKKO_TEST_LABEL === 'before';
 const profile = path.join(out, 'profile');
+app.disableHardwareAcceleration(); // capturePage throws UnknownVizError on GPU-less hosts otherwise
 app.setPath('userData', profile);
 app.setPath('sessionData', profile);
 const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
