@@ -49,3 +49,18 @@ test('native evidence always supplies UI tests in a nonempty Bash array', () => 
   assert.equal((workflow.match(/-only-testing:NekkoNativeUITests\/GroupEvidenceTests/g) ?? []).length, 1);
   assert.equal((workflow.match(/-only-testing:NekkoNativeUITests\/PurposeGroupsTests/g) ?? []).length, 1);
 });
+
+// The native AX tree speaks PR metadata rather than its on-screen #42 badge.
+test('card details checks real spoken fields and keeps reveal drags inside the Form', () => {
+  const ui = fs.readFileSync(path.join(root, 'apps/ios/scripts/GroupEvidenceTests.swift'), 'utf8');
+  assert.ok(ui.includes('marker: "Pull request 42, open"'));
+  assert.ok(ui.includes('popover.frame.contains(element.frame)'));
+  assert.ok(ui.includes('for down in [false, true]'));
+  assert.ok(ui.includes('CGVector(dx: 0.05, dy: down ? 0.25 : 0.8)'));
+  assert.ok(ui.includes('CGVector(dx: 0.05, dy: down ? 0.8 : 0.25)'));
+  assert.ok(!ui.includes('form.swipeDown()'));
+  assert.ok(ui.includes('other < index ? "0" : "1"'));
+  assert.ok(ui.includes('other > index'));
+  assert.ok(ui.includes('"-uiTestKeepCardDetails"'));
+  assert.ok(ui.includes('XCTAssertFalse(row(app).label.contains(field.marker)'));
+});
