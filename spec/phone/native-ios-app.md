@@ -309,6 +309,7 @@ hardware authentication, iPad and VoiceOver remain unverified.
 - **Intent:** see what became of a chat's PRs from the list, with the same state hues as the desktop's agent cards (`prTone` in `SessionPrChip`; the desktop card now shows one PR chip, see [agent card PR chip](../agents/agent-card-pr-chip.md)). A row whose transcript names PRs (the summary's `prUrls`) shows one `#123` per PR in its facts line, tinted by state (open green, draft faint, merged in the accent, closed in danger), up to three; with more, a pull-request glyph and the count. The labels are not links: the row opens the chat, whose PR chip opens each PR. VoiceOver reads "Pull request 123, merged".
 - **Lookup:** the phone asks the chat's own computer (`pr:sessionList`, read only, the host's cached state) for chats that name a PR, 8 at a time, again when a chat moves on or names another PR, and every five minutes; a failed lookup is asked again next time. Chats without PRs cost nothing. No new permission, storage or network use beyond that read.
 - **Verification:** the lookup's batching and freshness are unit-tested (`BeyondTests`); the row drawing awaits the macOS CI build and simulator screenshots.
+- `[updated 2026-11-09]` The numbers became the desktop's single PR chip (the leading PR's state glyph and `#123`, then `+N`), at the row's bottom right; the row also gained the provider mark and the context gauge in its hues. See [phone chat rows](phone-chat-rows-match-the-desktop-card.md).
 
 ### New-chat mascot grips the edge (#1247)
 

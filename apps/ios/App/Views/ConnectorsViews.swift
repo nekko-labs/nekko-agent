@@ -88,19 +88,36 @@ struct ConnectorsView: View {
     }
 }
 
-/// A connector's mark: the kind of service it is, in a tile. (No brand artwork on the phone yet.)
+/// A connector's brand mark on a quiet tile, as the desktop's connector cards
+/// draw it (`connectorIcons.tsx`): the service's own colours, and GitHub and
+/// Linear, whose marks are monochrome, in the ink so they read in both themes.
+/// A kind with no mark yet falls back to the kind of service it is.
 struct ConnectorMark: View {
     let kind: PhoneConnectors.Kind
     var size: CGFloat = 30
     @Environment(\.palette) private var palette
 
+    /// Marks drawn in the ink rather than their own colour.
+    static let monochrome: Set<String> = ["github", "linear"]
+
     var body: some View {
-        Image(systemName: kind.category == .git ? "arrow.triangle.branch" : "checklist")
-            .font(.system(size: size * 0.5, weight: .semibold))
-            .foregroundStyle(palette.accent)
-            .frame(width: size, height: size)
-            .background(palette.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: size * 0.28))
-            .accessibilityHidden(true)
+        Group {
+            if UIImage(named: "connector-\(kind.id)") != nil {
+                Image("connector-\(kind.id)")
+                    .renderingMode(Self.monochrome.contains(kind.id) ? .template : .original)
+                    .resizable().scaledToFit()
+                    .foregroundStyle(palette.ink)
+                    .frame(width: size * 0.6, height: size * 0.6)
+            } else {
+                Image(systemName: kind.category == .git ? "arrow.triangle.branch" : "checklist")
+                    .font(.system(size: size * 0.5, weight: .semibold))
+                    .foregroundStyle(palette.accent)
+            }
+        }
+        .frame(width: size, height: size)
+        .background(palette.surface2, in: RoundedRectangle(cornerRadius: size * 0.28))
+        .accessibilityHidden(true)
+        .accessibilityIdentifier("connectors.mark.\(kind.id)")
     }
 }
 

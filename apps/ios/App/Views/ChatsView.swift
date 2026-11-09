@@ -451,6 +451,16 @@ struct ChatsView: View {
 
     private func place(of s: SessionSummary) -> ChatPlace? { ChatPlace.of(placeId(of: s), store: store) }
 
+    /// The kind of provider a chat runs on, from the list of the place that holds it:
+    /// this iPhone's own providers, or the active computer's. Nil for a chat on a
+    /// computer not in view, whose row then names the provider from the model.
+    private func providerKind(of s: SessionSummary) -> String? {
+        guard let id = s.providerId else { return nil }
+        if PhoneProviders.isPhoneChat(s.id) { return phone.providers.first { $0.id == id }?.kind }
+        guard (owner(s) ?? store.activeId) == store.activeId else { return nil }
+        return store.providers.first { $0.id == id }?.kind
+    }
+
     /// New chat runs on the place in view; with every place in view, on the computer used last.
     private func newChat() {
         if let filter, filter != store.activeId, filter != PhoneProviders.computerId { store.connect(filter) }
@@ -503,7 +513,7 @@ struct ChatsView: View {
         return NavigationLink(value: Route.chat(s.id)) {
             ChatRow(summary: s, activity: listActivity[s.id], waiting: on == store.activeId ? store.outbox.count(for: s.id) : 0,
                     showPreview: view.showPreviews, place: showsComputer ? place(of: s) : nil, showPlaceIcon: view.showComputerIcons,
-                    prs: view.showPullRequests ? store.rowPrs[s.id] ?? [] : [],
+                    prs: view.showPullRequests ? store.rowPrs[s.id] ?? [] : [], providerKind: providerKind(of: s),
                     showModel: view.showModel, showContext: view.showContext, showUpdated: view.showUpdated)
         }
         // Straight on the ground like the rest of the list, with the attention bar on a chat that needs you.
@@ -562,6 +572,8 @@ struct ChatRow: View {
     var showPlaceIcon = true
     /// The pull requests the chat made, with their state (`pr:sessionList`).
     var prs: [PullRequest] = []
+    /// The kind of provider it runs on (`providers:list`), for the mark beside the model.
+    var providerKind: String? = nil
     var showModel = true
     var showContext = true
     var showUpdated = true
@@ -569,7 +581,9 @@ struct ChatRow: View {
 
     var body: some View {
         // A glyph column says what the chat is doing before the title is read
-        // (the desktop's StatusIcon); the facts sit under the preview as chips.
+        // (the desktop's StatusIcon). Under the title, the desktop card's line:
+        // the provider's mark and the model, then how full the context is while
+        // the chat is in progress. The PR chip sits at the bottom right.
         HStack(alignment: .top, spacing: 10) {
             ChatStatusIcon(activity: activity, completed: summary.archived, waiting: waiting > 0, activeWatchCount: summary.activeWatchCount)
                 .frame(width: 22, height: 22).padding(.top, 1)
@@ -578,26 +592,27 @@ struct ChatRow: View {
                     if summary.pinned { Image(systemName: "pin.fill").font(.caption2).foregroundStyle(palette.warning).accessibilityLabel("Pinned") }
                     Text(title).font(.body.weight(.semibold)).foregroundStyle(summary.archived ? palette.inkSoft : palette.ink).lineLimit(1)
                 }
-                if showModel, let model = summary.modelId {
-                    Text(AgentRows.shortModelName(model)).font(.caption2).foregroundStyle(palette.accent)
-                        .lineLimit(1).accessibilityLabel("Model \(model)").accessibilityIdentifier("chats.row.model")
-                }
-                if showContext, let used = summary.contextUsed ?? summary.transcriptTokens {
-                    Text(summary.contextWindow.map { "\(MonitorFormat.tokens(used))/\(MonitorFormat.tokens($0))" } ?? "\(MonitorFormat.tokens(used)) tokens")
-                        .font(.caption2.monospacedDigit()).foregroundStyle(palette.inkFaint)
-                        .accessibilityLabel("Context window: \(used) tokens used")
-                        .accessibilityIdentifier("chats.row.context")
+                if modelShown || contextShown != nil {
+                    HStack(spacing: 6) {
+                        if modelShown, let model = summary.modelId {
+                            ModelFact(model: model, mark: ChatCard.providerMark(kind: providerKind, modelId: model))
+                        }
+                        if let context = contextShown { ContextFact(context: context) }
+                    }
                 }
                 if showPreview, let preview { Text(preview).font(.footnote).foregroundStyle(palette.inkFaint).lineLimit(2) }
                 if activity != nil || waiting > 0 || place != nil || !prs.isEmpty {
                     HStack(spacing: 6) {
                         badge
                         if let place { PlaceChip(place: place, showIcon: showPlaceIcon) }
-                        if !prs.isEmpty { RowPrLinks(prs: prs) }
                         if waiting > 0 {
                             Label("\(waiting) waiting", systemImage: "tray.and.arrow.up")
                                 .font(.caption2).foregroundStyle(palette.inkSoft)
                                 .accessibilityLabel(waiting == 1 ? "1 prompt waiting to send" : "\(waiting) prompts waiting to send")
+                        }
+                        if !prs.isEmpty {
+                            Spacer(minLength: 4)
+                            RowPrChip(prs: prs)
                         }
                     }
                     .padding(.top, 2)
@@ -616,6 +631,14 @@ struct ChatRow: View {
 
     private var title: String { summary.title.trimmingCharacters(in: .whitespaces).isEmpty ? "New chat" : summary.title }
 
+    private var modelShown: Bool { showModel && summary.modelId != nil }
+
+    /// The context gauge, while the chat is in progress (the desktop hides it once a chat is done).
+    private var contextShown: ChatCard.Context? {
+        guard showContext, ChatCard.showsContext(summary, activity: activity) else { return nil }
+        return ChatCard.context(summary)
+    }
+
     private var preview: String? {
         let t = (summary.lastReplyText ?? summary.firstUserText ?? "").replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
         return t.isEmpty ? nil : t
@@ -631,44 +654,105 @@ struct ChatRow: View {
     }
 }
 
-/// The PRs a chat made, on its row as on the desktop's agent cards: one `#123`
-/// per PR tinted by its state as on GitHub, up to three; past that a
-/// pull-request glyph and the count. Opening the chat shows each one.
-struct RowPrLinks: View {
-    static let maxInline = 3
+/// The model a chat runs on, as the desktop card's line: the provider's mark,
+/// tinted like the words, then "Opus 5.5". No mark for a custom endpoint.
+struct ModelFact: View {
+    let model: String
+    let mark: String?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let mark {
+                Image("provider-\(mark)").renderingMode(.template).resizable().scaledToFit()
+                    .frame(width: 11, height: 11).accessibilityHidden(true)
+                    .accessibilityIdentifier("chats.row.provider.\(mark)")
+            }
+            Text(ChatCard.modelName(model)).lineLimit(1)
+        }
+        .font(.caption2.weight(.medium)).foregroundStyle(palette.accent)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Model \(ChatCard.modelName(model))")
+        .accessibilityIdentifier("chats.row.model")
+    }
+}
+
+/// How full the chat's context window is, `45k/1M`, in the hue of how close to
+/// full it is (the desktop's `fillTone`: green, amber from 60%, red from 85%).
+struct ContextFact: View {
+    let context: ChatCard.Context
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Text(context.text)
+            .font(.caption2.monospacedDigit()).foregroundStyle(tone).lineLimit(1)
+            .accessibilityLabel("Context window \(context.percent) percent full")
+            .accessibilityIdentifier("chats.row.context")
+    }
+
+    private var tone: Color {
+        switch context.fill {
+        case .room: return palette.success
+        case .filling: return palette.warning
+        case .full: return palette.danger
+        }
+    }
+}
+
+/// The PRs a chat made, as the desktop card's chip (`SessionPrChip`): the PR that
+/// matters most with GitHub's glyph for its state, tinted as GitHub tints it, and
+/// `+N` for the others. Opening the chat lists each one.
+struct RowPrChip: View {
     let prs: [PullRequest]
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 6) {
-            if prs.count > Self.maxInline {
-                Label("\(prs.count)", systemImage: "arrow.triangle.pull")
-                    .labelStyle(.titleAndIcon).foregroundStyle(palette.inkSoft)
-            } else {
-                ForEach(prs) { pr in Text("#\(pr.number)").foregroundStyle(tone(pr)) }
+        if let pr = ChatCard.primaryPr(prs) {
+            let status = ChatCard.prStatus(pr)
+            HStack(spacing: 4) {
+                HStack(spacing: 2) {
+                    Image(Self.glyph(status)).renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 11, height: 11)
+                    Text("#\(pr.number)")
+                }
+                .foregroundStyle(tone(status))
+                if prs.count > 1 { Text("+\(prs.count - 1)").foregroundStyle(palette.inkFaint) }
             }
+            .font(.caption2.weight(.semibold).monospacedDigit())
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .overlay(Capsule().stroke(palette.line, lineWidth: 1))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(label)
+            .accessibilityIdentifier("chats.row.prs")
         }
-        .font(.caption2.weight(.semibold).monospacedDigit())
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier("chats.row.prs")
+    }
+
+    static func glyph(_ s: ChatCard.PrStatus) -> String {
+        switch s {
+        case .open: return "pr-open"
+        case .draft: return "pr-draft"
+        case .merged: return "pr-merged"
+        case .closed: return "pr-closed"
+        }
     }
 
     /// Merged in the merge hue, closed in danger, a draft faint, an open one green: the desktop's `prTone`.
-    private func tone(_ pr: PullRequest) -> Color {
-        switch pr.state {
+    private func tone(_ s: ChatCard.PrStatus) -> Color {
+        switch s {
         case .merged: return palette.accent
         case .closed: return palette.danger
-        case .open: return pr.isDraft ? palette.inkFaint : palette.success
+        case .draft: return palette.inkFaint
+        case .open: return palette.success
         }
     }
 
     private var label: String {
         prs.map { pr in
-            let s: String = switch pr.state {
+            let s: String = switch ChatCard.prStatus(pr) {
             case .merged: String(localized: "merged")
             case .closed: String(localized: "closed")
-            case .open: pr.isDraft ? String(localized: "draft") : String(localized: "open")
+            case .draft: String(localized: "draft")
+            case .open: String(localized: "open")
             }
             return String(localized: "Pull request \(pr.number), \(s)")
         }.joined(separator: ", ")

@@ -59,7 +59,8 @@ class CardDetailsDeviceTest {
         override fun putString(name: String, value: String?) { if (value == null) store.remove(name) else store[name] = value }
     })
 
-    private fun summaries(): String = """[{"id":"g1","title":"Plan the week","updatedAt":1793923200000,"lastReplyText":"Three goals for Monday.","modelId":"opus","transcriptTokens":42000,"claudeCodeContext":{"modelId":"opus","used":42000,"window":200000},"prUrls":["https://github.com/example/project/pull/42"]}]"""
+    // Watching (a watch armed), so still in progress: the card shows its context gauge only then.
+    private fun summaries(): String = """[{"id":"g1","title":"Plan the week","updatedAt":1793923200000,"lastReplyText":"Three goals for Monday.","activeWatchCount":1,"modelId":"opus","transcriptTokens":42000,"claudeCodeContext":{"modelId":"opus","used":42000,"window":200000},"prUrls":["https://github.com/example/project/pull/42"]}]"""
 
     private fun answer(channel: String): JsonElement = when (channel) {
         Channels.SESSIONS_SUMMARIES -> WireJson.parseToJsonElement(summaries())
