@@ -57,13 +57,19 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "\(theme)-1-pair")
         app.buttons["Pair"].firstMatch.tap()
         passCelebration(app, attachAs: "\(theme)-1a-paired")
-        // Step 3 follows the first pairing (after the celebration); only then does iOS ask.
-        let allowNotifications = app.buttons["firstRun.allowNotifications"]
-        XCTAssertTrue(allowNotifications.waitForExistence(timeout: 20), "the notification step follows pairing")
+        // Step 3 follows the first pairing (after the celebration): the permission
+        // checklist (#2262). Notifications are asked from their own row, the only
+        // system prompt here; Continue alone never prompts.
+        let finish = app.buttons["permissions.continue"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 20), "the permission checklist follows pairing")
         attach(app, "\(theme)-1b-notifications-step")
-        allowNotifications.tap()
-        tapSystemAlertIfShown()
-        XCTAssertTrue(waitGone(allowNotifications, 10))
+        let notifications = app.buttons["permissions.action.notifications"]
+        if notifications.waitForExistence(timeout: 3) {
+            notifications.tap()
+            tapSystemAlertIfShown()
+        }
+        finish.tap()
+        XCTAssertTrue(waitGone(finish, 10))
 
         let newChat = app.navigationBars.buttons["New chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
@@ -473,7 +479,7 @@ final class LiveRelayTests: XCTestCase {
         viewMenu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.buttons["chats.view.groupBy"].waitForExistence(timeout: 5), "Group by")
         attach(app, "beyond-6-view-menu")
-        app.buttons["chats.view.done"].tap()
+        closeViewOptions(app)
         auditAccessibility(app, "beyond-chats")
 
         // IO-26: the computer's automation, run from the phone; its answer comes back.
@@ -910,7 +916,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(groupBy.tapUntil { byComputer.exists }, "Group by opens its choices")
         XCTAssertTrue(byComputer.waitForExistence(timeout: 5), "Group by → Computer")
         byComputer.tap()
-        app.buttons["chats.view.done"].tap()
+        closeViewOptions(app)
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "This iPhone")).firstMatch
             .waitForExistence(timeout: 5), "a heading for this iPhone")
         attach(app, "fleet-5-by-computer")
