@@ -161,8 +161,8 @@ final class PawPull {
 }
 
 enum PawArt {
-    static let fill = Color(red: 16/255, green: 23/255, blue: 20/255)
-    static let line = Color(red: 242/255, green: 241/255, blue: 233/255)
+    static let fill = BrandColor.plum
+    static let line = BrandColor.mark
 
     /// An eight-spoke spinner of radius 10, centred on the origin.
     static func spinner(turn: Double, ink: Color, opacity: Double = 1, in context: GraphicsContext) {
