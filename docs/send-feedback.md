@@ -61,3 +61,11 @@ Choose **Good → Give us a GitHub star!**, or open **Settings → Help out the 
 With GitHub connected in Connectors, Nekko checks which account is connected and whether it already stars the project. **Give a star** adds it through GitHub’s API only after your click. Starring is public. A confirmed star stays visibly selected with a happy Nekko; your first newly confirmed star gets one short thank-you animation (disabled for reduced motion). An existing star is thanked without replaying the animation.
 
 Without a connected account or suitable token permissions, **Open GitHub** lets you star there instead. **Check status** rechecks the connected account, including after starring in your browser. Merely opening GitHub does not mark the project starred. A verified change from not-starred to starred on the same account also gets the first-star thank-you. Native iOS and Android sheets do not yet offer these new controls.
+
+### The ask in a chat
+
+Nekko asks for a star at most twice: under the reply to your 10th prompt, and under the reply to your 50th. The card has **Star on GitHub** (or **Star as @you** when GitHub is connected), **Not now** and **Don’t ask again**. It never covers the chat, and nothing is starred without your click.
+
+- Sending another prompt without choosing counts as **Not now**.
+- Starring, **Don’t ask again**, or a star GitHub already shows for your connected account end it for good.
+- Only prompts sent from that window or browser count, and the count stays there: it is not synced and never sent anywhere.
