@@ -2,7 +2,7 @@
 // against a stub bridge (an RTX 4060 with no picture model yet). Never contacts a host.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 import '../src/renderer/styles.css';
 
 const GB = 1e9;

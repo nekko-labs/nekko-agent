@@ -107,7 +107,7 @@ function RunDashboard({ run, onOpenChat }: { run: TrainingRun; onOpenChat: (sess
               )}
               {run.status === 'running' && <button className="btn btn-outline py-1!" onClick={pause}>Pause</button>}
               {(run.status === 'running' || run.status === 'paused') && (
-                <button className="btn btn-outline py-1! border-red-400/40! text-red-400!" onClick={stop}>Stop</button>
+                <button className="btn btn-ghost py-1! text-danger-text!" onClick={stop}>Stop</button>
               )}
             </span>
           )}
@@ -115,7 +115,7 @@ function RunDashboard({ run, onOpenChat }: { run: TrainingRun; onOpenChat: (sess
             {run.sessionId && (
               <button className="btn btn-ghost py-1!" onClick={() => onOpenChat(run.sessionId!)}>Open chat →</button>
             )}
-            <button className="btn btn-ghost py-1! text-red-400" onClick={remove}>Delete</button>
+            <button className="btn btn-ghost py-1! text-danger-text" onClick={remove}>Delete</button>
           </span>
         </span>
       </div>

@@ -3,15 +3,16 @@ import { NekkoAvatar } from './Mascot.js';
 import type { AgentStatus } from './WorkspaceCard.js';
 
 /**
- * The iPhone Live Activity's status badge (apps/ios/App/Shared/LiveStatusGlyph.swift):
- * the same tints and the same shapes, drawn dark on the tint.
+ * The status badge, in the shapes of the iPhone Live Activity
+ * (apps/ios/App/Shared/LiveStatusGlyph.swift), tinted with the state tokens
+ * (docs/design-system.md) and drawn dark on the tint.
  */
 const BADGE: Record<AgentStatus, { tint: string; label: string; glyph: React.ReactNode }> = {
-  working: { tint: '#4dc28a', label: 'Working', glyph: <path d="M12 2.5c2.6 2 3.8 5 3.8 8.6V16H8.2v-4.9c0-3.6 1.2-6.6 3.8-8.6zM8.2 12.5 5.8 15v2.2l2.4-1.2M15.8 12.5l2.4 2.5v2.2l-2.4-1.2M10.6 18.2 12 21.5l1.4-3.3" /> },
-  input: { tint: '#ff9e0a', label: 'Needs you', glyph: <path d="M7.3 8a4.7 4.7 0 0 1 9.4 0c0 3.3-4.7 3.3-4.7 5.3M12 19.5h.01" /> },
-  error: { tint: '#ff453a', label: 'Stopped with an error', glyph: <path d="M6 6l12 12M18 6 6 18" /> },
-  done: { tint: '#30d159', label: 'Done', glyph: <path d="M4.7 12.7 10 18l9.3-12" /> },
-  idle: { tint: '#0a85ff', label: 'Watching', glyph: <path d="M2.7 10.7H12l-9.3 10H12M14.7 3.3h6.6l-6.6 7.4h6.6" /> },
+  working: { tint: 'var(--success)', label: 'Working', glyph: <path d="M12 2.5c2.6 2 3.8 5 3.8 8.6V16H8.2v-4.9c0-3.6 1.2-6.6 3.8-8.6zM8.2 12.5 5.8 15v2.2l2.4-1.2M15.8 12.5l2.4 2.5v2.2l-2.4-1.2M10.6 18.2 12 21.5l1.4-3.3" /> },
+  input: { tint: 'var(--attention)', label: 'Needs you', glyph: <path d="M7.3 8a4.7 4.7 0 0 1 9.4 0c0 3.3-4.7 3.3-4.7 5.3M12 19.5h.01" /> },
+  error: { tint: 'var(--danger)', label: 'Stopped with an error', glyph: <path d="M6 6l12 12M18 6 6 18" /> },
+  done: { tint: 'var(--success)', label: 'Done', glyph: <path d="M4.7 12.7 10 18l9.3-12" /> },
+  idle: { tint: 'var(--neutral)', label: 'Watching', glyph: <path d="M2.7 10.7H12l-9.3 10H12M14.7 3.3h6.6l-6.6 7.4h6.6" /> },
 };
 
 /**

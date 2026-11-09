@@ -417,7 +417,7 @@ function HostFilePane({ path }: { path: string }) {
       </div>
 
       {truncated && (
-        <div className="border-b border-line px-3 py-1 text-2xs text-amber-500">
+        <div className="border-b border-line px-3 py-1 text-2xs text-warning-text">
           Large file, showing the first part only; editing is disabled.
         </div>
       )}

@@ -4,7 +4,7 @@
 // whose only picture model is Z-Image. Never contacts a host.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource-variable/inter-tight';
+import '@fontsource-variable/geist';
 import '../src/renderer/styles.css';
 import { EditModelOffer } from '../src/renderer/components/agent-console/EditModelOffer'; // after-only
 

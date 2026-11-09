@@ -3,8 +3,8 @@ import React, { useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { FollowUpChoices } from '../src/renderer/components/FollowUpChoices';
 import { MarkdownEditor, type MarkdownEditorElement } from '../src/renderer/components/agent-console/MarkdownEditor';
-import '@fontsource-variable/inter-tight';
-import '@fontsource-variable/jetbrains-mono';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import '../src/renderer/styles.css';
 
 function Fixture() {

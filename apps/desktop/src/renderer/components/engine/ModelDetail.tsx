@@ -186,8 +186,8 @@ export function ModelDetail({
                       <span
                         className="shrink-0 rounded-full px-2 py-0.5 text-2xs"
                         style={{
-                          background: `color-mix(in srgb, ${fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning, #d1a054)' : 'var(--danger)'} 16%, transparent)`,
-                          color: fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning, #d1a054)' : 'var(--danger)',
+                          background: `color-mix(in srgb, ${fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning)' : 'var(--danger)'} 16%, transparent)`,
+                          color: fit === 'fits' ? 'var(--success)' : fit === 'tight' ? 'var(--warning)' : 'var(--danger)',
                         }}
                         title={
                           fit === 'fits'
