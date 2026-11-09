@@ -718,7 +718,8 @@ function AnotherAccount({
           {name ? <>Claude Code keeps this login in its own folder, <code>{claudeAccountFolder(name)}</code>.</> : 'A short name, like Work or Client A. One email with a personal plan and an organization? Add each as its own account and pick the other one when Anthropic asks which to use.'}
         </span>
       </label>
-      <p className="mt-2 text-xs text-ink-faint">Using the same email for a personal plan and an organization? Sign in separately and choose the intended organization on Anthropic's page.</p>
+      {/* The empty-name hint above already says this; repeat it once the folder line replaces that hint. */}
+      {name && <p className="mt-2 text-xs text-ink-faint">Using the same email for a personal plan and an organization? Sign in separately and choose the intended organization on Anthropic's page.</p>}
       {conflict && <p className="claude-verdict" data-verdict="blocked" role="alert">{conflict} already uses this profile. Choose a different name to keep its sign-in unchanged.</p>}
       {name && !conflict && !status && <p className="claude-detect mt-2"><span className="claude-spin" />Checking that folder's sign-in…</p>}
       {name && !conflict && status?.installed && !status.loggedIn && (

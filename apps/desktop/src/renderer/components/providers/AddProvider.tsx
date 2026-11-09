@@ -332,10 +332,10 @@ export function AddProvider({
         {CLAUDE_API_KINDS.includes(kind) && <label className="col-span-2 text-xs font-medium text-ink-soft">
           Connection name
           <input className="input mt-1" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Work API, Personal, or Client A" />
-          <span className="mt-1 block text-2xs font-normal text-ink-faint">Shown in the chat's Claude connection picker. Each API connection is billed separately.</span>
+          <span className="mt-1 block text-2xs font-normal text-ink-faint">The account's name in the model picker. Each API connection is billed separately.</span>
         </label>}
         <details className="col-span-2 min-w-0">
-          <summary className="cursor-pointer text-xs text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : ' — server address and name'}</summary>
+          <summary className="cursor-pointer text-xs text-ink-soft">Connection settings{ oauthProvider ? ' (optional)' : CLAUDE_API_KINDS.includes(kind) ? ' — server address' : ' — server address and name'}</summary>
           <div className="mt-3 grid grid-cols-2 gap-3">
         {!CLAUDE_API_KINDS.includes(kind) && <label className="text-xs font-medium text-ink-soft">
           Label
