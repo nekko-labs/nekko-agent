@@ -48,4 +48,11 @@ class ConnectionLogTest {
         assertTrue(ask("wss://relay.example", RelayState.DENIED, DenyReason.REVOKED).first().contains("removed this phone"))
         assertTrue(ask("wss://relay.example", RelayState.CONNECTING, detail = "TLS certificate not trusted").any { it.contains("certificate") })
     }
+
+    @Test fun `a gone relay name says pair again, not check the internet`() {
+        val gone = ConnectionAdvice.advise("wss://relay.example", "Studio", RelayState.CONNECTING, null, RelayStatus.HOST_NOT_FOUND, phoneOnTailnet = false, debug = false)
+        assertTrue(gone.first().contains("relay.example doesn’t exist"))
+        assertTrue(gone.any { it.contains("pair this phone again") })
+        assertTrue(gone.none { it.startsWith("Check this phone is online") })
+    }
 }
