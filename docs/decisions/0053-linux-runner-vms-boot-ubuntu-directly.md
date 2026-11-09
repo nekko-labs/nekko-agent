@@ -64,7 +64,9 @@ Options 2, 4 and 6.
   after the macOS slots that may run, so Linux never takes a macOS VM's place. They boot only
   for a queued Linux job (no warm VMs). nekkod's own Linux VMs are subtracted from
   `count-vms` before Apple's cap is applied; other apps' Linux VMs still count against it,
-  because a framework VM process does not say which kind it is.
+  because a framework VM process does not say which kind it is. Superseded by
+  [decision 0074](0074-count-macos-guests-and-give-the-image-build-a-place.md): `count-vms`
+  now counts macOS guests only.
 - **Labels:** a Linux VM registers `self-hosted, Linux, ARM64, <label>-linux` on GitHub and
   `<label>-linux,linux,arm64` on GitLab, so a job asking for one kind never lands on the other.
 
@@ -77,4 +79,5 @@ Options 2, 4 and 6.
 - The `SHA256SUMS` files' GPG signatures are not checked (a `shortcut:` in the code); HTTPS to
   Canonical is the trust root for now.
 - Docker Desktop on the same Mac (a Linux VM of another app) still takes one of Apple's two
-  macOS places in our count, as before.
+  macOS places in our count, as before. No longer so since
+  [decision 0074](0074-count-macos-guests-and-give-the-image-build-a-place.md).

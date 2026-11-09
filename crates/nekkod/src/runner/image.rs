@@ -10,9 +10,10 @@
 
 use super::Runners;
 use super::signals::MacState;
+use super::supervisor::BuildSlot;
 use super::updates::{os_major, write_atomic};
 use super::vm::{
-    BuildSpec, CONSOLE_LOG, GITHUB_SEED, HelperVm, RunHandle, RunSpec, Stopped, Vm, output_within, xcode_source,
+    BuildSpec, CONSOLE_LOG, GITHUB_SEED, HelperVm, Live, RunHandle, RunSpec, Stopped, Vm, output_within, xcode_source,
 };
 use nekko_cloud::vault::Vault;
 use nekko_engine::download::{Downloads, HttpFetch, Request};
@@ -124,6 +125,13 @@ pub enum Stage {
     Tools,
     Test,
     Finish,
+}
+
+impl Stage {
+    /// Boots a VM, so it needs one of Apple's two macOS places.
+    fn boots_vm(self) -> bool {
+        matches!(self, Stage::Install | Stage::Xcode | Stage::Lockdown | Stage::Tools | Stage::Test)
+    }
 }
 
 const STAGES: [Stage; 7] =
@@ -310,7 +318,10 @@ impl BuildFile {
 /// The Mac right now, for the gates between stages.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Readings {
+    /// macOS VMs on this Mac, any app's.
     pub vms: u8,
+    /// Our runner's macOS VMs among them, booting ones included.
+    pub runner_vms: u8,
     pub memory_critical: bool,
     pub hot: bool,
     pub free_gb: f64,
@@ -319,10 +330,12 @@ pub struct Readings {
 }
 
 /// Why the next stage cannot start. The idle and priority modes do not apply:
-/// the owner started this. Battery matters only from the first VM on.
+/// the owner started this. Battery matters only from the first VM on, and a
+/// macOS place only for a stage that boots one. Idle runner VMs give theirs up
+/// at once, so a runner VM still holding one is running a job.
 fn waiting_reason(r: &Readings, stage: Stage) -> Option<String> {
-    if r.vms >= MAX_MACOS_VMS {
-        Some("Waiting for a free VM slot".into())
+    if stage.boots_vm() && r.vms.max(r.runner_vms) >= MAX_MACOS_VMS {
+        Some(if r.runner_vms > 0 { "Waiting for a CI job to finish" } else { "Waiting for a free VM slot" }.into())
     } else if r.memory_critical {
         Some("Waiting for memory to free up".into())
     } else if r.hot {
@@ -552,12 +565,13 @@ fn overwrite_in_place(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     f.sync_all()
 }
 
-/// Clears the keep-awake wish however the job ends, a cancel included.
-struct Hold(Arc<AtomicBool>);
+/// Clears the keep-awake wish and gives back the macOS place however the job ends, a cancel included.
+struct Hold(Arc<AtomicBool>, Arc<BuildSlot>);
 
 impl Drop for Hold {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
+        self.1.want(false);
     }
 }
 
@@ -567,6 +581,8 @@ pub struct ImageJob<H: BuildHost> {
     vault: Arc<dyn Vault>,
     /// Read by the supervisor to keep the Mac awake.
     building: Arc<AtomicBool>,
+    /// The macOS place the supervisor gives up to this build.
+    slot: Arc<BuildSlot>,
     publish: Box<dyn Fn(&ImageView) + Send + Sync>,
     view: Mutex<ImageView>,
     task: Mutex<Option<JoinHandle<()>>>,
@@ -580,6 +596,7 @@ impl<H: BuildHost> ImageJob<H> {
         host: H,
         vault: Arc<dyn Vault>,
         building: Arc<AtomicBool>,
+        slot: Arc<BuildSlot>,
         publish: Box<dyn Fn(&ImageView) + Send + Sync>,
     ) -> Self {
         let job = ImageJob {
@@ -587,6 +604,7 @@ impl<H: BuildHost> ImageJob<H> {
             host,
             vault,
             building,
+            slot,
             publish,
             view: Mutex::default(),
             task: Mutex::default(),
@@ -670,7 +688,7 @@ impl<H: BuildHost> ImageJob<H> {
             None => self.read_build().ok_or("There is no setup to resume.")?,
         };
         self.building.store(true, Ordering::SeqCst);
-        let hold = Hold(self.building.clone());
+        let hold = Hold(self.building.clone(), self.slot.clone());
         self.update(|v| {
             *v = ImageView {
                 state: ImageState::Building,
@@ -756,8 +774,13 @@ impl<H: BuildHost> ImageJob<H> {
     }
 
     async fn wait_for_host(&self, stage: Stage) {
+        // Held from the first VM stage to the end, so no runner VM takes the place between stages.
+        if stage.boots_vm() {
+            self.slot.want(true);
+        }
         loop {
-            let r = self.host.readings().await;
+            let mut r = self.host.readings().await;
+            r.runner_vms = self.slot.runner_vms();
             let Some(why) = waiting_reason(&r, stage) else {
                 self.building.store(true, Ordering::SeqCst);
                 return;
@@ -1376,13 +1399,15 @@ impl BuildHost for RealBuildHost {
 
     async fn readings(&self) -> Readings {
         let vms = match &self.vm {
-            Ok(v) => v.count_vms().await.unwrap_or(0),
+            Ok(v) => v.count_macos_vms().await.unwrap_or(0),
             Err(_) => 0,
         };
         let Some(m) = self.mac() else { return Readings { vms, ..Default::default() } };
         let host = m.host.as_ref();
         Readings {
             vms,
+            // The job fills this in from the supervisor's count.
+            runner_vms: 0,
             memory_critical: host.is_some_and(|h| h.memory == Pressure::Critical),
             hot: host.is_some_and(|h| matches!(h.thermal, Thermal::Serious | Thermal::Critical)),
             free_gb: m.free_disk_gb,
@@ -1445,6 +1470,8 @@ impl BuildHost for RealBuildHost {
     }
 
     async fn install(&self, ipsw: &Path, bundle: &Path, report: &Report<'_>) -> Result<(), String> {
+        // macOS installs inside a running VM, which takes a place like any other.
+        let _live = Live::up(&self.vm()?.live);
         let mut child = Command::new(&self.vm()?.helper)
             .arg("install")
             .arg("--ipsw")

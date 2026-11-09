@@ -17,6 +17,7 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader, Lines};
@@ -138,7 +139,8 @@ pub trait Vm: Send + Sync + 'static {
     /// A read-only image at `path` holding only `file` with `contents`.
     fn write_seed(&self, path: &Path, file: &str, contents: &str) -> impl Future<Output = Result<(), String>> + Send;
     fn start(&self, spec: RunSpec) -> impl Future<Output = Result<RunHandle, String>> + Send;
-    fn count_vms(&self) -> impl Future<Output = Result<u8, String>> + Send;
+    /// macOS guests running on this Mac, any app's: what Apple's cap of two counts.
+    fn count_macos_vms(&self) -> impl Future<Output = Result<u8, String>> + Send;
 }
 
 /// The real backend: the `nekko-vm` helper.
@@ -157,6 +159,24 @@ pub struct HelperVm {
     pub seed_timeout: Duration,
     pub count_timeout: Duration,
     pub scutil_timeout: Duration,
+    /// VMs this driver has up, from spawning the helper until it is reaped.
+    pub live: Arc<AtomicU8>,
+}
+
+/// One VM up on a [`HelperVm`], counted in its `live` until dropped.
+pub(super) struct Live(Arc<AtomicU8>);
+
+impl Live {
+    pub(super) fn up(count: &Arc<AtomicU8>) -> Self {
+        count.fetch_add(1, Ordering::SeqCst);
+        Self(count.clone())
+    }
+}
+
+impl Drop for Live {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 impl HelperVm {
@@ -172,6 +192,7 @@ impl HelperVm {
             seed_timeout: Duration::from_secs(30),
             count_timeout: Duration::from_secs(10),
             scutil_timeout: Duration::from_secs(10),
+            live: Arc::default(),
         }
     }
 
@@ -244,6 +265,8 @@ impl HelperVm {
             .kill_on_drop(true)
             .spawn()
             .map_err(|e| format!("cannot run nekko-vm: {e}"))?;
+        // Counted from here: the VM may be up before its `started` line.
+        let live = Live::up(&self.live);
         drop(vm_end);
         let Some(out) = child.stdout.take() else {
             let _ = child.kill().await;
@@ -270,7 +293,16 @@ impl HelperVm {
         let (done_tx, done_rx) = oneshot::channel();
         let (stop_tx, stop_rx) = mpsc::unbounded_channel();
         let nat = net::serve(nat_end, self.host.clone(), self.egress.clone(), cfg);
-        tokio::spawn(supervise(child, lines, nat, stop_rx, self.stop_grace, done_tx));
+        let grace = self.stop_grace;
+        tokio::spawn(async move {
+            let (tx, rx) = oneshot::channel();
+            supervise(child, lines, nat, stop_rx, grace, tx).await;
+            // Uncounted before `done` fires, so whoever awaits it sees the VM gone.
+            drop(live);
+            if let Ok(why) = rx.await {
+                let _ = done_tx.send(why);
+            }
+        });
         Ok(RunHandle::new(done_rx, stop_tx))
     }
 }
@@ -395,9 +427,11 @@ impl Vm for HelperVm {
         self.boot(args, job_net_config(self.dns().await?)).await
     }
 
-    async fn count_vms(&self) -> Result<u8, String> {
+    async fn count_macos_vms(&self) -> Result<u8, String> {
         let v = self.call(&["count-vms".as_ref()], self.count_timeout).await?;
-        v["count"].as_u64().and_then(|n| u8::try_from(n).ok()).ok_or_else(|| format!("nekko-vm count-vms said: {v}"))
+        // A helper from before `macos` counts every VM, Linux ones too.
+        let n = v["macos"].as_u64().or_else(|| v["count"].as_u64());
+        n.and_then(|n| u8::try_from(n).ok()).ok_or_else(|| format!("nekko-vm count-vms said: {v}"))
     }
 }
 

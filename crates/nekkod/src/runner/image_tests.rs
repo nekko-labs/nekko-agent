@@ -174,8 +174,11 @@ struct Rig {
     vault: Arc<MemVault>,
     views: Arc<Mutex<Vec<ImageView>>>,
     building: Arc<AtomicBool>,
+    slot: Arc<BuildSlot>,
     /// The keep-awake wish at each view that waits.
     awake_while_waiting: Arc<Mutex<Vec<bool>>>,
+    /// Whether the build held a macOS place as each stage ran.
+    wants_by_stage: Arc<Mutex<Vec<(Stage, bool)>>>,
 }
 
 impl Rig {
@@ -185,7 +188,9 @@ impl Rig {
             vault: Arc::default(),
             views: Arc::default(),
             building: Arc::default(),
+            slot: Arc::default(),
             awake_while_waiting: Arc::default(),
+            wants_by_stage: Arc::default(),
         }
     }
     fn images(&self) -> PathBuf {
@@ -194,15 +199,20 @@ impl Rig {
     fn job(&self, fake: Fake) -> Arc<ImageJob<Fake>> {
         let views = self.views.clone();
         let (awake, building) = (self.awake_while_waiting.clone(), self.building.clone());
+        let (wants, slot) = (self.wants_by_stage.clone(), self.slot.clone());
         let mut job = ImageJob::new(
             self.images(),
             fake,
             self.vault.clone(),
             self.building.clone(),
+            self.slot.clone(),
             Box::new(move |v: &ImageView| {
                 views.lock().unwrap().push(v.clone());
                 if v.state == ImageState::Waiting {
                     awake.lock().unwrap().push(building.load(Ordering::SeqCst));
+                }
+                if let (ImageState::Building, Some(stage)) = (v.state, v.stage) {
+                    wants.lock().unwrap().push((stage, slot.wants()));
                 }
             }),
         );
@@ -750,13 +760,62 @@ async fn a_proof_that_does_not_parse_fails_lockdown() {
 async fn two_vms_wait_with_a_reason() {
     let rig = Rig::new();
     let fake = Fake::default();
-    fake.vms.lock().unwrap().extend([2, 2, 0]);
+    // Check and Download boot nothing and go ahead; Install waits.
+    fake.vms.lock().unwrap().extend([2, 2, 2, 2, 0]);
     let job = rig.job(fake);
     job.build(request(Kind::Xcode)).unwrap();
     finish(&job).await;
     let views = rig.views.lock().unwrap();
+    let waits: Vec<_> = views.iter().filter(|v| v.state == ImageState::Waiting).map(|v| v.stage).collect();
+    assert_eq!(waits, vec![Some(Stage::Install), Some(Stage::Install)]);
     assert!(views.iter().any(|v| v.state == ImageState::Waiting && v.detail == "Waiting for a free VM slot"));
     assert_eq!(job.status().state, ImageState::Ready);
+}
+
+#[tokio::test]
+async fn a_runner_vm_with_a_job_is_waited_for_by_name() {
+    let rig = Rig::new();
+    old_image(&rig);
+    rig.slot.set_runner_vms(1);
+    let fake = Fake::default();
+    fake.vms.lock().unwrap().extend([2, 2]);
+    let job = rig.job(fake);
+    job.build(request(Kind::Tools)).unwrap();
+    while !rig.views.lock().unwrap().iter().any(|v| v.state == ImageState::Waiting) {
+        tokio::task::yield_now().await;
+    }
+    rig.slot.set_runner_vms(0);
+    finish(&job).await;
+    let views = rig.views.lock().unwrap();
+    assert!(views.iter().any(|v| v.state == ImageState::Waiting && v.detail == "Waiting for a CI job to finish"));
+    assert_eq!(job.status().state, ImageState::Ready);
+}
+
+#[tokio::test]
+async fn the_build_holds_a_macos_place_from_its_first_vm_stage_to_its_end() {
+    let rig = Rig::new();
+    let job = rig.job(Fake::default());
+    job.build(request(Kind::Xcode)).unwrap();
+    finish(&job).await;
+    let wants = rig.wants_by_stage.lock().unwrap().clone();
+    let at = |s: Stage| wants.iter().filter(|(st, _)| *st == s).all(|(_, w)| *w);
+    assert!(wants.iter().any(|(s, w)| *s == Stage::Check && !*w), "{wants:?}");
+    assert!(wants.iter().any(|(s, w)| *s == Stage::Download && !*w), "{wants:?}");
+    for s in [Stage::Install, Stage::Xcode, Stage::Lockdown, Stage::Test, Stage::Finish] {
+        assert!(at(s), "held at {s:?}: {wants:?}");
+    }
+    assert!(!rig.slot.wants(), "given back once the build is done");
+
+    // A failed build gives it back too.
+    let rig = Rig::new();
+    old_image(&rig);
+    let job = rig.job(Fake::default());
+    fail(&job, "add_tools", "no network");
+    job.build(request(Kind::Tools)).unwrap();
+    finish(&job).await;
+    assert_eq!(job.status().state, ImageState::Failed);
+    assert!(rig.wants_by_stage.lock().unwrap().contains(&(Stage::Tools, true)));
+    assert!(!rig.slot.wants());
 }
 
 #[tokio::test]
@@ -785,6 +844,21 @@ fn the_gates_wait_with_a_reason() {
     assert!(waiting_reason(&memory, Stage::Check).is_some());
     let full = Readings { free_gb: 10.0, ..ok };
     assert!(waiting_reason(&full, Stage::Check).is_some());
+    // A macOS place matters only to a stage that boots a VM.
+    let two = Readings { vms: 2, ..ok };
+    for stage in [Stage::Check, Stage::Download, Stage::Scripts, Stage::Finish] {
+        assert_eq!(waiting_reason(&two, stage), None, "{stage:?}");
+    }
+    for stage in [Stage::Install, Stage::Xcode, Stage::Lockdown, Stage::Tools, Stage::Test] {
+        assert_eq!(waiting_reason(&two, stage).as_deref(), Some("Waiting for a free VM slot"), "{stage:?}");
+    }
+    let job = Readings { vms: 2, runner_vms: 1, ..ok };
+    assert_eq!(waiting_reason(&job, Stage::Tools).as_deref(), Some("Waiting for a CI job to finish"));
+    // Runner VMs still booting are not in the helper's count yet.
+    let booting = Readings { vms: 0, runner_vms: 2, ..ok };
+    assert!(waiting_reason(&booting, Stage::Tools).is_some());
+    let one = Readings { vms: 1, runner_vms: 1, ..ok };
+    assert_eq!(waiting_reason(&one, Stage::Tools), None, "one place is enough");
     let battery = Readings { on_battery: true, ..ok };
     assert_eq!(waiting_reason(&battery, Stage::Download), None, "a download may run on battery");
     assert!(waiting_reason(&battery, Stage::Install).is_some());
@@ -833,6 +907,7 @@ async fn cancel_removes_the_build_folder_and_the_password() {
     assert!(rig.vault.get(PASSWORD_ITEM).is_none());
     assert!(job.host.called("halt"));
     assert!(!rig.building.load(Ordering::SeqCst));
+    assert!(!rig.slot.wants(), "the macOS place is given back");
 }
 
 #[tokio::test]
