@@ -15,8 +15,10 @@ final class PermissionChecklistUITests: XCTestCase {
         let app = launch()
         let next = app.buttons["permissions.continue"]
         XCTAssertTrue(next.waitForExistence(timeout: 15))
+        // OS notification access survives -uiTestReset and may already be granted.
+        // Open its details explicitly without requesting access.
+        open("notifications", in: app)
         XCTAssertTrue(app.buttons["permissions.action.notifications"].exists)
-        // One row is open at a time; the rest are compact and tappable.
         XCTAssertTrue(app.buttons["permissions.row.network"].exists)
         XCTAssertFalse(app.buttons["permissions.action.network"].exists)
         XCTAssertFalse(app.alerts.firstMatch.exists)
@@ -58,6 +60,7 @@ final class PermissionChecklistUITests: XCTestCase {
             app.swipeUp()
         }
         link.tap()
+        open("notifications", in: app)
         XCTAssertTrue(app.buttons["permissions.action.notifications"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.buttons["permissions.continue"].exists)
         XCTAssertFalse(app.staticTexts["Step 3 of 3"].exists)
@@ -132,8 +135,9 @@ final class PermissionChecklistUITests: XCTestCase {
 
     func testGrantChecksOffTheRowAndOpensTheNext() {
         let app = XCUIApplication()
-        // Notifications cannot be reset from XCUITest; the microphone can.
+        // Reset the grant and its next row, independent of earlier suite tests.
         app.resetAuthorizationStatus(for: .microphone)
+        app.resetAuthorizationStatus(for: .speechRecognition)
         app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-uiTestReset", "YES", "-theme", "light", "-uiTestNotificationStep"]
         app.launch()
         let row = app.buttons["permissions.row.microphone"]
@@ -145,8 +149,15 @@ final class PermissionChecklistUITests: XCTestCase {
         reveal(allow, in: app)
         allow.tap()
         let alert = XCUIApplication(bundleIdentifier: "com.apple.springboard").alerts.firstMatch
-        XCTAssertTrue(alert.waitForExistence(timeout: 10))
-        alert.buttons["Allow"].tap()
+        guard alert.waitForExistence(timeout: 10) else {
+            XCTFail("Microphone request must show its system permission alert")
+            return
+        }
+        // iOS 27 exposes nested buttons with this same TCC identifier.
+        // Select the first representation of the actual microphone grant control.
+        let grant = alert.buttons.matching(identifier: "kTCCServiceMicrophone-allow-button").firstMatch
+        XCTAssertTrue(grant.waitForExistence(timeout: 5))
+        grant.tap()
         let status = app.descendants(matching: .any)["permissions.status.microphone"].firstMatch
         wait(for: [expectation(for: NSPredicate(format: "label == %@", "Allowed"), evaluatedWith: status)], timeout: 10)
         // The next unfinished row below opens on its own, not the top of the list.
@@ -156,15 +167,32 @@ final class PermissionChecklistUITests: XCTestCase {
     }
 
     func testNotNowChecksOffTheRowAndOpensTheNext() {
+        // Notifications cannot be reset; these two OS grants can.
+        let permissions = XCUIApplication()
+        permissions.resetAuthorizationStatus(for: .microphone)
+        permissions.resetAuthorizationStatus(for: .speechRecognition)
         let app = launch()
-        let skip = app.buttons["permissions.skip.notifications"]
+        open("microphone", in: app)
+        let skip = app.buttons["permissions.skip.microphone"]
         XCTAssertTrue(skip.waitForExistence(timeout: 15))
+        reveal(skip, in: app)
         skip.tap()
-        XCTAssertTrue(app.buttons["permissions.action.network"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["permissions.action.notifications"].exists)
-        XCTAssertEqual(app.buttons["permissions.row.notifications"].value as? String, "Skipped")
+        XCTAssertTrue(app.buttons["permissions.action.speech"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["permissions.action.microphone"].exists)
+        XCTAssertEqual(app.buttons["permissions.row.microphone"].value as? String, "Skipped")
         XCTAssertFalse(app.alerts.firstMatch.exists)
         attach(app, "permissions-advanced")
+    }
+
+    private func open(_ name: String, in app: XCUIApplication) {
+        let row = app.buttons["permissions.row.\(name)"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        let action = app.buttons["permissions.action.\(name)"]
+        if !action.exists {
+            reveal(row, in: app)
+            row.tap()
+        }
+        XCTAssertTrue(action.waitForExistence(timeout: 5), "\(name) details open")
     }
 
     /// Short drags toward the element; a full swipe can jump past a row at the largest text size.
