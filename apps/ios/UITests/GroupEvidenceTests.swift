@@ -18,7 +18,7 @@ final class GroupEvidenceTests: XCTestCase {
         let fields = [
             (setting: "chats.view.showModel", marker: "Model opus"),
             (setting: "chats.view.showContext", marker: "Context window"),
-            (setting: "chats.view.showPullRequests", marker: "pull request #42"),
+            (setting: "chats.view.showPullRequests", marker: "Pull request 42, open"),
             (setting: "chats.view.showUpdated", marker: " ago"),
         ]
         if after {
@@ -45,7 +45,7 @@ final class GroupEvidenceTests: XCTestCase {
                 let control = reveal(app, app.switches[fields[index].setting].firstMatch)
                 control.tap()
                 XCTAssertEqual(control.value as? String, "0", fields[index].setting)
-                closeViewOptions(app)
+                closeCardViewOptions(app)
                 for other in fields.indices {
                     XCTAssertEqual(row(app).label.contains(fields[other].marker), other > index, fields[other].marker)
                 }
@@ -64,7 +64,7 @@ final class GroupEvidenceTests: XCTestCase {
             for field in fields {
                 XCTAssertEqual(reveal(app, app.switches[field.setting].firstMatch).value as? String, "0", field.setting)
             }
-            closeViewOptions(app)
+            closeCardViewOptions(app)
         } else {
             app.buttons["chats.view"].tap()
             attach(app, "card-details-menu")
@@ -76,20 +76,39 @@ final class GroupEvidenceTests: XCTestCase {
     }
 
     private func reveal(_ app: XCUIApplication, _ element: XCUIElement) -> XCUIElement {
-        let form = app.popovers.firstMatch.collectionViews.firstMatch
-        // The Form scrolls inside the fixed-height popover. Return to its top before
-        // searching down so each control is checked regardless of the previous one.
-        if !element.isHittable { form.swipeDown() }
-        for _ in 0..<4 {
-            if element.isHittable { break }
-            form.swipeUp()
+        let popover = app.popovers.firstMatch
+        let form = popover.collectionViews.firstMatch
+        // Search toward the bottom first: an unseen row is virtualized below the
+        // fold. Do not pull down at the top, which dismissed the native popover.
+        // Keep both drag endpoints inside the Form and away from its controls.
+        for down in [false, true] {
+            for attempt in 0...4 {
+                guard popover.exists, form.exists else {
+                    XCTFail("View options must remain open while revealing a field")
+                    return element
+                }
+                if element.exists, !element.frame.isEmpty,
+                   popover.frame.contains(element.frame), element.isHittable {
+                    return element
+                }
+                if attempt < 4 {
+                    let start = form.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: down ? 0.25 : 0.8))
+                    let end = form.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: down ? 0.8 : 0.25))
+                    start.press(forDuration: 0.05, thenDragTo: end)
+                }
+            }
         }
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "card-details-field-not-reachable"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
         XCTAssertTrue(element.exists)
+        XCTAssertTrue(popover.frame.contains(element.frame))
         XCTAssertTrue(element.isHittable)
         return element
     }
 
-    private func closeViewOptions(_ app: XCUIApplication) {
+    private func closeCardViewOptions(_ app: XCUIApplication) {
         reveal(app, app.buttons["chats.view.done"]).tap()
     }
 
