@@ -813,3 +813,100 @@
   new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   start();
 })();
+
+// ---- why Nekko: the pillar tour. A vertical tablist; the active pillar's 8 s
+//      demo plays beside it (files follow the look: -light for White and
+//      Colourful). The progress line is a CSS animation; when it ends the next
+//      pillar becomes active. It holds while the pointer is over the tour, while
+//      keyboard focus is in it, while it is off screen or the tab is hidden, and
+//      after Pause. Under reduced motion nothing advances and only posters load.
+//      Video loads only once the tour is first on screen. ----
+(() => {
+  const tour = document.querySelector('[data-pillar-tour]');
+  if (!tour) return;
+  const tabs = [...tour.querySelectorAll('.pillar-tab')];
+  const items = tabs.map((t) => t.closest('.pillar-item'));
+  const panel = tour.querySelector('[role="tabpanel"]');
+  const video = tour.querySelector('.pillar-video');
+  const pauseBtn = tour.querySelector('[data-pillar-pause]');
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tone = () => (document.documentElement.dataset.theme === 'dark' ? '' : '-light');
+  const file = (id, poster) => `media/pillar-${id}${tone()}${poster ? '-poster.jpg' : '.mp4'}`;
+  let active = 0;
+  let userPaused = false;
+  let pointer = false;
+  let keyboard = false;
+  let onScreen = false;
+  let seen = false;
+
+  tour.classList.add('is-js');
+  if (!reduced) {
+    tour.classList.add('is-timed');
+    pauseBtn.hidden = false;
+  }
+
+  const running = () => !reduced && !userPaused && onScreen && !document.hidden;
+  const sync = () => {
+    tour.classList.toggle('is-held', !running() || pointer || keyboard);
+    tour.classList.toggle('is-paused', userPaused);
+    if (!video.getAttribute('src')) return;
+    if (running()) video.play().catch(() => { /* autoplay blocked: the poster stays */ });
+    else video.pause();
+  };
+  const load = () => {
+    const id = tabs[active].dataset.pillar;
+    video.poster = file(id, true);
+    video.setAttribute('aria-label', tabs[active].dataset.alt);
+    if (reduced || !seen) return;
+    video.src = file(id, false);
+    sync();
+  };
+  const select = (i, focus) => {
+    active = (i + tabs.length) % tabs.length;
+    tabs.forEach((t, j) => {
+      const on = j === active;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      items[j].classList.toggle('is-active', on);
+    });
+    panel.setAttribute('aria-labelledby', tabs[active].id);
+    if (focus) tabs[active].focus();
+    load();
+  };
+
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => select(i));
+    tab.addEventListener('keydown', (e) => {
+      const to = { ArrowDown: active + 1, ArrowRight: active + 1, ArrowUp: active - 1, ArrowLeft: active - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (to === undefined) return;
+      e.preventDefault();
+      select(to, true);
+    });
+  });
+  items.forEach((item) => item.querySelector('.pillar-line i').addEventListener('animationend', () => select(active + 1)));
+
+  tour.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') { pointer = true; sync(); } });
+  tour.addEventListener('pointerleave', () => { pointer = false; sync(); });
+  // Only keyboard focus holds the tour: a mouse click leaves its button focused.
+  tour.addEventListener('focusin', (e) => { keyboard = e.target.matches(':focus-visible'); sync(); });
+  tour.addEventListener('focusout', (e) => { if (!tour.contains(e.relatedTarget)) { keyboard = false; sync(); } });
+  pauseBtn.addEventListener('click', () => {
+    userPaused = !userPaused;
+    pauseBtn.setAttribute('aria-label', userPaused ? 'Play the tour' : 'Pause the tour');
+    sync();
+  });
+  document.addEventListener('visibilitychange', sync);
+
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(([entry]) => {
+      onScreen = entry.isIntersecting;
+      if (onScreen && !seen) { seen = true; load(); }
+      sync();
+    }, { threshold: 0.35 }).observe(tour);
+  } else {
+    onScreen = seen = true;
+    load();
+  }
+  new MutationObserver(load).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  load();
+})();
