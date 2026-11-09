@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.isRoot
@@ -91,6 +92,9 @@ class LiveRelayTest {
             // touch at its old centre can miss; click it through its semantics.
             click(hasText("Pair"))
 
+            // The pairing celebration covers the app until it goes; Let's go closes it early
+            // (FirstRunJourneyTest does the same). Taps meant for step 3 otherwise land on it.
+            closePairCelebration()
             // Step 3, right after the first pairing: notifications (granted above, so nothing is asked).
             waitFor(hasText("Step 3 of 3"), 30_000)
             shot("1a-first-run-notifications")
@@ -226,6 +230,13 @@ class LiveRelayTest {
         compose.onNode(box).performClick()
         compose.onNode(box).performTextInput(text)
         tap(hasContentDescription("Send"))
+    }
+
+    private fun closePairCelebration() {
+        val celebrating = { compose.onAllNodes(hasTestTag("pairSuccess.done")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30_000) { celebrating() || compose.onAllNodes(hasText("Step 3 of 3")).fetchSemanticsNodes().isNotEmpty() }
+        if (celebrating()) click(hasTestTag("pairSuccess.done"))
+        compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("pairSuccess")).fetchSemanticsNodes().isEmpty() }
     }
 
     private fun waitFor(matcher: SemanticsMatcher, timeoutMs: Long = 10_000) {

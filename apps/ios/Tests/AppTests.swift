@@ -137,6 +137,10 @@ final class ThemePresetTests: XCTestCase {
 final class DeepLinkTests: XCTestCase {
     func testPairingAndChatLinksAreRouted() {
         let app = AppModel.shared
+        // Routing consumes an approval only after unlock; do not depend on the shared test app’s saved lock setting.
+        let savedAppLock = app.prefs.appLock
+        defer { app.prefs.appLock = savedAppLock }
+        app.prefs.appLock = false
         app.pendingLink = nil
         app.handle(url: URL(string: "nekko-agent-pair:?relay=wss%3A%2F%2Frelay.example.com&room=a1b2c3d4e5f60718&key=00112233445566778899aabbccddeeff&host=BJ7go4GGB9flqEQfjn77eO%2BWT5J%2Bxi8WJkMUlZycp%2BJNohdWg8JmKM5w1b22gUGNVRucsADtge0BdgHP9q8HUaE%3D&pair=ABCD2345")!)
         XCTAssertEqual(app.pendingLink?.relayUrl, "wss://relay.example.com")

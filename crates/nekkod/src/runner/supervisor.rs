@@ -25,7 +25,7 @@ use std::future::Future;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::Duration;
 use tokio::sync::oneshot::error::TryRecvError;
 
@@ -53,6 +53,45 @@ const NO_IMAGE: &str = "No VM image yet.";
 const NO_LINUX_IMAGE: &str = "No Linux image yet.";
 /// The Linux golden image, beside the macOS one under `images/`.
 pub const LINUX_IMAGE: &str = "linux";
+
+/// The macOS place an image build takes from the runners. From its first VM
+/// stage to its end the build wants one, and the supervisor gives it up: no new
+/// VM, no refilled slot, and an idle VM stopped at once. A running job is never stopped.
+#[derive(Debug, Default)]
+pub struct BuildSlot {
+    wants: AtomicBool,
+    /// VMs the build's driver has up (`HelperVm::live`), which `count-vms` already sees.
+    pub build_vms: Arc<AtomicU8>,
+    /// Our macOS runner VMs as of the last tick, for the build's waiting reason.
+    runner_vms: AtomicU8,
+}
+
+impl BuildSlot {
+    pub fn new(build_vms: Arc<AtomicU8>) -> Self {
+        Self { build_vms, ..Default::default() }
+    }
+
+    pub fn want(&self, on: bool) {
+        self.wants.store(on, Ordering::SeqCst);
+    }
+
+    pub fn wants(&self) -> bool {
+        self.wants.load(Ordering::SeqCst)
+    }
+
+    pub fn runner_vms(&self) -> u8 {
+        self.runner_vms.load(Ordering::SeqCst)
+    }
+
+    pub(super) fn set_runner_vms(&self, n: u8) {
+        self.runner_vms.store(n, Ordering::SeqCst);
+    }
+
+    /// The place the build holds while none of its VMs is up, which `count-vms` cannot see.
+    fn held_unused(&self) -> u8 {
+        u8::from(self.wants() && self.build_vms.load(Ordering::SeqCst) == 0)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -418,6 +457,7 @@ pub struct Supervisor<S: Sense, V: Vm, P: Provider> {
     mac: Option<MacState>,
     /// An image build is running: it holds the Mac awake too.
     building: Arc<AtomicBool>,
+    build_slot: Arc<BuildSlot>,
 }
 
 /// A provider call that gives up after `PROVIDER_TIMEOUT`.
@@ -522,6 +562,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             day_start: u64::MAX,
             today: HashMap::new(),
             building: Arc::default(),
+            build_slot: Arc::default(),
             mac: None,
         }
     }
@@ -774,9 +815,10 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
             .collect()
     }
 
-    /// Memory of every VM still running, for the owner's usual-use history.
-    pub fn set_building(&mut self, building: Arc<AtomicBool>) {
+    /// An image build's awake hold and the macOS place it takes from the runners.
+    pub fn set_building(&mut self, building: Arc<AtomicBool>, build_slot: Arc<BuildSlot>) {
         self.building = building;
+        self.build_slot = build_slot;
     }
 
     /// The Mac as of the last tick.
@@ -784,6 +826,7 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         self.mac.clone()
     }
 
+    /// Memory of every VM still running, for the owner's usual-use history.
     pub fn running_vm_mb(&self) -> u64 {
         self.runners.iter().flat_map(|r| &r.slots).map(|s| u64::from(s.memory_mb)).sum()
     }
@@ -834,6 +877,9 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
         }
         // Also with no runner left: a removed record's registrations still need removing.
         self.retry_removals(now).await;
+        // After this tick's starts and clean-ups, and with no runner left too, so the build never reads a stale count.
+        let our_mac = self.runners.iter().map(|r| r.of(Guest::Macos)).sum::<usize>();
+        self.build_slot.set_runner_vms(u8::try_from(our_mac).unwrap_or(u8::MAX));
         // 7. Keep awake.
         let mut hold = false;
         for r in self.runners.iter_mut().filter(|r| !r.dropped) {
@@ -878,14 +924,20 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
 
     /// Steps 2 to 6 of a normal tick.
     async fn run(&mut self, m: &MacState, now: f64) {
-        // 2. Every VZ VM on the Mac, ours and other apps'; a failed count counts as full.
+        // 2. Every macOS VM on the Mac, ours and other apps'; a failed count counts as full.
         let count = match &self.vm {
-            Ok(vm) => vm.count_vms().await.unwrap_or_else(|e| {
+            Ok(vm) => vm.count_macos_vms().await.unwrap_or_else(|e| {
                 eprintln!("runner: cannot count VMs: {e}");
                 MAX_MACOS_VMS
             }),
             Err(_) => return,
         };
+        // Never fewer than the macOS VMs we know of, should the helper's count miss some.
+        let our_mac = self.runners.iter().map(|r| r.of(Guest::Macos)).sum::<usize>();
+        let build = usize::from(self.build_slot.build_vms.load(Ordering::SeqCst));
+        let count = count.max(u8::try_from(our_mac + build).unwrap_or(u8::MAX));
+        let held = self.build_slot.held_unused();
+        let yield_to_build = self.build_slot.wants();
 
         self.sweep().await;
 
@@ -939,17 +991,16 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
 
         // 4. New VMs, at most one per tick across all runners. macOS first: Linux gets the
         // memory the macOS slots leave, and never counts toward Apple's cap.
-        let our_linux = self.runners.iter().flat_map(|r| &r.slots).filter(|s| s.guest == Guest::Linux).count();
         let linux_image = self.runners_dir.join("images").join(LINUX_IMAGE);
         let mut started = false;
         for ri in 0..self.runners.len() {
             let r = &mut self.runners[ri];
             let s = r.record.config.settings.clone();
-            let ours = u8::try_from(r.of(Guest::Macos) + our_linux).unwrap_or(u8::MAX);
+            let ours = u8::try_from(r.of(Guest::Macos)).unwrap_or(u8::MAX);
             let host = HostFacts {
                 ram_mb: m.ram_mb,
                 cores: m.cores,
-                other_macos_vms: count.saturating_sub(ours),
+                other_macos_vms: count.saturating_sub(ours).saturating_add(held),
                 user_memory_mb: m.user_memory_mb,
             };
             let (available, limit) = macos_slots_explained(&s, &host);
@@ -1095,7 +1146,9 @@ impl<S: Sense, V: Vm, P: Provider> Supervisor<S, V, P> {
                 } else if *excess > 0 {
                     *excess -= 1;
                     let since = *slot.idle_since.get_or_insert(now);
-                    if now - since >= IDLE_READY_SECS as f64 {
+                    // An image build waiting for this place gets it now.
+                    let for_build = yield_to_build && slot.guest == Guest::Macos;
+                    if for_build || now - since >= IDLE_READY_SECS as f64 {
                         slot.halt(now, vec!["idle".into()], true, true);
                     }
                 } else {

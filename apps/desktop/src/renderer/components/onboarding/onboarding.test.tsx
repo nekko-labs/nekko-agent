@@ -140,7 +140,7 @@ describe('onboarding step content', () => {
     const html = renderToStaticMarkup(<WelcomeStep />);
     expect(html).toContain('Hi, I&#x27;m Nekko.');
     expect(html).toContain('class="setup-nekko');
-    expect(html).not.toContain('#a7c8ac');
+    expect(html).not.toContain('#c99bb3');
   });
 
   it('offers the online options, a local scan, and the Nekko Agent deep link', () => {

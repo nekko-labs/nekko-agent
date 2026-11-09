@@ -2,6 +2,7 @@ package com.nekko.android
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -50,7 +51,7 @@ class ComposerPhotosTest {
                     onStop = {},
                     initialText = "What is in these?",
                     attach = AttachUi(
-                        state = tray.state.value,
+                        state = tray.state.collectAsState().value,
                         onPickFiles = {},
                         onTakePhoto = null,
                         onRemove = {},

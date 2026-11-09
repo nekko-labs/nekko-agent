@@ -253,4 +253,11 @@
     <string name="chats_pair_success_body">コンピュータとペアリングしました。チャットを読み込んでいます。</string>
     <string name="chats_pair_success_done">はじめる</string>
     <string name="chats_pair_success_illustration">コンピュータとこのスマートフォンがつながりました</string>
+    <string name="chats_row_model">モデル %1$s</string>
+    <string name="chats_row_context">コンテキストウィンドウ %1$d パーセント使用</string>
+    <string name="chats_row_pr">プルリクエスト %1$d、%2$s</string>
+    <string name="chats_pr_open">オープン</string>
+    <string name="chats_pr_draft">ドラフト</string>
+    <string name="chats_pr_merged">マージ済み</string>
+    <string name="chats_pr_closed">クローズ済み</string>
 </resources>

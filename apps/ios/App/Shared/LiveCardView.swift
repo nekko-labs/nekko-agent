@@ -14,16 +14,15 @@ struct LiveCardView: View {
 
     /// The card is always dark, whatever the phone's appearance: the Nekko plum
     /// ground, the app icon's tile and the launch screen's colour.
-    static let background = Color(red: 0x19/255, green: 0, blue: 0x19/255)
+    static let background = BrandColor.plum
     /// The app's coloured ground (`AppBackdrop` in dark): the accent washed in
     /// from the top. Drawn over `background` on the Lock Screen and in the
     /// Settings preview; the Dynamic Island stays black.
     static var wash: LinearGradient {
         LinearGradient(colors: [accent.opacity(0.16), accent.opacity(0.04)], startPoint: .top, endPoint: .bottom)
     }
-    // Dark Nekko (`Palette.make(dark: true)` in Theme.swift): the extension runs
-    // apart from the app and can't see its theme, so the card keeps the default.
-    static let accent = Color(red: 0xC0/255, green: 0x84/255, blue: 0xB5/255)
+    /// Plum, not the retired lavender `#8B7DFF` (spec/brand/colour-palette.md).
+    static let accent = BrandColor.accentOnDark
     private static let onAccent = Color(red: 0x0C/255, green: 0x0C/255, blue: 0x11/255)
     private static let grey = Color(red: 0xA3/255, green: 0xA1/255, blue: 0xB0/255)
     /// A secondary button: the plum of the app's own message bubbles.
