@@ -135,9 +135,8 @@ final class PermissionChecklistUITests: XCTestCase {
 
     func testGrantChecksOffTheRowAndOpensTheNext() {
         let app = XCUIApplication()
-        // Reset the grant and its next row, independent of earlier suite tests.
+        // Reset the microphone grant, independent of earlier suite tests.
         app.resetAuthorizationStatus(for: .microphone)
-        app.resetAuthorizationStatus(for: .speechRecognition)
         app.launchArguments = ["-appLock", "NO", "-onboarded", "NO", "-uiTestReset", "YES", "-theme", "light", "-uiTestNotificationStep"]
         app.launch()
         let row = app.buttons["permissions.row.microphone"]
@@ -167,10 +166,9 @@ final class PermissionChecklistUITests: XCTestCase {
     }
 
     func testNotNowChecksOffTheRowAndOpensTheNext() {
-        // Notifications cannot be reset; these two OS grants can.
+        // Notifications cannot be reset; microphone authorization can.
         let permissions = XCUIApplication()
         permissions.resetAuthorizationStatus(for: .microphone)
-        permissions.resetAuthorizationStatus(for: .speechRecognition)
         let app = launch()
         open("microphone", in: app)
         let skip = app.buttons["permissions.skip.microphone"]
