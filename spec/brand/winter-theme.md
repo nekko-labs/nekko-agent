@@ -21,7 +21,7 @@ area: brand
 All decoration is `aria-hidden`, never takes input, uses theme colours so it reads in light and dark, and stops moving under reduced motion.
 
 - **Snow.** Eight faint flakes drift down behind the app on slow, staggered falls, with a soft snowdrift along the bottom edge (`WinterBackground.tsx`). It pauses while the window is hidden. Under reduced motion the flakes hang still.
-- **Nekko's beanie.** The per-chat Nekko (the cat peeking over a chat's composer) wears a blue knit beanie with a white pompom, ears poking out either side. As with Spooky's wizard hat, the greeting cat, the empty-wall cat and the title-bar mark stay undressed.
+- **Nekko's beanie.** The per-chat Nekko (the cat peeking over a chat's composer) wears a knitted cat-ear beanie: berry-red knit with V-stitch rows, its own knitted cat ears with pink insides (covering Nekko's real ears), a cream ribbed brim and a cream snowflake on the front. It was chosen from a design round of eight cat-ear beanies (oatmeal, ice-blue, striped, earflap, paw-patch and berry variants): the berry stands out best against Winter's midnight-blue at the 80px chat size, where the blue versions blend in. As with Spooky's wizard hat, the greeting cat, the empty-wall cat and the title-bar mark stay undressed.
 - **Merged PRs.** A merged PR's banner scatters static snowflakes and snowmen.
 - **The empty wall.** Snow lies along the top of the wall, icicles hang in the gaps above the frames, a few flakes are in the air and a snowman with a red scarf stands on the floor.
 
@@ -33,7 +33,7 @@ Not mentioned in the app or the user docs; they are for people to find. Each is 
 2. **The snow cat.** One of the falling flakes is Nekko's pixel head, falling more slowly than the rest and staying upright so its face reads.
 3. **Snow piles up.** The drift along the bottom starts low and slowly grows over the first hour the app is open (it starts over on relaunch). Under reduced motion it stays at a fixed middle height.
 4. **Aurora.** Between 22:00 and 04:00 local time, a faint aurora in the theme's two accents shimmers along the top of the window (checked every five minutes). Under reduced motion it is still.
-5. **Christmas.** On December 24 and 25 Nekko's beanie becomes a Santa hat whose tip flops over his right ear, and merged-PR confetti turns to trees, snowflakes and presents.
+5. **Christmas.** On December 24 and 25 the snowflake on Nekko's beanie becomes a holly sprig, and merged-PR confetti turns to trees, snowflakes and presents.
 6. **Oshogatsu.** From January 1 to 3 the empty wall's snowman gives way to a kagami mochi (two rice cakes and a mikan on a sanbo stand), and merged-PR confetti turns to kadomatsu and snowflakes.
 
 Dates and hours are the computer's local time. The rules live in `apps/desktop/src/renderer/seasonal.ts` (`seasonalHat`, `mergeConfetti`, `isChristmas`, `isShogatsu`, `isAuroraHour`, `snowballTap`), shared with Spooky's wizard hat and confetti.
@@ -42,7 +42,7 @@ Dates and hours are the computer's local time. The rules live in `apps/desktop/s
 
 - Winter appears once, under Seasonal, after Spooky; choosing it keeps the current light/dark mode, as every palette does.
 - Leaving Winter removes the snow, the hat, the confetti and the wall dressing at once.
-- Only one hat at a time: the wizard hat is Spooky's, the beanie (or Santa hat) Winter's, none on any other theme.
+- Only one hat at a time: the wizard hat is Spooky's, the knitted beanie Winter's, none on any other theme.
 - Reduced motion: no falling, flying or shimmering; everything that remains is still.
 
 ## Not yet

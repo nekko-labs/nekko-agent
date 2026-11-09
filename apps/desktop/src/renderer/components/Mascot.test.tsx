@@ -60,13 +60,17 @@ describe('Pixel Nekko', () => {
     expect(spooky).not.toContain('orange-wizard-hat');
     expect(await renderApp({})).not.toContain('orange-wizard-hat');
   });
-  it("wears Winter's beanie, a Santa hat at Christmas, and only one hat at a time", () => {
+  it("wears Winter's knitted cat-ear beanie, with holly at Christmas, and only one hat at a time", () => {
     const beanie = renderToStaticMarkup(<NekkoAvatar hat="beanie" />);
     expect(beanie).toContain('data-part="winter-beanie"');
+    expect(beanie).toContain('data-part="snowflake"');
     expect(beanie).not.toContain('orange-wizard-hat');
-    const santa = renderToStaticMarkup(<NekkoAvatar hat="santa" />);
-    expect(santa).toContain('data-part="santa-hat"');
-    expect(santa).not.toContain('winter-beanie');
+    // The knitted ears rise above the head's box, so the avatar lets them show.
+    expect(beanie).toContain('overflow="visible"');
+    const holly = renderToStaticMarkup(<NekkoAvatar hat="holly" />);
+    expect(holly).toContain('data-motif="holly"');
+    expect(holly).not.toContain('data-part="snowflake"');
+    expect(renderToStaticMarkup(<NekkoAvatar />)).not.toContain('overflow="visible"');
     expect(renderToStaticMarkup(<Mascot mood="idle" enabled={false} hat="beanie" />)).toBe('');
   });
   it('wears the wizard hat smaller and higher, on the crown', () => {

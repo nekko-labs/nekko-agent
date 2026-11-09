@@ -6,8 +6,8 @@
  * Preset ids: Spooky persists as `autumn` (its original id), Winter as `winter`.
  */
 
-/** A hat drawn on the head's 32-unit grid (Mascot.tsx `SeasonalHatArt`). */
-export type SeasonalHat = 'wizard' | 'beanie' | 'santa';
+/** A hat drawn on the head's 32-unit grid (SeasonalHat.tsx `SeasonalHatArt`). */
+export type SeasonalHat = 'wizard' | 'beanie' | 'holly';
 
 export const isSpookyPreset = (preset: string | undefined) => preset === 'autumn';
 export const isWinterPreset = (preset: string | undefined) => preset === 'winter';
@@ -31,7 +31,7 @@ export function isAuroraHour(date: Date): boolean {
 /** The hat the chat mascot wears under a seasonal theme, or none. */
 export function seasonalHat(preset: string | undefined, now: Date = new Date()): SeasonalHat | undefined {
   if (isSpookyPreset(preset)) return 'wizard';
-  if (isWinterPreset(preset)) return isChristmas(now) ? 'santa' : 'beanie';
+  if (isWinterPreset(preset)) return isChristmas(now) ? 'holly' : 'beanie';
   return undefined;
 }
 

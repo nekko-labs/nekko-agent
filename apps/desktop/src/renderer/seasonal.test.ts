@@ -8,10 +8,10 @@ describe('seasonal hats', () => {
     expect(seasonalHat('autumn', at(11, 9))).toBe('wizard');
     expect(seasonalHat('winter', at(11, 9))).toBe('beanie');
   });
-  it('turns the beanie into a Santa hat on December 24 and 25 only', () => {
+  it("swaps the beanie's snowflake for holly on December 24 and 25 only", () => {
     expect(seasonalHat('winter', at(12, 23))).toBe('beanie');
-    expect(seasonalHat('winter', at(12, 24))).toBe('santa');
-    expect(seasonalHat('winter', at(12, 25, 23))).toBe('santa');
+    expect(seasonalHat('winter', at(12, 24))).toBe('holly');
+    expect(seasonalHat('winter', at(12, 25, 23))).toBe('holly');
     expect(seasonalHat('winter', at(12, 26))).toBe('beanie');
     // Spooky keeps its wizard hat at Christmas.
     expect(seasonalHat('autumn', at(12, 25))).toBe('wizard');

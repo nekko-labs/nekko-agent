@@ -42,7 +42,7 @@ export const NekkoAvatar = React.forwardRef<SVGSVGElement, { size?: number; titl
   const hidden = usePageHidden();
   return (
     <svg ref={ref} className={`pixel-nekko${stationary ? ' pixel-stationary' : ''}${quiet ? ' pixel-quiet' : ''}${hidden ? ' pixel-paused' : ''}`} viewBox="0 0 32 32" width={size} height={size}
-      shapeRendering="crispEdges" role={title ? 'img' : 'presentation'} aria-label={title}
+      shapeRendering="crispEdges" overflow={hat ? 'visible' : undefined} role={title ? 'img' : 'presentation'} aria-label={title}
       aria-hidden={title ? undefined : true} focusable="false">
       <PixelHead eyes={eyes} pupilOffset={pupilOffset} />
       {hat && <SeasonalHatArt hat={hat} />}

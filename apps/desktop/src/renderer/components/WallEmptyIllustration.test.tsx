@@ -32,7 +32,7 @@ describe('empty wall illustration', () => {
     expect(december).toContain('data-part="snowman"');
     expect(december).not.toContain('kagami-mochi');
     expect(december).not.toContain('data-part="spooky"');
-    expect(december).not.toMatch(/winter-beanie|santa-hat/);
+    expect(december).not.toMatch(/winter-beanie/);
     const newYear = renderToStaticMarkup(<WallEmptyIllustration now={new Date(2027, 0, 2)} />);
     expect(newYear).toContain('data-part="kagami-mochi"');
     expect(newYear).not.toContain('data-part="snowman"');
