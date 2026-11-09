@@ -36,7 +36,7 @@ import { setAutomationsPaused } from '../automationsPause.js';
 import { PlusIcon } from '../icons.js';
 import { STATUS } from '../tokens.js';
 import { hasAppChrome } from '../chrome.js';
-import { CiRunnersView } from './CiRunnersView.js';
+import { CiRunnersView, watchRunnerPresence, type RunnerPresence } from './CiRunnersView.js';
 import { useShown } from '../simpleMode.js';
 
 /**
@@ -103,7 +103,7 @@ export function WorkflowsView() {
   const ciRunnersFocus = useStore((s) => s.ciRunnersFocus);
   // The sub-navigation's page: the task list, or this Mac's CI runners.
   const [section, setSection] = useState<'tasks' | 'ci'>(ciRunnersFocus ? 'ci' : 'tasks');
-  const [runners, setRunners] = useState<'none' | 'some' | 'unsupported'>('none');
+  const [runners, setRunners] = useState<RunnerPresence>('none');
   const workflowFocus = useStore((s) => s.workflowFocus);
   /** A run a notification asked to show; its row opens on that run. */
   const [focusRun, setFocusRun] = useState<{ workflowId: string; runId: string } | null>(null);
@@ -118,13 +118,7 @@ export function WorkflowsView() {
   }, [ciRunnersFocus]);
 
   // A connected runner is what makes the section relevant in Simple; a daemon with no runner channel (not a Mac) has none to show.
-  useEffect(() => {
-    const seen = (views: readonly unknown[]) => setRunners(views.length > 0 ? 'some' : 'none');
-    void window.nekko.listRunners?.().then(seen, (e: unknown) => {
-      if ((e instanceof Error ? e.message : String(e)).startsWith('unknown channel')) setRunners('unsupported');
-    });
-    return window.nekko.onRunnersChanged?.(seen);
-  }, []);
+  useEffect(() => watchRunnerPresence(window.nekko, setRunners), []);
 
   // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
   const sheetOpen = !!(creating || editing || setup);

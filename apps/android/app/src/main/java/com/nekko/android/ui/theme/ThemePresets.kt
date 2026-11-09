@@ -63,4 +63,5 @@ val THEME_PRESETS: List<ThemePreset> = listOf(
     ThemePreset("x-tidepool-colour", "Colourful", ThemePreset.Mode.LIGHT, accent = 0xFF0E4A4F, accent2 = 0xFFB04F36, family = "Tidepool", paper = 0xFFC1E5E5, surface = 0xFFECF7F7, surface2 = 0xFFDDF1F1, ink = 0xFF17151F, inkSoft = 0xFF00282C, inkFaint = 0xFF466667, line = 0xFFA1C4C4),
     ThemePreset("x-tidepool-dark", "Dark", ThemePreset.Mode.DARK, accent = 0xFFEF8A6A, accent2 = 0xFFF0A891, family = "Tidepool", paper = 0xFF003B40, surface = 0xFF0B1617, surface2 = 0xFF152021, ink = 0xFFEEF5F6, inkSoft = 0xFFD0D9DA, inkFaint = 0xFFA3ADAE, line = 0xFF293536),
     ThemePreset("autumn", "Spooky", ThemePreset.Mode.DARK, accent = 0xFFFB923C, accent2 = 0xFFEAB308, family = null, paper = null, surface = null, surface2 = null, ink = null, inkSoft = null, inkFaint = null, line = null),
+    ThemePreset("winter", "Winter", ThemePreset.Mode.DARK, accent = 0xFF8FD3FE, accent2 = 0xFF9EF0C9, family = null, paper = 0xFF0A111D, surface = 0xFF111B2B, surface2 = 0xFF1A2638, ink = 0xFFEAF2FB, inkSoft = 0xFFA8BBD0, inkFaint = 0xFF8A9DB4, line = 0xFF233249),
 )

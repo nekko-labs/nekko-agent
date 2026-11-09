@@ -1050,6 +1050,23 @@ export const THEME_PRESETS: ThemePreset[] = [
     swatch: ['#fb923c', '#eab308', '#0c0c11'],
     label: 'Spooky',
   },
+  {
+    // Seasonal, beside Spooky: a snowy night. Ice-blue accent, aurora-mint
+    // partner, midnight-blue surfaces (spec/brand/winter-theme.md).
+    id: 'winter',
+    mode: 'dark',
+    accent: '#8fd3fe',
+    accent2: '#9ef0c9',
+    swatch: ['#8fd3fe', '#9ef0c9', '#0a111d'],
+    label: 'Winter',
+    paper: '#0a111d',
+    surface: '#111b2b',
+    surface2: '#1a2638',
+    ink: '#eaf2fb',
+    inkSoft: '#a8bbd0',
+    inkFaint: '#8a9db4',
+    line: '#233249',
+  },
 ];
 
 /**

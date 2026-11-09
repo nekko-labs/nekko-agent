@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PeekNekkoArt, useComposerGaze, type PeekFace } from './GreetingNekko.js';
+import type { SeasonalHat } from '../seasonal.js';
 
 /** Paws come up on their own now and then: every 25-70s, for 2.5s. */
 const PAWS_PEEK_MIN_MS = 25_000;
@@ -44,12 +45,13 @@ const FACE: Record<Pose, PeekFace | undefined> = { here: undefined, ducking: 'al
 export function ChatMascot({
   enabled,
   working,
-  wizardHat,
+  hat,
   away = false,
 }: {
   enabled: boolean;
   working: boolean;
-  wizardHat: boolean;
+  /** A seasonal theme's hat (seasonal.ts `seasonalHat`). */
+  hat?: SeasonalHat;
   away?: boolean;
 }) {
   const faceRef = useRef<SVGSVGElement>(null);
@@ -106,7 +108,7 @@ export function ChatMascot({
   const down = pose === 'ducking' || pose === 'away';
   return (
     <span className="chat-mascot" data-chat-mascot={working ? 'working' : 'idle'} data-chat-mascot-pose={pose === 'here' ? undefined : pose} aria-hidden="true">
-      <PeekNekkoArt ref={faceRef} className="chat-mascot-art" look={look} face={FACE[pose]} wizardHat={wizardHat} paws={!down && (focused || peeking || pose === 'popping')} />
+      <PeekNekkoArt ref={faceRef} className="chat-mascot-art" look={look} face={FACE[pose]} hat={hat} paws={!down && (focused || peeking || pose === 'popping')} />
     </span>
   );
 }

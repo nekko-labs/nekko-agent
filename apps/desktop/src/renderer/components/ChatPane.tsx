@@ -66,6 +66,7 @@ import { VirtualTranscript, type VirtualTranscriptHandle } from './agent-console
 import { ChatSearchBar } from './agent-console/ChatSearchBar.js';
 
 import { SHORTCUTS } from '../shortcuts.js';
+import { seasonalHat } from '../seasonal.js';
 import { MarkdownEditor, type MarkdownEditorElement } from './agent-console/MarkdownEditor.js';
 import { MarkdownSandbox, safeHref } from './Markdown.js';
 import { PhotoViewer } from './PhotoViewer.js';
@@ -3000,7 +3001,7 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
               enabled={settings?.mascotEnabled ?? true}
               away={!!approval}
               working={streaming || hasLive}
-              wizardHat={settings?.themePreset === 'autumn'}
+              hat={seasonalHat(settings?.themePreset)}
             />}
             {compact && !wallWindow && stripShown && (
               <div className="composer-summary">
