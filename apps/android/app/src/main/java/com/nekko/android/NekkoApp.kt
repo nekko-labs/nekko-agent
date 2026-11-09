@@ -51,6 +51,8 @@ class NekkoApp : Application() {
         private set
     /** Text shared from other apps on its way to a chat's composer; memory only. */
     val shareInbox = ShareInbox()
+    /** The approval notification's **Always allow this tool**, waiting for that chat's card; memory only. */
+    val alwaysAllow = com.nekko.android.chat.AlwaysAllowLink()
     lateinit var connection: ConnectionKeeper
         private set
     lateinit var haptics: AndroidHaptics
@@ -138,6 +140,8 @@ class NekkoApp : Application() {
             override fun onStop(owner: LifecycleOwner) {
                 // What is typed is on disk before Android may end the app.
                 computers.drafts.flush()
+                // An Always allow left untaken never runs later by itself.
+                alwaysAllow.clear()
                 appLock.onBackground()
                 connection.onForeground(false)
             }
