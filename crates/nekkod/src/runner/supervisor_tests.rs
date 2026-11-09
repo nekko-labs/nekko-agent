@@ -96,6 +96,9 @@ struct VmState {
     slow_start: Option<(u64, Arc<Mutex<MacState>>)>,
     /// Each run's memory, beside `done`.
     mems: Vec<u32>,
+    /// Clones of the Linux image, and whether each run boots one (beside `done`).
+    linux_bundles: HashSet<PathBuf>,
+    linux: Vec<bool>,
 }
 
 #[derive(Clone)]
@@ -120,6 +123,9 @@ impl FakeVm {
 impl Vm for FakeVm {
     async fn clone_bundle(&self, from: &Path, to: &Path) -> Result<(), String> {
         self.1.lock().unwrap().push(format!("clone_bundle {} {}", self.rel(from), self.rel(to)));
+        if from.ends_with(LINUX_IMAGE) {
+            self.0.lock().unwrap().linux_bundles.insert(to.to_path_buf());
+        }
         std::fs::create_dir(to).map_err(|e| e.to_string())?;
         std::fs::write(to.join("disk.img"), b"clone").map_err(|e| e.to_string())
     }
@@ -150,6 +156,8 @@ impl Vm for FakeVm {
             let mut st = self.0.lock().unwrap();
             st.done.push(Some(done_tx));
             st.mems.push(spec.memory_mb);
+            let linux = st.linux_bundles.contains(&spec.bundle);
+            st.linux.push(linux);
         }
         let me = self.clone();
         tokio::spawn(async move {
@@ -164,9 +172,11 @@ impl Vm for FakeVm {
         Ok(RunHandle::new(done_rx, stop_tx))
     }
 
-    async fn count_vms(&self) -> Result<u8, String> {
+    /// `other` plus our live macOS runs: Linux guests are not counted, as the real helper does.
+    async fn count_macos_vms(&self) -> Result<u8, String> {
         let st = self.0.lock().unwrap();
-        if st.count_err { Err("helper gone".into()) } else { Ok(st.other + st.done.iter().flatten().count() as u8) }
+        let ours = st.done.iter().zip(&st.linux).filter(|(d, linux)| d.is_some() && !**linux).count() as u8;
+        if st.count_err { Err("helper gone".into()) } else { Ok(st.other + ours) }
     }
 }
 
@@ -1282,7 +1292,7 @@ fn runners_rig(h: H) -> Rig {
 async fn an_image_build_holds_the_mac_awake_with_no_runner() {
     let mut h = harness(vec![]);
     let building = Arc::new(std::sync::atomic::AtomicBool::new(true));
-    h.sup.set_building(building.clone());
+    h.sup.set_building(building.clone(), Arc::default());
     h.tick_for(5).await;
     assert_eq!(h.awake.lock().unwrap().last(), Some(&true));
     building.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -1923,4 +1933,98 @@ async fn the_owners_rerun_is_sent_on_the_next_tick() {
     h.sup.ask("r1", Ask::Rerun(job_ref()));
     h.tick_for(5).await;
     assert_eq!(h.count("rerun"), 1);
+}
+
+fn build_slot(h: &mut H) -> Arc<BuildSlot> {
+    let slot = Arc::new(BuildSlot::default());
+    h.sup.set_building(Arc::default(), slot.clone());
+    slot
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_image_build_takes_an_idle_vms_place_at_once() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 2)]);
+    let slot = build_slot(&mut h);
+    h.sup.start().await;
+    h.tick_for(60).await;
+    assert_eq!(h.vm.live(), 2, "both places kept ready: {:?}", h.log.lock().unwrap());
+    assert_eq!(slot.runner_vms(), 2);
+    let starts = h.count("start ");
+
+    slot.want(true);
+    h.tick_for(5).await;
+    assert_eq!(h.vm.live(), 1, "one idle VM stops within a tick, not after {IDLE_READY_SECS} s");
+    h.tick_for(60).await;
+    assert_eq!(h.count("start "), starts, "none starts in its place while the build holds it");
+    assert_eq!(h.view().available, 1);
+
+    slot.want(false);
+    h.tick_for(30).await;
+    assert_eq!(h.vm.live(), 2, "the place comes back once the build is done");
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_image_build_waits_for_a_running_job_and_its_place_is_not_refilled() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    // Another app's macOS VM holds the other place.
+    h.vm.0.lock().unwrap().other = 1;
+    let slot = build_slot(&mut h);
+    h.sup.start().await;
+    h.running().await;
+
+    slot.want(true);
+    h.tick_for(30).await;
+    assert_eq!(h.view().slots[0].state, SlotState::Running, "a running job is never stopped for a build");
+    assert_eq!(h.count("kill") + h.count("request_stop"), 0, "{:?}", h.log.lock().unwrap());
+
+    h.vm.finish(0, Stopped::Guest);
+    h.tick_for(60).await;
+    assert_eq!(h.vm.live(), 0);
+    assert_eq!(h.count("start "), 1, "the finished job's place goes to the build");
+
+    slot.want(false);
+    h.tick_for(30).await;
+    assert_eq!(h.count("start "), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_build_vm_that_is_up_is_counted_once() {
+    let mut h = harness(vec![record("r1", Priority::DoNotDisturb, 2)]);
+    let slot = build_slot(&mut h);
+    slot.want(true);
+    h.sup.start().await;
+    // The build wants a place and has no VM up: one place is left.
+    h.tick_for(5).await;
+    assert_eq!(h.view().available, 1);
+    // Its VM is up, so the helper's count has it: still one place, not none.
+    h.vm.0.lock().unwrap().other = 1;
+    slot.build_vms.store(1, Ordering::SeqCst);
+    h.tick_for(5).await;
+    assert_eq!(h.view().available, 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn our_linux_vms_take_no_macos_place() {
+    let mut h = harness(vec![linux_record(2, 1)]);
+    // Another app's macOS VM holds one place; our Linux VM must not be taken off it.
+    h.vm.0.lock().unwrap().other = 1;
+    linux_image(&h);
+    h.prov.0.lock().unwrap().linux_queued = 1;
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(h.count("mint-linux"), 1);
+    assert_eq!(h.view().available, 1);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_build_reads_no_runner_vms_once_the_last_runner_is_gone() {
+    let mut h = harness(vec![record("r1", Priority::RunnerFirst, 1)]);
+    let slot = build_slot(&mut h);
+    h.sup.start().await;
+    h.tick_for(30).await;
+    assert_eq!(slot.runner_vms(), 1);
+    h.sup.set_records(vec![]);
+    h.tick_for(60).await;
+    assert_eq!(h.vm.live(), 0, "{:?}", h.log.lock().unwrap());
+    assert_eq!(slot.runner_vms(), 0);
 }

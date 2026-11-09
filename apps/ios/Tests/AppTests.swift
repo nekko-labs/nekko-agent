@@ -137,7 +137,7 @@ final class ThemePresetTests: XCTestCase {
 final class DeepLinkTests: XCTestCase {
     func testPairingAndChatLinksAreRouted() {
         let app = AppModel.shared
-        // Routing consumes an approval only after unlock; do not depend on the shared test app's saved lock setting.
+        // Routing consumes an approval only after unlock; do not depend on the shared test app’s saved lock setting.
         let savedAppLock = app.prefs.appLock
         defer { app.prefs.appLock = savedAppLock }
         app.prefs.appLock = false

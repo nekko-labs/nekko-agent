@@ -93,9 +93,9 @@ out=$("$helper" restore-image); code=$?
 check "restore-image answers in JSON ($out)" \
   "python3 -c 'import json, sys; d = json.loads(sys.argv[1]); assert isinstance(d[\"ok\"], bool); assert \"usage\" not in d.get(\"error\", \"\"); assert not d[\"ok\"] or (d[\"url\"].startswith(\"https://\") and d[\"build\"] and d[\"version\"])' '$out' 2>/dev/null"
 
-# count-vms prints a JSON count
+# count-vms prints every VM and the macOS guests among them
 out=$("$helper" count-vms); code=$?
-check "count-vms prints a count ($out)" "[ $code -eq 0 ] && echo '$out' | grep -Eqx '[{]\"count\":[0-9]+[}]'"
+check "count-vms prints its counts ($out)" "[ $code -eq 0 ] && echo '$out' | grep -Eqx '[{]\"count\":[0-9]+,\"macos\":[0-9]+[}]'"
 
 # egress prints its first JSON line within 2 s
 "$helper" egress >"$tmp/egress.out" 2>/dev/null &

@@ -18,7 +18,7 @@
 //   install --ipsw <file> --bundle <dir> --disk-gb N
 //                                              {"progress":0.5} every 5 s, then {"ok":true} | {"ok":false,"error"} (exit 1)
 //   capabilities                               {"firstBoot":true|false}
-//   count-vms                                  {"count":N}
+//   count-vms                                  {"count":N,"macos":M}
 //   egress                                     {"physical":{"name","index"}|null,"vpnCarriesDefault",
 //                                               "expensive","constrained"} now and on every change
 //   host                                       {"thermal":"nominal|fair|serious|critical","lowPowerMode",
@@ -105,20 +105,24 @@ func clone() -> Never {
 
 // MARK: count-vms
 
-/// Counts every running Virtualization.framework VM on this Mac, ours or not.
-/// Apple's license allows two macOS guests per Mac, and a Linux guest's process
-/// looks the same, so the count is conservative on purpose.
+/// Counts every running Virtualization.framework VM on this Mac, ours or not
+/// (`count`), and the macOS guests among them (`macos`). Apple's license allows
+/// two macOS guests per Mac. A macOS guest runs an AppleVirtualPlatform identity
+/// process beside its VM process; a Linux guest does not (decision 0074).
 func countVms() -> Never {
     let size = proc_listallpids(nil, 0)
     var pids = [pid_t](repeating: 0, count: Int(max(size, 0)) + 64)
     let n = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
     var path = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
     var count = 0
+    var identities = 0
     for pid in pids.prefix(Int(max(n, 0))) where pid > 0 {
         guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { continue }
-        if String(cString: path).hasSuffix("/com.apple.Virtualization.VirtualMachine") { count += 1 }
+        let p = String(cString: path)
+        if p.hasSuffix("/com.apple.Virtualization.VirtualMachine") { count += 1 }
+        if p.hasSuffix("/com.apple.Virtualization.AppleVirtualPlatformIdentity") { identities += 1 }
     }
-    emit(["count": count]); exit(0)
+    emit(["count": count, "macos": min(identities, count)]); exit(0)
 }
 
 // MARK: egress

@@ -224,14 +224,15 @@ private fun DeviceTile(icon: androidx.compose.ui.graphics.vector.ImageVector, li
 }
 
 /**
- * Desktop's pixel cat face on its 32 x 32 grid, the iPhone's `PixelCat` drawn the same way.
+ * Desktop's pixel cat face on its 32 x 32 grid, the iPhone's `PixelCat` drawn the same way:
+ * brand plum, white line and eyes, light-plum mouth (spec/brand/colour-palette.md).
  */
 @Composable
 fun PixelCat(
     modifier: Modifier = Modifier,
     happy: Boolean = false,
-    fill: Color = Color(0xFF101714),
-    line: Color = Color(0xFFF2F1E9),
+    fill: Color = Color(0xFF190019),
+    line: Color = Color.White,
 ) {
     Canvas(modifier) {
         val u = size.width / 32f
@@ -252,7 +253,7 @@ fun PixelCat(
             px(11, 15, 2, 3)
             px(20, 15, 2, 3)
         }
-        px(15, 20, 2, 1, Color(0xFFA7C8AC))
+        px(15, 20, 2, 1, Color(0xFFC99BB3))
     }
 }
 
