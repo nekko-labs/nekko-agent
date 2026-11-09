@@ -253,4 +253,11 @@
     <string name="chats_pair_success_body">Votre ordinateur est associé. Ses discussions arrivent.</string>
     <string name="chats_pair_success_done">C’est parti</string>
     <string name="chats_pair_success_illustration">Votre ordinateur et ce téléphone sont liés</string>
+    <string name="chats_row_model">Modèle %1$s</string>
+    <string name="chats_row_context">Fenêtre de contexte remplie à %1$d pour cent</string>
+    <string name="chats_row_pr">Pull request %1$d, %2$s</string>
+    <string name="chats_pr_open">ouverte</string>
+    <string name="chats_pr_draft">brouillon</string>
+    <string name="chats_pr_merged">fusionnée</string>
+    <string name="chats_pr_closed">fermée</string>
 </resources>

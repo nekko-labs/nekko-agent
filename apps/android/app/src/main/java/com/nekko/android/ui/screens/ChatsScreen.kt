@@ -134,7 +134,9 @@ import com.nekko.protocol.ChatGroup
 import com.nekko.protocol.RelayState
 import com.nekko.protocol.PcSettings
 import com.nekko.protocol.SessionSummary
-import com.nekko.protocol.MonitorFormat
+import com.nekko.protocol.ChatCard
+import com.nekko.protocol.PullRequest
+import com.nekko.android.data.RowPrs
 import kotlinx.coroutines.launch
 import com.nekko.android.ui.simple.LocalSimple
 import com.nekko.android.ui.simple.PollHardware
@@ -229,6 +231,15 @@ fun ChatsScreen(
     val sections = remember(s.summaries, s.workspaces, view, s.activity, groupOrder) {
         ChatSections.make(s.summaries, s.workspaces, view, s.activity, groupOrder, now)
     }
+    // The rows' PR chips: the state of each PR a chat names, asked of the computer a few at a time (the iPhone's loadRowPrs).
+    val rowPrs = remember(repo, active?.id) { RowPrs() }
+    val rowPrMap by rowPrs.byChat.collectAsStateWithLifecycle()
+    val prsKey = s.summaries.filter { it.prUrls.isNotEmpty() }.joinToString(",") { "${it.id}:${it.updatedAt}:${it.prUrls.size}" }
+    LaunchedEffect(rowPrs, prsKey, s.conn, view.showPullRequests, now / RowPrs.FRESH_MS) {
+        if (view.showPullRequests && s.conn == RelayState.ONLINE) rowPrs.load(s.summaries, repo.caller)
+    }
+    // The provider each chat runs on, from the computer's list, for the mark beside its model.
+    val providerKindOf: (SessionSummary) -> String? = { summary -> s.providers.firstOrNull { it.id == summary.providerId }?.kind }
     // Status groups lead with their own Needs you group; other views get one at the top.
     val needsYou = remember(s.summaries, s.activity, view) {
         if (view.groupBy == ChatListView.GroupBy.STATUS) emptyList() else s.summaries.filter { !it.archived && s.activity[it.id] == Activity.NEEDS_YOU }
@@ -453,7 +464,8 @@ fun ChatsScreen(
                                 itemsIndexed(found, key = { _, it -> "found:${it.id}" }) { i, summary ->
                                     if (i > 0) RowDivider(60.dp)
                                     if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
-                                    else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size)
+                                    else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) }, waiting = outbox.waitingFor(summary.id).size,
+                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary))
                                 }
                             } else if (s.summaries.isEmpty()) {
                                 item(key = "empty") {
@@ -476,7 +488,8 @@ fun ChatsScreen(
                                 itemsIndexed(needsYou, key = { _, it -> "needs:${it.id}" }) { i, summary ->
                                     if (i > 0) RowDivider(60.dp)
                                     ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
-                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view)
+                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view,
+                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary))
                                 }
                             }
                             // The desktop's agent sidebar as the view menu arranges it: by project (General, then each
@@ -506,7 +519,8 @@ fun ChatsScreen(
                                     if (i > 0) RowDivider(60.dp)
                                     if (summary.archived) CompletedRow(summary, onLongClick = { pressedDone = summary }) { onOpenChat(summary.id) }
                                     else ChatRow(summary, s.activity[summary.id], onLongClick = { pressed = summary }, onClick = { onOpenChat(summary.id) },
-                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view)
+                                        waiting = outbox.waitingFor(summary.id).size, showPreview = view.showPreviews, details = view,
+                                        prs = rowPrMap[summary.id].orEmpty(), providerKind = providerKindOf(summary))
                                 }
                                 if (hidden > 0) {
                                     item(key = "more:${g.key}") {
@@ -731,7 +745,14 @@ private fun ChatActionDialog(
 }
 
 @Composable
-internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0, showPreview: Boolean = true, details: ChatListView = ChatListView.STANDARD) {
+internal fun ChatRow(
+    s: SessionSummary, activity: Activity?, onLongClick: () -> Unit, onClick: () -> Unit, waiting: Int = 0, showPreview: Boolean = true,
+    details: ChatListView = ChatListView.STANDARD,
+    /** The state of the PRs the chat names (`pr:sessionList`), once the computer has said. */
+    prs: List<PullRequest> = emptyList(),
+    /** The kind of provider it runs on (`providers:list`), for the mark beside the model. */
+    providerKind: String? = null,
+) {
     val p = Nekko.palette
     val preview = plainText(s.lastReplyText ?: s.firstUserText ?: "")
     Row(
@@ -759,21 +780,22 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
                 if (s.pinned) Icon(Icons.Filled.PushPin, contentDescription = stringResource(R.string.chats_pinned), tint = p.warning, modifier = Modifier.size(14.dp))
                 if (details.showUpdated) Text(localAgo(s.updatedAt), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
             }
-            if (details.showModel) s.modelId?.let {
-                Text(AgentRows.shortModelName(it), style = MaterialTheme.typography.bodySmall, color = p.accent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("chats.row.model"))
-            }
-            if (details.showContext) (s.contextUsed ?: s.transcriptTokens)?.let { used ->
-                val text = s.contextWindow?.let { "${MonitorFormat.tokens(used)}/${MonitorFormat.tokens(it)}" } ?: "${MonitorFormat.tokens(used)} tokens"
-                Text(text, style = MaterialTheme.typography.bodySmall, color = p.inkFaint, modifier = Modifier.testTag("chats.row.context"))
-            }
-            if (details.showPullRequests && s.prUrls.isNotEmpty()) {
-                Text(s.prUrls.take(3).joinToString(" · ") { "#" + it.substringAfterLast('/') } + if (s.prUrls.size > 3) " +${s.prUrls.size - 3}" else "", style = MaterialTheme.typography.bodySmall, color = p.accent, modifier = Modifier.testTag("chats.row.prs"))
+            // The desktop card's line: the provider's mark and the model, then how
+            // full the context is while the chat is in progress.
+            val model = s.modelId?.takeIf { details.showModel }
+            val context = if (details.showContext && ChatCard.showsContext(s, activity)) ChatCard.context(s) else null
+            if (model != null || context != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    model?.let { ModelFact(it, ChatCard.providerMark(providerKind, it)) }
+                    context?.let { ContextFact(it) }
+                }
             }
             if (showPreview && preview.isNotEmpty()) {
                 Text(preview, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (activity != null || waiting > 0) {
-                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            val prChip = details.showPullRequests && (prs.isNotEmpty() || s.prUrls.isNotEmpty())
+            if (activity != null || waiting > 0 || prChip) {
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     when (activity) {
                         Activity.NEEDS_YOU -> RowChip(stringResource(R.string.chats_needs_you), tone = AgentRows.Tone.WARN)
                         Activity.RUNNING -> RowChip(stringResource(R.string.chats_working), accent = true)
@@ -792,6 +814,11 @@ internal fun ChatRow(s: SessionSummary, activity: Activity?, onLongClick: () -> 
                             Icon(Icons.Filled.Outbox, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(14.dp))
                             Text(stringResource(R.string.chats_n_waiting, waiting), style = MaterialTheme.typography.labelMedium, color = p.inkSoft)
                         }
+                    }
+                    // The PR chip rides the end of the row: the card's bottom right, as on the desktop.
+                    if (prChip) {
+                        Spacer(Modifier.weight(1f))
+                        RowPrChip(prs, s.prUrls)
                     }
                 }
             }
