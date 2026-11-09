@@ -40,3 +40,9 @@ Provider marks: the desktop's Lobe Icons (MIT) as iOS template SVGs (`ProviderMa
 
 - Native screenshots of the new rows on both phones.
 - The desktop also uses the model catalog's own context length; the phones use the computer's reported window or the desktop's guess.
+
+## Lazy Show disclosure driver (2026-11-09)
+
+The native Form can expose the first Show row (Previews) while lower rows, including Always show groups, are not yet in its accessibility tree. The PhoneParity driver recognizes that expanded content before scrolling the same Form to Always show groups; it does not mistake an unmaterialized inline row for the baseline menu. It still asserts reachability, the enabled switch value and visibility of the empty Building group. No timeout or product behavior changes.
+
+Evidence: older full-native run `42578046165`, app/harness `577f35db1f40545e7aa92feea2442660c9539b9d`, iPhone 18 Pro/iOS 27.2, exported Show screenshot and AX tree. Local source-contract checks cover the driver sequence; Swift compilation and native execution of this repair remain **unverified**. This is not matched current-head all-switch or persistence acceptance.

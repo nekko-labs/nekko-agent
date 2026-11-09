@@ -76,3 +76,17 @@ test('card details drives the native switch thumb and retains post-tap checks', 
   assert.ok(!ui.includes('control.tap()'));
   assert.ok(ui.includes('XCTAssertEqual(control.value as? String, "0", fields[index].setting)'));
 });
+
+// Run 42578046165 exposed Previews while the lazy lower Show rows did not exist.
+test('group parity recognizes expanded Show before revealing its lazy lower switch', () => {
+  const ui = fs.readFileSync(path.join(root, 'apps/ios/UITests/PhoneParityTests.swift'), 'utf8');
+  assert.ok(ui.includes('let previews = app.switches["Previews"]'));
+  assert.match(ui, /guard app\.buttons\["Show"\]\.tapUntil\(until: \{ previews\.exists \|\| menuAlways\.exists \}\) else \{\s+XCTFail\("Show exposes its controls"\)\s+return/);
+  assert.ok(ui.includes('let usesInlineControls = previews.exists'));
+  assert.ok(!ui.includes('let usesInlineControls = inlineAlways.exists'));
+  const reveal = ui.indexOf('guard revealViewOption(always, in: app) else { return }');
+  const exists = ui.indexOf('XCTAssertTrue(always.waitForExistence(timeout: 3))');
+  assert.ok(reveal >= 0 && exists > reveal, 'materialize the row before waiting for it');
+  assert.ok(ui.includes('XCTAssertEqual(inlineAlways.value as? String, "1", "Always show groups is enabled")'));
+  assert.ok(ui.includes('XCTAssertTrue(app.staticTexts["Building"].waitForExistence(timeout: 3))'));
+});
