@@ -22,7 +22,6 @@ const ADDABLE: Array<{ kind: PaneKind; label: string; hint: string; Icon: (p: { 
   { kind: 'files', label: 'Files', hint: 'Browse and open files', Icon: FolderIcon },
   { kind: 'browser', label: 'Browser', hint: 'A page, docs, or your running app', Icon: ExternalIcon },
   { kind: 'automations', label: 'Automations', hint: 'Scheduled, recurring and background work', Icon: BoltIcon },
-  { kind: 'insights', label: 'Insights', hint: 'Vitals, cost, tokens and optimize tips', Icon: LayoutIcon },
 ];
 
 /** What the Agent tab's windows offer: the kinds a workspace can hold. */

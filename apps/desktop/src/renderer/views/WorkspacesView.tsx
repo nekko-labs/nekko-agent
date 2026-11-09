@@ -27,6 +27,7 @@ import { leftGroup, moveGroupBefore } from './groupDrag.js';
 import { AgentPanelViewMenu } from '../components/AgentPanelViewMenu.js';
 import { endAgentDrag, startAgentDrag } from '../agentDrag.js';
 import { agentGroupRows } from './agentGroupRows.js';
+import { prefetchSessionPrs } from './prefetchSessionPrs.js';
 import { CARD_ATTR, flyMovedCards, measureCards, type CardSpot } from './agentCardMotion.js';
 import { useShown } from '../simpleMode.js';
 import {
@@ -567,10 +568,12 @@ export function AgentSidebar({ onOpenChat, onOpenTerminal, selectedId, onCreate,
   // Hidden cards do not prefetch PR details. Summaries still supply group counts.
   const visiblePrIds = groups.filter((g) => !collapsed.has(g.key)).flatMap((g) =>
     visibleItems(g).flatMap((e) => e.s && e.s.prUrls.length > 0 ? [e.s.id] : [])).join('\0');
+  const prReadsInFlight = useRef(new Map<string, Promise<void>>());
   useEffect(() => {
-    const loaded = useStore.getState().prsBySession;
-    visiblePrIds.split('\0').filter((id) => id && !(id in loaded)).slice(0, 8)
-      .forEach((id) => { void useStore.getState().refreshSessionPrs(id); });
+    let cancelled = false;
+    void prefetchSessionPrs(visiblePrIds.split('\0'), () => useStore.getState().prsBySession,
+      (id) => useStore.getState().refreshSessionPrs(id), prReadsInFlight.current, () => cancelled);
+    return () => { cancelled = true; };
   }, [sessions, visiblePrIds]);
 
   // When a card changes group (Building to Verifying), note where every card was

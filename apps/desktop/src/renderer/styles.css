@@ -312,6 +312,69 @@
   }
 }
 
+/*
+  Quiet surfaces (docs/design-system.md, decision 0071). Structure comes from
+  space and type: rows carry padding and text, never a border or a resting
+  background; tabs are words on a wash pill, with no track; a field is a faint
+  wash with no border until focus; one hairline separates sections of a
+  different kind.
+*/
+@utility quiet-row {
+  @apply flex w-full min-w-0 items-center rounded-lg text-left;
+  gap: var(--q-inline);
+  padding: 8px 12px;
+  color: inherit;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+  &:focus-visible { outline: none; background: var(--q-wash-strong); box-shadow: 0 0 0 2px var(--ring); }
+  &[aria-disabled='true'], &:disabled { cursor: not-allowed; }
+  @media (hover: hover) {
+    &:hover:not(:disabled):not([aria-disabled='true']) { background: var(--q-wash); }
+  }
+}
+@utility quiet-tab {
+  @apply inline-flex min-w-0 shrink-0 items-baseline rounded-lg text-xs font-medium;
+  gap: 4px;
+  padding: 4px 8px;
+  color: var(--ink-soft);
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+  &[aria-selected='true'], &[aria-pressed='true'], &[aria-checked='true'] { color: var(--ink); background: var(--q-wash-strong); }
+  &:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ring); }
+  &:disabled { opacity: 0.45; cursor: not-allowed; }
+  @media (hover: hover) {
+    &:hover:not(:disabled) { color: var(--ink); }
+  }
+}
+@utility quiet-field {
+  @apply w-full rounded-lg text-sm outline-hidden;
+  padding: 8px 12px;
+  border: 0;
+  background: var(--q-wash);
+  color: var(--ink);
+  transition: background var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+  &::placeholder { color: var(--ink-faint); }
+  &:focus { background: transparent; box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--ring); }
+}
+/* A popover or menu: one floating surface. The faint edge keeps it legible on a dark canvas; nothing inside gets a box of its own. */
+@utility quiet-popover {
+  @apply rounded-2xl;
+  corner-shape: squircle;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-float), 0 0 0 1px color-mix(in srgb, var(--line) 70%, transparent);
+}
+@utility quiet-rule {
+  height: 1px;
+  border: 0;
+  background: var(--line);
+  margin-block: var(--q-group);
+}
+/* Groups stack with the group gap; the first in a container takes none. */
+.quiet-group + .quiet-group { margin-top: var(--q-group); }
+
+@utility quiet-group-label {
+  @apply text-xs font-medium text-ink-soft;
+}
+
 @utility catalog-row {
   /* A row of the model list. It opens a page, so it has to read as something you
      can click rather than as a line of a table. */
@@ -1174,6 +1237,15 @@
     --dur-fast: 0.12s;
     --dur-med: 0.2s;
     --dur-slow: 0.26s;
+    /* Quiet surfaces rhythm (docs/design-system.md): the gaps that replace
+     borders and card tiles. Name to meta on a row, heading to its rows,
+     group to group, section to section. */
+    --q-inline: 8px;
+    --q-heading: 4px;
+    --q-group: 24px;
+    --q-section: 32px;
+    --q-wash: color-mix(in srgb, currentColor 6%, transparent);
+    --q-wash-strong: color-mix(in srgb, currentColor 9%, transparent);
     /* Semantic status colors. Every screen reads state through these (never a
      raw hex), so a theme change moves every badge, dot and chip at once. */
     --success: #3aa870;
@@ -3610,10 +3682,10 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
    ring on top of the accent border doubled it into a heavy 2px line. */
 .wall-composer .composer, .wall-composer .composer:focus-within { box-shadow: none; }
 
-/* Prompt suggestions as one chip among the composer's actions. In a crowded
-   bar it gives up its words before the model and Mode give up theirs, down to
-   the grade badge. */
-.composer-suggestions { display: flex; flex: 0 9999 auto; min-width: 38px; }
+/* Suggestions never compete with folders, the model or send for action-row space. */
+.composer-suggestions-row { display: flex; min-width: 0; }
+.composer-suggestions { display: flex; min-width: 0; max-width: 100%; }
+.composer-suggestions:empty { display: none; }
 .composer-suggestions-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Rows stay flat at rest; pointer/focus feedback is a wash and soft light,
    not a raised card. The inset glow survives the group's overflow clipping. */
@@ -4182,6 +4254,79 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 .mode-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .titlebar .mode-seg { margin-left: 10px; }
 
+/* A segmented choice whose highlight slides to the picked segment (Library's kind and layout sliders). */
+.slide-toggle { position: relative; display: inline-flex; flex: none; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.slide-toggle-thumb { position: absolute; top: 2px; bottom: 2px; left: 0; border-radius: 8px; background: var(--win, var(--paper)); box-shadow: 0 1px 2px rgb(0 0 0 / 0.14); pointer-events: none; }
+.slide-toggle-thumb[data-animate] { transition: transform 240ms cubic-bezier(0.23, 1, 0.32, 1), width 240ms cubic-bezier(0.23, 1, 0.32, 1); }
+.slide-toggle button { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 8px; font-size: 12px; white-space: nowrap; color: var(--ink-faint); transition: color 150ms ease-out; }
+.slide-toggle button:hover, .slide-toggle button[aria-checked="true"] { color: var(--ink); }
+.slide-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.slide-toggle-icons button { width: 30px; padding: 0; justify-content: center; }
+.slide-toggle-icons button[aria-checked="true"] { color: var(--accent); }
+.slide-toggle-count { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.library-types { scrollbar-width: none; }
+
+/* Library: a group folds by animating its row track, and its chevron turns. */
+.library-fold { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 220ms cubic-bezier(0.23, 1, 0.32, 1), opacity 160ms ease-out; }
+.library-fold[data-open] { grid-template-rows: 1fr; opacity: 1; }
+.library-fold > div { min-height: 0; overflow: hidden; }
+.library-chevron { transform: rotate(-90deg); transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+[aria-expanded="true"] > .library-chevron { transform: none; }
+
+/* Library previews: a tile has no box of its own; the picture is the visual and the name sits under it. */
+.library-list { view-transition-name: library-list; }
+.library-tiles { display: grid; gap: 18px 16px; padding: 8px 8px 6px; }
+[data-library-layout="small"] .library-tiles { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 14px 6px; }
+[data-library-layout="large"] .library-tiles { grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); }
+[data-library-layout="cards"] .library-tiles { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.library-tile { display: flex; min-width: 0; flex-direction: column; }
+.library-tile-main { display: flex; min-width: 0; flex-direction: column; align-items: center; gap: 4px; border-radius: 12px; text-align: center; }
+.library-tile-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.library-tile-preview { display: block; width: 100%; aspect-ratio: 1; border-radius: 14px; transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+.library-tile-main:active .library-tile-preview { transform: scale(0.97); }
+.library-tile-label { display: flex; max-width: 100%; flex-direction: column; align-items: inherit; }
+.library-tile-title { max-width: 100%; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; color: var(--ink); }
+.library-tile-meta { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ink-faint); }
+[data-library-layout="small"] .library-tile-preview { width: 56px; border-radius: 11px; }
+[data-library-layout="small"] .library-tile-meta { display: none; }
+[data-library-layout="cards"] .library-tile { gap: 8px; padding: 8px 8px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+[data-library-layout="cards"] .library-tile-main { align-items: stretch; text-align: left; }
+[data-library-layout="cards"] .library-tile-preview { aspect-ratio: 16 / 10; border-radius: 9px; margin-bottom: 4px; }
+.library-tile-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (hover: hover) {
+  .library-tile-main:hover .library-tile-preview { transform: translateY(-2px); }
+}
+/*
+  Layout changes run as a view transition (ArtifactsView), choreographed here.
+  Previews morph place and size; labels and headings glide without stretching;
+  whatever leaves fades fast and whatever arrives fades in just behind it. When
+  the list itself changes ("list" transitions) it plays as a panel sweeping to
+  its new width: the old rows go at once and the new ones are revealed by the
+  widening clip, so two layouts' text never shows at once. Between preview
+  layouts the list is untouched and keeps the default (invisible) crossfade.
+*/
+@keyframes library-fade-out { to { opacity: 0; } }
+@keyframes library-fade-in { from { opacity: 0; } }
+html[data-library-transition]::view-transition-group(*) { animation-duration: 340ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+html[data-library-transition]::view-transition-old(*):only-child { animation: library-fade-out 120ms ease-out both; }
+html[data-library-transition]::view-transition-new(*):only-child { animation: library-fade-in 200ms ease-out 110ms both; }
+html[data-library-transition]::view-transition-old(.library-preview),
+html[data-library-transition]::view-transition-new(.library-preview) { height: 100%; object-fit: cover; }
+html[data-library-transition]::view-transition-old(.library-label),
+html[data-library-transition]::view-transition-new(.library-label),
+html[data-library-transition]::view-transition-old(.library-head),
+html[data-library-transition]::view-transition-new(.library-head) { width: auto; height: 100%; object-fit: none; object-position: left top; }
+html[data-library-transition]::view-transition-old(.library-label) { animation: library-fade-out 140ms ease-out both; }
+html[data-library-transition]::view-transition-new(.library-label) { animation: library-fade-in 200ms ease-out 120ms both; }
+html[data-library-transition="list"]::view-transition-group(library-list) { overflow: clip; background: var(--win, var(--paper)); }
+html[data-library-transition="list"]::view-transition-old(library-list),
+html[data-library-transition="list"]::view-transition-new(library-list) { width: auto; height: 100%; object-fit: none; object-position: left top; }
+html[data-library-transition="list"]::view-transition-old(library-list) { animation: library-fade-out 70ms ease-out both; }
+html[data-library-transition="list"]::view-transition-new(library-list) { animation: library-fade-in 160ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .slide-toggle-thumb[data-animate], .library-fold, .library-chevron, .library-tile-preview { transition: none; }
+}
+
 /* The chat's details: a panel inside the composer card, under the toolbar. */
 .composer-details { border-top: 1px solid var(--line); padding: 6px 8px 6px 10px; font-size: 12px; }
 .composer-details-toggle { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; color: var(--ink-faint); }
@@ -4409,6 +4554,7 @@ html[data-app-inactive] *, html[data-app-inactive] *::before, html[data-app-inac
 @container (max-width: 520px) {
   /* Let the folder summary truncate before pushing the 44px actions outside. */
   .composer-bar > .composer-folders { min-width: 44px; }
+  .composer-bar > .composer-folders .folder-summary-label { display: none; }
   .composer-bar:has(> .composer-folders) .composer-foot-controls { min-width: 80px; }
 }
 

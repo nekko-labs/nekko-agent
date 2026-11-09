@@ -27,11 +27,17 @@ describe('Screens dropdown', () => {
 
   it('has a divider, then the two placement options', () => {
     const html = renderToStaticMarkup(<ScreensMenu state={state} open onToggle={() => {}} onPlacement={() => {}} />);
-    expect(html.indexOf('screens-picker__divider')).toBeLessThan(html.indexOf('Spread across screens'));
-    expect(html).toContain('Prefer main screen');
-    expect(html).toMatch(/checked=""[^>]*\/><span><strong>Spread across screens/);
+    expect(html.indexOf('screens-picker__divider')).toBeLessThan(html.indexOf('Balanced'));
+    expect(html).toContain('Prioritize main screen first');
+    expect(html).toMatch(/checked=""[^>]*\/><span><strong>Balanced/);
   });
 
+  it('reveals details for an already active secondary screen', () => {
+    const active = { ...state, displays: state.displays.map(d => ({ ...d, enabled: true })) };
+    const html = renderToStaticMarkup(<ScreensMenu state={active} embedded open onToggle={() => {}} onPlacement={() => {}} />);
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).not.toContain('inert=""');
+  });
   it('closed, it is just the button', () => {
     const html = renderToStaticMarkup(<ScreensMenu state={state} open={false} onToggle={() => {}} onPlacement={() => {}} />);
     expect(html).toContain('data-screens-button');
@@ -43,14 +49,15 @@ describe('Screens dropdown', () => {
     expect(html).not.toContain('data-screens-button');
     expect(html).not.toContain('role="dialog"');
     expect(html).toContain('aria-label="Screens to use"');
-    expect(html).toContain('Spread across screens');
+    expect(html).toContain('Balanced');
   });
   it('explains a single connected screen without a redundant locked toggle', () => {
     const html = renderToStaticMarkup(<ScreensMenu state={{ ...state, displays: [state.displays[0]] }} embedded open onToggle={() => {}} onPlacement={() => {}} />);
-    expect(html).toContain('Main screen · always on');
-    expect(html).toContain('Connected');
+    expect(html).toContain('Use more than one screen');
+    expect(html).toContain('data-expanded="false" inert="" aria-hidden="true"');
+    expect(html).not.toContain('screens-single');
     expect(html).toContain('For when you connect more screens.');
-    expect(html).toContain('Spread across screens');
+    expect(html).toContain('Balanced');
     expect(html).not.toContain('role="switch"');
   });
   it('explains how to toggle additional screens', () => {

@@ -13,8 +13,8 @@ const js = value => JSON.stringify(value).replace(/</g, '\\u003c');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const report = { scenes: {}, checks: [], errors: [] };
 app.disableHardwareAcceleration();
-// Five of six checked, Insights unchecked: the panel should show exactly those five.
-const monitors = { hardware: true, localModels: true, utilization: true, budget: true, automations: true, insights: false };
+// All five checked: the panel should show exactly those five.
+const monitors = { hardware: true, localModels: true, utilization: true, budget: true, automations: true };
 const wall = (dock) => ({ root: { id: 'mode-pane', kind: 'chat', refId: 'd' }, hero: 'd', watermark: 1, autoAdd: false, layout: { mode: 'focus' }, dock: { side: 'right', monitors, ...dock }, agentPanel: { show: true }, zonesIntro: true });
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((d, done) => done({ cancel: !/^(file:|data:|blob:)/.test(d.url) }));

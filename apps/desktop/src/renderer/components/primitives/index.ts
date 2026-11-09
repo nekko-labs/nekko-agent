@@ -8,3 +8,4 @@ export { EmptyHint, FieldLabel, PanelList, Section, StatTile } from './Panel.js'
 export { Modal, useDialog } from './Modal.js';
 export { LogSurface } from './LogSurface.js';
 export { Toggle } from './Toggle.js';
+export { Group, Row, QuietTabs, Rule, type QuietTab } from './Quiet.js';

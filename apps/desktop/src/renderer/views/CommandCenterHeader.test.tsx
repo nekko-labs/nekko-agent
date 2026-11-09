@@ -8,7 +8,6 @@ vi.mock('../store.js', () => ({ useStore: Object.assign((select: (s: { view: str
 vi.mock('../components/UpdateBanner.js', () => ({ UpdateControl: () => <span data-version>0.8.0</span> }));
 vi.mock('../components/DeveloperServerControls.js', () => ({ DeveloperServerControls: () => null }));
 vi.mock('../components/AgentWindowPicker.js', () => ({ AgentWindowPicker: () => null }));
-vi.mock('../components/InsightsBox.js', () => ({}));
 vi.mock('../components/CommandWall.js', () => ({ CommandWall: () => null, TerminalExcerpt: () => null }));
 vi.mock('../components/WallComposer.js', () => ({ WallComposer: () => null }));
 vi.mock('../components/MonitorsDock.js', () => ({ MonitorsDock: () => null }));

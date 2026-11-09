@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import type { WallLayoutMode } from '@nekko-agent/shared';
 import { displaysBridge, prefersReducedMotion, rememberOpenerMode, useDisplays, type DesktopInfo, type DisplayInfo, type DisplayPlacement, type DisplaysState, type SpacesMode } from '../displays.js';
 import { useStore } from '../store.js';
+import './screenCardControls.css';
 
 /** Two screens side by side: the toolbar button's glyph. */
 export function MultiMonitorIcon({ className }: { className?: string }) {
@@ -12,8 +13,8 @@ export function MultiMonitorIcon({ className }: { className?: string }) {
 }
 
 export const PLACEMENT_OPTIONS: Array<{ key: DisplayPlacement; label: string; hint: string }> = [
-  { key: 'empty-first', label: 'Spread across screens', hint: 'Use an empty screen first, then the one with the fewest agents.' },
-  { key: 'main-first', label: 'Prefer main screen', hint: 'Start on the main screen. Other screens keep their agents.' },
+  { key: 'main-first', label: 'Prioritize main screen first', hint: 'Start new agents on the main screen. Other screens keep their agents.' },
+  { key: 'empty-first', label: 'Balanced', hint: 'Open agents across your screens, using the one with the fewest agents first.' },
 ];
 
 export const SPACES_OPTIONS: Array<{ key: Exclude<SpacesMode, 'ask'>; label: string; hint: string }> = [
@@ -118,6 +119,18 @@ export function ScreensControl({ mode = 'grid', embedded = false }: { mode?: Wal
       catch (e) { useStore.getState().pushToast('error', `Could not change screens: ${(e as Error).message}`); }
       finally { setBusy(false); }
     }}
+    onUseMultiple={async (enabled) => {
+      setBusy(true);
+      if (enabled) rememberOpenerMode(mode);
+      try {
+        for (const display of state.displays.filter(d => !d.main && d.enabled !== enabled)) {
+          setState(await displaysBridge!.toggle(display.id, enabled, prefersReducedMotion()));
+        }
+      } catch (e) {
+        useStore.getState().pushToast('error', `Could not change screens: ${(e as Error).message}`);
+        throw e;
+      } finally { setBusy(false); }
+    }}
     onPlacement={async (p) => {
       try { setState(await displaysBridge!.setPlacement(p)); }
       catch (e) { useStore.getState().pushToast('error', `Could not save the view option: ${(e as Error).message}`); }
@@ -138,7 +151,7 @@ export function ScreensControl({ mode = 'grid', embedded = false }: { mode?: Wal
 }
 
 /** The control's markup, separate so it renders without the desktop bridge (tests, fixtures). */
-export function ScreensMenu({ embedded = false, state, open, busy = false, rootRef, onHover, onToggleOpen, onToggle, onPlacement, onToggleDesktop, onSpacesMode, asking: initialAsking = null }: {
+export function ScreensMenu({ embedded = false, state, open, busy = false, rootRef, onHover, onToggleOpen, onToggle, onUseMultiple, onPlacement, onToggleDesktop, onSpacesMode, asking: initialAsking = null }: {
   embedded?: boolean;
   state: DisplaysState;
   open: boolean;
@@ -148,6 +161,7 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
   onToggleOpen?: () => void;
   onToggle: (display: DisplayInfo) => void;
   onPlacement: (placement: DisplayPlacement) => void;
+  onUseMultiple?: (enabled: boolean) => Promise<void>;
   /** `mode`: chosen in the permission explainer just now, saved before the toggle. */
   onToggleDesktop?: (desktop: DesktopInfo, mode?: Exclude<SpacesMode, 'ask'>) => void;
   onSpacesMode?: (mode: Exclude<SpacesMode, 'ask'>) => void;
@@ -155,6 +169,12 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
   asking?: string | null;
 }) {
   const [asking, setAsking] = useState<string | null>(initialAsking);
+  const detailsId = useId();
+  const [useMultiple, setUseMultiple] = useState(() => {
+    if (state.displays.some(d => !d.main && d.enabled)) return true;
+    try { return localStorage.getItem('nekko.useMultipleScreens') === 'true'; } catch { return false; }
+  });
+  const expanded = useMultiple || state.displays.some(d => !d.main && d.enabled);
   const spaces = state.spaces;
   const mainDisplay = state.displays.find((d) => d.main) ?? state.displays[0];
   const deskW = 64, deskH = Math.max(36, Math.round(deskW * (mainDisplay ? mainDisplay.bounds.height / mainDisplay.bounds.width : 0.625)));
@@ -175,19 +195,30 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
         : state.spaces && <span className="tabular-nums">{state.spaces.desktops.filter((d) => d.enabled).length}/{state.spaces.desktops.length}</span>}
     </button>}
     {open && <div className={embedded ? "screens-picker-inline" : "screens-picker"} role={embedded ? "group" : "dialog"} aria-label="Screens">
+      <label className="screens-enable">
+        <input type="checkbox" checked={expanded} disabled={busy} aria-expanded={expanded} aria-controls={detailsId}
+          onChange={async e => {
+            const enabled = e.target.checked;
+            try {
+              await onUseMultiple?.(enabled);
+              setUseMultiple(enabled);
+              try { localStorage.setItem('nekko.useMultipleScreens', String(enabled)); } catch { /* storage unavailable */ }
+            } catch { /* The bridge owner reports the error; retain the current choice. */ }
+          }} />
+        <span>Use more than one screen</span>
+      </label>
+      <div id={detailsId} className="screens-reveal" data-expanded={expanded} inert={!expanded} aria-hidden={!expanded}>
+      <div className="screens-reveal__content">
       {/* One screen with desktops: a lone Main tile says nothing, so only the desktops show. */}
       {(state.displays.length > 1 || !spaces) && <>
         <p className="screens-picker__title">Screens</p>
-        {embedded && state.displays.length === 1 ? <div className="screens-single" role="group" aria-label="Screens to use">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><rect x="3" y="3" width="18" height="13" rx="2" /><path d="M12 16v5m-4 0h8" /></svg>
-          <span><strong>Screen {mainDisplay.label}</strong><span>Main screen · always on</span></span>
-          <span className="screens-single__status">Connected</span>
-        </div> : <div className="screens-row" role="group" aria-label="Screens to use">
+        {state.displays.length > 1 && <div className="screens-row" role="group" aria-label="Screens to use">
           {state.displays.map((d) => <ScreenTile key={d.id} display={d} scale={scale} busy={busy} onToggle={() => onToggle(d)} />)}
         </div>}
         {state.displays.length > 1 && <p className="screens-picker__note">Select a screen to open or close its Nekko window.</p>}
       </>}
       {state.displays.length < 2 && !spaces && <p className="screens-picker__note">Connect another display to use agents on both screens.</p>}
+      </div></div>
       {spaces && <>
         <p className={`screens-picker__title ${state.displays.length > 1 ? 'screens-picker__title--sub' : ''}`}>Desktops</p>
         <div className="screens-row" role="group" aria-label="Desktops to use">
@@ -204,6 +235,7 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
         </div>}
         {spaces.mode === 'switch' && !spaces.access && <p className="screens-picker__note">Accessibility is off for Nekko in System Settings, so desktop windows open when you get there.</p>}
       </>}
+      <div className="screens-reveal" data-expanded={expanded || !!spaces} inert={!expanded && !spaces} aria-hidden={!expanded && !spaces}><div className="screens-reveal__content">
       <hr className="screens-picker__divider" />
       <p className="screens-picker__title">Open new agents</p>
       {embedded && state.displays.length < 2 && !spaces && <p className="screens-picker__note screens-placement-note">For when you connect more screens.</p>}
@@ -213,6 +245,7 @@ export function ScreensMenu({ embedded = false, state, open, busy = false, rootR
           <span><strong>{o.label}</strong><span>{o.hint}</span></span>
         </label>)}
       </div>
+      </div></div>
       {spaces && spaces.mode !== 'ask' && <div role="radiogroup" aria-label="How a desktop is reached" className="screens-options mt-2">
         {SPACES_OPTIONS.map((o) => <label key={o.key} className="screens-option">
           <input type="radio" name="screens-spaces-mode" checked={spaces.mode === o.key} onChange={() => onSpacesMode?.(o.key)} />

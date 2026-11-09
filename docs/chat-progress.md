@@ -50,6 +50,12 @@ The checklist reports **n of n passed**, followed by each check's state, device,
 
 These are agent reports, not an independent guarantee. A screenshot captured or a browser tool finished is not evidence that the pixels were inspected. Ordinary plan steps marked done do not count as verification passes. **No checklist published** means the agent has not supplied structured checks; you can ask it to publish or update its verification checklist and device/activity details.
 
+## PRs on agent cards
+
+The Agents panel shows each chat's pull-request chip, including finished chats in **Done**, without needing to open the chat first. A chip shows the primary PR number and state; **+N** counts additional PRs. Hover or select **+N** to list and open each PR separately. Chats are associated with confirmed PR creation, not arbitrary links mentioned in the conversation. Missing live metadata can still mean GitHub access or authentication needs attention.
+
+Finished **Done** chats hide context size and compaction activity, keeping their model and PR details. Context remains useful for work in progress, chats waiting on input, interrupted replies, drafts and chats with an armed watch, so those retain it when enabled in View options.
+
 ## Pull-request progress
 
 The PR panel shows finished/total head checks, successful/neutral/skipped, pending and failing checks, and any unknown outcomes. Finished includes failures, so all checks finished does not necessarily mean passing. **Check details** expands the named checks and their links. **CI checks** opens GitHub's checks tab.

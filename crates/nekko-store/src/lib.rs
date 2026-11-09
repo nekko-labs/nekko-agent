@@ -13,6 +13,7 @@
 pub mod client_ids;
 pub mod meta;
 mod phase;
+pub mod pr;
 mod review;
 mod summary;
 mod write;

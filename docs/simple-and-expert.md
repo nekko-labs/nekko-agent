@@ -6,7 +6,7 @@ Nekko Agent has two modes. **Simple** is a cleaner, more focused view: details s
 
 The switch has two icons: a chat bubble for Simple and angle brackets for Detailed.
 
-- **Desktop:** open View options above the agents wall. The labeled switch keeps each icon beside its name.
+- **Desktop and Local Web UI:** open **View** in the app’s top-right corner. Under **Interface detail**, select the **Simple** or **Detailed** radio row. **Customize** opens **Settings > Customize**, not a modal. These app-wide controls no longer sit in the agent panel’s view menu.
 - **iPhone:** at the top of the chats list's view menu (the filter icon) and of a chat's **More** menu.
 - **Android:** in the floating pill just under the top bar, in a chat and in the chats list.
 
