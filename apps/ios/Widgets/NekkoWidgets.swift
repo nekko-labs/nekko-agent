@@ -74,6 +74,7 @@ struct NekkoCardLiveActivity: Widget {
             LiveCardView(state: context.state, level: context.attributes.level, interactive: true,
                          computerId: context.attributes.computerId, computerName: context.attributes.computerName, stale: context.isStale)
                 .padding(14)
+                .background(LiveCardView.wash)
                 .activityBackgroundTint(LiveCardView.background.opacity(0.92))
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(LiveCardView.chatsURL)

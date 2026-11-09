@@ -104,7 +104,7 @@ What the app draws in the brand's own colours, whatever theme is chosen. Before 
 | Desktop / Local Web UI startup splash | plum `#190019` (already, #2272) | white | none |
 | Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat, the pairing celebration; Android `PixelCat`; desktop `PixelHead`) | plum `#190019` | white line and eyes | mouth `#C99BB3` |
 | Outline brand mark on a themed screen (iPhone first run and pairing) | none | the theme's `accent` | none |
-| iPhone Live Activity card (fixed dark `#1C1C1E`) | none | none | Dark Nekko accent `#C084B5` (dot, mic, filled buttons; 5.8:1 on the card, 6.7:1 under its dark text), was the retired lavender `#8B7DFF` |
+| iPhone Live Activity card (fixed dark plum `#190019`, washed with the accent from the top, 16% to 4%; was grey `#1C1C1E`) | plum `#190019` | none | Dark Nekko accent `#C084B5` (mic, filled buttons; 5.5:1 at the top of the wash, 6.8:1 on plain plum, 6.7:1 under its dark text), was the retired lavender `#8B7DFF`; secondary buttons `#3A1438` |
 
 - The iPhone reads all of these from `BrandColor` (`apps/ios/App/Shared/BrandColor.swift`); a themed surface uses the theme's `Palette` instead.
 - The launch storyboard is renamed whenever its colour changes (`LaunchScreen`, `Launch`, `LaunchPlum`, now `LaunchBrandPlum`) because iOS keeps showing a cached launch screen under the old name.
