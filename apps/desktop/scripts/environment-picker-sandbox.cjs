@@ -10,6 +10,8 @@ const before = process.env.NEKKO_TEST_LABEL === 'before';
 const profile = path.join(out, 'profile');
 app.setPath('userData', profile);
 app.setPath('sessionData', profile);
+// JSON for a script, with the characters that could end or break it escaped.
+const js = (v) => JSON.stringify(v).replace(/[<>/\u2028\u2029]/g, (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest((r, done) => done({ cancel: !/^(file:|data:|blob:)/.test(r.url) }));
@@ -22,8 +24,8 @@ app.whenReady().then(async () => {
   const check = (name, passed) => { report.checks.push({ name, passed: !!passed }); if (!passed) throw Error(name); };
   // A hidden window can hand back its previous frame; a one-pixel resize forces a fresh paint.
   const shot = async (name) => { win.setContentSize(901, 760); await sleep(120); win.setContentSize(900, 760); win.webContents.invalidate(); await sleep(350); fs.writeFileSync(path.join(out, name + '.png'), (await win.capturePage(undefined, { stayHidden: true })).toPNG()); };
-  const click = (selector) => run(`document.querySelector(${JSON.stringify(selector)}).click()`);
-  const clickText = (text) => run(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes(${JSON.stringify(text)})).click()`);
+  const click = (selector) => run(`document.querySelector(${js(selector)}).click()`);
+  const clickText = (text) => run(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes(${js(text)})).click()`);
   try {
     await win.loadFile(path.join(out, 'index.html'));
     await sleep(1200);
