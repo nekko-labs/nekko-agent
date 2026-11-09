@@ -120,6 +120,7 @@ jobs:
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
             apps/ios/scripts/pill-hardware-fixture.mjs
+            apps/ios/scripts/pill-gesture-trace.mjs
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -161,7 +162,9 @@ jobs:
         run: |
           set -euo pipefail
           node .evidence-harness/apps/ios/scripts/pill-hardware-fixture.mjs
-          echo "identical_pill_hardware_fixture=true" >> apps/ios/evidence/revisions.txt
+          node .evidence-harness/apps/ios/scripts/pill-gesture-trace.mjs
+          echo "identical_pill_hardware_fixture=true identical_callback_trace=true" >> apps/ios/evidence/revisions.txt
+          shasum -a 256 .evidence-harness/apps/ios/scripts/pill-gesture-trace.mjs apps/ios/App/Views/AgentPill.swift >> apps/ios/evidence/revisions.txt
           shasum -a 256 .evidence-harness/apps/ios/scripts/pill-hardware-fixture.mjs apps/ios/Protocol/Sources/NekkoKit/HardwareMonitorModel.swift >> apps/ios/evidence/revisions.txt
       - name: Test native protocol and phone request payloads
         working-directory: apps/ios/Protocol
@@ -194,7 +197,9 @@ jobs:
           xcodebuild "${COMMON[@]}" build-for-testing
           xcrun simctl io "$DEVICE" recordVideo evidence/pill-velocity.mp4 &
           VIDEO=$!
-          trap 'kill -INT "$VIDEO" || true; wait "$VIDEO" || true' EXIT
+          xcrun simctl spawn "$DEVICE" log stream --level debug --style compact --predicate 'eventMessage CONTAINS "NEKKO_PILL_TRACE"' > evidence/pill-gesture.log 2>&1 &
+          TRACE=$!
+          trap 'kill -INT "$VIDEO" || true; wait "$VIDEO" || true; kill "$TRACE" || true; wait "$TRACE" || true' EXIT
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
       - name: Export attachments and clean up owned simulator
