@@ -1,4 +1,4 @@
-name: Native mode label evidence
+name: PR2212 identical Card details diagnostic
 # Manual evidence only. Does not replace or change Native iOS/Android checks.
 # Dispatch at the feature commit: both app revisions use that exact test harness.
 # Use full commit SHAs for both inputs so a moving branch cannot change the comparison.
@@ -119,6 +119,7 @@ jobs:
           sparse-checkout: |
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
+            apps/ios/scripts/group-evidence.mjs
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -138,6 +139,16 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # Diagnostic only: same fixture AND all Card details interactions on both apps.
+          # --after deliberately keeps every field-hide and persisted-value assertion.
+          if [ "$IOS_TEST_FILE" = apps/ios/UITests/GroupEvidenceTests.swift ]; then
+            node .evidence-harness/apps/ios/scripts/group-evidence.mjs --after
+            {
+              echo "identical_card_details_interaction=true"
+              shasum -a 256 "$IOS_TEST_FILE" .evidence-harness/apps/ios/scripts/group-evidence.mjs
+              git diff --stat -- apps/ios/App
+            } >> apps/ios/evidence/revisions.txt
+          fi
           # Only the security comparison needs the debug-only in-memory fixture.
           # Production views and behavior remain unchanged in both revisions.
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/SecurityComparisonTests.swift" ]]; then
@@ -183,6 +194,9 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
           xcodebuild "${COMMON[@]}" build-for-testing
+          xcrun simctl io "$DEVICE" recordVideo evidence/card-details.mp4 &
+          VIDEO=$!
+          trap 'kill -INT "$VIDEO" || true; wait "$VIDEO" || true' EXIT
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
       - name: Export attachments and clean up owned simulator
