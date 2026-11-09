@@ -104,7 +104,17 @@ final class PhoneParityTests: XCTestCase {
         // now exposes the same preference as an inline switch in its Show disclosure.
         let inlineAlways = app.switches["chats.view.showEmptyGroups"]
         let menuAlways = app.buttons["Always show groups"]
-        XCTAssertTrue(app.buttons["Show"].tapUntil { inlineAlways.exists || menuAlways.exists }, "Show exposes its controls")
+        let show = app.buttons["Show"]
+        XCTAssertTrue(show.waitForExistence(timeout: 5), "View options has Show")
+        show.tap()
+        // Show's rows open below the fold of the popover's lazy Form, and a row that is
+        // not on screen does not exist for XCTest. Tapping Show again only folds it, so
+        // scroll the Form to them instead (the baseline's menu opens on the first tap).
+        let form = app.popovers.firstMatch.collectionViews.firstMatch
+        for _ in 0..<5 where !(inlineAlways.exists || menuAlways.exists) {
+            if form.exists { form.swipeUp() } else { show.tap() }
+        }
+        XCTAssertTrue(inlineAlways.exists || menuAlways.exists, "Show exposes its controls")
         let usesInlineControls = inlineAlways.exists
         let always = usesInlineControls ? inlineAlways : menuAlways
         XCTAssertTrue(always.waitForExistence(timeout: 3))
