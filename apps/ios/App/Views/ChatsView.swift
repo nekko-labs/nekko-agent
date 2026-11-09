@@ -629,7 +629,6 @@ struct ChatRow: View {
             if showUpdated { TimelineView(.periodic(from: .now, by: 60)) { _ in
                 Text(Date(timeIntervalSince1970: Double(summary.updatedAt) / 1000), format: .relative(presentation: .numeric, unitsStyle: .narrow))
                     .font(.caption2).foregroundStyle(palette.inkFaint).padding(.top, 3)
-                    .accessibilityIdentifier("chats.row.updated")
             } }
         }
         .padding(.vertical, 4)
