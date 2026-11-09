@@ -116,7 +116,10 @@ public actor ChangeCalls {
     }
 
     private func signed(_ channel: String, _ args: [JSONValue], stepUp: JSONValue?, timeout: TimeInterval?) async throws -> JSONValue {
+        try Task.checkCancellation()
         let proof = try await ChangeProof.proof(signer: signer, deviceId: deviceId, channel: channel, args: args, ts: nextTs())
+        // System authorization may finish after Stop; a valid proof is not permission to send a cancelled action.
+        try Task.checkCancellation()
         guard let stepUp else { return try await caller.call(channel, args, proof: proof, timeout: timeout) }
         return try await caller.call(channel, args, proof: proof, stepUp: stepUp, timeout: timeout)
     }

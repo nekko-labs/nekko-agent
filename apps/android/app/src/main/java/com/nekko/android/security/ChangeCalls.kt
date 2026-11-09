@@ -6,6 +6,7 @@ import com.nekko.protocol.ChangeSigner
 import com.nekko.protocol.PhoneRefusal
 import com.nekko.protocol.RelayException
 import com.nekko.protocol.StepUpProof
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
@@ -38,19 +39,20 @@ class ChangeCalls(
      * phone's key first if this connection hasn't yet. [stepUp] (SK-7) rides
      * beside the proof when the computer asked for one.
      */
-    suspend fun call(channel: String, args: List<JsonElement>, stepUp: StepUpProof? = null, timeoutMs: Long? = null): JsonElement {
+    suspend fun call(channel: String, args: List<JsonElement>, stepUp: StepUpProof? = null, timeoutMs: Long? = null, authorize: () -> Unit = {}, retryKeyMissing: Boolean = true): JsonElement {
         val list = JsonArray(args)
         return try {
-            registerIfNeeded()
-            signed(channel, list, stepUp, timeoutMs)
+            authorize()
+            registerIfNeeded(authorize)
+            signed(channel, list, stepUp, timeoutMs, authorize)
         } catch (e: RelayException) {
             val refusal = e.refusal ?: PhoneRefusal.parse(e.message) ?: throw e
-            if (refusal.code != "key-missing") throw plain(e, refusal)
+            if (refusal.code != "key-missing" || !retryKeyMissing) throw plain(e, refusal)
             // The computer lost the key (this phone was paired again there): register and try once more.
             registered = false
             try {
-                registerIfNeeded()
-                signed(channel, list, stepUp, timeoutMs)
+                registerIfNeeded(authorize)
+                signed(channel, list, stepUp, timeoutMs, authorize)
             } catch (again: RelayException) {
                 throw plain(again, again.refusal ?: PhoneRefusal.parse(again.message) ?: throw again)
             }
@@ -62,10 +64,10 @@ class ChangeCalls(
     private fun plain(e: RelayException, refusal: PhoneRefusal): RelayException =
         RelayException(refusal.message(computer) ?: e.message.orEmpty(), refusal)
 
-    private suspend fun registerIfNeeded() {
+    private suspend fun registerIfNeeded(authorize: () -> Unit) {
         if (registered) return
         val key = JsonPrimitive(Base64.getEncoder().encodeToString(signer.publicKey()))
-        signed(ChangeProof.KEY_CHANNEL, JsonArray(listOf(key)), stepUp = null, timeoutMs = null)
+        signed(ChangeProof.KEY_CHANNEL, JsonArray(listOf(key)), stepUp = null, timeoutMs = null, authorize = authorize)
         registered = true
     }
 
@@ -75,8 +77,11 @@ class ChangeCalls(
         lastTs
     }
 
-    private suspend fun signed(channel: String, args: JsonArray, stepUp: StepUpProof?, timeoutMs: Long?): JsonElement {
+    private suspend fun signed(channel: String, args: JsonArray, stepUp: StepUpProof?, timeoutMs: Long?, authorize: () -> Unit): JsonElement {
         val proof = ChangeProof.proof(signer, deviceId, channel, args, nextTs())
+        // Authentication may have suspended while voice lost its target, foreground or lock authority.
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        authorize()
         return remote.callSigned(channel, args, proof, stepUp, timeoutMs)
     }
 }

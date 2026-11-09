@@ -199,7 +199,7 @@ struct ModelEffortButton: View {
 
     /// Simple mode may hide either half; a chat with no model yet still offers the picker.
     static func parts(_ prefs: Prefs, _ chat: ChatModel) -> (model: Bool, effort: Bool) {
-        (prefs.shows("model") || chat.modelId == nil, prefs.shows("effort"))
+        (chat.isImageChat || prefs.shows("model") || chat.modelId == nil, !chat.isImageChat && prefs.shows("effort"))
     }
 
     var body: some View {
@@ -220,11 +220,12 @@ struct ModelEffortButton: View {
         }
         .buttonStyle(.plain)
         .disabled(chat.savedAt != nil)
-        .accessibilityLabel("Model and effort")
-        .accessibilityValue("\(name), \(chat.effort.map(effortLabel) ?? String(localized: "Computer default"))")
+        .accessibilityLabel(chat.isImageChat ? "Image settings" : "Model and effort")
+        .accessibilityValue(chat.isImageChat ? name : "\(name), \(chat.effort.map(effortLabel) ?? String(localized: "Computer default"))")
         .accessibilityIdentifier("chat.modelEffort")
         .popover(isPresented: $open, arrowEdge: .bottom) {
-            ModelEffortPanel(chat: chat).presentationCompactAdaptation(.popover)
+            if chat.isImageChat { ImageChatSettingsSheet(chat: chat) }
+            else { ModelEffortPanel(chat: chat).presentationCompactAdaptation(.popover) }
         }
     }
 }

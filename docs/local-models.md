@@ -15,6 +15,8 @@ In a Photo chat, pick a model and a **Shape**: Square, Landscape, Portrait, Wide
 
 To edit, attach, paste or drop a photo and describe the change, or press **Edit** under a picture in the chat. Nekko offers an edit-capable model if the current model cannot edit. The source stays on the user message; the reply is a new image, not an overwrite. Model output may change details, so review it before relying on precise edits. Masks and selective retouching are not offered.
 
+On the iPhone, an image chat edits the same way: **+ → Photos to edit** (or Paste image), then describe the change, or tap **Edit** under a made picture (not under a clip). Up to four photos, scaled to 1,536 px on the long side. The edit runs on the computer and needs it online; if the chat's model can't edit photos, the computer says so in the chat.
+
 Generation runs on the Nekko computer. Setup downloads model files from Hugging Face and the image engine from GitHub; it does not send those sites your prompts or photos. Memory-fit estimates are not measured speed or output-quality guarantees.
 
 ### Short video clips (experimental)

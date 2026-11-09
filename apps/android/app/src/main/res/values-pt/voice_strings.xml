@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="voice_conversation">Conversa por voz</string>
+    <string name="voice_explanation">Toque em Iniciar e fale. Cada fala é enviada para esta conversa de texto. O telefone lê a nova resposta concluída e volta a ouvir. Parar, sair, bloquear ou desconectar encerra a voz, não o trabalho do agente. A voz nunca coloca solicitações na fila nem tenta enviá-las novamente. Mantenha a caixa de mensagem vazia.</string>
+    <string name="voice_start">Iniciar</string>
+    <string name="voice_stop">Parar voz</string>
+    <string name="voice_close">Fechar</string>
+    <string name="voice_cancel">Cancelar</string>
+    <string name="voice_settings">Abrir configurações do microfone</string>
+    <string name="voice_permission_granted">Microfone permitido. Toque em Iniciar ou mantenha pressionado novamente para começar.</string>
+    <string name="voice_permission_denied">Permita o acesso ao microfone em Configurações → Apps → Nekko Agent → Permissões e inicie novamente.</string>
+    <string name="voice_unavailable">Este telefone precisa de reconhecimento de fala instalado no dispositivo (Android 12 ou posterior). Não há alternativa de reconhecimento de fala na nuvem.</string>
+    <string name="voice_ready">Pronto</string>
+    <string name="voice_listening">Ouvindo</string>
+    <string name="voice_waiting">Pensando</string>
+    <string name="voice_speaking">Falando</string>
+    <string name="voice_stopped">Parado</string>
+    <string name="voice_heard">Você disse</string>
+    <string name="voice_reply">Resposta</string>
+    <string name="voice_hold">Segure para falar</string>
+    <string name="voice_hold_accessibility">Iniciar ou encerrar o ditado por pressão prolongada</string>
+    <string name="voice_commands">Ouvir comandos de “Nekko”</string>
+    <string name="voice_finish">Terminar de ouvir</string>
+</resources>

@@ -127,6 +127,7 @@ fun NewChatScreen(
     val res = LocalResources.current
     val active = c.active
     val online = c.conn == RelayState.ONLINE
+    var imageChat by rememberSaveable(c.activeId) { mutableStateOf(false) }
     val groups = modelGroups(c)
 
     var pick by rememberSaveable(stateSaver = ModelPickSaver) { mutableStateOf<ModelPick?>(null) }
@@ -150,8 +151,8 @@ fun NewChatScreen(
     var autoChoseModel by rememberSaveable { mutableStateOf(false) }
 
     // The models are the computer's: ask every enabled provider there, in parallel.
-    LaunchedEffect(online, c.providers) {
-        if (online && c.providers.isNotEmpty()) {
+    LaunchedEffect(online, c.providers, imageChat) {
+        if (online && !imageChat && c.providers.isNotEmpty()) {
             try {
                 repo.loadAllModels()
             } catch (e: CancellationException) {
@@ -176,9 +177,9 @@ fun NewChatScreen(
     val pickedKind = c.providers.firstOrNull { it.id == pick?.providerId }?.kind
     val isLocal = LocalProviders.isLocal(pickedKind) || (autoChoseModel && pickedKind == null)
     // A local model runs on its computer's hardware: offer the other paired computers.
-    val showRunOn = c.computers.size > 1 && (switched || isLocal)
+    val showRunOn = !imageChat && c.computers.size > 1 && (switched || isLocal)
     // Automatic can choose: a local model, other computers connected, and no folder (a folder decides the computer).
-    val autoOffered = isLocal && workspaceId == null && c.computers.size > 1 && c.peers.isNotEmpty()
+    val autoOffered = !imageChat && isLocal && workspaceId == null && c.computers.size > 1 && c.peers.isNotEmpty()
     val autoShown = autoOn && autoOffered
     // Ask every computer whether it is in use and move the chat to a free one, with a local model there.
     LaunchedEffect(autoRun, autoShown, online) {
@@ -291,6 +292,10 @@ fun NewChatScreen(
             if (shared != null) SharedTextCard(shared, onEditShared)
             SectionHeader(if (active != null) stringResource(R.string.chats_on_computer, active.name) else stringResource(R.string.chats_on_your_computer))
             Column(Modifier.padding(horizontal = 16.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.kind"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip(stringResource(R.string.image_kind_text), !imageChat) { imageChat = false }
+                    Chip(stringResource(R.string.image_kind_image), imageChat) { imageChat = true }
+                }
                 when {
                     active == null -> NCard {
                         Text(
@@ -303,6 +308,18 @@ fun NewChatScreen(
                             Spacer(Modifier.size(8.dp))
                             Text(stringResource(R.string.chats_pair_title))
                         }
+                    }
+                    imageChat -> NCard {
+                        val canCreate = online && c.imageGeneration
+                        Text(stringResource(R.string.image_prompt_only), style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                        if (!online) Text(stringResource(R.string.image_offline), color = p.warning)
+                        else if (!c.imageGeneration) Text(stringResource(R.string.image_unsupported), color = p.warning)
+                        com.nekko.android.ui.chat.ImageChatEditor(
+                            enabled = canCreate,
+                            loadModels = { repo.imageModels() },
+                            actionLabel = stringResource(R.string.image_create),
+                            onSave = { params -> onCreated(repo.createImageChat(params)) },
+                        )
                     }
                     !online -> OfflineNewChat(repo, active.name, c.conn == RelayState.CONNECTING, phonePick, c.workspaces, shared, onQueued)
                     else -> NCard {
