@@ -283,4 +283,10 @@
     <string name="chat_audit_by_mode">チャットのモードにより</string>
     <string name="chat_audit_by_rule">ガードレールのルールにより</string>
     <string name="chat_audit_by_other">%1$s経由</string>
+    <string name="chat_star_title">Nekko Agent はオープンソースです</string>
+    <string name="chat_star_detail">役に立っていたら、GitHub のスターでもっと多くの人に見つけてもらえます。</string>
+    <string name="chat_star_on_github">GitHub でスターを付ける</string>
+    <string name="chat_star_never">今後表示しない</string>
+    <string name="chat_star_thanks">ありがとう！ Nekko はあなたが来てくれてうれしいです。</string>
+    <string name="chat_star_thanks_detail">ブラウザで GitHub を開きました。スターはそこでワンタップです。</string>
 </resources>
