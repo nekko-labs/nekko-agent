@@ -21,6 +21,17 @@ Requires Settings → Dictation enabled. New voice modes use installed **on-devi
 - Navigation callbacks are installed in both single-screen and folding-pane routes. Speech following a navigation command is parked as a draft, never sent to the destination. Existing destination drafts are merged, not overwritten.
 - An Android manifest TTS service visibility query is added beside the existing recognition-service query. No foreground microphone service, background listening or audio-file persistence is added.
 
+## Always-on dictation in pieces (2026-11-10)
+
+`[implemented; JVM-tested (ContinuousDictationTest); the recording bar captured on an API 37 emulator; real audio and Whisper on a computer not yet exercised]` The composer's own microphone (**+ → Dictate**, the legacy engine choice in Settings → Dictation) now works like the iPhone's tap mode (`Dictation.swift`), instead of one clip of at most 30 s per tap:
+
+- **Computer engine (Whisper):** `Recorder.stream` keeps the microphone open until ■, with no cap, 16 kHz mono in memory only. `VoiceSegmenter` (until now unused on Android) cuts the audio at each pause of 1.2 s, and at most every 30 s so one piece fits a relay frame, at the iPhone's and the desktop's sensitivity (threshold 0.023). Each piece is one `voice:transcribe` WAV, sent one at a time in spoken order (the computer runs one transcription at a time), and its words are typed into the box as they come while listening goes on. ■ flushes and transcribes the last words too; the bar then says *Transcribing on <computer>…* until they are in. Silence alone is never a piece, and Whisper's non-speech tags type nothing.
+- A failing piece says *Couldn't turn speech into text* once per failing run and listening goes on. Leaving the chat, losing the voice authority or another pane claiming the microphone cancels: words still on their way are dropped, never typed late.
+- **Phone engine:** Android's recognizer endpoints by itself, so it listens again after each utterance until ■, typing each one's words.
+- The recording bar shows the time listened ("Listening · 1:05", no "/ 0:30") and *Transcribing…* while earlier pieces are on their way.
+- Unchanged: the dashboard's voice sheet stays one utterance per tap; dictation never sends; plain dictation types words only. The iPhone also runs "Nekko, …" commands from dictated words; on Android those stay in **Listen for "Nekko" commands** (above).
+- Not ported: the iPhone's offline fallback that turns a piece into text on the phone when the computer goes offline (Android's recognizer cannot take a recorded WAV); keeping the screen on while listening.
+
 ## Submission and fresh reply correlation
 
 `ChatController.send()` intentionally returns before its turn completes and may use an offline/retrying outbox. **Voice does not call it.** `sendVoice()` owns one awaited, bounded `chat:send` request with a fresh `clientMessageId`.

@@ -36,10 +36,11 @@ internal class RecordingLatch {
 
 /**
  * Records the microphone as 16 kHz mono 16-bit PCM, the computer's format,
- * into memory only (never a file), for at most [Wav.MAX_SECONDS].
+ * into memory only (never a file): one clip of at most [Wav.MAX_SECONDS] ([record]),
+ * or a stream of reads for continuous dictation ([stream]).
  *
- * [record] runs until [stop] is called, the cap is reached, or the coroutine is
- * cancelled (then nothing is returned). The caller holds RECORD_AUDIO.
+ * Both run until [stop] is called (or [record]'s cap is reached) or the coroutine
+ * is cancelled (then nothing more is delivered). The caller holds RECORD_AUDIO.
  */
 class Recorder {
     @Volatile private var recording: RecordingLatch? = null
@@ -51,19 +52,48 @@ class Recorder {
 
     @SuppressLint("MissingPermission") // The composer asks for RECORD_AUDIO before calling this.
     suspend fun record(progress: Progress): ShortArray {
+        val out = ShortArray(Wav.MAX_SAMPLES)
+        var n = 0
+        capture { chunk, got ->
+            val take = minOf(got, out.size - n)
+            chunk.copyInto(out, n, 0, take)
+            n += take
+            progress.update(n, Wav.level(chunk, got))
+            n < out.size
+        }
+        return out.copyOf(n)
+    }
+
+    /**
+     * Continuous dictation (the iPhone's tap mode): no cap, until [stop] or cancellation.
+     * Each 100 ms read goes to [onChunk] (a copy) on the recording thread, in order.
+     */
+    suspend fun stream(onChunk: (ShortArray) -> Unit, progress: Progress) {
+        var n = 0
+        capture { chunk, got ->
+            onChunk(chunk.copyOf(got))
+            n += got
+            progress.update(n, Wav.level(chunk, got))
+            true
+        }
+    }
+
+    /** Opens the microphone and hands each read to [onRead] until it returns false, [stop], or cancellation. */
+    @SuppressLint("MissingPermission")
+    private suspend fun capture(onRead: (chunk: ShortArray, got: Int) -> Boolean) {
         // Publish before dispatching so a stop during the IO handoff is not reset or lost.
         val session = RecordingLatch()
         recording = session
         try {
-            return withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO) {
                 val context = currentCoroutineContext()
                 session.withCancellation { isActive ->
                     context.ensureActive()
-                    if (session.stopped) return@withCancellation ShortArray(0)
+                    if (session.stopped) return@withCancellation
                     val minBuf = AudioRecord.getMinBufferSize(Wav.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                     if (minBuf <= 0) throw IllegalStateException("This phone can’t record 16 kHz audio.")
                     context.ensureActive()
-                    if (session.stopped) return@withCancellation ShortArray(0)
+                    if (session.stopped) return@withCancellation
                     val rec = AudioRecord(
                         MediaRecorder.AudioSource.VOICE_RECOGNITION,
                         Wav.SAMPLE_RATE,
@@ -73,23 +103,18 @@ class Recorder {
                     )
                     try {
                         context.ensureActive()
-                        if (session.stopped) return@withCancellation ShortArray(0)
+                        if (session.stopped) return@withCancellation
                         if (rec.state != AudioRecord.STATE_INITIALIZED) {
                             throw IllegalStateException("The microphone is busy or unavailable.")
                         }
-                        val out = ShortArray(Wav.MAX_SAMPLES)
                         val chunk = ShortArray(Wav.SAMPLE_RATE / 10)
-                        var n = 0
                         if (session.start(isActive) { rec.startRecording() }) {
-                            while (!session.stopped && n < out.size && isActive()) {
-                                val got = rec.read(chunk, 0, minOf(chunk.size, out.size - n))
+                            while (!session.stopped && isActive()) {
+                                val got = rec.read(chunk, 0, chunk.size)
                                 if (got < 0) throw IllegalStateException("The microphone stopped (error $got).")
-                                chunk.copyInto(out, n, 0, got)
-                                n += got
-                                progress.update(n, Wav.level(chunk, got))
+                                if (!onRead(chunk, got)) break
                             }
                         }
-                        out.copyOf(n)
                     } finally {
                         runCatching { rec.stop() }
                         rec.release()

@@ -912,7 +912,8 @@ private fun rememberMic(d: DictationController?, updates: kotlinx.coroutines.flo
             val has = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
             if (has) {
                 com.nekko.android.voice.VoiceAudioOwner.claim(token) { d.cancel() }
-                d.toggle { words -> if (allowed() && com.nekko.android.voice.VoiceAudioOwner.owns(token)) onText(words) }
+                // Tap mode (the iPhone's): listens until Stop, typing each pause's words as they come.
+                d.toggle(continuous = true) { words -> if (allowed() && com.nekko.android.voice.VoiceAudioOwner.owns(token)) onText(words) }
             } else ask.launch(Manifest.permission.RECORD_AUDIO)
         }
     }

@@ -10,6 +10,9 @@ class AndroidMic(context: Context) : MicHardware {
     override suspend fun record(onProgress: (samples: Int, level: Float) -> Unit): ShortArray =
         recorder.record { n, lvl -> onProgress(n, lvl) }
 
+    override suspend fun stream(onChunk: (ShortArray) -> Unit, onProgress: (samples: Int, level: Float) -> Unit) =
+        recorder.stream(onChunk) { n, lvl -> onProgress(n, lvl) }
+
     override fun stopRecording() = recorder.stop()
 
     override fun phoneAvailable(): Boolean = phone.available()
