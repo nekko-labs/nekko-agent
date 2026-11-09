@@ -624,10 +624,14 @@ final class LiveRelayTests: XCTestCase {
         attach(app, "modes-3b-docked-right")
         // A swipe into the edge tucks it away as a slim tab; a tap on the tab brings it back.
         let tab = app.buttons["chat.pill.tab"]
-        // A real swipe's length: XCUITest's swipeRight stays inside the slim docked pill.
-        panel.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.01, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.995, dy: 0.4)), withVelocity: .fast, thenHoldForDuration: 0)
+        // From the narrow monitor's centre, the edge can be less than the tuck's 24 points away.
+        // Start just inside its inner edge and stay horizontal, rather than opening its tap action.
+        let tuckStart = panel.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5))
+        let tuckEnd = tuckStart.withOffset(CGVector(dx: window.frame.maxX - 1 - tuckStart.screenPoint.x, dy: 0))
+        XCTAssertGreaterThan(tuckEnd.screenPoint.x - tuckStart.screenPoint.x, 24, "the swipe crosses the tuck threshold")
+        tuckStart.press(forDuration: 0.01, thenDragTo: tuckEnd, withVelocity: .fast, thenHoldForDuration: 0)
         XCTAssertTrue(tab.waitForExistence(timeout: 5), "a swipe into the side tucks the pill away")
+        XCTAssertFalse(app.buttons["monitor.sheet"].exists, "a tuck swipe does not open the monitor details")
         XCTAssertFalse(panel.exists)
         settle()
         attach(app, "modes-3c-tucked-right")
