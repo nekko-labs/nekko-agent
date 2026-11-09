@@ -42,6 +42,7 @@
       <h2>Visiting this website</h2>
       <p>This site sets no cookies and loads no trackers or ads. Its fonts and files come from nekkoagent.com itself, so opening a page contacts no one else. Like any website, our host (Vercel) keeps short-lived request logs, which include your IP address, to serve the site and keep it secure.</p>
       <p>We use <strong>PostHog</strong> to count page views and clicks on the buttons and links on this site, so we can see which parts help and which do not. Nothing is stored in your browser (no cookies, no local storage), there are no session recordings and no profile is built about you, and PostHog is told to discard your IP address before saving the event. It is loaded from PostHog's US cloud, so visiting a page on nekkoagent.com makes a request there.</p>
+      <p>We also use <strong>Vercel Web Analytics</strong>, our host's own page counter, to count page views. Its script is served from nekkoagent.com itself, it stores nothing in your browser (no cookies, no local storage), and it does not identify you: Vercel tells visits apart with a hash of the request that it discards after 24 hours.</p>
 
       <h2>What the beta form stores</h2>
       <ul>
@@ -125,5 +126,9 @@
       <a href="/docs">Docs</a>
       <a href="/privacy">Privacy</a>
     </footer>
+    <script>
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
   </body>
 </html>

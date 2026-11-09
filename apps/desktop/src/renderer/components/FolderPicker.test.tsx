@@ -71,6 +71,13 @@ describe('composer folder picker', () => {
     expect(out).not.toContain('aria-pressed');
   });
 
+  it('offers per-chat removal only for included folders, separately from saved-access revocation', () => {
+    const out = renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={{ workspaceId: 'a' }} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} onExclude={() => {}} />);
+    expect(out).toContain('aria-label="Remove nekko-agent from this chat"');
+    expect(out).not.toContain('aria-label="Remove hypergate from this chat"');
+    expect(out).toContain('aria-label="Revoke access to nekko-agent"');
+  });
+
   it('stars the default folders new chats start with', () => {
     const out = renderToStaticMarkup(<FolderPickerMenu folders={folders} chat={null} defaults={['b']} onPick={() => {}} onClear={() => {}} onAdd={() => {}} onRemove={() => {}} onToggleDefault={() => {}} />);
     expect(out.match(/aria-pressed="true"/g)).toHaveLength(1);

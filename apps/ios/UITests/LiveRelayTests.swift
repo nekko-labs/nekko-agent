@@ -56,7 +56,8 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         attach(app, "\(theme)-1-pair")
         app.buttons["Pair"].firstMatch.tap()
-        // Step 3 follows the first pairing; only then does iOS ask.
+        passCelebration(app, attachAs: "\(theme)-1a-paired")
+        // Step 3 follows the first pairing (after the celebration); only then does iOS ask.
         let allowNotifications = app.buttons["firstRun.allowNotifications"]
         XCTAssertTrue(allowNotifications.waitForExistence(timeout: 20), "the notification step follows pairing")
         attach(app, "\(theme)-1b-notifications-step")
@@ -313,6 +314,7 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
+        passCelebration(app)
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
         app.navigationBars.buttons["New chat"].tap()
@@ -391,6 +393,7 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
+        passCelebration(app)
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
         app.navigationBars.buttons["New chat"].tap()
@@ -531,6 +534,7 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
+        passCelebration(app)
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
         // Search is in the computer menu, in place of the slim row; Cancel brings the row back.
@@ -672,6 +676,7 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
+        passCelebration(app)
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
         app.navigationBars.buttons["New chat"].tap()
@@ -732,6 +737,7 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
+        passCelebration(app)
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
         app.navigationBars.buttons["New chat"].tap()
@@ -791,6 +797,7 @@ final class LiveRelayTests: XCTestCase {
         XCTAssertTrue(waitForSteadyFrame(pair, in: app, 10), "the sheet's Pair button never settled")
         pair.tap()
         tapSystemAlertIfShown()
+        passCelebration(app)
 
         let newChat = app.navigationBars.buttons["New chat"]
         XCTAssertTrue(newChat.waitForExistence(timeout: 20))
@@ -848,6 +855,7 @@ final class LiveRelayTests: XCTestCase {
         field.typeText(link.absoluteString)
         app.buttons["Pair"].firstMatch.tap()
         tapSystemAlertIfShown()
+        passCelebration(app)
         XCTAssertTrue(waitOnline(app, 30), "connected to the computer")
 
         // A chat on the computer.
@@ -1043,6 +1051,15 @@ final class LiveRelayTests: XCTestCase {
             if attempt == 1 { _ = target.waitForExistence(timeout: 5) }
         }
         return false
+    }
+
+    /// The pairing celebration covers the app for a few seconds; Let's go closes it early.
+    private func passCelebration(_ app: XCUIApplication, attachAs name: String? = nil) {
+        let done = app.buttons["pairSuccess.done"]
+        guard done.waitForExistence(timeout: 5) else { return }
+        if let name { attach(app, name) }
+        done.tap()
+        _ = waitGone(done, 5)
     }
 
     private func waitGone(_ e: XCUIElement, _ seconds: TimeInterval) -> Bool {

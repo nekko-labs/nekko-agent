@@ -6,6 +6,10 @@ owner:
 
 # Execution Plan, Nekko Agent
 
+## Sidebar PR attribution follow-up (#2337)
+
+Use one creation-only transcript collector in `nekko-store::pr` for session summaries and `nekko-workspace` live reads, aligned with the shared TypeScript collector. Hydrate all mounted sidebar cards through a shared eight-read queue rather than a one-shot first-eight slice. Context visibility follows the existing activity Done classification rather than the archived flag alone; PR counts retain the existing #PR +N presentation. Verification is documented in `spec/agents/agent-card-pr-chip.md`.
+
 > **The plan only.** This file is the technical plan: how we build what [spec/](spec/README.md) describes (stack, architecture, data model, conventions, design system, constraints). Update it when the technical approach changes.
 >
 > **Tasks live in GitHub issues** (since 2026-11-04). Every change already has an issue ([AGENTS.md](AGENTS.md), "Landing work"): plan notes and the checklist for a change go in its issue, and how it was built goes in the PR description. [Floop](https://floop-nekko.fly.dev) mirrors the issues (two-way sync is planned). Do not add task groups here.
@@ -148,7 +152,7 @@ A workspace is a **split tree**, not a tab stack. `renderer/layout.ts` owns the 
 - **Sources**: folders wired into the chat (active highlighted, add/remove, multi-root), attached files (native multi-file picker; `prompt` fallback on web), the chat's `SPEC.md` (highlighted + openable) with Build-from-chat / Live controls, links to detected guideline files (AGENTS.md/CLAUDE.md), and a memory count.
 - **Breakdown**: live view of exactly what's entering the prompt this turn (files, guidelines, memory snippets, connector data, index snippets), each item toggleable/pinnable with token counts, plus a context-window headroom bar.
 
-**Design tokens.** All in `renderer/styles.css`; components read tokens, never raw values.
+**Design tokens.** All in `renderer/styles.css`; components read tokens, never raw values. How screens are composed from them (one surface per layer, rows without borders, groups separated by space and type) is the [quiet surfaces design system](docs/design-system.md) ([decision 0071](docs/decisions/0071-quiet-surfaces.md)).
 
 - **Colour.** Cool ink/paper neutrals in three ink tiers (`--ink`, `--ink-soft`, `--ink-faint`), every tier at WCAG AA (4.5:1) on `--paper`, `--win`, `--surface` and `--surface-2` in every theme and preset (`contrast.test.ts` holds it). One brand hue, violet: `--accent` `#6d5efc` light / `#8b7dff` dark, recolourable in Settings. `--accent-soft` and `--ring` derive from it by `color-mix`, so they follow the user's choice. Semantic status hues (`--success`, `--danger`, `--warning`, `--info`, `--running`, `--attention`) carry state; never a raw hex. Dark and light via `data-theme` with `color-scheme` set, so native controls never go white-on-white.
 - **Type.** Inter Tight for the UI, JetBrains Mono for code (Settings > Style can override both). One scale, 11 / 12 / 14 / 16 / 20 / 24, as `text-2xs` / `xs` / `sm` / `base` / `xl` / `2xl` (and `var(--text-*)` in CSS). Nothing below 11px, no in-between sizes, no `text-[Npx]`. Chat and documents set 14px body.

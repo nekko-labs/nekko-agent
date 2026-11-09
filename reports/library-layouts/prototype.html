@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library layouts: design prototype</title>
+<style>
+  :root {
+    --paper: #0c0c11; --win: #17171e; --surface: #16161c; --surface-2: #20202a;
+    --ink: #eceaf3; --ink-soft: #a3a1b0; --ink-faint: #898894; --line: #26262f;
+    --accent: #c084b5; --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
+    --ease-out: cubic-bezier(.23, 1, .32, 1);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13px/1.4 "Inter Tight", system-ui, sans-serif; background: var(--paper); color: var(--ink); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  .note { max-width: 1180px; margin: 24px auto 12px; padding: 0 16px; color: var(--ink-soft); }
+  .note h1 { color: var(--ink); font-size: 20px; margin: 0 0 4px; }
+  .note p { margin: 0; }
+  .frame { max-width: 1180px; height: 720px; margin: 0 auto 32px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--win); display: flex; flex-direction: column; }
+
+  /* Top bar: the type slider, then the layout slider in the top right. */
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .topbar h2 { font-size: 15px; margin: 0 6px 0 0; }
+  .slide { position: relative; display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+  .slide .thumb { position: absolute; top: 2px; bottom: 2px; left: 0; border-radius: 8px; background: var(--win); box-shadow: 0 1px 2px rgb(0 0 0 / .25); transition: transform 240ms var(--ease-out), width 240ms var(--ease-out); }
+  .slide button { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 8px; color: var(--ink-faint); white-space: nowrap; transition: color 160ms ease-out; }
+  .slide button:hover { color: var(--ink); }
+  .slide button[aria-checked="true"] { color: var(--ink); }
+  .slide .count { font-size: 11px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+  .slide.icons button { width: 30px; padding: 0; justify-content: center; }
+  .slide.icons button[aria-checked="true"] { color: var(--accent); }
+  .types { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .spacer { flex: 1; }
+
+  .body { position: relative; display: flex; min-height: 0; flex: 1; }
+  .list { view-transition-name: library-list; width: 300px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--win); }
+  .body[data-layout="list"] .list { width: 100%; border-right: 0; }
+  .body[data-layout="list"] .canvas { display: none; }
+  .filter { margin: 10px 10px 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; }
+  .scroll { min-height: 0; flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+
+  .group-h { display: flex; width: 100%; align-items: center; gap: 6px; padding: 10px 6px 4px; font-weight: 600; font-size: 12px; }
+  .group-h .chev { width: 12px; height: 12px; color: var(--ink-faint); transition: transform 200ms var(--ease-out); }
+  .group[data-collapsed] .chev { transform: rotate(-90deg); }
+  .group-h .count { font-weight: 400; font-size: 11px; color: var(--ink-faint); border-radius: 999px; background: var(--surface-2); padding: 0 7px; }
+  .group-h .more { margin-left: auto; font-weight: 500; font-size: 11px; color: var(--accent); }
+  .fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows 220ms var(--ease-out), opacity 180ms ease-out; }
+  .group[data-collapsed] .fold { grid-template-rows: 0fr; opacity: 0; }
+  .fold > div { overflow: hidden; min-height: 0; }
+
+  .row { display: flex; width: 100%; align-items: center; gap: 10px; padding: 5px 6px; border-radius: 8px; text-align: left; }
+  .row:hover { background: var(--surface-2); }
+  .row .ico { flex: none; width: 26px; height: 26px; }
+  .row .t { min-width: 0; flex: 1; }
+  .row .t b { display: block; font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .t span { display: block; font-size: 11px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .col { display: none; font-size: 11px; color: var(--ink-faint); white-space: nowrap; }
+  .body[data-layout="list"] .row .col { display: block; width: 130px; }
+  .body[data-layout="list"] .row .col.wide { width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  .body[data-layout="list"] .row .t span { display: none; }
+  .body[data-layout="list"] .scroll { padding: 0 20px 16px; }
+
+  .canvas { min-width: 0; flex: 1; overflow-y: auto; padding: 4px 20px 24px; }
+  .canvas .group-h { padding-top: 16px; font-size: 13px; }
+  .tiles { display: grid; gap: 18px 16px; padding: 8px 2px 4px; }
+  [data-layout="small"] .tiles { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 14px 8px; }
+  [data-layout="large"] .tiles { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+  [data-layout="cards"] .tiles { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+
+  /* A tile has no box of its own: the preview is the visual, the name sits under it. */
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; min-width: 0; border-radius: 12px; }
+  .tile .pv { width: 100%; aspect-ratio: 1; border-radius: 12px; transition: transform 160ms var(--ease-out); }
+  .tile:hover .pv { transform: translateY(-2px); }
+  .tile:active .pv { transform: scale(.97); }
+  .tile b { max-width: 100%; font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile span { max-width: 100%; font-size: 11px; color: var(--ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  [data-layout="small"] .tile .pv { width: 56px; border-radius: 10px; }
+  [data-layout="small"] .tile span { display: none; }
+  [data-layout="cards"] .tile { align-items: stretch; text-align: left; border: 1px solid var(--line); background: var(--surface); padding: 8px 8px 10px; gap: 4px; }
+  [data-layout="cards"] .tile .pv { aspect-ratio: 16 / 10; border-radius: 8px; margin-bottom: 4px; }
+  .tile .meta { display: none; }
+  [data-layout="cards"] .tile .meta { display: flex; gap: 6px; margin-top: 6px; }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-soft); }
+
+  ::view-transition-group(*) { animation-duration: 340ms; animation-timing-function: var(--ease-out); }
+  ::view-transition-old(*), ::view-transition-new(*) { height: 100%; }
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*) { animation-duration: 0s; }
+    .slide .thumb, .fold, .chev, .tile .pv { transition: none !important; }
+  }
+  .legend { max-width: 1180px; margin: 0 auto 40px; padding: 0 16px; color: var(--ink-soft); columns: 2; column-gap: 32px; }
+  .legend li { margin-bottom: 6px; break-inside: avoid; }
+</style>
+</head>
+<body>
+<div class="note">
+  <h1>Library: type slider, collapsible groups, layout styles</h1>
+  <p>Interactive prototype. Signed in as a <b>Developer</b>, so Web pages leads. Try the type slider, the layout slider (top right), and the group headers.</p>
+</div>
+
+<div class="frame">
+  <div class="topbar">
+    <h2>Library</h2>
+    <div class="slide types" role="radiogroup" aria-label="Show" id="types"><span class="thumb"></span></div>
+    <span class="spacer"></span>
+    <div class="slide icons" role="radiogroup" aria-label="Layout" id="layouts"><span class="thumb"></span></div>
+  </div>
+  <div class="body" id="body" data-layout="large">
+    <aside class="list">
+      <input class="filter" placeholder="Filter by name, file or chat…">
+      <div class="scroll" id="list"></div>
+    </aside>
+    <section class="canvas" id="canvas"></section>
+  </div>
+</div>
+
+<ul class="legend">
+  <li><b>Type slider</b> (top left): All, then one segment per kind that has files, each with its count. The thumb slides between segments.</li>
+  <li><b>Layout slider</b> (top right): list, small icons, large icons, full cards. Saved per profile.</li>
+  <li><b>All</b> shows every kind as a collapsible group, expanded to start. The kind that fits the setup answer leads (Developer: Web pages; Designer: Designs; Writer and Student: Documents; Product or business: Office files).</li>
+  <li><b>Groups</b> are a header plus large square previews with no card box around them. The canvas shows the newest items of each kind; <b>See all</b> moves the type slider to that kind.</li>
+  <li><b>Previews</b> are drawn from the file's kind, name and extension. The Library still never reads file contents until you open one.</li>
+  <li><b>Motion</b>: changing layout morphs every tile from its old place and size to its new one (340 ms, ease-out). Choosing List widens the list across the page while the canvas fades; leaving List shrinks it back. Reduced motion switches instantly.</li>
+</ul>
+
+<script>
+const KINDS = [
+  { id: 'doc', label: 'Documents', hue: 265 }, { id: 'web', label: 'Web pages', hue: 200 },
+  { id: 'design', label: 'Designs', hue: 330 }, { id: 'diagram', label: 'Diagrams', hue: 160 },
+  { id: 'data', label: 'Data', hue: 40 }, { id: 'office', label: 'Office files', hue: 20 }, { id: 'image', label: 'Images', hue: 290 },
+];
+const LEAD = { developer: 'web', designer: 'design', writer: 'doc', student: 'doc', business: 'office' };
+const items = [
+  ['web','Pricing page draft','pricing.html','Landing refresh'],['web','Docs search demo','search-demo.html','Docs search'],['web','Release notes preview','release-0-9.html','Release prep'],['web','Onboarding flow','onboarding.htm','Setup polish'],['web','Status dashboard','status.html','Live card'],['web','Perf report','perf-report.html','Speed contract'],['web','Changelog page','changelog.html','Release prep'],
+  ['doc','Beta readiness','beta-readiness.md','Beta review'],['doc','Security review','security-review.md','Agent data audit'],['doc','Meeting notes','notes-11-08.md','Weekly sync'],['doc','Market scan','market-scan.pdf','Competitor research'],['doc','Install guide','install.md','Docs refresh'],['doc','Interview plan','interviews.txt','Research'],
+  ['design','Library layouts','library.html','Library redesign'],['design','Rail icons','rail-icons.svg','Nav icons'],['design','Tray goodbye card','goodbye.png','Tray polish'],['design','Composer toolbar','toolbar.html','Composer'],
+  ['diagram','Engine architecture','engine.mmd','Engine notes'],['diagram','Relay handshake','relay.mermaid','Relay'],['diagram','Release pipeline','pipeline.drawio','CI'],
+  ['data','Model benchmarks','bench.csv','Model tuning'],['data','Usage export','usage.json','Usage'],
+  ['office','Board update','board-q4.pptx','Board prep'],['office','Budget','budget.xlsx','Finance'],
+  ['image','Mascot poses','poses.png','Mascot'],['image','App icon','icon.webp','Brand'],
+].map(([kind, title, file, chat], i) => ({ id: 'a' + i, kind, title, file, chat, when: `Nov ${9 - (i % 8)}` }));
+
+const state = { type: 'all', layout: 'large', collapsed: new Set(), profile: 'developer' };
+const LAYOUTS = [
+  { id: 'list', label: 'List', svg: '<path d="M3 4h10M3 8h10M3 12h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>' },
+  { id: 'small', label: 'Small icons', svg: '<g fill="currentColor"><rect x="2" y="2" width="3.2" height="3.2" rx=".8"/><rect x="6.4" y="2" width="3.2" height="3.2" rx=".8"/><rect x="10.8" y="2" width="3.2" height="3.2" rx=".8"/><rect x="2" y="6.4" width="3.2" height="3.2" rx=".8"/><rect x="6.4" y="6.4" width="3.2" height="3.2" rx=".8"/><rect x="10.8" y="6.4" width="3.2" height="3.2" rx=".8"/><rect x="2" y="10.8" width="3.2" height="3.2" rx=".8"/><rect x="6.4" y="10.8" width="3.2" height="3.2" rx=".8"/><rect x="10.8" y="10.8" width="3.2" height="3.2" rx=".8"/></g>' },
+  { id: 'large', label: 'Large icons', svg: '<g fill="currentColor"><rect x="2" y="2" width="5.4" height="5.4" rx="1.2"/><rect x="8.6" y="2" width="5.4" height="5.4" rx="1.2"/><rect x="2" y="8.6" width="5.4" height="5.4" rx="1.2"/><rect x="8.6" y="8.6" width="5.4" height="5.4" rx="1.2"/></g>' },
+  { id: 'cards', label: 'Full cards', svg: '<g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2.5" width="12" height="11" rx="1.8"/><path d="M2 9h12"/></g><path d="M4.5 11.2h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' },
+];
+
+function preview(it, cls = 'pv', extra = '') {
+  const k = KINDS.find((k) => k.id === it.kind);
+  const ext = it.file.split('.').pop().toUpperCase();
+  const c = `hsl(${k.hue} 70% 68%)`, soft = `hsl(${k.hue} 45% 22%)`, deep = `hsl(${k.hue} 35% 15%)`;
+  const art = {
+    doc: `<rect x="26" y="18" width="48" height="64" rx="5" fill="${deep}"/><path d="M34 32h26M34 40h32M34 48h22M34 56h30M34 64h18" stroke="${c}" stroke-width="3" stroke-linecap="round" opacity=".8"/>`,
+    web: `<rect x="16" y="22" width="68" height="54" rx="6" fill="${deep}"/><path d="M16 32h68" stroke="${c}" opacity=".5"/><circle cx="22" cy="27" r="1.6" fill="${c}"/><circle cx="27" cy="27" r="1.6" fill="${c}"/><rect x="23" y="38" width="30" height="5" rx="2.5" fill="${c}"/><rect x="23" y="47" width="22" height="3" rx="1.5" fill="${c}" opacity=".5"/><rect x="58" y="38" width="20" height="30" rx="3" fill="${c}" opacity=".35"/>`,
+    design: `<rect x="18" y="20" width="30" height="30" rx="6" fill="${c}"/><rect x="52" y="20" width="30" height="18" rx="6" fill="${c}" opacity=".55"/><rect x="52" y="42" width="30" height="38" rx="6" fill="${c}" opacity=".35"/><rect x="18" y="54" width="30" height="26" rx="6" fill="${c}" opacity=".7"/>`,
+    diagram: `<rect x="38" y="16" width="24" height="14" rx="4" fill="${c}"/><rect x="16" y="62" width="24" height="14" rx="4" fill="${c}" opacity=".6"/><rect x="60" y="62" width="24" height="14" rx="4" fill="${c}" opacity=".6"/><path d="M50 30v14M28 62V48h44v14" stroke="${c}" stroke-width="2.4" fill="none"/>`,
+    data: `<rect x="22" y="58" width="10" height="20" rx="2" fill="${c}" opacity=".5"/><rect x="37" y="44" width="10" height="34" rx="2" fill="${c}" opacity=".7"/><rect x="52" y="30" width="10" height="48" rx="2" fill="${c}"/><rect x="67" y="50" width="10" height="28" rx="2" fill="${c}" opacity=".6"/>`,
+    office: `<rect x="22" y="20" width="56" height="44" rx="5" fill="${deep}"/><rect x="30" y="28" width="40" height="22" rx="3" fill="${c}" opacity=".45"/><path d="M50 64v12M38 78h24" stroke="${c}" stroke-width="3" stroke-linecap="round"/>`,
+    image: `<rect x="16" y="20" width="68" height="60" rx="6" fill="${deep}"/><circle cx="64" cy="36" r="7" fill="${c}"/><path d="M20 76l20-22 14 12 10-8 18 18z" fill="${c}" opacity=".7"/>`,
+  }[it.kind];
+  return `<svg class="${cls}" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" style="background:${soft};${extra}" aria-hidden="true">${art}<text x="92" y="93" text-anchor="end" font-size="9" font-weight="700" fill="${c}" font-family="system-ui">${ext}</text></svg>`;
+}
+
+function order() {
+  const lead = LEAD[state.profile];
+  const ks = KINDS.filter((k) => items.some((i) => i.kind === k.id));
+  return lead ? [...ks.filter((k) => k.id === lead), ...ks.filter((k) => k.id !== lead)] : ks;
+}
+const chev = '<svg class="chev" viewBox="0 0 12 12"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+const TOP_N = { small: 12, large: 6, cards: 3 };
+
+function render() {
+  const body = document.getElementById('body');
+  body.dataset.layout = state.layout;
+  const kinds = order().filter((k) => state.type === 'all' || k.id === state.type);
+  const groups = kinds.map((k) => ({ k, its: items.filter((i) => i.kind === k.id) }));
+  const all = state.type === 'all';
+  document.getElementById('list').innerHTML = groups.map(({ k, its }) => `
+    <section class="group" ${all && state.collapsed.has(k.id) ? 'data-collapsed' : ''}>
+      ${all ? `<button class="group-h" data-toggle="${k.id}" aria-expanded="${!state.collapsed.has(k.id)}">${chev}${k.label}<span class="count">${its.length}</span></button>` : ''}
+      <div class="fold"><div>${its.map((i) => `
+        <button class="row">${preview(i, 'ico', 'border-radius:7px')}
+          <span class="t"><b>${i.title}</b><span>${i.chat} · ${i.when}</span></span>
+          <span class="col">${k.label}</span><span class="col wide">${i.chat}</span><span class="col">${i.when}</span></button>`).join('')}
+      </div></div>
+    </section>`).join('');
+  const n = all ? TOP_N[state.layout] : Infinity;
+  document.getElementById('canvas').innerHTML = groups.map(({ k, its }) => `
+    <section class="group" ${all && state.collapsed.has(k.id) ? 'data-collapsed' : ''}>
+      <button class="group-h" data-toggle="${k.id}" aria-expanded="${!state.collapsed.has(k.id)}">${all ? chev : ''}${k.label}<span class="count">${its.length}</span>
+        ${all && its.length > n ? `<span class="more" data-type="${k.id}">See all</span>` : ''}</button>
+      <div class="fold"><div><div class="tiles">${its.slice(0, n).map((i) => `
+        <button class="tile" style="view-transition-name:tile-${i.id}">${preview(i)}<b>${i.title}</b><span>${i.chat} · ${i.when}</span>
+          <span class="meta"><span class="chip">Open chat</span><span class="chip">Open file</span></span></button>`).join('')}
+      </div></div></div>
+    </section>`).join('');
+  renderSlides();
+}
+
+function slide(el, opts, value, pick) {
+  el.querySelectorAll('button').forEach((b) => b.remove());
+  for (const o of opts) {
+    const b = document.createElement('button');
+    b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(o.id === value));
+    b.title = o.title ?? o.label; b.innerHTML = o.html; b.onclick = () => pick(o.id);
+    el.appendChild(b);
+  }
+  requestAnimationFrame(() => {
+    const on = el.querySelector('[aria-checked="true"]'); const t = el.querySelector('.thumb');
+    if (on) { t.style.width = on.offsetWidth + 'px'; t.style.transform = `translateX(${on.offsetLeft}px)`; }
+  });
+}
+function renderSlides() {
+  slide(document.getElementById('types'), [{ id: 'all', label: 'All', html: `All <span class="count">${items.length}</span>` }, ...order().map((k) => ({ id: k.id, label: k.label, html: `${k.label} <span class="count">${items.filter((i) => i.kind === k.id).length}</span>` }))], state.type, (v) => change(() => { state.type = v; }));
+  slide(document.getElementById('layouts'), LAYOUTS.map((l) => ({ id: l.id, label: l.label, html: `<svg viewBox="0 0 16 16" width="16" height="16">${l.svg}</svg>` })), state.layout, (v) => change(() => { state.layout = v; }));
+}
+function change(fn) {
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!document.startViewTransition || still) { fn(); render(); return; }
+  document.startViewTransition(() => { fn(); render(); });
+}
+document.addEventListener('click', (e) => {
+  const more = e.target.closest('[data-type]');
+  if (more) { e.stopPropagation(); change(() => { state.type = more.dataset.type; }); return; }
+  const t = e.target.closest('[data-toggle]');
+  if (t && state.type === 'all') { const id = t.dataset.toggle; state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id); document.querySelectorAll(`[data-toggle="${id}"]`).forEach((h) => { h.closest('.group').toggleAttribute('data-collapsed', state.collapsed.has(id)); h.setAttribute('aria-expanded', String(!state.collapsed.has(id))); }); }
+});
+render();
+</script>
+</body>
+</html>

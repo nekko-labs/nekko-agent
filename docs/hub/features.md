@@ -28,6 +28,8 @@ This is a capability guide, not a promise that every provider, platform or insta
 | Continue from a phone or folding phone | [Phone remote control](/docs/remote) and [foldable layouts](/docs/two-chats-on-a-folding-phone) | Native apps are beta; check platform and device-verification status |
 | Check inference speed and model cost | [Benchmarks](/docs/benchmarks) and [usage limits/prices](/docs/usage-limits) | Benchmarks are workload-specific; estimates are not provider invoices |
 
+Provider cards in Models label **Subscription** versus **API**. Claude Code uses its reported login mode: a Claude plan shows Subscription, while API-key and cloud logins show API. OpenRouter sign-in is still metered API billing. Local servers and unknown Claude login modes get neither label; connection health is shown separately.
+
 ## Can Nekko Agent work offline?
 
 **Yes, with a local model and local tasks after required software and model weights are downloaded.** Use [Connections](/docs/connections) to control Nekko-managed network access. Online providers, downloads, web tools, connectors and remote access need a network. Terminal commands can make their own network requests; Offline mode is not an operating-system firewall.

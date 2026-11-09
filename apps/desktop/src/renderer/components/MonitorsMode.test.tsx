@@ -14,24 +14,22 @@ vi.mock('../simpleMode.js', async (original) => ({ ...(await original<object>())
 vi.mock('../store.js', () => ({ useStore: (select: (s: unknown) => unknown) => select({ settings: {} }) }));
 vi.mock('../useLimits.js', () => ({ useProviderLimitsPortfolio: () => ({ byToken: {}, answered: new Set(), nextRefreshAt: null }) }));
 vi.mock('../accountEmails.js', async (orig) => ({ ...(await orig<typeof import('../accountEmails.js')>()), useAccountEmails: () => ({}) }));
-vi.mock('./InsightsBox.js', () => ({ InsightsBox: () => null }));
 vi.mock('./AutomationsPane.js', () => ({ AutomationsPane: () => null }));
 vi.mock('./ResourceMonitor.js', () => ({ MonitorComputerSwitch: () => null, useWatchedComputer: () => null, useMonitors: () => ({ cpu: true, memory: true, gpu: true, vram: true }), useResourceSample: () => ({ system: { cpuPct: 18, memUsedMB: 2048, memTotalMB: 8192 }, gpu: null }) }));
 import { MonitorsDock } from './MonitorsDock.js';
 
-const vitals = { working: 0, waiting: 0, automations: 0, terminals: 0, tokensToday: 0, spend: '$0', fleet: [] };
 const ALL = MONITORS.map((p) => p.key);
 
 function render(dock: Partial<CommandWallState['dock']>, setState = vi.fn()) {
   const state = { ...DEFAULT_WALL_STATE, dock: { ...DEFAULT_WALL_STATE.dock, ...dock } };
-  const html = renderToStaticMarkup(<MonitorsDock state={state} setState={setState} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} vitals={vitals} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
+  const html = renderToStaticMarkup(<MonitorsDock state={state} setState={setState} tasks={[]} running={new Set()} now={0} sessions={[]} providers={[]} usage={null} onOpenChat={vi.fn()} onOpenModels={vi.fn()} />);
   return { html, state, setState };
 }
 const shown = (html: string) => [...html.matchAll(/data-monitor="([a-zA-Z]+)"/g)].map((m) => m[1]);
 const checked = (keys: MonitorKey[]) => Object.fromEntries(ALL.map((k) => [k, keys.includes(k)])) as Record<MonitorKey, boolean>;
 
 describe('Monitors in Simple and Detailed', () => {
-  const picks: MonitorKey[][] = [ALL, ['hardware', 'budget'], ['utilization', 'localModels', 'insights'], ['automations']];
+  const picks: MonitorKey[][] = [ALL, ['hardware', 'budget'], ['utilization', 'localModels'], ['automations']];
   for (const expert of [false, true]) {
     it.each(picks)(`shows exactly the checked monitors in ${expert ? 'Detailed' : 'Simple'} (%s ...)`, (...keys) => {
       mode.expert = expert;
@@ -87,7 +85,7 @@ function findToggle(state: CommandWallState, setState: ReturnType<typeof vi.fn>)
   };
   // Render the dock component as a plain function to read its element tree.
   // Hooks need a dispatcher, so do it inside a throwaway static render.
-  function Probe() { visit((MonitorsDock as (p: unknown) => React.ReactNode)({ state, setState, tasks: [], running: new Set(), now: 0, sessions: [], providers: [], usage: null, vitals, onOpenChat: vi.fn(), onOpenModels: vi.fn() })); return null; }
+  function Probe() { visit((MonitorsDock as (p: unknown) => React.ReactNode)({ state, setState, tasks: [], running: new Set(), now: 0, sessions: [], providers: [], usage: null, onOpenChat: vi.fn(), onOpenModels: vi.fn() })); return null; }
   renderToStaticMarkup(<Probe />);
   if (!found) throw new Error('no hide button');
   return found;

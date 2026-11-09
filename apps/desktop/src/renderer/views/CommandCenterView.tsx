@@ -5,8 +5,7 @@ import { ChatPane } from '../components/ChatPane.js';
 import React, { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { AgentEvent, AutomationTask, PendingInput, SessionSummary, UsageSummary } from '@nekko-agent/shared';
-import type { AgentType } from '@nekko-agent/shared';
-import { AUTO_MODEL_ID, classifyAgent, classifySession, formatUSD } from '@nekko-agent/shared';
+import { AUTO_MODEL_ID } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { addCreatedSession, useStore } from '../store.js';
 import { putCachedSession } from '../sessionCache.js';
@@ -15,7 +14,6 @@ import { retryUntilAnswered } from '../retryUntilAnswered.js';
 import { runningSessionIds } from '../liveRuns.js';
 import { AgentPanelControls } from '../components/AgentPanelControls.js';
 import { CommandWall } from '../components/CommandWall.js';
-import { type Vitals } from '../components/InsightsBox.js';
 import { ContextMenu, ContextAction } from '../components/ContextMenu.js';
 import { MonitorsDock } from '../components/MonitorsDock.js';
 import { usePanelPresence } from '../usePanelPresence.js';
@@ -46,8 +44,6 @@ import {
 
 // Remotion is only needed for the one-time intro, so it loads with it.
 const ZonesIntro = lazy(() => import('../components/ZonesIntro.js'));
-
-const HOUR = 60 * 60_000;
 
 /**
  * The wall's storage as this window should see it: the main window reads and
@@ -205,12 +201,6 @@ export function CommandCenterView() {
 
   const refreshPending = () => { window.nekko.pendingInput().then(setPending).catch(() => {}); };
 
-  const taskBySession = useMemo(() => {
-    const m = new Map<string, AutomationTask>();
-    for (const t of tasks) if (t.lastSessionId) m.set(t.lastSessionId, t);
-    return m;
-  }, [tasks]);
-
   const eventVersions = useRef(new Map<string, number>());
 
   // Track running sessions live; a freshly spawned sub-agent re-lists sessions,
@@ -256,44 +246,6 @@ export function CommandCenterView() {
     for (const s of sessions) if (s.parentSessionId) m.set(s.parentSessionId, [...(m.get(s.parentSessionId) ?? []), s]);
     return m;
   }, [sessions]);
-  const topLevel = useMemo(() => sessions.filter((s) => !s.parentSessionId && !s.taskId && !s.trainingRunId && !s.archivedAt), [sessions]);
-  const isRunningSession = useMemo(
-    () => (s: SessionSummary) => running.has(s.id) || (childrenOf.get(s.id) ?? []).some((k) => running.has(k.id)),
-    [running, childrenOf],
-  );
-
-  const vitals = useMemo<Vitals>(() => {
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const todayTokens = usage?.daily.find((d) => d.date === todayKey);
-    const isSubscriptionSpend = !!usage?.hasSubscriptionUsage && (usage?.totalCost ?? 0) === 0;
-    type Member = { type: AgentType; running: boolean };
-    const members: Member[] = [];
-    for (const s of topLevel) {
-      if (!isRunningSession(s) && now - s.updatedAt >= 24 * HOUR) continue;
-      members.push({ type: classifySession(s, taskBySession.get(s.id)), running: isRunningSession(s) });
-    }
-    for (const t of tasks) {
-      if (t.status !== 'active') continue;
-      members.push({ type: classifyAgent({ taskKind: t.kind, taskCondition: t.condition, prompt: t.prompt }), running: !!t.lastSessionId && running.has(t.lastSessionId) });
-    }
-    const byRole = new Map<string, { type: AgentType; count: number; live: number }>();
-    for (const m of members) {
-      const e = byRole.get(m.type.role) ?? { type: m.type, count: 0, live: 0 };
-      e.count++;
-      if (m.running) e.live++;
-      byRole.set(m.type.role, e);
-    }
-    return {
-      working: running.size,
-      waiting: topLevel.filter((s) => !!pending[s.id]).length,
-      automations: tasks.filter((t) => t.status === 'active').length,
-      terminals: terminals.filter((t) => t.running).length,
-      tokensToday: todayTokens ? todayTokens.input + todayTokens.output : 0,
-      spend: isSubscriptionSpend ? 'Included in plan' : formatUSD(usage?.totalCost ?? 0),
-      fleet: [...byRole.values()].sort((a, b) => b.count - a.count),
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [usage, topLevel, tasks, running, pending, terminals, taskBySession, isRunningSession]);
 
   const openChat = (id: string) => openChatPane(id);
   const openTerminal = (id: string) => openTerminalPane(id);
@@ -551,7 +503,7 @@ export function CommandCenterView() {
           setAddOpen(false);
         }} />
       <div className="wall-workspace" data-dock-side={wall.dock.side}>
-        <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} vitals={vitals} onOpenChat={openChat} onOpenModels={() => setView('models')} />
+        <MonitorsDock state={wall} setState={setWall} tasks={tasks} running={running} now={now} sessions={sessions} providers={providers} usage={usage} onOpenChat={openChat} onOpenModels={() => setView('models')} />
         <div ref={agentWorkspaceRef} className="wall-agent-workspace" data-tabs={agentsPresent && panel.orientation === 'horizontal' ? 'top' : 'left'}>
       {!panel.show && <div className="agent-panel-collapsed" data-orientation={panel.orientation}>
         <AgentPanelControls show={false} orientation={panel.orientation}

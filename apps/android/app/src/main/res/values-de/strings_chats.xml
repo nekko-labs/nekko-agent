@@ -248,4 +248,9 @@
     <string name="chats_group_month">Letzte 30 Tage</string>
     <string name="chats_group_older">Älter</string>
     <string name="chats_tool_step_up">%2$s in diesem Chat auf %1$s immer erlauben</string>
+    <string name="chats_pair_success_title">Verbunden!</string>
+    <string name="chats_pair_success_named">%1$s ist gekoppelt. Die Chats sind unterwegs.</string>
+    <string name="chats_pair_success_body">Dein Computer ist gekoppelt. Die Chats sind unterwegs.</string>
+    <string name="chats_pair_success_done">Los geht’s</string>
+    <string name="chats_pair_success_illustration">Dein Computer und dieses Telefon sind verbunden</string>
 </resources>

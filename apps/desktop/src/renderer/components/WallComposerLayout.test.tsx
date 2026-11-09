@@ -44,10 +44,13 @@ describe('wall composer layout', () => {
     expect(html).not.toContain('data-composer-automate');
   });
 
-  it('puts mode and incognito in the bottom bar beside +', () => {
+  it('keeps incognito beside + and Mode in its shared suggestions row', () => {
     const html = renderWallComposer();
     const foot = region(html, 'data-composer-foot');
-    expect(foot).toContain('data-chat-mode-button');
+    expect(foot).not.toContain('data-chat-mode-button');
+    expect(html.match(/data-composer-mode-row/g)).toHaveLength(1);
+    expect(region(html, 'data-composer-mode-row')).toContain('data-chat-mode-button');
+    expect(html.indexOf('data-composer-mode-row')).toBeGreaterThan(html.indexOf('data-composer-action'));
     expect(foot).toContain('Incognito');
     expect(html.indexOf('aria-label="Add a photo, video, file, folder, or skill"')).toBeLessThan(html.indexOf('data-composer-foot'));
     // Tools and MCP stay in the window, not in the composer's foot.

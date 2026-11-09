@@ -1,5 +1,4 @@
-import { ModeSwitch } from './ModeViews.js';
-import { openCustomize } from './CustomizeExperience.js';
+import './agentPanelViewMenu.css';
 import { useStore } from '../store.js';
 import { useShown } from '../simpleMode.js';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -10,7 +9,7 @@ import {
   type AgentGroupBy, type AgentPanelView, type AgentSortBy,
 } from '../views/agentPanelView.js';
 
-type Sub = 'group' | 'sort' | 'show' | 'details';
+type Sub = 'group' | 'sort' | 'show';
 
 const MENU_W = 236;
 const SUB_W = 210;
@@ -48,7 +47,8 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
       if (e.key !== 'Escape') return;
       e.preventDefault();
       // Escape backs out of a submenu first, then closes the menu.
-      setSub((open) => { if (!open) onClose(); return null; });
+      if (subRef.current) setSub(null);
+      else onClose();
     };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', key);
@@ -68,8 +68,9 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
     if (!row) { setSubPos(null); return; }
     const r = row.getBoundingClientRect();
     const h = subRef.current?.offsetHeight ?? 180;
+    const width = Math.min(sub === 'show' ? 470 : SUB_W, window.innerWidth - 16);
     const right = r.right + 6;
-    const left = right + SUB_W > window.innerWidth - 8 ? Math.max(8, r.left - SUB_W - 6) : right;
+    const left = right + width > window.innerWidth - 8 ? Math.max(8, r.left - width - 6) : right;
     setSubPos({ left, top: Math.max(8, Math.min(r.top - 6, window.innerHeight - h - 8)) });
   }, [sub]);
 
@@ -126,12 +127,9 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
           items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
         }}
       >
-        <div className="mb-2"><ModeSwitch labels /></div>
-        <button role="menuitem" className="btn btn-ghost mb-2 w-full justify-start" onClick={() => { onClose(); openCustomize(); }}>Customize…</button>
         {topRow('group', 'Group by', GROUP_BY_LABELS[view.groupBy])}
         {topRow('sort', 'Sort by', SORT_BY_LABELS[view.sortBy])}
         {topRow('show', 'Show')}
-        {topRow('details', 'Card details')}
         <div className="mx-2 my-1 h-px bg-line" role="separator" />
         <button
           role="menuitem"
@@ -147,10 +145,10 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
         <div
           ref={subRef}
           role="menu"
-          aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : sub === 'details' ? 'Card details' : 'Show'}
+          aria-label={sub === 'group' ? 'Group by' : sub === 'sort' ? 'Sort by' : 'Show'}
           data-agent-view-submenu={sub}
           className="context-menu card fixed z-[1001] max-h-[calc(100vh-16px)] overflow-y-auto p-2 shadow-(--shadow-float)"
-          style={{ width: SUB_W, left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
+          style={{ width: Math.min(sub === 'show' ? 470 : SUB_W, window.innerWidth - 16), left: subPos?.left ?? -9999, top: subPos?.top ?? -9999 }}
           onMouseEnter={keepSub}
           onMouseLeave={closeSubSoon}
           onContextMenu={(e) => e.preventDefault()}
@@ -182,16 +180,7 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
             <Choice checked={view.sortBy !== 'manual' && view.direction === 'desc'} disabled={view.sortBy === 'manual'} onClick={() => set({ direction: 'desc' })}>Descending</Choice>
             <Choice checked={view.sortBy !== 'manual' && view.direction === 'asc'} disabled={view.sortBy === 'manual'} onClick={() => set({ direction: 'asc' })}>Ascending</Choice>
           </>}
-          {sub === 'details' && <>
-            <Choice toggle checked={view.showModel} onClick={() => set({ showModel: !view.showModel })}>Model</Choice>
-            <Choice toggle checked={view.showContext} onClick={() => set({ showContext: !view.showContext })}>Context window</Choice>
-            <Choice toggle checked={view.showPullRequests} onClick={() => set({ showPullRequests: !view.showPullRequests })}>Pull requests</Choice>
-            <Choice toggle checked={view.showGit} onClick={() => set({ showGit: !view.showGit })}>Git branch</Choice>
-            <Choice toggle checked={view.showSubagents} onClick={() => set({ showSubagents: !view.showSubagents })}>Sub-agent count</Choice>
-            <Choice toggle checked={view.showWindows} onClick={() => set({ showWindows: !view.showWindows })}>Window count</Choice>
-            <Choice toggle checked={view.showUpdated} onClick={() => set({ showUpdated: !view.showUpdated })}>Last reply time</Choice>
-          </>}
-          {sub === 'show' && <>
+          {sub === 'show' && <div className="agent-show-columns"><section aria-label="Show in the panel"><h3 className="agent-show-heading">Show</h3>
             <Choice toggle checked={view.showMetadata} onClick={() => set({ showMetadata: !view.showMetadata })}
               title="The model, context, git and sub-agent lines under each card">Metadata</Choice>
             {hasComputers && <Choice toggle checked={view.showComputer} onClick={() => set({ showComputer: !view.showComputer })}
@@ -203,7 +192,10 @@ export function AgentPanelViewMenu({ x, y, view, onChange, onClose }: {
               title="Chats an automation started">Automations</Choice>
             <Choice toggle checked={view.showEmptyGroups} onClick={() => set({ showEmptyGroups: !view.showEmptyGroups })}
               title="Groups with no active agents">Empty groups</Choice>
-          </>}
+            </section><section aria-label="Card details"><h3 className="agent-show-heading">Card details</h3>
+              <p className="agent-show-hint">Click a dotted area to show or hide it.</p>
+              <AgentCardPreview view={view} onChange={onChange} />
+            </section></div>}
         </div>
       )}
     </>,
@@ -237,4 +229,31 @@ function Choice({ checked, toggle = false, disabled = false, title, onClick, chi
       <CheckIcon className={`h-3.5 w-3.5 shrink-0 text-accent ${checked ? '' : 'invisible'}`} />
     </button>
   );
+}
+
+export const CARD_DETAIL_OPTIONS = [
+  ['showModel', 'Model', 'Nekko · Local model'],
+  ['showContext', 'Context window', '24k / 128k context'],
+  ['showPullRequests', 'Pull requests', 'PR #42 · Open'],
+  ['showGit', 'Git branch', 'feature/new-design'],
+  ['showSubagents', 'Sub-agent count', '2 sub-agents'],
+  ['showWindows', 'Window count', '3 windows'],
+  ['showUpdated', 'Last reply time', '2 minutes ago'],
+] as const;
+
+/** A synthetic example, never a user's chat or repository. Hidden details remain discoverable. */
+export function AgentCardPreview({ view, onChange }: { view: AgentPanelView; onChange: (next: AgentPanelView) => void }) {
+  return <div className="agent-card-preview">
+    <span className="agent-card-preview__status">Working · Sample card</span>
+    <strong>Polish the app layout</strong>
+    {CARD_DETAIL_OPTIONS.map(([key, label, sample]) => {
+      const metadata = key !== 'showUpdated' && key !== 'showPullRequests';
+      const checked = view[key] && (!metadata || view.showMetadata);
+      return <button type="button" key={key} role="menuitemcheckbox" aria-label={label} aria-checked={checked}
+        className="agent-card-preview__detail" data-detail={key}
+        onClick={() => onChange({ ...view, [key]: !checked, ...(!checked && metadata ? { showMetadata: true } : {}) })}>
+        <span>{checked ? sample : label}</span><span aria-hidden="true">{checked ? '✓' : '+'}</span>
+      </button>;
+    })}
+  </div>;
 }

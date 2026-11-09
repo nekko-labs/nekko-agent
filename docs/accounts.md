@@ -19,7 +19,9 @@ Local model servers (Ollama, LM Studio, vLLM, the built-in engine) are computers
 
 ## Switching accounts
 
-When the chat's provider has more than one account, the model picker opens with an **Account** row at the top. Click another account and the chat moves to the same model on that account. An account greys out when it does not offer the chat's model.
+The model picker groups your providers by what they sell: **Claude** holds your Claude subscription logins, Anthropic API keys and Bedrock, Vertex or Foundry accounts; **OpenAI** holds ChatGPT plans and OpenAI API keys. When a group has more than one account, its accounts show as tabs under the heading, named the way you know them: **Personal · Max** for your own plan, your organization's name for a work seat (**Acme Inc · Team**), and an API key by the name you gave it (**Production · API**). If every account uses the same email, it shows once beside the heading. A dot marks the account this chat is on, and the model button names the account too.
+
+Click another account in the chat's own group and the chat moves to the same model on that account in one click. If that account does not offer the model, the tab just shows its models and nothing changes until you pick one. Searching lists a model on every account at once, each row naming its account.
 
 ![Switching a chat to another account](diagrams/accounts-switching.svg)
 
@@ -38,12 +40,12 @@ Nekko does not switch accounts on its own unless you ask it to: in a chat on **�
 
 **Your first subscription account** takes one press: **Add provider → Claude → Subscription** shows three steps, *Install Claude Code*, *Sign in* and *Connect*, starting at the one your computer has reached. Press the button and each step starts when the last one finishes; you only need to sign in when your browser opens.
 
-**API accounts** (an Anthropic API key, or Bedrock, Vertex or Foundry) work like any other API provider: choose **Add provider → Claude → API → Connect** once per key or cloud account.
+**API accounts** (an Anthropic API key, or Bedrock, Vertex or Foundry) work like any other API provider: choose **Add provider → Claude → API → Connect** once per key or cloud account. Give each a recognizable **Connection name**, such as `Production API` or `Sandbox API`, before saving. Adding another key creates a separate connection; it does not replace the previous key.
 
 **Subscription accounts** run the Claude Code you already have installed. Each one is a separate Claude Code login:
 
-1. On the Models page, choose **Add provider → Claude**, then the **Subscription** column. Your usual Claude Code login connects first.
-2. Choose **+ Another subscription account** and give it a name, such as `Work`. Nekko shows the folder Claude Code will keep that login in: `~/.claude-work`.
+1. On the Models page, choose **Add provider → Claude**, then the **Subscription** column. Connect your usual Claude Code login, or choose **+ Another subscription account** for a separate named profile.
+2. Choose **+ Another subscription account** and give it a name, such as `Work`. Nekko shows the folder Claude Code will keep that login in: `~/.claude-work`. A profile name a saved connection already uses is blocked before sign-in, even if that connection is turned off. Choose a different name rather than overwriting its login.
 3. Choose **Sign in to Work**. A terminal opens inside the panel and runs Claude Code's own sign-in on that folder (`claude auth login --claudeai`), which opens Anthropic's sign-in page in your browser. Sign in there; if no page opens, open the link the terminal shows and paste back any code it asks for. The panel moves on by itself once you're signed in.
 4. Nekko reads who the new login is (`claude auth status` prints its email, organization and plan) and checks it against the accounts you already have:
    - **A different person or organization** (say, your company's Team seat beside your personal Max plan): **Add Work** is ready.
@@ -62,7 +64,7 @@ CLAUDE_CONFIG_DIR=~/.claude-work claude
 
 ### Personal and work subscriptions under the same email
 
-Use **+ Another subscription account** and name it `Work`, then sign in through Claude Code and choose your organization in Anthropic's browser flow when offered. Your personal login stays in its own profile. Nekko distinguishes accounts by email **and organization**, not just email, and the model picker's **Account** row lets you choose between connected profiles.
+Use **+ Another subscription account** and name it `Work`, then sign in through Claude Code and choose your organization in Anthropic's browser flow when offered. Your personal login stays in its own profile. Nekko distinguishes accounts by email **and organization**, not just email, and the model picker shows both as tabs under **Claude** (for example **Personal · Max** and **Acme Inc · Team**), one click apart.
 
 One sign-in does **not** automatically populate every organization associated with your email. Claude Code documents separate configuration directories for simultaneous personal/work logins, not an API to enumerate every membership. Organization policies and Claude Code entitlement still apply. See the [investigation and verification limits](claude-account-selection.md).
 
