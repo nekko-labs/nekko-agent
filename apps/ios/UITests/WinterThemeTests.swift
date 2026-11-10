@@ -49,7 +49,13 @@ final class WinterThemeTests: XCTestCase {
     }
 
     private func waitValue(_ element: XCUIElement, _ value: String, timeout: TimeInterval) -> Bool {
-        XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: element)], timeout: timeout) == .completed
+        // Greeting and fixture refresh last 1.2s; predicate expectations poll too slowly.
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if element.value as? String == value { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        } while Date() < deadline
+        return false
     }
 
     private func attach(_ app: XCUIApplication, _ name: String) {
