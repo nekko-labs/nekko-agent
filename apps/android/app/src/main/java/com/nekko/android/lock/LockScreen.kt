@@ -24,8 +24,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -177,7 +176,7 @@ private fun LockScreen(epoch: Int, locked: Boolean, lock: AppLock, authenticator
                 colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Splash.GROUND),
                 modifier = Modifier.widthIn(min = 200.dp).height(48.dp).testTag("lock.unlock"),
             ) {
-                Icon(Icons.Filled.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Outlined.Fingerprint, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(8.dp))
                 Text(stringResource(R.string.settings_unlock))
             }

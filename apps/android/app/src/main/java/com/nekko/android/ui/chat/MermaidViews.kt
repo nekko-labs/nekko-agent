@@ -34,12 +34,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Schema
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
@@ -157,11 +157,11 @@ internal fun MermaidBlock(source: String, closed: Boolean, style: MarkdownStyle)
                                 .testTag("mermaid.diagram"),
                         )
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                            DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_source)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = {
+                            DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_source)) }, leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) }, onClick = {
                                 menu = false
                                 scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Diagram", source))) }
                             })
-                            DropdownMenuItem(text = { Text(sourceLabel) }, leadingIcon = { Icon(Icons.Filled.Code, null) }, onClick = {
+                            DropdownMenuItem(text = { Text(sourceLabel) }, leadingIcon = { Icon(Icons.Outlined.Code, null) }, onClick = {
                                 menu = false
                                 showSource = !showSource
                             })
@@ -232,27 +232,27 @@ private fun MermaidScreen(source: String, drawing: MermaidRenderer.Drawing, dark
                 TopAppBar(
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                     title = { Text(stringResource(R.string.chat_diagram)) },
-                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("mermaid.done")) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_done)) } },
+                    navigationIcon = { IconButton(onClick = onDismiss, modifier = Modifier.testTag("mermaid.done")) { Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.chat_done)) } },
                     actions = {
                         Box {
-                            IconButton(onClick = { menu = true }, modifier = Modifier.testTag("mermaid.actions")) { Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.chat_diagram_actions)) }
+                            IconButton(onClick = { menu = true }, modifier = Modifier.testTag("mermaid.actions")) { Icon(Icons.Outlined.MoreVert, contentDescription = stringResource(R.string.chat_diagram_actions)) }
                             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_source)) }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) }, onClick = {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_copy_source)) }, leadingIcon = { Icon(Icons.Outlined.ContentCopy, null) }, onClick = {
                                     menu = false
                                     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Diagram", source))) }
                                     note = resources.getString(R.string.chat_copied_source)
                                 })
-                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_share_image)) }, leadingIcon = { Icon(Icons.Filled.Share, null) }, onClick = {
+                                DropdownMenuItem(text = { Text(stringResource(R.string.chat_share_image)) }, leadingIcon = { Icon(Icons.Outlined.Share, null) }, onClick = {
                                     menu = false
                                     scope.launch { shareImage(context, drawing.image) }
                                 })
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                    DropdownMenuItem(text = { Text(stringResource(R.string.chat_save_to_photos)) }, leadingIcon = { Icon(Icons.Filled.Save, null) }, onClick = {
+                                    DropdownMenuItem(text = { Text(stringResource(R.string.chat_save_to_photos)) }, leadingIcon = { Icon(Icons.Outlined.Save, null) }, onClick = {
                                         menu = false
                                         scope.launch { note = if (saveToPhotos(context, drawing.image)) resources.getString(R.string.chat_saved_to_photos) else resources.getString(R.string.chat_save_failed) }
                                     })
                                 }
-                                DropdownMenuItem(text = { Text(if (showSource) stringResource(R.string.chat_show_diagram) else stringResource(R.string.chat_show_source)) }, leadingIcon = { Icon(Icons.Filled.Code, null) }, onClick = {
+                                DropdownMenuItem(text = { Text(if (showSource) stringResource(R.string.chat_show_diagram) else stringResource(R.string.chat_show_source)) }, leadingIcon = { Icon(Icons.Outlined.Code, null) }, onClick = {
                                     menu = false
                                     showSource = !showSource
                                 })

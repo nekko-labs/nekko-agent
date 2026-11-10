@@ -27,10 +27,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -115,8 +115,8 @@ private fun Page(title: String, onBack: () -> Unit, close: Boolean = false, acti
                 title = { Text(title, modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        if (close) Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_cancel))
-                        else Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back))
+                        if (close) Icon(Icons.Outlined.Close, contentDescription = stringResource(R.string.settings_cancel))
+                        else Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.settings_back))
                     }
                 },
                 actions = { actions() },
@@ -179,7 +179,7 @@ private fun ProviderList(repo: ComputersRepository, setup: ProviderSetupControll
             }
             item {
                 TextButton(onClick = add, enabled = online, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("providers.add")) {
-                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text(addLabel, modifier = Modifier.padding(start = 8.dp))
                 }
                 Note(
@@ -289,7 +289,7 @@ private fun AddProviderPage(repo: ComputersRepository, setup: ProviderSetupContr
                     modifier = Modifier.fillMaxWidth().testTag("provider.key"),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(Icons.Filled.Lock, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                    Icon(Icons.Outlined.Lock, contentDescription = null, tint = p.inkSoft, modifier = Modifier.size(16.dp).padding(top = 2.dp))
                     Note(stringResource(R.string.settings_sealed_note, computer))
                 }
             }

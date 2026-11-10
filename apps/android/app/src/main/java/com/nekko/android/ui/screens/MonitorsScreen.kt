@@ -22,10 +22,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -119,7 +119,7 @@ fun MonitorsScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = p.paper),
                 navigationIcon = {
                     if (onBack != null) {
-                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.settings_back)) }
+                        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.settings_back)) }
                     }
                 },
                 actions = { pane?.actions?.invoke(this) },
@@ -197,7 +197,7 @@ fun MonitorsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(Icons.Filled.Schedule, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.Schedule, contentDescription = null, tint = p.inkFaint, modifier = Modifier.size(16.dp))
                     Text(plainText(a.name).ifEmpty { automationName }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Text(MonitorSummary.nextRun(a.nextRunAt, now), style = MaterialTheme.typography.bodySmall, color = p.inkFaint)
                 }
@@ -284,7 +284,7 @@ private fun RunningRow(r: MonitorSummary.Running, elapsedMs: Long?, onOpen: () -
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(if (tone == Tone.WARNING) Icons.Filled.Warning else Icons.Filled.Bolt, contentDescription = null, tint = toneColor(tone), modifier = Modifier.size(16.dp))
+        Icon(if (tone == Tone.WARNING) Icons.Outlined.Warning else Icons.Outlined.Bolt, contentDescription = null, tint = toneColor(tone), modifier = Modifier.size(16.dp))
         Column(Modifier.weight(1f)) {
             Text(plainText(r.title).ifEmpty { stringResource(R.string.settings_chat) }, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(step, style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
