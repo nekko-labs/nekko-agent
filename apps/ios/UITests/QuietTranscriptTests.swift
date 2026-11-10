@@ -16,6 +16,8 @@ final class QuietTranscriptTests: XCTestCase {
             let progress = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Progress note")).firstMatch
             XCTAssertTrue(context.exists)
             XCTAssertTrue(progress.exists)
+            XCTAssertTrue(app.staticTexts["Please keep the new prompt visible."].exists)
+            XCTAssertFalse(app.staticTexts["The long workspace context stays available on demand."].exists)
             XCTAssertFalse(app.staticTexts["I'll read the test and the page it waits on first."].exists)
             context.tap()
             XCTAssertTrue(app.staticTexts["The long workspace context stays available on demand."].waitForExistence(timeout: 3))
@@ -34,6 +36,9 @@ final class QuietTranscriptTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        field.typeText("Keep this unsent draft")
+        let draft = field.value as? String
+        XCTAssertTrue(draft?.contains("Keep this unsent draft") == true)
         attach(app, "active-chat-keyboard-open")
         if !baseline {
             let dismiss = app.buttons["composer.hideKeyboard"]
@@ -42,6 +47,7 @@ final class QuietTranscriptTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(dismiss.frame.height, 44 - 0.001)
             dismiss.tap()
             XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
+            XCTAssertEqual(field.value as? String, draft)
             attach(app, "active-chat-keyboard-dismissed")
         }
     }

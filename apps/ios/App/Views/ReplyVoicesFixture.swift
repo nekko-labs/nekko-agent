@@ -33,7 +33,7 @@ struct ReplyVoicesFixture: View {
 
     private var blocks: [Block] {
         if ProcessInfo.processInfo.arguments.contains("-uiTestQuietContext") {
-            return [.user(id: "context", text: "Summary of the earlier conversation, compacted to save context:\n\n## Task and workspace\nThe long workspace context stays available on demand.", at: nil, images: 0)] + Self.blocks
+            return [.user(id: "context", text: "Summary of the earlier conversation, compacted to save context:\n\n## Task and workspace\nThe long workspace context stays available on demand.\n\n---\n\nPlease keep the new prompt visible.", at: nil, images: 0)] + Self.blocks
         }
         return Self.blocks
     }
