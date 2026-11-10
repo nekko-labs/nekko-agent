@@ -282,7 +282,7 @@ class OutboxTest {
     fun `offline the box is not blocked, and says the prompt will wait`() {
         val ui = ChatController.project(com.nekko.android.chat.ChatState(), ChatEnv(RelayState.OFFLINE, null, RemoteDefaults(), "Mac", canQueue = true))
         assertNull(ui.blocked)
-        assertEquals("Mac is offline. What you send waits on this phone and goes when it’s back.", ui.sendsLater)
+        assertEquals("Mac is offline.\nYour draft will be saved here and sent when reconnected", ui.sendsLater)
         val unpaired = ChatController.project(com.nekko.android.chat.ChatState(), ChatEnv(RelayState.DENIED, null, RemoteDefaults(), "Mac", canQueue = true))
         assertEquals("This phone is no longer paired.", unpaired.blocked)
     }

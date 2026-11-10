@@ -327,12 +327,13 @@ final class SavedListNoteTests: XCTestCase {
         XCTAssertGreaterThan(old.count, today.count, "an older list also names the day")
     }
 
-    func testASavedChatSaysItIsACopy() {
+    func testASavedChatShowsOnlyItsLastUpdate() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let text = SavedListNote.copy(savedAt: Int64((now.timeIntervalSince1970 - 600) * 1000), computer: "Mac", now: now,
                                       calendar: Calendar(identifier: .gregorian))
-        XCTAssertTrue(text.hasPrefix("Saved copy from "))
-        XCTAssertTrue(text.hasSuffix("It updates when Mac answers."))
+        XCTAssertTrue(text.hasPrefix("Updated last on "))
+        XCTAssertFalse(text.contains("Mac"))
+        XCTAssertFalse(text.contains("Saved copy"))
     }
 }
 

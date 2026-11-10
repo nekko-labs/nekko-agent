@@ -1194,12 +1194,10 @@ struct Composer: View {
             if let blocked = chat.blocked {
                 Text(blocked).font(.caption).foregroundStyle(palette.warning)
             } else if let note = chat.offlineNote {
-                // On its own surface: over the bar's translucent material its contrast depended on what scrolled behind.
-                Label(note, systemImage: "tray.and.arrow.up").font(.caption).foregroundStyle(palette.ink)
+                Text(note).font(.caption).foregroundStyle(palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(palette.surface, in: RoundedRectangle(cornerRadius: 10))
                     .accessibilityIdentifier("chat.offlineNote")
             }
             if let refusal {

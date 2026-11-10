@@ -98,3 +98,14 @@ Talk to Nekko opens a foreground sheet behind the app lock; entry never starts t
 ### Image settings fallback and localized resources (2026-11-08)
 
 When an image session has no saved image parameters, sending refuses explicitly and asks the owner to choose/save settings. The settings editor uses the protocol default CFG4, not an artificial invalid CFG4.5. Saved fractional parameters are preserved exactly and still require explicit correction; no automatic rounding or unsigned fallback is introduced. Voice/image resource keys are translated into all six existing additional locales; key/placeholder and XML checks pass, while native localized rendering and linguistic review remain unverified.
+
+### Quiet reconnecting notices (#2473)
+
+Implemented in native iOS and Android source; native iOS compilation and matching visual evidence remain pending until the hosted verification run is inspected.
+
+- Ordinary reconnecting is a borderless, background-free status row: 'Reconnecting to {computer}...'. The computer name remains dynamic. A small opacity-pulsing status dot sits beside the text instead of a refresh symbol. System Reduce Motion / disabled animations leaves it still.
+- When the outbox contains prompts, a separate supporting line says '1 prompt will send when reconnected.' or '{n} prompts will send when reconnected.'. Hide it for zero prompts.
+- The text-chat composer says '{computer} is reconnecting.', then on the next line 'Your draft will be saved here and sent when reconnected'. An actually offline computer still says offline. Image chats retain their no-text-queue explanation.
+- A saved transcript shows only 'Updated last on {timestamp}', preserving the existing localized time and date for older copies. The saved-list explanation is unchanged.
+- Retry, pairing repair, Tailscale help and safety exits remain available. Delivery, queue persistence, encryption and authorization are unchanged. No notice sends a draft merely because it was typed; the existing Send action still queues it.
+- Acceptance: names and singular/plural counts remain correct, zero count hides the line, no reconnect card/background remains, the pulse rests with reduced motion, and saved-copy metadata is one timestamp. Matching native screenshots and pulse recordings verify layout and motion; untested physical-device, large-text and foldable postures must not be claimed verified.

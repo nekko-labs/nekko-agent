@@ -1,7 +1,5 @@
 package com.nekko.android.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.MoreVert
@@ -21,6 +18,21 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import android.animation.ValueAnimator
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,7 +41,6 @@ import com.nekko.android.ui.security.SafetyExitMenuItems
 import com.nekko.android.ui.security.SafetyExits
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -88,6 +99,7 @@ fun ConnectionBanner(
     onComputers: () -> Unit,
     modifier: Modifier = Modifier,
     exits: SafetyExits? = null,
+    queuedCount: Int = 0,
 ) {
     val active = s.active
     if (active == null) {
@@ -129,15 +141,14 @@ fun ConnectionBanner(
         repair -> stringResource(R.string.chats_pair_again)
         else -> stringResource(R.string.chats_manage_computers)
     }
+    val specialError = stopped || denied || badKey || hint != null || tailnetHint != null || hostGone
+    val pulse = reconnectPulse(s.conn, specialError, systemAnimationsEnabled())
     var menu by remember { mutableStateOf(false) }
     Column(modifier) {
         Row(
             Modifier
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(p.surface)
-                .border(1.dp, p.line, RoundedCornerShape(12.dp))
                 .clickable(
                     role = Role.Button,
                     onClickLabel = clickLabel,
@@ -149,16 +160,28 @@ fun ConnectionBanner(
                     }
                 }
                 .heightIn(min = 48.dp)
-                .padding(start = 16.dp, end = if (exits != null) 4.dp else 16.dp, top = 12.dp, bottom = 12.dp),
+                .padding(start = 4.dp, end = if (exits != null) 0.dp else 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Dot(tone)
-            Column(Modifier.weight(1f)) {
-                Text(line, style = MaterialTheme.typography.bodyMedium, color = p.ink, maxLines = if (hint != null || denied || badKey || hostGone) 5 else 2, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ConnectionDot(tone, pulse)
+                    Text(line, style = MaterialTheme.typography.bodyMedium, color = p.inkSoft, maxLines = if (hint != null || denied || badKey || hostGone) 5 else 2, overflow = TextOverflow.Ellipsis)
+                }
+                if (queuedCount > 0 && s.conn != RelayState.ONLINE) {
+                    Text(
+                        if (queuedCount == 1) stringResource(R.string.chats_outbox_note_one, active.name)
+                        else stringResource(R.string.chats_outbox_note_other, queuedCount, active.name),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = p.inkFaint,
+                        modifier = Modifier.padding(start = 16.dp).testTag("chats.outboxNote"),
+                    )
+                }
                 if (s.conn == RelayState.ONLINE && !denied) {
                     Text(
                         stringResource(R.string.chats_encrypted_via, Pairing.relayHost(route)),
+                        modifier = Modifier.padding(start = 16.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = p.inkFaint,
                     )
@@ -183,4 +206,39 @@ fun ConnectionBanner(
         }
         exits?.outcome?.let { (msg, msgTone) -> Notice(msg, msgTone, Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
     }
+}
+
+/** Only an ordinary reconnect pulses, never an offline, refused or repair state. */
+internal fun reconnectPulse(conn: RelayState, specialError: Boolean, animationsEnabled: Boolean): Boolean =
+    animationsEnabled && !specialError && conn in setOf(RelayState.CONNECTING, RelayState.IDLE)
+
+@Composable
+private fun ConnectionDot(tone: Tone, pulse: Boolean) {
+    val opacity = if (pulse) {
+        val transition = rememberInfiniteTransition(label = "reconnecting")
+        val alpha by transition.animateFloat(
+            initialValue = 0.55f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+            label = "reconnecting dot",
+        )
+        alpha
+    } else 1f
+    Dot(tone, Modifier.alpha(opacity).testTag("connection.dot"))
+}
+
+/** Observe Remove animations live, including a change while this screen is open. */
+@Composable
+private fun systemAnimationsEnabled(): Boolean {
+    val resolver = LocalContext.current.contentResolver
+    var enabled by remember(resolver) { mutableStateOf(ValueAnimator.areAnimatorsEnabled()) }
+    DisposableEffect(resolver) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) { enabled = ValueAnimator.areAnimatorsEnabled() }
+        }
+        resolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
+        enabled = ValueAnimator.areAnimatorsEnabled()
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+    return enabled
 }

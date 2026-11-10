@@ -424,18 +424,10 @@ fun ChatsScreen(
                             state = list,
                             contentPadding = PaddingValues(top = if (searching) 0.dp else pill.topInset(simple.pill), bottom = 96.dp),
                         ) {
-                            item(key = "banner") { ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits) }
-                            // Offline mode: what waits on the phone, and chats started offline not created yet.
-                            if (outbox.waiting.isNotEmpty() && s.conn != RelayState.ONLINE) {
-                                item(key = "outbox-note") {
-                                    val n = outbox.waiting.size
-                                    Notice(
-                                        if (n == 1) stringResource(R.string.chats_outbox_note_one, active.name) else stringResource(R.string.chats_outbox_note_other, n, active.name),
-                                        Tone.FAINT,
-                                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("chats.outboxNote"),
-                                    )
-                                }
+                            item(key = "banner") {
+                                ConnectionBanner(s, onPair = onPair, onComputers = onComputers, exits = exits, queuedCount = outbox.waiting.size)
                             }
+                            // Chats started offline have not been created on the computer yet.
                             val pendingNew = outbox.pendingNewChats.filter { it.id !in outbox.direct }
                             if (pendingNew.isNotEmpty()) {
                                 item(key = "pending-header") { SectionHeader(stringResource(R.string.chats_waiting_to_send)) }
@@ -1179,13 +1171,13 @@ internal fun savedListNote(
     template: String = "Saved list from %1\$s. It updates when %2\$s answers.",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
-/** "Saved copy from 10:42. It updates when Mac answers.": a chat read from the phone's copy (OF-5). */
+/** The last update time of a chat read from the phone's saved copy (OF-5). */
 internal fun savedCopyNote(
     savedAt: Long,
     computer: String,
     now: Long = System.currentTimeMillis(),
     zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
-    template: String = "Saved copy from %1\$s. It updates when %2\$s answers.",
+    template: String = "Updated last on %1\$s",
 ): String = savedNote(template, savedAt, computer, now, zone)
 
 private fun savedNote(template: String, savedAt: Long, computer: String, now: Long, zone: java.time.ZoneId): String {

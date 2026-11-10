@@ -92,7 +92,7 @@ struct NekkoApp: App {
 enum NativeFixtureRoute {
     static var isolated: Bool {
         #if DEBUG
-        let flags = ["-uiTestPermissionsSettings", "-uiTestNotificationStep", "-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
+        let flags = ["-uiTestQuietReconnectEvidence", "-uiTestPermissionsSettings", "-uiTestNotificationStep", "-uiTestComputerSettingsEvidence", "-uiTestChatRefresh", "-uiTestNewChat", "-uiTestMarkdownLab", "-uiTestChatStatus",
                      "-uiTestPurposeGroups", "-uiTestReplyVoices", "-uiTestModelTabs",
                      "-uiTestTurnDetails", "-uiTestAttentionNotifications", "-uiTestSystemAttentionNotifications",
                      "-uiTestSecurityEvidence", "-uiTestRunSettings", "-uiTestStarAsk"]
@@ -120,6 +120,7 @@ private struct NativeAppContent: View {
     /// The app, or (Debug builds) a fixture the UI tests photograph.
     @ViewBuilder private var root: some View {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-uiTestQuietReconnectEvidence") { QuietReconnectEvidenceFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestPermissionsSettings") { NavigationStack { SettingsView() } } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestComputerSettingsEvidence") { ComputerSettingsEvidenceFixture() } else
         if ProcessInfo.processInfo.arguments.contains("-uiTestVoiceConversation") { VoiceConversationFixture() } else

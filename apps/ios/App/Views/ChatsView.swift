@@ -1141,7 +1141,7 @@ enum SavedListNote {
 
     /// A chat read from the phone's saved copy (OF-5).
     static func copy(savedAt ms: Int64, computer: String, now: Date = .now, calendar: Calendar = .current) -> String {
-        "Saved copy from \(when(ms, now: now, calendar: calendar)). It updates when \(computer) answers."
+        "Updated last on \(when(ms, now: now, calendar: calendar))"
     }
 
     private static func when(_ ms: Int64, now: Date, calendar: Calendar) -> String {

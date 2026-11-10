@@ -506,10 +506,21 @@ struct ConnectionBanner: View {
 
     var body: some View {
         if let l = line {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: l.icon).foregroundStyle(l.color)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(l.text).font(.footnote).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        if isReconnecting {
+                            ReconnectingPulse(color: palette.inkSoft)
+                        } else {
+                            Image(systemName: l.icon).foregroundStyle(l.color)
+                        }
+                        Text(l.text).font(.footnote).foregroundStyle(palette.inkSoft).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !waitingNote.isEmpty {
+                        Text(waitingNote).font(.caption).foregroundStyle(palette.inkFaint)
+                            .padding(.leading, 12)
+                            .accessibilityIdentifier("banner.waiting")
+                    }
                     // iOS doesn't let an app turn the VPN on; this is the shortest way to the switch (TS-4).
                     if app.offersTailscale {
                         Button("Open Tailscale") { app.openTailscale() }
@@ -545,8 +556,8 @@ struct ConnectionBanner: View {
                 .accessibilityLabel("More for \(store.active?.name ?? "this computer")")
                 .accessibilityIdentifier("banner.menu")
             }
-            .padding(12)
-            .background(l.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            .padding(.vertical, 8)
+            .accessibilityIdentifier("banner.connection")
             // Retry stays its own button for VoiceOver.
             .accessibilityElement(children: .contain)
         }
@@ -556,7 +567,7 @@ struct ConnectionBanner: View {
     private var waitingNote: String {
         let n = store.outbox.count
         if n == 0 { return "" }
-        return n == 1 ? " 1 prompt waits on this iPhone and goes when it’s back." : " \(n) prompts wait on this iPhone and go when it’s back."
+        return n == 1 ? "1 prompt will send when reconnected." : "\(n) prompts will send when reconnected."
     }
 
     /// The pairing key no longer matches, or the computer refused the key
@@ -566,6 +577,13 @@ struct ConnectionBanner: View {
         if store.connDetail == RelayStatus.badPairingKey { return true }
         if store.conn == .denied, store.denied == .badKey { return true }
         return false
+    }
+
+    private var isReconnecting: Bool {
+        store.conn == .connecting && app.tailnetHint == nil
+            && store.connDetail != RelayStatus.badPairingKey
+            && store.connDetail != RelayStatus.hostNotFound
+            && !(store.safetyExit?.computerId == store.activeId && store.safetyExit != nil)
     }
 
     private var line: (text: String, color: Color, icon: String)? {
@@ -583,22 +601,22 @@ struct ConnectionBanner: View {
             }
         }
         if store.connDetail == RelayStatus.badPairingKey {
-            return ("The pairing key no longer matches \(name). Pair again from Settings → Remote access on the computer." + waitingNote,
+            return ("The pairing key no longer matches \(name). Pair again from Settings → Remote access on the computer.",
                     palette.danger, "lock.slash")
         }
         switch store.conn {
         case .online, .idle:
             return nil
         case .connecting:
-            if let hint = app.tailnetHint { return (hint + waitingNote, palette.warning, "network.slash") }
+            if let hint = app.tailnetHint { return (hint, palette.warning, "network.slash") }
             if store.connDetail == RelayStatus.hostNotFound {
                 let host = store.active?.relayHost ?? "The relay"
-                return ("Can’t find \(host), the address this iPhone was paired with. On \(name), change how phones connect in Settings → Remote access, then pair again." + waitingNote,
+                return ("Can’t find \(host), the address this iPhone was paired with. On \(name), change how phones connect in Settings → Remote access, then pair again.",
                         palette.danger, "exclamationmark.triangle")
             }
-            return ("Connecting to \(name)…" + (store.connDetail.map { " (\($0))" } ?? "") + waitingNote, palette.running, "arrow.triangle.2.circlepath")
+            return ("Reconnecting to \(name)...", palette.running, "arrow.triangle.2.circlepath")
         case .offline:
-            return ("\(name) is offline. Open Nekko Agent on it, with Remote access on. This phone keeps trying." + waitingNote, palette.warning, "moon.zzz")
+            return ("\(name) is offline. Open Nekko Agent on it, with Remote access on. This phone keeps trying.", palette.warning, "moon.zzz")
         case .denied:
             let why: String
             switch store.denied {
@@ -611,5 +629,21 @@ struct ConnectionBanner: View {
             }
             return (why + " Pair again from Settings → Remote access on the computer.", palette.danger, "lock.slash")
         }
+    }
+}
+
+/// A connection status, not a control: a quiet opacity pulse without rotation.
+private struct ReconnectingPulse: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var color: Color
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: reduceMotion)) { context in
+            let phase = context.date.timeIntervalSinceReferenceDate * .pi / 0.9
+            Circle().fill(color)
+                .frame(width: 8, height: 8)
+                .opacity(reduceMotion ? 1 : 0.775 + 0.225 * cos(phase))
+        }
+        .accessibilityHidden(true)
     }
 }
