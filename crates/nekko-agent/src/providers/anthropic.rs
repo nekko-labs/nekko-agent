@@ -298,6 +298,11 @@ impl AnthropicProvider {
                 let id = m.get("id").and_then(Value::as_str).filter(|id| !id.is_empty())?;
                 let name = m.get("display_name").and_then(Value::as_str).filter(|n| !n.is_empty()).unwrap_or(id);
                 let api_window = m.get("max_input_tokens").and_then(Value::as_u64).filter(|n| *n > 0);
+                // The output ceiling the API lists wins over the shipped table,
+                // so a new model's `max_tokens` is right without a table edit.
+                if let Some(out) = m.get("max_tokens").and_then(Value::as_u64) {
+                    self.sampling.note_reported_output_limit(id, out);
+                }
                 Some(ModelInfo {
                     id: id.to_string(),
                     provider_id: self.config.id.clone(),

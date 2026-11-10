@@ -22761,7 +22761,7 @@
       },
       "body": {
         "model": "claude-opus-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "messages": [
           {
@@ -22781,7 +22781,7 @@
       },
       "body": {
         "model": "claude-opus-5-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "messages": [
           {
@@ -22801,7 +22801,7 @@
       },
       "body": {
         "model": "claude-opus-5-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "output_config": {
           "effort": "medium"
@@ -22824,7 +22824,7 @@
       },
       "body": {
         "model": "claude-opus-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "output_config": {
           "effort": "low"
@@ -22847,7 +22847,7 @@
       },
       "body": {
         "model": "claude-opus-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "output_config": {
           "effort": "medium"
@@ -22870,7 +22870,7 @@
       },
       "body": {
         "model": "claude-opus-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "output_config": {
           "effort": "xhigh"
@@ -22893,7 +22893,7 @@
       },
       "body": {
         "model": "claude-opus-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "output_config": {
           "effort": "max"
@@ -22916,7 +22916,7 @@
       },
       "body": {
         "model": "claude-sonnet-4-6",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "temperature": 1,
         "messages": [
@@ -22958,7 +22958,7 @@
       },
       "body": {
         "model": "claude-fable-5-1",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "messages": [
           {
@@ -23001,7 +23001,7 @@
       },
       "body": {
         "model": "anthropic/Claude-Opus-5",
-        "max_tokens": 64000,
+        "max_tokens": 128000,
         "stream": true,
         "messages": [
           {
