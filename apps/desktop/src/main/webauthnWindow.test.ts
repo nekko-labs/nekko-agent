@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { WebAuthnCeremonyRequest } from '@nekko-agent/shared';
-import { runCeremonyWindow, servePage, type CeremonyWindow } from './webauthnWindow.js';
+import { NO_PLATFORM_AUTHENTICATOR, runCeremonyWindow, servePage, type CeremonyWindow } from './webauthnWindow.js';
 
 const get: WebAuthnCeremonyRequest = { mode: 'get', challenge: 'BwcH', allowCredentials: ['AQ'], timeoutMs: 120_000 };
+const createPasskey: WebAuthnCeremonyRequest = {
+  mode: 'create', challenge: 'BwcH', userId: 'AQ', rpName: 'This computer', userName: 'owner', userDisplayName: 'Owner',
+  attachment: 'platform', excludeCredentials: [], timeoutMs: 120_000,
+};
 
 function fakeWindow(run: (code: string, userGesture?: boolean) => Promise<unknown>) {
   const listeners: Record<string, () => void> = {};
@@ -57,6 +61,28 @@ describe('the desktop ceremony window', () => {
   it('gives up when the key never answers', async () => {
     const w = fakeWindow(() => new Promise(() => {}));
     expect(await runCeremonyWindow(get, { openWindow: () => w as unknown as CeremonyWindow, serve, timeoutMs: 5 })).toMatchObject({ ok: false, cancelled: true });
+  });
+
+  it('says a passkey is not available here rather than waiting for a prompt that never comes', async () => {
+    const w = fakeWindow(async (code) => (code.includes('isUserVerifyingPlatformAuthenticatorAvailable') ? false : { ok: true }));
+    expect(await runCeremonyWindow(createPasskey, { openWindow: () => w as unknown as CeremonyWindow, serve, timeoutMs: 5_000 }))
+      .toEqual({ ok: false, error: NO_PLATFORM_AUTHENTICATOR });
+    // It never got as far as asking for a credential.
+    expect(w.webContents.executeJavaScript).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs a passkey registration once the computer says it has a platform authenticator', async () => {
+    const answer = { ok: true, mode: 'create', rpId: 'localhost', id: 'AQ', clientDataJSON: 'Ag', attestationObject: 'Aw' };
+    const w = fakeWindow(async (code) => (code.includes('isUserVerifyingPlatformAuthenticatorAvailable') ? true : answer));
+    expect(await runCeremonyWindow(createPasskey, { openWindow: () => w as unknown as CeremonyWindow, serve })).toEqual(answer);
+    expect(w.webContents.executeJavaScript.mock.calls[1][0]).toContain('"attachment":"platform"');
+  });
+
+  it('does not ask about platform authenticators for a security key', async () => {
+    const answer = { ok: true, mode: 'create', rpId: 'localhost', id: 'AQ', clientDataJSON: 'Ag', attestationObject: 'Aw' };
+    const w = fakeWindow(async () => answer);
+    await runCeremonyWindow({ ...createPasskey, attachment: 'cross-platform' }, { openWindow: () => w as unknown as CeremonyWindow, serve });
+    expect(w.webContents.executeJavaScript).toHaveBeenCalledTimes(1);
   });
 
   it('serves only the page, on loopback, with a strict CSP', async () => {
