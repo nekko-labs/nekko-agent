@@ -117,7 +117,7 @@ export function WorkflowsView() {
     if (ciRunnersFocus) setSection('ci');
   }, [ciRunnersFocus]);
 
-  // A connected runner is what makes the section relevant in Simple; a daemon with no runner channel (not a Mac) has none to show.
+  // A connected runner makes the section relevant in Simple; so does a daemon with no runner channel (not a Mac), whose page says where runners live.
   useEffect(() => watchRunnerPresence(window.nekko, setRunners), []);
 
   // Re-read each time a sheet opens: a plugin enabled meanwhile shows up.
@@ -207,8 +207,9 @@ export function WorkflowsView() {
   };
 
   // Arriving from View CI runners shows them whatever the mode, as before.
-  const ciRelevant = useShown('ci', { runners: runners === 'some' });
-  const ciShown = runners !== 'unsupported' && (ciRelevant || section === 'ci');
+  // A computer that cannot host one (Windows, Linux) keeps the page in both modes, so it explains instead of vanishing.
+  const ciRelevant = useShown('ci', { runners: runners === 'some' || runners === 'unsupported' });
+  const ciShown = ciRelevant || section === 'ci';
   const page = ciShown ? section : 'tasks';
   return (
     <div className="flex h-full min-h-0">
