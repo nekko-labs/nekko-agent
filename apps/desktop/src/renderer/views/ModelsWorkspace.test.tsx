@@ -11,11 +11,14 @@ vi.mock('./ModelServerView.js', () => ({ ModelServerView: ({ embedded }: { embed
 import { activeModelsSection, guideFirstModel, MODELS_SECTIONS, ModelsWorkspace } from './ModelsWorkspace.js';
 
 describe('Models workspace', () => {
-  it('stacks Cloud above Local on one page from either destination, with a side menu for both', () => {
+  it('stacks Cloud above Local on one page from either destination, with a dedicated floating menu for both', () => {
     for (const view of ['models', 'modelserver']) {
       state.view = view;
       const html = renderToStaticMarkup(<ModelsWorkspace />);
       expect(html).toContain('aria-label="Models sections"');
+      expect(html).toContain('class="models-layout"');
+      expect(html).toContain('class="models-rail"');
+      expect(html).not.toContain('class="settings-rail"');
       expect(html).toContain('id="models-local-title"');
       expect(html).toContain('id="models-cloud-title"');
       expect(html).toContain('data-providers="cloud"');

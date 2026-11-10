@@ -31,9 +31,11 @@ describe('provider families on the Models page', () => {
     expect(claude).toContain('>Work<');
     expect(claude).toContain('>Production<');
   });
-  it('uses no card or bordered tile, one hairline between families, and never renders a key', () => {
+  it('uses quiet grid sections without cards or separator grid cells, and never renders a key', () => {
     expect(html).not.toMatch(/class="[^"]*\bcard\b/);
-    expect(html.match(/quiet-rule/g)).toHaveLength(1);
+    expect(html).toContain('class="provider-families"');
+    expect(html).not.toContain('<hr');
+    expect(html.match(/data-provider-family=/g)).toHaveLength(2);
     expect(html).not.toContain('sk-never-render');
   });
   it('offers Add account per family, opening the setup that adds one there', () => {

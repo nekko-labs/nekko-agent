@@ -19,7 +19,7 @@ import { ChevronIcon, StarIcon } from '../icons.js';
  * organization seat reads as two accounts under one heading, with the email
  * once. An account's sign-in and connection controls open under its row.
  * Quiet surfaces: no cards; families are told apart by space and heading
- * size, with a hairline between families (docs/design-system.md).
+ * size, in a responsive grid of up to three columns (docs/design-system.md).
  */
 export function ProviderFamilies({ providers, onAdd, renderDetails }: {
   providers: ProviderConfig[];
@@ -35,11 +35,8 @@ export function ProviderFamilies({ providers, onAdd, renderDetails }: {
   const { byToken: limits } = useProviderLimitsPortfolio(cloud, true);
   return (
     <div className="provider-families" data-provider-families>
-      {families.map((f, i) => (
-        <React.Fragment key={f.id}>
-          {i > 0 && <hr className="quiet-rule" />}
-          <FamilySection family={f} identities={identities} limits={limits} onAdd={onAdd} renderDetails={renderDetails} />
-        </React.Fragment>
+      {families.map((f) => (
+        <FamilySection key={f.id} family={f} identities={identities} limits={limits} onAdd={onAdd} renderDetails={renderDetails} />
       ))}
     </div>
   );
