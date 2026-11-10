@@ -254,6 +254,8 @@ export const PHONE_DENIED_FOREVER: PhoneDeniedGroup = {
   channels: [
     'connector:connect',
     'connector:disconnect',
+    // Reads the GitHub CLI's sign-in on the computer and stores it as a connector.
+    'connector:importCli',
     'data:wipe',
     // Closes another app on the computer: only the person at it decides that.
     'memory:closeApp',

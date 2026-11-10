@@ -342,6 +342,13 @@ Open **Settings > Customize** for appearance, sidebar shortcuts, desktop behavio
 
 Open **Settings** to find **Skills** and **Connectors** at the top of its left rail. They are no longer shown in the left sidebar by default. To bring either shortcut back, use **Settings > Customize > View settings** and turn on its sidebar toggle. Hiding these shortcuts does not disable their features or command-palette access.
 
+### Connecting a service
+
+Each service in **Connectors** starts as one **Connect** button. Press it and the steps open one at a time: first a button that opens the page where you get a key, then a field to paste it into. Pasting a GitHub, GitLab, Linear, Slack, ClickUp or Floop key connects straight away; for the others, press **Connect**. Nekko checks every key with a real request before keeping it, and it stays on this computer.
+
+- **GitHub**: if the GitHub CLI (`gh`) is signed in on this computer, the row says so and **Connect** uses that sign-in, with nothing to copy. Choose **Use a token** to paste one instead. Otherwise **Open** goes to GitHub's new-token page with the name and access already filled in: press **Generate token**, copy it and paste it.
+- **GitLab**: **Open** goes to the token page with the name and the `api` scope filled in. For your own GitLab, enter its address first.
+
 ### Download progress in Model Server
 
 When you download a model or install a managed runtime, its button immediately
