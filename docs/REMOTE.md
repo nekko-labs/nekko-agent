@@ -123,6 +123,8 @@ The chat list defaults to **Status**: Needs input, Draft, Building, Verifying, W
 
 Each chat row on the iPhone and on Android reads like the desktop's agent card. Under the title: the provider's logo and the model (*Opus 5.5*), then, while the chat is still in progress (working, waiting on you or watching), how full its context window is, such as *45k/1M*, in green, amber from 60% and red from 85%. At the bottom right, a chip for its pull requests: the one that matters most (open before draft, merged or closed), with GitHub's glyph and colour for its state, and *+2* when there are more. **View → Card details** turns each of these off.
 
+On the iPhone a row is two lines at most, with no preview of the conversation and no divider lines: the title and when it last moved, then those facts. Under a chat, each sub-agent it spawned gets its own line, hanging from the chat on a thin tree line as on the desktop, with its status, its title and, at the end, the model it runs on (*Haiku 5.5*). Tap one to open the sub-agent's chat; **View → Card details → Sub-agents** hides them. Android still shows the preview and no sub-agent lines.
+
 From New chat's folder picker, choose **Manage folders** to add a computer path or remove a saved folder. Removing never deletes files. Stars select default folders for future chats: the first is primary, and the others are supporting folders. An explicit folder choice overrides those defaults for the current chat. Changing supporting folders may ask for device authentication; multi-folder starts wait for an online computer rather than queue a start that could lose folder context.
 
 ## The phone app

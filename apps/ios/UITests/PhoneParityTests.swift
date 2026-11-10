@@ -106,12 +106,12 @@ final class PhoneParityTests: XCTestCase {
         let menuAlways = app.buttons["Always show groups"]
         // The Form is lazy: its first Show row is exposed before the lower
         // Always show groups row exists (native run 42578046165's AX tree).
-        let previews = app.switches["Previews"]
-        guard app.buttons["Show"].tapUntil(until: { previews.exists || menuAlways.exists }) else {
+        let firstShown = app.switches["Completed chats"]
+        guard app.buttons["Show"].tapUntil(until: { firstShown.exists || menuAlways.exists }) else {
             XCTFail("Show exposes its controls")
             return
         }
-        let usesInlineControls = previews.exists
+        let usesInlineControls = firstShown.exists
         let always = usesInlineControls ? inlineAlways : menuAlways
         if usesInlineControls {
             guard revealViewOption(always, in: app) else { return }

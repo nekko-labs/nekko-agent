@@ -21,6 +21,22 @@ The desktop's card is the reference ([agent panel view options](../agents/agent-
 
 **View → Card details** turns Model, Context window, Pull requests and Last updated off independently. On iOS it expands inline inside the View-options popover, just like Show: native switches stay in the same Form instead of opening a nested popup. Changing one field leaves the others unchanged; all four choices persist across relaunch. [Implemented in source for #2380; native all-switch/persistence acceptance remains unverified. Older matched screenshots were inspected and show the nested-menu defect versus the inline switches, not a full interaction pass. Automatic run42578121066 on PR merge ref33669d3e compiled the corrected spoken-label and bounded-Form driver, but every switch remained on after the parent-row center tap. Its AX tree records each wide labeled Switch row containing the actual smaller switch. The driver now targets that native child with existence, frame-containment and hittability preconditions, preserving all field-independence, hidden-field and relaunch assertions. This driver correction still requires fresh native execution; previous failing runs remain failures.]
 
+## Quiet rows and sub-agents on the iPhone (2026-11-10)
+
+`[Implemented 2026-11-10 on iOS, in source. SessionSummary.subagents and the retired Previews choice are covered by CardDetailsTests; the Swift build, the native fixture screenshots and a device pass await macOS CI. Android has no sub-agent rows yet (see the gap in ios-and-android-stay-in-step.md)]`
+
+Philip asked (2026-11-10) that the iPhone's chat rows drop the chat preview and the divider lines and take the updated quiet style, with PR chips and sub-agents shown just like the desktop, and the model each sub-agent runs on especially.
+
+- **Two lines at most** ([design system](../../docs/design-system.md): space before lines, say it once, never a third line on a row). Line one: the status glyph, the title (medium weight), and when the chat last moved. Line two: where it runs (when the list shows several places), an image chat's mark, the provider mark and model, the context window while in progress, and prompts waiting on the phone.
+- **No preview.** The last reply or first prompt under the title is gone, and so is View → Show → *Previews*. A saved choice for it is ignored.
+- **No Working / Needs you / Error chips.** The status glyph already says it (and VoiceOver reads it); a chat that needs you keeps its warning edge.
+- **No divider lines,** on iPhone and in the iPad split view: rows are kept apart by space (6 pt above and below each chat), groups by their headings.
+- **PR chip as on the desktop** (`SessionPrChip`): one chip riding the end of the row's last line, its bottom right. A row with no second line shows it on the title line in place of the time, as a desktop card cut down to its title does.
+- **Sub-agents under their chat,** as the desktop sidebar's `SubAgentRow`: one row for each sub-agent the chat spawned and has not completed, oldest first, hanging from the chat's glyph on a tree line (a tee, the last one a rounded corner, the ink at a third as on the desktop). Each shows its own status glyph, its title, and at the end **the model it runs on, with its provider's mark** (*Haiku 5.5*), named and marked by the same rules as the chat's own model; VoiceOver reads "Sub-agent *title*, on *model*". Tapping one opens the sub-agent's chat. Shown only under an active chat, and only for chats on a computer (the iPhone's own chats have no sub-agents). The phone reads them from the same `sessions:summaries` list it already fetches (no new channel, permission or storage); they never become rows of their own.
+- **View → Card details → Sub-agents** turns the sub-agent rows off, as the desktop's view menu does; on by default and kept across relaunches.
+
+The desktop card's "N sub-agents" count line is not repeated on the phone: the rows below say it.
+
 ## PR state on Android
 
 Android now asks the computer for the state of each PR a row names (`pr:sessionList`, read only), as the iPhone does: chats that name a PR, 8 at a time, again when the chat moves on or names another PR, and every five minutes; a failed lookup is asked again next time (`RowPrs`). Until the computer answers (or while it can't be reached), the chip shows the chat's newest link and count untinted, so a row never loses its PRs offline. The iPhone shows the chip once the state is known, as before.
@@ -43,6 +59,6 @@ Provider marks: the desktop's Lobe Icons (MIT) as iOS template SVGs (`ProviderMa
 
 ## Lazy Show disclosure driver (2026-11-09)
 
-The native Form can expose the first Show row (Previews) while lower rows, including Always show groups, are not yet in its accessibility tree. The PhoneParity driver recognizes that expanded content before scrolling the same Form to Always show groups; it does not mistake an unmaterialized inline row for the baseline menu. It still asserts reachability, the enabled switch value and visibility of the empty Building group. No timeout or product behavior changes.
+The native Form can expose the first Show row (Previews; Completed chats since Previews left on 2026-11-10) while lower rows, including Always show groups, are not yet in its accessibility tree. The PhoneParity driver recognizes that expanded content before scrolling the same Form to Always show groups; it does not mistake an unmaterialized inline row for the baseline menu. It still asserts reachability, the enabled switch value and visibility of the empty Building group. No timeout or product behavior changes.
 
 Evidence: older full-native run `42578046165`, app/harness `577f35db1f40545e7aa92feea2442660c9539b9d`, iPhone 18 Pro/iOS 27.2, exported Show screenshot and AX tree. Local source-contract checks cover the driver sequence; Swift compilation and native execution of this repair remain **unverified**. This is not matched current-head all-switch or persistence acceptance.
