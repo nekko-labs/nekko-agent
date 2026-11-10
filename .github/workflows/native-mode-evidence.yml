@@ -235,7 +235,9 @@ jobs:
           ref: ${{ inputs.harness_ref || github.sha }}
           path: .evidence-harness
           persist-credentials: false
-          sparse-checkout: ${{ inputs.android_test_file }}
+          sparse-checkout: |
+            ${{ inputs.android_test_file }}
+            apps/android/app/src/debug/java/com/nekko/android/WinterEvidenceActivity.kt
           sparse-checkout-cone-mode: false
       # The capture script always comes from this workflow's own commit.
       - uses: actions/checkout@v7
@@ -262,6 +264,18 @@ jobs:
           mkdir -p "$(dirname "$ANDROID_TEST_FILE")"
           cp ".evidence-harness/$ANDROID_TEST_FILE" "$ANDROID_TEST_FILE"
           cp .evidence-workflow/apps/android/scripts/mode-evidence.sh apps/android/scripts/
+          # Share the debug host, never seasonal implementation, across both app revisions.
+          if [[ "$ANDROID_TEST_FILE" == *"/WinterThemeTest.kt" ]]; then
+            cp .evidence-harness/apps/android/app/src/debug/java/com/nekko/android/WinterEvidenceActivity.kt apps/android/app/src/debug/java/com/nekko/android/
+            python3 - <<'PYHOST'
+          from pathlib import Path
+          p = Path("apps/android/app/src/debug/AndroidManifest.xml")
+          s = p.read_text()
+          if ".WinterEvidenceActivity" not in s:
+              s = s.replace("<application>", '<application><activity android:name=".WinterEvidenceActivity" android:exported="false" />', 1)
+          p.write_text(s)
+          PYHOST
+          fi
       - uses: actions/setup-java@v6
         with:
           distribution: temurin

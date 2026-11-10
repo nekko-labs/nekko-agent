@@ -2,7 +2,6 @@ package com.nekko.android
 
 import android.graphics.Bitmap
 import android.provider.Settings
-import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -33,14 +32,14 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Overlay this file alone on base and head. Uses only pre-seasonal APIs, never copies new
+ * Overlay this file and its debug-only Activity host on base and head. Uses only pre-seasonal APIs, never copies new
  * decoration code onto base. Composed native fixture with the production theme and mascot.
  * Fits the actual emulator viewport, including folded, unfolded and landscape windows.
  * Evidence script disables animations; the static test explicitly checks that system setting.
  */
 @RunWith(AndroidJUnit4::class)
 class WinterThemeTest {
-    @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val compose = createAndroidComposeRule<WinterEvidenceActivity>()
     private val args get() = InstrumentationRegistry.getArguments()
 
     @Test fun seasonalThemesGreetingAndSwitchAway() {
