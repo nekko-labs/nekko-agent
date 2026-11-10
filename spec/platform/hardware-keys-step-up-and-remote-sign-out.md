@@ -43,6 +43,8 @@ Everything else (sending a prompt, approving a tool, answering a question, savin
 - **One-time code (TOTP)**: a secret the computer generates and shows once as a QR for any authenticator app; the phone and desktop accept the six digits. Offered because a security key can be forgotten at home. Rate-limited on the computer (5 wrong codes, then a minute, doubling).
 - **Recovery code**: ten single-use codes shown once when the first method is registered, stored by the owner. Used only to turn step-up off when every method is lost. There is no Nekko Labs reset: that is the point.
 
+The name is typed before the kind is picked, so the field holds what the owner typed until a method is actually registered: cancelling the key ceremony, or a refusal from the computer, leaves the name in place to try again with, and only a registration clears it. `[implemented 2026-11-10, #2390; the ceremony seam is unit-tested, the field clearing itself is not (the repo has no DOM interaction harness), and nothing has met a real key]` The phone does the same. An empty name is not an error: the computer names the method itself (*Security key*, *iPhone passkey*).
+
 At least **two** methods must be registered before step-up can be turned on (a security key and a TOTP, or two keys), so a lost key never locks the owner out of their own computer. The desktop warns, not refuses, when the second method is TOTP on the same phone that is being protected.
 
 ### Asking for it

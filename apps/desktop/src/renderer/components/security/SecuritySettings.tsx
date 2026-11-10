@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import {
+  WEBAUTHN_CANCELLED,
   WEBAUTHN_CEREMONY_TIMEOUT_MS,
   stepUpEnableBlocker,
   stepUpEnableWarning,
@@ -18,6 +19,37 @@ import { UntestedHardwareNote } from './UntestedHardwareNote.js';
 
 /** The anchor the Remote access card's *Protect this computer* prompt scrolls to. */
 export const SECURITY_SECTION_ID = 'settings-security-card';
+
+/** The window API this component calls; narrowed so the key ceremony can be tested without a renderer. */
+type SecurityApi = Pick<Window['nekko'], 'securityRegisterBegin' | 'securityRegisterKey' | 'webAuthnCeremony'>;
+
+/**
+ * Runs the WebAuthn *create* ceremony and registers what the key gave back.
+ * Null when the owner cancelled the ceremony: nothing was registered, so the
+ * caller keeps the name they typed (#2390). A refusal throws instead, to be
+ * shown.
+ */
+export async function registerKey(api: SecurityApi, kind: SecurityCredentialKind, name: string): Promise<SecurityMethodAdded | null> {
+  const begin = await api.securityRegisterBegin!(kind);
+  const r = await api.webAuthnCeremony!({
+    mode: 'create',
+    rpName: begin.rpName,
+    userId: begin.userId,
+    userName: begin.userName,
+    userDisplayName: begin.userDisplayName,
+    challenge: begin.challenge,
+    attachment: begin.attachment,
+    excludeCredentials: begin.excludeCredentials.map((c) => c.id),
+    timeoutMs: Math.min(begin.timeoutMs, WEBAUTHN_CEREMONY_TIMEOUT_MS),
+  });
+  if (!r.ok) {
+    // Only the owner closing the window passes in silence: a key that never answered has something to say.
+    if (r.cancelled && r.error === WEBAUTHN_CANCELLED) return null;
+    throw new Error(r.error);
+  }
+  if (r.mode !== 'create') throw new Error('The key gave an unexpected answer.');
+  return await api.securityRegisterKey!({ name, kind, rpId: r.rpId, id: r.id, clientDataJSON: r.clientDataJSON, attestationObject: r.attestationObject });
+}
 
 /**
  * Settings → Security (SK-4, SK-5): the second factors this computer accepts
@@ -62,27 +94,17 @@ export function SecuritySettings() {
     if (r.recoveryCodes?.length) setCodes(r.recoveryCodes);
   };
 
-  const addKey = (kind: SecurityCredentialKind, name: string) =>
-    run(async () => {
-      const begin = await api.securityRegisterBegin!(kind);
-      const r = await api.webAuthnCeremony!({
-        mode: 'create',
-        rpName: begin.rpName,
-        userId: begin.userId,
-        userName: begin.userName,
-        userDisplayName: begin.userDisplayName,
-        challenge: begin.challenge,
-        attachment: begin.attachment,
-        excludeCredentials: begin.excludeCredentials.map((c) => c.id),
-        timeoutMs: Math.min(begin.timeoutMs, WEBAUTHN_CEREMONY_TIMEOUT_MS),
-      });
-      if (!r.ok) {
-        if (r.cancelled) return;
-        throw new Error(r.error);
-      }
-      if (r.mode !== 'create') throw new Error('The key gave an unexpected answer.');
-      added(await api.securityRegisterKey!({ name, kind, rpId: r.rpId, id: r.id, clientDataJSON: r.clientDataJSON, attestationObject: r.attestationObject }));
+  /** Registers a key. Resolves true only when the method was actually added, so the view keeps the typed name after a cancel or a refusal. */
+  const addKey = async (kind: SecurityCredentialKind, name: string) => {
+    let registered = false;
+    const ok = await run(async () => {
+      const r = await registerKey(api, kind, name);
+      if (!r) return;
+      added(r);
+      registered = true;
     });
+    return ok && registered;
+  };
 
   const beginTotp = () =>
     run(async () => {
@@ -131,7 +153,7 @@ export function SecuritySettings() {
       webAuthnBlocked={webAuthnUnavailableReason(window as never)}
       passkeys={platformPasskeyAvailable(window.nekkoChrome?.platform ?? (navigator.userAgent.includes('Linux') ? 'linux' : undefined))}
       rpId={pageRpId(window as never)}
-      onAddKey={(kind, name) => void addKey(kind, name)}
+      onAddKey={(kind, name) => addKey(kind, name)}
       onTotpBegin={() => void beginTotp()}
       onTotpConfirm={(code) => void confirmTotp(code)}
       onTotpCancel={() => setTotp(null)}
@@ -167,7 +189,8 @@ export function SecuritySettingsView(p: {
   passkeys: boolean;
   rpId: string;
   now?: number;
-  onAddKey: (kind: SecurityCredentialKind, name: string) => void;
+  /** Resolves true when the method was registered; false when the ceremony was cancelled or refused, and the name is kept. */
+  onAddKey: (kind: SecurityCredentialKind, name: string) => boolean | Promise<boolean>;
   onTotpBegin: () => void;
   onTotpConfirm: (code: string) => void;
   onTotpCancel: () => void;
@@ -184,6 +207,10 @@ export function SecuritySettingsView(p: {
   const now = p.now ?? Date.now();
   const blocker = s ? stepUpEnableBlocker(s) : null;
   const warning = s ? stepUpEnableWarning(s, p.pairedPhones) : null;
+  /** Clear the typed name only once the method is registered, so a cancelled or refused ceremony leaves it to try again with. */
+  const add = async (kind: SecurityCredentialKind) => {
+    if (await p.onAddKey(kind, keyName)) setKeyName('');
+  };
   const methodRow = (id: string, title: string, detail: string, removeName: string, extra?: React.ReactNode) => (
     <li key={id} className="quiet-row min-h-(--q-row) gap-2 px-2!" data-method={id} data-quiet-row>
       <span className="flex min-w-0 flex-1 flex-col">
@@ -259,11 +286,11 @@ export function SecuritySettingsView(p: {
             maxLength={60}
             onChange={(e) => setKeyName(e.target.value)}
           />
-          <button className="btn btn-ghost py-1 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('security-key', keyName); setKeyName(''); }}>
+          <button className="btn btn-ghost py-1 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => void add('security-key')}>
             Add security key
           </button>
           {p.passkeys && (
-            <button className="btn btn-ghost py-1 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => { p.onAddKey('passkey', keyName); setKeyName(''); }}>
+            <button className="btn btn-ghost py-1 text-xs" disabled={p.busy || !!p.webAuthnBlocked} onClick={() => void add('passkey')}>
               Add passkey on this computer
             </button>
           )}
