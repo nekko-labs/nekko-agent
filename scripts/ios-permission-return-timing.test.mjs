@@ -13,7 +13,15 @@ function contract(text) {
     'let expandable = row.elementType == .button',
     'let target = expandable ? row : microphone',
     'if expandable { row.tap() }',
-    'guard target.exists && target.isHittable else',
+    'guard reveal(target, in: app) else { return }',
+    'guard reveal(microphone, in: app) else { return }',
+    'let viewport = scroll.frame.intersection(app.frame)',
+    'let bottom = min(viewport.maxY, footer.frame.minY) - 8',
+    'frame.minY >= viewport.minY + 8 && frame.maxY <= bottom',
+    'frame.minX >= viewport.minX && frame.maxX <= viewport.maxX',
+    'guard fullyVisible() else',
+    'geometry.name = "permissions-microphone-target-geometry"',
+    'attach(app, "permissions-microphone-before-request")',
     'XCTAssertTrue(microphone.label.hasPrefix("Allow"),',
     'XCTAssertTrue(alert.waitForExistence(timeout: 10))',
     'deny.tap()',
@@ -62,6 +70,16 @@ test('rejects a late clock, pre-assertion diagnostic capture or extra wait budge
   assert.throws(() => contract(source.replace('timeout: remaining', 'timeout: 10')));
   assert.throws(() => contract(source.replace('        app.activate()', '        app.activate()\n        let returnStarted = ProcessInfo.processInfo.systemUptime')));
   assert.throws(() => contract(source.replace('        app.activate()', '        if resumeState == .notRunning { app.launch() } else { app.activate() }')));
+});
+
+test('rejects a microphone target hidden by the pinned footer even when hittable', () => {
+  for (const needle of ['guard reveal(target, in: app) else { return }',
+    'guard reveal(microphone, in: app) else { return }',
+    'let bottom = min(viewport.maxY, footer.frame.minY) - 8',
+    'frame.minY >= viewport.minY + 8 && frame.maxY <= bottom',
+    'guard fullyVisible() else', 'attach(app, "permissions-microphone-before-request")']) {
+    assert.throws(() => contract(source.replace(needle, '// removed')));
+  }
 });
 
 test('opt-in matched workflow retains recording, strict runtime and no retries', () => {

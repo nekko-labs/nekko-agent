@@ -41,7 +41,12 @@ Android parity is planned in [#2251](https://github.com/nekko-labs/nekko-agent/i
 ## Strict Settings-return evidence (implemented harness, native result pending)
 
 The opt-in `PermissionReturnTimingTests` comparison drives the baseline inline card
-and current accordion by their actual AX capability. Both perform a real microphone
+and current accordion by their actual AX capability. Setup requires the full target
+frame inside the scroll viewport and above the pinned Continue footer, not merely
+XCTest isHittable; target geometry and a pre-request screenshot are retained. The
+first native baseline run compiled but tapped below the visible microphone control
+and failed before denial, so it supplied no Settings-return measurement. This
+visibility repair still requires native verification. Both perform a real microphone
 denial and public Settings switch change from 0 to 1. Both then call `app.activate()`
 without a process-state-dependent launch branch. A monotonic ten-second budget
 starts before activation and includes activation/session setup and the first AX

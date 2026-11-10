@@ -27,19 +27,14 @@ final class PermissionReturnTimingTests: XCTestCase {
         route.name = "permissions-microphone-request-path"
         route.lifetime = .keepAlways
         add(route)
-        for _ in 0..<10 {
-            if target.exists && target.isHittable { break }
-            app.swipeUp()
-        }
-        guard target.exists && target.isHittable else {
-            attach(app, "permissions-microphone-request-unreachable")
-            XCTFail("The microphone request must be reachable without granting it")
-            return
-        }
+        guard reveal(target, in: app) else { return }
         if expandable { row.tap() }
         XCTAssertTrue(microphone.waitForExistence(timeout: 5))
-        if !microphone.isHittable { app.swipeUp() }
+        guard reveal(microphone, in: app) else { return }
         XCTAssertTrue(microphone.label.hasPrefix("Allow"), "The unasked microphone request is shown before denial")
+        // isHittable alone can accept a control hidden behind the pinned footer.
+        // Record the actual frame and pixels before the deliberate request tap.
+        attach(app, "permissions-microphone-before-request")
         microphone.tap()
         let system = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         let alert = system.alerts.firstMatch
@@ -111,6 +106,35 @@ final class PermissionReturnTimingTests: XCTestCase {
         XCTAssertTrue(microphoneStatus.exists, "The same permission fixture must return after Settings")
         XCTAssertEqual(microphoneStatus.label, "Allowed")
         attach(app, "permissions-microphone-restored")
+    }
+
+    /// Setup only: the total Settings-return clock below is never changed here.
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        let scroll = app.scrollViews.firstMatch
+        let footer = app.buttons["permissions.continue"]
+        func fullyVisible() -> Bool {
+            guard element.exists && element.isHittable && scroll.exists && footer.exists else { return false }
+            let viewport = scroll.frame.intersection(app.frame)
+            let frame = element.frame
+            let bottom = min(viewport.maxY, footer.frame.minY) - 8
+            return frame.width > 0 && frame.height > 0
+                && frame.minX >= viewport.minX && frame.maxX <= viewport.maxX
+                && frame.minY >= viewport.minY + 8 && frame.maxY <= bottom
+        }
+        for _ in 0..<10 {
+            if fullyVisible() { break }
+            scroll.swipeUp()
+        }
+        let geometry = XCTAttachment(string: "target=\(element.identifier); frame=\(element.frame); scroll=\(scroll.frame); footer=\(footer.frame); fullyVisible=\(fullyVisible())")
+        geometry.name = "permissions-microphone-target-geometry"
+        geometry.lifetime = .keepAlways
+        add(geometry)
+        guard fullyVisible() else {
+            attach(app, "permissions-microphone-request-unreachable")
+            XCTFail("The microphone target must be fully inside the scroll viewport above Continue before tapping")
+            return false
+        }
+        return true
     }
 
     private func attach(_ app: XCUIApplication, _ name: String) {
