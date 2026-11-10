@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Send your first prompt" (FirstPromptIntro.kt): the iPhone's words; step 3 says Send, as Android's chat does (#2234). -->
+<resources>
+    <string name="intro_title">发送你的第一条提示</string>
+    <string name="intro_start_title">从一个问题开始</string>
+    <string name="intro_start_body">像请同事帮忙一样，输入你想完成的事。你也可以点麦克风直接说。</string>
+    <string name="intro_add_title">添加照片和文件夹</string>
+    <string name="intro_add_body">点 + 添加照片或粘贴图片。选择一个文件夹，让 Nekko 在你电脑上的正确位置工作。</string>
+    <string name="intro_send_title">点发送，Nekko 就开始工作</string>
+    <string name="intro_send_body">Nekko 在你的电脑上工作，并在这里回复。在运行命令或更改任何内容之前，它会先问你。</string>
+    <string name="intro_skip">跳过</string>
+    <string name="intro_next">下一步</string>
+    <string name="intro_back">返回</string>
+    <string name="intro_done">开始使用</string>
+    <string name="intro_step" formatted="true">第 %1$d 步：%2$s</string>
+</resources>
