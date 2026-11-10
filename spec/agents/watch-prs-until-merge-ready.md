@@ -31,10 +31,27 @@ until the user came back. Every user and project now gets the watch by default.
   way when the user or the repository authorizes landing, otherwise report it
   merge-ready or name the blocker. It never grants permission to bypass
   protections, approvals or checks, and it leaves a PR the user asked to hold.
-- The watch wakes the chat on any PR change (state, checks, review decision,
-  draft, update time) or at the deadline, through the same scheduler as
-  `agent_watch` (one-shot, durable, a busy chat is not interrupted). When the
-  woken turn ends with the PR still open, the host arms the next watch.
+- The watch wakes the chat when the PR needs attention, or at the deadline,
+  through the same scheduler as `agent_watch` (one-shot, durable, a busy chat
+  is not interrupted). When the woken turn ends with the PR still open, the
+  host arms the next watch.
+- **Waiting costs no tokens** `[implemented 2026-11-10, #2483; daemon unit and
+  scheduler tests; not yet seen in a live chat]`. Before, any change to the
+  PR's snapshot woke the chat, including `updatedAt` after the agent's own
+  push and checks moving to pending, so a model turn ran only to say "still
+  waiting for checks". Now a change wakes the chat only when it is
+  actionable: the PR merged or closed, a review decision, draft state, checks
+  finishing (passing or failing), or an update with the checks unchanged (a
+  comment or review). Checks starting or still running, and the push that
+  started them, are recorded on the watch (its `fingerprint`) and shown from
+  that metadata: `session:watches` views carry `checks` and `prState` as last
+  polled, and the composer chip and the transcript's watch chip read **checks
+  running**, **checks failing**, **checks passed** or **no checks yet**
+  beside the time left. The agent's own PR watches share the scheduler, so
+  the rule applies to them too (`watches::actionable_change`). A fingerprint
+  that is not a snapshot object (older watches) wakes on any change, as
+  before. The row headline still reads "wakes on any PR change" on every
+  client; rewording it touches the phones too and is left for later.
 - It stops for a PR when the PR is merged or closed, when the user cancels the
   host's watch on it, when a wake-up fails to deliver, or after 24 wake-ups for
   that PR in that chat. A turn the user stopped arms nothing. Merged and closed

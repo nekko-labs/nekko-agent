@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('./components/Markdown.js', () => ({ Markdown: ({ text }: { text: string }) => <p>{text}</p> }));
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { AgentWatchView, SessionSummary, ToolCall } from '@nekko-agent/shared';
-import { __setAgentWatches, fmtSpan, parseWatchCall, parseWatchWake, thenSummary, watchClock, watchHeadline, WatchSessionContext } from './agentWatches.js';
+import { __setAgentWatches, fmtSpan, parseWatchCall, parseWatchWake, thenSummary, watchClock, watchHeadline, watchProgress, WatchSessionContext } from './agentWatches.js';
 import { ActivityGroup } from './components/agent-console/ActivityGroup.js';
 import { ToolCard } from './components/agent-console/ToolCard.js';
 import { shortModelName, subagentModel, SubagentInheritedModelContext, SubagentParentContext } from './components/agent-console/SubagentCue.js';
@@ -13,6 +13,14 @@ const prResult = { toolCallId: 'w1', output: 'Watch armed: c0329e40-5e9d. Wake o
 const view = (over: Partial<AgentWatchView> = {}): AgentWatchView => ({ id: 'c0329e40-5e9d', kind: 'pr', url: prCall.input.url as string, status: 'active', deadlineAt: 10_000_000, nextPollAt: 0, pending: false, failures: 0, ...over });
 
 describe('watch calls', () => {
+  it('shows PR progress the host polled, without a wake-up', () => {
+    expect(watchProgress(view({ checks: 'pending' }))).toBe('checks running');
+    expect(watchProgress(view({ checks: 'failing' }))).toBe('checks failing');
+    expect(watchProgress(view({ checks: 'pending', pending: true }))).toBeNull();
+    expect(watchProgress(view({ checks: 'pending', status: 'done' }))).toBeNull();
+    expect(watchProgress(view({ kind: 'timer' }))).toBeNull();
+    expect(watchProgress(view())).toBeNull();
+  });
   it('names what is watched and what fires it, with the then-line', () => {
     const w = parseWatchCall(prCall, prResult);
     expect(w.id).toBe('c0329e40-5e9d');

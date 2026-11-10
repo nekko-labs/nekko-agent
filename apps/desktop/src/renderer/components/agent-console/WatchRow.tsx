@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ToolCall, ToolResult } from '@nekko-agent/shared';
 import { BinocularsIcon } from '../../icons.js';
 import { usePaneVisible } from '../../paneVisibility.js';
-import { parseWatchCall, parseWatchWake, prLabel, thenSummary, useAgentWatch, watchClock, watchHeadline, type WatchTone } from '../../agentWatches.js';
+import { parseWatchCall, parseWatchWake, prLabel, thenSummary, useAgentWatch, watchClock, watchHeadline, watchProgress, type WatchTone } from '../../agentWatches.js';
 import { fmtDateTime, fmtTime } from './transcript.js';
 import { useRowState } from './rowState.js';
 
@@ -39,7 +39,7 @@ export function WatchClockChip({ call, result }: { call: ToolCall; result?: Tool
   if (!clock) return null;
   return (
     <span className={`shrink-0 rounded border px-2 py-0.5 text-2xs font-normal tabular-nums ${TONE[clock.tone]}`} title={clock.title} aria-label={clock.title} data-watch-clock={clock.tone}>
-      {clock.text}
+      {[watchProgress(view), clock.text].filter(Boolean).join(' · ')}
     </span>
   );
 }
