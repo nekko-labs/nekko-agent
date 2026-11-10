@@ -663,7 +663,7 @@ struct NewChatView: View {
 
     private func modelName(_ m: (String, String)) -> String {
         let name = store.models[m.0]?.first { $0.id == m.1 }?.name ?? m.1
-        let provider = store.providers.first { $0.id == m.0 }?.label ?? m.0
+        let provider = store.providers.first { $0.id == m.0 }?.shortName ?? m.0
         return "\(name) · \(provider)"
     }
 
@@ -887,7 +887,8 @@ struct ModelPicker: View {
                     Section("Starred on your computer") {
                         ForEach(favorites, id: \.self) { f in
                             let pm = split(f)
-                            row(pm.0, pm.1, store.models[pm.0]?.first { $0.id == pm.1 }?.name ?? pm.1)
+                            row(pm.0, pm.1, store.models[pm.0]?.first { $0.id == pm.1 }?.name ?? pm.1,
+                                provider: store.providers.first { $0.id == pm.0 }?.shortName)
                         }
                     }
                 }
@@ -900,10 +901,11 @@ struct ModelPicker: View {
                         .accessibilityIdentifier("modelPicker.emptyScope")
                 }
                 ForEach(groups) { g in
-                    Section(g.provider.label) {
+                    Section {
                         if let plan = limits[g.provider.id] {
                             VStack(alignment: .leading, spacing: 8) {
-                                if let type = plan.planType { Text(type.capitalized).font(.caption).foregroundStyle(palette.inkSoft) }
+                                // The header already says a plan login's plan ("Personal · Max"): say it once.
+                                if let type = plan.planType, !g.provider.titleNamesPlan { Text(type.capitalized).font(.caption).foregroundStyle(palette.inkSoft) }
                                 ForEach(plan.windows) { window in LimitBar(window: window) }
                                 if plan.windows.isEmpty { Text("No limits reported.").font(.caption).foregroundStyle(palette.inkSoft) }
                             }
@@ -912,12 +914,24 @@ struct ModelPicker: View {
                         if let e = g.error {
                             Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.warning)
                         } else if let models = g.models {
-                            let shown = models.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.id.localizedCaseInsensitiveContains(query) }
+                            // A search for the account's email or name lists all of that account's models.
+                            let account = g.provider.accountMatches(query)
+                            let shown = models.filter { query.isEmpty || account || $0.name.localizedCaseInsensitiveContains(query) || $0.id.localizedCaseInsensitiveContains(query) }
                             if shown.isEmpty { Text("No models").font(.footnote).foregroundStyle(palette.inkFaint) }
                             ForEach(shown) { m in row(g.provider.id, m.id, m.name, loaded: m.loaded) }
                         } else {
                             ProgressView()
                         }
+                    } header: {
+                        // One Claude login can be a personal plan and an organization seat: each names itself (#2488).
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(g.provider.accountTitle)
+                            if let caption = g.provider.accountCaption {
+                                Text(caption).font(.caption).foregroundStyle(palette.inkSoft).textCase(nil)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("modelPicker.provider.\(g.provider.id)")
                     }
                 }
             }
@@ -963,15 +977,17 @@ struct ModelPicker: View {
         return (String(f[..<r.lowerBound]), String(f[r.upperBound...]))
     }
 
-    private func row(_ p: String, _ m: String, _ name: String, loaded: Bool = false) -> some View {
-        Button {
+    /// `provider` names the account beside a starred model, so the same model starred on two Claude accounts reads apart.
+    private func row(_ p: String, _ m: String, _ name: String, loaded: Bool = false, provider: String? = nil) -> some View {
+        let detail = [name != m ? m : nil, provider].compactMap { $0 }.joined(separator: " · ")
+        return Button {
             pick(p, m)
             dismiss()
         } label: {
             HStack {
                 VStack(alignment: .leading) {
                     Text(name).foregroundStyle(palette.ink)
-                    if name != m { Text(m).font(.caption2).foregroundStyle(palette.inkFaint) }
+                    if !detail.isEmpty { Text(detail).font(.caption2).foregroundStyle(palette.inkFaint) }
                 }
                 Spacer()
                 if loaded { Text("Loaded").font(.caption2).foregroundStyle(palette.success) }

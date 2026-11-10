@@ -578,17 +578,65 @@ public struct ComputerUse: Equatable, Sendable {
     }
 }
 
+/// Which Claude login a Claude subscription provider (`claude-code`) is signed in as
+/// (`ProviderAccount` in packages/shared/src/models.ts, #2488). One email can hold a
+/// personal plan (Pro, Max) and an organization seat (Team, Enterprise); each is its own provider.
+public struct ProviderAccount: Equatable, Sendable {
+    public enum Scope: String, Sendable {
+        /// The person's own plan; its name is always "Personal".
+        case personal
+        /// A Team or Enterprise seat; its name is the organization's.
+        case organization
+    }
+
+    public var signedIn: Bool
+    /// Missing for an API-key login or a signed-out one.
+    public var email: String?
+    public var scope: Scope?
+    /// "Personal", or the organization's name.
+    public var name: String?
+    /// `pro`, `max`, `team`, `enterprise`, or whatever a newer Claude Code prints; may be missing.
+    public var plan: String?
+
+    public init(signedIn: Bool, email: String? = nil, scope: Scope? = nil, name: String? = nil, plan: String? = nil) {
+        self.signedIn = signedIn
+        self.email = email
+        self.scope = scope
+        self.name = name
+        self.plan = plan
+    }
+
+    /// nil when the computer sent none (not read yet, an older build, or not a Claude subscription).
+    public static func from(_ v: JSONValue?) -> ProviderAccount? {
+        guard let v, v.object != nil else { return nil }
+        let blank = { (s: String?) in s.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } }
+        return ProviderAccount(signedIn: v.flag("signedIn"), email: blank(v.str("email")),
+                               scope: v.str("scope").flatMap(Scope.init(rawValue:)), name: blank(v.str("name")), plan: blank(v.str("plan")))
+    }
+}
+
 /// A provider as the phone keeps it: never the API key, base URL or token reference.
 public struct PublicProvider: Equatable, Sendable, Identifiable {
     public let id: String
     public let kind: String
     public let label: String
     public let enabled: Bool
+    /// Which Claude login it is, for a Claude subscription provider; nil otherwise.
+    public let account: ProviderAccount?
+
+    public init(id: String, kind: String, label: String, enabled: Bool, account: ProviderAccount? = nil) {
+        self.id = id
+        self.kind = kind
+        self.label = label
+        self.enabled = enabled
+        self.account = account
+    }
 
     public static func list(_ v: JSONValue?) -> [PublicProvider] {
         (v?.array ?? []).compactMap { p in
             guard let id = p.str("id") else { return nil }
-            return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"))
+            return PublicProvider(id: id, kind: p.str("kind") ?? "", label: p.str("label") ?? id, enabled: p.flag("enabled"),
+                                  account: ProviderAccount.from(p["account"]))
         }
     }
 
