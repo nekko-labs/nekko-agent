@@ -119,6 +119,8 @@ jobs:
           sparse-checkout: |
             ${{ inputs.ios_test_file }}
             apps/ios/App/Views/SecurityEvidenceFixture.swift
+            apps/ios/App/Views/ReplyVoicesFixture.swift
+            apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift
           sparse-checkout-cone-mode: false
       - name: Overlay tests only and record revisions
         env:
@@ -138,6 +140,12 @@ jobs:
           } > apps/ios/evidence/revisions.txt
           mkdir -p "$(dirname "$IOS_TEST_FILE")"
           cp ".evidence-harness/$IOS_TEST_FILE" "$IOS_TEST_FILE"
+          # The keyboard baseline contains the independently diagnosed recursive
+          # StarAskCountTests helper (#2531). Share its test-only repair on both
+          # revisions, leaving production keyboard behavior untouched.
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" ]]; then
+            cp .evidence-harness/apps/ios/Protocol/Tests/NekkoKitTests/StarAskTests.swift apps/ios/Protocol/Tests/NekkoKitTests/
+          fi
           # Only the security comparison needs the debug-only in-memory fixture.
           # Production views and behavior remain unchanged in both revisions.
           if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/SecurityComparisonTests.swift" ]]; then
@@ -153,6 +161,9 @@ jobs:
               s = s.replace(needle, '        if ProcessInfo.processInfo.arguments.contains("-uiTestSecurityEvidence") { SecurityEvidenceFixture() } else\n' + needle, 1)
           p.write_text(s)
           PYFIX
+          fi
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" ]]; then
+            cp .evidence-harness/apps/ios/App/Views/ReplyVoicesFixture.swift apps/ios/App/Views/
           fi
       - name: Test native protocol and phone request payloads
         working-directory: apps/ios/Protocol
@@ -175,6 +186,8 @@ jobs:
         working-directory: apps/ios
         env:
           ONLY_TESTING: ${{ inputs.ios_only_testing }}
+          IOS_TEST_FILE: ${{ inputs.ios_test_file }}
+          TEST_RUNNER_NEKKO_EVIDENCE_BASELINE: ${{ matrix.revision == 'before' && '1' || '0' }}
         run: |
           set -euo pipefail
           xcrun simctl boot "$DEVICE"
@@ -183,6 +196,11 @@ jobs:
           xcrun simctl status_bar "$DEVICE" override --time 9:41 --batteryState charged --batteryLevel 100
           COMMON=(-project NekkoNative.xcodeproj -scheme NekkoNative -configuration Debug -destination "platform=iOS Simulator,id=$DEVICE" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY="-" DEVELOPMENT_TEAM="" COMPILER_INDEX_STORE_ENABLE=NO)
           xcodebuild "${COMMON[@]}" build-for-testing
+          if [[ "$IOS_TEST_FILE" == "apps/ios/UITests/QuietTranscriptTests.swift" || "$IOS_TEST_FILE" == "apps/ios/UITests/KeyboardDismissEvidenceTests.swift" ]]; then
+            xcrun simctl io "$DEVICE" recordVideo --codec=h264 evidence/quiet-transcript.mp4 &
+            VIDEO_PID=$!
+            trap 'kill -INT "$VIDEO_PID" 2>/dev/null || true; wait "$VIDEO_PID" || true' EXIT
+          fi
           xcodebuild "${COMMON[@]}" -resultBundlePath evidence/mode-label.xcresult test-without-building \
             "-only-testing:$ONLY_TESTING"
       - name: Export attachments and clean up owned simulator

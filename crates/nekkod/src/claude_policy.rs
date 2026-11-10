@@ -102,6 +102,67 @@ pub struct ClaudePolicyStore {
     settings: Option<Arc<nekko_settings::SettingsStore>>,
     /// Each Claude Code harness provider's last `claude auth status --json`, by provider id.
     auth_status: Mutex<HashMap<String, Value>>,
+    /// Who each Claude Code harness provider is signed in as, from the same
+    /// read, and when it was read ([`account_view`]).
+    identity: Mutex<HashMap<String, (AccountIdentity, std::time::Instant)>>,
+}
+
+/// The account a Claude Code login belongs to, as `claude auth status` prints
+/// it: never a credential. One email can have a personal plan and an
+/// organization seat; each is its own login folder, told apart here.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct AccountIdentity {
+    pub signed_in: bool,
+    pub email: Option<String>,
+    pub org_id: Option<String>,
+    pub org_name: Option<String>,
+    /// `pro`, `max`, `team`, `enterprise`, or whatever a newer CLI prints.
+    pub plan: Option<String>,
+}
+
+impl AccountIdentity {
+    pub fn from_status(s: &nekko_harness::AuthStatus) -> Self {
+        let plan_login = s.logged_in && s.email.is_some();
+        Self {
+            signed_in: s.logged_in,
+            email: s.email.clone().filter(|_| plan_login),
+            org_id: s.org_id.clone().filter(|_| plan_login),
+            org_name: s.org_name.clone().filter(|_| plan_login),
+            plan: s.subscription_type.clone().filter(|_| plan_login),
+        }
+    }
+
+    /// Whether this login is an organization's seat (Team, Enterprise) rather
+    /// than the person's own plan. Claude names a personal plan's
+    /// organization "<email>'s Organization", so the plan decides, and the
+    /// name only when the CLI prints no plan.
+    pub fn is_organization(&self) -> bool {
+        match self.plan.as_deref() {
+            Some("team" | "enterprise") => true,
+            Some(_) => false,
+            None => self.org_name.as_deref().is_some_and(|n| !n.ends_with("'s Organization")),
+        }
+    }
+
+    /// `account` on a Claude Code provider in `providers:list`: the login
+    /// email, which account on it (`personal` or `organization`), its
+    /// display name ("Personal", or the organization's name) and plan.
+    pub fn view(&self) -> Value {
+        if !self.signed_in {
+            return json!({ "signedIn": false });
+        }
+        let Some(email) = &self.email else { return json!({ "signedIn": true }) };
+        let org = self.is_organization();
+        let name = if org { self.org_name.clone().unwrap_or_else(|| "Organization".into()) } else { "Personal".into() };
+        let mut v = json!({ "signedIn": true, "email": email, "scope": if org { "organization" } else { "personal" }, "name": name });
+        if let Some(plan) = &self.plan {
+            v["plan"] = json!(plan);
+        }
+        if let Some(id) = &self.org_id {
+            v["orgId"] = json!(id);
+        }
+        v
+    }
 }
 
 impl ClaudePolicyStore {
@@ -129,6 +190,7 @@ impl ClaudePolicyStore {
             settings: None,
             state: RwLock::new(State { effective: Policy::shipped(), applied: None }),
             auth_status: Mutex::new(HashMap::new()),
+            identity: Mutex::new(HashMap::new()),
         };
         store.recompute(None);
         if let Some(doc) = store.cache.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
@@ -237,6 +299,21 @@ impl ClaudePolicyStore {
         self.auth_status.lock().unwrap_or_else(|e| e.into_inner()).insert(provider_id.to_string(), status);
     }
 
+    /// Record who a harness provider is signed in as.
+    pub fn note_identity(&self, provider_id: &str, identity: AccountIdentity) {
+        self.identity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(provider_id.to_string(), (identity, std::time::Instant::now()));
+    }
+
+    /// The provider's `account` view and how old the read is; `None` before
+    /// any read.
+    pub fn account_view(&self, provider_id: &str) -> Option<(Value, std::time::Duration)> {
+        let ids = self.identity.lock().unwrap_or_else(|e| e.into_inner());
+        ids.get(provider_id).map(|(id, at)| (id.view(), at.elapsed()))
+    }
+
     /// Whether a status has been recorded for `provider_id`.
     pub fn has_auth_status(&self, provider_id: &str) -> bool {
         self.auth_status.lock().unwrap_or_else(|e| e.into_inner()).contains_key(provider_id)
@@ -323,6 +400,7 @@ pub async fn code_status_route(ctx: &crate::routes::Ctx, args: &[Value]) -> Resu
             let status = json!({ "loggedIn": s.logged_in, "authMethod": s.auth_method, "apiProvider": s.api_provider });
             if let Some(id) = provider_id {
                 ctx.claude_policy.note_auth_status(id, status.clone());
+                ctx.claude_policy.note_identity(id, AccountIdentity::from_status(&s));
             }
             let auth = if s.logged_in { policy::auth_from_status(Some(&status)) } else { ClaudeAuth::Unknown };
             Ok(json!({
@@ -453,6 +531,56 @@ fn preview_from_env(_is_packaged: bool) -> Option<ClaudeAuth> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn status(json: &str) -> nekko_harness::AuthStatus {
+        nekko_harness::parse_auth_status(json, true).unwrap()
+    }
+
+    #[test]
+    fn one_email_with_a_personal_plan_and_an_organization_seat_is_two_accounts() {
+        let personal = AccountIdentity::from_status(&status(
+            r#"{"loggedIn":true,"authMethod":"claude.ai","email":"me@example.com","orgId":"o1","orgName":"me@example.com's Organization","subscriptionType":"max"}"#,
+        ));
+        let seat = AccountIdentity::from_status(&status(
+            r#"{"loggedIn":true,"authMethod":"claude.ai","email":"me@example.com","orgId":"o2","orgName":"Nekko Labs","subscriptionType":"team"}"#,
+        ));
+        assert_eq!(
+            personal.view(),
+            json!({ "signedIn": true, "email": "me@example.com", "scope": "personal", "name": "Personal", "plan": "max", "orgId": "o1" })
+        );
+        assert_eq!(
+            seat.view(),
+            json!({ "signedIn": true, "email": "me@example.com", "scope": "organization", "name": "Nekko Labs", "plan": "team", "orgId": "o2" })
+        );
+    }
+
+    #[test]
+    fn an_unknown_plan_falls_back_to_the_organization_name() {
+        let org = AccountIdentity { signed_in: true, email: Some("a@b".into()), org_name: Some("Acme".into()), ..Default::default() };
+        assert!(org.is_organization());
+        let own = AccountIdentity { org_name: Some("a@b's Organization".into()), ..org.clone() };
+        assert!(!own.is_organization());
+        let enterprise = AccountIdentity { plan: Some("enterprise".into()), ..own };
+        assert!(enterprise.is_organization());
+    }
+
+    #[test]
+    fn signed_out_and_api_key_logins_name_no_one() {
+        let out = AccountIdentity::from_status(&nekko_harness::parse_auth_status(r#"{"loggedIn":false,"authMethod":"none","email":"stale@x"}"#, false).unwrap());
+        assert_eq!(out.view(), json!({ "signedIn": false }));
+        let key = AccountIdentity::from_status(&status(r#"{"loggedIn":true,"authMethod":"api_key"}"#));
+        assert_eq!(key.view(), json!({ "signedIn": true }));
+    }
+
+    #[test]
+    fn the_store_keeps_each_providers_identity() {
+        let store = ClaudePolicyStore::with_key([7; 32], None, None);
+        assert!(store.account_view("p").is_none());
+        store.note_identity("p", AccountIdentity { signed_in: true, email: Some("me@x".into()), plan: Some("pro".into()), ..Default::default() });
+        let (view, age) = store.account_view("p").unwrap();
+        assert_eq!(view["scope"], "personal");
+        assert!(age.as_secs() < 5);
+    }
     use ed25519_dalek::{Signer, SigningKey};
 
     const SEED: [u8; 32] = [7; 32];

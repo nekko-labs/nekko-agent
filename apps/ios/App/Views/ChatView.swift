@@ -57,6 +57,8 @@ struct ChatView: View {
     @State private var windowFrame: CGRect = .zero
     /// Something is being dragged over the chat.
     @State private var dropping = false
+    /// The GitHub star ask under the reply that reached 10 (then 50) prompts, until the next send or a choice.
+    @State private var starAsk = false
 
     var body: some View {
         Group {
@@ -68,8 +70,6 @@ struct ChatView: View {
         }
         .background { AppBackdrop() }
         .navigationBarTitleDisplayMode(.inline)
-        // Outside the composer, trailing just above the open software keyboard.
-        .floatingKeyboardDismiss()
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
@@ -78,6 +78,7 @@ struct ChatView: View {
             store.focus(chat: sessionId)
             if chat?.sessionId != sessionId {
                 chat?.stop()
+                starAsk = false
                 chat = ChatModel(sessionId: sessionId, store: store)
             }
             chat?.start()
@@ -193,6 +194,12 @@ struct ChatView: View {
                     if let e = chat.error {
                         Label(e, systemImage: "exclamationmark.triangle").font(.footnote).foregroundStyle(palette.danger)
                     }
+                    // Under the reply, never over a question, an approval, a failure or a saved copy.
+                    if starAsk && !chat.running && chat.turn.approval == nil && chat.turn.question == nil && chat.error == nil && chat.savedAt == nil {
+                        GitHubStarAsk(stop: { prefs.stopStarAsk() }, close: { withAnimation(.easeOut(duration: 0.16)) { starAsk = false } })
+                            .id("starAsk")
+                            .transition(.opacity)
+                    }
                     Color.clear.frame(height: 1).id("bottom")
                         .onAppear { atBottom = true }
                         .onDisappear { atBottom = false }
@@ -248,6 +255,14 @@ struct ChatView: View {
             // After the card has been laid out: scrolling in the same update used the old inset.
             .onChange(of: chat.turn.approval?.call.id) { _, _ in scrollAfterLayout(proxy) }
             .onChange(of: chat.turn.question != nil) { _, _ in scrollAfterLayout(proxy) }
+            // A prompt sent from here got its reply: it counts, and the 10th and 50th carry the star ask.
+            .onChange(of: chat.promptReplies) { old, new in
+                guard new > old, prefs.starAskAfterReply() else { return }
+                withAnimation(.easeOut(duration: 0.2)) { starAsk = true }
+                if atBottom { scrollAfterLayout(proxy) }
+            }
+            // The next send takes it away; unanswered, it was Not now.
+            .onChange(of: chat.promptsSent) { _, _ in starAsk = false }
             .overlay(alignment: .bottomTrailing) {
                 // Fades in and out (a fade, so also with Reduce Motion) rather than popping:
                 // `atBottom` changes outside any animation, as the end scrolls in or out of view.
@@ -434,7 +449,7 @@ struct ChatView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
                     .accessibilityIdentifier("chat.savedCopy")
             }
-            Composer(chat: chat, openTerminals: { showTerminals = true })
+            Composer(chat: chat, openTerminals: { showTerminals = true }, openFiles: { showFiles = true })
         }
         .padding(.horizontal, 12).padding(.bottom, 8).padding(.top, 6)
     }
@@ -762,6 +777,8 @@ struct BlockView: View {
     var editPicture: ((Int) -> Void)? = nil
     @Environment(\.palette) private var palette
     @State private var showReasoning = false
+    @State private var showProgress = false
+    @State private var showContext = false
 
     var body: some View {
         switch block {
@@ -769,6 +786,22 @@ struct BlockView: View {
             if images == 0, let wake = AgentRows.parseWake(text) {
                 // A watch's wake-up is a step of the run, not something the user typed.
                 WatchWakeRow(wake: wake, content: text, at: at)
+            } else if images == 0, let context = ConversationContext.parts(text) {
+                DisclosureGroup(isExpanded: $showContext) {
+                    MarkdownText(text: context.summary).textSelection(.enabled)
+                } label: {
+                    Label("Conversation summary", systemImage: "text.alignleft")
+                        .font(.footnote).foregroundStyle(palette.inkSoft)
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("chat.contextSummary")
+                if let prompt = context.prompt, !prompt.isEmpty {
+                    MarkdownText(text: prompt, bubble: true, selectable: false)
+                        .foregroundStyle(palette.userInk)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
+                }
             } else {
                 HStack {
                     Spacer(minLength: 48)
@@ -802,16 +835,19 @@ struct BlockView: View {
                     }
                 }
                 if !text.isEmpty {
-                    Group {
-                        if let chat {
-                            // Links route to the preview window or Safari; linked files and pages get cards (#1095).
-                            AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId, voice: voice)
-                        } else {
-                            MarkdownText(text: text, topics: true, askTail: voice == .reply || voice == .attention)
-                                .foregroundStyle(voice == .working ? palette.inkSoft : palette.ink)
+                    if voice == .working {
+                        DisclosureGroup(isExpanded: $showProgress) {
+                            replyText(text, streaming: streaming)
+                        } label: {
+                            Label("Progress note", systemImage: "brain")
+                                .font(.footnote).foregroundStyle(palette.inkSoft)
+                                .frame(minHeight: 44)
                         }
+                        .accessibilityIdentifier("chat.progressNote")
+                    } else {
+                        replyText(text, streaming: streaming)
+                            .modifier(Voiced(voice: voice))
                     }
-                    .modifier(Voiced(voice: voice))
                 }
                 if !photos.isEmpty {
                     if photos.contains(where: { !$0.isEmpty }) {
@@ -833,6 +869,16 @@ struct BlockView: View {
             default:
                 ToolRow(label: label, status: status, output: output)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func replyText(_ text: String, streaming: Bool) -> some View {
+        if let chat {
+            AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId, voice: voice)
+        } else {
+            MarkdownText(text: text, topics: true, askTail: voice == .reply || voice == .attention)
+                .foregroundStyle(voice == .working ? palette.inkSoft : palette.ink)
         }
     }
 }
@@ -1100,6 +1146,8 @@ struct Composer: View {
     let chat: ChatModel
     /// + → Terminal: the chat's terminals sheet.
     var openTerminals: () -> Void = {}
+    /// The folder after + → Files: the chat's files sheet.
+    var openFiles: () -> Void = {}
     @Environment(AppModel.self) private var app
     @Environment(ComputersStore.self) private var store
     @Environment(\.palette) private var palette
@@ -1263,11 +1311,14 @@ struct Composer: View {
                         Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
                             .disabled(!UIPasteboard.general.hasImages)
                     } label: {
-                        Image(systemName: "plus.circle.fill").font(.title2).foregroundStyle(palette.inkSoft)
+                        ComposerGlyph(name: "plus").foregroundStyle(palette.inkSoft)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
                     .accessibilityLabel("Add")
                     .accessibilityIdentifier("composer.add")
+                    // The desktop composer's order (#2448): +, the folder, then Simple's asks-first icon; mic and Send at the right.
+                    ComposerFolderMenu(chat: chat, openFiles: openFiles)
+                    if !chat.isImageChat && !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat, iconOnly: true) }
                     Spacer(minLength: 0)
                     // Listening (tap mode) keeps its stop button while earlier segments are transcribed.
                     if dictation.recording && !prefs.dictationHold {
@@ -1328,7 +1379,9 @@ struct Composer: View {
                 if parts.model || parts.effort || prefs.shows("context") {
                     HStack(spacing: 0) {
                         if parts.model || parts.effort { ModelEffortButton(chat: chat) }
-                        if !chat.isImageChat && !prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat) }
+                        // Expert keeps it beside the model with its name, as the desktop's details row does.
+                        // It gives way first on a narrow phone, so the context gauge keeps its width.
+                        if !chat.isImageChat && prefs.expertMode && prefs.shows("asks") { AsksFirstMenu(chat: chat).layoutPriority(-1) }
                         Spacer(minLength: 8)
                         if prefs.shows("context") { ContextGauge(chat: chat) }
                     }

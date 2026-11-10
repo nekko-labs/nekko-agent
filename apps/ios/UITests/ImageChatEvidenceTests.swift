@@ -6,9 +6,9 @@ final class ImageChatEvidenceTests: XCTestCase {
     @MainActor
     func testImageChatControlsGenerationAndExistingPhotoViewer() throws {
         let app = launch()
-        let kind = app.segmentedControls["newChat.kind"]
+        let kind = app.buttons["newChat.kind.image"]
         XCTAssertTrue(kind.waitForExistence(timeout: 10))
-        kind.buttons["Image"].tap()
+        kind.tap()
         capture("ImageChat-kind-local-only", app)
         app.buttons["newChat.imageSettings"].tap()
         let model = app.buttons["imageChat.model"]
@@ -31,9 +31,9 @@ final class ImageChatEvidenceTests: XCTestCase {
     @MainActor
     func testEditAMadePicture() throws {
         let app = launch()
-        let kind = app.segmentedControls["newChat.kind"]
+        let kind = app.buttons["newChat.kind.image"]
         XCTAssertTrue(kind.waitForExistence(timeout: 10))
-        kind.buttons["Image"].tap()
+        kind.tap()
         app.buttons["newChat.imageSettings"].tap()
         let model = app.buttons["imageChat.model"]
         XCTAssertTrue(model.waitForExistence(timeout: 5))
@@ -60,9 +60,9 @@ final class ImageChatEvidenceTests: XCTestCase {
     @MainActor
     func testOlderHostExplicitlyDisallowsImageGeneration() throws {
         let app = launch(["-imageOldHost"])
-        let kind = app.segmentedControls["newChat.kind"]
+        let kind = app.buttons["newChat.kind.image"]
         XCTAssertTrue(kind.waitForExistence(timeout: 10))
-        kind.buttons["Image"].tap()
+        kind.tap()
         XCTAssertFalse(app.buttons["newChat.start"].isEnabled)
         app.buttons["newChat.imageSettings"].tap()
         XCTAssertTrue(app.staticTexts["imageChat.error"].waitForExistence(timeout: 5))

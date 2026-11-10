@@ -839,7 +839,9 @@ async fn a_daemon_turn_writes_its_own_usage_and_reply_lines() {
     let lines: Vec<Value> = usage.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
     assert_eq!(lines.len(), 1, "{usage}");
     let keys: Vec<&str> = lines[0].as_object().unwrap().keys().map(String::as_str).collect();
-    assert_eq!(keys, ["ts", "providerId", "modelId", "inputTokens", "outputTokens", "sessionId", "auth", "local"]);
+    // `origin` (#2494): a turn the person sent; no `parentSessionId` for a chat of its own.
+    assert_eq!(keys, ["ts", "providerId", "modelId", "inputTokens", "outputTokens", "sessionId", "auth", "local", "origin"]);
+    assert_eq!(lines[0]["origin"], "user");
     assert_eq!(lines[0]["inputTokens"], 10);
     assert_eq!(lines[0]["outputTokens"], 3);
     assert_eq!(lines[0]["local"], false);

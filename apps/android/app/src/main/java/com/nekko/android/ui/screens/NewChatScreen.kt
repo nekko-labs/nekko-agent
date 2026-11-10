@@ -301,9 +301,9 @@ fun NewChatScreen(
             if (shared != null) SharedTextCard(shared, onEditShared)
             SectionHeader(if (active != null) stringResource(R.string.chats_on_computer, active.name) else stringResource(R.string.chats_on_your_computer))
             Column(Modifier.padding(horizontal = 16.dp)) {
-                Row(Modifier.horizontalScroll(rememberScrollState()).testTag("newChat.kind"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip(stringResource(R.string.image_kind_text), !imageChat) { imageChat = false }
-                    Chip(stringResource(R.string.image_kind_image), imageChat) { imageChat = true }
+                // Chat or Image: icons only, at the top right of what you start the chat from (#2448).
+                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.End) {
+                    com.nekko.android.ui.chat.ChatKindToggle(image = imageChat, onChange = { imageChat = it })
                 }
                 when {
                     active == null -> NCard {

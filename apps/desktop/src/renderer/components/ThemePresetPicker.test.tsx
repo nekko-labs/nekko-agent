@@ -28,10 +28,28 @@ describe('theme palette slices', () => {
     expect(markup).not.toContain('x-forest-colour');
     expect(markup).not.toContain('Colourful');
   });
-  it('renders preset and custom circles with solid slices', () => {
+  it('shows each palette as its own icon in that palette accent, and the custom wheel as slices', () => {
     const markup = renderToStaticMarkup(<ThemePresetPicker settings={{ theme: 'dark', accent: '#6d5efc' } as AppSettings} update={() => {}} />);
-    expect(markup).toContain('conic-gradient');
+    const icons = [['Nekko', 'cat'], ['Nebula', 'galaxy'], ['Terminal', 'terminal'], ['Nord', 'mountain'], ['Ember', 'flame'],
+      ['Forest', 'tree-evergreen'], ['Blueberry', 'blueberry'], ['Spooky', 'wizard-hat'], ['Winter', 'beanie']];
+    for (const [label, icon] of icons) {
+      expect(markup).toMatch(new RegExp(`title="${label}"[^]*?data-theme-icon="${icon}"`));
+    }
+    expect(markup.match(/data-theme-icon=/g)).toHaveLength(icons.length);
+    // Dark Nekko's accent colours its cat; the old palette circles are gone.
+    expect(markup).toMatch(/style="color:#c084b5"><span data-theme-icon="cat"/);
+    expect(markup.match(/conic-gradient/g)).toHaveLength(1);
     expect(markup).toContain('#f87171 0% 16.666666666666668%');
     expect(markup).toContain('role="radiogroup"');
+  });
+  it('gives every mask its own id so two pickers never share one', () => {
+    const markup = renderToStaticMarkup(<>
+      <ThemePresetPicker settings={{ theme: 'light' } as AppSettings} update={() => {}} />
+      <ThemePresetPicker settings={{ theme: 'light' } as AppSettings} update={() => {}} large />
+    </>);
+    const ids = [...markup.matchAll(/<mask id="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const [, ref] of markup.matchAll(/url\(#([^)]+)\)/g)) expect(ids).toContain(ref);
   });
 });

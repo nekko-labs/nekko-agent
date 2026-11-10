@@ -174,6 +174,9 @@ pub struct Wanted {
     pub permission_mode: PermissionMode,
     /// The provider's Claude Code account folder; `None` for the default login.
     pub config_dir: Option<PathBuf>,
+    /// `CLAUDE_CODE_SUBAGENT_MODEL`, from the sub-agent model preference
+    /// (#2487); `None` leaves Claude Code's own default.
+    pub subagent_model: Option<String>,
 }
 
 /// The Claude Code account a Claude Agent provider names
@@ -191,6 +194,7 @@ impl Wanted {
             && spec.effort == self.effort
             && spec.permission_mode == self.permission_mode
             && spec.config_dir == self.config_dir
+            && subagent_env(spec) == self.subagent_model.as_deref()
     }
 
     /// The launch, continuing `stored` when the chat has one.
@@ -212,9 +216,23 @@ impl Wanted {
             config_dir: self.config_dir.clone(),
             // Claude Code runs read-only git without asking: keep repository
             // configuration from naming programs those commands run.
-            env: nekko_tools::gitguard::agent_git_env(),
+            env: {
+                let mut env = nekko_tools::gitguard::agent_git_env();
+                if let Some(m) = &self.subagent_model {
+                    env.push((SUBAGENT_MODEL_ENV.into(), Some(m.clone())));
+                }
+                env
+            },
         }
     }
+}
+
+/// Claude Code's variable for the model its sub-agents run on.
+pub const SUBAGENT_MODEL_ENV: &str = "CLAUDE_CODE_SUBAGENT_MODEL";
+
+/// The sub-agent model a running child was launched with.
+fn subagent_env(spec: &LaunchSpec) -> Option<&str> {
+    spec.env.iter().rev().find(|(k, _)| k == SUBAGENT_MODEL_ENV).and_then(|(_, v)| v.as_deref())
 }
 
 impl Harness {
@@ -713,7 +731,21 @@ mod tests {
             effort: None,
             permission_mode: PermissionMode::Default,
             config_dir: None,
+            subagent_model: None,
         }
+    }
+
+    #[test]
+    fn the_subagent_model_rides_in_the_env_and_relaunches_on_change() {
+        let mut w = wanted();
+        w.subagent_model = Some("sonnet".into());
+        let spec = w.launch(bin(), None);
+        assert!(spec.env.contains(&(SUBAGENT_MODEL_ENV.to_string(), Some("sonnet".to_string()))));
+        assert!(w.matches(&spec));
+        let mut changed = w.clone();
+        changed.subagent_model = None;
+        assert!(!changed.matches(&spec), "a changed preference starts a new child");
+        assert!(changed.matches(&changed.launch(bin(), None)));
     }
 
     fn bin() -> ClaudeBin {

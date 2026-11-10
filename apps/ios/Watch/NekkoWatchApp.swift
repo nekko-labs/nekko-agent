@@ -55,7 +55,7 @@ struct WatchStatusView: View {
         VStack(spacing: 6) {
             Image(systemName: snapshot.needsYou > 0 ? "hand.raised.fill" : "cat")
                 .font(.title2)
-                .foregroundStyle(snapshot.needsYou > 0 ? Color.orange : Color.secondary)
+                .foregroundStyle(snapshot.needsYou > 0 ? BrandColor.attentionOnDark : BrandColor.inkFaintOnDark)
                 .accessibilityHidden(true)
             Text(snapshot.headline)
                 .font(.title3.weight(.semibold))

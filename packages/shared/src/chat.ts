@@ -43,6 +43,10 @@ export interface AgentWatchView {
   lastError?: string;
   /** Armed by Nekko itself on a PR the chat opened (Settings > Pull requests), not by the agent. */
   auto?: boolean;
+  /** PR watch: the checks as last polled. Progress the host records without waking the chat. */
+  checks?: 'passing' | 'failing' | 'pending' | 'none';
+  /** PR watch: the PR's state as last polled (`open`, `merged`, `closed`). */
+  prState?: string;
 }
 
 export interface ChatMessage {

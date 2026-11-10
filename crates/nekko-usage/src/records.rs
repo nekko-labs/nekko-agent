@@ -27,6 +27,10 @@ pub fn turn_usage_record(opts: &Value, provider: &Value, event: &Value, ts: u64)
     copy(&mut o, "auth", get(provider, "auth"));
     let kind = get(provider, "kind").and_then(Value::as_str);
     o.insert("local".into(), Value::Bool(kind.is_some_and(|k| LOCAL_PROVIDER_KINDS.contains(&k))));
+    // Where the turn came from (#2494): `user` or `background`, and the
+    // parent chat of a sub-agent's turn. Set by the daemon; older records lack them.
+    copy(&mut o, "origin", get(opts, "origin"));
+    copy(&mut o, "parentSessionId", get(opts, "parentSessionId"));
     Value::Object(o)
 }
 
