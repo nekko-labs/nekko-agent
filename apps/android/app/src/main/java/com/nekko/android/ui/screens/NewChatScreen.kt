@@ -150,6 +150,15 @@ fun NewChatScreen(
     /** Automatic set the model (a local one), on a computer whose providers may still be loading. */
     var autoChoseModel by rememberSaveable { mutableStateOf(false) }
 
+    // "Send your first prompt" (#2234): once, over someone's first ever New chat; closing it any way marks it seen.
+    val prefs = com.nekko.android.ui.security.LocalPhonePrefs.current
+    val introSeen = prefs?.flow(FirstPromptIntro.SEEN)?.collectAsStateWithLifecycle()?.value ?: true
+    var introOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(introSeen, c.summariesLoaded, c.savedListAt, online, c.summaries) {
+        if (!introOpen && FirstPromptIntro.shouldShow(introSeen, listLoaded = online && c.summariesLoaded && c.savedListAt == null, chats = c.summaries)) introOpen = true
+    }
+    if (introOpen) FirstPromptIntroSheet(onDone = { introOpen = false; prefs?.set(FirstPromptIntro.SEEN, true) })
+
     // The models are the computer's: ask every enabled provider there, in parallel.
     LaunchedEffect(online, c.providers, imageChat) {
         if (online && !imageChat && c.providers.isNotEmpty()) {

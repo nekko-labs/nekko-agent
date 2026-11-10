@@ -36,13 +36,13 @@
     <string name="chats_skip">Überspringen</string>
     <string name="chats_continue">Weiter</string>
     <string name="chats_intro_title">Dein Agent in der Hosentasche</string>
-    <string name="chats_intro_body">Nekko Agent läuft auf deinem Computer. Mit dieser App steuerst du ihn von überall.</string>
+    <string name="chats_intro_body">Chatte direkt auf diesem Telefon mit einer Cloud-API oder verbinde einen Computer für Agenten und Werkzeuge.</string>
     <string name="chats_intro_follow_title">Chats live verfolgen</string>
     <string name="chats_intro_follow_text">Sieh deinem Computer bei der Arbeit zu und starte neue Chats von hier.</string>
     <string name="chats_intro_approve_title">Tools freigeben und Fragen beantworten</string>
     <string name="chats_intro_approve_text">Wenn der Agent dich braucht, entscheidest du.</string>
     <string name="chats_intro_private_title">Privat von Grund auf</string>
-    <string name="chats_intro_private_text">Alles ist zwischen diesem Telefon und deinem Computer Ende-zu-Ende-verschlüsselt.</string>
+    <string name="chats_intro_private_text">Computer-Chats sind Ende-zu-Ende-verschlüsselt. Telefon-Chats nutzen HTTPS direkt zu deinem gewählten Anbieter.</string>
     <string name="chats_allow_notifications">Mitteilungen erlauben</string>
     <string name="chats_not_now">Nicht jetzt</string>
     <string name="chats_notify_title">Erfahre, wann dein Computer dich braucht</string>

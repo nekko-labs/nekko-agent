@@ -122,6 +122,8 @@ data class ChatUi(
     val imageParams: com.nekko.protocol.ImageChatParams? = null,
     /** The chat's folder on the computer, shown after + in the composer; null for none. */
     val workspaceId: String? = null,
+    /** Each finished reply's measurements, by the id of the block they follow (#2112, the iPhone's #1911). */
+    val footers: Map<String, com.nekko.protocol.TurnDetails> = emptyMap(),
 )
 
 /**
@@ -736,6 +738,7 @@ class ChatController(
                 title = plainText(state.session?.title ?: "").ifEmpty { "Chat" },
                 subtitle = listOfNotNull(modelId, env.computerName).joinToString(" · "),
                 blocks = com.nekko.protocol.QuestionReplies.project(Transcript.mergeLive(saved, turn.blocks)),
+                footers = state.session?.let { com.nekko.protocol.TurnDetails.footers(it.messages) } ?: emptyMap(),
                 running = turn.running || (image && state.session.running),
                 approval = turn.approval,
                 question = turn.question,

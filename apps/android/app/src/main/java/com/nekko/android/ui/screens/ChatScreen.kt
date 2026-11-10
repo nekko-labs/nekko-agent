@@ -371,7 +371,7 @@ private fun ChatScreenContent(
     // Adjacent calls with one purpose fold into one card (spec/chat/tool-calls-grouped-by-purpose.md).
     // Simple folds each turn's reasoning and tool steps into one line that opens in place (the approval card still asks).
     var openTurns by remember(vm.sessionId) { mutableStateOf(setOf<String>()) }
-    val rows = remember(keyed, showSteps, chat.running, openTurns) { transcriptRows(keyed, showSteps, chat.running, openTurns) }
+    val rows = remember(keyed, showSteps, chat.running, openTurns, chat.footers) { transcriptRows(keyed, showSteps, chat.running, openTurns, chat.footers) }
     // How each reply reads in its turn: a note, something left for you, or the reply (spec/chat/thinking-and-replies.md).
     val voices = remember(keyed, chat.running) { keyed.map { it.first }.zip(ReplyTopics.voices(chat.blocks, chat.running)).toMap() }
     val lastIndex = headerCount + rows.size + footerCount - 1
@@ -655,6 +655,8 @@ private fun ChatScreenContent(
                                 // Watch chips and subagent rows read the chat's watches and child chats.
                                 CompositionLocalProvider(LocalAgentContext provides agentContext, com.nekko.android.ui.chat.LocalSessionPhoto provides vm::photo) {
                                     when {
+                                        // A finished reply's metrics and, when it completed, its check (#2112).
+                                        row is TranscriptRow.Footer -> com.nekko.android.ui.chat.TurnDetailsRow(row.details)
                                         row is TranscriptRow.Steps -> StepsLine(row.steps.steps, row.steps.running, row.steps.durationMs, row.steps.open) {
                                             openTurns = if (row.steps.open) openTurns - row.steps.turn else openTurns + row.steps.turn
                                         }
@@ -683,7 +685,8 @@ private fun ChatScreenContent(
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     chat.error?.let { Notice(it, Tone.DANGER) }
                                     val rate = chat.rate
-                                    if (!chat.running && rate != null) {
+                                    // The last reply's own line already gives its speed.
+                                    if (!chat.running && rate != null && chat.footers.isEmpty()) {
                                         Text(
                                             stringResource(R.string.chats_tokens_per_second, String.format(Locale.US, "%.1f", rate)),
                                             style = MaterialTheme.typography.bodySmall,
@@ -1074,14 +1077,26 @@ private fun cameraUri(context: Context, file: File): Uri =
     FileProvider.getUriForFile(context, "${context.packageName}.photos", file)
 
 /** A transcript row: a message or a purpose group, or (Simple) one turn's folded steps. */
-private sealed interface TranscriptRow {
+internal sealed interface TranscriptRow {
     /** [stepsOpen] when its turn's steps show, so a reply's reasoning shows too. */
     data class Run(val run: PurposeRun<Pair<String, Block>>, val stepsOpen: Boolean) : TranscriptRow
     data class Steps(val steps: TurnSteps.Row.Summary<Pair<String, Block>>) : TranscriptRow
+    /** A finished reply's metrics, after the block it follows; it ends a purpose group. */
+    data class Footer(val details: com.nekko.protocol.TurnDetails) : TranscriptRow
 }
 
-private fun transcriptRows(keyed: List<Pair<String, Block>>, showSteps: Boolean, running: Boolean, open: Set<String>): List<TranscriptRow> {
-    if (showSteps) return Purpose.group(keyed) { Purpose.role(it.second) }.map { TranscriptRow.Run(it, stepsOpen = true) }
+internal fun transcriptRows(
+    keyed: List<Pair<String, Block>>,
+    showSteps: Boolean,
+    running: Boolean,
+    open: Set<String>,
+    footers: Map<String, com.nekko.protocol.TurnDetails> = emptyMap(),
+): List<TranscriptRow> {
+    // Each footer goes right after its block, or (that block folded away in Simple) right after
+    // the last thing shown before the next one, so it shows whether the steps are open or not.
+    val at = java.util.TreeMap<Int, com.nekko.protocol.TurnDetails>()
+    footers.forEach { (anchor, d) -> keyed.indexOfLast { it.second.id == anchor && it.second !is Block.User }.takeIf { it >= 0 }?.let { at[it] = d } }
+    val index = keyed.withIndex().associate { it.value.first to it.index }
     val out = mutableListOf<TranscriptRow>()
     val pending = mutableListOf<Pair<String, Block>>()
     var pendingOpen = false
@@ -1089,22 +1104,40 @@ private fun transcriptRows(keyed: List<Pair<String, Block>>, showSteps: Boolean,
         Purpose.group(pending.toList()) { Purpose.role(it.second) }.forEach { out += TranscriptRow.Run(it, pendingOpen) }
         pending.clear()
     }
-    TurnSteps.fold(keyed, { it.second }, { it.first }, running, open).forEach { r ->
-        when (r) {
-            is TurnSteps.Row.Summary -> { flush(); out += TranscriptRow.Steps(r) }
-            is TurnSteps.Row.Item -> {
-                if (r.stepsOpen != pendingOpen) flush()
-                pendingOpen = r.stepsOpen
-                pending += r.item
+    /** Footers whose block comes before [i]: they close what is pending. */
+    fun footersBefore(i: Int) {
+        while (at.isNotEmpty() && at.firstKey() < i) {
+            flush()
+            out += TranscriptRow.Footer(at.pollFirstEntry().value)
+        }
+    }
+    if (showSteps) {
+        keyed.forEachIndexed { i, item ->
+            footersBefore(i)
+            pendingOpen = true
+            pending += item
+        }
+    } else {
+        TurnSteps.fold(keyed, { it.second }, { it.first }, running, open).forEach { r ->
+            when (r) {
+                is TurnSteps.Row.Summary -> { footersBefore(index[r.turn] ?: 0); flush(); out += TranscriptRow.Steps(r) }
+                is TurnSteps.Row.Item -> {
+                    footersBefore(index[r.item.first] ?: 0)
+                    if (r.stepsOpen != pendingOpen) flush()
+                    pendingOpen = r.stepsOpen
+                    pending += r.item
+                }
             }
         }
     }
+    footersBefore(Int.MAX_VALUE)
     flush()
     return out
 }
 
 /** A list key for a transcript row: the block's own key, its first block's for a purpose group, or its turn's for folded steps. */
 private fun rowKey(row: TranscriptRow): String = when (row) {
+    is TranscriptRow.Footer -> "footer:" + row.details.id
     is TranscriptRow.Steps -> "steps:" + row.steps.turn
     is TranscriptRow.Run -> when (val run = row.run) {
         is PurposeRun.Single -> run.item.first

@@ -110,19 +110,22 @@ pub fn claude_context_window(model: &str) -> Option<u64> {
 /// `claudeMaxOutputTokens`: the most output tokens one reply from a Claude
 /// model may hold, by family and generation. `max_tokens` is required on every
 /// request, so a chat with no cap of its own is sent the model's own ceiling.
+/// This table is the fallback: the Models API's `max_tokens`, when the
+/// provider has a models list, is preferred (`SamplingMemory::note_reported_output_limit`).
 /// An id that is not Claude's gets a generous middle value; a model that holds
 /// less says so in a 400 (see `output_limit_error`).
+///
+/// Anthropic's model table (checked 2026-11-10): 128K for Fable and Mythos,
+/// Opus and Sonnet from 4.6 on, and Haiku from 5 on; 64K for Opus 4.5, Sonnet
+/// 3.7 to 4.5 and Haiku 4.x; 32K for Opus 4 and 4.1.
 pub fn claude_max_output_tokens(model: &str) -> u64 {
     let Some(c) = parse_claude_model(model) else { return 32_000 };
-    if c.family == Family::Haiku && c.major >= 5.0 {
-        return 128_000;
-    }
-    if matches!(c.family, Family::Fable | Family::Mythos) || c.major >= 5.0 {
-        return 64_000;
-    }
     match c.family {
+        Family::Fable | Family::Mythos => 128_000,
         Family::Haiku => {
-            if c.major >= 4.0 {
+            if c.major >= 5.0 {
+                128_000
+            } else if c.major >= 4.0 {
                 64_000
             } else if c.minor >= 5.0 {
                 8_192
@@ -131,20 +134,24 @@ pub fn claude_max_output_tokens(model: &str) -> u64 {
             }
         }
         Family::Sonnet => {
-            if c.major >= 4.0 || at_least(&c, 3.0, 7.0) {
+            if at_least(&c, 4.0, 6.0) {
+                128_000
+            } else if c.major >= 4.0 || at_least(&c, 3.0, 7.0) {
                 64_000
             } else {
                 8_192
             }
         }
-        // Opus: 3 held 4k, 4 and 4.1 hold 32k, 4.5 onwards 64k.
+        // Opus: 3 held 4k, 4 and 4.1 hold 32k, 4.5 64k, 4.6 onwards 128k.
         _ => {
-            if c.major < 4.0 {
-                4_096
+            if at_least(&c, 4.0, 6.0) {
+                128_000
             } else if at_least(&c, 4.0, 5.0) {
                 64_000
-            } else {
+            } else if c.major >= 4.0 {
                 32_000
+            } else {
+                4_096
             }
         }
     }
@@ -325,6 +332,9 @@ pub struct SamplingMemory {
     /// `LEARNED_OUTPUT_LIMIT`: the output ceiling the API reported for a model
     /// when the table below was too generous.
     output_limits: Mutex<HashMap<String, u64>>,
+    /// The output ceiling the Models API lists for a model (`max_tokens`),
+    /// noted when the provider lists its models. A 400's ceiling still wins.
+    reported_output_limits: Mutex<HashMap<String, u64>>,
 }
 
 impl SamplingMemory {
@@ -345,6 +355,7 @@ impl SamplingMemory {
     pub fn reset(&self) {
         self.shapes.lock().unwrap_or_else(|e| e.into_inner()).clear();
         self.output_limits.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        self.reported_output_limits.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 
     /// `learnOutputLimit`: keep the ceiling a 400 named for this model.
@@ -352,13 +363,25 @@ impl SamplingMemory {
         self.output_limits.lock().unwrap_or_else(|e| e.into_inner()).insert(normalize_model_id(model), limit);
     }
 
+    /// Keep the output ceiling the Models API lists for this model, so a
+    /// new model gets its real ceiling without a table edit.
+    pub fn note_reported_output_limit(&self, model: &str, limit: u64) {
+        if limit > 0 {
+            self.reported_output_limits
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(normalize_model_id(model), limit);
+        }
+    }
+
     /// `outputCapFor`: the `max_tokens` to send. The request's own cap when it
-    /// has one (a sideband call's explicit budget), else the model's ceiling,
-    /// never above what the API has told us.
+    /// has one (a sideband call's explicit budget), else the model's ceiling:
+    /// what a 400 named, else what the Models API lists, else the table.
     pub fn output_cap_for(&self, model: &str, requested: Option<u64>) -> u64 {
-        let learned =
-            self.output_limits.lock().unwrap_or_else(|e| e.into_inner()).get(&normalize_model_id(model)).copied();
-        let ceiling = learned.unwrap_or_else(|| claude_max_output_tokens(model));
+        let id = normalize_model_id(model);
+        let learned = self.output_limits.lock().unwrap_or_else(|e| e.into_inner()).get(&id).copied();
+        let reported = self.reported_output_limits.lock().unwrap_or_else(|e| e.into_inner()).get(&id).copied();
+        let ceiling = learned.or(reported).unwrap_or_else(|| claude_max_output_tokens(model));
         match requested {
             Some(n) if n > 0 => n.min(ceiling),
             _ => ceiling,
@@ -595,27 +618,63 @@ mod tests {
 
     #[test]
     fn reads_the_output_ceiling_off_the_id() {
-        assert_eq!(claude_max_output_tokens("claude-opus-5-5"), 64_000);
-        assert_eq!(claude_max_output_tokens("anthropic/claude-opus-4-1"), 32_000);
+        // Anthropic's model table, checked 2026-11-10.
+        for id in [
+            "claude-fable-5-2",
+            "claude-fable-5-1",
+            "claude-fable-5",
+            "claude-mythos-5-2",
+            "claude-opus-5-5",
+            "claude-opus-5",
+            "claude-opus-4-8",
+            "claude-opus-4-7",
+            "claude-opus-4-6",
+            "claude-sonnet-5-5",
+            "claude-sonnet-5",
+            "claude-sonnet-4-6",
+            "claude-haiku-5-5",
+            "anthropic.claude-opus-5-5",
+            "us.anthropic.claude-sonnet-4-6",
+            "anthropic/claude-fable-5-2",
+        ] {
+            assert_eq!(claude_max_output_tokens(id), 128_000, "{id}");
+        }
         assert_eq!(claude_max_output_tokens("claude-opus-4-5"), 64_000);
-        assert_eq!(claude_max_output_tokens("claude-sonnet-4-6"), 64_000);
-        assert_eq!(claude_max_output_tokens("claude-sonnet-3-5"), 8_192);
+        assert_eq!(claude_max_output_tokens("claude-sonnet-4-5"), 64_000);
         assert_eq!(claude_max_output_tokens("claude-haiku-4-5-20251001"), 64_000);
-        assert_eq!(claude_max_output_tokens("claude-haiku-5-5"), 128_000);
-        assert_eq!(claude_max_output_tokens("claude-fable-5-1"), 64_000);
+        assert_eq!(claude_max_output_tokens("anthropic/claude-opus-4-1"), 32_000);
+        assert_eq!(claude_max_output_tokens("claude-sonnet-3-5"), 8_192);
         assert_eq!(claude_max_output_tokens("my-proxy-model"), 32_000);
     }
 
     #[test]
     fn learns_a_lower_output_ceiling() {
         let m = SamplingMemory::default();
-        assert_eq!(m.output_cap_for("claude-opus-5-5", None), 64_000);
+        assert_eq!(m.output_cap_for("claude-opus-5-5", None), 128_000);
         assert_eq!(m.output_cap_for("claude-opus-5-5", Some(220)), 220);
         assert_eq!(m.output_cap_for("claude-opus-4-1", Some(100_000)), 32_000);
         m.learn_output_limit("anthropic/claude-opus-5-5", 16_000);
         assert_eq!(m.output_cap_for("claude-opus-5-5", None), 16_000);
         m.reset();
-        assert_eq!(m.output_cap_for("claude-opus-5-5", None), 64_000);
+        assert_eq!(m.output_cap_for("claude-opus-5-5", None), 128_000);
+    }
+
+    #[test]
+    fn prefers_the_models_api_ceiling_over_the_table_and_a_400_over_both() {
+        let m = SamplingMemory::default();
+        // A model released after this build: the table guesses, the API knows.
+        assert_eq!(m.output_cap_for("claude-sonnet-6", None), 128_000);
+        m.note_reported_output_limit("claude-sonnet-6", 256_000);
+        assert_eq!(m.output_cap_for("claude-sonnet-6", None), 256_000);
+        assert_eq!(m.output_cap_for("claude-sonnet-6", Some(1_000)), 1_000);
+        // A zero is no information.
+        m.note_reported_output_limit("claude-opus-5-5", 0);
+        assert_eq!(m.output_cap_for("claude-opus-5-5", None), 128_000);
+        // A 400's ceiling is the API speaking about this very request: it wins.
+        m.learn_output_limit("claude-sonnet-6", 64_000);
+        assert_eq!(m.output_cap_for("claude-sonnet-6", None), 64_000);
+        m.reset();
+        assert_eq!(m.output_cap_for("claude-sonnet-6", None), 128_000);
     }
 
     #[test]
