@@ -1,5 +1,6 @@
 package com.nekko.android
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.provider.Settings
 import androidx.activity.ComponentActivity
