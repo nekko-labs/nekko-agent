@@ -70,8 +70,6 @@ struct ChatView: View {
         }
         .background { AppBackdrop() }
         .navigationBarTitleDisplayMode(.inline)
-        // Outside the composer, trailing just above the open software keyboard.
-        .floatingKeyboardDismiss()
         .task(id: sessionId) {
             // Coming back to the same chat (a pushed screen popped) keeps the
             // model and what has streamed so far; start() re-subscribes and re-reads.
@@ -779,6 +777,8 @@ struct BlockView: View {
     var editPicture: ((Int) -> Void)? = nil
     @Environment(\.palette) private var palette
     @State private var showReasoning = false
+    @State private var showProgress = false
+    @State private var showContext = false
 
     var body: some View {
         switch block {
@@ -786,6 +786,22 @@ struct BlockView: View {
             if images == 0, let wake = AgentRows.parseWake(text) {
                 // A watch's wake-up is a step of the run, not something the user typed.
                 WatchWakeRow(wake: wake, content: text, at: at)
+            } else if images == 0, let context = ConversationContext.parts(text) {
+                DisclosureGroup(isExpanded: $showContext) {
+                    MarkdownText(text: context.summary).textSelection(.enabled)
+                } label: {
+                    Label("Conversation summary", systemImage: "text.alignleft")
+                        .font(.footnote).foregroundStyle(palette.inkSoft)
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("chat.contextSummary")
+                if let prompt = context.prompt, !prompt.isEmpty {
+                    MarkdownText(text: prompt, bubble: true, selectable: false)
+                        .foregroundStyle(palette.userInk)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .background(palette.userBubble, in: RoundedRectangle(cornerRadius: 18))
+                }
             } else {
                 HStack {
                     Spacer(minLength: 48)
@@ -819,16 +835,19 @@ struct BlockView: View {
                     }
                 }
                 if !text.isEmpty {
-                    Group {
-                        if let chat {
-                            // Links route to the preview window or Safari; linked files and pages get cards (#1095).
-                            AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId, voice: voice)
-                        } else {
-                            MarkdownText(text: text, topics: true, askTail: voice == .reply || voice == .attention)
-                                .foregroundStyle(voice == .working ? palette.inkSoft : palette.ink)
+                    if voice == .working {
+                        DisclosureGroup(isExpanded: $showProgress) {
+                            replyText(text, streaming: streaming)
+                        } label: {
+                            Label("Progress note", systemImage: "brain")
+                                .font(.footnote).foregroundStyle(palette.inkSoft)
+                                .frame(minHeight: 44)
                         }
+                        .accessibilityIdentifier("chat.progressNote")
+                    } else {
+                        replyText(text, streaming: streaming)
+                            .modifier(Voiced(voice: voice))
                     }
-                    .modifier(Voiced(voice: voice))
                 }
                 if !photos.isEmpty {
                     if photos.contains(where: { !$0.isEmpty }) {
@@ -850,6 +869,16 @@ struct BlockView: View {
             default:
                 ToolRow(label: label, status: status, output: output)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func replyText(_ text: String, streaming: Bool) -> some View {
+        if let chat {
+            AssistantReply(text: text, streaming: streaming, sessionId: chat.sessionId, voice: voice)
+        } else {
+            MarkdownText(text: text, topics: true, askTail: voice == .reply || voice == .attention)
+                .foregroundStyle(voice == .working ? palette.inkSoft : palette.ink)
         }
     }
 }
@@ -1147,6 +1176,19 @@ struct Composer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if focused {
+                HStack {
+                    Spacer()
+                    Button(action: hideKeyboard) {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Hide keyboard")
+                    .accessibilityIdentifier("composer.hideKeyboard")
+                }
+            }
             // With the other next steps, above the box. A skill or saved prompt is a slash command, not work to place.
             if !chat.isImageChat, skill == nil, prompt == nil, chat.offersSubagent(text) { workPlace }
             if let blocked = chat.blocked {

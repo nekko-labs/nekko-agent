@@ -32,3 +32,10 @@ Topics are read from the text the model wrote, with no model call and no change 
 
 - Labels are recognised in English. A reply in another language gets its panels and the closing question header (`？` counts), but a translated label stays bold text.
 - A model that ignores the labels still gets the panels and the closing question header, not the other headers.
+
+## Compact iOS transcript (#2452)
+
+- [implemented on branch; native verification pending] Settled working/progress notes start collapsed behind a 44-point Progress note disclosure in both Simple and Detailed modes. Explicit expansion shows the original text. Model reasoning keeps its existing collapsed Thought disclosure. Replies and attention messages, including questions and next steps, are not folded. Unclassified streaming text stays visible until its voice settles.
+- [implemented on branch; native verification pending] A user-role continuation envelope beginning with the exact generated prefix `Summary of the earlier conversation, compacted to save context:` starts collapsed as Conversation summary. An arbitrary Task and workspace heading is not enough to hide a user message. Messages with attached images stay visible. Expansion preserves the full context; no summary-model call, storage rewrite, context deletion or network request is introduced.
+- [implemented on branch; native verification pending] An active iOS chat exposes a borderless, labeled 44-point Hide keyboard control while its composer is focused. Focus drives the control rather than global keyboard-frame notifications. The plain icon label defines an explicit rectangular 44-point hit shape; hosted accessibility audits previously reported only the glyph bounds without it, and the repair still requires native verification. Hardware-keyboard users can also dismiss editing; New chat and forms retain their existing dismissal behavior.
+- Android parity remains planned in [#2453](https://github.com/nekko-labs/nekko-agent/issues/2453). Folded/unfolded devices and hardware keyboards still require native verification.
