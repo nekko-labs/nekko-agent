@@ -66,7 +66,13 @@ final class SecurityEvidenceTests: XCTestCase {
         // Photographed before the checks, so the revision without the feature is captured too.
         attach(app, "always-allow-from-outside")
 
-        let card = app.descendants(matching: .any)["securityEvidence.card"]
+        // The DEBUG fixture contains the real dashboard; target its container,
+        // not an inherited identifier on a leaf with no descendants.
+        let card = app.otherElements["securityEvidence.card"]
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "always-allow-from-outside-ax"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
         XCTAssertTrue(card.exists, "the Lock Screen card is shown")
         // Decision 0070 replaced the approval strip with totals. Check the actual fixture's
         // counts, not just a container, while the in-app signed action is still refused below.

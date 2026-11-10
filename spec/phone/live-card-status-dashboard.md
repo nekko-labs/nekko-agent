@@ -103,6 +103,16 @@ and the original five-/20-/10-second deadlines; it does not set preferences or
 permissions directly. Source contracts reject the old hittability-only path.
 Native compilation and execution of this new driver remain **unverified**.
 
+The completed 5c933 fixture shard failed only the dashboard count/handoff queries
+on both attempts (eight assertions). Both exported screenshots were inspected and
+show all three required totals and Open app, above the refused in-app approval.
+This supports a query-scoping diagnosis, not missing dashboard rendering; the old
+export has no security hierarchy attachment to prove the exact accessibility cause.
+The DEBUG fixture now explicitly contains its real accessibility children, and the
+test targets that Other container and records the app hierarchy before retaining
+all count, handoff, no-strip, signed-link and refused-save assertions. This fixture
+and query repair has **not yet been compiled or executed natively**.
+
 ## Verification still pending
 
 Source changes include producer/relay/protocol/dispatcher tests and native UI evidence fixtures. Their presence is not a passing native run.

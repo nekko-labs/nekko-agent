@@ -5,6 +5,7 @@ import fs from 'node:fs';
 
 const relay = fs.readFileSync(new URL('../UITests/LiveRelayTests.swift', import.meta.url), 'utf8');
 const security = fs.readFileSync(new URL('../UITests/SecurityEvidenceTests.swift', import.meta.url), 'utf8');
+const fixture = fs.readFileSync(new URL('../App/Views/SecurityEvidenceFixture.swift', import.meta.url), 'utf8');
 
 function notificationContract(source) {
   const start = source.indexOf('let test = app.buttons["settings.notify.test"]');
@@ -77,5 +78,25 @@ test('dashboard evidence retains signed-link execution and refused-save safety c
     'XCTAssertFalse(card.buttons["approval.alwaysAllow"].exists',
   ]) {
     assert.throws(() => securityContract(security.replace(required, '// removed')));
+  }
+});
+
+function containerContract(view, journey) {
+  assert.match(view, /\.accessibilityElement\(children: \.contain\)\s*\.accessibilityIdentifier\("securityEvidence\.card"\)/);
+  assert.ok(journey.includes('let card = app.otherElements["securityEvidence.card"]'));
+  assert.ok(journey.includes('XCTAttachment(string: app.debugDescription)'));
+  assert.ok(journey.includes('hierarchy.name = "always-allow-from-outside-ax"'));
+  assert.ok(journey.includes('hierarchy.lifetime = .keepAlways'));
+  securityContract(journey);
+}
+
+test('the DEBUG dashboard has a contained, queryable hierarchy without hiding its children', () => {
+  containerContract(fixture, security);
+  for (const children of ['combine', 'ignore']) {
+    assert.throws(() => containerContract(fixture.replace('children: .contain', 'children: .' + children), security));
+  }
+  for (const required of ['let card = app.otherElements["securityEvidence.card"]',
+    'XCTAttachment(string: app.debugDescription)', 'hierarchy.lifetime = .keepAlways']) {
+    assert.throws(() => containerContract(fixture, security.replace(required, '// removed')));
   }
 });
