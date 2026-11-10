@@ -100,7 +100,7 @@ What the app draws in the brand's own colours, whatever theme is chosen. Before 
 | Surface | Ground / fill | Line and mark | Small accent |
 |---|---|---|---|
 | iPhone launch screen (`LaunchBrandPlum.storyboard`), opening animation, return dissolve and app lock cover | plum `#190019` | white cat | none |
-| Android 12+ opening splash | plum `#190019` (`ic_launcher_background`) | white mark (`ic_launcher_mark`) | none |
+| Android 12+ opening splash | plum `#190019` (`ic_launcher_background`) | none since #2120 (`splash_blank`): the app's opening builds the white cat in its first frame, as the iPhone's plain-plum launch screen | none |
 | Desktop / Local Web UI startup splash | plum `#190019` (already, #2272) | white | none |
 | Pixel mascot (iPhone `PixelCat`, the paw refresh, the Live Activity cat, the pairing celebration; Android `PixelCat`; desktop `PixelHead`) | plum `#190019` | white line and eyes | mouth `#C99BB3` |
 | Outline brand mark on a themed screen (iPhone first run and pairing) | none | the theme's `accent` | none |
