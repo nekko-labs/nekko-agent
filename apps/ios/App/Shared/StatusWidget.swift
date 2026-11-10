@@ -33,12 +33,12 @@ struct StatusWidgetView: View {
         default:
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Circle().fill(snapshot.online ? Color.green : Color.secondary).frame(width: 7, height: 7)
+                    Circle().fill(snapshot.online ? BrandColor.success : Color.secondary).frame(width: 7, height: 7)
                     Text(snapshot.computer ?? "Nekko Agent").font(.caption.weight(.semibold)).lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 if snapshot.needsYou > 0 {
-                    Text("\(snapshot.needsYou)").font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(.orange)
+                    Text("\(snapshot.needsYou)").font(.system(size: 40, weight: .bold, design: .rounded)).foregroundStyle(BrandColor.attention)
                     Text(snapshot.needsYou == 1 ? "needs you" : "need you").font(.subheadline.weight(.medium))
                 } else {
                     Text(snapshot.headline).font(.title3.weight(.semibold)).lineLimit(2)

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A finished reply's metrics and its details (TurnDetailsRow.kt, #2112), the iPhone's TurnDetailsView. -->
+<resources>
+    <string name="turn_done">完成</string>
+    <string name="turn_effort" formatted="true">%1$s 力度</string>
+    <string name="turn_in" formatted="true">输入 %1$s</string>
+    <string name="turn_out" formatted="true">输出 %1$s</string>
+    <string name="turn_rate" formatted="true">%1$s 词元/秒</string>
+    <string name="turn_detail_model">模型</string>
+    <string name="turn_detail_effort">力度</string>
+    <string name="turn_detail_input">输入词元</string>
+    <string name="turn_detail_cache_read">从缓存读取</string>
+    <string name="turn_detail_cache_write">写入缓存</string>
+    <string name="turn_detail_output">输出词元</string>
+    <string name="turn_detail_speed">速度</string>
+    <string name="turn_detail_writing">生成时间</string>
+    <string name="turn_detail_total">总时间</string>
+    <string name="turn_detail_calls">模型调用</string>
+    <string name="turn_detail_ended">结束方式</string>
+    <string name="turn_stop_complete">已完成</string>
+    <string name="turn_stop_loop">已停止：一直在原地打转</string>
+    <string name="turn_stop_runaway">已停止：运行时间过长</string>
+    <string name="turn_stop_interrupted">已中断</string>
+    <string name="turn_stop_unknown">未记录</string>
+    <string name="turn_show_details">显示详情</string>
+    <string name="turn_hide_details">隐藏详情</string>
+</resources>

@@ -10,23 +10,29 @@ struct ChatStatusIcon: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        // Our status glyphs (docs/design-system.md, Agent status), never SF Symbols.
         Group {
             if activity == .running {
-                RocketGlyph().stroke(palette.success, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)).frame(width: 18, height: 18)
+                glyph(RocketGlyph(), palette.success)
             } else if activity == .needsYou {
-                Image(systemName: "questionmark").foregroundStyle(palette.warning)
+                glyph(QuestionGlyph(), palette.warning)
             } else if activity == .failed {
-                Image(systemName: "exclamationmark.triangle").foregroundStyle(palette.danger)
+                glyph(WarningGlyph(), palette.danger)
             } else if waiting {
-                Image(systemName: "clock").foregroundStyle(palette.inkFaint)
+                glyph(ClockGlyph(), palette.inkFaint)
             } else if activeWatchCount <= 0 {
-                Image(systemName: "checkmark").foregroundStyle(palette.inkFaint)
+                glyph(CheckGlyph(), palette.inkFaint)
             } else {
-                Text("Zz").foregroundStyle(palette.inkFaint)
+                glyph(SleepGlyph(), palette.inkFaint)
             }
         }
-        .font(.caption.weight(.semibold))
+        .accessibilityElement()
         .accessibilityLabel(label)
+    }
+
+    private func glyph(_ shape: some Shape, _ color: Color) -> some View {
+        shape.stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .frame(width: 18, height: 18)
     }
 
     var label: String {

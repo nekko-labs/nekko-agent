@@ -31,11 +31,18 @@ struct ReplyVoicesFixture: View {
         .tool(id: id, name: name, label: value, status: .ok, output: "ok", input: [key: .string(value)])
     }
 
+    private var blocks: [Block] {
+        if ProcessInfo.processInfo.arguments.contains("-uiTestQuietContext") {
+            return [.user(id: "context", text: "Summary of the earlier conversation, compacted to save context:\n\n## Task and workspace\nThe long workspace context stays available on demand.\n\n---\n\nPlease keep the new prompt visible.", at: nil, images: 0)] + Self.blocks
+        }
+        return Self.blocks
+    }
+
     var body: some View {
-        let voices = Dictionary(uniqueKeysWithValues: zip(Self.blocks.map(\.id), ReplyTopics.voices(Self.blocks)))
+        let voices = Dictionary(uniqueKeysWithValues: zip(blocks.map(\.id), ReplyTopics.voices(blocks)))
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(TranscriptRow.of(Self.blocks)) { row in
+                ForEach(TranscriptRow.of(blocks)) { row in
                     switch row {
                     case .block(let block): BlockView(block: block, voice: voices[block.id] ?? nil)
                     case .agents(let blocks): ForEach(blocks) { BlockView(block: $0) }

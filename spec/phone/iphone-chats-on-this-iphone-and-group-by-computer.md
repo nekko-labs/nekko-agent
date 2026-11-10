@@ -75,3 +75,7 @@ Focused package suites: PhoneChatsTests, PhoneCloudBoundaryTests, PhoneCloudLife
 - https://openrouter.ai/docs/api-reference/streaming
 
 Desktop cross-check: crates/nekko-agent/src/providers/anthropic.rs and openai_compat.rs. Official references describe API contracts, not successful calls with an entitled account.
+
+### Current-main integration checkpoint (PR #2462)
+
+Implemented source retains main’s image-chat options and desktop-order composer action row while always offering This iPhone for text chats before provider setup. Folder/tools are not duplicated in the Run on row and stay hidden for phone-local chats. The focused comparison workflow now records the native simulator journey in addition to screenshots; this is capture support, not pixel/video inspection. Final merged-source Native iOS and matched current-main evidence are pending. No live paid-provider, physical-device or iPad/conceptual-foldable verification is claimed. The batch composer cannot push workflow changes with its current GitHub App permissions; use the existing standalone native/evidence workflows without widening App permissions.

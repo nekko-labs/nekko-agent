@@ -264,3 +264,9 @@ No commits, branches, workflow dispatches or PRs were created by this task.
 3. For a local relay on a USB phone run `adb reverse tcp:4400 tcp:4400` and pair
    with `ws://localhost:4400`; on the emulator use `ws://10.0.2.2:4400`. Paste the
    pairing link (`nekko-agent-pair:?relay=…&room=…&key=…&host=…&pair=…`) on the Pair screen.
+
+## Direct cloud chats on this phone (#2414)
+
+The native **This phone** destination works without a paired computer. Add an HTTPS cloud-provider API, keep its key sealed on this device, select a model and start a standalone streamed text chat. Setup/test, key replacement, disable/remove, stop/retry and local history/forget are supported. No tools, photos or sync; Claude/ChatGPT subscriptions and local model servers still need a computer.
+
+See [Android direct-cloud specification](../../spec/phone/android-direct-cloud-chats.md) and the [verification handoff](docs/phone-cloud-2414-handoff.md) for the implementation boundary, SDK paths, exact checks and evidence limitations. No new dependencies were added.

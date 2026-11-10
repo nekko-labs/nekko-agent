@@ -1,4 +1,5 @@
 import { ContextChangeNotice, showContextChangeNotice } from './ContextChangeNotice.js';
+import { useClaudePlan } from '../providerAccounts.js';
 import { FollowUpChoices, followUpOptions } from './FollowUpChoices.js';
 import { ActiveWatchChips } from './ActiveWatchChips.js';
 import { computerBlock, useComputerOf } from './ComputerChip.js';
@@ -25,7 +26,7 @@ import { DictationButton } from './DictationButton.js';
 import { voiceComposer } from '../voiceActions.js';
 import { decideApproval, type ApprovalScope } from './agent-console/approval-decision.js';
 import type { AgentEvent, AskAnswer, AskRequest, AutoQuality, Session, ContextBundle, IndexedFile, ModelInfo, ProviderConfig, SkillDef, PrInfo, QueuePayload, QueuedPrompt } from '@nekko-agent/shared';
-import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
+import { CHAT_MODE_LABEL, CLAUDE_CODE_PROVIDER_KIND, canOfferSubagent, reportedClaudeCodeContext, DEFAULT_IMAGE_CHAT_PARAMS, pickAutoModel, AUTO_MODEL_ID, matchSkills, modelMediaSupport, mediaSupportNotice, mediaKindOf, estimateTokens, estimateTranscriptTokens, getSessionWorkspaceIds, extractPrUrls, collectSessionPrUrls, detectSessionWorkspace, decodeRate, accumulateDecodeMs, hasResumableProgress, isLocalProvider, cloudProviderAllowed, resolveModelAvailability, claudePlanUsageNotice, estimateCostUSD, getModelPrice, shortLiveStatus, pickAcrossProviders, limitsKeyFor, queueItemPayload, queueItemText, planProgress } from '@nekko-agent/shared';
 import type { AutoProviderPick, ProviderPool } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
 import { approvalAfterResult } from './ChatPane.approval.js';
@@ -2388,6 +2389,13 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
   };
   // This provider's live usage windows, and the models they still leave usable.
   const providerLimits = useProviderLimits(activeProvider);
+  // A Claude Agent chat on Fable says how the plan pays for it: close to its
+  // weekly cap, or on usage credits from here (Claude Code's own windows first,
+  // the dated plan catalog when they say nothing). Informs; never blocks.
+  const claudePlan = useClaudePlan(activeProvider);
+  const planUsageNotice = claudePlan && modelId && modelId !== AUTO_MODEL_ID
+    ? claudePlanUsageNotice({ modelId, subscriptionType: claudePlan, limits: providerLimits, now: Date.now() })
+    : null;
   const runnableModels = models.filter(
     (m) => resolveModelAvailability({ model: m, provider: activeProvider, limits: providerLimits }).status === 'ready',
   );
@@ -3576,9 +3584,10 @@ function ChatPaneImpl({ sessionId, onRunningChange, readOnly = false, commandCen
                 {/* The chat's details: a panel of the composer itself, open or
                     shrunk to the model alone. Simple mode leaves out the
                     controls Settings > Simple mode keeps for Expert. */}
-                {!cleanStart && !imageMode && surface !== 'composer' && (!wallWindow || modelHint) && (
+                {!cleanStart && !imageMode && surface !== 'composer' && (!wallWindow || modelHint || planUsageNotice) && (
                   <div className={`composer-details ${detailsShown ? 'is-open' : ''}`} data-composer-details aria-label="Chat details">
                     {modelHint && <p role="status" data-model-note className="mb-1 flex items-center gap-2 text-xs" style={{ color: unavailableModel ? 'var(--warning)' : 'var(--accent)' }}><span aria-hidden>●</span>{modelHint}</p>}
+                    {!modelHint && planUsageNotice && <p role="status" data-plan-usage-note={planUsageNotice.kind} className="mb-1 flex items-center gap-2 text-xs" style={{ color: planUsageNotice.kind === 'near-limit' ? 'var(--warning)' : 'var(--ink-soft)' }}><span aria-hidden>●</span>{planUsageNotice.text}</p>}
                     {!wallWindow && <>
                       <div className="flex min-w-0 flex-wrap items-center gap-2" data-composer-primary-row>
                         <div className="min-w-0 max-w-full shrink-0">{modelControls}</div>

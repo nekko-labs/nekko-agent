@@ -105,3 +105,20 @@ async fn an_unscoped_key_turn_error_points_at_the_workspace_field() {
     let (_, error) = p.chat(chat_req()).collect().await;
     assert!(error.unwrap().message.starts_with("anthropic 400: "));
 }
+
+#[tokio::test]
+async fn the_catalog_s_max_tokens_becomes_the_output_ceiling() {
+    let catalog = r#"{"data":[{"type":"model","id":"claude-sonnet-6","display_name":"Claude Sonnet 6","max_input_tokens":2000000,"max_tokens":256000},{"type":"model","id":"claude-opus-5-5","display_name":"Claude Opus 5.5"}],"has_more":false}"#;
+    let (p, _) = provider(json!({}), 200, catalog);
+    let max_tokens = |p: &AnthropicProvider, model: &str| {
+        let req = ChatRequest { model: model.into(), ..chat_req() };
+        p.chat_request(&req, SamplingShape::Effort).body.unwrap()["max_tokens"].as_u64().unwrap()
+    };
+    // Before the list is read, the shipped table answers.
+    assert_eq!(max_tokens(&p, "claude-sonnet-6"), 128_000);
+    let models = p.list_models().await.unwrap();
+    assert_eq!(models.iter().find(|m| m.id == "claude-sonnet-6").unwrap().context_length, Some(2_000_000));
+    // After it, the API's own figure; a model it lists without one keeps the table.
+    assert_eq!(max_tokens(&p, "claude-sonnet-6"), 256_000);
+    assert_eq!(max_tokens(&p, "claude-opus-5-5"), 128_000);
+}

@@ -28,6 +28,8 @@ struct SecurityEvidenceFixture: View {
                     .padding(14)
                     .background(LiveCardView.background, in: RoundedRectangle(cornerRadius: 22))
                     .padding(.horizontal, 12)
+                    // Keep an addressable container without merging or hiding the real metrics.
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("securityEvidence.card")
             }
         }

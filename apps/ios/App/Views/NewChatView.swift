@@ -193,10 +193,15 @@ struct NewChatView: View {
     /// The message, its photos, Add and Start, and below them the chat's options, on frosted glass.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // Chat or Image: icons only, at the box's top right (#2448).
+            HStack {
+                Spacer(minLength: 0)
+                ChatKindToggle(image: $imageChat)
+            }
+            .padding(.bottom, -6)
             MarkdownComposerField(text: $text, focused: $typing,
                                   placeholder: imageChat ? "Describe an image to generate" : onPhone ? "Ask anything" : "What should your computer do?",
                                   identifier: "newChat.prompt", onPasteImages: pasteImages, boxed: false)
-                .padding(.top, 20)
             if loadingPhotos {
                 HStack(spacing: 6) {
                     ProgressView().controlSize(.small)
@@ -216,15 +221,18 @@ struct NewChatView: View {
                     Button { pasteImages() } label: { Label("Paste image", systemImage: "doc.on.clipboard") }
                         .disabled(!UIPasteboard.general.hasImages)
                 } label: {
-                    Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(palette.ink)
-                        .frame(width: 36, height: 36).background(palette.surface, in: Circle())
-                        .overlay(Circle().stroke(palette.line))
+                    ComposerGlyph(name: "plus").foregroundStyle(palette.inkSoft)
                         .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
                 .accessibilityLabel("Add")
                 .accessibilityIdentifier("newChat.add")
                 // Chats on this iPhone send text only.
                 .disabled(onPhone || imageChat)
+                // The desktop composer's order (#2448): +, the folder, then Simple's asks-first icon; mic and Start at the right.
+                if !onPhone && !imageChat {
+                    folderMenu
+                    if !app.prefs.expertMode && app.prefs.shows("asks") { toolsPicker(iconOnly: true) }
+                }
                 Spacer(minLength: 0)
                 VoiceConversationButton(makeTarget: makeVoiceTarget, finished: { target in
                     switch target {
@@ -279,12 +287,6 @@ struct NewChatView: View {
     /// The model and effort, where the chat runs and what it may do: computer, Nekko Cloud, folder and tool policy.
     private var options: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Chat kind", selection: $imageChat) {
-                Text("Chat").tag(false)
-                Text("Image").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("newChat.kind")
             if imageChat {
                 Menu {
                     ForEach(store.computers) { computer in
@@ -338,6 +340,8 @@ struct NewChatView: View {
                     .accessibilityHint("How hard the model works on each reply. Higher takes longer.")
                     .accessibilityIdentifier("newChat.effort")
                 }
+                // Expert keeps it beside the model with its name, as the desktop's new-chat row does.
+                if !onPhone && app.prefs.expertMode && app.prefs.shows("asks") { toolsPicker(iconOnly: false) }
             }
             HStack(spacing: 6) {
                 // Where it runs, whenever there is a choice (2026-11-04): it starts on the
@@ -378,33 +382,6 @@ struct NewChatView: View {
                 }
                 .accessibilityHint("Where the chat runs. Choosing another computer shows its models and folders; a local model runs on that computer’s own hardware.")
                 .accessibilityIdentifier("newChat.computer")
-                if !onPhone {
-                    Menu {
-                        Picker("Folder", selection: Binding(get: { folder }, set: { value in
-                            choseFolder = true
-                            folder = value
-                            if let id = store.activeId { app.prefs.lastFolder[id] = value }
-                        })) {
-                            Text("No folder").tag(String?.none)
-                            ForEach(store.workspaces) { w in
-                                VStack(alignment: .leading) {
-                                    Text(w.name)
-                                    if let path = w.path { Text(path) }
-                                }.tag(Optional(w.id))
-                            }
-                        }
-                        Divider()
-                        Button { foldersOpen = true } label: { Label("Manage folders", systemImage: "folder.badge.gearshape") }
-                    } label: {
-                        chip(folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? (folder == nil ? String(localized: "No folder") : String(localized: "Saved folder")), icon: "folder")
-                    }
-                    .accessibilityIdentifier("newChat.folder")
-                    if app.prefs.shows("asks") {
-                        ToolPolicyPicker(selection: toolsChoice)
-                        .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Ask when it matters is recommended for general use.")
-                        .accessibilityIdentifier("newChat.tools")
-                    }
-                }
             }
             if autoShown, let line = autoLine {
                 Label(line, systemImage: autoFinding ? "ellipsis" : "sparkles")
@@ -433,6 +410,47 @@ struct NewChatView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The folder after +, where the desktop composer has its folder picker.
+    private var folderMenu: some View {
+        Menu {
+            Picker("Folder", selection: Binding(get: { folder }, set: { value in
+                choseFolder = true
+                folder = value
+                if let id = store.activeId { app.prefs.lastFolder[id] = value }
+            })) {
+                Text("No folder").tag(String?.none)
+                ForEach(store.workspaces) { w in
+                    VStack(alignment: .leading) {
+                        Text(w.name)
+                        if let path = w.path { Text(path) }
+                    }.tag(Optional(w.id))
+                }
+            }
+            Divider()
+            Button { foldersOpen = true } label: { Label("Manage folders", systemImage: "folder.badge.gearshape") }
+        } label: {
+            HStack(spacing: 6) {
+                ComposerGlyph(name: "folder", size: 16).foregroundStyle(palette.inkSoft)
+                Text(folderName).font(.footnote.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).truncationMode(.middle)
+            }
+            .padding(.horizontal, 4).frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .accessibilityLabel("Folder")
+        .accessibilityValue(folderName)
+        .accessibilityIdentifier("newChat.folder")
+    }
+
+    private var folderName: String {
+        folder.flatMap { id in store.workspaces.first { $0.id == id }?.name } ?? (folder == nil ? String(localized: "No folder") : String(localized: "Saved folder"))
+    }
+
+    /// When the agent asks: Simple's icon in the + row, Expert's named control beside the model.
+    private func toolsPicker(iconOnly: Bool) -> some View {
+        ToolPolicyPicker(selection: toolsChoice, iconOnly: iconOnly)
+            .accessibilityHint("How the agent asks before it runs tools on \(store.active?.name ?? "your computer"). Ask when it matters is recommended for general use.")
+            .accessibilityIdentifier("newChat.tools")
     }
 
     /// A solid, readable control over the decorative ground, as the desktop's clean-start controls.

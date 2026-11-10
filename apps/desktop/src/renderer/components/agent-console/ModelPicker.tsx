@@ -4,7 +4,7 @@ import { pickerPlacement } from './pickerPlacement.js';
 import { MODEL_LIST_TIMEOUT_MS, filteredModelGroups, isModelPickerEscape, modelRowLabel, nextFavoriteModels, shouldDismissModelPickerPointer, withTimeout } from './modelPickerInteractions.js';
 import type { AutoQuality, ModelInfo, ProviderConfig } from '@nekko-agent/shared';
 import {
-  AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, formatModelPriceLabel,
+  AUTO_MODEL_ID, AUTO_QUALITIES, AUTO_QUALITY_META, blockLabel, claudeCreditsAvailable, claudePlanNote, claudePlanUsageNotice, formatModelPriceLabel,
   isLocalProvider, limitsKeyFor, modelPricing, resolveModelAvailability, shortModelName,
 } from '@nekko-agent/shared';
 import { useShallow } from 'zustand/react/shallow';
@@ -272,16 +272,26 @@ export function ModelPicker({
     // A blocked model stays in the list and says why. Hiding it makes a model
     // that exists look like one the app never heard of.
     const availability = availabilityOf(p, m);
-    const blocked = availability.status === 'blocked';
+    // What this Claude plan includes for the model (Fable on Pro runs on
+    // credits, on Max up to half the week): said, never enforced. A Fable
+    // window Claude Code reports spent, on an account with credits, still runs
+    // (on credits), so it is not "Limit reached".
+    const plan = p.kind === 'claude-code' ? idOf(p).plan : undefined;
+    const now = Date.now();
+    const planUsage = plan ? claudePlanUsageNotice({ modelId: m.id, subscriptionType: plan, limits: limitsOf(p), now }) : null;
+    const onCredits = availability.reason === 'rate-limited' && planUsage?.kind === 'on-credits' && claudeCreditsAvailable(limitsOf(p));
+    const blocked = availability.status === 'blocked' && !onCredits;
     const why = availability.detail ?? blockLabel(availability);
     // A local model's detail is where it lives (a path-like id splits into a
     // short name and its folder); a cloud model's is its price.
     const label = modelRowLabel(m, local);
     const claudeVersion = p.kind === 'claude-code' && selected && resolvedModelId ? shortModelName(resolvedModelId) : null;
     const detail = blocked ? why : label.sub;
-    const meta = showAccount === 'family' ? accountLabel(p) : showAccount === 'account' ? idOf(p).name : key === defaultKey ? null : (p.kind === 'claude-code' ? null : (m.availability?.detail ?? price));
+    const planNote = plan ? claudePlanNote(m.id, plan, now) : null;
+    const planLabel = onCredits ? 'Uses usage credits' : planNote?.label ?? null;
+    const meta = showAccount === 'family' ? accountLabel(p) : showAccount === 'account' ? idOf(p).name : key === defaultKey ? null : (p.kind === 'claude-code' ? planLabel : (m.availability?.detail ?? price));
     const tip = p.kind === 'claude-code'
-      ? (claudeVersion ? `Currently ${claudeVersion} · Claude Code chooses the version` : 'Claude Code chooses the version when the chat starts')
+      ? [claudeVersion ? `Currently ${claudeVersion} · Claude Code chooses the version` : 'Claude Code chooses the version when the chat starts', onCredits ? planUsage?.text : planNote?.detail].filter(Boolean).join('\n')
       : [label.name, detail ?? meta].filter(Boolean).join(' · ');
     return (
       <div

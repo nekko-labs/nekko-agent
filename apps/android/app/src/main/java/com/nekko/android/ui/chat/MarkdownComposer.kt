@@ -302,7 +302,7 @@ private val LABELS: Map<MarkdownAction, Int> = mapOf(
 )
 
 /**
- * The formatting toolbar, inside the message card above the text: bold,
+ * The formatting toolbar, on top of the keyboard while the message box is in use (#2450): bold,
  * italic, strikethrough, inline code, link, heading, bulleted, numbered and
  * task lists, indent and outdent, quote, code block and table; while the caret
  * is in a table, *Add row* and *Add column* come first. A button shows pressed when
