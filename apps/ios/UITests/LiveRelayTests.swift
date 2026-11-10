@@ -260,11 +260,10 @@ final class LiveRelayTests: XCTestCase {
         let result = app.staticTexts["settings.notify.testResult"]
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         // A slow simulator can drop the first-run prompt, and then iOS asks here instead.
-        // The result comes back from the computer, so it gets as long as any other round trip
-        // here (20 s was too short: runs 42592729091, 42617821734). Polled, not a fixed wait:
-        // the banner checked below is only up for a few seconds. The pause keeps the poll from
-        // flooding the simulator with springboard queries while the app works.
-        let deadline = Date().addingTimeInterval(computerWait)
+        // Keep the notification's original 20-second result contract. The button is online
+        // before the tap; pausing the poll avoids flooding the simulator with queries.
+        // A slower result is a failure to diagnose, not a reason to lengthen this deadline.
+        let deadline = Date().addingTimeInterval(20)
         while !result.exists, Date() < deadline {
             if springboard.buttons["Allow"].exists { springboard.buttons["Allow"].tap() }
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))

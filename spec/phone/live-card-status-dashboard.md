@@ -80,6 +80,17 @@ None disables the card. All enabled iOS levels draw counts and voice, with an in
 
 Dashboard and Settings catalog labels have the existing seven-language coverage. Command parsing and dispatcher replies remain initially English; adding catalog entries does not localize dynamically returned English replies. Android notification action labels are localized, not the entire foreground voice sheet.
 
+## Strict native acceptance follow-up (2026-11-09)
+
+Test-only follow-up, not a new product capability: the security evidence checks the fixture's actual
+**0 Building / 1 Need input / 0 Done** totals, the Open app handoff and absence of a dashboard
+approval strip. It retains the authenticated notification-link execution and the refused-save
+assertion that the call still waits; a container's presence alone is not authorization evidence.
+The separate live notification journey retains its original **20-second** result deadline,
+online-button precondition, yielding poll, actual result label and visible banner assertions.
+Source-contract checks do not prove Swift compilation, delivery timing, or native accessibility
+labels. Native execution of these strengthened checks remains **unverified**.
+
 ## Verification still pending
 
 Source changes include producer/relay/protocol/dispatcher tests and native UI evidence fixtures. Their presence is not a passing native run.
