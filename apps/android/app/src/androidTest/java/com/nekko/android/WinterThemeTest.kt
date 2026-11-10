@@ -47,6 +47,7 @@ class WinterThemeTest {
     @Test fun seasonalThemesGreetingAndSwitchAway() {
         val preset = mutableStateOf("winter")
         var refreshes = 0
+        foregroundActivity()
         compose.setContent {
             val look = ThemeResolver.resolve(ThemeChoice.COMPUTER,
                 Appearance(Appearance.ThemeMode.DARK, preset = preset.value), systemDark = false)
@@ -111,7 +112,8 @@ class WinterThemeTest {
         }
         try {
             scale(0f)
-            compose.setContent {
+            foregroundActivity()
+        compose.setContent {
                 val look = ThemeResolver.resolve(ThemeChoice("winter"), null, false)
                 NekkoTheme(dark = look.dark, preset = look.preset) {
                     Box(Modifier.fillMaxSize().background(Nekko.palette.paper).testTag("winter.static")) {
@@ -148,6 +150,15 @@ class WinterThemeTest {
     }
 
     private fun settle() { compose.waitForIdle(); Thread.sleep(200); compose.waitForIdle() }
+
+    private fun foregroundActivity() {
+        // Resumed test activities can remain behind Launcher on hosted emulators.
+        compose.activityRule.scenario.onActivity { activity ->
+            activity.startActivity(Intent(activity, activity.javaClass).addFlags(
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            ))
+        }
+    }
 
     private fun shot(name: String) {
         val dir = File(ApplicationProvider.getApplicationContext<NekkoApp>().getExternalFilesDir(null), "evidence").apply { mkdirs() }
